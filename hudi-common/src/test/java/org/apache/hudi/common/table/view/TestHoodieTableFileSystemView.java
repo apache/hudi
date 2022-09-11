@@ -1874,6 +1874,40 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     return writeStat;
   }
 
+  static class FileSystemViewExpectedState {
+    Set<String> logFilesCurrentlyPresent = new HashSet<>();
+    Set<String> baseFilesCurrentlyPresent = new HashSet<>();
+    Set<String> pendingCompactionFgIdsCurrentlyPresent = new HashSet<>();
+    Set<String> pendingLogCompactionFgIdsCurrentlyPresent = new HashSet<>();
+  }
+
+  /**
+   * Used to verify fils system view on various file systems.
+   */
+  protected void verifyFileSystemView(String partitionPath, FileSystemViewExpectedState expectedState,
+                                      SyncableFileSystemView tableFileSystemView) {
+    tableFileSystemView.sync();
+    // Verify base files
+    assertEquals(expectedState.baseFilesCurrentlyPresent,tableFileSystemView.getLatestBaseFiles(partitionPath)
+        .map(HoodieBaseFile::getFileName)
+        .collect(Collectors.toSet()));
+
+    // Verify log files
+    assertEquals(expectedState.logFilesCurrentlyPresent, tableFileSystemView.getAllFileSlices(partitionPath)
+        .flatMap(FileSlice::getLogFiles)
+        .map(logFile -> logFile.getPath().getName())
+        .collect(Collectors.toSet()));
+    // Verify file groups part of pending compaction operations
+    assertEquals(expectedState.pendingCompactionFgIdsCurrentlyPresent, tableFileSystemView.getPendingCompactionOperations()
+        .map(pair -> pair.getValue().getFileGroupId().getFileId())
+        .collect(Collectors.toSet()));
+
+    // Verify file groups part of pending log compaction operations
+    assertEquals(expectedState.pendingLogCompactionFgIdsCurrentlyPresent, tableFileSystemView.getPendingLogCompactionOperations()
+        .map(pair -> pair.getValue().getFileGroupId().getFileId())
+        .collect(Collectors.toSet()));
+  }
+
   @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;

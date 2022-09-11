@@ -46,7 +46,6 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
@@ -77,7 +76,7 @@ import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertG
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class DataValidationCheckForLogCompactionActions extends HoodieClientTestBase {
+public class TestDataValidationCheckForLogCompactionActions extends HoodieClientTestBase {
 
   private HoodieTestTable testTable;
   Random random = new Random();
@@ -379,7 +378,6 @@ public class DataValidationCheckForLogCompactionActions extends HoodieClientTest
     // Create logcompaction client.
     HoodieWriteConfig logCompactionConfig = HoodieWriteConfig.newBuilder().withProps(config2.getProps())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.ALWAYS_ALLOW)
             .withLogCompactionBlocksThreshold("2").build())
         .build();
     SparkRDDWriteClient logCompactionClient = new SparkRDDWriteClient(context, logCompactionConfig);

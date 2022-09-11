@@ -249,7 +249,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       // do not cleanup slice required for pending compaction
       Iterator<FileSlice> fileSliceIterator =
           fileGroup.getAllFileSlices()
-              .filter(fs -> !isFileSliceNeededForPendingCompaction(fs) && !isFileSliceNeededForPendingLogCompaction(fs))
+              .filter(fs -> !isFileSliceNeededForPendingMajorOrMinorCompaction(fs))
               .iterator();
       if (isFileGroupInPendingCompaction(fileGroup)) {
         // We have already saved the last version of file-groups for pending compaction Id
@@ -359,7 +359,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
           }
 
           // Always keep the last commit
-          if (!isFileSliceNeededForPendingCompaction(aSlice) && && !isFileSliceNeededForPendingLogCompaction(aSlice) HoodieTimeline
+          if (!isFileSliceNeededForPendingMajorOrMinorCompaction(aSlice) && HoodieTimeline
               .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
             // this is a commit, that should be cleaned.
             aFile.ifPresent(hoodieDataFile -> {
@@ -508,6 +508,15 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     } else {
       return "";
     }
+  }
+
+  /*
+   * Determine if file slice needed to be preserved for pending compaction or log compaction.
+   * @param fileSlice File slice
+   * @return true if file slice needs to be preserved, false otherwise.
+   */
+  private boolean isFileSliceNeededForPendingMajorOrMinorCompaction(FileSlice fileSlice) {
+    return isFileSliceNeededForPendingCompaction(fileSlice) || isFileSliceNeededForPendingLogCompaction(fileSlice);
   }
 
   /**

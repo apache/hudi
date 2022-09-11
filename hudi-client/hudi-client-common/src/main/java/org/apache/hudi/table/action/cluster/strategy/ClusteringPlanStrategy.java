@@ -116,14 +116,15 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
    */
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(String partition) {
     SyncableFileSystemView fileSystemView = (SyncableFileSystemView) getHoodieTable().getSliceView();
-    Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
-        .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
-        .collect(Collectors.toSet());
-    fgIdsInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
+    Set<HoodieFileGroupId> fgIdsInPendingCompactionLogCompactionAndClustering =
+        Stream.concat(fileSystemView.getPendingCompactionOperations(), fileSystemView.getPendingLogCompactionOperations())
+            .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
+            .collect(Collectors.toSet());
+    fgIdsInPendingCompactionLogCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
 
     return hoodieTable.getSliceView().getLatestFileSlices(partition)
         // file ids already in clustering are not eligible
-        .filter(slice -> !fgIdsInPendingCompactionAndClustering.contains(slice.getFileGroupId()));
+        .filter(slice -> !fgIdsInPendingCompactionLogCompactionAndClustering.contains(slice.getFileGroupId()));
   }
 
   /**

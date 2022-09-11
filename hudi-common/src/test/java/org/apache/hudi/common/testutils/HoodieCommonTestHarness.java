@@ -18,12 +18,9 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewExpectedState;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.exception.HoodieIOException;
@@ -31,9 +28,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.util.stream.Collectors;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * The common hoodie test harness to provide the basic infrastructure.
@@ -127,33 +121,6 @@ public class HoodieCommonTestHarness {
     } catch (IOException ioe) {
       throw new HoodieIOException("Error getting file system view", ioe);
     }
-  }
-
-  /**
-   * Used to verify fils system view on various file systems.
-   */
-  protected void verifyFileSystemView(String partitionPath, FileSystemViewExpectedState expectedState,
-                                    SyncableFileSystemView tableFileSystemView) {
-    tableFileSystemView.sync();
-    // Verify base files
-    assertEquals(expectedState.baseFilesCurrentlyPresent,tableFileSystemView.getLatestBaseFiles(partitionPath)
-        .map(HoodieBaseFile::getFileName)
-        .collect(Collectors.toSet()));
-
-    // Verify log files
-    assertEquals(expectedState.logFilesCurrentlyPresent, tableFileSystemView.getAllFileSlices(partitionPath)
-        .flatMap(FileSlice::getLogFiles)
-        .map(logFile -> logFile.getPath().getName())
-        .collect(Collectors.toSet()));
-    // Verify file groups part of pending compaction operations
-    assertEquals(expectedState.pendingCompactionFgIdsCurrentlyPresent, tableFileSystemView.getPendingCompactionOperations()
-        .map(pair -> pair.getValue().getFileGroupId().getFileId())
-        .collect(Collectors.toSet()));
-
-    // Verify file groups part of pending log compaction operations
-    assertEquals(expectedState.pendingLogCompactionFgIdsCurrentlyPresent, tableFileSystemView.getPendingLogCompactionOperations()
-        .map(pair -> pair.getValue().getFileGroupId().getFileId())
-        .collect(Collectors.toSet()));
   }
 
   /**

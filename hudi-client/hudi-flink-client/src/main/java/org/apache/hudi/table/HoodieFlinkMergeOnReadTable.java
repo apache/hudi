@@ -117,7 +117,7 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
         context, config, this, compactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor(),
-        new HoodieFlinkCopyOnWriteTable(config, context, getMetaClient()));
+        new HoodieFlinkCopyOnWriteTable(config, context, getMetaClient()), WriteOperationType.COMPACT);
     return convertMetadata(compactionExecutor.execute());
   }
 

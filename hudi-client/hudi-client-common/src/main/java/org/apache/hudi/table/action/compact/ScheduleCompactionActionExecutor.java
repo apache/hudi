@@ -173,6 +173,9 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
       return false;
     }
     Pair<Integer, String> latestDeltaCommitInfo = latestDeltaCommitInfoOption.get();
+    if (WriteOperationType.LOG_COMPACT.equals(operationType)) {
+      return true;
+    }
     int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
     int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
     switch (compactionTriggerStrategy) {
@@ -215,10 +218,6 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
           LOG.info(String.format("The delta commits >= %s and elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
               inlineCompactDeltaSecondsMax));
         }
-        break;
-      case ALWAYS_ALLOW:
-        compactable = true;
-        LOG.info("Always allow trigger strategy is used.");
         break;
       default:
         throw new HoodieCompactionException("Unsupported compaction trigger strategy: " + config.getInlineCompactTriggerStrategy());

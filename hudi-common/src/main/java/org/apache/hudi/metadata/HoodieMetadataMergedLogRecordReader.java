@@ -107,7 +107,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     // processing log block records as part of scan.
     synchronized (this) {
       records.clear();
-      scanInternal(Option.of(new KeySpec(keyPrefixes, false)));
+      scanInternal(Option.of(new KeySpec(keyPrefixes, false)), false);
       return records.values().stream()
           .filter(Objects::nonNull)
           .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)

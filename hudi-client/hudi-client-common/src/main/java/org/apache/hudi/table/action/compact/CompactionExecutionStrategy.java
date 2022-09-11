@@ -23,65 +23,57 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
-/**
- * Strategy class to execute log compaction operations.
- */
-public class LogCompactionExecutionStrategy<T extends HoodieRecordPayload, I, K, O>
-    extends CompactionExecutionStrategy<T, I, K, O> {
+public class CompactionExecutionStrategy<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(LogCompactionExecutionStrategy.class);
-
-  @Override
-  protected void transitionRequestedToInflight(HoodieTable table, String logCompactionInstantTime) {
+  protected void transitionRequestedToInflight(HoodieTable table, String compactionInstantTime) {
     HoodieActiveTimeline timeline = table.getActiveTimeline();
-    HoodieInstant instant = HoodieTimeline.getLogCompactionRequestedInstant(logCompactionInstantTime);
+    HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
     // Mark instant as compaction inflight
-    timeline.transitionLogCompactionRequestedToInflight(instant);
+    timeline.transitionCompactionRequestedToInflight(instant);
     table.getMetaClient().reloadActiveTimeline();
   }
 
-  protected String instantTimeToUseForScanning(String logCompactionInstantTime, String maxInstantTime) {
-    return logCompactionInstantTime;
+  protected String instantTimeToUseForScanning(String compactionInstantTime, String maxInstantTime) {
+    return maxInstantTime;
   }
 
   protected boolean shouldPreserveCommitMetadata() {
-    return true;
+    return false;
   }
 
-  @Override
   protected Iterator<List<WriteStatus>> writeFileAndGetWriteStats(HoodieCompactionHandler compactionHandler,
                                                                   CompactionOperation operation,
                                                                   String instantTime,
                                                                   HoodieMergedLogRecordScanner scanner,
                                                                   Option<HoodieBaseFile> oldDataFileOpt) throws IOException {
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-    header.put(HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES,
-        StringUtils.join(scanner.getValidBlockInstants(), ","));
-    // Compacting is very similar to applying updates to existing file
-    return compactionHandler.handleInsertsForLogCompaction(instantTime, operation.getPartitionPath(),
-        operation.getFileId(), scanner.getRecords(), header);
+    Iterator<List<WriteStatus>> result;
+    // If the dataFile is present, perform updates else perform inserts into a new base file.
+    if (oldDataFileOpt.isPresent()) {
+      result = compactionHandler.handleUpdate(instantTime, operation.getPartitionPath(),
+          operation.getFileId(), scanner.getRecords(),
+          oldDataFileOpt.get());
+    } else {
+      result = compactionHandler.handleInsert(instantTime, operation.getPartitionPath(), operation.getFileId(),
+          scanner.getRecords());
+    }
+    return result;
   }
 
-  @Override
   protected boolean useScanV2(HoodieWriteConfig writeConfig) {
-    return true;
+    return writeConfig.useScanV2ForLogRecordReader();
   }
+
 }

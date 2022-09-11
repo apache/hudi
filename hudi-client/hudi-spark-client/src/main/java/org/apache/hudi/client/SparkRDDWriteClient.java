@@ -46,6 +46,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -362,6 +363,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     final HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(logCompactionInstant), Option.empty());
+      preCommit(logCompactionInstant, metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       updateTableMetadata(table, metadata, logCompactionInstant);
@@ -374,13 +376,9 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
-      try {
-        metrics.updateCommitMetrics(HoodieActiveTimeline.parseDateFromInstantTime(logCompactionCommitTime).getTime(),
-            durationInMs, metadata, HoodieActiveTimeline.LOG_COMPACTION_ACTION);
-      } catch (ParseException e) {
-        throw new HoodieCommitException("Commit time is not of valid format. Failed to commit log compaction "
-            + config.getBasePath() + " at time " + logCompactionCommitTime, e);
-      }
+      HoodieActiveTimeline.parseDateFromInstantTimeSafely(logCompactionCommitTime).ifPresent(parsedInstant ->
+          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, HoodieActiveTimeline.LOG_COMPACTION_ACTION)
+      );
     }
     LOG.info("Log Compacted successfully on commit " + logCompactionCommitTime);
   }
@@ -392,9 +390,10 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     HoodieTimeline pendingLogCompactionTimeline = table.getActiveTimeline().filterPendingLogCompactionTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getLogCompactionInflightInstant(logCompactionInstantTime);
     if (pendingLogCompactionTimeline.containsInstant(inflightInstant)) {
-      //TODO: Verify the rollback cases for logcompaction.
+      LOG.info("Found Log compaction inflight file. Rolling back the commit and exiting.");
       table.rollbackInflightLogCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
       table.getMetaClient().reloadActiveTimeline();
+      throw new HoodieException("Inflight logcompaction file exists");
     }
     logCompactionTimer = metrics.getLogCompactionCtx();
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionInstantTime);

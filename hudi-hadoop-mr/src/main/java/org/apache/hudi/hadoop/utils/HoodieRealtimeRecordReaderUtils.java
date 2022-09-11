@@ -47,6 +47,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -64,6 +66,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 
 public class HoodieRealtimeRecordReaderUtils {
+  private static final Logger LOG = LogManager.getLogger(HoodieRealtimeRecordReaderUtils.class);
 
   /**
    * Reads the schema from the base file.
@@ -194,7 +197,7 @@ public class HoodieRealtimeRecordReaderUtils {
           try {
             fieldValue = record.get(field.name());
           } catch (AvroRuntimeException e) {
-            LOG.debug("Field:" + field.name() + "not found in Schema:" + schema.toString());
+            LOG.debug("Field:" + field.name() + "not found in Schema:" + schema);
           }
           recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema());
         }

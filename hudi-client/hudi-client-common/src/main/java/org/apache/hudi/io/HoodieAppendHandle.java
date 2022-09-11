@@ -409,7 +409,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     while (recordItr.hasNext()) {
       HoodieRecord record = recordItr.next();
       init(record);
-      flushToDiskIfRequired(record);
+      flushToDiskIfRequired(record, false);
       writeToBuffer(record);
     }
     appendDataAndDeleteBlocks(header, true);
@@ -462,7 +462,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     Option<Map<String, String>> recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
     try {
       init(record);
-      flushToDiskIfRequired(record);
+      flushToDiskIfRequired(record, false);
       writeToBuffer(record);
     } catch (Throwable t) {
       // Not throwing exception from here, since we don't want to fail the entire job
@@ -497,13 +497,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   public void write(Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
-    Iterator<String> keyIterator = recordMap.keySet().stream().iterator();
     try {
-      while (keyIterator.hasNext()) {
-        final String key = keyIterator.next();
-        HoodieRecord<T> record = (HoodieRecord<T>) recordMap.get(key);
+      for (Map.Entry<String, HoodieRecord<? extends HoodieRecordPayload>> entry: recordMap.entrySet()) {
+        HoodieRecord<T> record = (HoodieRecord<T>) entry.getValue();
         init(record);
-        // For logCompaction operations all the records are read and written as a huge block.
+        flushToDiskIfRequired(record, false);
         writeToBuffer(record);
       }
       appendDataAndDeleteBlocks(header, true);
@@ -560,7 +558,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   /**
    * Checks if the number of records have reached the set threshold and then flushes the records to disk.
    */
-  private void flushToDiskIfRequired(HoodieRecord record) {
+  private void flushToDiskIfRequired(HoodieRecord record, boolean appendDeleteBlocks) {
     // Append if max number of records reached to achieve block size
     if (numberOfRecords >= (int) (maxBlockSize / averageRecordSize)) {
       // Recompute averageRecordSize before writing a new block and update existing value with
@@ -568,7 +566,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       LOG.info("AvgRecordSize => " + averageRecordSize);
       averageRecordSize = (averageRecordSize + sizeEstimator.sizeEstimate(record)) / 2;
       // Delete blocks will be appended after appending all the data blocks.
-      appendDataAndDeleteBlocks(header, false);
+      appendDataAndDeleteBlocks(header, appendDeleteBlocks);
       estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
       numberOfRecords = 0;
     }

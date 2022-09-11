@@ -18,14 +18,11 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieException;
 
 import java.io.Serializable;
 import java.util.function.BiPredicate;
@@ -456,15 +453,12 @@ public interface HoodieTimeline extends Serializable {
       } else if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
         // Deltacommit is used by both ingestion and logcompaction.
         // So, distinguish both of them check for the inflight file being present.
-        FileSystem fs = metaClient.getFs();
-        String logCompactionRequestedFile = instant.getTimestamp() + "logcompaction.requested";
-        Path path = new Path(metaClient.getMetaPath(), logCompactionRequestedFile);
-        try {
-          if (fs.exists(path)) {
-            return new HoodieInstant(true, LOG_COMPACTION_ACTION, instant.getTimestamp());
-          }
-        } catch (Exception e) {
-          throw new HoodieException("Error converting completed instant to inflight instant", e);
+        HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
+        Option<HoodieInstant> logCompactionInstant = Option.fromJavaOptional(rawActiveTimeline.getInstants()
+            .filter(hoodieInstant -> hoodieInstant.getTimestamp().equals(instant.getTimestamp())
+                && LOG_COMPACTION_ACTION.equals(hoodieInstant.getAction())).findFirst());
+        if (logCompactionInstant.isPresent()) {
+          return new HoodieInstant(true, LOG_COMPACTION_ACTION, instant.getTimestamp());
         }
       }
     }

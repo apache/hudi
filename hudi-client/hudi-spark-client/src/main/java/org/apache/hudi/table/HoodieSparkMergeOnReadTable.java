@@ -44,7 +44,6 @@ import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.compact.HoodieSparkMergeOnReadTableCompactor;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
-import org.apache.hudi.table.action.compact.RunLogCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkBulkInsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkBulkInsertPreppedDeltaCommitActionExecutor;
@@ -143,7 +142,7 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor<T> compactionExecutor = new RunCompactionActionExecutor<>(
         context, config, this, compactionInstantTime, new HoodieSparkMergeOnReadTableCompactor<>(),
-        new HoodieSparkCopyOnWriteTable<>(config, context, getMetaClient()));
+        new HoodieSparkCopyOnWriteTable<>(config, context, getMetaClient()), WriteOperationType.COMPACT);
     return compactionExecutor.execute();
   }
 
@@ -162,8 +161,8 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> logCompact(
       HoodieEngineContext context, String logCompactionInstantTime) {
-    RunLogCompactionActionExecutor logCompactionExecutor = new RunLogCompactionActionExecutor(
-        context, config, this, logCompactionInstantTime, this);
+    RunCompactionActionExecutor logCompactionExecutor = new RunCompactionActionExecutor(context, config, this,
+        logCompactionInstantTime, new HoodieSparkMergeOnReadTableCompactor<>(), this, WriteOperationType.LOG_COMPACT);
     return logCompactionExecutor.execute();
   }
 
@@ -182,7 +181,7 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handlePreppedInserts(String instantTime, String partitionPath, String fileId,
+  public Iterator<List<WriteStatus>> handleInsertsForLogCompaction(String instantTime, String partitionPath, String fileId,
                                                           Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap,
                                                           Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     HoodieAppendHandle appendHandle = new HoodieAppendHandle(config, instantTime, this,

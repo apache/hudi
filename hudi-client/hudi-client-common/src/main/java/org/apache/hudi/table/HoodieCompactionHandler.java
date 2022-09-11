@@ -43,7 +43,7 @@ public interface HoodieCompactionHandler<T extends HoodieRecordPayload> {
   Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
                                            Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap);
 
-  default Iterator<List<WriteStatus>> handlePreppedInserts(String instantTime, String partitionPath, String fileId,
+  default Iterator<List<WriteStatus>> handleInsertsForLogCompaction(String instantTime, String partitionPath, String fileId,
                                                            Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap,
                                                            Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     throw new HoodieNotSupportedException("Operation is not yet supported");

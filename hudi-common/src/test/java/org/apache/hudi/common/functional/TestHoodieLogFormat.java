@@ -1930,6 +1930,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
         .sorted()
         .collect(Collectors.toList());
+    List<String> validBlockInstants = scanner.getValidBlockInstants();
+    List<String> expectedBlockInstants = Arrays.asList("108","105", "104");
+    assertEquals(expectedBlockInstants, validBlockInstants);
     Collections.sort(readKeys);
     assertEquals(expectedRecords, readKeys, "Record keys read should be exactly same.");
   }

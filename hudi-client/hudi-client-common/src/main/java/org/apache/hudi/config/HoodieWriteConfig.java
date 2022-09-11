@@ -1350,14 +1350,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION);
   }
 
-  public String getPartitionsForLogCompaction() {
-    return getString(HoodieCompactionConfig.PARTITIONS_FOR_LOG_COMPACTION);
-  }
-
-  public String getPartitionsForCompaction() {
-    return getString(HoodieCompactionConfig.PARTITIONS_FOR_COMPACTION);
-  }
-
   public int getCommitArchivalBatchSize() {
     return getInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE);
   }

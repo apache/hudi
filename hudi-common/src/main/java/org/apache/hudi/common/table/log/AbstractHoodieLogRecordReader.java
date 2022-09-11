@@ -213,7 +213,7 @@ public abstract class AbstractHoodieLogRecordReader {
     scanInternal(Option.of(new KeySpec(keys, true)), false);
   }
 
-  public void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
+  public synchronized void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
     if (useScanV2) {
       scanInternalV2(keySpecOpt, skipProcessingBlocks);
     } else {
@@ -221,7 +221,7 @@ public abstract class AbstractHoodieLogRecordReader {
     }
   }
 
-  protected synchronized void scanInternal(Option<KeySpec> keySpecOpt) {
+  private synchronized void scanInternal(Option<KeySpec> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -387,7 +387,7 @@ public abstract class AbstractHoodieLogRecordReader {
     }
   }
 
-  private void scanInternalV2(Option<KeySpec> keySpecOption, boolean skipProcessingBlocks) {
+  private synchronized void scanInternalV2(Option<KeySpec> keySpecOption, boolean skipProcessingBlocks) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -555,7 +555,7 @@ public abstract class AbstractHoodieLogRecordReader {
           // When compacted blocks are seen update the blockTimeToCompactionBlockTimeMap.
           Arrays.stream(firstBlock.getLogBlockHeader().get(COMPACTED_BLOCK_TIMES).split(","))
               .forEach(originalInstant -> {
-                String finalInstant = blockTimeToCompactionBlockTimeMap.get(instantTime);
+                String finalInstant = blockTimeToCompactionBlockTimeMap.getOrDefault(instantTime, instantTime);
                 blockTimeToCompactionBlockTimeMap.put(originalInstant, finalInstant);
               });
         } else {

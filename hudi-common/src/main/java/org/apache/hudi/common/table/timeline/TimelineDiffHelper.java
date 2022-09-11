@@ -67,11 +67,8 @@ public class TimelineDiffHelper {
             + lostPendingCompactions);
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
-
-      // Rather than checking for compaction instants with completed check and a commit file,
-      // check the previous state to be pending and current state to be completed that way compaction will be covered.
       List<HoodieInstant> finishedCompactionInstants = compactionInstants.stream()
-          .filter(instantPair -> !instantPair.getKey().isCompleted()
+          .filter(instantPair -> instantPair.getValue().getAction().equals(HoodieTimeline.COMMIT_ACTION)
               && instantPair.getValue().isCompleted())
           .map(Pair::getKey).collect(Collectors.toList());
 

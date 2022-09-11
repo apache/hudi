@@ -29,14 +29,14 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -74,10 +74,10 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
    *
    * @param table                     {@link HoodieTable} instance to use.
    * @param pendingCompactionTimeline pending compaction timeline.
-   * @param compactionInstantTime     compaction instant
+   * @param instantTime     compaction instant
    */
   public abstract void preCompact(
-      HoodieTable table, HoodieTimeline pendingCompactionTimeline, String compactionInstantTime);
+      HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime);
 
   /**
    * Maybe persist write status.
@@ -97,11 +97,10 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         || (compactionPlan.getOperations().isEmpty())) {
       return context.emptyHoodieData();
     }
-    HoodieActiveTimeline timeline = table.getActiveTimeline();
-    HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
-    // Mark instant as compaction inflight
-    timeline.transitionCompactionRequestedToInflight(instant);
-    table.getMetaClient().reloadActiveTimeline();
+    CompactionExecutionStrategy executionStrategy = getCompactionExecutionStrategy(compactionPlan);
+
+    // Transition requested to inflight file.
+    executionStrategy.transitionRequestedToInflight(table, compactionInstantTime);
 
     HoodieTableMetaClient metaClient = table.getMetaClient();
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
@@ -123,10 +122,12 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
     LOG.info("Compactor compacting " + operations + " files");
 
+    String maxInstantTime = getMaxInstantTime(metaClient);
+
     context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
     return context.parallelize(operations).map(operation -> compact(
-        compactionHandler, metaClient, config, operation, compactionInstantTime, taskContextSupplier))
+        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, taskContextSupplier, executionStrategy))
         .flatMap(List::iterator);
   }
 
@@ -138,7 +139,23 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
                                    HoodieWriteConfig config,
                                    CompactionOperation operation,
                                    String instantTime,
+                                   String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
+    return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime,
+        taskContextSupplier, new CompactionExecutionStrategy());
+  }
+
+  /**
+   * Execute a single compaction operation and report back status.
+   */
+  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
+                                   HoodieTableMetaClient metaClient,
+                                   HoodieWriteConfig config,
+                                   CompactionOperation operation,
+                                   String instantTime,
+                                   String maxInstantTime,
+                                   TaskContextSupplier taskContextSupplier,
+                                   CompactionExecutionStrategy executionStrategy) throws IOException {
     FileSystem fs = metaClient.getFs();
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
@@ -151,7 +168,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
       readerSchema = HoodieAvroUtils.addMetadataFields(
           new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     }
-    LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
+    LOG.info("Compaction operation started for base file: " + operation.getDataFileName() + " and delta files: " + operation.getDeltaFileNames()
         + " for commit " + instantTime);
     // TODO - FIX THIS
     // Reads the entire avro file. Always only specific blocks should be read from the avro file
@@ -159,10 +176,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     // Load all the delta commits since the last compaction commit and get all the blocks to be
     // loaded and load it using CompositeAvroLogReader
     // Since a DeltaCommit is not defined yet, reading all the records. revisit this soon.
-    String maxInstantTime = metaClient
-        .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
-            HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
 
@@ -174,7 +188,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withBasePath(metaClient.getBasePath())
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
-        .withLatestInstantTime(maxInstantTime)
+        .withLatestInstantTime(executionStrategy.instantTimeToUseForScanning(instantTime, maxInstantTime))
         .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
         .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
@@ -185,7 +199,8 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
-        .withUseScanV2(config.useScanV2ForLogRecordReader())
+        .withUseScanV2(executionStrategy.useScanV2(config))
+        .withPreserveCommitMetadata(executionStrategy.shouldPreserveCommitMetadata())
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =
@@ -213,15 +228,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;
-    // If the dataFile is present, perform updates else perform inserts into a new base file.
-    if (oldDataFileOpt.isPresent()) {
-      result = compactionHandler.handleUpdate(instantTime, operation.getPartitionPath(),
-          operation.getFileId(), scanner.getRecords(),
-          oldDataFileOpt.get());
-    } else {
-      result = compactionHandler.handleInsert(instantTime, operation.getPartitionPath(), operation.getFileId(),
-          scanner.getRecords());
-    }
+    result = executionStrategy.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
     scanner.close();
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
@@ -239,4 +246,22 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
       s.getStat().setRuntimeStats(runtimeStats);
     }).collect(toList());
   }
+
+  public String getMaxInstantTime(HoodieTableMetaClient metaClient) {
+    String maxInstantTime = metaClient
+        .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
+            HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
+        .filterCompletedInstants().lastInstant().get().getTimestamp();
+    return maxInstantTime;
+  }
+
+  public CompactionExecutionStrategy getCompactionExecutionStrategy(HoodieCompactionPlan compactionPlan) {
+    if (compactionPlan.getStrategy() == null || StringUtils.isNullOrEmpty(compactionPlan.getStrategy().getCompactorClassName())) {
+      return new CompactionExecutionStrategy();
+    } else {
+      CompactionExecutionStrategy executionStrategy = ReflectionUtils.loadClass(compactionPlan.getStrategy().getCompactorClassName());
+      return executionStrategy;
+    }
+  }
+
 }
