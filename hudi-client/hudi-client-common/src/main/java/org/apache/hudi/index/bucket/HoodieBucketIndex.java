@@ -35,7 +35,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -46,13 +45,13 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   private static final Logger LOG = LogManager.getLogger(HoodieBucketIndex.class);
 
   protected final int numBuckets;
-  protected final List<String> indexKeyFields;
+  protected final String indexKeyFields;
 
   public HoodieBucketIndex(HoodieWriteConfig config) {
     super(config);
 
     this.numBuckets = config.getBucketIndexNumBuckets();
-    this.indexKeyFields = Arrays.asList(config.getBucketIndexHashField().split(","));
+    this.indexKeyFields = config.getBucketIndexHashField();
     LOG.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
   }
 

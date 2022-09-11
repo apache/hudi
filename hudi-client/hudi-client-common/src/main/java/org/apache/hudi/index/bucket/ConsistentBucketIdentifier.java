@@ -74,7 +74,7 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
     return fileIdToBucket.get(fileId);
   }
 
-  public ConsistentHashingNode getBucket(HoodieKey hoodieKey, List<String> indexKeyFields) {
+  public ConsistentHashingNode getBucket(HoodieKey hoodieKey, String indexKeyFields) {
     return getBucket(getHashKeys(hoodieKey.getRecordKey(), indexKeyFields));
   }
 

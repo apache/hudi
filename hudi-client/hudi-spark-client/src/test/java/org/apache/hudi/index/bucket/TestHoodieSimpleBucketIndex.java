@@ -144,11 +144,11 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
 
   private String getRecordFileId(HoodieRecord record) {
     return BucketIdentifier.bucketIdStr(
-        BucketIdentifier.getBucketId(record, "_row_key", NUM_BUCKET));
+        BucketIdentifier.getBucketId(record.getKey(), "_row_key", NUM_BUCKET));
   }
 
   private int getRecordBucketId(HoodieRecord record) {
     return BucketIdentifier
-        .getBucketId(record, "_row_key", NUM_BUCKET);
+        .getBucketId(record.getKey(), "_row_key", NUM_BUCKET);
   }
 }
