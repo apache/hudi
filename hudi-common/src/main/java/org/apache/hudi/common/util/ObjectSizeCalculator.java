@@ -18,13 +18,15 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.util.jvm.MemoryLayoutSpecification;
 import org.apache.hudi.common.util.jvm.HotSpotMemoryLayoutSpecification32bit;
 import org.apache.hudi.common.util.jvm.HotSpotMemoryLayoutSpecification64bit;
 import org.apache.hudi.common.util.jvm.HotSpotMemoryLayoutSpecification64bitCompressed;
+import org.apache.hudi.common.util.jvm.MemoryLayoutSpecification;
 import org.apache.hudi.common.util.jvm.OpenJ9MemoryLayoutSpecification32bit;
 import org.apache.hudi.common.util.jvm.OpenJ9MemoryLayoutSpecification64bit;
 import org.apache.hudi.common.util.jvm.OpenJ9MemoryLayoutSpecification64bitCompressed;
+
+import org.openjdk.jol.info.ClassLayout;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
@@ -87,7 +89,7 @@ public class ObjectSizeCalculator {
   // added.
   private final int superclassFieldPadding;
 
-  private final Map<Class<?>, ClassSizeInfo> classSizeInfos = new IdentityHashMap<>();
+  private static final Map<Class<?>, ClassSizeInfo> CLASS_SIZE_INFO_MAP = new IdentityHashMap<>();
 
   private final Set<Object> alreadyVisited = Collections.newSetFromMap(new IdentityHashMap<>());
   private final Deque<Object> pending = new ArrayDeque<>(64);
@@ -127,6 +129,8 @@ public class ObjectSizeCalculator {
         }
         obj = pending.removeFirst();
       }
+    } catch (IllegalAccessException | SecurityException e) {
+      return ClassLayout.parseClass(obj.getClass()).instanceSize();
     } finally {
       alreadyVisited.clear();
       pending.clear();
@@ -134,16 +138,20 @@ public class ObjectSizeCalculator {
     }
   }
 
-  private ClassSizeInfo getClassSizeInfo(final Class<?> clazz) {
-    ClassSizeInfo csi = classSizeInfos.get(clazz);
+  private static ClassSizeInfo getClassSizeInfo(final Class<?> clazz,
+                                                int referenceSize,
+                                                int superclassFieldPadding,
+                                                int objectHeaderSize,
+                                                int objectPadding) {
+    ClassSizeInfo csi = CLASS_SIZE_INFO_MAP.get(clazz);
     if (csi == null) {
-      csi = new ClassSizeInfo(clazz);
-      classSizeInfos.put(clazz, csi);
+      csi = new ClassSizeInfo(clazz, referenceSize, superclassFieldPadding, objectHeaderSize, objectPadding);
+      CLASS_SIZE_INFO_MAP.put(clazz, csi);
     }
     return csi;
   }
 
-  private void visit(Object obj) {
+  private void visit(Object obj) throws IllegalAccessException {
     if (alreadyVisited.contains(obj)) {
       return;
     }
@@ -155,7 +163,7 @@ public class ObjectSizeCalculator {
       if (clazz.isArray()) {
         visitArray(obj);
       } else {
-        getClassSizeInfo(clazz).visit(obj, this);
+        getClassSizeInfo(clazz, referenceSize, superclassFieldPadding, objectHeaderSize, objectPadding).visit(obj, this);
       }
     }
   }
@@ -200,7 +208,7 @@ public class ObjectSizeCalculator {
       this.array = array;
     }
 
-    public void visit(ObjectSizeCalculator calc) {
+    public void visit(ObjectSizeCalculator calc) throws IllegalAccessException {
       for (Object elem : array) {
         if (elem != null) {
           calc.visit(elem);
@@ -223,7 +231,7 @@ public class ObjectSizeCalculator {
     return ((x + multiple - 1) / multiple) * multiple;
   }
 
-  private class ClassSizeInfo {
+  private static class ClassSizeInfo {
 
     // Padded fields + header size
     private final long objectSize;
@@ -232,7 +240,7 @@ public class ObjectSizeCalculator {
     private final long fieldsSize;
     private final Field[] referenceFields;
 
-    public ClassSizeInfo(Class<?> clazz) {
+    public ClassSizeInfo(Class<?> clazz, int referenceSize, int superclassFieldPadding, int objectHeaderSize, int objectPadding) {
       long fieldsSize = 0;
       final List<Field> referenceFields = new LinkedList<>();
       for (Field f : clazz.getDeclaredFields()) {
@@ -243,14 +251,13 @@ public class ObjectSizeCalculator {
         if (type.isPrimitive()) {
           fieldsSize += getPrimitiveFieldSize(type);
         } else {
-          f.setAccessible(true);
           referenceFields.add(f);
           fieldsSize += referenceSize;
         }
       }
       final Class<?> superClass = clazz.getSuperclass();
       if (superClass != null) {
-        final ClassSizeInfo superClassInfo = getClassSizeInfo(superClass);
+        final ClassSizeInfo superClassInfo = getClassSizeInfo(superClass, referenceSize, superclassFieldPadding, objectHeaderSize, objectPadding);
         fieldsSize += roundTo(superClassInfo.fieldsSize, superclassFieldPadding);
         referenceFields.addAll(Arrays.asList(superClassInfo.referenceFields));
       }
@@ -259,18 +266,14 @@ public class ObjectSizeCalculator {
       this.referenceFields = referenceFields.toArray(new Field[referenceFields.size()]);
     }
 
-    void visit(Object obj, ObjectSizeCalculator calc) {
+    void visit(Object obj, ObjectSizeCalculator calc) throws IllegalAccessException {
       calc.increaseSize(objectSize);
       enqueueReferencedObjects(obj, calc);
     }
 
-    public void enqueueReferencedObjects(Object obj, ObjectSizeCalculator calc) {
+    public void enqueueReferencedObjects(Object obj, ObjectSizeCalculator calc) throws IllegalAccessException {
       for (Field f : referenceFields) {
-        try {
-          calc.enqueue(f.get(obj));
-        } catch (IllegalAccessException e) {
-          throw new AssertionError("Unexpected denial of access to " + f, e);
-        }
+        calc.enqueue(f.get(obj));
       }
     }
   }
@@ -307,7 +310,7 @@ public class ObjectSizeCalculator {
         return new OpenJ9MemoryLayoutSpecification32bit();
       } else if (!"64".equals(dataModel)) {
         throw new UnsupportedOperationException(
-                "Unrecognized value '" + dataModel + "' of sun.arch.data.model system property");
+            "Unrecognized value '" + dataModel + "' of sun.arch.data.model system property");
       }
 
       long maxMemory = 0;
@@ -329,7 +332,7 @@ public class ObjectSizeCalculator {
         return new HotSpotMemoryLayoutSpecification32bit();
       } else if (!"64".equals(dataModel)) {
         throw new UnsupportedOperationException(
-                "Unrecognized value '" + dataModel + "' of sun.arch.data.model system property");
+            "Unrecognized value '" + dataModel + "' of sun.arch.data.model system property");
       }
 
       final int vmVersion = Integer.parseInt(strVmVersion.substring(0, strVmVersion.indexOf('.')));
