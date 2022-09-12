@@ -87,8 +87,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T extends HoodieRecordP
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr)
-      throws Exception {
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
     // If canIndexLogFiles, write inserts to log files else write inserts to base files
     if (table.getIndex().canIndexLogFiles()) {
       return new SparkLazyInsertIterable<>(recordItr, true, config, instantTime, table,

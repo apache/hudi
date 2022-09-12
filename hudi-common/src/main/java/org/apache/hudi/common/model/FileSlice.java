@@ -107,6 +107,11 @@ public class FileSlice implements Serializable {
     return Option.fromJavaOptional(logFiles.stream().findFirst());
   }
 
+  public long getTotalFileSize() {
+    return getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L)
+        + getLogFiles().mapToLong(HoodieLogFile::getFileSize).sum();
+  }
+
   /**
    * Returns true if there is no data file and no log files. Happens as part of pending compaction
    * 

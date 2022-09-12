@@ -61,7 +61,8 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
                                                               Map<String, String> strategyParams,
                                                               Schema schema,
                                                               List<HoodieFileGroupId> fileGroupIdList,
-                                                              boolean preserveHoodieMetadata) {
+                                                              boolean preserveHoodieMetadata,
+                                                              Map<String, String> extraMetadata) {
     if (numOutputGroups != 1 || fileGroupIdList.size() != 1) {
       throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
     }

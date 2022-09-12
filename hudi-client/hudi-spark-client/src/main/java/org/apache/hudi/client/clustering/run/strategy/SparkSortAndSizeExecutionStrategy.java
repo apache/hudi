@@ -55,7 +55,8 @@ public class SparkSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
   @Override
   public HoodieData<WriteStatus> performClusteringWithRecordsRDD(final HoodieData<HoodieRecord<T>> inputRecords, final int numOutputGroups,
                                                               final String instantTime, final Map<String, String> strategyParams, final Schema schema,
-                                                              final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata) {
+                                                              final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata,
+                                                              final Map<String, String> extraMetadata) {
     LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()

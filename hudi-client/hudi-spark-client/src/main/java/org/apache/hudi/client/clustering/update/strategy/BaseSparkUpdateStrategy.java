@@ -18,11 +18,12 @@
 
 package org.apache.hudi.client.clustering.update.strategy;
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 
 import java.util.List;
@@ -34,9 +35,9 @@ import java.util.Set;
  */
 public abstract class BaseSparkUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, HoodieData<HoodieRecord<T>>> {
 
-  public BaseSparkUpdateStrategy(HoodieSparkEngineContext engineContext,
+  public BaseSparkUpdateStrategy(HoodieEngineContext engineContext, HoodieTable table,
                                  Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
-    super(engineContext, fileGroupsInPendingClustering);
+    super(engineContext, table, fileGroupsInPendingClustering);
   }
 
   /**
