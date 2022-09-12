@@ -14,6 +14,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
  
+import sndhdr
 import sys
 import os
 from pyspark import sql
@@ -44,34 +45,45 @@ class ExamplePySpark:
             'hoodie.insert.shuffle.parallelism': 2
         }
         self.dataGen = spark._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
-        self.snapshotQuery = "SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table"
         return
 
     def runQuickstart(self):
         self.insertData()
         self.queryData()
+        
         self.updateData()
         self.queryData()
+
         self.timeTravelQuery()
         self.incrementalQuery()
         self.pointInTimeQuery()
+
         self.softDeletes()
+        self.queryData()
+
         self.hardDeletes()
+        self.queryData()
+
         self.insertOverwrite()
+        self.queryData()
         return
 
     def insertData(self):
+        print("Insert Data")
         inserts = self.spark._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(self.dataGen.generateInserts(10))
         df = self.spark.read.json(self.spark.sparkContext.parallelize(inserts, 2))
         df.write.format("hudi").options(**self.hudi_options).mode("overwrite").save(self.basePath)
-        return
+        return 
+
     def updateData(self):
+        print("Update Data")
         updates = self.spark._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(self.dataGen.generateUpdates(10))
         df = self.spark.read.json(spark.sparkContext.parallelize(updates, 2))
         df.write.format("hudi").options(**self.hudi_options).mode("append").save(self.basePath)
-        return
+        return 
 
     def queryData(self):
+        print("Query Data")
         tripsSnapshotDF = self.spark.read.format("hudi").load(self.basePath)
         tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
         self.spark.sql("SELECT fare, begin_lon, begin_lat, ts FROM  hudi_trips_snapshot WHERE fare > 20.0").show()
@@ -79,12 +91,18 @@ class ExamplePySpark:
         return
 
     def timeTravelQuery(self):
-        self.spark.read.format("hudi").option("as.of.instant", "20210728141108").load(self.basePath)
-        self.spark.read.format("hudi").option("as.of.instant", "2021-07-28 14:11:08.000").load(self.basePath)
-        self.spark.read.format("hudi").option("as.of.instant", "2021-07-28").load(self.basePath)
+        query = "SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM time_travel_query"
+        print("Time Travel Query")
+        self.spark.read.format("hudi").option("as.of.instant", "20210728141108").load(self.basePath).createOrReplaceTempView("time_travel_query")
+        self.spark.sql(query)
+        self.spark.read.format("hudi").option("as.of.instant", "2021-07-28 14:11:08.000").load(self.basePath).createOrReplaceTempView("time_travel_query")
+        self.spark.sql(query)
+        self.spark.read.format("hudi").option("as.of.instant", "2021-07-28").load(self.basePath).createOrReplaceTempView("time_travel_query")
+        self.spark.sql(query)
         return
     
     def incrementalQuery(self):
+        print("Incremental Query")
         self.spark.read.format("hudi").load(self.basePath).createOrReplaceTempView("hudi_trips_snapshot")
         self.commits = list(map(lambda row: row[0], self.spark.sql("SELECT DISTINCT(_hoodie_commit_time) AS commitTime FROM  hudi_trips_snapshot ORDER BY commitTime").limit(50).collect()))
         beginTime = self.commits[len(self.commits) - 2] 
@@ -97,6 +115,7 @@ class ExamplePySpark:
         self.spark.sql("SELECT `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts FROM hudi_trips_incremental WHERE fare > 20.0").show()
 
     def pointInTimeQuery(self):
+        print("Point-in-time Query")
         beginTime = "000"
         endTime = self.commits[len(self.commits) - 2]
         point_in_time_read_options = {
@@ -110,11 +129,13 @@ class ExamplePySpark:
         self.spark.sql("SELECT `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts FROM hudi_trips_point_in_time WHERE fare > 20.0").show()
     
     def softDeletes(self):
+        print("Soft Deletes")
         spark.read.format("hudi").load(self.basePath).createOrReplaceTempView("hudi_trips_snapshot")
 
         # fetch total records count
-        spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
-        spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot WHERE rider IS NOT null").count()
+        trip_count = spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
+        non_null_rider_count = spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot WHERE rider IS NOT null").count()
+        print(f"trip count: {trip_count}, non null rider count: {non_null_rider_count}")
         # fetch two records for soft deletes
         soft_delete_ds = spark.sql("SELECT * FROM hudi_trips_snapshot").limit(2)
         # prepare the soft deletes by ensuring the appropriate fields are nullified
@@ -145,13 +166,16 @@ class ExamplePySpark:
         self.spark.read.format("hudi").load(self.basePath).createOrReplaceTempView("hudi_trips_snapshot")
 
         # This should return the same total count as before
-        self.spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
+        trip_count = self.spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
         # This should return (total - 2) count as two records are updated with nulls
-        self.spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot WHERE rider IS NOT null").count()
+        non_null_rider_count = self.spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot WHERE rider IS NOT null").count()
+        print(f"trip count: {trip_count}, non null rider count: {non_null_rider_count}")
 
     def hardDeletes(self):
+        print("Hard Deletes")
         # fetch total records count
-        self.spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
+        total_count = self.spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
+        print(f"total count: {total_count}")
         # fetch two records to be deleted
         ds = self.spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").limit(2)
 
@@ -175,8 +199,12 @@ class ExamplePySpark:
         roAfterDeleteViewDF = self.spark.read.format("hudi").load(self.basePath) 
         roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot")
         # fetch should return (total - 2) records
-        self.spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
+        total_count = self.spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
+        print(f"total count: {total_count}")
+        return
+
     def insertOverwrite(self):
+        print("Insert Overwrite")
         self.spark.read.format("hudi").load(self.basePath).select(["uuid","partitionpath"]).sort(["partitionpath", "uuid"]).show(n=100,truncate=False)
         inserts = self.spark._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(self.dataGen.generateInserts(10))
         df = self.spark.read.json(self.spark.sparkContext.parallelize(inserts, 2)).filter("partitionpath = 'americas/united_states/san_francisco'")
@@ -192,17 +220,12 @@ class ExamplePySpark:
         }
         df.write.format("hudi").options(**hudi_insert_overwrite_options).mode("append").save(self.basePath)
         self.spark.read.format("hudi").load(self.basePath).select(["uuid","partitionpath"]).sort(["partitionpath", "uuid"]).show(n=100,truncate=False)
-
-    
-
-
-
-
+        return
 
 if __name__ == "__main__":
     random.seed(46474747)
     if len(sys.argv) < 2:
-        print("Usage: HoodiePySparkQuickstart <tablePath> <tableName>")
+        print("Usage: python3 HoodiePySparkQuickstart.py <tableName>")
         quit(-1)
     tableName = sys.argv[1]
     basePath = "file:///tmp/hudi_trips_cow"
