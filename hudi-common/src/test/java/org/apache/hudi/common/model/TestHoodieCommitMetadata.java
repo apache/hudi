@@ -19,15 +19,14 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.JsonUtils;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -47,12 +46,9 @@ public class TestHoodieCommitMetadata {
       HoodieCommitMetadata commitMetadata, List<String> expectedFieldNameList)
       throws IOException {
     String serializedCommitMetadata = commitMetadata.toJsonString();
-    Iterator<String> fieldNameIterator = JsonUtils.getObjectMapper()
-        .readTree(serializedCommitMetadata).fieldNames();
-    List<String> actualFieldNameList = new ArrayList<>();
-    while (fieldNameIterator.hasNext()) {
-      actualFieldNameList.add(fieldNameIterator.next());
-    }
+    List<String> actualFieldNameList = CollectionUtils.toStream(
+            JsonUtils.getObjectMapper().readTree(serializedCommitMetadata).fieldNames())
+        .collect(Collectors.toList());
     assertEquals(
         expectedFieldNameList.stream().sorted().collect(Collectors.toList()),
         actualFieldNameList.stream().sorted().collect(Collectors.toList())
