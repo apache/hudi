@@ -22,7 +22,7 @@ function BlogLayout(props) {
             </aside>
           )}
           <main
-            className={clsx('col', {
+            className={clsx('col row', {
               'col--7': hasSidebar,
               'col--9 col--offset-2': !hasSidebar,
             })}

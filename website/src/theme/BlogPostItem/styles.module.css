@@ -5,20 +5,27 @@
  * LICENSE file in the root directory of this source tree.
  */
 
- .blogPostTitle {
+.blogPostTitle {
   font-size: 1rem;
-  
 }
+
+.blogPostPageTitle {
+  margin-bottom: 0;
+}
+
 .blogPostPageTile{
   font-size:3rem;
   display: inline-flex;
- 
 }
 
 .blogPostData {
   font-size: 1.1rem;
   margin-top: 0 !important;
-  margin-left:1px
+  margin-left:20px
+}
+
+.tagsWrapperPostPage {
+  margin: 10px 0 10px calc(0.5rem + 2px) !important;
 }
 
 .blogPostDetailsFull {
@@ -30,7 +37,7 @@
 }
 
 .authorsList {
-  font-size:0.9rem;
+  font-size:0.75rem;
   white-space: nowrap;
   text-align:justify;
   color: rgb(28, 30, 33);
@@ -65,24 +72,27 @@
 }
 
 .authorTimeTags {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   color: rgb(28, 30, 33);
   display:flex;
   flex-direction: row;
   vertical-align:text-top;
   margin-left:2px;
- 
- 
- 
- 
- }
+  flex-wrap: wrap;
+}
 
 .tag {
-  margin: 0 20px 0px -10px;
+  margin: -5px 20px 10px -10px;
   display: inline-flex;
-  margin-top:-5px;
-  height:35px  !important;
   vertical-align:bottom;
+}
+
+.tagPostPage {
+  margin: -5px 20px 0 -10px;
+}
+
+.tag a {
+  padding: 2px 5px;
 }
 
 h4{
@@ -91,11 +101,16 @@ h4{
 
 }
 
+.postHeader {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+}
 
 .greyLink {
   color: rgb(28, 30, 33);
   text-decoration-color: rgb(28, 30, 33);
- 
 }
 
 .blogPostText{
@@ -103,8 +118,11 @@ h4{
   color: rgb(28, 30, 33);
   display:flex;
   flex-direction: row;
-  
   margin-left:2px;
+}
+
+.blogInfo {
+  display: flex;
 }
 
 .blogPostAuthorsList{

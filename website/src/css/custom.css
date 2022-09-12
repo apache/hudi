@@ -207,22 +207,32 @@ footer .container {
 }
 
 .blogThumbnail {
-  height: 180px;
   overflow: hidden;
   margin-bottom: 10px;
+  position: relative;
+  padding: 50% 0 0 0!important;
 }
 
-.blogThumbnail img {
+.blogThumbnail .blog-image {
+  position: absolute;
+  top: 0;
+  left: 0;
   height:100%;
-  width: auto;
+  width: 100%;
+  object-fit: cover;
 }
+
 .tagRegular_node_modules-\@docusaurus-theme-classic-lib-next-theme-Tag-styles-module{
-  color:black
+  color:black;
+  width: max-content;
 }
 .authorTimeTags_src-theme-BlogPostItem-styles-module {
   vertical-align:text-top;
 }
 
+.pagination-nav {
+  width: 100%;
+}
 
 .blog-list-page article {
   display: inline-flex;
