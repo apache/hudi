@@ -80,7 +80,8 @@ mvn clean javadoc:aggregate -Pjavadocs
 
 ### Build with different Spark versions
 
-The default Spark version supported is 2.4.4. Refer to the table below for building with different Spark and Scala versions.
+The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version, corresponding to `spark3` profile is 3.3.0.
+Refer to the table below for building with different Spark and Scala versions.
 
 | Maven build options       | Expected Spark bundle jar name               | Notes                                            |
 |:--------------------------|:---------------------------------------------|:-------------------------------------------------|
@@ -89,7 +90,8 @@ The default Spark version supported is 2.4.4. Refer to the table below for build
 | `-Dspark2.4 -Dscala-2.12` | hudi-spark2.4-bundle_2.12                    | For Spark 2.4.4 and Scala 2.12                   |
 | `-Dspark3.1 -Dscala-2.12` | hudi-spark3.1-bundle_2.12                    | For Spark 3.1.x and Scala 2.12                   |
 | `-Dspark3.2 -Dscala-2.12` | hudi-spark3.2-bundle_2.12                    | For Spark 3.2.x and Scala 2.12                   |
-| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.2.x and Scala 2.12                   |
+| `-Dspark3.3 -Dscala-2.12` | hudi-spark3.3-bundle_2.12                    | For Spark 3.3.x and Scala 2.12                   |
+| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.3.0 and Scala 2.12                   |
 | `-Dscala-2.12`            | hudi-spark-bundle_2.12 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.12                   |
 
 For example,
@@ -140,3 +142,8 @@ mvn -Punit-tests test -DSPARK_EVLOG_DIR=/path/for/spark/event/log
 ## Quickstart
 
 Please visit [https://hudi.apache.org/docs/quick-start-guide.html](https://hudi.apache.org/docs/quick-start-guide.html) to quickly explore Hudi's capabilities using spark-shell. 
+
+## Contributing
+
+Please check out our [contribution guide](https://hudi.apache.org/contribute/how-to-contribute) to learn more about how to contribute.
+For code contributions, please refer to the [developer setup](https://hudi.apache.org/contribute/developer-setup).
