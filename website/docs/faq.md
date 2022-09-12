@@ -287,13 +287,17 @@ Depending on how you write to Hudi these are the possible options currently.
    - Offline compaction can be achieved by setting ```compaction.async.enabled``` to ```false``` and periodically running [Flink offline Compactor](https://hudi.apache.org/docs/next/compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
    - Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set ```compaction.async.enabled``` to ```false```, ```compaction.schedule.enabled``` to ```true``` and then run the [Flink offline Compactor](https://hudi.apache.org/docs/next/compaction/#flink-offline-compaction) periodically to execute the plans.
 
+### How to disable all table services in case of multiple writers?
+
+[hoodie.table.services.enabled](https://hudi.apache.org/docs/configurations/#hoodietableservicesenabled) is an umbrella config that can be used to turn off all table services at once without having to individually disable them. This is handy in use cases where there are multiple writers doing ingestion. While one of the main pipelines can take care of the table services, other ingestion pipelines can disable them to avoid frequent trigger of cleaning/clustering etc. This does not apply to singe writer scenarios.
+
 ### What performance/ingest latency can I expect for Hudi writing?
 
 The speed at which you can write into Hudi depends on the [write operation](https://hudi.apache.org/docs/write_operations) and some trade-offs you make along the way like file sizing. Just like how databases incur overhead over direct/raw file I/O on disks,  Hudi operations may have overhead from supporting  database like features compared to reading/writing raw DFS files. That said, Hudi implements advanced techniques from database literature to keep these minimal. User is encouraged to have this perspective when trying to reason about Hudi performance. As the saying goes : there is no free lunch (not yet atleast)
 
 | Storage Type | Type of workload | Performance | Tips |
 |-------|--------|--------|--------|
-| copy on write | bulk_insert | Should match vanilla spark writing + an additional sort to properly size files | properly size [bulk insert parallelism](https://hudi.apache.org/docs/configurations#hoodiebulkinsertshuffleparallelism) to get right number of files. use insert if you want this auto tuned |
+| copy on write | bulk_insert | Should match vanilla spark writing + an additional sort to properly size files | properly size [bulk insert parallelism](https://hudi.apache.org/docs/configurations#hoodiebulkinsertshuffleparallelism) to get right number of files. use insert if you want this auto tuned . Configure [hoodie.bulkinsert.sort.mode](https://hudi.apache.org/docs/configurations#hoodiebulkinsertsortmode) for better file sizes at the cost of memory. The default value NONE offers the fastest performance and matches `spark.write.parquet()` in terms of number of files, overheads. 
 | copy on write | insert | Similar to bulk insert, except the file sizes are auto tuned requiring input to be cached into memory and custom partitioned. | Performance would be bound by how parallel you can write the ingested data. Tune [this limit](https://hudi.apache.org/docs/configurations#hoodieinsertshuffleparallelism) up, if you see that writes are happening from only a few executors. |
 | copy on write | upsert/ de-duplicate & insert | Both of these would involve index lookup.  Compared to naively using Spark (or similar framework)'s JOIN to identify the affected records, Hudi indexing is often 7-10x faster as long as you have ordered keys (discussed below) or <50% updates. Compared to naively overwriting entire partitions, Hudi write can be several magnitudes faster depending on how many files in a given partition is actually updated. For e.g, if a partition has 1000 files out of which only 100 is dirtied every ingestion run, then Hudi would only read/merge a total of 100 files and thus 10x faster than naively rewriting entire partition. | Ultimately performance would be bound by how quickly we can read and write a parquet file and that depends on the size of the parquet file, configured [here](https://hudi.apache.org/docs/configurations#hoodieparquetmaxfilesize). Also be sure to properly tune your [bloom filters](https://hudi.apache.org/docs/configurations#Index-Configs). [HUDI-56](https://issues.apache.org/jira/browse/HUDI-56) will auto-tune this. |
 | merge on read | bulk insert | Currently new data only goes to parquet files and thus performance here should be similar to copy_on_write bulk insert. This has the nice side-effect of getting data into parquet directly for query performance. [HUDI-86](https://issues.apache.org/jira/browse/HUDI-86) will add support for logging inserts directly and this up drastically. | |
@@ -580,6 +584,22 @@ After the second write:
 |-------------------|--------------------|------------------|----------------------|--------------------|-----------------|---|----|
 |  20220622204044318|20220622204044318...|                 1|                      |890aafc0-d897-44d...|hudi.apache.com|  1|   1|
 |  20220622204208997|20220622204208997...|                 2|                      |890aafc0-d897-44d...|             null|  1|   2|
+
+
+### I see two different records for the same record key value, each record key with a different timestamp format. How is this possible?
+
+This is a known issue with enabling row-writer for bulk_insert operation. When you do a bulk_insert followed by another 
+write operation such as upsert/insert this might be observed for timestamp fields specifically. For example, bulk_insert might produce
+timestamp `2016-12-29 09:54:00.0` for record key whereas non bulk_insert write operation might produce a long value like
+`1483023240000000` for the record key thus creating two different records. To fix this, starting 0.10.1 a new config [hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled](https://hudi.apache.org/docs/configurations/#hoodiedatasourcewritekeygeneratorconsistentlogicaltimestampenabled) 
+is introduced to bring consistency irrespective of whether row writing is enabled on not. However, for the sake of 
+backwards compatibility and not breaking existing pipelines, this config is set to false by default and will have to be enabled explicitly.
+
+
+### Can I switch from one index type to another without having to rewrite the entire table?
+
+It should be okay to switch between Bloom index and Simple index as long as they are not global. 
+Moving from global to non-global and vice versa may not work. Also switching between Hbase (gloabl index) and regular bloom might not work.
 
 ## Contributing to FAQ
 
