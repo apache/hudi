@@ -19,11 +19,16 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.JsonUtils;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -33,6 +38,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests hoodie commit metadata {@link HoodieCommitMetadata}.
  */
 public class TestHoodieCommitMetadata {
+
+  private static final List<String> EXPECTED_FIELD_NAMES = Arrays.asList(
+      "partitionToWriteStats", "compacted", "extraMetadata", "operationType");
+
+  public static void verifyMetadataFieldNames(
+      HoodieCommitMetadata commitMetadata, List<String> expectedFieldNameList)
+      throws IOException {
+    String serializedCommitMetadata = commitMetadata.toJsonString();
+    List<String> actualFieldNameList = CollectionUtils.toStream(
+            JsonUtils.getObjectMapper().readTree(serializedCommitMetadata).fieldNames())
+        .collect(Collectors.toList());
+    assertEquals(
+        expectedFieldNameList.stream().sorted().collect(Collectors.toList()),
+        actualFieldNameList.stream().sorted().collect(Collectors.toList())
+    );
+  }
+
+  @Test
+  public void verifyFieldNamesInCommitMetadata() throws IOException {
+    List<HoodieWriteStat> fakeHoodieWriteStats = HoodieTestUtils.generateFakeHoodieWriteStat(10);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    fakeHoodieWriteStats.forEach(stat -> commitMetadata.addWriteStat(stat.getPartitionPath(), stat));
+    verifyMetadataFieldNames(commitMetadata, EXPECTED_FIELD_NAMES);
+  }
 
   @Test
   public void testPerfStatPresenceInHoodieMetadata() throws Exception {
