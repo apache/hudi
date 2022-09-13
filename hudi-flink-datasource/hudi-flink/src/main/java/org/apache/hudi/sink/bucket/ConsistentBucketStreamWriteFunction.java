@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
@@ -55,8 +56,8 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
   private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketStreamWriteFunction.class);
 
   private List<String> indexKeyFields;
-  private int bucketNum;
   private Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
+  private Map<ConsistentHashingNode, HoodieRecordLocation> nodeToRecordLocation;
 
   /**
    * Constructs a StreamingSinkFunction.
@@ -70,10 +71,10 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    this.bucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     this.indexKeyFields = Arrays.asList(config.getString(FlinkOptions.INDEX_KEY_FIELD).split(","));
 
     this.partitionToIdentifier = new HashMap<>();
+    this.nodeToRecordLocation = new HashMap<>();
   }
 
   @Override
@@ -98,14 +99,16 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
             + partitionToIdentifier.get(partition).getMetadata().getFilename() + ", record_key: " + hoodieKey);
 
     record.unseal();
-    record.setCurrentLocation(new HoodieRecordLocation("U", FSUtils.createNewFileId(node.getFileIdPrefix(), 0)));
+    record.setCurrentLocation(nodeToRecordLocation.computeIfAbsent(node,
+        n -> new HoodieRecordLocation("U", FSUtils.createNewFileId(n.getFileIdPrefix(), 0))));
     record.seal();
     bufferRecord(record);
   }
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     return partitionToIdentifier.computeIfAbsent(partition, p -> {
-      HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(this.metaClient, p, bucketNum);
+      HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadMetadata(this.metaClient, p);
+      ValidationUtils.checkArgument(metadata != null);
       return new ConsistentBucketIdentifier(metadata);
     });
   }

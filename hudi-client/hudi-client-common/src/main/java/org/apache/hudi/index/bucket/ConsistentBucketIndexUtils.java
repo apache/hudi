@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIndexException;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -62,12 +63,15 @@ public class ConsistentBucketIndexUtils {
       return metadataOption.get();
     }
 
+    LOG.info("Failed to load metadata, try to create one. Partition: " + partition);
+
     // There is no metadata, so try to create a new one and save it.
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
     if (saveMetadata(metaClient, metadata)) {
       return metadata;
     }
 
+    LOG.info("Failed to create metadata (May caused by concurrent metadata creation. Try load again. Partition:" + partition);
     // The creation failed, so try load metadata again. Concurrent creation of metadata should have succeeded.
     // Note: the consistent problem of cloud storage is handled internal in the HoodieWrapperFileSystem, i.e., ConsistentGuard
     metadataOption = loadMetadata(metaClient, partition);
@@ -89,10 +93,10 @@ public class ConsistentBucketIndexUtils {
     try {
       HoodieWrapperFileSystem fs = metaClient.getFs();
       FileStatus[] metaFiles = fs.listStatus(metadataPath);
-      final HoodieTimeline completedCommits = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+      final HoodieTimeline completedCommits = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
       Predicate<FileStatus> metaFilePredicate = fileStatus -> {
         String filename = fileStatus.getPath().getName();
-        if (!filename.contains(HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX)) {
+        if (!filename.endsWith(HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX)) {
           return false;
         }
         String timestamp = HoodieConsistentHashingMetadata.getTimestampFromFile(filename);
@@ -111,7 +115,7 @@ public class ConsistentBucketIndexUtils {
       return Option.of(HoodieConsistentHashingMetadata.fromBytes(content));
     } catch (IOException e) {
       LOG.error("Error when loading hashing metadata, partition: " + partition, e);
-      throw new HoodieIndexException("Error while loading hashing metadata", e);
+      throw new HoodieIndexException("Error while loading hashing metadata, partition: " + partition, e);
     }
   }
 
@@ -125,7 +129,7 @@ public class ConsistentBucketIndexUtils {
   public static boolean saveMetadata(HoodieTableMetaClient metaClient, HoodieConsistentHashingMetadata metadata) {
     HoodieWrapperFileSystem fs = metaClient.getFs();
     Path dir = FSUtils.getPartitionPath(metaClient.getHashingMetadataPath(), metadata.getPartitionPath());
-    Path fullPath = new Path(dir, metadata.getFilename() + ".tmp." + ThreadLocalRandom.current().nextInt());
+    Path fullPath = new Path(dir, metadata.getFilename() + ".tmp." + Math.abs(ThreadLocalRandom.current().nextInt()));
     try (FSDataOutputStream fsOut = fs.create(fullPath, false)) {
       byte[] bytes = metadata.toBytes();
       fsOut.write(bytes);
@@ -133,12 +137,24 @@ public class ConsistentBucketIndexUtils {
       fsOut.close();
 
       // Atomic renaming to ensure only one can succeed creating the initial hashing metadata
-      fs.rename(fullPath, new Path(dir, metadata.getFilename()));
-      return true;
+      boolean success = fs.rename(fullPath, new Path(dir, metadata.getFilename()));
+      if (success) {
+        return true;
+      }
+    } catch (FileAlreadyExistsException e) {
+      LOG.info("Failed to save bucket metadata: " + metadata + " as it has been created by others");
     } catch (IOException e) {
-      LOG.warn("Failed to update bucket metadata: " + metadata, e);
+      LOG.warn("Failed to save bucket metadata: " + metadata, e);
+    }
+
+    // Cleanup tmp files if necessary
+    try {
+      if (fs.exists(fullPath)) {
+        fs.delete(fullPath);
+      }
+    } catch (IOException ex) {
+      LOG.warn("Error trying to clean up temporary metadata: " + metadata, ex);
     }
     return false;
   }
-
 }
