@@ -38,7 +38,7 @@ case class HoodieSpark3ResolveLogicalRelations() extends Rule[LogicalPlan] {
           //    - Hasn't been tagged prior (to make sure we're not wrapping it recursively)
           if sparkAdapter.isHoodieTable(table) && lr.getTagValue(hudiLogicalRelationTag).isEmpty =>
           // NOTE: Have to make a copy here, since by default Spark is caching resolved [[LogicalRelation]]s
-          val logicalRelation = lr.newInstance()
+          val logicalRelation = lr.copy()
           logicalRelation.setTagValue(hudiLogicalRelationTag, true)
 
           HoodieLogicalRelation(logicalRelation)
@@ -56,7 +56,7 @@ case class HoodieSpark3FoldLogicalRelations() extends Rule[LogicalPlan] {
         //       to make sure if meta-fields were accessed by some operators upstream (t/h metadata-output
         //       resolution) these are still accessible.
         //       At this stage, we've already cleared the analysis (resolution) phase, therefore it's safe to do so
-        case HoodieLogicalRelation(lr: LogicalRelation) => Project(lr.output, lr)
+        case HoodieLogicalRelation(lr: LogicalRelation) => lr
       }
     }
   }

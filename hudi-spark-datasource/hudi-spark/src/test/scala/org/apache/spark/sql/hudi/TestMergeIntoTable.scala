@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.spark.sql.internal.SQLConf
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
@@ -674,6 +675,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Merge Hudi to Hudi") {
     withRecordType()(withTempDir { tmp =>
+      spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       Seq("cow", "mor").foreach { tableType =>
         val sourceTable = generateTableName

@@ -28,7 +28,12 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 
 import scala.collection.JavaConverters._
 
-// TODO elaborate
+/**
+ * TODO elaborate
+ *
+ * NOTE: This class is a wrapper allowing to streamline handling of Hudi's metadata fields in Spark <= 3.1
+ *       (proper meta-fields support is introduced only in Spark 3.2)
+ */
 case class HoodieLogicalRelation(override val child: LogicalRelation) extends UnaryNode
   with MultiInstanceRelation
   with HoodieUnaryLikeSham[LogicalPlan] {

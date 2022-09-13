@@ -222,7 +222,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val insertSourceDF = sourceDF.join(targetDF, primaryKeys,"left_anti")
 
       // column order changed after left anti join , we should keep column order of source dataframe
-      val cols = removeMetaFields(sourceDF).columns
+      val cols = sourceDF.columns
       executeInsertOnly(insertSourceDF.select(cols.head, cols.tail:_*), parameters)
     }
 
