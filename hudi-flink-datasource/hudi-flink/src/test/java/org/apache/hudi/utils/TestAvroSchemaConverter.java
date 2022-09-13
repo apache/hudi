@@ -23,6 +23,7 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.util.AvroSchemaConverter;
 
 import org.apache.avro.Schema;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.junit.jupiter.api.Test;
 
@@ -49,5 +50,42 @@ public class TestAvroSchemaConverter {
         + "`totalUncompressedSize` BIGINT, "
         + "`isDeleted` BOOLEAN NOT NULL>";
     assertThat(dataType.getChildren().get(pos).toString(), is(expected));
+  }
+
+  @Test
+  void testLocalTimestampType() {
+    DataType dataType = DataTypes.ROW(
+        DataTypes.FIELD("f_localtimestamp_millis", DataTypes.TIMESTAMP_WITH_LOCAL_TIME_ZONE(3)),
+        DataTypes.FIELD("f_localtimestamp_micros", DataTypes.TIMESTAMP_WITH_LOCAL_TIME_ZONE(6))
+    );
+    // convert to avro schema
+    Schema schema = AvroSchemaConverter.convertToSchema(dataType.getLogicalType());
+    final String expectedSchema = ""
+        + "[ \"null\", {\n"
+        + "  \"type\" : \"record\",\n"
+        + "  \"name\" : \"record\",\n"
+        + "  \"fields\" : [ {\n"
+        + "    \"name\" : \"f_localtimestamp_millis\",\n"
+        + "    \"type\" : [ \"null\", {\n"
+        + "      \"type\" : \"long\",\n"
+        + "      \"logicalType\" : \"local-timestamp-millis\"\n"
+        + "    } ],\n"
+        + "    \"default\" : null\n"
+        + "  }, {\n"
+        + "    \"name\" : \"f_localtimestamp_micros\",\n"
+        + "    \"type\" : [ \"null\", {\n"
+        + "      \"type\" : \"long\",\n"
+        + "      \"logicalType\" : \"local-timestamp-micros\"\n"
+        + "    } ],\n"
+        + "    \"default\" : null\n"
+        + "  } ]\n"
+        + "} ]";
+    assertThat(schema.toString(true), is(expectedSchema));
+    // convert it back
+    DataType convertedDataType = AvroSchemaConverter.convertToDataType(schema);
+    final String expectedDataType = "ROW<"
+        + "`f_localtimestamp_millis` TIMESTAMP_LTZ(3), "
+        + "`f_localtimestamp_micros` TIMESTAMP_LTZ(6)>";
+    assertThat(convertedDataType.toString(), is(expectedDataType));
   }
 }

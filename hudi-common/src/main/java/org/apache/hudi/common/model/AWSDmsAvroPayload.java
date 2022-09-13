@@ -69,8 +69,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    IndexedRecord insertValue = super.getInsertValue(schema, properties).get();
-    return handleDeleteOperation(insertValue);
+    return getInsertValue(schema);
   }
 
   @Override
@@ -82,8 +81,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties)
       throws IOException {
-    IndexedRecord insertValue = super.getInsertValue(schema, properties).get();
-    return handleDeleteOperation(insertValue);
+    return combineAndGetUpdateValue(currentValue, schema);
   }
 
   @Override

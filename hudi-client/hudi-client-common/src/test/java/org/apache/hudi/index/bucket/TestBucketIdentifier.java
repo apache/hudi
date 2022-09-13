@@ -26,11 +26,12 @@ import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestBucketIdentifier {
 
@@ -103,20 +104,20 @@ public class TestBucketIdentifier {
   public void testGetHashKeys() {
     BucketIdentifier identifier = new BucketIdentifier();
     List<String> keys = identifier.getHashKeys(new HoodieKey("abc", "partition"), "");
-    Assertions.assertEquals(1, keys.size());
-    Assertions.assertEquals("abc", keys.get(0));
+    assertEquals(1, keys.size());
+    assertEquals("abc", keys.get(0));
 
     keys = identifier.getHashKeys(new HoodieKey("f1:abc", "partition"), "f1");
-    Assertions.assertEquals(1, keys.size());
-    Assertions.assertEquals("abc", keys.get(0));
+    assertEquals(1, keys.size());
+    assertEquals("abc", keys.get(0));
 
     keys = identifier.getHashKeys(new HoodieKey("f1:abc,f2:bcd", "partition"), "f2");
-    Assertions.assertEquals(1, keys.size());
-    Assertions.assertEquals("bcd", keys.get(0));
+    assertEquals(1, keys.size());
+    assertEquals("bcd", keys.get(0));
 
     keys = identifier.getHashKeys(new HoodieKey("f1:abc,f2:bcd", "partition"), "f1,f2");
-    Assertions.assertEquals(2, keys.size());
-    Assertions.assertEquals("abc", keys.get(0));
-    Assertions.assertEquals("bcd", keys.get(1));
+    assertEquals(2, keys.size());
+    assertEquals("abc", keys.get(0));
+    assertEquals("bcd", keys.get(1));
   }
 }

@@ -18,10 +18,6 @@
 
 package org.apache.hudi.sink.compact;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.util.Arrays;
-import java.util.List;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -30,6 +26,11 @@ import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategy;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Test case for every {@link CompactionPlanStrategy} implements
@@ -59,16 +60,16 @@ public class TestCompactionPlanStrategy {
     FlinkCompactionConfig compactionConfig = new FlinkCompactionConfig();
     CompactionPlanStrategy strategy = CompactionPlanStrategies.getStrategy(compactionConfig);
 
-    assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_002}, strategy.select(pendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {INSTANT_002}, strategy.select(pendingCompactionTimeline));
 
     compactionConfig.compactionSeq = FlinkCompactionConfig.SEQ_LIFO;
-    assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_006}, strategy.select(pendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {INSTANT_006}, strategy.select(pendingCompactionTimeline));
 
     HoodieTimeline emptyPendingCompactionTimeline = emptyTimeline.filterPendingCompactionTimeline();
-    assertHoodieInstantsEquals(new HoodieInstant[]{}, strategy.select(emptyPendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {}, strategy.select(emptyPendingCompactionTimeline));
 
     HoodieTimeline allCompleteCompactionTimeline = allCompleteTimeline.filterPendingCompactionTimeline();
-    assertHoodieInstantsEquals(new HoodieInstant[]{}, strategy.select(allCompleteCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {}, strategy.select(allCompleteCompactionTimeline));
   }
 
   @Test
@@ -78,16 +79,16 @@ public class TestCompactionPlanStrategy {
     compactionConfig.maxNumCompactionPlans = 2;
 
     CompactionPlanStrategy strategy = CompactionPlanStrategies.getStrategy(compactionConfig);
-    assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_002, INSTANT_003}, strategy.select(pendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {INSTANT_002, INSTANT_003}, strategy.select(pendingCompactionTimeline));
 
     compactionConfig.compactionSeq = FlinkCompactionConfig.SEQ_LIFO;
-    assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_006, INSTANT_004}, strategy.select(pendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {INSTANT_006, INSTANT_004}, strategy.select(pendingCompactionTimeline));
 
     HoodieTimeline emptyPendingCompactionTimeline = emptyTimeline.filterPendingCompactionTimeline();
-    assertHoodieInstantsEquals(new HoodieInstant[]{}, strategy.select(emptyPendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {}, strategy.select(emptyPendingCompactionTimeline));
 
     HoodieTimeline allCompleteCompactionTimeline = allCompleteTimeline.filterPendingCompactionTimeline();
-    assertHoodieInstantsEquals(new HoodieInstant[]{}, strategy.select(allCompleteCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {}, strategy.select(allCompleteCompactionTimeline));
   }
 
   @Test
@@ -97,14 +98,14 @@ public class TestCompactionPlanStrategy {
     compactionConfig.compactionPlanSelectStrategy = CompactionPlanStrategy.ALL;
     CompactionPlanStrategy strategy = CompactionPlanStrategies.getStrategy(compactionConfig);
 
-    assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_002, INSTANT_003, INSTANT_004, INSTANT_006},
+    assertHoodieInstantsEquals(new HoodieInstant[] {INSTANT_002, INSTANT_003, INSTANT_004, INSTANT_006},
         strategy.select(pendingCompactionTimeline));
 
     HoodieTimeline emptyPendingCompactionTimeline = emptyTimeline.filterPendingCompactionTimeline();
-    assertHoodieInstantsEquals(new HoodieInstant[]{}, strategy.select(emptyPendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {}, strategy.select(emptyPendingCompactionTimeline));
 
     HoodieTimeline allCompleteCompactionTimeline = allCompleteTimeline.filterPendingCompactionTimeline();
-    assertHoodieInstantsEquals(new HoodieInstant[]{}, strategy.select(allCompleteCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {}, strategy.select(allCompleteCompactionTimeline));
   }
 
   @Test
@@ -116,16 +117,16 @@ public class TestCompactionPlanStrategy {
     CompactionPlanStrategy strategy = CompactionPlanStrategies.getStrategy(compactionConfig);
     compactionConfig.compactionPlanInstant = "004";
 
-    assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_004}, strategy.select(pendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {INSTANT_004}, strategy.select(pendingCompactionTimeline));
 
     compactionConfig.compactionPlanInstant = "002,003";
-    assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_002, INSTANT_003}, strategy.select(pendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {INSTANT_002, INSTANT_003}, strategy.select(pendingCompactionTimeline));
 
     compactionConfig.compactionPlanInstant = "002,005";
-    assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_002}, strategy.select(pendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {INSTANT_002}, strategy.select(pendingCompactionTimeline));
 
     compactionConfig.compactionPlanInstant = "005";
-    assertHoodieInstantsEquals(new HoodieInstant[]{}, strategy.select(pendingCompactionTimeline));
+    assertHoodieInstantsEquals(new HoodieInstant[] {}, strategy.select(pendingCompactionTimeline));
   }
 
   private void assertHoodieInstantsEquals(HoodieInstant[] expected, List<HoodieInstant> actual) {
