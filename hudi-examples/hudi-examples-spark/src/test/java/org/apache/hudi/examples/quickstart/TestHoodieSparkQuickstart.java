@@ -21,9 +21,8 @@ package org.apache.hudi.examples.quickstart;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.testutils.providers.SparkProvider;
+
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -36,15 +35,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.nio.file.Paths;
 
-import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.delete;
-import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.deleteByPartition;
-import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.incrementalQuery;
-import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.insertData;
-import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.insertOverwriteData;
-import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.pointInTimeQuery;
-import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.queryData;
 import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.runQuickstart;
-import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.updateData;
 
 public class TestHoodieSparkQuickstart implements SparkProvider {
   protected static HoodieSparkEngineContext context;
