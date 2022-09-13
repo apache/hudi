@@ -39,7 +39,10 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
@@ -217,11 +220,18 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
     Option<Dataset<Row>> dataset = Option.empty();
     if (!cloudFiles.isEmpty()) {
-      DataFrameReader dataFrameReader = getDataFrameReader(fileFormat);
-      dataset = Option.of(dataFrameReader.load(cloudFiles.toArray(new String[0])));
+      JavaRDD<Dataset<Row>> datasetIterator = sparkContext.parallelize(cloudFiles, cloudFiles.size()).flatMap(
+          (FlatMapFunction<String, Dataset<Row>>) cloudFile -> Collections.singletonList(getDataFromFile(cloudFile, fileFormat)).iterator());
+      Dataset<Row> finalDataset = datasetIterator.fold(sparkSession.emptyDataFrame(), (Function2<Dataset<Row>, Dataset<Row>, Dataset<Row>>) (v1, v2) -> v1.union(v2));
+      dataset = Option.of(finalDataset);
     }
     LOG.debug("Extracted distinct files " + cloudFiles.size()
         + " and some samples " + cloudFiles.stream().limit(10).collect(Collectors.toList()));
     return Pair.of(dataset, queryTypeAndInstantEndpts.getRight().getRight());
+  }
+
+  private Dataset<Row> getDataFromFile(String filePath, String fileFormat) {
+    DataFrameReader dataFrameReader = getDataFrameReader(fileFormat);
+    return dataFrameReader.load(filePath);
   }
 }
