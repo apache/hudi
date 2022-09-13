@@ -84,7 +84,7 @@ function BlogPostItem(props) {
         const authorsCount = authors.length;
         if (authorsCount === 0) {
             return (
-                <div className={clsx(styles.authorTimeTags, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
+                <div className={clsx(styles.authorTimeTags, "row 'margin-vert--md'")}>
                     <time dateTime={date} itemProp="datePublished">
                         {formattedDate}
                     </time>
@@ -120,7 +120,7 @@ function BlogPostItem(props) {
                     ))}
 
                 </div> : <div
-                    className={clsx(styles.authorTimeTags, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
+                    className={clsx(styles.authorTimeTags, "row 'margin-vert--md'")}>
                     <time dateTime={date} itemProp="datePublished">
                         {formattedDate} by
                     </time>
@@ -128,7 +128,7 @@ function BlogPostItem(props) {
                     {authors.map((author, idx) => (
 
                         <div key={idx}>
-                            <div className="avatar margin-bottom--sm">
+                            <div className="avatar">
 
                                 {author.name && (
                                     <div>
@@ -184,17 +184,18 @@ function BlogPostItem(props) {
 
                         )}
                     </TitleHeading>
-                    <div className={styles.blogInfo}>
+                    <div className={clsx(styles.blogInfo, "margin-top--sm margin-bottom--sm")}>
                         {AuthorsList()}
-                        <div className={clsx(styles.blogPostData)}>
-
-                            {isBlogPostPage && <>
+                        {readingTime && <div className={clsx(styles.blogPostData, { [styles.blogpostReadingTime]: !isBlogPostPage })}>
+                            <>
                                 {typeof readingTime !== 'undefined' && (
                                     <>
                                         {readingTimePlural(readingTime)}
                                     </>
-                                )}</>}
+                                )}
+                            </>
                         </div>
+                        }
                     </div>
                 </div>
                 {!!tags.length && (

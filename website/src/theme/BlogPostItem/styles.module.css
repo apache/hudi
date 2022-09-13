@@ -21,7 +21,11 @@
 .blogPostData {
   font-size: 1.1rem;
   margin-top: 0 !important;
-  margin-left:20px
+  display: list-item;
+}
+
+.blogpostReadingTime {
+  font-size: 0.875rem;
 }
 
 .tagsWrapperPostPage {
@@ -123,6 +127,8 @@ h4{
 
 .blogInfo {
   display: flex;
+  flex-wrap: wrap;
+  column-gap: 40px;
 }
 
 .blogPostAuthorsList{
