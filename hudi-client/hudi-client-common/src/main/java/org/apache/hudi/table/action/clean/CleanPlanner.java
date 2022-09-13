@@ -476,6 +476,17 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   }
 
   /**
+   * Returns the last completed commit timestamp before clean.
+   */
+  public String getLastCompletedCommitTimestamp() {
+    if (commitTimeline.lastInstant().isPresent()) {
+      return commitTimeline.lastInstant().get().getTimestamp();
+    } else {
+      return "";
+    }
+  }
+
+  /**
    * Determine if file slice needed to be preserved for pending compaction.
    *
    * @param fileSlice File Slice

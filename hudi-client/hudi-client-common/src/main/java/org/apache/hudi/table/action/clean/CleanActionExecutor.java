@@ -167,6 +167,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
                   ? new HoodieInstant(HoodieInstant.State.valueOf(actionInstant.getState()),
                   actionInstant.getAction(), actionInstant.getTimestamp())
                   : null))
+          .withLastCompletedCommitTimestamp(cleanerPlan.getLastCompletedCommitTimestamp())
           .withDeletePathPattern(partitionCleanStat.deletePathPatterns())
           .withSuccessfulDeletes(partitionCleanStat.successDeleteFiles())
           .withFailedDeletes(partitionCleanStat.failedDeleteFiles())
