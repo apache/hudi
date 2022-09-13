@@ -341,6 +341,25 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
+  public Stream<FileSlice> getLatestMergedFileSlicesWithOnlyBaseFileBeforeOrOn(String partitionPath, String maxInstantTime) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxInstantTime);
+    try {
+      List<FileSliceDTO> dataFiles = executeRequest(LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL, paramsMap,
+          new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream()
+          .map(FileSliceDTO::toFileSlice)
+          .map(fileSlice -> {
+            FileSlice newFileSlice =
+                new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
+            newFileSlice.setBaseFile(fileSlice.getBaseFile().get());
+            return newFileSlice;
+          });
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
   public Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
     Map<String, String> paramsMap =
         getParams(INSTANTS_PARAM, StringUtils.join(commitsToReturn.toArray(new String[0]), ","));

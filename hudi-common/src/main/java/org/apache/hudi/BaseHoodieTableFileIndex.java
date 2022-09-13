@@ -303,6 +303,18 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                   .orElse(Collections.emptyList())
               )
           );
+    } else if (tableType.equals(HoodieTableType.MERGE_ON_READ) && queryType.equals(HoodieTableQueryType.READ_OPTIMIZED)) {
+      cachedAllInputFileSlices = partitionFiles.keySet().stream()
+          .collect(Collectors.toMap(
+                  Function.identity(),
+                  partitionPath ->
+                      queryInstant.map(instant ->
+                              fileSystemView.getLatestMergedFileSlicesWithOnlyBaseFileBeforeOrOn(partitionPath.path, queryInstant.get())
+                                  .collect(Collectors.toList())
+                          )
+                          .orElse(Collections.emptyList())
+              )
+          );
     } else {
       cachedAllInputFileSlices = partitionFiles.keySet().stream()
          .collect(Collectors.toMap(

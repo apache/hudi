@@ -714,6 +714,36 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
+  public final Stream<FileSlice> getLatestMergedFileSlicesWithOnlyBaseFileBeforeOrOn(String partitionStr, String maxInstantTime) {
+    try {
+      readLock.lock();
+      String partition = formatPartitionKey(partitionStr);
+      ensurePartitionLoadedCorrectly(partition);
+      return fetchAllStoredFileGroups(partition)
+          .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
+          .map(fileGroup -> {
+            Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
+            // if the file-group is under construction, pick the latest before compaction instant time.
+            if (fileSlice.isPresent()) {
+              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
+            }
+            return fileSlice;
+          })
+          .filter(Option::isPresent)
+          .map(Option::get)
+          .map(fileSlice -> {
+            FileSlice newFileSlice =
+                new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
+            newFileSlice.setBaseFile(fileSlice.getBaseFile().get());
+            return newFileSlice;
+          })
+          .map(this::addBootstrapBaseFileIfPresent);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
   public final Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
     try {
       readLock.lock();
