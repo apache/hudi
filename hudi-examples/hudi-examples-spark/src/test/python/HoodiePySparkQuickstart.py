@@ -14,20 +14,79 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
  
-import sndhdr
 import sys
 import os
 from pyspark import sql
-from datetime import datetime
 import random
 from pyspark.sql.functions import lit
 from functools import reduce
+from pyspark.sql import Row
+from datetime import datetime, timedelta
+import uuid
 
 
-DEFAULT_FIRST_PARTITION_PATH = "2020/01/01"
-DEFAULT_SECOND_PARTITION_PATH = "2020/01/02"
-DEFAULT_THIRD_PARTITION_PATH = "2020/01/03"
+DEFAULT_FIRST_PARTITION_PATH = "americas/united_states/san_francisco"
+DEFAULT_SECOND_PARTITION_PATH = "americas/brazil/sao_paulo"
+DEFAULT_THIRD_PARTITION_PATH = "asia/india/chennai"
 DEFAULT_PARTITION_PATHS = [DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH]
+
+class DataGenerator:
+    def __init__(self):
+        self.existing_keys = []
+        pass
+
+    def generateInserts(self,n):
+        inserts = []
+        now = str(int(datetime.now().timestamp() * 1000) % 10000)
+        for i in range(n):
+            inserts.append(self.generateNewRecord(now))
+        return inserts
+
+    def generateRandomTimestamp(daysAgo):
+        now = datetime.now()
+        return now - timedelta(days=int(daysAgo*random.random()),
+                            seconds=int(3600*24*random.random()),
+                            microseconds=int(1000000*random.random()))
+
+
+    def generateNewRecord(self,name):
+        theuuid = str(uuid.uuid4())
+        partitionPath = DEFAULT_PARTITION_PATHS[random.randint(0,len(DEFAULT_PARTITION_PATHS)-1)]
+        
+        self.existing_keys.append((theuuid,partitionPath))
+        return self.generateRecord(theuuid,partitionPath,name)
+
+    def generateRecord(self,theuuid,partitionPath,name):
+        riderName = "rider-" + name
+        driverName = "driver-" + name
+        timestamp = int(DataGenerator.generateRandomTimestamp(7).timestamp() * 1000)
+        return Row(uuid=theuuid,
+            partitionpath=partitionPath,
+            ts=timestamp,
+            rider=riderName,
+            driver=driverName,
+            begin_lat=(random.random()-0.5)*180,
+            begin_lon=(random.random()-0.5)*360,
+            end_lat=(random.random()-0.5)*180,
+            end_lon=(random.random()-0.5)*360, 
+            fare=random.random()*100
+            )
+
+    def generateUpdates(self,n):
+        if n > len(self.existing_keys):
+            print("trying to generate more than existing keys")
+            quit(-1)
+        indexes = list(range(len(self.existing_keys)))
+        random.shuffle(indexes)
+        now = str(int(datetime.now().timestamp() * 1000) % 10000)
+        updates = []
+        for i in range(n):
+            theuuid, partitionpath = self.existing_keys[indexes[i]]
+            updates.append(self.generateRecord(theuuid,partitionpath,now))
+        return updates
+        
+    
+
 
 class ExamplePySpark:
     def __init__(self, spark: sql.SparkSession, tableName: str, basePath: str):
@@ -44,7 +103,7 @@ class ExamplePySpark:
             'hoodie.upsert.shuffle.parallelism': 2,
             'hoodie.insert.shuffle.parallelism': 2
         }
-        self.dataGen = spark._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
+        self.dataGen = DataGenerator()
         return
 
     def runQuickstart(self):
@@ -70,15 +129,13 @@ class ExamplePySpark:
 
     def insertData(self):
         print("Insert Data")
-        inserts = self.spark._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(self.dataGen.generateInserts(10))
-        df = self.spark.read.json(self.spark.sparkContext.parallelize(inserts, 2))
+        df = self.spark.createDataFrame(self.dataGen.generateInserts(10))
         df.write.format("hudi").options(**self.hudi_options).mode("overwrite").save(self.basePath)
         return 
 
     def updateData(self):
         print("Update Data")
-        updates = self.spark._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(self.dataGen.generateUpdates(10))
-        df = self.spark.read.json(spark.sparkContext.parallelize(updates, 2))
+        df = self.spark.createDataFrame(self.dataGen.generateUpdates(5))
         df.write.format("hudi").options(**self.hudi_options).mode("append").save(self.basePath)
         return 
 
@@ -206,8 +263,7 @@ class ExamplePySpark:
     def insertOverwrite(self):
         print("Insert Overwrite")
         self.spark.read.format("hudi").load(self.basePath).select(["uuid","partitionpath"]).sort(["partitionpath", "uuid"]).show(n=100,truncate=False)
-        inserts = self.spark._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(self.dataGen.generateInserts(10))
-        df = self.spark.read.json(self.spark.sparkContext.parallelize(inserts, 2)).filter("partitionpath = 'americas/united_states/san_francisco'")
+        df = self.spark.createDataFrame(self.dataGen.generateInserts(10)).filter("partitionpath = 'americas/united_states/san_francisco'")
         hudi_insert_overwrite_options = {
             'hoodie.table.name': self.tableName,
             'hoodie.datasource.write.recordkey.field': 'uuid',
@@ -238,7 +294,6 @@ if __name__ == "__main__":
         .config("spark.kryoserializer.buffer.max", "512m") \
         .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension") \
         .getOrCreate()
-    #java_import(spark._sc._jvm, "org.apache.spark.sql.api.python.*")
     ps = ExamplePySpark(spark,tableName,basePath)
     ps.runQuickstart()
 
