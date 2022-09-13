@@ -31,7 +31,8 @@ to cloud stores.
    Configurations required for OCI and Hudi co-operability.
 
 :::note 
-Many cloud object storage systems like [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html) allow you to set lifecycle policies to manage objects. 
+Many cloud object storage systems like [Amazon S3](https://docs.aws.amazon.com/s3/) allow you to set
+[lifecycle policies](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html) to manage objects. 
 One of the policies is related to object expiration. If your organisation has configured such policies, 
 then please ensure to exclude (or have a longer expiry period) for Hudi tables.
 :::
