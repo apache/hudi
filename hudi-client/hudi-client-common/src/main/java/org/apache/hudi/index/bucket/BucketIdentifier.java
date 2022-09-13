@@ -21,6 +21,8 @@ package org.apache.hudi.index.bucket;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -33,6 +35,7 @@ import java.util.stream.Collectors;
 public class BucketIdentifier implements Serializable {
   // Compatible with the spark bucket name
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
+  private static final Logger LOG = LogManager.getLogger(BucketIdentifier.class);
 
   public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets) {
     return getBucketId(record.getKey(), indexKeyFields, numBuckets);
@@ -40,6 +43,20 @@ public class BucketIdentifier implements Serializable {
 
   public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
     return (getHashKeys(hoodieKey, indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+  }
+
+  public static int getRangeBucketNum(String recordKey, int bucketRangeStepSize) {
+    int index = recordKey.indexOf(":");
+    if (index >= 0) {
+      recordKey = recordKey.substring(index + 1);
+    }
+    try {
+      int bucketNum = (int) (Long.parseLong(recordKey) / bucketRangeStepSize);
+      return bucketNum;
+    } catch (Exception e) {
+      LOG.error("RANGE_BUCKET index need a primary key like Interger.", e);
+      throw e;
+    }
   }
 
   public static int getBucketId(HoodieKey hoodieKey, List<String> indexKeyFields, int numBuckets) {

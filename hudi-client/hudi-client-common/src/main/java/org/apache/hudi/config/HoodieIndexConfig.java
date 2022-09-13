@@ -502,6 +502,11 @@ public class HoodieIndexConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withRangeBucketStepSize(Integer size) {
+      hoodieIndexConfig.setValue(RANGE_BUCKET_STEP_SIZE, size.toString());
+      return this;
+    }
+
     public Builder withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType bucketType) {
       hoodieIndexConfig.setValue(BUCKET_INDEX_ENGINE_TYPE, bucketType.name());
       return this;

@@ -71,14 +71,9 @@ public class HoodieRangeBucketIndex extends HoodieIndex<Object, Object> {
       throws HoodieIndexException {
     List<Pair<String, Integer>> partitionPathAndBucketNumPair = records.map((SerializableFunction<HoodieRecord<R>, Pair<String, Integer>>) v1 -> {
       String partitionPath = v1.getPartitionPath();
-      String recordKey = v1.getKey().getRecordKey();
-      int index = recordKey.indexOf(":");
-      String recordKeyValue = "0";
-      if (index >= 0) {
-        recordKeyValue = recordKey.substring(index + 1);
-      }
-      long bucketNum = Long.parseLong(recordKeyValue) / bucketRangeStepSize;
-      return Pair.of(partitionPath, (int) bucketNum);
+      String recordKey = v1.getRecordKey();
+      int bucketNum = BucketIdentifier.getRangeBucketNum(recordKey, bucketRangeStepSize);
+      return Pair.of(partitionPath, bucketNum);
     }).distinct().collectAsList();
     int index = 0;
     for (Pair<String, Integer> partitionBucketNumPair : partitionPathAndBucketNumPair) {
@@ -100,13 +95,7 @@ public class HoodieRangeBucketIndex extends HoodieIndex<Object, Object> {
         @Override
         protected HoodieRecord<R> computeNext() {
           HoodieRecord record = recordIter.next();
-          String recordKey = record.getKey().getRecordKey();
-          String recordKeyValue = "0";
-          if (recordKey.contains(":")) {
-            recordKeyValue = recordKey.substring(recordKey.indexOf(":") + 1);
-          }
-          int bucketId = (int) (Long.parseLong(recordKeyValue) / bucketRangeStepSize);
-
+          int bucketId = BucketIdentifier.getRangeBucketNum(record.getRecordKey(), bucketRangeStepSize);
           String partitionPath = record.getPartitionPath();
           if (!partitionPathFileIDList.containsKey(partitionPath)) {
             partitionPathFileIDList.put(partitionPath, loadPartitionBucketIdFileIdMapping(hoodieTable, partitionPath));
