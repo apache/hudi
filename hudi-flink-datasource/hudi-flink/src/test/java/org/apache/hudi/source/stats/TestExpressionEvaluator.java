@@ -54,7 +54,7 @@ public class TestExpressionEvaluator {
       DataTypes.FIELD("f_time", DataTypes.TIME(3)),
       DataTypes.FIELD("f_date", DataTypes.DATE()),
       DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3))
-      ).notNull();
+  ).notNull();
   private static final DataType INDEX_ROW_DATA_TYPE = DataTypes.ROW(
       DataTypes.FIELD("file_name", DataTypes.STRING()),
       DataTypes.FIELD("value_cnt", DataTypes.BIGINT()),

@@ -85,7 +85,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Create the SparkParsePartitionUtil.
    */
-  def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil
+  def getSparkParsePartitionUtil: SparkParsePartitionUtil
 
   /**
    * ParserInterface#parseMultipartIdentifier is supported since spark3, for spark2 this should not be called.

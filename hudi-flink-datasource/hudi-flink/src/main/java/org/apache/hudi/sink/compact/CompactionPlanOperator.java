@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,6 +32,7 @@ import org.apache.hudi.util.FlinkTables;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;

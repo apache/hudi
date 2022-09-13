@@ -101,25 +101,25 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     HashMap<String, String> mergedExpected = new HashMap<>(EXPECTED1);
     mergedExpected.put("par1", "[id1,par1,id1,Danny,22,4,par1, id2,par1,id2,Stephen,33,2,par1]");
     TestHarness.instance().preparePipeline(tempFile, conf)
-            .consume(TestData.DATA_SET_INSERT)
-            .emptyEventBuffer()
-            .checkpoint(1)
-            .assertNextEvent()
-            .checkpointComplete(1)
-            .checkWrittenData(EXPECTED1, 4)
-            .consume(TestData.DATA_SET_DISORDER_INSERT)
-            .emptyEventBuffer()
-            .checkpoint(2)
-            .assertNextEvent()
-            .checkpointComplete(2)
-            .checkWrittenData(mergedExpected, 4)
-            .consume(TestData.DATA_SET_SINGLE_INSERT)
-            .emptyEventBuffer()
-            .checkpoint(3)
-            .assertNextEvent()
-            .checkpointComplete(3)
-            .checkWrittenData(mergedExpected, 4)
-            .end();
+        .consume(TestData.DATA_SET_INSERT)
+        .emptyEventBuffer()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkWrittenData(EXPECTED1, 4)
+        .consume(TestData.DATA_SET_DISORDER_INSERT)
+        .emptyEventBuffer()
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(mergedExpected, 4)
+        .consume(TestData.DATA_SET_SINGLE_INSERT)
+        .emptyEventBuffer()
+        .checkpoint(3)
+        .assertNextEvent()
+        .checkpointComplete(3)
+        .checkWrittenData(mergedExpected, 4)
+        .end();
   }
 
   @ParameterizedTest
@@ -132,13 +132,13 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     conf.set(FlinkOptions.CHANGELOG_ENABLED, false);
     conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, compactionDeltaCommits);
     TestHarness.instance().preparePipeline(tempFile, conf)
-            .consume(TestData.DATA_SET_INSERT)
-            .emptyEventBuffer()
-            .checkpoint(1)
-            .assertNextEvent()
-            .checkpointComplete(1)
-            .checkWrittenData(EXPECTED1, 4)
-            .end();
+        .consume(TestData.DATA_SET_INSERT)
+        .emptyEventBuffer()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkWrittenData(EXPECTED1, 4)
+        .end();
   }
 
   @Override

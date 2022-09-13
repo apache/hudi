@@ -41,6 +41,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -155,7 +156,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
-    Properties properties = new Properties();
+    Properties properties = CollectionUtils.copy(cfg.getProps());
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
@@ -327,7 +328,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
-    Properties properties = populateMetaFields ? new Properties() : getPropertiesForKeyGen();
+    Properties properties = getPropertiesForKeyGen(populateMetaFields);
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
@@ -606,8 +607,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         .withMarkersType(MarkerType.DIRECT.name());
     HoodieWriteConfig cfg = cfgBuilder.build();
 
-    Properties properties = new Properties();
+    Properties properties = getPropertiesForKeyGen(true);
+    properties.putAll(cfg.getProps());
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
+
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
     try (final SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {

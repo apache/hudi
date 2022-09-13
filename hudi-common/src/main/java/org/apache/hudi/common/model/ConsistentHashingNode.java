@@ -39,11 +39,17 @@ public class ConsistentHashingNode implements Serializable {
 
   private final int value;
   private final String fileIdPrefix;
+  private final NodeTag tag;
+
+  public ConsistentHashingNode(int value, String fileIdPrefix) {
+    this(value, fileIdPrefix, NodeTag.NORMAL);
+  }
 
   @JsonCreator
-  public ConsistentHashingNode(@JsonProperty("value") int value, @JsonProperty("fileIdPrefix") String fileIdPrefix) {
+  public ConsistentHashingNode(@JsonProperty("value") int value, @JsonProperty("fileIdPrefix") String fileIdPrefix, @JsonProperty("tag") NodeTag tag) {
     this.value = value;
     this.fileIdPrefix = fileIdPrefix;
+    this.tag = tag;
   }
 
   public static String toJsonString(List<ConsistentHashingNode> nodes) throws IOException {
@@ -67,6 +73,10 @@ public class ConsistentHashingNode implements Serializable {
     return fileIdPrefix;
   }
 
+  public NodeTag getTag() {
+    return tag;
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("ConsistentHashingNode{");
@@ -74,5 +84,20 @@ public class ConsistentHashingNode implements Serializable {
     sb.append(", fileIdPfx='").append(fileIdPrefix).append('\'');
     sb.append('}');
     return sb.toString();
+  }
+
+  public enum NodeTag {
+    /**
+     * Standard node.
+     */
+    NORMAL,
+    /**
+     * Node that is new, or is used to replace a normal node in the hash ring. Used in bucket split.
+     */
+    REPLACE,
+    /**
+     * To mark the deletion of a node in the hash ring. Used in bucket merge.
+     */
+    DELETE
   }
 }

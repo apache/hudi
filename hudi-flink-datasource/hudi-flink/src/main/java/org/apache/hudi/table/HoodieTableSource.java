@@ -404,7 +404,7 @@ public class HoodieTableSource implements
   /**
    * Returns whether the hoodie table data exists .
    */
-  private  boolean tableDataExists() {
+  private boolean tableDataExists() {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = activeTimeline.getLastCommitMetadataWithValidData();
     return instantAndCommitMetadata.isPresent();
