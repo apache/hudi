@@ -22,6 +22,7 @@
   font-size: 1.1rem;
   margin-top: 0 !important;
   display: list-item;
+  margin-left: 20px;
 }
 
 .blogpostReadingTime {
@@ -128,7 +129,7 @@ h4{
 .blogInfo {
   display: flex;
   flex-wrap: wrap;
-  column-gap: 40px;
+  column-gap: 20px;
 }
 
 .blogPostAuthorsList{

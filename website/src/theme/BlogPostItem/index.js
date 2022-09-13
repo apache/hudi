@@ -207,7 +207,7 @@ function BlogPostItem(props) {
 
     return (
         <article
-            className={!isBlogPostPage ? 'blog-list-item' : undefined}
+            className={clsx({"blog-list-item": !isBlogPostPage})}
             itemProp="blogPost"
             itemScope
             itemType="http://schema.org/BlogPosting">
@@ -219,16 +219,14 @@ function BlogPostItem(props) {
                 </div>
             )}
 
-            {(tagsExists || truncated) && (
+            {(tagsExists || truncated) && isBlogPostPage && editUrl (
                 <footer
                     className={clsx('row docusaurus-mt-lg', {
                         [styles.blogPostDetailsFull]: isBlogPostPage,
                     })}>
-                    {isBlogPostPage && editUrl && (
-                        <div className="col margin-top--sm">
-                            <EditThisPage editUrl={editUrl}/>
-                        </div>
-                    )}
+                    <div className="col margin-top--sm">
+                        <EditThisPage editUrl={editUrl}/>
+                    </div>
                 </footer>
             )}
         </article>

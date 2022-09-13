@@ -12,6 +12,8 @@ import BlogSidebar from '@theme/BlogSidebar';
 function BlogLayout(props) {
   const {sidebar, toc, children, ...layoutProps} = props;
   const hasSidebar = sidebar && sidebar.items.length > 0;
+  const isBlogListPage = props.pageClassName === "blog-list-page";
+  const isTagsPostList = props.pageClassName === "blog-tags-post-list-page";
   return (
     <Layout {...layoutProps}>
       <div className="container margin-vert--lg">
@@ -22,9 +24,11 @@ function BlogLayout(props) {
             </aside>
           )}
           <main
-            className={clsx('col row', {
+            className={clsx('col', {
               'col--7': hasSidebar,
               'col--9 col--offset-2': !hasSidebar,
+              'row': isBlogListPage,
+              'tags-post-list': isTagsPostList
             })}
             itemScope
             itemType="http://schema.org/Blog">

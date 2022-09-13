@@ -279,5 +279,14 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
 }
 
 
+.tags-post-list article {
+  margin-bottom: 30px;
+  border-bottom: 2px solid #eee;
+}
+
+.tags-post-list article:last-child {
+  margin-bottom: 0;
+  border-bottom: 0;
+}
 
 
