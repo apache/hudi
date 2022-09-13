@@ -21,15 +21,17 @@ package org.apache.hudi.sync.common;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
@@ -40,9 +42,11 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -83,18 +87,24 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
   }
 
-  public boolean isDropPartition() {
+  /**
+   * Get the set of dropped partitions based on the latest commit metadata.
+   * Returns empty set if the latest commit was not due to DELETE_PARTITION operation.
+   */
+  public Set<String> getDroppedPartitions() {
     try {
-      Option<HoodieCommitMetadata> hoodieCommitMetadata = HoodieTableMetadataUtil.getLatestCommitMetadata(metaClient);
+      Option<HoodieCommitMetadata> hoodieCommitMetadata = getLatestCommitMetadata(metaClient);
 
       if (hoodieCommitMetadata.isPresent()
           && WriteOperationType.DELETE_PARTITION.equals(hoodieCommitMetadata.get().getOperationType())) {
-        return true;
+        Map<String, List<String>> partitionToReplaceFileIds =
+            ((HoodieReplaceCommitMetadata) hoodieCommitMetadata.get()).getPartitionToReplaceFileIds();
+        return partitionToReplaceFileIds.keySet();
       }
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to get commit metadata", e);
     }
-    return false;
+    return Collections.emptySet();
   }
 
   @Override
@@ -118,8 +128,11 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
           config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION));
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
-      return TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().getCommitsTimeline()
-          .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE));
+      return TimelineUtils.getPartitionsWritten(
+          metaClient.getArchivedTimeline(lastCommitTimeSynced.get())
+              .mergeTimeline(metaClient.getActiveTimeline())
+              .getCommitsTimeline()
+              .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE));
     }
   }
 
@@ -127,7 +140,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
    * Iterate over the storage partitions and find if there are any new partitions that need to be added or updated.
    * Generate a list of PartitionEvent based on the changes required.
    */
-  public List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions, boolean isDropPartition) {
+  public List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions, Set<String> droppedPartitions) {
     Map<String, String> paths = new HashMap<>();
     for (Partition tablePartition : tablePartitions) {
       List<String> hivePartitionValues = tablePartition.getValues();
@@ -143,7 +156,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
 
-      if (isDropPartition) {
+      if (droppedPartitions.contains(storagePartition)) {
         events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
       } else {
         if (!storagePartitionValues.isEmpty()) {
@@ -157,5 +170,24 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       }
     }
     return events;
+  }
+
+  /**
+   * Get Last commit's Metadata.
+   */
+  private static Option<HoodieCommitMetadata> getLatestCommitMetadata(HoodieTableMetaClient metaClient) {
+    try {
+      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      if (timeline.lastInstant().isPresent()) {
+        HoodieInstant instant = timeline.lastInstant().get();
+        byte[] data = timeline.getInstantDetails(instant).get();
+        return HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction()) ? Option.of(HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class)) :
+            Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
+      } else {
+        return Option.empty();
+      }
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get commit metadata", e);
+    }
   }
 }
