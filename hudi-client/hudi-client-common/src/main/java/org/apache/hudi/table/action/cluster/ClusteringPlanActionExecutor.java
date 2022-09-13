@@ -58,13 +58,8 @@ public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O
 
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
     LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
-    Option<HoodieInstant> lastClusteringInstant;
-    Option<HoodieInstant> pendingInstant = table.getActiveTimeline().filterPendingReplaceTimeline().lastInstant();
-    if (pendingInstant.isPresent()) {
-      lastClusteringInstant = pendingInstant;
-    } else {
-      lastClusteringInstant = table.getActiveTimeline().getCompletedReplaceTimeline().lastInstant();
-    }
+    Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline()
+        .filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
 
     int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
