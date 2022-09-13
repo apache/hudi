@@ -21,7 +21,7 @@ package org.apache.hudi.client.clustering.plan.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -30,8 +30,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieJavaCopyOnWriteTable;
-import org.apache.hudi.table.HoodieJavaMergeOnReadTable;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -53,14 +52,8 @@ public class JavaSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<T
     extends PartitionAwareClusteringPlanStrategy<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(JavaSizeBasedClusteringPlanStrategy.class);
 
-  public JavaSizeBasedClusteringPlanStrategy(HoodieJavaCopyOnWriteTable<T> table,
-                                             HoodieJavaEngineContext engineContext,
-                                             HoodieWriteConfig writeConfig) {
-    super(table, engineContext, writeConfig);
-  }
-
-  public JavaSizeBasedClusteringPlanStrategy(HoodieJavaMergeOnReadTable<T> table,
-                                             HoodieJavaEngineContext engineContext,
+  public JavaSizeBasedClusteringPlanStrategy(HoodieTable table,
+                                             HoodieEngineContext engineContext,
                                              HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
   }

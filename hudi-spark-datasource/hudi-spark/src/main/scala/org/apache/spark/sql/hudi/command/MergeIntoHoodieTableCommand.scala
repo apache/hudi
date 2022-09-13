@@ -157,7 +157,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val primaryKeys = hoodieCatalogTable.tableConfig.getRecordKeyFieldProp.split(",")
       // Only records that are not included in the target table can be inserted
       val insertSourceDF = sourceDF.join(targetDF, primaryKeys,"leftanti")
-      executeInsertOnly(insertSourceDF, parameters)
+
+      // column order changed after left anti join , we should keep column order of source dataframe
+      val cols = removeMetaFields(sourceDF).columns
+      executeInsertOnly(insertSourceDF.select(cols.head, cols.tail:_*), parameters)
     }
     sparkSession.catalog.refreshTable(targetTableIdentify.unquotedString)
     Seq.empty[Row]

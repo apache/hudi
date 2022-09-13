@@ -18,8 +18,6 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -41,6 +39,8 @@ import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
@@ -68,11 +68,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.function.Predicate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -677,8 +677,8 @@ public class TestData {
     assert hoodiePropertiesFile.exists();
     // 1. init flink table
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-            .fromFile(hoodiePropertiesFile)
-            .withPath(basePath).build();
+        .fromFile(hoodiePropertiesFile)
+        .withPath(basePath).build();
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, config.getProps());
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
@@ -734,8 +734,8 @@ public class TestData {
           for (String curKey : scanner.getRecords().keySet()) {
             if (!keyToSkip.contains(curKey)) {
               Option<GenericRecord> record = (Option<GenericRecord>) scanner.getRecords()
-                      .get(curKey).getData()
-                      .getInsertValue(schema, config.getProps());
+                  .get(curKey).getData()
+                  .getInsertValue(schema, config.getProps());
               if (record.isPresent()) {
                 readBuffer.add(filterOutVariables(record.get()));
               }
@@ -786,7 +786,7 @@ public class TestData {
     fields.add(genericRecord.get("age").toString());
     fields.add(genericRecord.get("ts").toString());
     fields.add(genericRecord.get("partition").toString());
-    return String.join(",",fields);
+    return String.join(",", fields);
   }
 
   public static BinaryRowData insertRow(Object... fields) {
