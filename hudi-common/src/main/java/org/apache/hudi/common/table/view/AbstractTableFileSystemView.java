@@ -665,13 +665,25 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
-      Stream<FileSlice> fileSliceStream = fetchLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime)
-          .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime));
+      Stream<Stream<FileSlice>> allFileSliceStream = fetchAllStoredFileGroups(partitionPath)
+              .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime).filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime)));
       if (includeFileSlicesInPendingCompaction) {
-        return fileSliceStream.map(this::filterBaseFileAfterPendingCompaction).map(this::addBootstrapBaseFileIfPresent);
+        return allFileSliceStream
+                .map(sliceStream ->
+                        Option.fromJavaOptional(sliceStream
+                                .map(this::filterBaseFileAfterPendingCompaction)
+                                .filter(slice -> !slice.isEmpty())
+                                .findFirst()))
+                .filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
       } else {
-        return fileSliceStream.filter(fs -> !isPendingCompactionScheduledForFileId(fs.getFileGroupId()))
-            .map(this::addBootstrapBaseFileIfPresent);
+        return allFileSliceStream
+                .map(sliceStream ->
+                        Option.fromJavaOptional(sliceStream
+                                .filter(slice -> !isPendingCompactionScheduledForFileId(slice.getFileGroupId()))
+                                .filter(slice -> !slice.isEmpty())
+                                .findFirst()))
+                .filter(Option::isPresent)
+                .map(Option::get);
       }
     } finally {
       readLock.unlock();
