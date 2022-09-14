@@ -146,12 +146,17 @@
     <spark32.version>3.2.1</spark32.version>
     <spark33.version>3.3.0</spark33.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
-    <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
+    <!-- NOTE: Different Spark versions might require different number of shared
+               modules being incorporated, hence we're creating multiple placeholders
+               (hudi.spark.common.modules.*) -->
+    <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>
+    <hudi.spark.common.modules.2/>
     <avro.version>1.8.2</avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
     <scala.version>${scala11.version}</scala.version>
+    <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
     <scala.binary.version>2.11</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
@@ -162,7 +167,6 @@
     <jetty.version>9.4.15.v20190215</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
     <hbase.version>2.4.9</hbase.version>
-    <hbase-thirdparty.version>3.5.1</hbase-thirdparty.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
     <h2.version>1.4.199</h2.version>
     <awaitility.version>3.1.2</awaitility.version>
@@ -374,9 +378,17 @@
                     <exclude>org.sl4fj:slf4j-jcl</exclude>
                     <exclude>log4j:log4j</exclude>
                     <exclude>ch.qos.logback:logback-classic</exclude>
+                    <!-- NOTE: We're banning any HBase deps versions other than the approved ${hbase.version},
+                               which is aimed at preventing the classpath collisions w/ transitive deps usually) -->
+                    <exclude>org.apache.hbase:hbase-common:*</exclude>
+                    <exclude>org.apache.hbase:hbase-client:*</exclude>
+                    <exclude>org.apache.hbase:hbase-server:*</exclude>
                   </excludes>
                   <includes>
                     <include>org.slf4j:slf4j-simple:*:*:test</include>
+                    <include>org.apache.hbase:hbase-common:${hbase.version}</include>
+                    <include>org.apache.hbase:hbase-client:${hbase.version}</include>
+                    <include>org.apache.hbase:hbase-server:${hbase.version}</include>
                   </includes>
                 </bannedDependencies>
               </rules>
@@ -572,6 +584,19 @@
 
   <dependencyManagement>
     <dependencies>
+      <!-- Scala -->
+      <dependency>
+        <groupId>org.scala-lang</groupId>
+        <artifactId>scala-library</artifactId>
+        <version>${scala.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.scala-lang.modules</groupId>
+        <artifactId>scala-collection-compat_${scala.binary.version}</artifactId>
+        <version>${scala.collection-compat.version}</version>
+      </dependency>
+
       <!-- Logging -->
       <!-- NOTE: All the following deps have to have "provided" scope to make sure these are not conflicting
            w/ implementations that are using Hudi as a library. For ex, all Spark < 3.3 are still relying on Log4j1
@@ -1067,6 +1092,14 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-common</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1155,6 +1188,10 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1182,6 +1219,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1215,6 +1256,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1263,6 +1308,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1837,7 +1886,8 @@
       </build>
     </profile>
 
-    <!-- Default is spark2 profile, and spark2 is an alias of spark2.4 -->
+    <!-- Default is "spark2" profile, and "spark2" is an alias of "spark2.4" -->
+    <!-- NOTE: This profile is deprecated and soon will be removed -->
     <profile>
       <id>spark2</id>
       <modules>
@@ -1874,7 +1924,8 @@
       </activation>
     </profile>
 
-    <!-- spark3 is an alias of spark3.3 -->
+    <!-- "spark3" is an alias for "spark3.3" -->
+    <!-- NOTE: This profile is deprecated and soon will be removed -->
     <profile>
       <id>spark3</id>
       <properties>
@@ -1903,6 +1954,7 @@
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.3.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
+        <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
       <activation>
         <property>
@@ -1920,7 +1972,7 @@
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.1.x</hudi.spark.module>
-        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
+        <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <antlr.version>4.8-1</antlr.version>
@@ -1952,7 +2004,9 @@
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
-        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
+        <!-- This glob has to include hudi-spark3-common, hudi-spark3.2plus-common -->
+        <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
+        <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>
@@ -1970,6 +2024,7 @@
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.2.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
+        <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
       <activation>
         <property>
@@ -1987,7 +2042,9 @@
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
-        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
+        <!-- This glob has to include hudi-spark3-common, hudi-spark3.2plus-common -->
+        <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
+        <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>
@@ -2006,6 +2063,7 @@
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.3.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
+        <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
       <activation>
         <property>

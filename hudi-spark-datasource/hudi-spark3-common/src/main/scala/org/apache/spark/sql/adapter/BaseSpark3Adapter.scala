@@ -32,6 +32,8 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{HoodieCatalystPlansUtils, HoodieSpark3CatalystPlanUtils, Row, SparkSession}
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel.{DISK_ONLY, DISK_ONLY_2, DISK_ONLY_3, MEMORY_AND_DISK, MEMORY_AND_DISK_2, MEMORY_AND_DISK_SER, MEMORY_AND_DISK_SER_2, MEMORY_ONLY, MEMORY_ONLY_2, MEMORY_ONLY_SER, MEMORY_ONLY_SER_2, NONE, OFF_HEAP}
 
@@ -42,7 +44,10 @@ import scala.util.control.NonFatal
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
-  override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
+  def getCatalogUtils: HoodieSpark3CatalogUtils
+
+  override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
+    val encoder = RowEncoder(schema).resolveAndBind()
     new Spark3RowSerDe(encoder)
   }
 
@@ -58,9 +63,9 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
    */
   override def getFilePartitions(
-      sparkSession: SparkSession,
-      partitionedFiles: Seq[PartitionedFile],
-      maxSplitBytes: Long): Seq[FilePartition] = {
+                                  sparkSession: SparkSession,
+                                  partitionedFiles: Seq[PartitionedFile],
+                                  maxSplitBytes: Long): Seq[FilePartition] = {
     FilePartition.getFilePartitions(sparkSession, partitionedFiles, maxSplitBytes)
   }
 
@@ -76,7 +81,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
             false
         }
       case DataSourceV2Relation(table: Table, _, _, _, _) => isHoodieTable(table.properties())
-      case _=> false
+      case _ => false
     }
   }
 
