@@ -234,18 +234,15 @@ footer .container {
   width: 100%;
 }
 
-.blog-list-page article {
+.blog-list-page article, .blog-tags-post-list-page article {
   display: inline-flex;
   width: 45%;
- 
   margin: 1.2em;
   vertical-align: text-top;
-  
-  
-  
 }
+
 @media(max-width:1391px){
-  .blog-list-page article {
+  .blog-list-page article, .blog-tags-post-list-page article {
     display: inline-flex;
     width: 80%;
     margin: 1.2em;
@@ -255,7 +252,7 @@ footer .container {
 
 
 @media only screen and (max-width: 815px) {
-  .blog-list-page article {
+  .blog-list-page article, .blog-tags-post-list-page article {
     display: flex;
     width: 100%;
     margin: 1.2em;
@@ -278,15 +275,7 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
   overflow:hidden;
 }
 
-
-.tags-post-list article {
-  margin-bottom: 30px;
-  border-bottom: 2px solid #eee;
+.tags-post-list > :first-child {
+  width: 100%;
 }
-
-.tags-post-list article:last-child {
-  margin-bottom: 0;
-  border-bottom: 0;
-}
-
 

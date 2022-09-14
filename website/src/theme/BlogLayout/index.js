@@ -14,6 +14,7 @@ function BlogLayout(props) {
   const hasSidebar = sidebar && sidebar.items.length > 0;
   const isBlogListPage = props.pageClassName === "blog-list-page";
   const isTagsPostList = props.pageClassName === "blog-tags-post-list-page";
+  console.log('children', children)
   return (
     <Layout {...layoutProps}>
       <div className="container margin-vert--lg">
@@ -27,7 +28,7 @@ function BlogLayout(props) {
             className={clsx('col', {
               'col--7': hasSidebar,
               'col--9 col--offset-2': !hasSidebar,
-              'row': isBlogListPage,
+              'row': isBlogListPage || isTagsPostList,
               'tags-post-list': isTagsPostList
             })}
             itemScope

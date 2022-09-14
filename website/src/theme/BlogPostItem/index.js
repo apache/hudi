@@ -62,6 +62,7 @@ function BlogPostItem(props) {
         editUrl,
         authors,
     } = metadata;
+    console.log('editUrl', editUrl)
     const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi.png';
     const tagsExists = tags.length > 0;
 
@@ -186,7 +187,7 @@ function BlogPostItem(props) {
                     </TitleHeading>
                     <div className={clsx(styles.blogInfo, "margin-top--sm margin-bottom--sm")}>
                         {AuthorsList()}
-                        {readingTime && <div className={clsx(styles.blogPostData, { [styles.blogpostReadingTime]: !isBlogPostPage })}>
+                        {isBlogPostPage && readingTime && <div className={clsx(styles.blogPostData, { [styles.blogpostReadingTime]: !isBlogPostPage })}>
                             <>
                                 {typeof readingTime !== 'undefined' && (
                                     <>
@@ -219,7 +220,7 @@ function BlogPostItem(props) {
                 </div>
             )}
 
-            {(tagsExists || truncated) && isBlogPostPage && editUrl (
+            {(tagsExists || truncated) && isBlogPostPage && editUrl && (
                 <footer
                     className={clsx('row docusaurus-mt-lg', {
                         [styles.blogPostDetailsFull]: isBlogPostPage,
