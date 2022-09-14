@@ -444,7 +444,7 @@ df.write.format("hudi").
   mode(Overwrite).
   save(basePath)
 assert(df
-  .except(spark.sql(snapshotQuery)).count == 0)
+  .except(spark.sql(snapshotQuery)).count() == 0)
 ```
 
 :::info
@@ -487,7 +487,7 @@ df.write.format("hudi").
 options(**hudi_options).
 mode("overwrite").
 save(basePath)
-assert spark.sql(snapshotQuery).exceptAll(df).count == 0
+assert spark.sql(snapshotQuery).exceptAll(df).count() == 0
 ```
 
 :::info
@@ -760,7 +760,7 @@ df.write.format("hudi").
 assert(spark
   .sql(snapshotQuery).intersect(df).count() == df.count())
 assert(spark
-  .sql(snapshotQuery).except(df).except(snapBeforeUpdate).count == 0)
+  .sql(snapshotQuery).except(df).except(snapBeforeUpdate).count() == 0)
 ```
 
 :::note
