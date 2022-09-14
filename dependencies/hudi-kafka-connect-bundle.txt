@@ -226,7 +226,7 @@ protobuf-java/com.google.protobuf/3.17.3//protobuf-java-3.17.3.jar
 py4j/net.sf.py4j/0.10.7//py4j-0.10.7.jar
 pyrolite/net.razorvine/4.13//pyrolite-4.13.jar
 reactive-streams/org.reactivestreams/1.0.2//reactive-streams-1.0.2.jar
-rocksdbjni/org.rocksdb/5.17.2//rocksdbjni-5.17.2.jar
+rocksdbjni/org.rocksdb/6.29.5//rocksdbjni-6.29.5.jar
 scala-java8-compat_2.11/org.scala-lang.modules/0.7.0//scala-java8-compat_2.11-0.7.0.jar
 scala-library/org.scala-lang/2.11.8//scala-library-2.11.8.jar
 scala-parser-combinators_2.11/org.scala-lang.modules/1.1.1//scala-parser-combinators_2.11-1.1.1.jar

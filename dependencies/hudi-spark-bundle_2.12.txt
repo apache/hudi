@@ -219,7 +219,7 @@ parquet-hadoop-bundle/org.apache.parquet/1.8.1//parquet-hadoop-bundle-1.8.1.jar
 parquet-hadoop/org.apache.parquet/1.10.1//parquet-hadoop-1.10.1.jar
 parquet-jackson/org.apache.parquet/1.10.1//parquet-jackson-1.10.1.jar
 protobuf-java/com.google.protobuf/2.5.0//protobuf-java-2.5.0.jar
-rocksdbjni/org.rocksdb/5.17.2//rocksdbjni-5.17.2.jar
+rocksdbjni/org.rocksdb/6.29.5//rocksdbjni-6.29.5.jar
 scala-library/org.scala-lang/2.11.12//scala-library-2.11.12.jar
 scala-reflect/org.scala-lang/2.11.8//scala-reflect-2.11.8.jar
 servlet-api/javax.servlet/2.4//servlet-api-2.4.jar

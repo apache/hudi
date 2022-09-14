@@ -127,7 +127,7 @@ orc-core/org.apache.orc/1.6.0/nohive/orc-core-1.6.0-nohive.jar
 orc-shims/org.apache.orc/1.6.0//orc-shims-1.6.0.jar
 paranamer/com.thoughtworks.paranamer/2.7//paranamer-2.7.jar
 protobuf-java/com.google.protobuf/2.5.0//protobuf-java-2.5.0.jar
-rocksdbjni/org.rocksdb/5.17.2//rocksdbjni-5.17.2.jar
+rocksdbjni/org.rocksdb/6.29.5//rocksdbjni-6.29.5.jar
 slf4j-api/org.slf4j/1.7.26//slf4j-api-1.7.26.jar
 slf4j-log4j12/org.slf4j/1.7.10//slf4j-log4j12-1.7.10.jar
 snappy-java/org.xerial.snappy/1.1.1.3//snappy-java-1.1.1.3.jar

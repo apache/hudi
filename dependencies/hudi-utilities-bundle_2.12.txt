@@ -265,7 +265,7 @@ parquet-jackson/org.apache.parquet/1.10.1//parquet-jackson-1.10.1.jar
 protobuf-java/com.google.protobuf/2.5.0//protobuf-java-2.5.0.jar
 py4j/net.sf.py4j/0.10.7//py4j-0.10.7.jar
 pyrolite/net.razorvine/4.13//pyrolite-4.13.jar
-rocksdbjni/org.rocksdb/5.17.2//rocksdbjni-5.17.2.jar
+rocksdbjni/org.rocksdb/6.29.5//rocksdbjni-6.29.5.jar
 scala-library/org.scala-lang/2.11.12//scala-library-2.11.12.jar
 scala-reflect/org.scala-lang/2.11.8//scala-reflect-2.11.8.jar
 scala-xml_2.11/org.scala-lang.modules/1.0.6//scala-xml_2.11-1.0.6.jar

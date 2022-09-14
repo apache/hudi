@@ -123,7 +123,7 @@ parquet-format/org.apache.parquet/2.4.0//parquet-format-2.4.0.jar
 parquet-hadoop/org.apache.parquet/1.10.1//parquet-hadoop-1.10.1.jar
 parquet-jackson/org.apache.parquet/1.10.1//parquet-jackson-1.10.1.jar
 protobuf-java/com.google.protobuf/2.5.0//protobuf-java-2.5.0.jar
-rocksdbjni/org.rocksdb/5.17.2//rocksdbjni-5.17.2.jar
+rocksdbjni/org.rocksdb/6.29.5//rocksdbjni-6.29.5.jar
 servlet-api/javax.servlet/2.5//servlet-api-2.5.jar
 slf4j-api/org.slf4j/1.7.7//slf4j-api-1.7.7.jar
 slf4j-log4j12/org.slf4j/1.7.10//slf4j-log4j12-1.7.10.jar
