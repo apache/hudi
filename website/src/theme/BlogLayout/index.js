@@ -14,7 +14,7 @@ function BlogLayout(props) {
   const hasSidebar = sidebar && sidebar.items.length > 0;
   const isBlogListPage = props.pageClassName === "blog-list-page";
   const isTagsPostList = props.pageClassName === "blog-tags-post-list-page";
-  console.log('children', children)
+
   return (
     <Layout {...layoutProps}>
       <div className="container margin-vert--lg">
