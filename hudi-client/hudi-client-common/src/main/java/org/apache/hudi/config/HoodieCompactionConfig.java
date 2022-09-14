@@ -106,6 +106,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Only if the log file size is greater than the threshold in bytes,"
           + " the file group will be compacted.");
 
+  public static final ConfigProperty<Long> COMPACTION_LOG_FILE_LENGTH_THRESHOLD = ConfigProperty
+      .key("hoodie.compaction.logfile.length.threshold")
+      .defaultValue(0L)
+      .withDocumentation("Only if the log file length is greater than the threshold,"
+          + " the file group will be compacted.");
+
   public static final ConfigProperty<String> COMPACTION_STRATEGY = ConfigProperty
       .key("hoodie.compaction.strategy")
       .defaultValue(LogFileSizeBasedCompactionStrategy.class.getName())
@@ -164,16 +170,24 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
 
 
-  /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
+   */
   @Deprecated
   public static final String INLINE_COMPACT_PROP = INLINE_COMPACT.key();
-  /** @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead
+   */
   @Deprecated
   public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = INLINE_COMPACT_NUM_DELTA_COMMITS.key();
-  /** @deprecated Use {@link #INLINE_COMPACT_TIME_DELTA_SECONDS} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_TIME_DELTA_SECONDS} and its methods instead
+   */
   @Deprecated
   public static final String INLINE_COMPACT_TIME_DELTA_SECONDS_PROP = INLINE_COMPACT_TIME_DELTA_SECONDS.key();
-  /** @deprecated Use {@link #INLINE_COMPACT_TRIGGER_STRATEGY} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_TRIGGER_STRATEGY} and its methods instead
+   */
   @Deprecated
   public static final String INLINE_COMPACT_TRIGGER_STRATEGY_PROP = INLINE_COMPACT_TRIGGER_STRATEGY.key();
   /**
@@ -241,41 +255,61 @@ public class HoodieCompactionConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String COMPACTION_STRATEGY_PROP = COMPACTION_STRATEGY.key();
-  /** @deprecated Use {@link #COMPACTION_STRATEGY} and its methods instead */
+  /**
+   * @deprecated Use {@link #COMPACTION_STRATEGY} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_COMPACTION_STRATEGY = COMPACTION_STRATEGY.defaultValue();
-  /** @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead */
+  /**
+   * @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead
+   */
   @Deprecated
   public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = COMPACTION_LAZY_BLOCK_READ_ENABLE.key();
-  /** @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead */
+  /**
+   * @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED = COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue();
-  /** @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead */
+  /**
+   * @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead
+   */
   @Deprecated
   public static final String COMPACTION_REVERSE_LOG_READ_ENABLED_PROP = COMPACTION_REVERSE_LOG_READ_ENABLE.key();
-  /** @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead */
+  /**
+   * @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue();
+  /**
+   * @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead
+   */
+  @Deprecated
+  public static final String TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP = TARGET_PARTITIONS_PER_DAYBASED_COMPACTION.key();
+  /**
+   * @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = TARGET_PARTITIONS_PER_DAYBASED_COMPACTION.defaultValue();
   /**
    * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
    */
   @Deprecated
   private static final String DEFAULT_INLINE_COMPACT = INLINE_COMPACT.defaultValue();
-  /** @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = INLINE_COMPACT_NUM_DELTA_COMMITS.defaultValue();
-  /** @deprecated Use {@link #INLINE_COMPACT_TIME_DELTA_SECONDS} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_TIME_DELTA_SECONDS} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_INLINE_COMPACT_TIME_DELTA_SECONDS = INLINE_COMPACT_TIME_DELTA_SECONDS.defaultValue();
-  /** @deprecated Use {@link #INLINE_COMPACT_TRIGGER_STRATEGY} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_TRIGGER_STRATEGY} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_INLINE_COMPACT_TRIGGER_STRATEGY = INLINE_COMPACT_TRIGGER_STRATEGY.defaultValue();
-  /** @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead */
-  @Deprecated
-  public static final String TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP = TARGET_PARTITIONS_PER_DAYBASED_COMPACTION.key();
-  /** @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead */
-  @Deprecated
-  public static final String DEFAULT_TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = TARGET_PARTITIONS_PER_DAYBASED_COMPACTION.defaultValue();
 
   private HoodieCompactionConfig() {
     super();
@@ -378,6 +412,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withLogFileSizeThresholdBasedCompaction(long logFileSizeThreshold) {
       compactionConfig.setValue(COMPACTION_LOG_FILE_SIZE_THRESHOLD, String.valueOf(logFileSizeThreshold));
+      return this;
+    }
+
+    public Builder withLogFileLengthThresholdBasedCompaction(int logFileLengthThreshold) {
+      compactionConfig.setValue(COMPACTION_LOG_FILE_LENGTH_THRESHOLD, String.valueOf(logFileLengthThreshold));
       return this;
     }
 
