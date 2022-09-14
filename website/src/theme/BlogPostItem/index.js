@@ -62,7 +62,6 @@ function BlogPostItem(props) {
         editUrl,
         authors,
     } = metadata;
-    console.log('editUrl', editUrl)
     const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi.png';
     const tagsExists = tags.length > 0;
 
