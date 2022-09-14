@@ -124,9 +124,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
       Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> metadataResult = metadataBootstrap(partitionSelections.get(BootstrapMode.METADATA_ONLY));
       // if there are full bootstrap to be performed, perform that too
       Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> fullBootstrapResult = fullBootstrap(partitionSelections.get(BootstrapMode.FULL_RECORD));
-      // Delete the marker directory for the instant
-      WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
-          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+
       return new HoodieBootstrapWriteMetadata(metadataResult, fullBootstrapResult);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
@@ -148,17 +146,22 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     }
 
     HoodieTableMetaClient metaClient = table.getMetaClient();
+    String bootstrapInstantTime = HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
     metaClient.getActiveTimeline().createNewInstant(
-        new HoodieInstant(State.REQUESTED, metaClient.getCommitActionType(),
-            HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS));
+        new HoodieInstant(State.REQUESTED, metaClient.getCommitActionType(), bootstrapInstantTime));
 
     table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
-        metaClient.getCommitActionType(), HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS), Option.empty());
+        metaClient.getCommitActionType(), bootstrapInstantTime), Option.empty());
 
     HoodieData<BootstrapWriteStatus> bootstrapWriteStatuses = runMetadataBootstrap(partitionFilesList);
 
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     updateIndexAndCommitIfNeeded(bootstrapWriteStatuses.map(w -> w), result);
+
+    // Delete the marker directory for the instant
+    WriteMarkersFactory.get(config.getMarkersType(), table, bootstrapInstantTime)
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+
     return Option.of(result);
   }
 
@@ -265,12 +268,20 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
         (JavaRDD<HoodieRecord>) inputProvider.generateInputRecords("bootstrap_source", config.getBootstrapSourceBasePath(),
             partitionFilesList);
     // Start Full Bootstrap
-    final HoodieInstant requested = new HoodieInstant(State.REQUESTED, table.getMetaClient().getCommitActionType(),
-        HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
+    String bootstrapInstantTime = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
+    final HoodieInstant requested = new HoodieInstant(
+        State.REQUESTED, table.getMetaClient().getCommitActionType(), bootstrapInstantTime);
     table.getActiveTimeline().createNewInstant(requested);
 
     // Setup correct schema and run bulk insert.
-    return Option.of(getBulkInsertActionExecutor(HoodieJavaRDD.of(inputRecordsRDD)).execute());
+    Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> writeMetadataOption =
+        Option.of(getBulkInsertActionExecutor(HoodieJavaRDD.of(inputRecordsRDD)).execute());
+
+    // Delete the marker directory for the instant
+    WriteMarkersFactory.get(config.getMarkersType(), table, bootstrapInstantTime)
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+
+    return writeMetadataOption;
   }
 
   protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(HoodieData<HoodieRecord> inputRecordsRDD) {
