@@ -327,19 +327,7 @@
       <exclusions>
         <exclusion>
           <groupId>org.apache.hudi</groupId>
-          <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.hudi</groupId>
           <artifactId>hudi-spark_${scala.binary.version}</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.hudi</groupId>
-          <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.hudi</groupId>
-          <artifactId>${hudi.spark.common.module}</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
