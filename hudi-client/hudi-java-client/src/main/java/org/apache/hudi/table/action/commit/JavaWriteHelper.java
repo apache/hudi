@@ -67,13 +67,10 @@ public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteH
       return Pair.of(key, record);
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
-    final Schema[] schema = {null};
+    final Schema schema = new Schema.Parser().parse(avroJsonSchema);
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
-      if (schema[0] == null) {
-        schema[0] = new Schema.Parser().parse(avroJsonSchema);
-      }
       @SuppressWarnings("unchecked")
-      T reducedData = (T) rec1.getData().preCombine(rec2.getData(), schema[0], new Properties());
+      T reducedData = (T) rec1.getData().preCombine(rec2.getData(), schema, new Properties());
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.

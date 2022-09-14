@@ -96,15 +96,12 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
     Map<Object, List<HoodieRecord<T>>> keyedRecords = records.stream()
         .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
 
-    final Schema[] schema = {null};
+    final Schema schema = new Schema.Parser().parse(avroJsonSchema);
     return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
       final T data1 = rec1.getData();
       final T data2 = rec2.getData();
 
-      if (schema[0] == null) {
-        schema[0] = new Schema.Parser().parse(avroJsonSchema);
-      }
-      @SuppressWarnings("unchecked") final T reducedData = (T) data2.preCombine(data1, schema[0], new Properties());
+      @SuppressWarnings("unchecked") final T reducedData = (T) data2.preCombine(data1, schema, new Properties());
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
