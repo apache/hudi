@@ -257,7 +257,7 @@ public class DeltaSync implements Serializable, Closeable {
     if (fs.exists(new Path(cfg.targetBasePath))) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf()))
           .setBasePath(cfg.targetBasePath).setPayloadClassName(cfg.payloadClassName)
-          .setMergerImpls(cfg.mergerImpls)
+          .setMergerStrategy(cfg.mergerStrategy)
           .build();
       switch (meta.getTableType()) {
         case COPY_ON_WRITE:
@@ -849,7 +849,7 @@ public class DeltaSync implements Serializable, Closeable {
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf()))
               .setBasePath(cfg.targetBasePath)
               .setPayloadClassName(cfg.payloadClassName)
-              .setMergerImpls(cfg.mergerImpls)
+              .setMergerStrategy(cfg.mergerStrategy)
               .build();
           int totalCompleted = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
           if (totalCompleted > 0) {

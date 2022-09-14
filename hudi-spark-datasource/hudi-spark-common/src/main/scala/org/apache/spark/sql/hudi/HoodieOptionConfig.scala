@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType
 
@@ -73,8 +73,14 @@ object HoodieOptionConfig {
   val SQL_MERGER_IMPLS: HoodieSQLOption[String] = buildConf()
     .withSqlKey("mergerImpls")
     .withHoodieKey(DataSourceWriteOptions.MERGER_IMPLS.key)
-    .withTableConfigKey(HoodieTableConfig.MERGER_IMPLS.key)
     .defaultValue(classOf[HoodieAvroRecordMerger].getName)
+    .build()
+
+  val SQL_MERGER_STRATEGY: HoodieSQLOption[String] = buildConf()
+    .withSqlKey("mergerSTRATEGY")
+    .withHoodieKey(DataSourceWriteOptions.MERGER_STRATEGY.key)
+    .withTableConfigKey(HoodieTableConfig.MERGER_STRATEGY.key)
+    .defaultValue(StringUtils.DEFAULT_MERGER_STRATEGY_UUID)
     .build()
 
   /**
@@ -193,7 +199,7 @@ object HoodieOptionConfig {
   // extract primaryKey, preCombineField, type options
   def extractSqlOptions(options: Map[String, String]): Map[String, String] = {
     val sqlOptions = mappingTableConfigToSqlOption(options)
-    val targetOptions = keyMapping.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName) -- Set(SQL_MERGER_IMPLS.sqlKeyName)
+    val targetOptions = keyMapping.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName) -- Set(SQL_MERGER_IMPLS.sqlKeyName) -- Set(SQL_MERGER_STRATEGY.sqlKeyName)
     sqlOptions.filterKeys(targetOptions.contains)
   }
 

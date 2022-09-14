@@ -26,7 +26,6 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -156,11 +155,10 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
-  public static final ConfigProperty<String> MERGER_IMPLS = ConfigProperty
-      .key("hoodie.compaction.merger.impls")
-      .defaultValue(HoodieAvroRecordMerger.class.getName())
-      .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used "
-          + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
+  public static final ConfigProperty<String> MERGER_STRATEGY = ConfigProperty
+      .key("hoodie.compaction.merger.strategy")
+      .defaultValue(StringUtils.DEFAULT_MERGER_STRATEGY_UUID)
+      .withDocumentation("Id of merger strategy.  Hudi will pick RecordMergers in hoodie.datasource.write.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")
@@ -244,7 +242,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
-  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String mergerImpls) {
+  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String mergerStrategy) {
     super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
@@ -256,9 +254,9 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
         needStore = true;
       }
-      if (contains(MERGER_IMPLS) && payloadClassName != null
-          && !getString(MERGER_IMPLS).equals(mergerImpls)) {
-        setValue(MERGER_IMPLS, mergerImpls);
+      if (contains(MERGER_STRATEGY) && payloadClassName != null
+          && !getString(MERGER_STRATEGY).equals(mergerStrategy)) {
+        setValue(MERGER_STRATEGY, mergerStrategy);
         needStore = true;
       }
       if (needStore) {
@@ -428,7 +426,7 @@ public class HoodieTableConfig extends HoodieConfig {
       hoodieConfig.setDefaultValue(TYPE);
       if (hoodieConfig.getString(TYPE).equals(HoodieTableType.MERGE_ON_READ.name())) {
         hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME);
-        hoodieConfig.setDefaultValue(MERGER_IMPLS);
+        hoodieConfig.setDefaultValue(MERGER_STRATEGY);
       }
       hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
@@ -501,11 +499,8 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
-  public String getMergerImpls() {
-    // There could be tables written with merge strategy from com.uber.hoodie. Need to transparently
-    // change to org.apache.hudi
-    return getStringOrDefault(MERGER_IMPLS).replace("com.uber.hoodie",
-        "org.apache.hudi");
+  public String getMergerStrategy() {
+    return getStringOrDefault(MERGER_STRATEGY);
   }
 
   public String getPreCombineField() {

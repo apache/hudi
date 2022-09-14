@@ -233,6 +233,7 @@ public class StreamerUtil {
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
             .withMergerImpls(conf.getString(FlinkOptions.RECORD_MERGER_IMPLS))
+            .withMergerStrategy(conf.getString(FlinkOptions.RECORD_MERGER_STRATEGY))
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString());
 

@@ -86,7 +86,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
         new Path(tablePath).getFileSystem(new Configuration),
         s"$tablePath/" + HoodieTableMetaClient.METAFOLDER_NAME,
         HoodieTableConfig.PAYLOAD_CLASS_NAME.defaultValue,
-        HoodieTableConfig.MERGER_IMPLS.defaultValue).getTableType)
+        HoodieTableConfig.MERGER_STRATEGY.defaultValue).getTableType)
 
       // Manually pass incremental configs to global configs to make sure Hudi query is able to load the
       // global configs

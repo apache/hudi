@@ -302,9 +302,9 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
     private val baseFileIterator = baseFileReader(split.dataFile.get)
 
-    val mergerList = tableState.mergerStrategy.split(",")
+    val mergerList = tableState.mergerImpls.split(",")
       .map(_.trim).distinct.toList.asJava
-    private val recordMerger = HoodieRecordUtils.generateRecordMerger(tableState.tablePath, EngineType.SPARK, mergerList)
+    private val recordMerger = HoodieRecordUtils.generateRecordMerger(tableState.tablePath, EngineType.SPARK, mergerList, tableState.mergerStrategy)
 
     override def hasNext: Boolean = hasNextInternal
 
@@ -425,9 +425,9 @@ private object HoodieMergeOnReadRDD {
           getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))
       }
 
-      val mergerList = tableState.mergerStrategy.split(",")
+      val mergerList = tableState.mergerImpls.split(",")
         .map(_.trim).distinct.toList.asJava
-      val recordMerger = HoodieRecordUtils.generateRecordMerger(tableState.tablePath, EngineType.SPARK, mergerList)
+      val recordMerger = HoodieRecordUtils.generateRecordMerger(tableState.tablePath, EngineType.SPARK, mergerList, tableState.mergerStrategy)
       logRecordScannerBuilder.withRecordMerger(recordMerger)
 
       if (recordMerger.getRecordType == HoodieRecordType.SPARK) {

@@ -132,8 +132,14 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> MERGER_IMPLS = ConfigProperty
       .key("hoodie.datasource.write.merger.impls")
       .defaultValue(HoodieAvroRecordMerger.class.getName())
-      .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used "
+      .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
+          + "These merger impls will filter by hoodie.datasource.write.merger.strategy "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
+
+  public static final ConfigProperty<String> MERGER_STRATEGY = ConfigProperty
+      .key("hoodie.datasource.write.merger.strategy")
+      .defaultValue(StringUtils.DEFAULT_MERGER_STRATEGY_UUID)
+      .withDocumentation("Id of merger strategy.  Hudi will pick RecordMergers in hoodie.datasource.write.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.class")
@@ -912,7 +918,8 @@ public class HoodieWriteConfig extends HoodieConfig {
         .map(String::trim)
         .distinct()
         .collect(Collectors.toList());
-    this.recordMerger = HoodieRecordUtils.generateRecordMerger(getString(BASE_PATH), engineType, mergers);
+    String mergerStrategy = getString(MERGER_STRATEGY);
+    this.recordMerger = HoodieRecordUtils.generateRecordMerger(getString(BASE_PATH), engineType, mergers, mergerStrategy);
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -939,7 +946,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public void setMergerClass(String mergerStrategy) {
-    setValue(MERGER_IMPLS, mergerStrategy);
+    setValue(MERGER_STRATEGY, mergerStrategy);
   }
 
   public String getInternalSchema() {
@@ -2288,6 +2295,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withMergerImpls(String mergerImpls) {
       writeConfig.setValue(MERGER_IMPLS, mergerImpls);
+      return this;
+    }
+
+    public Builder withMergerStrategy(String mergerStrategy) {
+      writeConfig.setValue(MERGER_STRATEGY, mergerStrategy);
       return this;
     }
 

@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.Schema;
@@ -30,6 +31,11 @@ import java.io.IOException;
 import java.util.Properties;
 
 public class HoodieSparkRecordMerger implements HoodieRecordMerger {
+
+  @Override
+  public String getMergingStrategy() {
+    return StringUtils.DEFAULT_MERGER_STRATEGY_UUID;
+  }
 
   @Override
   public Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {

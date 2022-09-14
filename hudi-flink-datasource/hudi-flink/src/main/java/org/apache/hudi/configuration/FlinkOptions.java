@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -120,8 +121,15 @@ public class FlinkOptions extends HoodieConfig {
       .key("record.merger.impls")
       .stringType()
       .defaultValue(HoodieAvroRecordMerger.class.getName())
-      .withDescription("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used "
+      .withDescription("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
+          + "These merger impls will filter by record.merger.strategy. "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
+
+  public static final ConfigOption<String> RECORD_MERGER_STRATEGY = ConfigOptions
+      .key("record.merger.strategy")
+      .stringType()
+      .defaultValue(StringUtils.DEFAULT_MERGER_STRATEGY_UUID)
+      .withDescription("Id of merger strategy.  Hudi will pick RecordMergers in record.merger.impls which has the same merger strategy id");
 
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
       .key("partition.default_name")

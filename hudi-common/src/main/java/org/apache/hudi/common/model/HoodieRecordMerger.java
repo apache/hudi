@@ -49,4 +49,9 @@ public interface HoodieRecordMerger extends Serializable {
    * SPARK, AVRO, FLINK
    */
   HoodieRecordType getRecordType();
+
+  /**
+   * The kind of merging strategy this recordMerger belongs to. An UUID represents merging strategy.
+   */
+  String getMergingStrategy();
 }

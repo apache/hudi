@@ -79,6 +79,7 @@ case class HoodieTableState(tablePath: String,
                             usesVirtualKeys: Boolean,
                             recordPayloadClassName: String,
                             metadataConfig: HoodieMetadataConfig,
+                            mergerImpls: String,
                             mergerStrategy: String)
 
 /**
@@ -469,8 +470,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.metadataConfig,
-      mergerStrategy = optParams.getOrElse(HoodieWriteConfig.MERGER_IMPLS.key(),
-        metaClient.getTableConfig.getMergerImpls)
+      mergerImpls = optParams.getOrElse(HoodieWriteConfig.MERGER_IMPLS.key(),
+        HoodieWriteConfig.MERGER_IMPLS.defaultValue()),
+      mergerStrategy = optParams.getOrElse(HoodieWriteConfig.MERGER_STRATEGY.key(),
+        metaClient.getTableConfig.getMergerStrategy)
     )
   }
 

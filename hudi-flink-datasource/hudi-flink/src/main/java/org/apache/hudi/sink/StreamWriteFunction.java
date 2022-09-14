@@ -18,9 +18,7 @@
 
 package org.apache.hudi.sink;
 
-import java.util.Arrays;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -29,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -204,12 +201,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   private void initMergeClass() {
-    List<String> mergers = Arrays.stream(config.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
-        .map(String::trim)
-        .distinct()
-        .collect(Collectors.toList());
-    recordMerger = HoodieRecordUtils.generateRecordMerger(writeClient.getConfig().getBasePath(), EngineType.FLINK,
-        mergers);
+    recordMerger = writeClient.getConfig().getRecordMerger();
     LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
   }
 

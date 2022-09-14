@@ -218,7 +218,7 @@ object HoodieWriterUtils {
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
     PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
-    MERGER_IMPLS -> HoodieTableConfig.MERGER_IMPLS
+    MERGER_STRATEGY -> HoodieTableConfig.MERGER_STRATEGY
   )
   def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {
     val includingTableConfigs = scala.collection.mutable.Map() ++ options
