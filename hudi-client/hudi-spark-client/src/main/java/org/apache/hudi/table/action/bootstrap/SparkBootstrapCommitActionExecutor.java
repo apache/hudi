@@ -334,7 +334,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
         })
         .collect(Collectors.toList());
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Bootstrap metadata table: " + config.getTableName());
+    context.setJobStatus(this.getClass().getSimpleName(), "Run metadata-only bootstrap operation: " + config.getTableName());
     return context.parallelize(bootstrapPaths, config.getBootstrapParallelism())
         .map(partitionFsPair -> getMetadataHandler(config, table, partitionFsPair.getRight().getRight()).runMetadataBootstrap(partitionFsPair.getLeft(),
                 partitionFsPair.getRight().getLeft(), keyGenerator));
