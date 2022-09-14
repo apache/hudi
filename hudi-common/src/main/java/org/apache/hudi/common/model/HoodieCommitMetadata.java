@@ -245,6 +245,7 @@ public class HoodieCommitMetadata implements Serializable {
    * parse the bytes of deltacommit, and get the base file and the log files belonging to this
    * provided file group.
    */
+  // TODO: refactor this method to avoid doing the json tree walking (HUDI-4822).
   public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(
       byte[] bytes, HoodieFileGroupId fileGroupId) {
     String jsonStr = new String(bytes, StandardCharsets.UTF_8);

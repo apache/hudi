@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import org.apache.hudi.client.WriteStatus;
@@ -25,15 +26,12 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.cdc.HoodieCDCOperation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.generic.GenericRecord;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -106,8 +104,7 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
         insertRecordsWritten++;
         writtenRecordKeys.add(keyToPreWrite);
         if (cdcEnabled) {
-          cdcData.put(hoodieRecord.getRecordKey(), createCDCRecord(HoodieCDCOperation.INSERT,
-              hoodieRecord.getRecordKey(), partitionPath, null, (GenericRecord) insertRecord.get()));
+          cdcLogger.put(hoodieRecord, null, insertRecord);
         }
       } catch (IOException e) {
         throw new HoodieUpsertException("Failed to write records", e);
@@ -134,8 +131,7 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
           writeRecord(hoodieRecord, insertRecord);
           insertRecordsWritten++;
           if (cdcEnabled) {
-            cdcData.put(hoodieRecord.getRecordKey(), createCDCRecord(HoodieCDCOperation.INSERT,
-                hoodieRecord.getRecordKey(), partitionPath, null, (GenericRecord) insertRecord.get()));
+            cdcLogger.put(hoodieRecord, null, insertRecord);
           }
         }
       } catch (IOException e) {
