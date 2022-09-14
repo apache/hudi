@@ -29,6 +29,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
+
+import java.util.Properties;
+
 public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
 
@@ -51,16 +55,20 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
 
   @Override
   public HoodieData<HoodieRecord<T>> deduplicateRecords(
-      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
+      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String avroJsonSchema) {
     boolean isIndexingGlobal = index.isGlobal();
+    final Schema[] schema = {null};
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
       Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
       return Pair.of(key, record);
     }).reduceByKey((rec1, rec2) -> {
+      if (schema[0] == null) {
+        schema[0] = new Schema.Parser().parse(avroJsonSchema);
+      }
       @SuppressWarnings("unchecked")
-      T reducedData = (T) rec2.getData().preCombine(rec1.getData());
+      T reducedData = (T) rec2.getData().preCombine(rec1.getData(), schema[0], new Properties());
       HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
 
       return new HoodieAvroRecord<>(reducedKey, reducedData);

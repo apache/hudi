@@ -43,7 +43,7 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
     try {
       // De-dupe/merge if needed
       I dedupedRecords =
-          combineOnCondition(shouldCombine, inputRecords, shuffleParallelism, table);
+          combineOnCondition(shouldCombine, inputRecords, shuffleParallelism, table, table.getConfig().getSchema());
 
       Instant lookupBegin = Instant.now();
       I taggedRecords = dedupedRecords;
@@ -69,8 +69,8 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
       I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table);
 
   public I combineOnCondition(
-      boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table) {
-    return condition ? deduplicateRecords(records, table, parallelism) : records;
+          boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table, String schema) {
+    return condition ? deduplicateRecords(records, table, parallelism, schema) : records;
   }
 
   /**
@@ -81,10 +81,10 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
    * @return Collection of HoodieRecord already be deduplicated
    */
   public I deduplicateRecords(
-      I records, HoodieTable<T, I, K, O> table, int parallelism) {
-    return deduplicateRecords(records, table.getIndex(), parallelism);
+      I records, HoodieTable<T, I, K, O> table, int parallelism, String schema) {
+    return deduplicateRecords(records, table.getIndex(), parallelism, schema);
   }
 
   public abstract I deduplicateRecords(
-      I records, HoodieIndex<?, ?> index, int parallelism);
+      I records, HoodieIndex<?, ?> index, int parallelism, String schema);
 }

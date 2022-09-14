@@ -114,7 +114,7 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Bas
 
     if (performDedupe) {
       dedupedRecords = (HoodieData<HoodieRecord<T>>) HoodieWriteHelper.newInstance().combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
-          parallelism, table);
+          parallelism, table, config.getSchema());
     }
 
     // only JavaRDD is supported for Spark partitioner, but it is not enforced by BulkInsertPartitioner API. To improve this, TODO HUDI-3463
