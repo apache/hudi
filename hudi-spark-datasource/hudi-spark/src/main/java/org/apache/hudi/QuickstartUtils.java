@@ -163,7 +163,7 @@ public class QuickstartUtils {
      * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
      */
     public List<HoodieRecord> generateInserts(Integer n) throws IOException {
-      String randomString = "JONRANDOM"; //generateRandomString();
+      String randomString = generateRandomString();
       return generateInsertsStream(randomString, n).collect(Collectors.toList());
     }
 
@@ -196,6 +196,7 @@ public class QuickstartUtils {
      * Generates new updates, one for each of the keys above
      * list
      *
+     * @param n Number of updates (must be no more than number of existing keys)
      * @return list of hoodie record updates
      */
     public List<HoodieRecord> generateUniqueUpdatesForExample(Integer n) {
