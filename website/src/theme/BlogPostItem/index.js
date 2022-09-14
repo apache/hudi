@@ -62,7 +62,7 @@ function BlogPostItem(props) {
         editUrl,
         authors,
     } = metadata;
-    const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi.png';
+    const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi-logo-medium.png';
     const tagsExists = tags.length > 0;
 
     const tagsList = () => {

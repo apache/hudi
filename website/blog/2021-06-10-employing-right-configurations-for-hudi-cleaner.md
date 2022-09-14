@@ -3,7 +3,7 @@ title: "Employing correct configurations for Hudi's cleaner table service"
 excerpt: "Ensuring isolation between Hudi writers and readers using `HoodieCleaner.java`"
 author: pratyakshsharma
 category: blog
-image: /assets/images/Initial_timeline-aeb1bbf2bc2489d76460277b7de47c14.png
+image: /assets/images/blog/hoodie-cleaner/Initial_timeline.png
 ---
 
 Apache Hudi provides snapshot isolation between writers and readers. This is made possible by Hudi’s MVCC concurrency model. In this blog, we will explain how to employ the right configurations to manage multiple file versions. Furthermore, we will discuss mechanisms available to users on how to maintain just the required number of old file versions so that long running readers do not fail. 
