@@ -249,7 +249,7 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
     // create a topic with very short retention
     final String topic = TEST_TOPIC_PREFIX + "testFailOnDataLoss";
     Properties topicConfig = new Properties();
-    topicConfig.setProperty("retention.ms", "10000");
+    topicConfig.setProperty("retention.ms", "8000");
     testUtils.createTopic(topic, 1, topicConfig);
 
     TypedProperties failOnDataLossProps = createPropsForKafkaSource(topic, null, "earliest");
@@ -261,7 +261,7 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
     assertEquals(2, fetch1.getBatch().get().count());
 
     // wait for the checkpoint to expire
-    Thread.sleep(10001);
+    Thread.sleep(30000);
     Throwable t = assertThrows(HoodieDeltaStreamerException.class, () -> {
       kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     });
