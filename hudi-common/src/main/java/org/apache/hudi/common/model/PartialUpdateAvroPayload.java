@@ -24,6 +24,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -163,7 +164,8 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       Comparable oldOrderingVal = (Comparable)HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
           orderingField,
           true, consistentLogicalTimestampEnabled);
-      if (oldOrderingVal != null && oldOrderingVal.compareTo(orderingVal) > 0) {
+      if (oldOrderingVal != null && ReflectionUtils.isSameClass(oldOrderingVal, orderingVal)
+          && oldOrderingVal.compareTo(orderingVal) > 0) {
         // pick the payload with greatest ordering value as insert record
         isOldRecordNewer = true;
       }
