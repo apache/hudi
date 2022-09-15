@@ -18,12 +18,13 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.SerializableRecord;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -73,8 +74,10 @@ public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable
 
   private final String cdcSupplementalLoggingMode;
 
+  private final Schema cdcSchema;
+
   // the cdc data
-  private final Map<String, SerializableRecord> cdcData;
+  private final Map<String, HoodieAvroPayload> cdcData;
 
   private final Function<GenericRecord, GenericRecord> rewriteRecordFunc;
 
@@ -103,6 +106,15 @@ public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable
 
       this.cdcEnabled = config.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED);
       this.cdcSupplementalLoggingMode = config.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE);
+
+      if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)) {
+        this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA;
+      } else if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE)) {
+        this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE;
+      } else {
+        this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY;
+      }
+
       this.cdcData = new ExternalSpillableMap<>(
           maxInMemorySizeInBytes,
           config.getSpillableMapBasePath(),
@@ -126,26 +138,28 @@ public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable
             keyFields.stream().map(keyField -> oldRecord.get(keyField).toString()).toArray(String[]::new),
           ":");
       }
+      GenericData.Record cdcRecord;
       if (indexedRecord.isPresent()) {
         GenericRecord record = (GenericRecord) indexedRecord.get();
         if (oldRecord == null) {
           // inserted cdc record
-          cdcData.put(recordKey, createCDCRecord(HoodieCDCOperation.INSERT, recordKey, partitionPath,
-              null, record));
+          cdcRecord = createCDCRecord(HoodieCDCOperation.INSERT, recordKey, partitionPath,
+              null, record);
         } else {
           // updated cdc record
-          cdcData.put(recordKey, createCDCRecord(HoodieCDCOperation.UPDATE, recordKey, partitionPath,
-              oldRecord, record));
+          cdcRecord = createCDCRecord(HoodieCDCOperation.UPDATE, recordKey, partitionPath,
+              oldRecord, record);
         }
       } else {
         // deleted cdc record
-        cdcData.put(recordKey, createCDCRecord(HoodieCDCOperation.DELETE, recordKey, partitionPath,
-            oldRecord, null));
+        cdcRecord = createCDCRecord(HoodieCDCOperation.DELETE, recordKey, partitionPath,
+            oldRecord, null);
       }
+      cdcData.put(recordKey, new HoodieAvroPayload(Option.of(cdcRecord)));
     }
   }
 
-  private SerializableRecord createCDCRecord(HoodieCDCOperation operation,
+  private GenericData.Record createCDCRecord(HoodieCDCOperation operation,
                                                String recordKey,
                                                String partitionPath,
                                                GenericRecord oldRecord,
@@ -159,7 +173,7 @@ public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable
     } else {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey);
     }
-    return new SerializableRecord(record);
+    return record;
   }
 
   private GenericRecord addCommitMetadata(GenericRecord record, String recordKey, String partitionPath) {
@@ -188,7 +202,13 @@ public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable
     try {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = buildCDCBlockHeader();
       List<IndexedRecord> records = cdcData.values().stream()
-          .map(SerializableRecord::getRecord).collect(Collectors.toList());
+          .map( record -> {
+            try {
+              return record.getInsertValue(cdcSchema).get();
+            } catch (IOException e) {
+              throw new HoodieIOException("Failed to get cdc record", e);
+            }
+          }).collect(Collectors.toList());
       HoodieLogBlock block = new HoodieCDCDataBlock(records, header,
           StringUtils.join(keyFields.toArray(new String[0]), ","));
       AppendResult result = cdcWriter.appendBlocks(Collections.singletonList(block));
