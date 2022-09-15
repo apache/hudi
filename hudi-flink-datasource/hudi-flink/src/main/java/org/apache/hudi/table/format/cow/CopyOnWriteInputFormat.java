@@ -109,7 +109,13 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
         fileSplit.getPath());
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
     partSpec.forEach((k, v) -> {
-      DataType fieldType = fullFieldTypes[fieldNameList.indexOf(k)];
+      final int idx = fieldNameList.indexOf(k);
+      if (idx == -1) {
+        // for any rare cases that the partition field does not exist in schema,
+        // fallback to file read
+        return;
+      }
+      DataType fieldType = fullFieldTypes[idx];
       if (!DataTypeUtils.isDatetimeType(fieldType)) {
         // date time type partition field is formatted specifically,
         // read directly from the data file to avoid format mismatch or precision loss
