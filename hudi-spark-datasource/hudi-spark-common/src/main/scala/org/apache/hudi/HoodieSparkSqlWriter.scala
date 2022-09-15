@@ -210,29 +210,31 @@ object HoodieSparkSqlWriter {
               internalSchemaOpt = Some(AvroInternalSchemaConverter.convert(sourceSchema))
             }
 
-            if (internalSchemaOpt.isDefined) {
-              // Apply schema evolution, by auto-merging write schema and read schema
-              val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(sourceSchema, internalSchemaOpt.get)
-              AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getName)
-            } else if (TableSchemaResolver.isSchemaCompatible(sourceSchema, latestTableSchema)) {
-              // In case schema reconciliation is enabled and source and latest table schemas
-              // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]]), then we
-              // will rebase incoming batch onto the table's latest schema (ie, reconcile them)
-              //
-              // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
-              //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
-              //       and [[latestTableSchema]] is treated as a writer's schema)
-              latestTableSchema
-            } else {
-              log.error(
-                s"""
-                   |Failed to reconcile incoming batch schema with the table's one.
-                   |Incoming schema ${sourceSchema.toString(true)}
+            internalSchemaOpt match {
+              case Some(internalSchema) =>
+                // Apply schema evolution, by auto-merging write schema and read schema
+                val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(sourceSchema, internalSchema)
+                AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getName)
 
-                   |Table's schema ${latestTableSchema.toString(true)}
-
-                   |""".stripMargin)
-              throw new SchemaCompatibilityException("Failed to reconcile incoming schema with the table's one")
+              case None =>
+                if (TableSchemaResolver.isSchemaCompatible(sourceSchema, latestTableSchema)) {
+                  // In case schema reconciliation is enabled and source and latest table schemas
+                  // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]]), then we
+                  // will rebase incoming batch onto the table's latest schema (ie, reconcile them)
+                  //
+                  // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
+                  //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
+                  //       and [[latestTableSchema]] is treated as a writer's schema)
+                  latestTableSchema
+                } else {
+                  log.error(
+                    s"""
+                       |Failed to reconcile incoming batch schema with the table's one.
+                       |Incoming schema ${sourceSchema.toString(true)}
+                       |Table's schema ${latestTableSchema.toString(true)}
+                       |""".stripMargin)
+                  throw new SchemaCompatibilityException("Failed to reconcile incoming schema with the table's one")
+                }
             }
           } else {
             // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
