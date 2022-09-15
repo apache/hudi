@@ -61,7 +61,7 @@ object DataSkippingUtils extends Logging {
     }
   }
 
-  private def tryComposeIndexFilterExpr(sourceExpr: Expression, indexSchema: StructType): Option[Expression] = {
+  private def tryComposeIndexFilterExpr(sourceFilterExpr: Expression, indexSchema: StructType): Option[Expression] = {
     //
     // For translation of the Filter Expression for the Data Table into Filter Expression for Column Stats Index, we're
     // assuming that
@@ -91,7 +91,7 @@ object DataSkippingUtils extends Logging {
     //       colA_minValue = min(colA)  =>  transform_expr(colA_minValue) = min(transform_expr(colA))
     //       colA_maxValue = max(colA)  =>  transform_expr(colA_maxValue) = max(transform_expr(colA))
     //
-    sourceExpr match {
+    sourceFilterExpr match {
       // If Expression is not resolved, we can't perform the analysis accurately, bailing
       case expr if !expr.resolved => None
 
@@ -230,7 +230,7 @@ object DataSkippingUtils extends Logging {
       // Filter "expr(colA) in (B1, B2, ...)"
       // NOTE: [[InSet]] is an optimized version of the [[In]] expression, where every sub-expression w/in the
       //       set is a static literal
-      case InSet(sourceExpr @ AllowedTransformationExpression(attrRef), hset: Seq[Any]) =>
+      case InSet(sourceExpr @ AllowedTransformationExpression(attrRef), hset: Set[Any]) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
