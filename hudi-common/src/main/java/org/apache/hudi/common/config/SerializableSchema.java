@@ -35,10 +35,14 @@ public class SerializableSchema implements Serializable {
   public SerializableSchema() {
   }
 
+  public SerializableSchema(String schema) {
+    this.schema = new Schema.Parser().parse(schema);
+  }
+
   public SerializableSchema(Schema schema) {
     this.schema = newCopy(schema);
   }
-  
+
   public SerializableSchema(SerializableSchema serializableSchema) {
     this(serializableSchema.schema);
   }

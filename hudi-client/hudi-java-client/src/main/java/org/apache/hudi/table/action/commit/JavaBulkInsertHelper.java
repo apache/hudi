@@ -103,7 +103,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
 
     if (performDedupe) {
       dedupedRecords = (List<HoodieRecord<T>>) JavaWriteHelper.newInstance().combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
-          parallelism, table, config.getSchema());
+          parallelism, table);
     }
 
     final List<HoodieRecord<T>> repartitionedRecords = (List<HoodieRecord<T>>) partitioner.repartitionRecords(dedupedRecords, parallelism);

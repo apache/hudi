@@ -58,7 +58,7 @@ public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteH
 
   @Override
   public List<HoodieRecord<T>> deduplicateRecords(
-      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String avroJsonSchema) {
+      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr) {
     boolean isIndexingGlobal = index.isGlobal();
     Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
       HoodieKey hoodieKey = record.getKey();
@@ -67,7 +67,7 @@ public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteH
       return Pair.of(key, record);
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
-    final Schema schema = new Schema.Parser().parse(avroJsonSchema);
+    final Schema schema = new Schema.Parser().parse(schemaStr);
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
       T reducedData = (T) rec1.getData().preCombine(rec2.getData(), schema, new Properties());
