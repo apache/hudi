@@ -588,9 +588,9 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 ```python
 # pyspark
 tripsSnapshotDF = spark.
-    read.
-    format("hudi").
-    load(basePath)
+read.
+format("hudi").
+load(basePath)
 # load(basePath) use "/partitionKey=partitionValue" folder structure for Spark auto partition discovery
 
 tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
@@ -671,9 +671,7 @@ format("hudi").
 option("as.of.instant", "2021-07-28 14: 11: 08").
 load(basePath)
 
-// It is equal
-to
-"as.of.instant = 2021-07-28 00:00:00"
+# It is equal to "as.of.instant = 2021-07-28 00:00:00"
 spark.read.
 format("hudi").
 option("as.of.instant", "2021-07-28").
@@ -852,9 +850,9 @@ when not matched then
 updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
 df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
 df.write.format("hudi").
-    options(**hudi_options).
-    mode("append").
-    save(basePath)
+options(**hudi_options).
+mode("append").
+save(basePath)
 ```
 
 :::note
@@ -917,10 +915,10 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 # pyspark
 # reload data
 spark.
-    read.
-    format("hudi").
-    load(basePath).
-    createOrReplaceTempView("hudi_trips_snapshot")
+read.
+format("hudi").
+load(basePath).
+createOrReplaceTempView("hudi_trips_snapshot")
 
 commits = list(map(lambda row: row[0], spark.sql(
     "select distinct(_hoodie_commit_time) as commitTime from  hudi_trips_snapshot order by commitTime").limit(
@@ -934,8 +932,8 @@ incremental_read_options = {
 }
 
 tripsIncrementalDF = spark.read.format("hudi").
-    options(**incremental_read_options).
-    load(basePath)
+options(**incremental_read_options).
+load(basePath)
 tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
 
 spark.sql(
@@ -999,8 +997,8 @@ point_in_time_read_options = {
 }
 
 tripsPointInTimeDF = spark.read.format("hudi").
-    options(**point_in_time_read_options).
-    load(basePath)
+options(**point_in_time_read_options).
+load(basePath)
 
 tripsPointInTimeDF.createOrReplaceTempView("hudi_trips_point_in_time")
 spark.sql(
@@ -1091,8 +1089,8 @@ from pyspark.sql.functions import lit
 from functools import reduce
 
 spark.read.format("hudi").
-    load(basePath).
-    createOrReplaceTempView("hudi_trips_snapshot")
+load(basePath).
+createOrReplaceTempView("hudi_trips_snapshot")
 # fetch total records count
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot where rider is not null").count()
@@ -1122,14 +1120,14 @@ soft_delete_df = reduce(lambda df, col: df.withColumn(col[0], lit(None).cast(col
 
 # simply upsert the table after setting these fields to null
 soft_delete_df.write.format("hudi").
-    options(**hudi_soft_delete_options).
-    mode("append").
-    save(basePath)
+options(**hudi_soft_delete_options).
+mode("append").
+save(basePath)
 
 # reload data
 spark.read.format("hudi").
-    load(basePath).
-    createOrReplaceTempView("hudi_trips_snapshot")
+load(basePath).
+createOrReplaceTempView("hudi_trips_snapshot")
 
 # This should return the same total count as before
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
@@ -1242,15 +1240,15 @@ from pyspark.sql.functions import lit
 deletes = list(map(lambda row: (row[0], row[1]), ds.collect()))
 hard_delete_df = spark.sparkContext.parallelize(deletes).toDF(['uuid', 'partitionpath']).withColumn('ts', lit(0.0))
 hard_delete_df.write.format("hudi").
-    options(**hudi_hard_delete_options).
-    mode("append").
-    save(basePath)
+options(**hudi_hard_delete_options).
+mode("append").
+save(basePath)
 
 # run the same read query as above.
 roAfterDeleteViewDF = spark.
-    read.
-    format("hudi").
-    load(basePath)
+read.
+format("hudi").
+load(basePath)
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 # fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
