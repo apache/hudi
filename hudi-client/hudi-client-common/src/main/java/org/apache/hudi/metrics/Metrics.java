@@ -55,7 +55,7 @@ public class Metrics {
     Runtime.getRuntime().addShutdownHook(new Thread(Metrics::shutdown));
   }
 
-  private void reportAndCloseReporter() {
+  private void reportAndStopReporter() {
     try {
       registerHoodieCommonMetrics();
       reporter.report();
@@ -102,7 +102,7 @@ public class Metrics {
     if (!initialized) {
       return;
     }
-    instance.reportAndCloseReporter();
+    instance.reportAndStopReporter();
     initialized = false;
   }
 
