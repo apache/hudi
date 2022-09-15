@@ -954,7 +954,7 @@ class TestHoodieSparkSqlWriter {
   def testToWriteWithoutParametersIncludedInHoodieTableConfig(): Unit = {
     val _spark = spark
     import _spark.implicits._
-    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val df = Seq((1, "a1", 10, 1000L, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
@@ -968,7 +968,7 @@ class TestHoodieSparkSqlWriter {
          | create table $tableName1 (
          |   id int,
          |   name string,
-         |   price double,
+         |   value int,
          |   ts long,
          |   dt string
          | ) using hudi
@@ -1006,7 +1006,7 @@ class TestHoodieSparkSqlWriter {
     assert(tableConfig2.getUrlEncodePartitioning == "true")
     assert(tableConfig2.getKeyGeneratorClassName == classOf[SimpleKeyGenerator].getName)
 
-    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val df2 = Seq((2, "a2", 20, 1000L, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     // raise exception when use params which is not same with HoodieTableConfig
     val configConflictException = intercept[HoodieException] {
       df2.write.format("hudi")
