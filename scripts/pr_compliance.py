@@ -15,9 +15,9 @@ def test_title():
     assert title_is_ok(" my fake pr [MINOR]")
     #test that more than 4 nums is also ok
     assert title_is_ok("[HUDI-12345] my fake pr")
+    #test that 1 nums is also ok
+    assert title_is_ok("[HUDI-1] my fake pr")
 
-    #3 nums not ok
-    assert not title_is_ok("[HUDI-123] my fake pr")
     #no nums not ok
     assert not title_is_ok("[HUDI-] my fake pr")
     #no brackets not ok
@@ -485,5 +485,3 @@ if __name__ == '__main__':
     if not body_is_ok(body):
         exit(-2)
     exit(0)
-
-
