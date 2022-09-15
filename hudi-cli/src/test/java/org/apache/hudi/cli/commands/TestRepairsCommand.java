@@ -73,6 +73,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
 import static org.apache.hudi.common.table.HoodieTableConfig.generateChecksum;
 import static org.apache.hudi.common.table.HoodieTableConfig.validateChecksum;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -319,4 +320,51 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     }
   }
 
+  @Test
+  public void testRenamePartition() throws IOException {
+    tablePath = tablePath + "/rename_partition_test/";
+    HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName(tableName())
+        .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
+        .setPayloadClassName("org.apache.hudi.common.model.HoodieAvroPayload")
+        .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
+        .setPartitionFields("partition_path")
+        .setRecordKeyFields("_row_key")
+        .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
+        .initTable(HoodieCLI.conf, tablePath);
+
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
+      String newCommitTime = "001";
+      int numRecords = 20;
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
+      JavaRDD<HoodieRecord> writeRecords = context().getJavaSparkContext().parallelize(records, 1);
+      List<WriteStatus> result = client.upsert(writeRecords, newCommitTime).collect();
+      Assertions.assertNoWriteErrors(result);
+
+      SQLContext sqlContext = context().getSqlContext();
+      long totalRecs = sqlContext.read().format("hudi").load(tablePath).count();
+      assertEquals(totalRecs, 20);
+      long totalRecsInOldPartition = sqlContext.read().format("hudi").load(tablePath)
+          .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + DEFAULT_FIRST_PARTITION_PATH + "'").count();
+
+      // Execute rename partition command
+      assertEquals(0, SparkMain.renamePartition(jsc(), tablePath, DEFAULT_FIRST_PARTITION_PATH, "2016/03/18"));
+
+      // there should not be any records in old partition
+      totalRecs = sqlContext.read().format("hudi").load(tablePath)
+          .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + DEFAULT_FIRST_PARTITION_PATH + "'").count();
+      assertEquals(totalRecs, 0);
+
+      // all records from old partition should have been migrated to new partition
+      totalRecs = sqlContext.read().format("hudi").load(tablePath)
+          .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + "2016/03/18" + "'").count();
+      assertEquals(totalRecs, totalRecsInOldPartition);
+    }
+  }
 }

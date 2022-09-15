@@ -131,7 +131,6 @@ public class TimelineUtils {
         getMetadataValue(metaClient, extraMetadataKey, instant)).orElse(Option.empty());
   }
 
-
   /**
    * Get extra metadata for specified key from latest commit/deltacommit/replacecommit instant including internal commits
    * such as clustering.
@@ -176,5 +175,14 @@ public class TimelineUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read instant information: " + instant + " for " + metaClient.getBasePath(), e);
     }
+  }
+
+  public static HoodieDefaultTimeline getTimeline(HoodieTableMetaClient metaClient, boolean includeArchivedTimeline) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    if (includeArchivedTimeline) {
+      HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+      return archivedTimeline.mergeTimeline(activeTimeline);
+    }
+    return activeTimeline;
   }
 }

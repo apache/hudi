@@ -20,7 +20,6 @@ package org.apache.spark.sql.adapter
 import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
@@ -33,6 +32,7 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -43,6 +43,8 @@ import scala.util.control.NonFatal
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
+  def getCatalogUtils: HoodieSpark3CatalogUtils
+
   override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
     val encoder = RowEncoder(schema).resolveAndBind()
     new Spark3RowSerDe(encoder)
@@ -50,9 +52,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
-  override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = {
-    new Spark3ParsePartitionUtil(conf)
-  }
+  override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil
 
   override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
     parser.parseMultipartIdentifier(sqlText)

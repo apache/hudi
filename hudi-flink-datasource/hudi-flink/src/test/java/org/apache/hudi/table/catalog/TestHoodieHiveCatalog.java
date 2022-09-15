@@ -21,6 +21,7 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
@@ -37,7 +38,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.hudi.util.StreamerUtil;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -138,7 +138,7 @@ public class TestHoodieHiveCatalog {
     String expectedTableSchema = "`uuid` INT NOT NULL,`name` STRING,`age` INT,`par1` STRING,`ts` BIGINT";
     assertEquals(expectedTableSchema, tableSchema);
     assertEquals(Collections.singletonList("uuid"), table1.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
-    assertEquals(Collections.singletonList("par1"), ((CatalogTable)table1).getPartitionKeys());
+    assertEquals(Collections.singletonList("par1"), ((CatalogTable) table1).getPartitionKeys());
 
     // validate explicit primary key
     options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "id");

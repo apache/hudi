@@ -303,7 +303,9 @@ public class HoodieJavaStreamingApp {
     }
 
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
-      numExpCommits += 1;
+      if (inputDF2 != null) {
+        numExpCommits += 1;
+      }
       // Wait for compaction to also finish and track latest timestamp as commit timestamp
       waitTillNCommits(fs, numExpCommits, 180, 3);
       commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);

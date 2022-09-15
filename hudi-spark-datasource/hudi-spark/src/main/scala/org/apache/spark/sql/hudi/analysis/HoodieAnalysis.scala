@@ -79,10 +79,6 @@ object HoodieAnalysis {
       val spark3Analysis: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3AnalysisClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-      val spark3ResolveReferences: RuleBuilder =
-        session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
-
       val resolveAlterTableCommandsClass =
         if (HoodieSparkUtils.gteqSpark3_3)
           "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
@@ -94,10 +90,10 @@ object HoodieAnalysis {
       //
       // It's critical for this rules to follow in this order, so that DataSource V2 to V1 fallback
       // is performed prior to other rules being evaluated
-      rules ++= Seq(dataSourceV2ToV1Fallback, spark3Analysis, spark3ResolveReferences, resolveAlterTableCommands)
+      rules ++= Seq(dataSourceV2ToV1Fallback, spark3Analysis, resolveAlterTableCommands)
 
     } else if (HoodieSparkUtils.gteqSpark3_1) {
-      val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.Spark312ResolveHudiAlterTableCommand"
+      val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.Spark31ResolveHudiAlterTableCommand"
       val spark31ResolveAlterTableCommands: RuleBuilder =
         session => ReflectionUtils.loadClass(spark31ResolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
 
@@ -282,13 +278,21 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           // the hoodie's meta field in sql statement, it is a system field, cannot set the value
           // by user.
           if (HoodieSparkUtils.isSpark3) {
-            val assignmentFieldNames = assignments.map(_.key).map {
+            val resolvedAssignments = assignments.map { assign =>
+              val resolvedKey = assign.key match {
+                case c if !c.resolved =>
+                  resolveExpressionFrom(target)(c)
+                case o => o
+              }
+              Assignment(resolvedKey, null)
+            }
+            val assignmentFieldNames = resolvedAssignments.map(_.key).map {
               case attr: AttributeReference =>
                 attr.name
               case _ => ""
             }.toArray
             val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala
-            if (metaFields.mkString(",").startsWith(assignmentFieldNames.take(metaFields.length).mkString(","))) {
+            if (assignmentFieldNames.take(metaFields.length).mkString(",").startsWith(metaFields.mkString(","))) {
               true
             } else {
               false

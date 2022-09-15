@@ -53,7 +53,7 @@ public class Metrics {
     }
     reporter.start();
 
-    Runtime.getRuntime().addShutdownHook(new Thread(this::reportAndCloseReporter));
+    Runtime.getRuntime().addShutdownHook(new Thread(Metrics::shutdown));
   }
 
   private void reportAndCloseReporter() {
@@ -61,6 +61,7 @@ public class Metrics {
       registerHoodieCommonMetrics();
       reporter.report();
       if (getReporter() != null) {
+        LOG.info("Closing metrics reporter...");
         getReporter().close();
       }
     } catch (Exception e) {
@@ -138,5 +139,9 @@ public class Metrics {
 
   public Closeable getReporter() {
     return reporter.getReporter();
+  }
+
+  public static boolean isInitialized() {
+    return initialized;
   }
 }

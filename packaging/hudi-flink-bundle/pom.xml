@@ -130,7 +130,7 @@
                   <include>javax.servlet:javax.servlet-api</include>
 
                   <!-- Used for HUDI write handle -->
-                  <inclide>com.esotericsoftware:kryo-shaded</inclide>
+                  <include>com.esotericsoftware:kryo-shaded</include>
 
                   <include>org.apache.flink:${flink.hadoop.compatibility.artifactId}</include>
                   <include>org.apache.flink:flink-json</include>
@@ -501,8 +501,7 @@
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-      <!-- Override the version to be same with Flink avro -->
-      <version>1.10.0</version>
+      <version>${avro.version}</version>
       <scope>compile</scope>
     </dependency>
 

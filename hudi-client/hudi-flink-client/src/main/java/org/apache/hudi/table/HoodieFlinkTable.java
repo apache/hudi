@@ -40,6 +40,9 @@ import org.apache.avro.specific.SpecificRecordBase;
 
 import java.util.List;
 
+/**
+ * Impl of a flink hoodie table.
+ */
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements ExplicitWriteHandleTable<T> {

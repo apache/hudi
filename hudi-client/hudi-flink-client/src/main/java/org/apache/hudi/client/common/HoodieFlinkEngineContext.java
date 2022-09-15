@@ -33,6 +33,9 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
 
@@ -44,10 +47,6 @@ import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.apache.hudi.common.util.collection.ImmutablePair;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.util.FlinkClientUtil;
 
 import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapWrapper;

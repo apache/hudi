@@ -90,9 +90,9 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     }
 
     @Override
-    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key, String partitionPath) {
+    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key) {
       int bucketId = BucketIdentifier.getBucketId(key, indexKeyFields, numBuckets);
-      Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(partitionPath);
+      Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(key.getPartitionPath());
       return Option.ofNullable(bucketIdToFileIdMapping.getOrDefault(bucketId, null));
     }
   }

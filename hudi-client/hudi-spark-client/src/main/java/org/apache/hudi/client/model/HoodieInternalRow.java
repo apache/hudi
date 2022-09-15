@@ -94,7 +94,11 @@ public class HoodieInternalRow extends InternalRow {
 
   @Override
   public int numFields() {
-    return sourceRow.numFields();
+    if (sourceContainsMetaFields) {
+      return sourceRow.numFields();
+    } else {
+      return sourceRow.numFields() + metaFields.length;
+    }
   }
 
   @Override

@@ -54,6 +54,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -98,8 +99,13 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withLayoutConfig(HoodieLayoutConfig.newBuilder()
             .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build()).build();
-    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
+        .build();
+
+    Properties props = getPropertiesForKeyGen(true);
+    props.putAll(config.getProps());
+
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
     client = getHoodieWriteClient(config);
 
     // write data and commit
@@ -138,8 +144,13 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withLayoutConfig(HoodieLayoutConfig.newBuilder()
             .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build()).build();
-    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
+        .build();
+
+    Properties props = getPropertiesForKeyGen(true);
+    props.putAll(config.getProps());
+
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
     client = getHoodieWriteClient(config);
 
     final List<HoodieRecord> records = dataGen.generateInserts("001", 100);
