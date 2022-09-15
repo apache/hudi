@@ -33,7 +33,7 @@ import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKey
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression, InterpretedPredicate}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EqualTo, Expression, InterpretedPredicate, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
@@ -163,9 +163,9 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    */
   def listFileSlices(partitionFilters: Seq[Expression]): Map[String, Seq[FileSlice]] = {
     // Prune the partition path by the partition filters
-    val prunedPartitions = prunePartition(cachedAllInputFileSlices.keySet().asScala.toSeq, partitionFilters)
+    val prunedPartitions = prunePartition(partitionFilters)
     prunedPartitions.map(partition => {
-      (partition.path, cachedAllInputFileSlices.get(partition).asScala)
+      (partition.path, getCachedInputFileSlices(partition).asScala)
     }).toMap
   }
 
@@ -176,7 +176,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @return The pruned partition paths
    */
   def getPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
-    prunePartition(cachedAllInputFileSlices.keySet().asScala.toSeq, predicates)
+    prunePartition(predicates)
   }
 
   /**
@@ -187,12 +187,16 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @param predicates     The filter condition.
    * @return The pruned partition paths.
    */
-  protected def prunePartition(partitionPaths: Seq[PartitionPath], predicates: Seq[Expression]): Seq[PartitionPath] = {
+  protected def prunePartition(predicates: Seq[Expression]): Seq[PartitionPath] = {
     val partitionColumnNames = partitionSchema.fields.map(_.name).toSet
     val partitionPruningPredicates = predicates.filter {
       _.references.map(_.name).toSet.subsetOf(partitionColumnNames)
     }
     if (partitionPruningPredicates.nonEmpty) {
+      val equalPredicate = partitionPruningPredicates.filter(_.isInstanceOf[EqualTo])
+      val names = equalPredicate.map(_.asInstanceOf[EqualTo]).map(_.left.asInstanceOf[AttributeReference].name).toArray
+      val values = equalPredicate.map(_.asInstanceOf[EqualTo]).map(_.right.asInstanceOf[Literal].value.toString).toArray
+      val partitionPaths = getPartitionPaths(names, values).asScala
       val predicate = partitionPruningPredicates.reduce(expressions.And)
 
       val boundPredicate = InterpretedPredicate(predicate.transform {
@@ -209,7 +213,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         s" after partition prune size is: ${prunedPartitionPaths.size}")
       prunedPartitionPaths
     } else {
-      partitionPaths
+      logInfo(s"No partition predicate provided, total partition size is: ${getAllQueryPartitionPaths.asScala.size}")
+      getAllQueryPartitionPaths.asScala;
     }
   }
 

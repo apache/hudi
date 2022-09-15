@@ -94,7 +94,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return List of FileStatus for base files
    */
   def allFiles: Seq[FileStatus] = {
-    cachedAllInputFileSlices.values.asScala.flatMap(_.asScala)
+    getAllInputFileSlices.values.asScala.flatMap(_.asScala)
       .map(fs => fs.getBaseFile.orElse(null))
       .filter(_ != null)
       .map(_.getFileStatus)
@@ -142,13 +142,12 @@ case class HoodieFileIndex(spark: SparkSession,
       Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
     } else {
       // Prune the partition path by the partition filters
-      val prunedPartitions = prunePartition(cachedAllInputFileSlices.keySet.asScala.toSeq, partitionFilters)
+      val prunedPartitions = prunePartition(partitionFilters)
       var totalFileSize = 0
       var candidateFileSize = 0
-
       val result = prunedPartitions.map { partition =>
         val baseFileStatuses: Seq[FileStatus] =
-          cachedAllInputFileSlices.get(partition).asScala
+          getCachedInputFileSlices(partition).asScala
             .map(fs => fs.getBaseFile.orElse(null))
             .filter(_ != null)
             .map(_.getFileStatus)

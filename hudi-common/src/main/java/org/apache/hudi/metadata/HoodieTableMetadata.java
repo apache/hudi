@@ -133,6 +133,11 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException;
 
   /**
+   * Fetch list of all partitions path that match the given prefix
+   */
+  List<String> getPartitionPathsWithPrefix(String prefix) throws IOException;
+
+  /**
    * Fetch list of all partition paths, per the latest snapshot of the metadata.
    */
   List<String> getAllPartitionPaths() throws IOException;

@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 
@@ -74,8 +75,13 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, datasetBasePath);
     }
 
+    return getPartitionPathsWithPrefix("");
+  }
+
+  @Override
+  public List<String> getPartitionPathsWithPrefix(String prefix) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
-    pathsToList.add(basePath);
+    pathsToList.add(StringUtils.isNullOrEmpty(prefix) ? new Path(datasetBasePath) : new Path(datasetBasePath, prefix));
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
 
     while (!pathsToList.isEmpty()) {
