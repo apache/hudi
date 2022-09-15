@@ -132,6 +132,11 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING)))
       .withDocumentation("Assume partitioning is yyyy/MM/dd");
 
+  public static final ConfigProperty<Integer> META_SYNC_FILTER_PUSHDOWN_MAX_SIZE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.filter_pushdown_max_size")
+      .defaultValue(1000)
+      .withDocumentation("Assume partitioning is yyyy/MM/dd");
+
   public static final ConfigProperty<Boolean> META_SYNC_DECODE_PARTITION = ConfigProperty
       .key("hoodie.meta.sync.decode_partition")
       .defaultValue(false)

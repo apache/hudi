@@ -21,6 +21,7 @@ package org.apache.hudi.hive;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -31,6 +32,7 @@ import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
@@ -58,13 +60,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.*;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
@@ -309,6 +305,52 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     return schemaChanged;
   }
 
+  private String generateFilter(List<String> partitionKeys, List<String> partitionValues) {
+    if (partitionKeys.size() != partitionValues.size()) {
+      throw new HoodieHiveSyncException("Partition key and values should be same length"
+          + ", but got partitionKey: " + partitionKeys + " with values: " + partitionValues);
+    }
+
+    StringBuilder filter = new StringBuilder();
+    for (int i = 0; i < partitionKeys.size(); i++) {
+      filter.append("(")
+          .append(partitionKeys.get(i))
+          .append(" = ")
+          .append(partitionValues.get(i)).append(")");
+      if (i != (partitionKeys.size() - 1)) {
+        filter.append(" AND ");
+      }
+    }
+    return filter.toString();
+  }
+  private List<Partition> getTablePartitions(String tableName, List<String> writtenPartitionsSince) {
+    PartitionValueExtractor partitionValueExtractor = ReflectionUtils
+        .loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+    List<String> partitionKeys = config.getSplitStrings(META_SYNC_PARTITION_FIELDS);
+    writtenPartitionsSince
+        .stream().map(value -> {partitionValueExtractor.extractPartitionValuesInPath(value)})
+    syncClient.getMetastoreFieldSchemas(tableName)
+        .stream()
+        .filter(f -> partitionKeys.contains(f.getName()))
+        .map(field -> {
+
+        });
+
+    if (partitionKeys.size() * writtenPartitionsSince.size() > config.getIntOrDefault(META_SYNC_FILTER_PUSHDOWN_MAX_SIZE)) {
+
+    }
+
+    StringBuilder filter = new StringBuilder();
+    for (String storagePartition : writtenPartitionsSince) {
+      List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
+      filter.append("(")
+          .append(generateFilter(partitionKeys, partitionValues))
+          .append(")");
+      filter.append(" OR ");
+    }
+    filter.delete(filter.length() - 4, filter.length());
+    return syncClient.getPartitionsByFilter(tableName, filter.toString());
+  }
   /**
    * Syncs the list of storage partitions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).
@@ -316,7 +358,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, Set<String> droppedPartitions) {
     boolean partitionsChanged;
     try {
-      List<Partition> hivePartitions = syncClient.getAllPartitions(tableName);
+      List<Partition> hivePartitions = getTablePartitions(tableName, writtenPartitionsSince);
       List<PartitionEvent> partitionEvents =
           syncClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, droppedPartitions);
 
