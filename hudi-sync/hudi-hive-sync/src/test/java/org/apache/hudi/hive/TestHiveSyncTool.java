@@ -88,8 +88,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHiveSyncTool {
 
   private static final List<Object> SYNC_MODES = Arrays.asList(
-      /*"hiveql",
-      "hms",*/
+      "hiveql",
+      "hms",
       "jdbc");
 
   private static Iterable<Object> syncMode() {
