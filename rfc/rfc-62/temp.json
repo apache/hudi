@@ -1,0 +1,17 @@
+"": 123352,
+"": 0,
+"": 0,
+"": 123352,
+"": 4675371,
+"": 0,
+"": 0,
+"": 0,
+"": 0,
+"": 0,
+"": 0,
+"": 21051,
+"": 0
+
+
+
+totalNumWrites, totalNumDeletes, totalNumUpdateWrites, totalNumInserts, totalWriteBytes, totalWriteErrors, totalLogRecords, totalLogFilesCompacted, totalLogSizeCompacted, totalUpdatedRecordsCompacted, totalScanTime, totalCreateTime, totalUpsertTime

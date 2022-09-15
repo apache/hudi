@@ -20,17 +20,16 @@
 
 ## Proposers
 
-- zhangyue19921010@163.com
+- zhangyue19921010
 
 ## Approvers
  - @codope
  - @xushiyan
+ - @YuweiXiao
 
 ## Status
 
 JIRA: https://issues.apache.org/jira/browse/HUDI-4707
-
-> Please keep the status updated in `rfc/README.md`.
 
 ## Abstract
 
@@ -48,82 +47,29 @@ On the other hand, for advanced users, they also need some way to efficiently un
 ## Background
 As we know, hudi already has its own unique metrics system and metadata framework. These information are very important for hudi job tuning or troubleshooting. Fo example:
 
-1. Hudi will record the complete timeline in the .hoodie directory, including active timeline and archive timeline. From this we can trace the historical state of the hudi job.
+1. Hudi will record the complete timeline in the `.hoodie` directory, including active timeline and archive timeline. The timeline acts as an **event log** for the Hudi table using which one can track table snapshots.
 
-2. Hudi metadata table which will records all the partitions, all the data files, etc
+2. Hudi metadata table which records partitions, data files, columns statistics, etc.
 
-3. Each commit of hudi records various metadata information and runtime metrics currently written, such as:
-```json
-{
-    "partitionToWriteStats":{
-        "20210623/0/20210825":[
-            {
-                "fileId":"4ae31921-eedd-4c56-8218-bb47849397a4-0",
-                "path":"20210623/0/20210825/4ae31921-eedd-4c56-8218-bb47849397a4-0_0-27-2006_20220818134233973.parquet",
-                "prevCommit":"null",
-                "numWrites":123352,
-                "numDeletes":0,
-                "numUpdateWrites":0,
-                "numInserts":123352,
-                "totalWriteBytes":4675371,
-                "totalWriteErrors":0,
-                "tempPath":null,
-                "partitionPath":"20210623/0/20210825",
-                "totalLogRecords":0,
-                "totalLogFilesCompacted":0,
-                "totalLogSizeCompacted":0,
-                "totalUpdatedRecordsCompacted":0,
-                "totalLogBlocks":0,
-                "totalCorruptLogBlock":0,
-                "totalRollbackBlocks":0,
-                "fileSizeInBytes":4675371,
-                "minEventTime":null,
-                "maxEventTime":null
-            }
-        ]
-    },
-    "compacted":false,
-    "extraMetadata":{
-        "schema":"xxxx"
-    },
-    "operationType":"UPSERT",
-    "totalRecordsDeleted":0,
-    "totalLogFilesSize":0,
-    "totalScanTime":0,
-    "totalCreateTime":21051,
-    "totalUpsertTime":0,
-    "minAndMaxEventTime":{
-        "Optional.empty":{
-            "val":null,
-            "present":false
-        }
-    },
-    "writePartitionPaths":[
-        "20210623/0/20210825"
-    ],
-    "fileIdAndRelativePaths":{
-        "c144908e-ca7d-401f-be1c-613de98d96a3-0":"20210623/0/20210825/c144908e-ca7d-401f-be1c-613de98d96a3-0_3-33-2009_20220818134233973.parquet"
-    },
-    "totalLogRecordsCompacted":0,
-    "totalLogFilesCompacted":0,
-    "totalCompactedRecordsUpdated":0
-}
-```
+3. Each commit of hudi records various metadata information and runtime metrics currently written, such as: totalNumWrites, totalNumDeletes, totalNumUpdateWrites, totalNumInserts, totalWriteBytes, 
+totalWriteErrors, totalLogRecords, totalLogFilesCompacted, totalLogSizeCompacted, totalUpdatedRecordsCompacted, totalScanTime, totalCreateTime, totalUpsertTime => based on `HoodieWriteStat`
 
-In order to expose hudi table context more efficiently, this RFC propose a Diagnostic Reporter Tool.
-This tool can be turned on as the final stage in ingestion job after commit which will collect common troubleshooting information including engine(take spark as example here) runtime information and generate a diagnostic report json file.
 
-Or users can trigger this diagnostic reporter tool using hudi-cli to generate this report json file.
+In order to expose hudi table context more efficiently, this RFC proposes a Diagnostic Reporter System.
+It can be turned on as the final stage in the ingestion job post-commit which will collect common troubleshooting information including engine (Spark, Flink) runtime information, and generate a diagnostic report JSON file.
+Alternatively, users can trigger diagnostic reporter using `hudi-cli` to generate the JSON report.
+
+If users turn on this diagnostic reporter, hoodie tries to generate this report under `.hoodie/report/` no matter current commit is successful or not.
 
 ## Implementation
 
-This Diagnostic Reporter Tool will go through whole hudi table and generate a report json file which contains all the necessary information. Also this tool will package .hoodie folder as a zip compressed file.
+Diagnostic Reporter will go through the whole hudi table and generate a JSON file that contains all the necessary information. Also, this tool will package `.hoodie` folder as a zip compressed file.
 
 Users can use this Diagnostic Reporter Tool in the following two ways：
 1. Users can directly enable this diagnostic reporter in the writing jobs, at this time diagnostic reporter tool will go through current hudi table and generate report files as the last stage after commit.
 2. Users can directly generate the corresponding report file for a hudi table through the hudi cli command.
 
-Report json file location: hudi will create a new meta folder name `.hoodie/report/` for this report result, for example  `.hoodie/report/xxxx.json` and `.hoodie/report/xxxx.zip`
+Report json file location: hudi will create a new meta folder name `.hoodie/report/instant-time/` for this report result, for example  `.hoodie/report/xxxx.json` and `.hoodie/report/xxxx.zip`
 
 Naming rules for specific report json/zip file: `HudiTableName + "_" + HudiVersion + "_" + appName + "_" + applicationId + "_" + applicationAttemptId + "_" + isLocal + format`.
 There may be multiple writers and writing multiple hudi tables. Using this naming rule should be sufficient to identify a writer.
@@ -133,27 +79,31 @@ AS for the json file this diagnostic reporter tool generated, it will contains t
 
 ### Data information
 
-Diagnostic reporter tool need to list all the partitions and all the data files for current hudi table. Then do basic analysis, build follow result (part1 of report.json)
-Also we can get these information from metadata table directly if users enable it. And we can run hoodieMetadata table valuation tool after get all these information.
+Diagnostic reporter need to do file system listing. Then do basic analysis, build follow result (part1 of report.json)
+- List all the partitions and all the data files for current hudi table.
+- Calculate how many partition numbers in total as `total.partition_numbers`
+- Calculate how many latest base files in total as `total.latest_base_file_numbers`
+- Calculate total data volumes for all the latest base files as `total.latest_base_file_volume`
+- Select the partition with the largest number of latest base files as `partition_max_data_file_numbers`
+- Select the partition with the largest volume of latest base files as `partition_max_data_volume`
+
 ```json
 {
     "total":{
         "partition_numbers":"100",
-        "data_file_numbers":"1000",
-        "data_volume":"1000GB",
+        "latest_base_file_numbers":"1000",
+        "latest_base_file_volume":"1000GB",
         "partition_keys":"year/month/day"
     },
-    "max_data_volume_per_partition":{
+    "partition_max_data_volume":{
         "partition_name":"2022/09/05",
-        "data_file_number":"10",
         "file_group_number":"5",
         "data_volume":"10GB",
         "max_data_file_size":"1GB",
         "min_data_file_size":"100MB"
     },
-    "max_data_file_numbers_per_partition":{
+    "partition_max_data_file_numbers":{
         "partition_name":"2022/09/06",
-        "data_file_number":"100",
         "file_group_number":"50",
         "data_volume":"1GB",
         "max_data_file_size":"100MB",
@@ -162,8 +112,8 @@ Also we can get these information from metadata table directly if users enable i
     "sample_hoodie_key":{
         "hoodie_keys":"user_id",
         "sample_values":[
-            "123",
-            "456"
+            "1**4",
+            "4**7"
         ]
     }
 }
@@ -171,11 +121,12 @@ Also we can get these information from metadata table directly if users enable i
 
 We can quickly catch up the data distribution characteristics of the current hudi table through this part, which can be used to determine whether there is a small file problem 
 or a data hotspot problem, etc.
+
 In addition, through data distribution and sample hudi keys, we can also use this information to help users choose the most appropriate index mode, for example:
 - If the hudi data is roughly evenly distributed, users can try using bucket index to improve upsert performance.
-- If the hudi key is monotonically increasing then users can try the bloom index
+- If the hudi key is monotonically increasing then users can try the bloom index.
 
-Of course, the behavior of the sample hoodie key is false by default for privacy reasons
+Of course, the behavior of the sample hoodie key is false by default for privacy concerns and sample values for hoodie_keys can be masked, only expose half length of them with heads and tails like `183*****832`
 
 
 
@@ -186,72 +137,33 @@ The second part is the `metadata information` related to the last k active commi
 
 ```json
 {
-    "configs":{
-        "engine_config":{
-            "spark.executor.memoryOverhead":"3072"
-        },
-        "hoodie_config":{
-            "hoodie.datasource.write.keygenerator.class":"org.apache.hudi.keygen.ComplexKeyGenerator"
-        }
+  "configs":{
+    "engine_config":{
+      "spark.executor.memoryOverhead":"3072"
     },
-    "commits":[
-        {
-            "20220818134233973.commit":{
-                "partitionToWriteStats":{
-                    "20210623/0/20210825":[
-                        {
-                            "fileId":"4ae31921-eedd-4c56-8218-bb47849397a4-0",
-                            "path":"20210623/0/20210825/4ae31921-eedd-4c56-8218-bb47849397a4-0_0-27-2006_20220818134233973.parquet",
-                            "prevCommit":"null",
-                            "numWrites":123352,
-                            "numDeletes":0,
-                            "numUpdateWrites":0,
-                            "numInserts":123352,
-                            "totalWriteBytes":4675371,
-                            "totalWriteErrors":0,
-                            "tempPath":null,
-                            "partitionPath":"20210623/0/20210825",
-                            "totalLogRecords":0,
-                            "totalLogFilesCompacted":0,
-                            "totalLogSizeCompacted":0,
-                            "totalUpdatedRecordsCompacted":0,
-                            "totalLogBlocks":0,
-                            "totalCorruptLogBlock":0,
-                            "totalRollbackBlocks":0,
-                            "fileSizeInBytes":4675371,
-                            "minEventTime":null,
-                            "maxEventTime":null
-                        }
-                    ]
-                },
-                "compacted":false,
-                "extraMetadata":{
-                    "schema":"xxxx"
-                },
-                "operationType":"UPSERT",
-                "totalRecordsDeleted":0,
-                "totalLogFilesSize":0,
-                "totalScanTime":0,
-                "totalCreateTime":21051,
-                "totalUpsertTime":0,
-                "minAndMaxEventTime":{
-                    "Optional.empty":{
-                        "val":null,
-                        "present":false
-                    }
-                },
-                "writePartitionPaths":[
-                    "20210623/0/20210825"
-                ],
-                "fileIdAndRelativePaths":{
-                    "c144908e-ca7d-401f-be1c-613de98d96a3-0":"20210623/0/20210825/c144908e-ca7d-401f-be1c-613de98d96a3-0_3-33-2009_20220818134233973.parquet"
-                },
-                "totalLogRecordsCompacted":0,
-                "totalLogFilesCompacted":0,
-                "totalCompactedRecordsUpdated":0
-            }
-        }
-    ]
+    "hoodie_config":{
+      "hoodie.datasource.write.keygenerator.class":"org.apache.hudi.keygen.ComplexKeyGenerator"
+    }
+  },
+  "commits":[
+    {
+      "20220818134233973.commit":{
+        "totalNumWrites":123352,
+        "totalNumDeletes":0,
+        "totalNumUpdateWrites":0,
+        "totalNumInserts":123352,
+        "totalWriteBytes":4675371,
+        "totalWriteErrors":0,
+        "totalLogRecords":0,
+        "totalLogFilesCompacted":0,
+        "totalLogSizeCompacted":0,
+        "totalUpdatedRecordsCompacted":0,
+        "totalScanTime":0,
+        "totalCreateTime":21051,
+        "totalUpsertTime":0
+      }
+    }
+  ]
 }
 ```
 
@@ -270,20 +182,11 @@ So that we can collect any spark runtime information we want. For example collec
         {
             "status":"COMPLETE",
             "stageId":7191,
-            "attemptId":0,
             "numTasks":1,
-            "numActiveTasks":0,
-            "numCompleteTasks":1,
             "numFailedTasks":0,
-            "numKilledTasks":0,
-            "numCompletedIndices":1,
             "submissionTime":"2022-09-05T09:42:16.648GMT",
-            "firstTaskLaunchedTime":"2022-09-05T09:42:16.667GMT",
             "completionTime":"2022-09-05T09:42:18.236GMT",
-            "executorDeserializeTime":7,
-            "executorDeserializeCpuTime":6942821,
             "executorRunTime":1559,
-            "executorCpuTime":6341871,
             "resultSize":795,
             "jvmGcTime":0,
             "resultSerializationTime":0,
@@ -294,30 +197,8 @@ So that we can collect any spark runtime information we want. For example collec
             "inputRecords":0,
             "outputBytes":0,
             "outputRecords":0,
-            "shuffleRemoteBlocksFetched":0,
-            "shuffleLocalBlocksFetched":0,
-            "shuffleFetchWaitTime":0,
-            "shuffleRemoteBytesRead":0,
-            "shuffleRemoteBytesReadToDisk":0,
-            "shuffleLocalBytesRead":0,
-            "shuffleReadBytes":0,
-            "shuffleReadRecords":0,
-            "shuffleWriteBytes":0,
-            "shuffleWriteTime":0,
-            "shuffleWriteRecords":0,
             "name":"f_sa_auction_hourly_hudi_final",
-            "description":"Obtaining marker files for all created, merged paths",
-            "details":"org.apache.spark.api.java.AbstractJavaRDDLike.foreach(JavaRDDLike.scala:45)\norg.apache.hudi.client.common.HoodieSparkEngineContext.foreach(HoodieSparkEngineContext.java:88)\norg.apache.hudi.table.MarkerFiles.deleteMarkerDir(MarkerFiles.java:98)\norg.apache.hudi.table.MarkerFiles.quietDeleteMarkerDir(MarkerFiles.java:75)\norg.apache.hudi.client.AbstractHoodieWriteClient.postCommit(AbstractHoodieWriteClient.java:427)\norg.apache.hudi.client.AbstractHoodieWriteClient.commitStats(AbstractHoodieWriteClient.java:186)\norg.apache.hudi.client.SparkRDDWriteClient.commit(SparkRDDWriteClient.java:122)\norg.apache.hudi.HoodieSparkSqlWriter$.commitAndPerformPostOperations(HoodieSparkSqlWriter.scala:479)\norg.apache.hudi.HoodieSparkSqlWriter$.write(HoodieSparkSqlWriter.scala:223)\norg.apache.hudi.DefaultSource.createRelation(DefaultSource.scala:145)\norg.apache.spark.sql.execution.datasources.SaveIntoDataSourceCommand.run(SaveIntoDataSourceCommand.scala:46)\norg.apache.spark.sql.execution.command.ExecutedCommandExec.sideEffectResult$lzycompute(commands.scala:70)\norg.apache.spark.sql.execution.command.ExecutedCommandExec.sideEffectResult(commands.scala:68)\norg.apache.spark.sql.execution.command.ExecutedCommandExec.doExecute(commands.scala:90)\norg.apache.spark.sql.execution.SparkPlan.$anonfun$execute$1(SparkPlan.scala:180)\norg.apache.spark.sql.execution.SparkPlan.$anonfun$executeQuery$1(SparkPlan.scala:218)\norg.apache.spark.rdd.RDDOperationScope$.withScope(RDDOperationScope.scala:151)\norg.apache.spark.sql.execution.SparkPlan.executeQuery(SparkPlan.scala:215)\norg.apache.spark.sql.execution.SparkPlan.execute(SparkPlan.scala:176)\norg.apache.spark.sql.execution.QueryExecution.toRdd$lzycompute(QueryExecution.scala:127)",
-            "schedulingPool":"default",
-            "rddIds":[
-                28873
-            ],
-            "accumulatorUpdates":[
-
-            ],
-            "killedTasksSummary":{
-
-            }
+            "description":"Obtaining marker files for all created, merged paths"
         }
     ]
 }
@@ -327,116 +208,120 @@ Through this part, we can observe all stages of the current hudi job and the cor
 ### final schema demo
 ```json
 {
-    "data_info":{
-        "total":{
-            "partition_numbers":"100",
-            "data_file_numbers":"1000",
-            "data_volume":"1000GB",
-            "partition_keys":"year/month/day"
-        },
-        "max_data_volume_per_partition":{
-            "partition_name":"2022/09/05",
-            "data_file_number":"10",
-            "file_group_number":"5",
-            "data_volume":"10GB",
-            "max_data_file_size":"1GB",
-            "min_data_file_size":"100MB"
-        },
-        "max_data_file_numbers_per_partition":{
-            "partition_name":"2022/09/06",
-            "data_file_number":"100",
-            "file_group_number":"50",
-            "data_volume":"1GB",
-            "max_data_file_size":"100MB",
-            "min_data_file_size":"10MB"
-        },
-        "sample_hoodie_key":{
-            "hoodie_keys":"user_id",
-            "sample_values":[
-                "123",
-                "456"
-            ]
-        }
+  "data_info": {
+    "total": {
+      "partition_numbers": "100",
+      "latest_base_file_numbers": "1000",
+      "latest_base_file_volume": "1000GB",
+      "partition_keys": "year/month/day"
     },
-    "meta_info":{
-        "configs":{
-            "engine_config":{
-                "spark.executor.memoryOverhead":"3072"
-            },
-            "hoodie_config":{
-                "hoodie.datasource.write.keygenerator.class":"org.apache.hudi.keygen.ComplexKeyGenerator"
-            }
-        },
-        "commits":[
-            "xxx"
-        ]
+    "partition_max_data_volume": {
+      "partition_name": "2022/09/05",
+      "file_group_number": "5",
+      "data_volume": "10GB",
+      "max_data_file_size": "1GB",
+      "min_data_file_size": "100MB"
     },
-    "engine_info":{
-        "engine_runtime_info":[
-            {
-                "status":"COMPLETE",
-                "stageId":7191,
-                "attemptId":0,
-                "numTasks":1,
-                "numActiveTasks":0,
-                "numCompleteTasks":1,
-                "numFailedTasks":0,
-                "numKilledTasks":0,
-                "numCompletedIndices":1,
-                "submissionTime":"2022-09-05T09:42:16.648GMT",
-                "firstTaskLaunchedTime":"2022-09-05T09:42:16.667GMT",
-                "completionTime":"2022-09-05T09:42:18.236GMT",
-                "executorDeserializeTime":7,
-                "executorDeserializeCpuTime":6942821,
-                "executorRunTime":1559,
-                "executorCpuTime":6341871,
-                "resultSize":795,
-                "jvmGcTime":0,
-                "resultSerializationTime":0,
-                "memoryBytesSpilled":0,
-                "diskBytesSpilled":0,
-                "peakExecutionMemory":0,
-                "inputBytes":0,
-                "inputRecords":0,
-                "outputBytes":0,
-                "outputRecords":0,
-                "shuffleRemoteBlocksFetched":0,
-                "shuffleLocalBlocksFetched":0,
-                "shuffleFetchWaitTime":0,
-                "shuffleRemoteBytesRead":0,
-                "shuffleRemoteBytesReadToDisk":0,
-                "shuffleLocalBytesRead":0,
-                "shuffleReadBytes":0,
-                "shuffleReadRecords":0,
-                "shuffleWriteBytes":0,
-                "shuffleWriteTime":0,
-                "shuffleWriteRecords":0,
-                "name":"f_sa_auction_hourly_hudi_final",
-                "description":"Obtaining marker files for all created, merged paths",
-                "details":"org.apache.spark.api.java.AbstractJavaRDDLike.foreach(JavaRDDLike.scala:45)\norg.apache.hudi.client.common.HoodieSparkEngineContext.foreach(HoodieSparkEngineContext.java:88)\norg.apache.hudi.table.MarkerFiles.deleteMarkerDir(MarkerFiles.java:98)\norg.apache.hudi.table.MarkerFiles.quietDeleteMarkerDir(MarkerFiles.java:75)\norg.apache.hudi.client.AbstractHoodieWriteClient.postCommit(AbstractHoodieWriteClient.java:427)\norg.apache.hudi.client.AbstractHoodieWriteClient.commitStats(AbstractHoodieWriteClient.java:186)\norg.apache.hudi.client.SparkRDDWriteClient.commit(SparkRDDWriteClient.java:122)\norg.apache.hudi.HoodieSparkSqlWriter$.commitAndPerformPostOperations(HoodieSparkSqlWriter.scala:479)\norg.apache.hudi.HoodieSparkSqlWriter$.write(HoodieSparkSqlWriter.scala:223)\norg.apache.hudi.DefaultSource.createRelation(DefaultSource.scala:145)\norg.apache.spark.sql.execution.datasources.SaveIntoDataSourceCommand.run(SaveIntoDataSourceCommand.scala:46)\norg.apache.spark.sql.execution.command.ExecutedCommandExec.sideEffectResult$lzycompute(commands.scala:70)\norg.apache.spark.sql.execution.command.ExecutedCommandExec.sideEffectResult(commands.scala:68)\norg.apache.spark.sql.execution.command.ExecutedCommandExec.doExecute(commands.scala:90)\norg.apache.spark.sql.execution.SparkPlan.$anonfun$execute$1(SparkPlan.scala:180)\norg.apache.spark.sql.execution.SparkPlan.$anonfun$executeQuery$1(SparkPlan.scala:218)\norg.apache.spark.rdd.RDDOperationScope$.withScope(RDDOperationScope.scala:151)\norg.apache.spark.sql.execution.SparkPlan.executeQuery(SparkPlan.scala:215)\norg.apache.spark.sql.execution.SparkPlan.execute(SparkPlan.scala:176)\norg.apache.spark.sql.execution.QueryExecution.toRdd$lzycompute(QueryExecution.scala:127)",
-                "schedulingPool":"default",
-                "rddIds":[
-                    28873
-                ],
-                "accumulatorUpdates":[
-
-                ],
-                "killedTasksSummary":{
-
-                }
-            }
-        ]
+    "partition_max_data_file_numbers": {
+      "partition_name": "2022/09/06",
+      "file_group_number": "50",
+      "data_volume": "1GB",
+      "max_data_file_size": "100MB",
+      "min_data_file_size": "10MB"
+    },
+    "sample_hoodie_key": {
+      "hoodie_keys": "user_id",
+      "sample_values": [
+        "1**4",
+        "4**7"
+      ]
     }
+  },
+  "meta_info": {
+    "configs": {
+      "engine_config": {
+        "spark.executor.memoryOverhead": "3072"
+      },
+      "hoodie_config": {
+        "hoodie.datasource.write.keygenerator.class": "org.apache.hudi.keygen.ComplexKeyGenerator"
+      }
+    },
+    "commits": [
+      {
+        "20220818134233973.commit": {
+          "totalNumWrites": 123352,
+          "totalNumDeletes": 0,
+          "totalNumUpdateWrites": 0,
+          "totalNumInserts": 123352,
+          "totalWriteBytes": 4675371,
+          "totalWriteErrors": 0,
+          "totalLogRecords": 0,
+          "totalLogFilesCompacted": 0,
+          "totalLogSizeCompacted": 0,
+          "totalUpdatedRecordsCompacted": 0,
+          "totalScanTime": 0,
+          "totalCreateTime": 21051,
+          "totalUpsertTime": 0
+        }
+      }
+    ]
+  },
+  "engine_info": {
+    "engine_runtime_info":[
+        {
+            "status":"COMPLETE",
+            "stageId":7191,
+            "numTasks":1,
+            "numFailedTasks":0,
+            "submissionTime":"2022-09-05T09:42:16.648GMT",
+            "completionTime":"2022-09-05T09:42:18.236GMT",
+            "executorRunTime":1559,
+            "resultSize":795,
+            "jvmGcTime":0,
+            "resultSerializationTime":0,
+            "memoryBytesSpilled":0,
+            "diskBytesSpilled":0,
+            "peakExecutionMemory":0,
+            "inputBytes":0,
+            "inputRecords":0,
+            "outputBytes":0,
+            "outputRecords":0,
+            "name":"f_sa_auction_hourly_hudi_final",
+            "description":"Obtaining marker files for all created, merged paths"
+        }
+    ]
+  }
 }
 ```
 
+### Config
+
+Add several configs to control the behavior of Diagnostic Reporter
+
+- `hoodie.write.diagnostic.reporter.enable`: default false. If users turn on this diagnostic reporter, hoodie tries to generate this report no matter current commit is successful or not.
+- `hoodie.write.diagnostic.reporter.base_path`: default `.hoodie/`. Allows users to specify where the report json file and  the zip file is written.
+- `hoodie.write.diagnostic.reporter.zip.meta`: default false. Set true, hoodie tries to zip `.hoodie` under `hoodie.write.diagnostic.reporter.base_path` + /report. Please pay attention here, for large hudi tables, this behavior may take pretty long time and affect write performance.
+- `hoodie.write.diagnostic.reporter.zip.meta.commits.only`: default true. Takes effect when `hoodie.write.diagnostic.reporter.zip.meta` is true. Compress active timeline related files only.
+- `hoodie.write.diagnostic.reporter.include.data.info`: default false. Set true, Diagnostic reporter will do file system listing and basic analysis which can reflect the data characteristics of the entire hudi table. Please pay attention here, this operation list the whole hudi table and may take pretty long time affecting write performance.
+- `hoodie.write.diagnostic.reporter.include.sample.keys`: default false. Set true, Diagnostic reporter tries to sample several hoodie keys in report json file(data_info part) with masked. for example `12****56`
+- `hoodie.write.diagnostic.reporter.include.meta.info`: default true. Summarize and expose the statistics of each commit: totalNumWrites, totalNumDeletes, totalNumUpdateWrites, totalNumInserts, totalWriteBytes, totalWriteErrors, totalLogRecords, totalLogFilesCompacted, totalLogSizeCompacted, totalUpdatedRecordsCompacted, totalScanTime, totalCreateTime, totalUpsertTime => based on `HoodieWriteStat`
+- `hoodie.write.diagnostic.reporter.commits.number`: default -1 which means include all the active commits. Takes effect when `hoodie.write.diagnostic.reporter.include.meta.info` is true.
+- `hoodie.write.diagnostic.reporter.include.engine.info`: default true. Collect runtime engine info for current job.
+
+
+Please pay attention here:
+When users set `hoodie.write.diagnostic.reporter.enable` true, hoodie tries to generate this json report in each commit no matter this commit is successful or not.
+
+`hoodie.write.diagnostic.reporter.zip.meta` and `hoodie.write.diagnostic.reporter.include.data.info` operations are pretty time consuming for huge hudi tables, which may affect write performance.
 
 ## Rollout/Adoption Plan
 
- - What impact (if any) will there be on existing users? 
- - If we are changing behavior how will we phase out the older behavior?
- - If we need special migration tools, describe them here.
- - When will we remove the existing behavior
+The implementation of this Diagnostic Reporter is divided into three phases:
+1. Combined with Spark hudi writer, after the commit (whether successful or not) generate a Diagnostic Reporter json file and corresponding `.hoodie` zip file.
+2. Combined with Hudi CLI, users can directly generate the corresponding report file for a hudi table through the hudi cli command.
+3. Develop a web app to view these metrics/json in a more user-friendly manner.
+4. Combined with flink engine.
+
 
 ## Test Plan
 
