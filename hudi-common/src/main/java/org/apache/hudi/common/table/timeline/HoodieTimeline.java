@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
 import java.io.Serializable;
-import java.util.List;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -294,8 +293,6 @@ public interface HoodieTimeline extends Serializable {
    * @return Get the stream of completed instants
    */
   Stream<HoodieInstant> getInstants();
-
-  List<HoodieInstant> getInstantsAsList();
 
   /**
    * @return Get the stream of completed instants in reverse order TODO Change code references to getInstants() that
