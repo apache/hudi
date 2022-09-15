@@ -75,31 +75,35 @@ public final class HoodieSparkQuickstart {
     Dataset<Row> snapshotBeforeUpdate = spark.sql(snapshotQuery);
     Dataset<Row> updateDf = updateData(spark, jsc, tablePath, tableName, dataGen);
     queryData(spark, jsc, tablePath, tableName, dataGen);
-    assert spark.sql(snapshotQuery).intersect(updateDf).count() == updateDf.count();
-    assert spark.sql(snapshotQuery).except(updateDf).except(snapshotBeforeUpdate).count() == 0;
+    Dataset<Row> snapshotAfterUpdate = spark.sql(snapshotQuery);
+    assert snapshotAfterUpdate.intersect(updateDf).count() == updateDf.count();
+    assert snapshotAfterUpdate.except(updateDf).except(snapshotBeforeUpdate).count() == 0;
 
     incrementalQuery(spark, tablePath, tableName);
     pointInTimeQuery(spark, tablePath, tableName);
 
-    Dataset<Row> snapshotBeforeDelete = spark.sql(snapshotQuery);
+    Dataset<Row> snapshotBeforeDelete = snapshotAfterUpdate;
     Dataset<Row> deleteDf = delete(spark, tablePath, tableName);
     queryData(spark, jsc, tablePath, tableName, dataGen);
-    assert spark.sql(snapshotQuery).intersect(deleteDf).count() == 0;
-    assert snapshotBeforeDelete.except(deleteDf).except(spark.sql(snapshotQuery)).count() == 0;
+    Dataset<Row> snapshotAfterDelete = spark.sql(snapshotQuery);
+    assert snapshotAfterDelete.intersect(deleteDf).count() == 0;
+    assert snapshotBeforeDelete.except(deleteDf).except(snapshotAfterDelete).count() == 0;
 
-    Dataset<Row> snapshotBeforeOverwrite = spark.sql(snapshotQuery);
+    Dataset<Row> snapshotBeforeOverwrite = snapshotAfterDelete;
     Dataset<Row> overwriteDf = insertOverwriteData(spark, jsc, tablePath, tableName, dataGen);
     queryData(spark, jsc, tablePath, tableName, dataGen);
     Dataset<Row> withoutThirdPartitionDf = snapshotBeforeOverwrite.filter("partitionpath != '" + HoodieExampleDataGenerator.DEFAULT_THIRD_PARTITION_PATH + "'");
     Dataset<Row> expectedDf = withoutThirdPartitionDf.union(overwriteDf);
-    assert spark.sql(snapshotQuery).except(expectedDf).count() == 0;
+    Dataset<Row> snapshotAfterOverwrite = spark.sql(snapshotQuery);
+    assert snapshotAfterOverwrite.except(expectedDf).count() == 0;
 
 
-    Dataset<Row> snapshotBeforeDeleteByPartition = spark.sql(snapshotQuery);
+    Dataset<Row> snapshotBeforeDeleteByPartition = snapshotAfterOverwrite;
     deleteByPartition(spark, tablePath, tableName);
     queryData(spark, jsc, tablePath, tableName, dataGen);
-    assert spark.sql(snapshotQuery).intersect(snapshotBeforeDeleteByPartition.filter("partitionpath == '" + HoodieExampleDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'")).count() == 0;
-    assert spark.sql(snapshotQuery).count() == snapshotBeforeDeleteByPartition.filter("partitionpath != '" + HoodieExampleDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'").count();
+    Dataset<Row> snapshotAfterDeleteByPartition = spark.sql(snapshotQuery);
+    assert snapshotAfterDeleteByPartition.intersect(snapshotBeforeDeleteByPartition.filter("partitionpath == '" + HoodieExampleDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'")).count() == 0;
+    assert snapshotAfterDeleteByPartition.count() == snapshotBeforeDeleteByPartition.filter("partitionpath != '" + HoodieExampleDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'").count();
   }
 
   /**
