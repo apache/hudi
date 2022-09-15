@@ -42,6 +42,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Properties;
@@ -89,8 +91,9 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
         .withBucketNum("8").build();
   }
 
-  @Test
-  public void testTagLocation() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testTagLocation(boolean isInsert) throws Exception {
     String rowKey1 = UUID.randomUUID().toString();
     String rowKey2 = UUID.randomUUID().toString();
     String rowKey3 = UUID.randomUUID().toString();
@@ -119,9 +122,17 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
     assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(r -> r.isCurrentLocationKnown()));
 
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(table, SCHEMA);
-    testTable.addCommit("001").withInserts("2016/01/31", getRecordFileId(record1), record1);
-    testTable.addCommit("002").withInserts("2016/01/31", getRecordFileId(record2), record2);
-    testTable.addCommit("003").withInserts("2016/01/31", getRecordFileId(record3), record3);
+
+    if (isInsert) {
+      testTable.addCommit("001").withInserts("2016/01/31", getRecordFileId(record1), record1);
+      testTable.addCommit("002").withInserts("2016/01/31", getRecordFileId(record2), record2);
+      testTable.addCommit("003").withInserts("2016/01/31", getRecordFileId(record3), record3);
+    } else {
+      testTable.addCommit("001").withAppends("2016/01/31", getRecordFileId(record1), record1);
+      testTable.addCommit("002").withAppends("2016/01/31", getRecordFileId(record2), record2);
+      testTable.addCommit("003").withAppends("2016/01/31", getRecordFileId(record3), record3);
+    }
+
     taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context,
         HoodieSparkTable.create(config, context, metaClient));
     assertFalse(taggedRecordRDD.collectAsList().stream().filter(r -> r.isCurrentLocationKnown())
