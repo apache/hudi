@@ -207,35 +207,42 @@ footer .container {
 }
 
 .blogThumbnail {
-  height: 180px;
   overflow: hidden;
   margin-bottom: 10px;
+  position: relative;
+  padding: 50% 0 0 0!important;
 }
 
-.blogThumbnail img {
+.blogThumbnail .blog-image {
+  position: absolute;
+  top: 0;
+  left: 0;
   height:100%;
-  width: auto;
+  width: 100%;
+  object-fit: cover;
 }
+
 .tagRegular_node_modules-\@docusaurus-theme-classic-lib-next-theme-Tag-styles-module{
-  color:black
+  color:black;
+  width: max-content;
 }
 .authorTimeTags_src-theme-BlogPostItem-styles-module {
   vertical-align:text-top;
 }
 
+.pagination-nav {
+  width: 100%;
+}
 
-.blog-list-page article {
+.blog-list-page article, .blog-tags-post-list-page article {
   display: inline-flex;
   width: 45%;
- 
   margin: 1.2em;
   vertical-align: text-top;
-  
-  
-  
 }
+
 @media(max-width:1391px){
-  .blog-list-page article {
+  .blog-list-page article, .blog-tags-post-list-page article {
     display: inline-flex;
     width: 80%;
     margin: 1.2em;
@@ -245,7 +252,7 @@ footer .container {
 
 
 @media only screen and (max-width: 815px) {
-  .blog-list-page article {
+  .blog-list-page article, .blog-tags-post-list-page article {
     display: flex;
     width: 100%;
     margin: 1.2em;
@@ -268,6 +275,7 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
   overflow:hidden;
 }
 
-
-
+.tags-post-list > :first-child {
+  width: 100%;
+}
 
