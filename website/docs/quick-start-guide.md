@@ -1213,7 +1213,7 @@ roAfterDeleteViewDF = spark. \
   read. \
   format("hudi"). \
   load(basePath) 
-roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
+roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot")
 # fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 
