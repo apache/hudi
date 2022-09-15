@@ -24,6 +24,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -43,6 +44,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -68,6 +72,8 @@ public class HoodieCDCLogger implements Closeable {
 
   private final boolean populateMetaFields;
 
+  private final KeyGenerator keyGenerator;
+
   // writer for cdc data
   private final HoodieLogFormat.Writer cdcWriter;
 
@@ -90,6 +96,7 @@ public class HoodieCDCLogger implements Closeable {
       String fileName,
       String commitTime,
       HoodieWriteConfig config,
+      HoodieTableConfig tableConfig,
       List<String> keyFields,
       int taskPartitionId,
       HoodieLogFormat.Writer cdcWriter,
@@ -102,6 +109,12 @@ public class HoodieCDCLogger implements Closeable {
       this.keyFields = keyFields;
       this.taskPartitionId = taskPartitionId;
       this.populateMetaFields = config.populateMetaFields();
+
+      TypedProperties props = new TypedProperties();
+      props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), tableConfig.getKeyGeneratorClassName());
+      props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), tableConfig.getRecordKeyFieldProp());
+      props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), tableConfig.getPartitionFieldProp());
+      this.keyGenerator = KeyGenUtils.createKeyGeneratorByClassName(new TypedProperties(props));
       this.cdcWriter = cdcWriter;
       this.rewriteRecordFunc = rewriteRecordFunc;
 
@@ -136,9 +149,7 @@ public class HoodieCDCLogger implements Closeable {
       if (oldRecord == null) {
         recordKey = hoodieRecord.getRecordKey();
       } else {
-        recordKey = StringUtils.join(
-            keyFields.stream().map(keyField -> oldRecord.get(keyField).toString()).toArray(String[]::new),
-          ":");
+        recordKey = this.keyGenerator.getKey(oldRecord).getRecordKey();
       }
       GenericData.Record cdcRecord;
       if (indexedRecord.isPresent()) {
@@ -162,10 +173,10 @@ public class HoodieCDCLogger implements Closeable {
   }
 
   private GenericData.Record createCDCRecord(HoodieCDCOperation operation,
-                                               String recordKey,
-                                               String partitionPath,
-                                               GenericRecord oldRecord,
-                                               GenericRecord newRecord) {
+                                             String recordKey,
+                                             String partitionPath,
+                                             GenericRecord oldRecord,
+                                             GenericRecord newRecord) {
     GenericData.Record record;
     if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), commitTime,

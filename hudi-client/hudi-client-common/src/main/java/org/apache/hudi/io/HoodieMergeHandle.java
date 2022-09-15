@@ -219,6 +219,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
             newFilePath.getName(),
             instantTime,
             config,
+            hoodieTable.getMetaClient().getTableConfig(),
             keyFields,
             getPartitionId(),
             createLogWriter(Option.empty(), instantTime),
@@ -431,18 +432,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
   }
 
-  private void setCDCStatIfNeeded(HoodieWriteStat stat) {
+  private void setCDCStatIfNeeded(Option<AppendResult> cdcResult, HoodieWriteStat stat) {
     try {
-      Option<AppendResult> cdcResult;
-      if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
-        // the following cases where we do not need to write out the cdc file:
-        // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
-        // case 2: all the data are new-coming,
-        cdcResult = Option.empty();
-      } else {
-        cdcResult = cdcLogger.writeCDCData();
-      }
-
       if (cdcResult.isPresent()) {
         Path cdcLogFile = cdcResult.get().logFile().getPath();
         String cdcFileName = cdcLogFile.getName();
@@ -475,8 +466,17 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         fileWriter = null;
       }
 
+      Option<AppendResult> cdcResult;
+      if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
+        // the following cases where we do not need to write out the cdc file:
+        // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
+        // case 2: all the data are new-coming,
+        cdcResult = Option.empty();
+      } else {
+        cdcResult = cdcLogger.writeCDCData();
+      }
       // if there are cdc data written, set the CDC-related information.
-      setCDCStatIfNeeded(stat);
+      setCDCStatIfNeeded(cdcResult, stat);
 
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
       stat.setTotalWriteBytes(fileSizeInBytes);

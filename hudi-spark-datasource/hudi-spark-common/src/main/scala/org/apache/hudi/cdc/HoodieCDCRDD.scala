@@ -29,10 +29,10 @@ import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.{HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, LogIteratorUtils, RecordMergingFileIterator, SparkAdapterSupport}
 import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.table.HoodieTableConfig._
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
@@ -40,7 +40,9 @@ import org.apache.hudi.common.table.log.HoodieCDCLogRecordReader
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.HoodiePayloadConfig
+import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -124,7 +126,19 @@ class HoodieCDCRDD(
 
     private val basePath = metaClient.getBasePathV2
 
-    private val recordKeyField: String = if (metaClient.getTableConfig.populateMetaFields()) {
+    private val tableConfig = metaClient.getTableConfig
+
+    private val populateMetaFields = tableConfig.populateMetaFields()
+
+    private val keyGenerator = {
+      val props = new TypedProperties()
+      props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, tableConfig.getKeyGeneratorClassName)
+      props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, tableConfig.getRecordKeyFieldProp)
+      props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key, tableConfig.getPartitionFieldProp)
+      HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
+    }
+
+    private val recordKeyField: String = if (populateMetaFields) {
       HoodieRecord.RECORD_KEY_METADATA_FIELD
     } else {
       val keyFields = metaClient.getTableConfig.getRecordKeyFields.get()
@@ -160,15 +174,6 @@ class HoodieCDCRDD(
     protected override val avroSchema: Schema = new Schema.Parser().parse(originTableSchema.avroSchemaStr)
 
     protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
-
-    private val recordKeyindices: Array[Int] = {
-      val recordKeys= if (metaClient.getTableConfig.populateMetaFields()) {
-        Array(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-      } else {
-        metaClient.getTableConfig.getRecordKeyFields.get()
-      }
-      recordKeys.map(structTypeSchema.fieldIndex)
-    }
 
     private val serializer = sparkAdapter.createAvroSerializer(originTableSchema.structTypeSchema,
       avroSchema, nullable = false)
@@ -438,7 +443,7 @@ class HoodieCDCRDD(
               val iter = loadFileSlice(currentChangeFile.getAfterFileSlice.get())
               afterImageRecords = mutable.Map.empty
               iter.foreach { row =>
-                val key = StringUtils.join(recordKeyindices.map(row.getString), ":")
+                val key = getRecordKey(row)
                 afterImageRecords.put(key, row.copy())
               }
             }
@@ -502,7 +507,7 @@ class HoodieCDCRDD(
         beforeImageRecords.clear()
         val iter = loadFileSlice(fileSlice)
         iter.foreach { row =>
-          val key = StringUtils.join(recordKeyindices.map(row.getString), ":")
+          val key = getRecordKey(row)
           beforeImageRecords.put(key, serialize(row))
         }
         // reset beforeImageFiles
@@ -570,6 +575,14 @@ class HoodieCDCRDD(
 
     private def serialize(curRowRecord: InternalRow): GenericRecord = {
       serializer.serialize(curRowRecord).asInstanceOf[GenericRecord]
+    }
+
+    private def getRecordKey(row: InternalRow): String = {
+      if (populateMetaFields) {
+        row.getString(structTypeSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+      } else {
+        this.keyGenerator.getKey(serialize(row)).getRecordKey
+      }
     }
 
     private def getInsertValue(

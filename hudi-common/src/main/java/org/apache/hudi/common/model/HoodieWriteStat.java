@@ -45,7 +45,7 @@ public class HoodieWriteStat implements Serializable {
   private String path;
 
   /**
-   * Relative cdc file path that store the CDC data.
+   * Relative CDC file path that store the CDC data.
    */
   private String cdcPath;
 
