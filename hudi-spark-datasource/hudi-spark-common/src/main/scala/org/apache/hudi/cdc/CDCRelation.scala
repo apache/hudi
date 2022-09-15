@@ -162,7 +162,7 @@ object CDCRelation {
     )
   }
 
-  def isCDCTable(metaClient: HoodieTableMetaClient): Boolean = {
+  def isCDCEnabled(metaClient: HoodieTableMetaClient): Boolean = {
     metaClient.getTableConfig.isCDCEnabled
   }
 
@@ -174,7 +174,7 @@ object CDCRelation {
       metaClient: HoodieTableMetaClient,
       options: Map[String, String]): CDCRelation = {
 
-    if (!isCDCTable(metaClient)) {
+    if (!isCDCEnabled(metaClient)) {
       throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePathV2.toString}")
     }
 

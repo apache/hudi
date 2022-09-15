@@ -53,7 +53,7 @@ public class HoodieCDCLogRecordReader implements ClosableIterator<IndexedRecord>
 
   @Override
   public boolean hasNext() {
-    if (null == itr || !itr.hasNext()) {
+    if (itr == null || !itr.hasNext()) {
       if (reader.hasNext()) {
         HoodieDataBlock dataBlock = (HoodieDataBlock) reader.next();
         if (dataBlock.getBlockType() == HoodieLogBlock.HoodieLogBlockType.CDC_DATA_BLOCK) {

@@ -126,7 +126,19 @@ class DefaultSource extends RelationProvider
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-      new EmptyRelation(sqlContext, metaClient, isCdcQuery)
+      val _schema = if (isCdcQuery) {
+        CDCRelation.FULL_CDC_SPARK_SCHEMA
+      } else {
+        val schemaResolver = new TableSchemaResolver(metaClient)
+        try {
+          val avroSchema = schemaResolver.getTableAvroSchema
+          AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+        } catch {
+          case _: Exception =>
+            schema
+        }
+      }
+      new EmptyRelation(sqlContext, _schema)
     } else if (isCdcQuery) {
       CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
     } else {
@@ -216,9 +228,10 @@ class DefaultSource extends RelationProvider
     val metaClient = HoodieTableMetaClient.builder().setConf(
       sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
 
-    if (CDCRelation.isCDCTable(metaClient) &&
-        parameters.get(QUERY_TYPE.key).contains(QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
-        parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)) {
+    val isCdcQuery = CDCRelation.isCDCEnabled(metaClient) &&
+      parameters.get(QUERY_TYPE.key).contains(QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
+      parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
+    if (isCdcQuery) {
       (shortName(), CDCRelation.FULL_CDC_SPARK_SCHEMA)
     } else {
       val schemaResolver = new TableSchemaResolver(metaClient)

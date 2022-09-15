@@ -68,7 +68,7 @@ class HoodieStreamSource(
 
   private lazy val tableType = metaClient.getTableType
 
-  private val isCDCQuery = CDCRelation.isCDCTable(metaClient) &&
+  private val isCDCQuery = CDCRelation.isCDCEnabled(metaClient) &&
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
     parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
 
