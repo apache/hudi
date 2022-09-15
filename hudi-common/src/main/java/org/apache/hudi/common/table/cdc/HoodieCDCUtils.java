@@ -93,7 +93,7 @@ public class HoodieCDCUtils {
         return CDC_SCHEMA;
       case WITH_BEFORE:
         return CDC_SCHEMA_OP_RECORDKEY_BEFORE;
-     case OP_KEY:
+      case OP_KEY:
         return CDC_SCHEMA_OP_AND_RECORDKEY;
       default:
         throw new HoodieException("not support this supplemental logging mode: " + supplementalLoggingMode);

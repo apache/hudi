@@ -27,7 +27,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -230,7 +229,7 @@ public class HoodieCDCLogger implements Closeable {
     try {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = buildCDCBlockHeader();
       List<IndexedRecord> records = cdcData.values().stream()
-          .map( record -> {
+          .map(record -> {
             try {
               return record.getInsertValue(cdcSchema).get();
             } catch (IOException e) {
