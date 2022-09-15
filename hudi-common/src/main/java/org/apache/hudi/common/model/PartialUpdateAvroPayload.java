@@ -63,26 +63,26 @@ import java.util.Properties;
  *  case 1
  *  Current data:
  *      id      ts      name    price
- *      1     , 1     , name_1, price_1
+ *      1       1       name_1  price_1
  *  Insert data:
  *      id      ts      name    price
- *      1     , 2     , null  , price_2
+ *      1       2       null    price_2
  *
  *  Result data after #preCombine or #combineAndGetUpdateValue:
  *      id      ts      name    price
- *      1     , 2     , name_1  , price_2
+ *      1       2       name_1  price_2
  *
  *  case 2
  *  Current data:
  *      id      ts      name    price
- *      1     , 2     , name_1, null
+ *      1       2       name_1  null
  *  Insert data:
  *      id      ts      name    price
- *      1     , 1     , null  , price_1
+ *      1       1       null    price_1
  *
  *  Result data after preCombine or combineAndGetUpdateValue:
  *      id      ts      name    price
- *      1     , 2     , name_1  , price_1
+ *      1       2       name_1  price_1
  *</pre>
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
