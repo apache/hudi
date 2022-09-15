@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
@@ -132,18 +133,13 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(false)
       .withDocumentation("When enable, persist the change data if necessary, and can be queried as a CDC query mode.");
 
-  // op and key
-  public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY = "op_key";
-  public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE = "cdc_data_before";
-  public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER = "cdc_data_before_after";
-
   public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
       .key("hoodie.table.cdc.supplemental.logging.mode")
-      .defaultValue(CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY)
+      .defaultValue(HoodieCDCSupplementalLoggingMode.OP_KEY.getValue())
       .withValidValues(
-          CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY,
-          CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE,
-          CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)
+          HoodieCDCSupplementalLoggingMode.OP_KEY.getValue(),
+          HoodieCDCSupplementalLoggingMode.WITH_BEFORE.getValue(),
+          HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER.getValue())
       .withDocumentation("When 'op_key' persist the 'op' and the record key only,"
           + " when 'cdc_data_before' persist the additional 'before' image ,"
           + " and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.");

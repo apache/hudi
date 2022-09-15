@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -53,7 +54,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable {
+public class HoodieCDCLogger implements Closeable {
 
   private final String partitionPath;
 
@@ -72,7 +73,7 @@ public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable
 
   private final boolean cdcEnabled;
 
-  private final String cdcSupplementalLoggingMode;
+  private final HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode;
 
   private final Schema cdcSchema;
 
@@ -105,11 +106,12 @@ public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable
       this.rewriteRecordFunc = rewriteRecordFunc;
 
       this.cdcEnabled = config.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED);
-      this.cdcSupplementalLoggingMode = config.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE);
+      this.cdcSupplementalLoggingMode = HoodieCDCSupplementalLoggingMode.parse(
+          config.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE));
 
-      if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)) {
+      if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
         this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA;
-      } else if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE)) {
+      } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
         this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE;
       } else {
         this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY;
@@ -128,7 +130,7 @@ public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable
     }
   }
 
-  public void put(HoodieRecord<T> hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
+  public void put(HoodieRecord hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
     if (cdcEnabled) {
       String recordKey;
       if (oldRecord == null) {
@@ -165,10 +167,10 @@ public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable
                                                GenericRecord oldRecord,
                                                GenericRecord newRecord) {
     GenericData.Record record;
-    if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)) {
+    if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), commitTime,
           oldRecord, addCommitMetadata(newRecord, recordKey, partitionPath));
-    } else if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE)) {
+    } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey, oldRecord);
     } else {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey);
@@ -225,9 +227,9 @@ public class HoodieCDCLogger<T extends HoodieRecordPayload> implements Closeable
   private Map<HoodieLogBlock.HeaderMetadataType, String> buildCDCBlockHeader() {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, commitTime);
-    if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)) {
+    if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, HoodieCDCUtils.CDC_SCHEMA_STRING);
-    } else if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE)) {
+    } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE_STRING);
     } else {
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY_STRING);

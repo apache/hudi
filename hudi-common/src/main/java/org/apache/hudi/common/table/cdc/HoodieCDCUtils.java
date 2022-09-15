@@ -22,7 +22,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieException;
 
 public class HoodieCDCUtils {
@@ -88,13 +87,13 @@ public class HoodieCDCUtils {
   public static final Schema CDC_SCHEMA_OP_AND_RECORDKEY =
       new Schema.Parser().parse(CDC_SCHEMA_OP_AND_RECORDKEY_STRING);
 
-  public static final Schema schemaBySupplementalLoggingMode(String supplementalLoggingMode) {
+  public static final Schema schemaBySupplementalLoggingMode(HoodieCDCSupplementalLoggingMode supplementalLoggingMode) {
     switch (supplementalLoggingMode) {
-      case HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER:
+      case WITH_BEFORE_AFTER:
         return CDC_SCHEMA;
-      case HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE:
+      case WITH_BEFORE:
         return CDC_SCHEMA_OP_RECORDKEY_BEFORE;
-      case HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY:
+     case OP_KEY:
         return CDC_SCHEMA_OP_AND_RECORDKEY;
       default:
         throw new HoodieException("not support this supplemental logging mode: " + supplementalLoggingMode);

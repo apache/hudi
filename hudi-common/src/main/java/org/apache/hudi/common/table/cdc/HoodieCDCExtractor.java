@@ -85,7 +85,7 @@ public class HoodieCDCExtractor {
 
   private final FileSystem fs;
 
-  private final String supplementalLoggingMode;
+  private final HoodieCDCSupplementalLoggingMode supplementalLoggingMode;
 
   private final String startInstant;
 
@@ -106,7 +106,8 @@ public class HoodieCDCExtractor {
     this.metaClient = metaClient;
     this.basePath = metaClient.getBasePathV2();
     this.fs = metaClient.getFs().getFileSystem();
-    this.supplementalLoggingMode = metaClient.getTableConfig().cdcSupplementalLoggingMode();
+    this.supplementalLoggingMode = HoodieCDCSupplementalLoggingMode.parse(
+        metaClient.getTableConfig().cdcSupplementalLoggingMode());
     this.startInstant = startInstant;
     this.endInstant = endInstant;
     if (HoodieTableType.MERGE_ON_READ == metaClient.getTableType()
@@ -306,7 +307,7 @@ public class HoodieCDCExtractor {
       }
     } else {
       // this is a cdc log
-      if (supplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)) {
+      if (supplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
         cdcFileSplit = new HoodieCDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath());
       } else {
         try {
@@ -318,7 +319,7 @@ public class HoodieCDCExtractor {
           FileSlice beforeFileSlice = null;
           FileSlice currentFileSlice = new FileSlice(fileGroupId, instant.getTimestamp(),
               new HoodieBaseFile(fs.getFileStatus(new Path(basePath, writeStat.getPath()))), new ArrayList<>());
-          if (supplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY)) {
+          if (supplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.OP_KEY)) {
             beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           }
           cdcFileSplit = new HoodieCDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath(),
