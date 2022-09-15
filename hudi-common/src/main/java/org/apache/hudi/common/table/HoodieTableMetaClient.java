@@ -876,11 +876,10 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder set(String key, Object value) {
+    private void set(String key, Object value) {
       if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
         this.others.put(key, value);
       }
-      return this;
     }
 
     public PropertyBuilder set(Map<String, Object> props) {
