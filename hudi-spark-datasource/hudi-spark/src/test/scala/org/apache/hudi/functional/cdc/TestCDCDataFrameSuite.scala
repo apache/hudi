@@ -41,7 +41,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step6: Bluk_Insert 20
    */
   @ParameterizedTest
-  @CsvSource(Array("op_key", "cdc_data_before", "cdc_data_before_after"))
+  @CsvSource(Array("cdc_data_before", "cdc_data_before_after"))
   def testCOWDataSourceWrite(cdcSupplementalLoggingMode: String): Unit = {
     val options = commonOpts ++ Map(
       HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> cdcSupplementalLoggingMode

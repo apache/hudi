@@ -68,6 +68,8 @@ public class HoodieCDCLogger implements Closeable {
 
   private final List<String> keyFields;
 
+  private final Schema dataSchema;
+
   private final int taskPartitionId;
 
   private final boolean populateMetaFields;
@@ -98,6 +100,7 @@ public class HoodieCDCLogger implements Closeable {
       HoodieWriteConfig config,
       HoodieTableConfig tableConfig,
       List<String> keyFields,
+      Schema schema,
       int taskPartitionId,
       HoodieLogFormat.Writer cdcWriter,
       long maxInMemorySizeInBytes,
@@ -107,6 +110,7 @@ public class HoodieCDCLogger implements Closeable {
       this.fileName = fileName;
       this.commitTime = commitTime;
       this.keyFields = keyFields;
+      this.dataSchema = HoodieAvroUtils.removeMetadataFields(schema);
       this.taskPartitionId = taskPartitionId;
       this.populateMetaFields = config.populateMetaFields();
 
@@ -180,9 +184,9 @@ public class HoodieCDCLogger implements Closeable {
     GenericData.Record record;
     if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), commitTime,
-          oldRecord, addCommitMetadata(newRecord, recordKey, partitionPath));
+          removeCommitMetadata(oldRecord), newRecord);
     } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
-      record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey, oldRecord);
+      record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey, removeCommitMetadata(oldRecord));
     } else {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey);
     }
@@ -196,6 +200,17 @@ public class HoodieCDCLogger implements Closeable {
       HoodieAvroUtils.addCommitMetadataToRecord(rewriteRecord, commitTime, seqId);
       HoodieAvroUtils.addHoodieKeyToRecord(rewriteRecord, recordKey, partitionPath, fileName);
       return rewriteRecord;
+    }
+    return record;
+  }
+
+  private GenericRecord removeCommitMetadata(GenericRecord record) {
+    if (record != null && populateMetaFields) {
+      GenericData.Record newRecord = new GenericData.Record(dataSchema);
+      for (Schema.Field field : dataSchema.getFields()) {
+        newRecord.put(field.name(), record.get(field.name()));
+      }
+      return newRecord;
     }
     return record;
   }
