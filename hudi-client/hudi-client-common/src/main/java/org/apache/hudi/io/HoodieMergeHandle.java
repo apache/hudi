@@ -221,6 +221,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
             config,
             hoodieTable.getMetaClient().getTableConfig(),
             keyFields,
+            tableSchema,
             getPartitionId(),
             createLogWriter(Option.empty(), instantTime),
             IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config),
