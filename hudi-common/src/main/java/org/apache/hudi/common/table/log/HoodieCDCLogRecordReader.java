@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -43,7 +44,7 @@ public class HoodieCDCLogRecordReader implements ClosableIterator<IndexedRecord>
   public HoodieCDCLogRecordReader(
       FileSystem fs,
       Path cdcLogPath,
-      String cdcSupplementalLoggingMode) throws IOException {
+      HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode) throws IOException {
     this.cdcLogFile = new HoodieLogFile(fs.getFileStatus(cdcLogPath));
     this.reader = new HoodieLogFileReader(fs, cdcLogFile,
       HoodieCDCUtils.schemaBySupplementalLoggingMode(cdcSupplementalLoggingMode),

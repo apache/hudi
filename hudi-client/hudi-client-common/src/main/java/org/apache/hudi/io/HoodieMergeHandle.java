@@ -108,7 +108,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   // a flag that indicate whether allow the change data to write out a cdc log file.
   protected boolean cdcEnabled = false;
   // used to write cdc data
-  protected HoodieCDCLogger<T> cdcLogger;
+  protected HoodieCDCLogger cdcLogger;
   private boolean preserveMetadata = false;
 
   protected Path newFilePath;
@@ -214,7 +214,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       // init the cdc logger
       this.cdcEnabled = config.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED);
       if (cdcEnabled) {
-        this.cdcLogger = new HoodieCDCLogger<>(
+        this.cdcLogger = new HoodieCDCLogger(
             partitionPath,
             newFilePath.getName(),
             instantTime,
