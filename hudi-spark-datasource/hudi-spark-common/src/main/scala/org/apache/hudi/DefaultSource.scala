@@ -20,7 +20,6 @@ package org.apache.hudi
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
-import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -111,8 +110,6 @@ class DefaultSource extends RelationProvider
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
     val queryType = parameters(QUERY_TYPE.key)
-    val isCdcQuery = queryType == QUERY_TYPE_INCREMENTAL_OPT_VAL &&
-      parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
     // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
     //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
     //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
@@ -126,21 +123,7 @@ class DefaultSource extends RelationProvider
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-      val _schema = if (isCdcQuery) {
-        CDCRelation.FULL_CDC_SPARK_SCHEMA
-      } else {
-        val schemaResolver = new TableSchemaResolver(metaClient)
-        try {
-          val avroSchema = schemaResolver.getTableAvroSchema
-          AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
-        } catch {
-          case _: Exception =>
-            schema
-        }
-      }
-      new EmptyRelation(sqlContext, _schema)
-    } else if (isCdcQuery) {
-      CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
+      new EmptyRelation(sqlContext, metaClient)
     } else {
       (tableType, queryType, isBootstrappedTable) match {
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
@@ -228,24 +211,17 @@ class DefaultSource extends RelationProvider
     val metaClient = HoodieTableMetaClient.builder().setConf(
       sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
 
-    val isCdcQuery = CDCRelation.isCDCEnabled(metaClient) &&
-      parameters.get(QUERY_TYPE.key).contains(QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
-      parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
-    if (isCdcQuery) {
-      (shortName(), CDCRelation.FULL_CDC_SPARK_SCHEMA)
-    } else {
-      val schemaResolver = new TableSchemaResolver(metaClient)
-      val sqlSchema =
-        try {
-          val avroSchema = schemaResolver.getTableAvroSchema
-          AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
-        } catch {
-          case _: Exception =>
-            require(schema.isDefined, "Fail to resolve source schema")
-            schema.get
-        }
-      (shortName(), sqlSchema)
-    }
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val sqlSchema =
+      try {
+        val avroSchema = schemaResolver.getTableAvroSchema
+        AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+      } catch {
+        case _: Exception =>
+          require(schema.isDefined, "Fail to resolve source schema")
+          schema.get
+      }
+    (shortName(), sqlSchema)
   }
 
   override def createSource(sqlContext: SQLContext,
