@@ -27,7 +27,6 @@ import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.Closeable;
 import java.util.Map;
 
 /**
@@ -56,14 +55,12 @@ public class Metrics {
     Runtime.getRuntime().addShutdownHook(new Thread(Metrics::shutdown));
   }
 
-  private void reportAndCloseReporter() {
+  private void reportAndStopReporter() {
     try {
       registerHoodieCommonMetrics();
       reporter.report();
-      if (getReporter() != null) {
-        LOG.info("Closing metrics reporter...");
-        getReporter().close();
-      }
+      LOG.info("Stopping the metrics reporter...");
+      reporter.stop();
     } catch (Exception e) {
       LOG.warn("Error while closing reporter", e);
     }
@@ -105,7 +102,7 @@ public class Metrics {
     if (!initialized) {
       return;
     }
-    instance.reportAndCloseReporter();
+    instance.reportAndStopReporter();
     initialized = false;
   }
 
@@ -135,10 +132,6 @@ public class Metrics {
 
   public MetricRegistry getRegistry() {
     return registry;
-  }
-
-  public Closeable getReporter() {
-    return reporter.getReporter();
   }
 
   public static boolean isInitialized() {
