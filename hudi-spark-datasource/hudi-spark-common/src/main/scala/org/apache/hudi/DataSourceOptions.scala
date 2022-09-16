@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.{ConfigProperty, DFSPropertiesConfiguration
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
@@ -787,9 +787,13 @@ object DataSourceOptionsHelper {
 
   def inferKeyGenClazz(props: TypedProperties): String = {
     val partitionFields = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), null)
-    if (partitionFields != null) {
+    val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
+    inferKeyGenClazz(recordsKeyFields, partitionFields)
+  }
+
+  def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
+    if (!StringUtils.isNullOrEmpty(partitionFields)) {
       val numPartFields = partitionFields.split(",").length
-      val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
       val numRecordKeyFields = recordsKeyFields.split(",").length
       if (numPartFields == 1 && numRecordKeyFields == 1) {
         classOf[SimpleKeyGenerator].getName
