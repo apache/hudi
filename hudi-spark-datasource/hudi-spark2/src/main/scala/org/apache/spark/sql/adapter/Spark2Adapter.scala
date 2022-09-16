@@ -19,8 +19,13 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
-import org.apache.hudi.{Spark2HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.hadoop.fs.Path
+import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.{AvroConversionUtils, BaseFileOnlyRelation, DefaultSource, EmptyRelation, HoodieBootstrapRelation, IncrementalRelation, MergeOnReadIncrementalRelation, MergeOnReadSnapshotRelation, Spark2HoodieFileScanRDD, Spark2RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -28,19 +33,23 @@ import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{Command, InsertIntoTable, Join, LogicalPlan, DeleteFromTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, InsertIntoTable, Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile, Spark2ParsePartitionUtil, SparkParsePartitionUtil}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark2CatalystExpressionUtils, HoodieSpark2CatalystPlanUtils, Row, SparkSession}
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark2CatalystExpressionUtils, HoodieSpark2CatalystPlanUtils, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.JavaConverters.mapAsScalaMapConverter
+import java.util.{Map => JMap}
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 2.4.x
@@ -121,6 +130,15 @@ class Spark2Adapter extends SparkAdapter {
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
     InterpretedPredicate.create(e)
+  }
+
+  override def createRelation(metaClient: HoodieTableMetaClient,
+                              sqlContext: SQLContext,
+                              schema: Schema,
+                              globPaths: Array[Path],
+                              parameters: JMap[String, String]): BaseRelation = {
+    val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
+    DefaultSource.createRelation(metaClient, sqlContext, dataSchema, globPaths, parameters.asScala.toMap)
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

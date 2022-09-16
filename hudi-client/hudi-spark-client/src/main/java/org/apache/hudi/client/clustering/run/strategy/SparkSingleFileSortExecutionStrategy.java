@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -33,7 +34,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.table.action.commit.SparkBulkInsertRowWriter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.sql.Dataset;
@@ -58,13 +58,13 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
   }
 
   @Override
-  public HoodieData<WriteStatus> performClusteringWithRecordsRow(Dataset<Row> inputRecords,
-                                                                 int numOutputGroups,
-                                                                 String instantTime,
-                                                                 Map<String, String> strategyParams,
-                                                                 Schema schema,
-                                                                 List<HoodieFileGroupId> fileGroupIdList,
-                                                                 boolean preserveHoodieMetadata) {
+  public HoodieData<WriteStatus> performClusteringWithRecordsAsRow(Dataset<Row> inputRecords,
+                                                                   int numOutputGroups,
+                                                                   String instantTime,
+                                                                   Map<String, String> strategyParams,
+                                                                   Schema schema,
+                                                                   List<HoodieFileGroupId> fileGroupIdList,
+                                                                   boolean shouldPreserveHoodieMetadata) {
     if (numOutputGroups != 1 || fileGroupIdList.size() != 1) {
       throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
     }
@@ -74,15 +74,10 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
         .withBulkInsertParallelism(numOutputGroups)
         .withProps(getWriteConfig().getProps()).build();
 
-    boolean shouldPreserveHoodieMetadata = preserveHoodieMetadata;
-    if (!newConfig.populateMetaFields() && preserveHoodieMetadata) {
-      LOG.warn("Will setting preserveHoodieMetadata to false as populateMetaFields is false");
-      shouldPreserveHoodieMetadata = false;
-    }
-
+    // Since clustering will write to single file group using HoodieUnboundedCreateHandle, set max file size to a large value.
     newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
 
-    return SparkBulkInsertRowWriter.bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
+    return HoodieDatasetBulkInsertHelper.bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
         getRowPartitioner(strategyParams, schema), numOutputGroups, shouldPreserveHoodieMetadata);
   }
 
@@ -93,7 +88,7 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
                                                               Map<String, String> strategyParams,
                                                               Schema schema,
                                                               List<HoodieFileGroupId> fileGroupIdList,
-                                                              boolean preserveHoodieMetadata) {
+                                                              boolean shouldPreserveHoodieMetadata) {
     if (numOutputGroups != 1 || fileGroupIdList.size() != 1) {
       throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
     }
@@ -106,6 +101,6 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
     newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
 
     return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
-        false, getRDDPartitioner(strategyParams, schema), true, numOutputGroups, new SingleFileHandleCreateFactory(fileGroupIdList.get(0).getFileId(), preserveHoodieMetadata));
+        false, getRDDPartitioner(strategyParams, schema), true, numOutputGroups, new SingleFileHandleCreateFactory(fileGroupIdList.get(0).getFileId(), shouldPreserveHoodieMetadata));
   }
 }

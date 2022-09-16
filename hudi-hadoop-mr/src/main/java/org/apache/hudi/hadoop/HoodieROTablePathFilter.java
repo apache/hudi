@@ -183,8 +183,17 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
-          fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-              metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+          if (getConf().get("as.of.instant") != null) {
+            // Build FileSystemViewManager with specified time, it's necessary to set this config when you may
+            // access old version files. For example, in spark side, using "hoodie.datasource.read.paths"
+            // which contains old version files, if not specify this value, these files will be filtered.
+            fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()),
+                metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBeforeOrEquals(getConf().get("as.of.instant")));
+          } else {
+            fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+          }
           String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
           // populate the cache

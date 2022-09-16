@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.hudi.JavaSparkAdaptorSupport;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -75,10 +76,13 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.sources.BaseRelation;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -103,19 +107,20 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime) {
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
+    boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false);
     // execute clustering for each group async and collect WriteStatus
     Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
         clusteringPlan.getInputGroups().stream()
             .map(inputGroup -> {
               if (getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", false)) {
-                return runClusteringForGroupAsyncWithRow(inputGroup,
+                return runClusteringForGroupAsyncAsRow(inputGroup,
                     clusteringPlan.getStrategy().getStrategyParams(),
-                    Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
+                    shouldPreserveMetadata,
                     instantTime);
               }
-              return runClusteringForGroupAsyncWithRDD(inputGroup,
+              return runClusteringForGroupAsync(inputGroup,
                   clusteringPlan.getStrategy().getStrategyParams(),
-                  Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
+                  shouldPreserveMetadata,
                   instantTime);
             })
             .collect(Collectors.toList()))
@@ -134,27 +139,35 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    * Different from {@link performClusteringWithRecordsRDD}, this method take {@link Dataset<Row>}
    * as inputs.
    */
-  public abstract HoodieData<WriteStatus> performClusteringWithRecordsRow(final Dataset<Row> inputRecords, final int numOutputGroups, final String instantTime,
-                                                                          final Map<String, String> strategyParams, final Schema schema,
-                                                                          final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
+  public abstract HoodieData<WriteStatus> performClusteringWithRecordsAsRow(final Dataset<Row> inputRecords,
+                                                                            final int numOutputGroups,
+                                                                            final String instantTime,
+                                                                            final Map<String, String> strategyParams,
+                                                                            final Schema schema,
+                                                                            final List<HoodieFileGroupId> fileGroupIdList,
+                                                                            final boolean shouldPreserveHoodieMetadata);
 
   /**
    * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters.
    * The number of new file groups created is bounded by numOutputGroups.
    * Note that commit is not done as part of strategy. commit is callers responsibility.
    *
-   * @param inputRecords           RDD of {@link HoodieRecord}.
-   * @param numOutputGroups        Number of output file groups.
-   * @param instantTime            Clustering (replace commit) instant time.
-   * @param strategyParams         Strategy parameters containing columns to sort the data by when clustering.
-   * @param schema                 Schema of the data including metadata fields.
-   * @param fileGroupIdList        File group id corresponding to each out group.
-   * @param preserveHoodieMetadata Whether to preserve commit metadata while clustering.
+   * @param inputRecords                 RDD of {@link HoodieRecord}.
+   * @param numOutputGroups              Number of output file groups.
+   * @param instantTime                  Clustering (replace commit) instant time.
+   * @param strategyParams               Strategy parameters containing columns to sort the data by when clustering.
+   * @param schema                       Schema of the data including metadata fields.
+   * @param fileGroupIdList              File group id corresponding to each out group.
+   * @param shouldPreserveHoodieMetadata Whether to preserve commit metadata while clustering.
    * @return RDD of {@link WriteStatus}.
    */
-  public abstract HoodieData<WriteStatus> performClusteringWithRecordsRDD(final HoodieData<HoodieRecord<T>> inputRecords, final int numOutputGroups, final String instantTime,
-                                                                       final Map<String, String> strategyParams, final Schema schema,
-                                                                       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
+  public abstract HoodieData<WriteStatus> performClusteringWithRecordsRDD(final HoodieData<HoodieRecord<T>> inputRecords,
+                                                                          final int numOutputGroups,
+                                                                          final String instantTime,
+                                                                          final Map<String, String> strategyParams,
+                                                                          final Schema schema,
+                                                                          final List<HoodieFileGroupId> fileGroupIdList,
+                                                                          final boolean shouldPreserveHoodieMetadata);
 
   protected BulkInsertPartitioner<Dataset<Row>> getRowPartitioner(Map<String, String> strategyParams,
                                                                   Schema schema) {
@@ -173,8 +186,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    * @param schema         Schema of the data including metadata fields.
    */
   private <I> BulkInsertPartitioner<I> getPartitioner(Map<String, String> strategyParams,
-                                                        Schema schema,
-                                                        boolean isRowPartitioner) {
+                                                      Schema schema,
+                                                      boolean isRowPartitioner) {
     Option<String[]> orderByColumnsOpt =
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
             .map(listStr -> listStr.split(","));
@@ -186,17 +199,13 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         case HILBERT:
           return isRowPartitioner
               ? new RowSpatialCurveSortPartitioner(getWriteConfig())
-              : new RDDSpatialCurveSortPartitioner(
-              (HoodieSparkEngineContext) getEngineContext(),
-              orderByColumns,
-              layoutOptStrategy,
-              getWriteConfig().getLayoutOptimizationCurveBuildMethod(),
-              HoodieAvroUtils.addMetadataFields(schema));
+              : new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns, layoutOptStrategy,
+                  getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema));
         case LINEAR:
           return isRowPartitioner
               ? new RowCustomColumnsSortPartitioner(orderByColumns)
               : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
-              getWriteConfig().isConsistentLogicalTimestampEnabled());
+                  getWriteConfig().isConsistentLogicalTimestampEnabled());
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
@@ -205,13 +214,13 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
   }
 
   /**
-   * Submit job to execute clustering for the group with RDD APIs.
+   * Submit job to execute clustering for the group using Avro/HoodieRecord representation.
    */
-  private CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsyncWithRDD(HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
-                                                                                       boolean preserveHoodieMetadata, String instantTime) {
+  private CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsync(HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
+                                                                                boolean preserveHoodieMetadata, String instantTime) {
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
-      HoodieData<HoodieRecord<T>> inputRecords = readRecordsForGroupAsRDD(jsc, clusteringGroup, instantTime);
+      HoodieData<HoodieRecord<T>> inputRecords = readRecordsForGroup(jsc, clusteringGroup, instantTime);
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
@@ -221,10 +230,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
   }
 
   /**
-   * Submit job to execute clustering for the group with dataset APIs.
+   * Submit job to execute clustering for the group, directly using the spark native Row representation.
    */
-  private CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsyncWithRow(HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
-                                                                                       boolean preserveHoodieMetadata, String instantTime) {
+  private CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsyncAsRow(HoodieClusteringGroup clusteringGroup,
+                                                                                     Map<String, String> strategyParams,
+                                                                                     boolean shouldPreserveHoodieMetadata,
+                                                                                     String instantTime) {
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
       Dataset<Row> inputRecords = readRecordsForGroupAsRow(jsc, clusteringGroup, instantTime);
@@ -232,14 +243,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
           .collect(Collectors.toList());
-      return performClusteringWithRecordsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, preserveHoodieMetadata);
+      return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, shouldPreserveHoodieMetadata);
     });
   }
 
   /**
    * Get RDD of all records for the group. This includes all records from file slice (Apply updates from log files, if any).
    */
-  private HoodieData<HoodieRecord<T>> readRecordsForGroupAsRDD(JavaSparkContext jsc, HoodieClusteringGroup clusteringGroup, String instantTime) {
+  private HoodieData<HoodieRecord<T>> readRecordsForGroup(JavaSparkContext jsc, HoodieClusteringGroup clusteringGroup, String instantTime) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream().map(ClusteringOperation::create).collect(Collectors.toList());
     boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
     if (hasLogFiles) {
@@ -334,14 +345,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    * Get dataset of all records for the group. This includes all records from file slice (Apply updates from log files, if any).
    */
   private Dataset<Row> readRecordsForGroupAsRow(JavaSparkContext jsc,
-                                                   HoodieClusteringGroup clusteringGroup,
-                                                   String instantTime) {
+                                                HoodieClusteringGroup clusteringGroup,
+                                                String instantTime) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream()
         .map(ClusteringOperation::create).collect(Collectors.toList());
     boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
     SQLContext sqlContext = new SQLContext(jsc.sc());
 
-    String[] baseFilePaths = clusteringOps
+    Path[] baseFilePaths = clusteringOps
         .stream()
         .map(op -> {
           ArrayList<String> readPaths = new ArrayList<>();
@@ -355,33 +366,37 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         })
         .flatMap(Collection::stream)
         .filter(path -> !path.isEmpty())
-        .toArray(String[]::new);
-    String[] deltaPaths = clusteringOps
-        .stream()
-        .filter(op -> !op.getDeltaFilePaths().isEmpty())
-        .flatMap(op -> op.getDeltaFilePaths().stream())
-        .toArray(String[]::new);
+        .map(Path::new)
+        .toArray(Path[]::new);
 
-    Dataset<Row> inputRecords;
+    HashMap<String, String> params = new HashMap<>();
+    params.put("hoodie.datasource.query.type", "snapshot");
+    params.put("as.of.instant", instantTime);
+
+    Path[] paths;
     if (hasLogFiles) {
       String compactionFractor = Option.ofNullable(getWriteConfig().getString("compaction.memory.fraction"))
           .orElse("0.75");
-      String[] paths = CollectionUtils.combine(baseFilePaths, deltaPaths);
-      inputRecords = sqlContext.read()
-          .format("org.apache.hudi")
-          .option("hoodie.datasource.query.type", "snapshot")
-          .option("compaction.memory.fraction", compactionFractor)
-          .option("as.of.instant", instantTime)
-          .option("hoodie.datasource.read.paths", String.join(",", paths))
-          .load();
+      params.put("compaction.memory.fraction", compactionFractor);
+
+      Path[] deltaPaths = clusteringOps
+          .stream()
+          .filter(op -> !op.getDeltaFilePaths().isEmpty())
+          .flatMap(op -> op.getDeltaFilePaths().stream())
+          .map(Path::new)
+          .toArray(Path[]::new);
+      paths = CollectionUtils.combine(baseFilePaths, deltaPaths);
     } else {
-      inputRecords = sqlContext.read()
-          .format("org.apache.hudi")
-          .option("as.of.instant", instantTime)
-          .option("hoodie.datasource.read.paths", String.join(",", baseFilePaths))
-          .load();
+      paths = baseFilePaths;
     }
-    return inputRecords;
+
+    // Building HoodieFileIndex needs this param to decide query path
+    params.put("glob.paths", String.join(",", Arrays.stream(paths).map(Path::toString).toArray(String[]::new)));
+
+    // Let Hudi relations to fetch the schema from the table itself
+    BaseRelation relation = JavaSparkAdaptorSupport.sparkAdapter()
+        .createRelation(getHoodieTable().getMetaClient(), sqlContext, null, paths, params);
+    return sqlContext.baseRelationToDataFrame(relation);
   }
 
   /**

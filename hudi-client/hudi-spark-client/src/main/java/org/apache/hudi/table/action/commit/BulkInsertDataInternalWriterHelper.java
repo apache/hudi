@@ -65,7 +65,7 @@ public class BulkInsertDataInternalWriterHelper {
   private final String fileIdPrefix;
   private final Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
   private final boolean populateMetaFields;
-  private final boolean preserveHoodieMetadata;
+  private final boolean shouldPreserveHoodieMetadata;
   private final Option<BuiltinKeyGenerator> keyGeneratorOpt;
   private final boolean simpleKeyGen;
   private final int simplePartitionFieldIndex;
@@ -87,7 +87,7 @@ public class BulkInsertDataInternalWriterHelper {
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                             String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
-                                            boolean populateMetaFields, boolean arePartitionRecordsSorted, boolean preserveHoodieMetadata) {
+                                            boolean populateMetaFields, boolean arePartitionRecordsSorted, boolean shouldPreserveHoodieMetadata) {
     this.hoodieTable = hoodieTable;
     this.writeConfig = writeConfig;
     this.instantTime = instantTime;
@@ -96,7 +96,7 @@ public class BulkInsertDataInternalWriterHelper {
     this.taskEpochId = taskEpochId;
     this.structType = structType;
     this.populateMetaFields = populateMetaFields;
-    this.preserveHoodieMetadata = preserveHoodieMetadata;
+    this.shouldPreserveHoodieMetadata = shouldPreserveHoodieMetadata;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
 
@@ -208,7 +208,7 @@ public class BulkInsertDataInternalWriterHelper {
 
   private HoodieRowCreateHandle createHandle(String partitionPath) {
     return new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-        instantTime, taskPartitionId, taskId, taskEpochId, structType, preserveHoodieMetadata);
+        instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
   }
 
   private String getNextFileId() {

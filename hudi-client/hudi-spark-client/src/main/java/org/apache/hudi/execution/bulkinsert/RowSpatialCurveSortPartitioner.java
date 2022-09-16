@@ -20,57 +20,23 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.sort.SpaceCurveSortingHelper;
-import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
-import java.util.Arrays;
-import java.util.List;
-
-public class RowSpatialCurveSortPartitioner implements BulkInsertPartitioner<Dataset<Row>> {
-
-  private final String[] orderByColumns;
-  private final HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy;
-  private final HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType;
+public class RowSpatialCurveSortPartitioner extends SpatialCurveSortPartitionerBase<Dataset<Row>> {
 
   public RowSpatialCurveSortPartitioner(HoodieWriteConfig config) {
-    this.layoutOptStrategy = config.getLayoutOptimizationStrategy();
-    if (config.getClusteringSortColumns() != null) {
-      this.orderByColumns = Arrays.stream(config.getClusteringSortColumns().split(","))
-          .map(String::trim).toArray(String[]::new);
-    } else {
-      throw new IllegalArgumentException("The config "
-          + HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() + " must be provided");
-    }
-    this.curveCompositionStrategyType = config.getLayoutOptimizationCurveBuildMethod();
+    super(config.getClusteringSortColumns(), config.getLayoutOptimizationStrategy(), config.getLayoutOptimizationCurveBuildMethod());
+  }
+
+  public RowSpatialCurveSortPartitioner(String[] orderByColumns,
+                                        HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
+                                        HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType) {
+    super(orderByColumns, layoutOptStrategy, curveCompositionStrategyType);
   }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> records, int outputPartitions) {
     return reorder(records, outputPartitions);
-  }
-
-  private Dataset<Row> reorder(Dataset<Row> dataset, int numOutputGroups) {
-    if (orderByColumns.length == 0) {
-      // No-op
-      return dataset;
-    }
-
-    List<String> orderedCols = Arrays.asList(orderByColumns);
-
-    switch (curveCompositionStrategyType) {
-      case DIRECT:
-        return SpaceCurveSortingHelper.orderDataFrameByMappingValues(dataset, layoutOptStrategy, orderedCols, numOutputGroups);
-      case SAMPLE:
-        return SpaceCurveSortingHelper.orderDataFrameBySamplingValues(dataset, layoutOptStrategy, orderedCols, numOutputGroups);
-      default:
-        throw new UnsupportedOperationException(String.format("Unsupported space-curve curve building strategy (%s)", curveCompositionStrategyType));
-    }
-  }
-
-  @Override
-  public boolean arePartitionRecordsSorted() {
-    return true;
   }
 }

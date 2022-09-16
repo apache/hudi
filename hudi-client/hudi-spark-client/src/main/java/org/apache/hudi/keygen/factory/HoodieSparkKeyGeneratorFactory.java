@@ -30,6 +30,7 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import org.slf4j.Logger;
@@ -72,6 +73,22 @@ public class HoodieSparkKeyGeneratorFactory {
       return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
     } catch (Throwable e) {
       throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
+    }
+  }
+
+  public static String inferKeyGenClazz(TypedProperties props) {
+    String partitionFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), null);
+    if (partitionFields != null) {
+      int numPartFields = partitionFields.split(",").length;
+      String recordsKeyFields = props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), KeyGeneratorOptions.RECORDKEY_FIELD_NAME.defaultValue());
+      int numRecordKeyFields = recordsKeyFields.split(",").length;
+      if (numPartFields == 1 && numRecordKeyFields == 1) {
+        return SimpleKeyGenerator.class.getName();
+      } else {
+        return ComplexKeyGenerator.class.getName();
+      }
+    } else {
+      return NonpartitionedKeyGenerator.class.getName();
     }
   }
 

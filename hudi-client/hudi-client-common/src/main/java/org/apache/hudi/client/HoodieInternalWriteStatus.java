@@ -163,4 +163,13 @@ public class HoodieInternalWriteStatus implements Serializable {
         + totalRecords + ", errored Rows " + totalErrorRecords
         + ", global error " + (globalError != null);
   }
+
+  public WriteStatus toWriteStatus() {
+    WriteStatus status = new WriteStatus(trackSuccessRecords, failureFraction);
+    status.setFileId(fileId);
+    status.setTotalRecords(totalRecords);
+    status.setPartitionPath(partitionPath);
+    status.setStat(stat);
+    return status;
+  }
 }

@@ -70,7 +70,7 @@ public class HoodieRowCreateHandle implements Serializable {
   private final UTF8String commitTime;
   private final Function<Long, String> seqIdGenerator;
 
-  private final boolean preserveHoodieMetadata;
+  private final boolean shouldPreserveHoodieMetadata;
 
   private final HoodieTimer currTimer;
 
@@ -99,7 +99,7 @@ public class HoodieRowCreateHandle implements Serializable {
                                long taskId,
                                long taskEpochId,
                                StructType structType,
-                               boolean preserveHoodieMetadata) {
+                               boolean shouldPreserveHoodieMetadata) {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
@@ -120,7 +120,7 @@ public class HoodieRowCreateHandle implements Serializable {
 
     this.writeStatus = new HoodieInternalWriteStatus(!table.getIndex().isImplicitWithStorage(),
         writeConfig.getWriteStatusFailureFraction());
-    this.preserveHoodieMetadata = preserveHoodieMetadata;
+    this.shouldPreserveHoodieMetadata = shouldPreserveHoodieMetadata;
 
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);
@@ -173,9 +173,9 @@ public class HoodieRowCreateHandle implements Serializable {
       UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
       // This is the only meta-field that is generated dynamically, hence conversion b/w
       // [[String]] and [[UTF8String]] is unavoidable if preserveHoodieMetadata is false
-      UTF8String seqId = preserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+      UTF8String seqId = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
           : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
-      UTF8String writeCommitTime = preserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
+      UTF8String writeCommitTime = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
           : commitTime;
 
       InternalRow updatedRow = new HoodieInternalRow(writeCommitTime, seqId, recordKey,

@@ -19,7 +19,9 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -32,11 +34,13 @@ import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, Subque
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SparkSession}
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import java.util.Locale
+import java.util.{Map => JMap}
 
 /**
  * Interface adapting discrepancies and incompatibilities between different Spark versions
@@ -140,6 +144,15 @@ trait SparkAdapter extends Serializable {
    * TODO move to HoodieCatalystExpressionUtils
    */
   def createInterpretedPredicate(e: Expression): InterpretedPredicate
+
+  /**
+   * Create Hoodie relation based on globPaths, otherwise use tablePath if it's empty
+   */
+  def createRelation(metaClient: HoodieTableMetaClient,
+                     sqlContext: SQLContext,
+                     schema: Schema,
+                     globPaths: Array[Path],
+                     parameters: JMap[String, String]): BaseRelation
 
   /**
    * Create instance of [[HoodieFileScanRDD]]

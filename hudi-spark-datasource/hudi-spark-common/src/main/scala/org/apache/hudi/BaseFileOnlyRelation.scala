@@ -160,9 +160,6 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         fileFormat = fileFormat,
         optParams)(sparkSession)
     } else {
-      val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
-      val extraReadPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
-
       // NOTE: Spark is able to infer partitioning values from partition path only when Hive-style partitioning
       //       scheme is used. Therefore, we fallback to reading the table as non-partitioned (specifying
       //       partitionColumns = Seq.empty) whenever Hive-style partitioning is not involved
@@ -174,7 +171,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
 
       DataSource.apply(
         sparkSession = sparkSession,
-        paths = extraReadPaths,
+        paths = globPaths.map(_.toString),
         // Here we should specify the schema to the latest commit schema since
         // the table schema evolution.
         userSpecifiedSchema = userSchema.orElse(Some(tableStructSchema)),
