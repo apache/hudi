@@ -37,7 +37,6 @@ import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -54,22 +53,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class HoodieCDCLogger implements Closeable {
 
-  private final String partitionPath;
-
-  private final String fileName;
-
   private final String commitTime;
 
-  private final List<String> keyFields;
+  private final String keyField;
 
   private final Schema dataSchema;
-
-  private final int taskPartitionId;
 
   private final boolean populateMetaFields;
 
@@ -87,31 +79,22 @@ public class HoodieCDCLogger implements Closeable {
   // the cdc data
   private final Map<String, HoodieAvroPayload> cdcData;
 
-  private final Function<GenericRecord, GenericRecord> rewriteRecordFunc;
-
   // the count of records currently being written, used to generate the same seqno for the cdc data
   private final AtomicLong writtenRecordCount = new AtomicLong(-1);
 
   public HoodieCDCLogger(
-      String partitionPath,
-      String fileName,
       String commitTime,
       HoodieWriteConfig config,
       HoodieTableConfig tableConfig,
-      List<String> keyFields,
       Schema schema,
-      int taskPartitionId,
       HoodieLogFormat.Writer cdcWriter,
-      long maxInMemorySizeInBytes,
-      Function<GenericRecord, GenericRecord> rewriteRecordFunc) {
+      long maxInMemorySizeInBytes) {
     try {
-      this.partitionPath = partitionPath;
-      this.fileName = fileName;
       this.commitTime = commitTime;
-      this.keyFields = keyFields;
       this.dataSchema = HoodieAvroUtils.removeMetadataFields(schema);
-      this.taskPartitionId = taskPartitionId;
       this.populateMetaFields = config.populateMetaFields();
+      this.keyField = populateMetaFields ? HoodieRecord.RECORD_KEY_METADATA_FIELD
+          : tableConfig.getRecordKeyFieldProp();
 
       TypedProperties props = new TypedProperties();
       props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), tableConfig.getKeyGeneratorClassName());
@@ -119,7 +102,6 @@ public class HoodieCDCLogger implements Closeable {
       props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), tableConfig.getPartitionFieldProp());
       this.keyGenerator = KeyGenUtils.createKeyGeneratorByClassName(new TypedProperties(props));
       this.cdcWriter = cdcWriter;
-      this.rewriteRecordFunc = rewriteRecordFunc;
 
       this.cdcEnabled = config.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED);
       this.cdcSupplementalLoggingMode = HoodieCDCSupplementalLoggingMode.parse(
@@ -159,16 +141,16 @@ public class HoodieCDCLogger implements Closeable {
         GenericRecord record = (GenericRecord) indexedRecord.get();
         if (oldRecord == null) {
           // inserted cdc record
-          cdcRecord = createCDCRecord(HoodieCDCOperation.INSERT, recordKey, partitionPath,
+          cdcRecord = createCDCRecord(HoodieCDCOperation.INSERT, recordKey,
               null, record);
         } else {
           // updated cdc record
-          cdcRecord = createCDCRecord(HoodieCDCOperation.UPDATE, recordKey, partitionPath,
+          cdcRecord = createCDCRecord(HoodieCDCOperation.UPDATE, recordKey,
               oldRecord, record);
         }
       } else {
         // deleted cdc record
-        cdcRecord = createCDCRecord(HoodieCDCOperation.DELETE, recordKey, partitionPath,
+        cdcRecord = createCDCRecord(HoodieCDCOperation.DELETE, recordKey,
             oldRecord, null);
       }
       cdcData.put(recordKey, new HoodieAvroPayload(Option.of(cdcRecord)));
@@ -177,7 +159,6 @@ public class HoodieCDCLogger implements Closeable {
 
   private GenericData.Record createCDCRecord(HoodieCDCOperation operation,
                                              String recordKey,
-                                             String partitionPath,
                                              GenericRecord oldRecord,
                                              GenericRecord newRecord) {
     GenericData.Record record;
@@ -188,17 +169,6 @@ public class HoodieCDCLogger implements Closeable {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey, removeCommitMetadata(oldRecord));
     } else {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey);
-    }
-    return record;
-  }
-
-  private GenericRecord addCommitMetadata(GenericRecord record, String recordKey, String partitionPath) {
-    if (record != null && populateMetaFields) {
-      GenericRecord rewriteRecord = rewriteRecordFunc.apply(record);
-      String seqId = HoodieRecord.generateSequenceId(commitTime, taskPartitionId, writtenRecordCount.get());
-      HoodieAvroUtils.addCommitMetadataToRecord(rewriteRecord, commitTime, seqId);
-      HoodieAvroUtils.addHoodieKeyToRecord(rewriteRecord, recordKey, partitionPath, fileName);
-      return rewriteRecord;
     }
     return record;
   }
@@ -236,8 +206,7 @@ public class HoodieCDCLogger implements Closeable {
               throw new HoodieIOException("Failed to get cdc record", e);
             }
           }).collect(Collectors.toList());
-      HoodieLogBlock block = new HoodieCDCDataBlock(records, header,
-          StringUtils.join(keyFields.toArray(new String[0]), ","));
+      HoodieLogBlock block = new HoodieCDCDataBlock(records, header, keyField);
       AppendResult result = cdcWriter.appendBlocks(Collections.singletonList(block));
 
       // call close to trigger the data flush.

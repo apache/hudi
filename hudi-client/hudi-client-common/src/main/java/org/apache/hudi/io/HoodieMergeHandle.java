@@ -215,17 +215,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       this.cdcEnabled = config.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED);
       if (cdcEnabled) {
         this.cdcLogger = new HoodieCDCLogger(
-            partitionPath,
-            newFilePath.getName(),
             instantTime,
             config,
             hoodieTable.getMetaClient().getTableConfig(),
-            keyFields,
             tableSchema,
-            getPartitionId(),
             createLogWriter(Option.empty(), instantTime),
-            IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config),
-            this::rewriteRecord);
+            IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
       }
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);

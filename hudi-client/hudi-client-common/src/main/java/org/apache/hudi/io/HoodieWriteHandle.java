@@ -47,7 +47,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
@@ -98,7 +97,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    */
   protected final Schema writeSchema;
   protected final Schema writeSchemaWithMetaFields;
-  protected final List<String> keyFields;
 
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
@@ -119,11 +117,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
                               HoodieTable<T, I, K, O> hoodieTable, Option<Schema> overriddenSchema,
                               TaskContextSupplier taskContextSupplier) {
     super(config, Option.of(instantTime), hoodieTable);
-    if (config.populateMetaFields()) {
-      this.keyFields = Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    } else {
-      this.keyFields = Arrays.asList(hoodieTable.getMetaClient().getTableConfig().getRecordKeyFields().get());
-    }
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.tableSchema = overriddenSchema.orElseGet(() -> getSpecifiedTableSchema(config));
