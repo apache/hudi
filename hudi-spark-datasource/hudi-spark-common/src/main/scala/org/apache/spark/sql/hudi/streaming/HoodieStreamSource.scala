@@ -25,10 +25,10 @@ import org.apache.hadoop.fs.Path
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{FileIOUtils, TablePathUtils}
+
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource.VERSION
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.internal.Logging
@@ -60,7 +60,6 @@ class HoodieStreamSource(
     val fs = path.getFileSystem(hadoopConf)
     TablePathUtils.getTablePath(fs, path).get()
   }
-
   private lazy val metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(tablePath.toString).build()
 
   private lazy val tableType = metaClient.getTableType
