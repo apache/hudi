@@ -18,15 +18,13 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-
-import java.util.stream.Collectors
 import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
@@ -41,6 +39,7 @@ import org.apache.spark.sql.sources.{BaseRelation, PrunedScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
+import java.util.stream.Collectors
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 
@@ -205,7 +204,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val endInstantTime = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp)
       val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
-      val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
+      var scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")
         fullTableScanDataFrame(startInstantTime, endInstantTime)
       } else {
@@ -214,19 +213,19 @@ class IncrementalRelation(val sqlContext: SQLContext,
         } else {
           log.info("Additional Filters to be applied to incremental source are :" + filters.mkString("Array(", ", ", ")"))
 
-        var prunedSchema = StructType(Seq())
-        // COMMIT_TIME_METADATA_FIELD is required in the schema even if it is not requested by the user
-        // because this field is used to filter the data that is in the time window of the incremental read
-        if (!requiredColumns.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
-          prunedSchema = prunedSchema.add(usedSchema(HoodieRecord.COMMIT_TIME_METADATA_FIELD))
-        }
-        requiredColumns.foreach(col => {
-          val field = usedSchema.find(_.name == col)
-          if (field.isDefined) {
-            prunedSchema = prunedSchema.add(field.get)
+          var prunedSchema = StructType(Seq())
+          // COMMIT_TIME_METADATA_FIELD is required in the schema even if it is not requested by the user
+          // because this field is used to filter the data that is in the time window of the incremental read
+          if (!requiredColumns.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
+            prunedSchema = prunedSchema.add(usedSchema(HoodieRecord.COMMIT_TIME_METADATA_FIELD))
           }
-        })
-        var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], prunedSchema)
+          requiredColumns.foreach(col => {
+            val field = usedSchema.find(_.name == col)
+            if (field.isDefined) {
+              prunedSchema = prunedSchema.add(field.get)
+            }
+          })
+          var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], prunedSchema)
 
           var doFullTableScan = false
 
@@ -273,7 +272,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       // COMMIT_TIME_METADATA_FIELD is previously added to the schema to do incremental read
       // now remove COMMIT_TIME_METADATA_FIELD from the data frame if it is not requested by the user
       if (!requiredColumns.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
-        df = df.toDF().drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+        scanDf = scanDf.toDF().drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
       }
       filters.foldLeft(scanDf)((e, f) => e.filter(f)).rdd
     }
