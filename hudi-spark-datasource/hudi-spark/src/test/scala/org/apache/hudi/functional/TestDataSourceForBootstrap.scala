@@ -31,6 +31,8 @@ import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.time.Instant
 import java.util.Collections
@@ -148,8 +150,9 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = false, isHiveStylePartitioned = false)
   }
 
-  @Test
-  def testMetadataBootstrapCOWHiveStylePartitioned(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("METADATA_ONLY", "FULL_RECORD"))
+  def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapMode: String): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
@@ -166,7 +169,10 @@ class TestDataSourceForBootstrap {
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
-      commonOpts.updated(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr") ++ Map(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true"),
+      commonOpts.updated(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr") ++
+        Map(
+          DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+          HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.key -> bootstrapMode),
       classOf[SimpleKeyGenerator].getName)
 
     // check marked directory clean up
@@ -520,7 +526,11 @@ class TestDataSourceForBootstrap {
       .save(basePath)
 
     val commitInstantTime1: String = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    assertEquals(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, commitInstantTime1)
+    val expectedBootstrapInstant =
+      if ("FULL_RECORD".equals(extraOpts.getOrElse(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.key, HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.defaultValue)))
+        HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS
+      else HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS
+    assertEquals(expectedBootstrapInstant, commitInstantTime1)
     commitInstantTime1
   }
 
