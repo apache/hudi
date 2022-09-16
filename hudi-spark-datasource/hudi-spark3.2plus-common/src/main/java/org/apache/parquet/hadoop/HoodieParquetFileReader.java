@@ -19,6 +19,8 @@
 
 package org.apache.parquet.hadoop;
 
+import org.apache.hudi.secondary.index.SecondaryIndexUtils;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -77,6 +79,8 @@ import org.apache.parquet.io.SeekableInputStream;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.yetus.audience.InterfaceAudience.Private;
+import org.roaringbitmap.PeekableIntIterator;
+import org.roaringbitmap.RoaringBitmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -667,6 +671,7 @@ public class HoodieParquetFileReader implements Closeable {
   private final List<BlockMetaData> blocks;
   private final List<ColumnIndexStore> blockIndexStores;
   private final List<HoodieRowRanges> blockRowRanges;
+  private HoodieRowRanges specificRowRanges;
 
   // not final. in some cases, this may be lazily loaded for backward-compat.
   private ParquetMetadata footer;
@@ -723,6 +728,7 @@ public class HoodieParquetFileReader implements Closeable {
       paths.put(ColumnPath.get(col.getPath()), col);
     }
     this.crc = options.usePageChecksumVerification() ? new CRC32() : null;
+    this.specificRowRanges = convertRowIdSetToRanges(SecondaryIndexUtils.getSpecificRowIdSet(configuration));
   }
 
   /**
@@ -767,6 +773,7 @@ public class HoodieParquetFileReader implements Closeable {
       paths.put(ColumnPath.get(col.getPath()), col);
     }
     this.crc = options.usePageChecksumVerification() ? new CRC32() : null;
+    this.specificRowRanges = convertRowIdSetToRanges(SecondaryIndexUtils.getSpecificRowIdSet(conf));
   }
 
   public HoodieParquetFileReader(InputFile file, ParquetReadOptions options) throws IOException {
@@ -795,6 +802,8 @@ public class HoodieParquetFileReader implements Closeable {
       paths.put(ColumnPath.get(col.getPath()), col);
     }
     this.crc = options.usePageChecksumVerification() ? new CRC32() : null;
+    Configuration conf = ((HadoopInputFile) file).getConfiguration();
+    this.specificRowRanges = convertRowIdSetToRanges(SecondaryIndexUtils.getSpecificRowIdSet(conf));
   }
 
   private static <T> List<T> listWithNulls(int size) {
@@ -829,7 +838,8 @@ public class HoodieParquetFileReader implements Closeable {
   }
 
   public long getFilteredRecordCount() {
-    if (!options.useColumnIndexFilter() || !FilterCompat.isFilteringRequired(options.getRecordFilter())) {
+    if (!options.useColumnIndexFilter()
+        || (!FilterCompat.isFilteringRequired(options.getRecordFilter()) && specificRowRanges == null)) {
       return getRecordCount();
     }
     long total = 0;
@@ -954,7 +964,8 @@ public class HoodieParquetFileReader implements Closeable {
     if (currentBlock == blocks.size()) {
       return null;
     }
-    if (!options.useColumnIndexFilter() || !FilterCompat.isFilteringRequired(options.getRecordFilter())) {
+    if (!options.useColumnIndexFilter()
+        || (!FilterCompat.isFilteringRequired(options.getRecordFilter()) && specificRowRanges == null)) {
       return readNextRowGroup();
     }
     BlockMetaData block = blocks.get(currentBlock);
@@ -1047,14 +1058,23 @@ public class HoodieParquetFileReader implements Closeable {
   }
 
   private HoodieRowRanges getRowRanges(int blockIndex) {
-    assert FilterCompat
-        .isFilteringRequired(options.getRecordFilter()) : "Should not be invoked if filter is null or NOOP";
+    assert FilterCompat.isFilteringRequired(options.getRecordFilter()) || specificRowRanges != null
+        : "Should not be invoked if filter is null or NOOP";
     HoodieRowRanges rowRanges = blockRowRanges.get(blockIndex);
     if (rowRanges == null) {
-      rowRanges = HoodieColumnIndexFilter.calculateHoodieRowRanges(options.getRecordFilter(), getColumnIndexStore(blockIndex),
-          paths.keySet(), blocks.get(blockIndex).getRowCount());
+      if (FilterCompat.isFilteringRequired(options.getRecordFilter())) {
+        rowRanges = HoodieColumnIndexFilter.calculateHoodieRowRanges(options.getRecordFilter(), getColumnIndexStore(blockIndex),
+            paths.keySet(), blocks.get(blockIndex).getRowCount());
+      } else {
+        rowRanges = HoodieRowRanges.createSingle(blocks.get(blockIndex).getRowCount());
+      }
+
+      if (specificRowRanges != null) {
+        rowRanges = HoodieRowRanges.intersection(rowRanges, specificRowRanges);
+      }
       blockRowRanges.set(blockIndex, rowRanges);
     }
+
     return rowRanges;
   }
 
@@ -1721,5 +1741,49 @@ public class HoodieParquetFileReader implements Closeable {
     public long endPos() {
       return offset + length;
     }
+  }
+
+  /**
+   * Convert row id set to row ranges
+   *
+   * @param rowIdSet Specific row id set to read
+   * @return Row ranges
+   */
+  private HoodieRowRanges convertRowIdSetToRanges(RoaringBitmap rowIdSet) {
+    if (rowIdSet == null) {
+      return null;
+    }
+
+    HoodieRowRanges rowRanges = new HoodieRowRanges();
+    PeekableIntIterator iterator = rowIdSet.getIntIterator();
+    int startRowId = -1;
+    int preRowId = -1;
+    int curRowId = -1;
+    while (iterator.hasNext()) {
+      curRowId = iterator.next();
+      if (startRowId == -1) {
+        startRowId = curRowId;
+        preRowId = curRowId;
+        continue;
+      }
+
+      if (preRowId == curRowId - 1) {
+        preRowId = curRowId;
+        continue;
+      }
+
+      rowRanges.add(new HoodieRowRanges.Range(startRowId, preRowId));
+      startRowId = curRowId;
+      preRowId = curRowId;
+    }
+
+    if (startRowId != preRowId || startRowId != -1) {
+      rowRanges.add(new HoodieRowRanges.Range(startRowId, preRowId));
+      startRowId = curRowId;
+      preRowId = curRowId;
+    }
+
+    LOG.info("specific row ranges: {}, hit rows: {}", rowRanges, rowRanges.rowCount());
+    return rowRanges;
   }
 }

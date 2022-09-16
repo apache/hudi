@@ -69,7 +69,7 @@ public class HoodieRowRanges {
     public final long to;
 
     // Creates a range of [from, to] (from and to are inclusive; empty ranges are not valid)
-    Range(long from, long to) {
+    public Range(long from, long to) {
       assert from <= to;
       this.from = from;
       this.to = to;
@@ -97,7 +97,7 @@ public class HoodieRowRanges {
 
   private final List<Range> ranges;
 
-  private HoodieRowRanges() {
+  public HoodieRowRanges() {
     this(new ArrayList<>());
   }
 
@@ -116,7 +116,7 @@ public class HoodieRowRanges {
    * @param rowCount a single row count
    * @return an immutable HoodieRowRanges
    */
-  static HoodieRowRanges createSingle(long rowCount) {
+  public static HoodieRowRanges createSingle(long rowCount) {
     return new HoodieRowRanges(new Range(0L, rowCount - 1L));
   }
 
@@ -197,7 +197,7 @@ public class HoodieRowRanges {
    *
    * The result HoodieRowRanges object will contain all the row indexes there were contained in both of the specified objects
    */
-  static HoodieRowRanges intersection(HoodieRowRanges left, HoodieRowRanges right) {
+  public static HoodieRowRanges intersection(HoodieRowRanges left, HoodieRowRanges right) {
     HoodieRowRanges result = new HoodieRowRanges();
 
     int rightIndex = 0;
@@ -223,7 +223,7 @@ public class HoodieRowRanges {
    * the last one or might be overlapped with some of the last ones.
    * (*) [a, b] < [c, d] if b < c
    */
-  private void add(Range range) {
+  public void add(Range range) {
     Range rangeToAdd = range;
     for (int i = ranges.size() - 1; i >= 0; --i) {
       Range last = ranges.get(i);
