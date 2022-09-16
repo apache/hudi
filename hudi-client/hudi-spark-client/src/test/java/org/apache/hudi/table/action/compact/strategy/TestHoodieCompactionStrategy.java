@@ -250,10 +250,10 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(110 * MB, new ArrayList<>());
     sizesMap.put(100 * MB, Collections.singletonList(2048 * MB));
     sizesMap.put(90 * MB, Arrays.asList(512 * MB, 512 * MB));
-    LogFileLengthBasedCompactionStrategy strategy = new LogFileLengthBasedCompactionStrategy();
+    LogFileNumBasedCompactionStrategy strategy = new LogFileNumBasedCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
             HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(1024)
-                .withLogFileLengthThresholdBasedCompaction(2).build())
+                .withLogFileNumThresholdBasedCompaction(2).build())
         .build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
     List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());

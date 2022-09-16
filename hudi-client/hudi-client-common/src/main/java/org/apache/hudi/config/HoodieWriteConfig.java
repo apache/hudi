@@ -1275,8 +1275,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_SIZE_THRESHOLD);
   }
 
-  public Long getCompactionLogFileLengthThreshold() {
-    return getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_LENGTH_THRESHOLD);
+  public Long getCompactionLogFileNumThreshold() {
+    return getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_NUM_THRESHOLD);
   }
 
   public Boolean getCompactionLazyBlockReadEnabled() {

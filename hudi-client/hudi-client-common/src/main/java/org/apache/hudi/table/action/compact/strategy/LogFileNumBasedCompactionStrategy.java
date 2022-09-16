@@ -27,17 +27,17 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * LogFileLengthBasedCompactionStrategy orders the compactions based on the total log files length,
+ * LogFileLengthBasedCompactionStrategy orders the compactions based on the total log files num,
  * filters the file group which log files length is greater than the threshold and limits the compactions within a configured IO bound.
  */
-public class LogFileLengthBasedCompactionStrategy extends BoundedIOCompactionStrategy
+public class LogFileNumBasedCompactionStrategy extends BoundedIOCompactionStrategy
     implements Comparator<HoodieCompactionOperation> {
 
   @Override
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
-    Long lengthThreshold = writeConfig.getCompactionLogFileLengthThreshold();
+    Long numThreshold = writeConfig.getCompactionLogFileNumThreshold();
     List<HoodieCompactionOperation> filterOperator = operations.stream()
-        .filter(e -> e.getDeltaFilePaths().size() >= lengthThreshold)
+        .filter(e -> e.getDeltaFilePaths().size() >= numThreshold)
         .sorted(this).collect(Collectors.toList());
     return super.orderAndFilter(writeConfig, filterOperator, pendingCompactionPlans);
   }
