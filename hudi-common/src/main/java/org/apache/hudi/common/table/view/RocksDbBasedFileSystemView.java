@@ -39,7 +39,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,10 +50,10 @@ import java.util.stream.Stream;
 /**
  * A file-system view implementation on top of embedded Rocks DB store. For each table : 3 column Family is added for
  * storing (1) File-Slices and Data Files for View lookups (2) Pending compaction operations (3) Partitions tracked
- * <p>
+ *
  * Fine-grained retrieval API to fetch latest file-slice and data-file which are common operations for
  * ingestion/compaction are supported.
- * <p>
+ *
  * TODO: vb The current implementation works in embedded server mode where each restarts blows away the view stores. To
  * support view-state preservation across restarts, Hoodie timeline also needs to be stored inorder to detect changes to
  * timeline across restarts.
@@ -390,16 +389,6 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath) {
     return getFileGroups(rocksDB.<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(),
         schemaHelper.getPrefixForSliceViewByPartition(partitionPath)).map(Pair::getValue));
-  }
-
-  @Override
-  Stream<Pair<String, List<HoodieFileGroup>>> fetchAllStoredFileGroups(List<String> partitionPath) {
-    ArrayList<Pair<String, List<HoodieFileGroup>>> res = new ArrayList<>();
-    for (String s : partitionPath) {
-      Stream<HoodieFileGroup> fileGroup = fetchAllStoredFileGroups(s);
-      res.add(Pair.of(s, fileGroup.collect(Collectors.toList())));
-    }
-    return res.stream();
   }
 
   @Override

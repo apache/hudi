@@ -46,7 +46,7 @@ import java.util.stream.Stream;
 
 /**
  * TableFileSystemView Implementations based on in-memory storage.
- *
+ * 
  * @see TableFileSystemView
  * @since 0.3.0
  */
@@ -264,16 +264,6 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partition) {
     final List<HoodieFileGroup> fileGroups = new ArrayList<>(partitionToFileGroupsMap.get(partition));
     return fileGroups.stream();
-  }
-
-  @Override
-  Stream<Pair<String, List<HoodieFileGroup>>> fetchAllStoredFileGroups(List<String> partitions) {
-    ArrayList<Pair<String, List<HoodieFileGroup>>> part = new ArrayList<>();
-    for (String partition : partitions) {
-      final List<HoodieFileGroup> fileGroups = new ArrayList<>(partitionToFileGroupsMap.get(partition));
-      part.add(Pair.of(partition, fileGroups));
-    }
-    return part.stream();
   }
 
   public Stream<HoodieFileGroup> getAllFileGroups() {

@@ -743,25 +743,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   private Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroupsIncludingReplaced(final List<String> partitionStrList) {
-    try {
-      readLock.lock();
-      // Ensure there is consistency in handling trailing slash in partition-path. Always trim it which is what is done
-      // in other places.
-      List<String> formatedParts = partitionStrList.stream().map(str -> {
-        String partition = formatPartitionKey(str);
-        ensurePartitionLoadedCorrectly(partition);
-        return partition;
-      }).collect(Collectors.toList());
-      Stream<Pair<String, List<HoodieFileGroup>>> pairStream = fetchAllStoredFileGroups(formatedParts);
-      Stream<Pair<String, List<HoodieFileGroup>>> result = pairStream.map(pair -> {
-        Pair<String, List<HoodieFileGroup>> temp = Pair.of(pair.getLeft(), pair.getRight()
-            .stream().map(this::addBootstrapBaseFileIfPresent).collect(Collectors.toList()));
-        return temp;
-      });
-      return result;
-    } finally {
-      readLock.unlock();
+    List<Pair<String, List<HoodieFileGroup>>> fileGroupPerPartitionList = new ArrayList<>();
+    for (String partitionStr : partitionStrList) {
+      fileGroupPerPartitionList.add(Pair.of(partitionStr, getAllFileGroupsIncludingReplaced(partitionStr).collect(Collectors.toList())));
     }
+    return fileGroupPerPartitionList.stream();
   }
 
   private Stream<HoodieFileGroup> getAllFileGroupsIncludingReplaced(final String partitionStr) {
@@ -944,8 +930,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @return file-group stream
    */
   abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath);
-
-  abstract Stream<Pair<String, List<HoodieFileGroup>>> fetchAllStoredFileGroups(List<String> partitionPath);
 
   /**
    * Fetch all Stored file-groups across all partitions loaded.

@@ -380,13 +380,13 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPath) {
-    ArrayList<Pair<String, List<HoodieFileGroup>>> res = new ArrayList<>();
-    for (String s : partitionPath) {
-      Stream<HoodieFileGroup> fileGroup = getAllFileGroups(s);
-      res.add(Pair.of(s, fileGroup.collect(Collectors.toList())));
+  public Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPathList) {
+    ArrayList<Pair<String, List<HoodieFileGroup>>> fileGroupPerPartitionList = new ArrayList<>();
+    for (String partitionPath : partitionPathList) {
+      Stream<HoodieFileGroup> fileGroup = getAllFileGroups(partitionPath);
+      fileGroupPerPartitionList.add(Pair.of(partitionPath, fileGroup.collect(Collectors.toList())));
     }
-    return res.stream();
+    return fileGroupPerPartitionList.stream();
   }
 
   @Override
