@@ -199,7 +199,7 @@ public class QuickstartUtils {
      * @param n Number of updates (must be no more than number of existing keys)
      * @return list of hoodie record updates
      */
-    public List<HoodieRecord> generateUniqueUpdatesForExample(Integer n) {
+    public List<HoodieRecord> generateUniqueUpdates(Integer n) {
       if (numExistingKeys < n) {
         throw new HoodieException("Data must have been written before performing the update operation");
       }

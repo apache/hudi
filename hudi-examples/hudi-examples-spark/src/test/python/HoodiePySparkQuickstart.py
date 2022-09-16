@@ -22,7 +22,7 @@ import random
 from pyspark.sql.functions import lit
 from functools import reduce
 import tempfile
-
+import argparse
 
 
 class ExamplePySpark:
@@ -90,7 +90,7 @@ class ExamplePySpark:
 
     def updateData(self):
         print("Update Data")
-        updates = self.spark._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(self.dataGen.generateUniqueUpdatesForExample(5))
+        updates = self.spark._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(self.dataGen.generateUniqueUpdates(5))
         df = self.spark.read.json(spark.sparkContext.parallelize(updates, 2))
         df.write.format("hudi").options(**self.hudi_options).mode("append").save(self.basePath)
         return df
@@ -237,14 +237,20 @@ class ExamplePySpark:
 
 if __name__ == "__main__":
     random.seed(46474747)
-    if len(sys.argv) < 3:
-        print("Usage: python3 HoodiePySparkQuickstart.py <tableName> <jar file path/bundle name>")
-        quit(-1)
-    #Example jar filepath: /Users/jon/.m2/repository/org/apache/hudi/hudi-spark3.3-bundle_2.12/0.13.0-SNAPSHOT/hudi-spark3.3-bundle_2.12-0.13.0-SNAPSHOT.jar
-    tableName = sys.argv[1]
-    jarBundle = sys.argv[2]
+    parser = argparse.ArgumentParser(description="Examples of various operations to perform on Hudi with PySpark",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-t", "--table", action="store", required=True, help="the name of the table to create")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-p", "--package", action="store", help="the name of the hudi-spark-bundle package\n eg. \"org.apache.hudi:hudi-spark3.3-bundle_2.12:0.12.0\"")
+    group.add_argument("-j", "--jar", action="store", help="the full path to hudi-spark-bundle .jar file\n eg. \"[HUDI_BASE_PATH]/packaging/hudi-spark-bundle/target/hudi-spark-bundle[VERSION].jar\"")
+    args = vars(parser.parse_args())
+    package = args["package"]
+    jar = args["jar"]
+    if package != None:
+        os.environ["PYSPARK_SUBMIT_ARGS"] = f"--packages {package} pyspark-shell"
+    elif "jar" != None:
+        os.environ["PYSPARK_SUBMIT_ARGS"] = f"--jars {jar} pyspark-shell"
+
     with tempfile.TemporaryDirectory() as tmpdirname:
-        os.environ["PYSPARK_SUBMIT_ARGS"] = f"--jars {jarBundle} pyspark-shell"
         spark = sql.SparkSession \
             .builder \
             .appName("Hudi Spark basic example") \
@@ -252,7 +258,7 @@ if __name__ == "__main__":
             .config("spark.kryoserializer.buffer.max", "512m") \
             .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension") \
             .getOrCreate()
-        ps = ExamplePySpark(spark,tableName,tmpdirname)
+        ps = ExamplePySpark(spark,args["table"],tmpdirname)
         ps.runQuickstart()
 
 
