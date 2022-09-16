@@ -188,13 +188,13 @@ object HoodieSparkSqlWriter {
         Array(classOf[org.apache.avro.generic.GenericData],
           classOf[org.apache.avro.Schema]))
 
-      val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
+      val (structName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
       val reconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
 
       val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
       var internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
 
-      val sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
+      val sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, namespace)
       val latestTableSchemaOpt = getLatestTableSchema(spark, basePath, tableIdentifier, sparkContext.hadoopConfiguration)
 
       val writerSchema: Schema = latestTableSchemaOpt match {
@@ -284,7 +284,7 @@ object HoodieSparkSqlWriter {
       val (writeResult, writeClient: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]) =
         operation match {
           case WriteOperationType.DELETE => {
-            val genericRecords = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema)
+            val genericRecords = HoodieSparkUtils.createRdd(df, structName, namespace, reconcileSchema)
             // Convert to RDD[HoodieKey]
             val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
@@ -322,7 +322,7 @@ object HoodieSparkSqlWriter {
               java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).toList, jsc,
                 hoodieConfig, basePath.toString): _*)
             } else {
-              val genericRecords = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema)
+              val genericRecords = HoodieSparkUtils.createRdd(df, structName, namespace, reconcileSchema)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
 
@@ -338,7 +338,7 @@ object HoodieSparkSqlWriter {
           }
           case _ => { // any other operation
             // Convert to RDD[HoodieRecord]
-            val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema,
+            val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, namespace, reconcileSchema,
               org.apache.hudi.common.util.Option.of(writerSchema))
 
             // Check whether partition columns should be persisted w/in the data-files, or should
