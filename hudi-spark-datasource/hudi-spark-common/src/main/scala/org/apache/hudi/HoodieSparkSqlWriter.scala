@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
+import org.apache.avro.generic.{GenericData, GenericRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
@@ -185,8 +185,8 @@ object HoodieSparkSqlWriter {
 
       // Register Avro classes ([[Schema]], [[GenericData]]) w/ Kryo
       sparkContext.getConf.registerKryoClasses(
-        Array(classOf[org.apache.avro.generic.GenericData],
-          classOf[org.apache.avro.Schema]))
+        Array(classOf[GenericData],
+          classOf[Schema]))
 
       val (structName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
       val reconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
@@ -267,7 +267,7 @@ object HoodieSparkSqlWriter {
       //       records into Avro format. Otherwise, Kryo wouldn't be able to apply an optimization allowing
       //       it to avoid the need to ser/de the whole schema along _every_ Avro record
       val targetAvroSchemas = sourceSchema +: writerSchema +: latestTableSchemaOpt.toSeq
-      sparkContext.getConf.registerAvroSchemas(targetAvroSchemas: _*)
+      registerAvroSchemasWithKryo(sparkContext, targetAvroSchemas: _*)
 
       log.info(s"Registered Avro schemas: ${targetAvroSchemas.map(_.toString(true)).mkString("\n")}")
 
@@ -346,10 +346,16 @@ object HoodieSparkSqlWriter {
             // behavior by default)
             // TODO move partition columns handling down into the handlers
             val shouldDropPartitionColumns = hoodieConfig.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
+            val dataFileSchema = if (shouldDropPartitionColumns) {
+              val truncatedSchema = generateSchemaWithoutPartitionColumns(partitionColumns, writerSchema)
+              // NOTE: We have to register this schema w/ Kryo to make sure it's able to apply an optimization
+              //       allowing it to avoid the need to ser/de the whole schema along _every_ Avro record
+              registerAvroSchemasWithKryo(sparkContext, truncatedSchema)
+              truncatedSchema
+            } else {
+              writerSchema
+            }
 
-            val dataFileSchema =
-              if (shouldDropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionColumns, writerSchema)
-              else writerSchema
             // NOTE: Avro's [[Schema]] can't be effectively serialized by JVM native serialization framework
             //       (due to containing cyclic refs), therefore we have to convert it to string before
             //       passing onto the Executor
@@ -490,6 +496,10 @@ object HoodieSparkSqlWriter {
     } catch {
       case _: Exception => None
     }
+  }
+
+  private def registerAvroSchemasWithKryo(sparkContext: SparkContext, targetAvroSchemas: Schema*): Unit = {
+    sparkContext.getConf.registerAvroSchemas(targetAvroSchemas: _*)
   }
 
   private def getLatestTableSchema(spark: SparkSession,
