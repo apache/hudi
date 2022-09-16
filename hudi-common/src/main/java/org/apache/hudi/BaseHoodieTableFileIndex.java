@@ -91,7 +91,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private final transient FileStatusCache fileStatusCache;
 
   protected transient volatile long cachedFileSize = 0L;
-  private transient boolean isAllInputFileSlicesCached = false;
+  protected transient boolean isAllInputFileSlicesCached = false;
   private transient volatile Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices = new HashMap<>();
   private transient volatile List<PartitionPath> cachedAllPartitionPaths;
 
@@ -120,7 +120,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                                   Option<String> specifiedQueryInstant,
                                   boolean shouldIncludePendingCommits,
                                   boolean shouldValidateInstant,
-                                  FileStatusCache fileStatusCache) {
+                                  FileStatusCache fileStatusCache,
+                                  boolean shouldRefresh) {
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
         .orElse(new String[0]);
 
@@ -141,9 +142,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.engineContext = engineContext;
     this.fileStatusCache = fileStatusCache;
 
-    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
-    resetTableMetadata(newTableMetadata);
+    doRefresh(!shouldRefresh);
   }
 
   protected abstract Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath);
@@ -193,6 +192,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         .collect(Collectors.toList());
 
     this.cachedAllPartitionPaths = getQueryPartitionPaths(queryRelativePartitionPaths);
+
+    // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
+    this.queryAsNonePartitionedTable = this.cachedAllPartitionPaths.stream().anyMatch(p -> p.values.length == 0);
     return this.cachedAllPartitionPaths;
   }
 
@@ -340,8 +342,22 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private void doRefresh() {
+    doRefresh(false);
+  }
+  
+  private void doRefresh(boolean initMetadataOnly) {
     long startTime = System.currentTimeMillis();
 
+    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    resetTableMetadata(newTableMetadata);
+
+    if (initMetadataOnly) {
+      return;
+    }
+
+    // Reset it to null to trigger re-loading of all partition path
+    cachedAllPartitionPaths = null;
     Map<PartitionPath, FileStatus[]> partitionFiles = getAllQueryPartitionPaths().stream()
         .collect(Collectors.toMap(p -> p, this::loadPartitionPathFiles));
     FileStatus[] allFiles = partitionFiles.values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
@@ -384,8 +400,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         .mapToLong(BaseHoodieTableFileIndex::fileSliceSize)
         .sum();
 
-    // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
-    this.queryAsNonePartitionedTable = partitionFiles.keySet().stream().anyMatch(p -> p.values.length == 0);
     this.isAllInputFileSlicesCached = true;
 
     long duration = System.currentTimeMillis() - startTime;

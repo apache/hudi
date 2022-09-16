@@ -70,7 +70,9 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     toJavaOption(specifiedQueryInstant),
     false,
     false,
-    SparkHoodieTableFileIndex.adapt(fileStatusCache)
+    SparkHoodieTableFileIndex.adapt(fileStatusCache),
+    configProperties.getBoolean(DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.key(),
+      DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.defaultValue())
   )
     with SparkAdapterSupport
     with Logging {
