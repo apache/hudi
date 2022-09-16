@@ -206,7 +206,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         case (_, record) =>
           toScalaOption(record.getData.getInsertValue(logFileReaderAvroSchema, payloadProps))
             .map(_.asInstanceOf[GenericRecord])
-    }
+      }
 
     protected def removeLogRecord(key: String): Option[HoodieRecord[_ <: HoodieRecordPayload[_]]] =
       logRecords.remove(key)
