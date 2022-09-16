@@ -38,19 +38,17 @@ public class TestTableChanges {
 
   @Test
   public void testPrimitiveAdd() {
-    Types.RecordType record = Types.RecordType.get(Arrays.asList(new Types.Field[] {
-        Types.Field.get(0, "col1", Types.BooleanType.get()),
+    Types.RecordType record = Types.RecordType.get(Arrays.asList(Types.Field.get(0, "col1", Types.BooleanType.get()),
         Types.Field.get(1, "col2", Types.IntType.get()),
         Types.Field.get(2, "col3", Types.LongType.get()),
-        Types.Field.get(3, "col4", Types.FloatType.get())}));
+        Types.Field.get(3, "col4", Types.FloatType.get())));
 
-    Types.RecordType checkRecord = Types.RecordType.get(Arrays.asList(new Types.Field[]  {
-        Types.Field.get(0, "col1", Types.BooleanType.get()),
+    Types.RecordType checkRecord = Types.RecordType.get(Arrays.asList(Types.Field.get(0, "col1", Types.BooleanType.get()),
         Types.Field.get(4, true, "c1", Types.BooleanType.get(), "add c1 after col1"),
         Types.Field.get(1, "col2", Types.IntType.get()),
         Types.Field.get(5, true, "c2", Types.IntType.get(), "add c2 before col3"),
         Types.Field.get(2, "col3", Types.LongType.get()),
-        Types.Field.get(3, "col4", Types.FloatType.get())}));
+        Types.Field.get(3, "col4", Types.FloatType.get())));
 
     InternalSchema oldSchema = new InternalSchema(record);
     // add c1 after 'col1', and c2 before 'col3'
