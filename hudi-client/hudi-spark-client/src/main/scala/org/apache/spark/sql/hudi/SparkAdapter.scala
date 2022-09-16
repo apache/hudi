@@ -40,7 +40,6 @@ import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansU
 import org.apache.spark.storage.StorageLevel
 
 import java.util.Locale
-import java.util.{Map => JMap}
 
 /**
  * Interface adapting discrepancies and incompatibilities between different Spark versions
@@ -152,7 +151,7 @@ trait SparkAdapter extends Serializable {
                      sqlContext: SQLContext,
                      schema: Schema,
                      globPaths: Array[Path],
-                     parameters: JMap[String, String]): BaseRelation
+                     parameters: java.util.Map[String, String]): BaseRelation
 
   /**
    * Create instance of [[HoodieFileScanRDD]]
