@@ -70,7 +70,7 @@ public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLate
         if (!overwriteField(value, defaultValue)) {
           builder.set(field, value);
         } else {
-          builder.set(field, currentRecord.get(field.pos()));
+          builder.set(field, currentRecord.get(field.name()));
         }
       });
       return Option.of(builder.build());
