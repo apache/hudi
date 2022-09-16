@@ -219,7 +219,7 @@ footer .container {
   left: 0;
   height:100%;
   width: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .tagRegular_node_modules-\@docusaurus-theme-classic-lib-next-theme-Tag-styles-module{
