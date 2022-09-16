@@ -217,14 +217,14 @@ object HoodieSparkSqlWriter {
                 AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getName)
 
               case None =>
+                // In case schema reconciliation is enabled and source and latest table schemas
+                // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]]), then we
+                // will rebase incoming batch onto the table's latest schema (ie, reconcile them)
+                //
+                // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
+                //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
+                //       and [[latestTableSchema]] is treated as a writer's schema)
                 if (TableSchemaResolver.isSchemaCompatible(sourceSchema, latestTableSchema)) {
-                  // In case schema reconciliation is enabled and source and latest table schemas
-                  // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]]), then we
-                  // will rebase incoming batch onto the table's latest schema (ie, reconcile them)
-                  //
-                  // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
-                  //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
-                  //       and [[latestTableSchema]] is treated as a writer's schema)
                   latestTableSchema
                 } else {
                   log.error(
