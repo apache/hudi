@@ -68,11 +68,6 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   }
 
   @Override
-  public Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath) {
-    return super.getAllReplacedFileGroups(partitionPath);
-  }
-
-  @Override
   public void reset() {
     super.reset();
     tableMetadata.reset();
