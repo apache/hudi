@@ -1483,7 +1483,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
           .fromBytes(metaClient.getActiveTimeline().getInstantDetails(replaceCommitInstant).get(), HoodieReplaceCommitMetadata.class);
 
       List<String> filesFromReplaceCommit = new ArrayList<>();
-      replaceCommitMetadata.getPartitionToWriteStats().forEach((k,v) -> v.forEach(entry -> filesFromReplaceCommit.add(entry.getPath())));
+      replaceCommitMetadata.getPartitionToWriteStats().
+          forEach((k,v) ->
+              v.forEach(entry -> filesFromReplaceCommit.add(entry.getPath())));
 
       // find all parquet files created as part of clustering. Verify it matces w/ whats found in replace commit metadata.
       FileStatus[] fileStatuses = fs.listStatus(new Path(basePath + "/" + partitionPath));
