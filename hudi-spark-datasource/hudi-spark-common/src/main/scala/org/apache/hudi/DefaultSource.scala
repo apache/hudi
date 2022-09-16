@@ -210,7 +210,6 @@ class DefaultSource extends RelationProvider
     }
     val metaClient = HoodieTableMetaClient.builder().setConf(
       sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
-
     val schemaResolver = new TableSchemaResolver(metaClient)
     val sqlSchema =
       try {

@@ -202,10 +202,10 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     // NOTE: This have to stay lazy to make sure it's initialized only at the point where it's
     //       going to be used, since we modify `logRecords` before that and therefore can't do it any earlier
     protected lazy val logRecordsIterator: Iterator[Option[GenericRecord]] =
-    logRecords.iterator.map {
-      case (_, record) =>
-        toScalaOption(record.getData.getInsertValue(logFileReaderAvroSchema, payloadProps))
-          .map(_.asInstanceOf[GenericRecord])
+      logRecords.iterator.map {
+        case (_, record) =>
+          toScalaOption(record.getData.getInsertValue(logFileReaderAvroSchema, payloadProps))
+            .map(_.asInstanceOf[GenericRecord])
     }
 
     protected def removeLogRecord(key: String): Option[HoodieRecord[_ <: HoodieRecordPayload[_]]] =
@@ -393,7 +393,7 @@ private object HoodieMergeOnReadRDD {
             HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue))
         .withBitCaskDiskMapCompressionEnabled(
           hadoopConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
-            HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
+          HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
       if (logFiles.nonEmpty) {
         logRecordScannerBuilder.withPartition(
           getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))

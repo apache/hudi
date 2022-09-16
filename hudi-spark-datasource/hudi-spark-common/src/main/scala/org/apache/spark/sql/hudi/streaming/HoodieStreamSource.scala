@@ -61,7 +61,6 @@ class HoodieStreamSource(
     TablePathUtils.getTablePath(fs, path).get()
   }
   private lazy val metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(tablePath.toString).build()
-
   private lazy val tableType = metaClient.getTableType
 
   @transient private var lastOffset: HoodieSourceOffset = _
