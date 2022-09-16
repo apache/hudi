@@ -108,9 +108,20 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     LinkedHashMap<String, String> partSpec = PartitionPathUtils.extractPartitionSpecFromPath(
         fileSplit.getPath());
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> partObjects.put(k, DataTypeUtils.resolvePartition(
-        partDefaultName.equals(v) ? null : v,
-        fullFieldTypes[fieldNameList.indexOf(k)])));
+    partSpec.forEach((k, v) -> {
+      final int idx = fieldNameList.indexOf(k);
+      if (idx == -1) {
+        // for any rare cases that the partition field does not exist in schema,
+        // fallback to file read
+        return;
+      }
+      DataType fieldType = fullFieldTypes[idx];
+      if (!DataTypeUtils.isDatetimeType(fieldType)) {
+        // date time type partition field is formatted specifically,
+        // read directly from the data file to avoid format mismatch or precision loss
+        partObjects.put(k, DataTypeUtils.resolvePartition(partDefaultName.equals(v) ? null : v, fieldType));
+      }
+    });
 
     this.reader = ParquetSplitReaderUtil.genPartColumnarRowReader(
         utcTimestamp,

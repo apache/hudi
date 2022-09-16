@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.{ConfigProperty, DFSPropertiesConfiguration
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
@@ -387,13 +387,14 @@ object DataSourceWriteOptions {
     .withDocumentation(" Config to indicate how long (by millisecond) before a retry should issued for failed microbatch")
 
   /**
-   * By default true (in favor of streaming progressing over data integrity)
+   * By default false. If users prefer streaming progress over data integrity, can set this to true.
    */
   val STREAMING_IGNORE_FAILED_BATCH: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.ignore.failed.batch")
-    .defaultValue("true")
+    .defaultValue("false")
     .withDocumentation("Config to indicate whether to ignore any non exception error (e.g. writestatus error)"
-      + " within a streaming microbatch")
+      + " within a streaming microbatch. Turning this on, could hide the write status errors while the spark checkpoint moves ahead." +
+      "So, would recommend users to use this with caution.")
 
   val META_SYNC_CLIENT_TOOL_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.meta.sync.client.tool.class")

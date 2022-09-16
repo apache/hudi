@@ -42,8 +42,14 @@ public class SparkBootstrapDeltaCommitActionExecutor<T extends HoodieRecordPaylo
 
   @Override
   protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(HoodieData<HoodieRecord> inputRecordsRDD) {
-    return new SparkBulkInsertDeltaCommitActionExecutor((HoodieSparkEngineContext) context, new HoodieWriteConfig.Builder().withProps(config.getProps())
-        .withSchema(bootstrapSchema).build(), table, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
-        inputRecordsRDD, extraMetadata);
+    return new SparkBulkInsertDeltaCommitActionExecutor(
+        (HoodieSparkEngineContext) context,
+        new HoodieWriteConfig.Builder()
+            .withProps(config.getProps())
+            .withSchema(bootstrapSchema).build(),
+        table,
+        HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
+        inputRecordsRDD,
+        extraMetadata);
   }
 }

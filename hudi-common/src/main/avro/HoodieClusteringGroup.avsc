@@ -45,6 +45,16 @@
          "default": 1
       },
       {
+        /* Used to track extra metadata to facilitate clustering execution
+         */
+        "name":"extraMetadata",
+         "type":["null", {
+            "type":"map",
+            "values":"string"
+         }],
+         "default": null
+      },
+      {
          "name":"version",
          "type":["int", "null"],
          "default": 1

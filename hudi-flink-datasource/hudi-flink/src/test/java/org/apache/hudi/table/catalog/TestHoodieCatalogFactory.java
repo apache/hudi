@@ -87,7 +87,7 @@ public class TestHoodieCatalogFactory {
         FactoryUtil.createCatalog(
             catalogName, options, null, Thread.currentThread().getContextClassLoader());
 
-    checkEquals(expectedCatalog, (AbstractCatalog)actualCatalog);
+    checkEquals(expectedCatalog, (AbstractCatalog) actualCatalog);
   }
 
   private static void checkEquals(AbstractCatalog c1, AbstractCatalog c2) {

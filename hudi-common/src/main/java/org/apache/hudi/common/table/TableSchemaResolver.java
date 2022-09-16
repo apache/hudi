@@ -18,15 +18,6 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -53,6 +44,16 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.io.storage.HoodieOrcReader;
 import org.apache.hudi.util.Lazy;
+
+import org.apache.avro.JsonProperties;
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.SchemaCompatibility;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -62,6 +63,7 @@ import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 
 import javax.annotation.concurrent.ThreadSafe;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -141,6 +143,19 @@ public class TableSchemaResolver {
   /**
    * Fetches tables schema in Avro format as of the given instant
    *
+   * @param timestamp as of which table's schema will be fetched
+   */
+  public Schema getTableAvroSchema(String timestamp) throws Exception {
+    Option<HoodieInstant> instant = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsBeforeOrEquals(timestamp)
+        .lastInstant();
+    return getTableAvroSchemaInternal(metaClient.getTableConfig().populateMetaFields(), instant);
+  }
+
+  /**
+   * Fetches tables schema in Avro format as of the given instant
+   *
    * @param instant as of which table's schema will be fetched
    */
   public Schema getTableAvroSchema(HoodieInstant instant, boolean includeMetadataFields) throws Exception {
@@ -191,7 +206,7 @@ public class TableSchemaResolver {
     // TODO partition columns have to be appended in all read-paths
     if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
       return metaClient.getTableConfig().getPartitionFields()
-          .map(partitionFields -> appendPartitionColumns(schema, partitionFields))
+          .map(partitionFields -> appendPartitionColumns(schema, Option.ofNullable(partitionFields)))
           .orElse(schema);
     }
 
@@ -501,6 +516,18 @@ public class TableSchemaResolver {
    *
    * @return InternalSchema for this table
    */
+  public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata(String timestamp) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsBeforeOrEquals(timestamp);
+    return timeline.lastInstant().flatMap(this::getTableInternalSchemaFromCommitMetadata);
+  }
+
+  /**
+   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
+   *
+   * @return InternalSchema for this table
+   */
   private Option<InternalSchema> getTableInternalSchemaFromCommitMetadata(HoodieInstant instant) {
     try {
       HoodieCommitMetadata metadata = getCachedCommitMetadata(instant);
@@ -621,18 +648,18 @@ public class TableSchemaResolver {
     }
   }
 
-  static Schema appendPartitionColumns(Schema dataSchema, String[] partitionFields) {
+  public static Schema appendPartitionColumns(Schema dataSchema, Option<String[]> partitionFields) {
     // In cases when {@link DROP_PARTITION_COLUMNS} config is set true, partition columns
     // won't be persisted w/in the data files, and therefore we need to append such columns
     // when schema is parsed from data files
     //
     // Here we append partition columns with {@code StringType} as the data type
-    if (partitionFields.length == 0) {
+    if (!partitionFields.isPresent() || partitionFields.get().length == 0) {
       return dataSchema;
     }
 
-    boolean hasPartitionColNotInSchema = Arrays.stream(partitionFields).anyMatch(pf -> !containsFieldInSchema(dataSchema, pf));
-    boolean hasPartitionColInSchema = Arrays.stream(partitionFields).anyMatch(pf -> containsFieldInSchema(dataSchema, pf));
+    boolean hasPartitionColNotInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> !containsFieldInSchema(dataSchema, pf));
+    boolean hasPartitionColInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> containsFieldInSchema(dataSchema, pf));
     if (hasPartitionColNotInSchema && hasPartitionColInSchema) {
       throw new HoodieIncompatibleSchemaException("Partition columns could not be partially contained w/in the data schema");
     }
@@ -641,7 +668,7 @@ public class TableSchemaResolver {
       // when hasPartitionColNotInSchema is true and hasPartitionColInSchema is false, all partition columns
       // are not in originSchema. So we create and add them.
       List<Field> newFields = new ArrayList<>();
-      for (String partitionField: partitionFields) {
+      for (String partitionField: partitionFields.get()) {
         newFields.add(new Schema.Field(
             partitionField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
       }

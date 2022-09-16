@@ -17,11 +17,11 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
@@ -89,10 +89,5 @@ trait HoodieCatalystPlansUtils {
    */
   def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
                        query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan
-
-  /**
-   * Create Like expression.
-   */
-  def createLike(left: Expression, right: Expression): Expression
 
 }

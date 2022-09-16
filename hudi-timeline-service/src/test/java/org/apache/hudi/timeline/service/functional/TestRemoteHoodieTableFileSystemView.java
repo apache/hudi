@@ -37,6 +37,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.fail;
+
 /**
  * Bring up a remote Timeline Server and run all test-cases of TestHoodieTableFileSystemView against it.
  */
@@ -76,6 +78,7 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     try {
       // Immediately fails and throws a connection refused exception.
       view.getLatestBaseFiles();
+      fail("Should be catch Exception 'Connection refused (Connection refused)'");
     } catch (HoodieRemoteException e) {
       assert e.getMessage().contains("Connection refused (Connection refused)");
     }
@@ -85,12 +88,26 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
             .withRemoteServerHost("localhost")
             .withRemoteServerPort(server.getServerPort())
             .withRemoteTimelineClientRetry(true)
+            .withRemoteTimelineClientMaxRetryIntervalMs(2000L)
             .withRemoteTimelineClientMaxRetryNumbers(4)
             .build());
     try {
       view.getLatestBaseFiles();
+      fail("Should be catch Exception 'Still failed to Sending request after retried 4 times.'");
     } catch (HoodieRemoteException e) {
       assert e.getMessage().equalsIgnoreCase("Still failed to Sending request after retried 4 times.");
     }
+    // Retry succeed after 2 or 3 tries.
+    new Thread(() -> {
+      try {
+        Thread.sleep(5000L);
+        LOG.info("Restart server.");
+        server.startService();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }).run();
+    view.getLatestBaseFiles();
+    server.close();
   }
 }

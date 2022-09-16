@@ -68,6 +68,10 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
 
   @Override
   public Option<HoodieClusteringPlan> generateClusteringPlan() {
+    if (!checkPrecondition()) {
+      return Option.empty();
+    }
+
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
     LOG.info("Scheduling clustering for " + metaClient.getBasePath());
     HoodieWriteConfig config = getWriteConfig();

@@ -88,6 +88,18 @@ public abstract class HoodieIndex<I, O> implements Serializable {
       HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException;
 
+
+  /**
+   * Extracts the location of written records, and updates the index.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public HoodieData<WriteStatus> updateLocation(
+      HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
+      HoodieTable hoodieTable, String instant) throws HoodieIndexException {
+    return updateLocation(writeStatuses, context, hoodieTable);
+  }
+
+
   /**
    * Rollback the effects of the commit made at instantTime.
    */

@@ -19,8 +19,8 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
-
 import org.apache.hudi.exception.HoodieException;
+
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
@@ -38,7 +38,7 @@ public class TempViewCommand implements CommandMarker {
 
   @CliCommand(value = {"temp_query", "temp query"}, help = "query against created temp view")
   public String query(
-          @CliOption(key = {"sql"}, mandatory = true, help = "select query to run against view") final String sql) {
+      @CliOption(key = {"sql"}, mandatory = true, help = "select query to run against view") final String sql) {
 
     try {
       HoodieCLI.getTempViewProvider().runQuery(sql);
@@ -62,7 +62,7 @@ public class TempViewCommand implements CommandMarker {
 
   @CliCommand(value = {"temp_delete", "temp delete"}, help = "Delete view name")
   public String delete(
-          @CliOption(key = {"view"}, mandatory = true, help = "view name") final String tableName) {
+      @CliOption(key = {"view"}, mandatory = true, help = "view name") final String tableName) {
 
     try {
       HoodieCLI.getTempViewProvider().deleteTable(tableName);

@@ -30,6 +30,9 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
+/**
+ * Flink delete commit action executor.
+ */
 public class FlinkDeleteCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseFlinkCommitActionExecutor<T> {
   private final List<HoodieKey> keys;
 

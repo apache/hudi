@@ -19,27 +19,21 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.{Spark2HoodieFileScanRDD, Spark2RowSerDe}
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, InsertIntoTable, Join, LogicalPlan}
-import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile, Spark2ParsePartitionUtil, SparkParsePartitionUtil}
+import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark2CatalystExpressionUtils, HoodieSpark2CatalystPlanUtils, Row, SQLContext, SparkSession}
+import org.apache.spark.sql._
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -50,6 +44,10 @@ import scala.collection.mutable.ArrayBuffer
  * Implementation of [[SparkAdapter]] for Spark 2.4.x
  */
 class Spark2Adapter extends SparkAdapter {
+
+  override def getCatalogUtils: HoodieCatalogUtils = {
+    throw new UnsupportedOperationException("Catalog utilities are not supported in Spark 2.x");
+  }
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark2CatalystExpressionUtils
 
@@ -63,7 +61,8 @@ class Spark2Adapter extends SparkAdapter {
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
-  override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
+  override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
+    val encoder = RowEncoder(schema).resolveAndBind()
     new Spark2RowSerDe(encoder)
   }
 
@@ -73,7 +72,7 @@ class Spark2Adapter extends SparkAdapter {
     )
   }
 
-  override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = new Spark2ParsePartitionUtil
+  override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark2ParsePartitionUtil
 
   override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
     throw new IllegalStateException(s"Should not call ParserInterface#parseMultipartIdentifier for spark2")

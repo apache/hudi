@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import com.google.common.collect.Lists
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.model.{BootstrapFileMapping, HoodieFileGroupId}
 import org.apache.hudi.common.table.HoodieTableMetaClient

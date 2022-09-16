@@ -47,13 +47,19 @@ import java.util.Locale
 trait SparkAdapter extends Serializable {
 
   /**
-   * Creates instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
+   * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
+   * [[TableCatalog]]s
+   */
+  def getCatalogUtils: HoodieCatalogUtils
+
+  /**
+   * Returns an instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
    * on Catalyst [[Expression]]s
    */
   def getCatalystExpressionUtils: HoodieCatalystExpressionUtils
 
   /**
-   * Creates instance of [[HoodieCatalystPlansUtils]] providing for common utils operating
+   * Returns an instance of [[HoodieCatalystPlansUtils]] providing for common utils operating
    * on Catalyst [[LogicalPlan]]s
    */
   def getCatalystPlanUtils: HoodieCatalystPlansUtils
@@ -78,7 +84,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Create the SparkRowSerDe.
    */
-  def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe
+  def createSparkRowSerDe(schema: StructType): SparkRowSerDe
 
   /**
    * Create the hoodie's extended spark sql parser.
@@ -88,7 +94,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Create the SparkParsePartitionUtil.
    */
-  def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil
+  def getSparkParsePartitionUtil: SparkParsePartitionUtil
 
   /**
    * ParserInterface#parseMultipartIdentifier is supported since spark3, for spark2 this should not be called.

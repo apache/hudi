@@ -294,8 +294,9 @@ public class TestInlineCompaction extends CompactionTestBase {
       moveCompactionFromRequestedToInflight(instantTime, cfg);
     }
 
-    // When: commit happens after 10s
-    HoodieWriteConfig inlineCfg = getConfigForInlineCompaction(5, 10, CompactionTriggerStrategy.TIME_ELAPSED);
+    // When: commit happens after 1000s. assumption is that, there won't be any new compaction getting scheduled within 100s, but the previous failed one will be
+    // rolledback and retried to move it to completion.
+    HoodieWriteConfig inlineCfg = getConfigForInlineCompaction(5, 1000, CompactionTriggerStrategy.TIME_ELAPSED);
     String instantTime2;
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(inlineCfg)) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
@@ -305,6 +306,7 @@ public class TestInlineCompaction extends CompactionTestBase {
 
     // Then: 1 delta commit is done, the failed compaction is retried
     metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+    // 2 delta commits at the beginning. 1 compaction, 1 delta commit following it.
     assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
     assertEquals(instantTime, metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().firstInstant().get().getTimestamp());
   }

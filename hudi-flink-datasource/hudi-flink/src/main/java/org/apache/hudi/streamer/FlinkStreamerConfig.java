@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.util.FlinkStateBackendConverter;
 import org.apache.hudi.util.StreamerUtil;
@@ -59,7 +59,7 @@ public class FlinkStreamerConfig extends Configuration {
   public String flinkCheckPointPath;
 
   @Parameter(names = {"--flink-state-backend-type"}, description = "Flink state backend type, support only hashmap and rocksdb by now,"
-          + " default hashmap.", converter = FlinkStateBackendConverter.class)
+      + " default hashmap.", converter = FlinkStateBackendConverter.class)
   public StateBackend stateBackend = new HashMapStateBackend();
 
   @Parameter(names = {"--instant-retry-times"}, description = "Times to retry when latest instant has not completed.")
@@ -264,7 +264,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--clean-policy"},
       description = "Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
-          +  "Default is KEEP_LATEST_COMMITS.")
+          + "Default is KEEP_LATEST_COMMITS.")
   public String cleanPolicy = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
 
   @Parameter(names = {"--clean-retain-commits"},
@@ -321,8 +321,8 @@ public class FlinkStreamerConfig extends Configuration {
   public String hiveSyncPartitionFields = "";
 
   @Parameter(names = {"--hive-sync-partition-extractor-class"}, description = "Tool to extract the partition value from HDFS path, "
-      + "default 'SlashEncodedDayPartitionValueExtractor'")
-  public String hiveSyncPartitionExtractorClass = SlashEncodedDayPartitionValueExtractor.class.getCanonicalName();
+      + "default 'MultiPartKeysValueExtractor'")
+  public String hiveSyncPartitionExtractorClass = MultiPartKeysValueExtractor.class.getCanonicalName();
 
   @Parameter(names = {"--hive-sync-assume-date-partitioning"}, description = "Assume partitioning is yyyy/mm/dd, default false")
   public Boolean hiveSyncAssumeDatePartition = false;

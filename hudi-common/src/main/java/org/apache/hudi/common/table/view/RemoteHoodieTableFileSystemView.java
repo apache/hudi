@@ -18,11 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.http.client.fluent.Request;
-import org.apache.http.client.fluent.Response;
-import org.apache.http.client.utils.URIBuilder;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -44,6 +39,13 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieRemoteException;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.http.Consts;
+import org.apache.http.client.fluent.Request;
+import org.apache.http.client.fluent.Response;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -129,13 +131,11 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private final HoodieTableMetaClient metaClient;
   private HoodieTimeline timeline;
   private final ObjectMapper mapper;
-  private final int timeoutSecs;
+  private final int timeoutMs;
 
   private boolean closed = false;
 
   private RetryHelper<Response> retryHelper;
-
-  private final HttpRequestCheckedFunction urlCheckedFunc;
 
   private enum RequestMethod {
     GET, POST
@@ -152,8 +152,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     this.timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     this.serverHost = viewConf.getRemoteViewServerHost();
     this.serverPort = viewConf.getRemoteViewServerPort();
-    this.timeoutSecs = viewConf.getRemoteTimelineClientTimeoutSecs();
-    this.urlCheckedFunc = new HttpRequestCheckedFunction(this.timeoutSecs * 1000);
+    this.timeoutMs = viewConf.getRemoteTimelineClientTimeoutSecs() * 1000;
     if (viewConf.isRemoteTimelineClientRetryEnabled()) {
       retryHelper =  new RetryHelper(
               viewConf.getRemoteTimelineClientMaxRetryIntervalMs(),
@@ -179,10 +178,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
     String url = builder.toString();
     LOG.info("Sending request : (" + url + ")");
-    // Reset url and method, to avoid repeatedly instantiating objects.
-    urlCheckedFunc.setUrlAndMethod(url, method);
-    Response response =  retryHelper != null ? retryHelper.tryWith(urlCheckedFunc).start() : urlCheckedFunc.get();
-    String content = response.returnContent().asString();
+    Response response = retryHelper != null ? retryHelper.start(() -> get(timeoutMs, url, method)) : get(timeoutMs, url, method);
+    String content = response.returnContent().asString(Consts.UTF_8);
     return (T) mapper.readValue(content, reference);
   }
 
@@ -502,32 +499,13 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     }
   }
 
-  /**
-   * For remote HTTP requests, to avoid repeatedly instantiating objects.
-   */
-  private class HttpRequestCheckedFunction implements RetryHelper.CheckedFunction<Response> {
-    private String url;
-    private RequestMethod method;
-    private final int timeoutMs;
-
-    public void setUrlAndMethod(String url, RequestMethod method) {
-      this.method = method;
-      this.url = url;
-    }
-    
-    public HttpRequestCheckedFunction(int timeoutMs) {
-      this.timeoutMs = timeoutMs;
-    }
-
-    @Override
-    public Response get() throws IOException {
-      switch (method) {
-        case GET:
-          return Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute();
-        case POST:
-        default:
-          return Request.Post(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute();
-      }
+  private Response get(int timeoutMs, String url, RequestMethod method) throws IOException {
+    switch (method) {
+      case GET:
+        return Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute();
+      case POST:
+      default:
+        return Request.Post(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute();
     }
   }
 }

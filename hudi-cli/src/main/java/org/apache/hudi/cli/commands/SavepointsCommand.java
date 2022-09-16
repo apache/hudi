@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
@@ -57,7 +58,8 @@ public class SavepointsCommand implements CommandMarker {
   }
 
   @CliCommand(value = "savepoint create", help = "Savepoint a commit")
-  public String savepoint(@CliOption(key = {"commit"}, help = "Commit to savepoint") final String commitTime,
+  public String savepoint(
+      @CliOption(key = {"commit"}, help = "Commit to savepoint") final String commitTime,
       @CliOption(key = {"user"}, unspecifiedDefaultValue = "default",
           help = "User who is creating the savepoint") final String user,
       @CliOption(key = {"comments"}, unspecifiedDefaultValue = "default",
@@ -125,7 +127,8 @@ public class SavepointsCommand implements CommandMarker {
   }
 
   @CliCommand(value = "savepoint delete", help = "Delete the savepoint")
-  public String deleteSavepoint(@CliOption(key = {"commit"}, help = "Delete a savepoint") final String instantTime,
+  public String deleteSavepoint(
+      @CliOption(key = {"commit"}, help = "Delete a savepoint") final String instantTime,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",

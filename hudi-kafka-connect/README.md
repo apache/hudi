@@ -440,4 +440,29 @@ records across base and log files. However, currently there is a limitation wher
 only log files. Hence, the queries for Hudi Kafka Connect will only work after compaction merges the records into base files. Alternatively,
 users have the option to reconfigure the table type to `COPY_ON_WRITE` in config-sink.json.
 
+### 9 - Troubleshoot
+
+#### javax.security.auth.login.LoginException
+If during the execution of Hudi Sink connector, you see this error:
+
+```Caused by: javax.security.auth.login.LoginException: java.lang.NullPointerException: invalid null input: name```
+, is very likely that your Kafka Connect service was started by an unnamed user. To see if this is your case,
+ssh into your Kafka Connect container/server and run:
+`whoami`
+
+If you receive a message like this `whoami: cannot find name for user ID ...`, you'll need to change the service user starting Kafka Connect.
+If you are using Docker images, modify your Dockerfile.
+
+To change the service user of your docker image, add this to your Dockerfile:
+```dockerfile
+USER <name of an existing service user>
+```
+
+To create a new service user for your docker image, add this to your Dockerfile:
+```dockerfile
+RUN useradd kafka-conn-service -r 
+USER kafka-conn-service
+```
+
+
 

@@ -216,61 +216,6 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
     }.toList
   }
-
-  protected def createMergeOnReadBaseFileReaders(partitionSchema: StructType,
-                                                 dataSchema: HoodieTableSchema,
-                                                 requiredDataSchema: HoodieTableSchema,
-                                                 requestedColumns: Array[String],
-                                                 filters: Array[Filter]): (BaseFileReader, BaseFileReader) = {
-    val requiredSchemaFileReaderMerging = createBaseFileReader(
-      spark = sqlContext.sparkSession,
-      partitionSchema = partitionSchema,
-      dataSchema = dataSchema,
-      requiredDataSchema = requiredDataSchema,
-      filters = filters,
-      options = optParams,
-      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
-      //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema)
-    )
-
-    // Check whether fields required for merging were also requested to be fetched
-    // by the query:
-    //    - In case they were, there's no optimization we could apply here (we will have
-    //    to fetch such fields)
-    //    - In case they were not, we will provide 2 separate file-readers
-    //        a) One which would be applied to file-groups w/ delta-logs (merging)
-    //        b) One which would be applied to file-groups w/ no delta-logs or
-    //           in case query-mode is skipping merging
-    val requiredColumns = mandatoryFieldsForMerging.map(HoodieAvroUtils.getRootLevelFieldName)
-    if (requiredColumns.forall(requestedColumns.contains)) {
-      (requiredSchemaFileReaderMerging, requiredSchemaFileReaderMerging)
-    } else {
-      val prunedRequiredSchema = {
-        val superfluousColumnNames = requiredColumns.filterNot(requestedColumns.contains)
-        val prunedStructSchema =
-          StructType(requiredDataSchema.structTypeSchema.fields
-            .filterNot(f => superfluousColumnNames.contains(f.name)))
-
-        HoodieTableSchema(prunedStructSchema, convertToAvroSchema(prunedStructSchema).toString)
-      }
-
-      val requiredSchemaFileReaderNoMerging = createBaseFileReader(
-        spark = sqlContext.sparkSession,
-        partitionSchema = partitionSchema,
-        dataSchema = dataSchema,
-        requiredDataSchema = prunedRequiredSchema,
-        filters = filters,
-        options = optParams,
-        // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
-        //       to configure Parquet reader appropriately
-        hadoopConf = embedInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema)
-      )
-
-      (requiredSchemaFileReaderMerging, requiredSchemaFileReaderNoMerging)
-    }
-  }
-
 }
 
 object MergeOnReadSnapshotRelation {

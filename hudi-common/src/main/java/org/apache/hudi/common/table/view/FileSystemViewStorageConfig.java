@@ -113,31 +113,31 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> REMOTE_RETRY_ENABLE = ConfigProperty
           .key("hoodie.filesystem.view.remote.retry.enable")
           .defaultValue("false")
-          .sinceVersion("0.12.0")
+          .sinceVersion("0.12.1")
           .withDocumentation("Whether to enable API request retry for remote file system view.");
 
   public static final ConfigProperty<Integer> REMOTE_MAX_RETRY_NUMBERS = ConfigProperty
       .key("hoodie.filesystem.view.remote.retry.max_numbers")
       .defaultValue(3) // 3 times
-      .sinceVersion("0.12.0")
+      .sinceVersion("0.12.1")
       .withDocumentation("Maximum number of retry for API requests against a remote file system view. e.g timeline server.");
 
   public static final ConfigProperty<Long> REMOTE_INITIAL_RETRY_INTERVAL_MS = ConfigProperty
       .key("hoodie.filesystem.view.remote.retry.initial_interval_ms")
       .defaultValue(100L)
-      .sinceVersion("0.12.0")
+      .sinceVersion("0.12.1")
       .withDocumentation("Amount of time (in ms) to wait, before retry to do operations on storage.");
 
   public static final ConfigProperty<Long> REMOTE_MAX_RETRY_INTERVAL_MS = ConfigProperty
       .key("hoodie.filesystem.view.remote.retry.max_interval_ms")
       .defaultValue(2000L)
-      .sinceVersion("0.12.0")
+      .sinceVersion("0.12.1")
       .withDocumentation("Maximum amount of time (in ms), to wait for next retry.");
 
   public static final ConfigProperty<String> RETRY_EXCEPTIONS = ConfigProperty
           .key("hoodie.filesystem.view.remote.retry.exceptions")
           .defaultValue("")
-          .sinceVersion("0.12.0")
+          .sinceVersion("0.12.1")
           .withDocumentation("The class name of the Exception that needs to be re-tryed, separated by commas. "
                   + "Default is empty which means retry all the IOException and RuntimeException from Remote Request.");
 

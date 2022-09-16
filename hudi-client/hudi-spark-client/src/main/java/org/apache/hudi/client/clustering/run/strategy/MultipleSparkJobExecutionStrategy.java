@@ -167,7 +167,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
                                                                           final Map<String, String> strategyParams,
                                                                           final Schema schema,
                                                                           final List<HoodieFileGroupId> fileGroupIdList,
-                                                                          final boolean shouldPreserveHoodieMetadata);
+                                                                          final boolean shouldPreserveHoodieMetadata,
+                                                                          final Map<String, String> extraMetadata);
 
   protected BulkInsertPartitioner<Dataset<Row>> getRowPartitioner(Map<String, String> strategyParams,
                                                                   Schema schema) {
@@ -225,7 +226,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
           .collect(Collectors.toList());
-      return performClusteringWithRecordsRDD(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, preserveHoodieMetadata);
+      return performClusteringWithRecordsRDD(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, preserveHoodieMetadata,
+          clusteringGroup.getExtraMetadata());
     });
   }
 
