@@ -98,7 +98,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
                               schema: Schema,
                               globPaths: Array[Path],
                               parameters: java.util.Map[String, String]): BaseRelation = {
-    val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
     DefaultSource.createRelation(metaClient, sqlContext, dataSchema, globPaths, parameters.asScala.toMap)
   }
 
