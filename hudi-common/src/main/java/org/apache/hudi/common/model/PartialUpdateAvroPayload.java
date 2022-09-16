@@ -102,13 +102,13 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       return this;
     }
     // pick the payload with greater ordering value as insert record
-    final boolean isOldRecordNewer = oldValue.orderingVal.compareTo(orderingVal) > 0 ? true : false;
+    final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0 ? true : false;
     try {
       GenericRecord oldRecord = (GenericRecord) oldValue.getInsertValue(schema).get();
-      Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, isOldRecordNewer);
+      Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord);
       if (mergedRecord.isPresent()) {
         return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
-            isOldRecordNewer ? oldValue.orderingVal : this.orderingVal);
+            shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
       }
     } catch (Exception ex) {
       return this;
@@ -123,7 +123,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties prop) throws IOException {
-    return mergeOldRecord(currentValue, schema, isRecordNewer(currentValue, prop));
+    return mergeOldRecord(currentValue, schema, isRecordNewer(orderingVal, currentValue, prop));
   }
 
   /**
@@ -149,20 +149,21 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     }
 
     GenericRecord baseRecord = isOldRecordNewer ? (GenericRecord) oldRecord : (GenericRecord) recordOption.get();
-    GenericRecord mergedRecord = isOldRecordNewer ? (GenericRecord) recordOption.get() : (GenericRecord) oldRecord;
+    GenericRecord updatingRecord = isOldRecordNewer ? (GenericRecord) recordOption.get() : (GenericRecord) oldRecord;
 
-    return mergeRecords(schema, baseRecord, mergedRecord);
+    return mergeRecords(schema, baseRecord, updatingRecord);
   }
 
   /**
    * Returns whether the given record is newer than the record of this payload.
    *
+   * @param orderingVal
    * @param record The record
    * @param prop   The payload properties
    *
    * @return true if the given record is newer
    */
-  private boolean isRecordNewer(IndexedRecord record, Properties prop) {
+  private static boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
     String orderingField = prop.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     if (!StringUtils.isNullOrEmpty(orderingField)) {
       boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(prop.getProperty(

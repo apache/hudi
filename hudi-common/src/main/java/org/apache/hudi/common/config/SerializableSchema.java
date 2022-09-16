@@ -35,8 +35,8 @@ public class SerializableSchema implements Serializable {
   public SerializableSchema() {
   }
 
-  public SerializableSchema(String schema) {
-    this.schema = new Schema.Parser().parse(schema);
+  public SerializableSchema(String schemaStr) {
+    this.schema = new Schema.Parser().parse(schemaStr);
   }
 
   public SerializableSchema(Schema schema) {
