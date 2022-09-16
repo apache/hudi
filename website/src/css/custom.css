@@ -7,13 +7,24 @@
 
 /* You can override the default Infima variables here. */
 :root {
+  --ifm-color-primary-text: rgb(41, 85, 122);
+  --ifm-color-secondary-text: rgb(13, 177, 249);
   --ifm-color-primary: rgba(7, 159, 202, 255);
   --ifm-color-primary-dark: rgba(10, 159, 202, 255);
   --ifm-color-primary-darker: rgba(0,78,127,255);
   --ifm-color-primary-darkest: rgba(0,55,103,255);
   --ifm-color-primary-light: rgba(4, 159, 202, 255);
   --ifm-color-primary-lighter: rgba(0, 183, 246, 255);
-  --ifm-color-primary-lightest: rgba(215, 228, 238, 255);
+  --ifm-color-primary-lightest: rgb(215, 228, 238);
+  --ifm-color-primary-light-grey: rgb(248, 248, 248);
+  --ifm-color-grey-shade-1: rgb(96, 103, 112);
+  --ifm-color-grey-shade-2: rgb(150, 159, 175);
+  --ifm-color-grey-shade-3: rgb(218, 221, 225);
+  --ifm-color-grey-shade-4: rgb(235, 237, 240);
+  --ifm-color-grey-shade-5: rgb(245, 246, 247);
+  --ifm-color-grey-shade-6: rgb(206, 238, 247);
+  --ifm-color-white: rgb(255, 255, 255);
+  --ifm-color-icon-backgroung: rgba(206, 238, 247, 0.5);
   --ifm-code-font-size: 95%;
   --ifm-navbar-height: 5rem;
 }
@@ -72,10 +83,11 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
     font-size: 0.5em !important;
     padding: 5px;
   }
-  
-
 }
 
+.navbar__item {
+  padding: var(--ifm-navbar-item-padding-vertical) 9px;
+}
 
 .header-twitter-link:before {
   background: url(/assets/images/twitter.png) no-repeat;
@@ -108,7 +120,8 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 }
 
 .hero__subtitle {
-  text-align: left;
+  font-size: 1.25rem;
+  margin-bottom: 50px;
 }
 
 .buttons_src-pages-index-module {
@@ -278,4 +291,14 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
 .tags-post-list > :first-child {
   width: 100%;
 }
+
+.slick-track{
+  display: flex !important;
+
+
+}.slick-slide{
+   display: flex !important;
+   height: auto !important;
+ }
+
 

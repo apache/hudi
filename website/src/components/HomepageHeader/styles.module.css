@@ -1,0 +1,50 @@
+.heroBanner {
+    padding: 4rem 0;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    background: var(--ifm-color-primary-light-grey);
+}
+
+.heroImg {
+    max-width: 345px;
+    float: unset;
+}
+
+.contentWrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: var(--ifm-color-gray-900);
+}
+
+.content {
+    max-width: 516px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+.heroTitle {
+    width: unset;
+    color: var(--ifm-color-primary-text);
+}
+
+.heroTitle span {
+    color: var(--ifm-color-secondary-text);
+}
+
+@media screen and (max-width: 966px) {
+    .heroBanner {
+        padding: 2rem;
+    }
+}
+
+.buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+}

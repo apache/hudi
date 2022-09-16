@@ -1,0 +1,55 @@
+/*@import "../../css/custom.css";*/
+
+.featuresWrapper {
+    background: var(--ifm-color-primary-light-grey);
+    padding: 80px 20px;
+}
+.titleWrapper {
+    text-align: center;
+    margin-bottom: 60px;
+}
+.wrapperContainer {
+    display: grid;
+    grid-template-columns: auto auto auto;
+    gap: 20px;
+}
+.boxWrapper {
+    background: var(--ifm-color-white);
+    border-radius: 12px;
+    padding: 25px;
+}
+.iconWrapper {
+    background: var(--ifm-color-icon-backgroung);
+    border-radius: 8px;
+    width: 70px;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+.iconWrapper svg{
+    max-width: 50px;
+    max-height: 50px;
+}
+.featuresTitle {
+    font-style: normal;
+    font-weight: 700;
+    font-size: 20px;
+    line-height: 24px;
+    color: var(--ifm-color-gray-900);
+    margin: 0 0 10px;
+}
+
+@media only screen and (max-width: 992px) {
+    .wrapperContainer {
+        grid-template-columns: auto auto;
+    }
+}
+
+@media only screen and (max-width: 600px) {
+    .wrapperContainer {
+        grid-template-columns: auto;
+    }
+}
+

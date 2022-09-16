@@ -1,0 +1,37 @@
+.cardWrapper {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  padding: 25px 0 25px 0;
+  background-color: var(--ifm-color-primary-light-grey);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 34px;
+  margin-top: 20px;
+  color: var(--ifm-color-gray-900);
+  padding: 0 25px;
+}
+.subtitle {
+  font-size: 16px;
+  margin-top: 10px;
+  font-weight: 400;
+  line-height: 20px;
+  padding: 0 25px;
+  color: var(--ifm-color-gray-900);
+  text-align: center;
+}
+.iconWrapper {
+  background-color: var(--ifm-color-primary-text);
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

@@ -1,0 +1,24 @@
+.wrapper {
+  width: 100%;
+  padding: 100px 0;
+}
+.cardsWrapper {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: auto auto auto auto;
+  margin-top: 60px;
+}
+.whyHudiTitle {
+  text-align: center;
+  margin-bottom: 15px;
+}
+@media screen and (max-width: 992px) {
+  .cardsWrapper {
+    grid-template-columns: auto auto;
+  }
+}
+@media screen and (max-width: 600px) {
+  .cardsWrapper {
+    grid-template-columns: auto;
+  }
+}

@@ -1,0 +1,73 @@
+/*@import "../../css/custom.css";*/
+
+.joinCommunityWrapper {
+    background: var(--ifm-color-white);
+    padding: 100px 0;
+}
+.communityContent {
+    display: grid;
+    grid-template-columns: 58% 35%;
+    align-items: center;
+    gap: 2%;
+    margin: 0 auto;
+}
+.communityDescription {
+    font-weight: 400;
+    font-size: 20px;
+    line-height: 26px;
+}
+.communityCardWrapper {
+    display: grid;
+    gap: 20px;
+    padding: 20px;
+    grid-template-columns: auto auto;
+}
+.communityCard {
+    background: var(--ifm-color-primary-light-grey);
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.3s;
+}
+.mediaTitle {
+    padding-top: 5px;
+}
+.title {
+    font-weight: 400;
+    font-size: 20px;
+    line-height: 26px;
+    margin-bottom: 10px;
+}
+.linkText {
+    display: flex;
+    align-items: center;
+    color: var(--ifm-color-primary);
+    width: max-content;
+    margin: 0 auto;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+.leftSideWrapper {
+    width: fit-content;
+    margin: 0 auto;
+}
+
+@media only screen and (max-width: 992px) {
+    .communityContent {
+        grid-template-columns: auto auto;
+    }
+}
+
+@media only screen and (max-width: 768px) {
+    .communityContent {
+        grid-template-columns: auto;
+    }
+}
+
+@media only screen and (max-width: 600px) {
+    .communityCardWrapper {
+        grid-template-columns: auto;
+    }
+}
+

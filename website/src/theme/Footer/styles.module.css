@@ -1,0 +1,81 @@
+/**
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+.footerLogoLink {
+  opacity: 0.5;
+  transition: opacity var(--ifm-transition-fast) var(--ifm-transition-timing-default);
+}
+.footerLinksIcon {
+  display: flex;
+  align-items: center;
+}
+.footerLogoLink:hover {
+  opacity: 1;
+}
+.footerWrapper{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.footerLinks{
+  width: 100%;
+}
+.footerSubtitle{
+  max-width: 284px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0px;
+  text-align: left;
+  color: var(--ifm-color-gray-900);
+}
+.footerCopyright{
+  border-top: 1px solid var(--ifm-color-grey-shade-3);;
+  padding-top:20px
+}
+.footerLogoWrapper{
+  margin:  0 60px;
+}
+.footerLogoWrapper img{
+  width: 200px !important;
+  height: 60px !important;
+  max-width: 100% !important;
+}
+@media screen and (max-width: 996px) {
+  .footerLinks {
+    grid-template-columns: auto auto auto;
+    display: grid;
+  }
+  .footerWrapper {
+    display: block;
+    text-align: center;
+  }
+  .footerSubtitle{
+    text-align: center;
+    max-width: unset;
+  }
+  .footerLogoWrapper{
+    margin-bottom: 50px !important;
+  }
+}
+@media screen and (max-width: 600px) {
+  .footerLinks {
+    grid-template-columns: auto auto ;
+  }
+  .footerLogoWrapper{
+    text-align: center;
+  }
+
+  .footerWrapper {
+    display: block;
+    text-align: center;
+  }
+  .footerSubtitle{
+    text-align: center;
+    max-width: unset;
+  }
+}

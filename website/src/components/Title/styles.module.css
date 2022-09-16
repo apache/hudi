@@ -1,0 +1,11 @@
+.titleWrapper {
+  display: block;
+  font-size: 2.5em;
+  font-weight: bold;
+}
+.primaryTxt {
+  color: var(--ifm-color-primary-text);
+}
+.secondaryTxt {
+  color: var(--ifm-color-secondary-text);
+}

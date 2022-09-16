@@ -18,6 +18,10 @@ module.exports = {
   favicon: '/assets/images/favicon.ico',
   organizationName: 'apache',
   projectName: 'hudi',
+  customFields: {
+    copyrightText:
+        "Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.",
+  },
   i18n: {
     defaultLocale: 'en',
     locales: ['en', 'cn'],
@@ -394,10 +398,11 @@ module.exports = {
       ],
       logo: {
         alt: 'Apache Hudi™',
-        src: '/assets/images/logo-big.png',
+        src: '/assets/images/hudi.png',
         href: 'https://hudi.apache.org/',
       },
-      copyright: 'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. <br />Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.',
+      copyright:
+        'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.',
     },
     prism: {
       theme: darkCodeTheme,

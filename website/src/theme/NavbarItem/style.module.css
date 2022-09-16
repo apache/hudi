@@ -1,0 +1,20 @@
+.downloadLinkDropdownHide::after {
+    content: none !important;
+}
+
+.labelWrapperDropdown {
+    display: flex;
+    align-items: center;
+}
+
+.labelWrapperDropdown svg {
+    margin-left: 5.5px;
+}
+
+.labelWrapperDropdown:hover svg path {
+    stroke: var(--ifm-navbar-link-hover-color);
+}
+.externalLink {
+    display: flex;
+    align-items: center;
+}

@@ -1,0 +1,25 @@
+.button {
+    padding: 16px 24px;
+    font-size: 1rem;
+    line-height: 1.25rem;
+    border-radius: 0.75rem;
+    transition: 0.3s;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.button:hover {
+    text-decoration: none;
+}
+
+.primary:hover, .secondary {
+    color: var(--ifm-color-secondary-text);
+    background: var(--ifm-color-white);
+    border: 1px solid var(--ifm-color-secondary-text);
+}
+
+.primary, .secondary:hover {
+    color: var(--ifm-color-white);
+    background: var(--ifm-color-secondary-text);
+    border: 1px solid transparent;
+}
