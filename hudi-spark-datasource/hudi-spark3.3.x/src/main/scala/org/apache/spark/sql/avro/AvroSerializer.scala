@@ -65,13 +65,17 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_WRITE)))
   }
 
+  def serialize(catalystData: Any): Any = {
+    converter.apply(catalystData)
+  }
+
   private val dateRebaseFunc = createDateRebaseFuncInWrite(
     datetimeRebaseMode, "Avro")
 
   private val timestampRebaseFunc = createTimestampRebaseFuncInWrite(
     datetimeRebaseMode, "Avro")
 
-  def serialize(catalystData: Any): Any = {
+  private val converter: Any => Any = {
     val actualAvroType = resolveNullableType(rootAvroType, nullable)
     val baseConverter = try {
       rootCatalystType match {
@@ -89,13 +93,14 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
         s"Cannot convert SQL type ${rootCatalystType.sql} to Avro type $rootAvroType.", ise)
     }
     if (nullable) {
-      if (catalystData == null) {
-        null
-      } else {
-        baseConverter.apply(catalystData)
-      }
+      (data: Any) =>
+        if (data == null) {
+          null
+        } else {
+          baseConverter.apply(data)
+        }
     } else {
-      baseConverter.apply(catalystData)
+      baseConverter
     }
   }
 
