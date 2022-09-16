@@ -47,6 +47,11 @@ public class TestPartialUpdateAvroPayload {
       + "  \"type\": \"record\",\n"
       + "  \"name\": \"partialRecord\", \"namespace\":\"org.apache.hudi\",\n"
       + "  \"fields\": [\n"
+      + "    {\"name\": \"_hoodie_commit_time\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"_hoodie_commit_seqno\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"_hoodie_record_key\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"_hoodie_partition_path\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"_hoodie_file_name\", \"type\": [\"null\", \"string\"]},\n"
       + "    {\"name\": \"id\", \"type\": [\"null\", \"string\"]},\n"
       + "    {\"name\": \"partition\", \"type\": [\"null\", \"string\"]},\n"
       + "    {\"name\": \"ts\", \"type\": [\"null\", \"long\"]},\n"
@@ -152,8 +157,8 @@ public class TestPartialUpdateAvroPayload {
     PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L);
     PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(delRecord1, 1L);
 
-    assertEquals(payload1.preCombine(payload2), payload2);
-    assertEquals(payload2.preCombine(payload1), payload2);
+    assertArrayEquals(payload1.preCombine(payload2, schema, new Properties()).recordBytes, payload2.recordBytes);
+    assertArrayEquals(payload2.preCombine(payload1, schema, new Properties()).recordBytes, payload2.recordBytes);
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
     assertFalse(payload2.getInsertValue(schema).isPresent());
@@ -162,5 +167,44 @@ public class TestPartialUpdateAvroPayload {
     properties.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema, properties), Option.empty());
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema, properties).isPresent());
+  }
+
+  @Test
+  public void testUseLatestRecordMetaValue() throws IOException {
+    Properties properties = new Properties();
+    properties.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
+
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("_hoodie_commit_time", "20220915000000000");
+    record1.put("_hoodie_commit_seqno", "20220915000000000_1_000");
+    record1.put("id", "1");
+    record1.put("partition", "partition1");
+    record1.put("ts", 0L);
+    record1.put("_hoodie_is_deleted", false);
+    record1.put("city", "NY0");
+    record1.put("child", Arrays.asList("A"));
+
+    GenericRecord record2 = new GenericData.Record(schema);
+    record1.put("_hoodie_commit_time", "20220915000000001");
+    record1.put("_hoodie_commit_seqno", "20220915000000001_2_000");
+    record2.put("id", "1");
+    record2.put("partition", "partition1");
+    record2.put("ts", 1L);
+    record2.put("_hoodie_is_deleted", false);
+    record2.put("city", null);
+    record2.put("child", Arrays.asList("B"));
+
+    PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L);
+    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 1L);
+
+    // let payload1 as the latest one, then should use payload1's meta field's value as the result even its ordering val is smaller
+    GenericRecord mergedRecord1 = (GenericRecord) payload1.preCombine(payload2, schema, properties).getInsertValue(schema, properties).get();
+    assertEquals(mergedRecord1.get("_hoodie_commit_time").toString(), record1.get("_hoodie_commit_time").toString());
+    assertEquals(mergedRecord1.get("_hoodie_commit_seqno").toString(), record1.get("_hoodie_commit_seqno").toString());
+
+    // let payload2 as the latest one, then should use payload2's meta field's value as the result
+    GenericRecord mergedRecord2 = (GenericRecord) payload2.preCombine(payload1, schema, properties).getInsertValue(schema, properties).get();
+    assertEquals(mergedRecord2.get("_hoodie_commit_time").toString(), "20220915000000001");
+    assertEquals(mergedRecord2.get("_hoodie_commit_seqno").toString(), "20220915000000001_2_000");
   }
 }

@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -87,6 +89,12 @@ import java.util.Properties;
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
 
+  /*
+    flag for deleted record combine logic
+    1 preCombine: if delete record is newer, return merged record with _hoodie_is_deleted=true
+    1 combineAndGetUpdateValue:  return empty since we don't need to store deleted data to storage
+   */
+  private boolean isPrecombining = false;
   public PartialUpdateAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
@@ -104,7 +112,8 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     // pick the payload with greater ordering value as insert record
     final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0 ? true : false;
     try {
-      GenericRecord oldRecord = (GenericRecord) oldValue.getInsertValue(schema).get();
+      isPrecombining = true;
+      GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
       Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord);
       if (mergedRecord.isPresent()) {
         return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
@@ -112,6 +121,8 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       }
     } catch (Exception ex) {
       return this;
+    } finally {
+      isPrecombining = false;
     }
     return this;
   }
@@ -137,8 +148,19 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private Option<IndexedRecord> mergeOldRecord(
-      IndexedRecord oldRecord,
+  @Override
+  protected Option<IndexedRecord> mergeRecords(Schema schema, GenericRecord baseRecord, GenericRecord mergedRecord) {
+    if (isDeleteRecord(baseRecord) && !isPrecombining) {
+      return Option.empty();
+    } else {
+      final GenericRecordBuilder builder = new GenericRecordBuilder(schema);
+      List<Schema.Field> fields = schema.getFields();
+      fields.forEach(field -> setField(baseRecord, mergedRecord, builder, field));
+      return Option.of(builder.build());
+    }
+  }
+
+  private Option<IndexedRecord> mergeOldRecord(IndexedRecord oldRecord,
       Schema schema,
       boolean isOldRecordNewer) throws IOException {
     Option<IndexedRecord> recordOption = getInsertValue(schema);
@@ -148,10 +170,49 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       return Option.empty();
     }
 
-    GenericRecord baseRecord = isOldRecordNewer ? (GenericRecord) oldRecord : (GenericRecord) recordOption.get();
-    GenericRecord updatingRecord = isOldRecordNewer ? (GenericRecord) recordOption.get() : (GenericRecord) oldRecord;
+    if (isOldRecordNewer && schema.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD) != null) {
+      // handling disorder, should use the metadata fields of the updating record
+      return mergeDisorderRecordsWithMetadata(schema, (GenericRecord) oldRecord, (GenericRecord) recordOption.get());
+    } else if (isOldRecordNewer) {
+      return mergeRecords(schema, (GenericRecord) oldRecord, (GenericRecord) recordOption.get());
+    } else {
+      return mergeRecords(schema, (GenericRecord) recordOption.get(), (GenericRecord) oldRecord);
+    }
+  }
 
-    return mergeRecords(schema, baseRecord, updatingRecord);
+  /**
+   * Merges the given disorder records with metadata.
+   *
+   * @param schema         The record schema
+   * @param oldRecord      The current record from file
+   * @param updatingRecord The incoming record
+   *
+   * @return the merged record option
+   */
+  protected Option<IndexedRecord> mergeDisorderRecordsWithMetadata(
+      Schema schema,
+      GenericRecord oldRecord,
+      GenericRecord updatingRecord) {
+    if (isDeleteRecord(oldRecord) && !isPrecombining) {
+      return Option.empty();
+    } else {
+      final GenericRecordBuilder builder = new GenericRecordBuilder(schema);
+      List<Schema.Field> fields = schema.getFields();
+      fields.forEach(field -> {
+        final GenericRecord baseRecord;
+        final GenericRecord mergedRecord;
+        if (HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.containsKey(field.name())) {
+          // this is a metadata field
+          baseRecord = updatingRecord;
+          mergedRecord = oldRecord;
+        } else {
+          baseRecord = oldRecord;
+          mergedRecord = updatingRecord;
+        }
+        setField(baseRecord, mergedRecord, builder, field);
+      });
+      return Option.of(builder.build());
+    }
   }
 
   /**
