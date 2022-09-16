@@ -43,7 +43,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -119,14 +118,14 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
       Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
           .parallelize(partitionsToClean, cleanerParallelism)
-          .mapPartitions((Iterator<String> it) -> {
-            List<String> list = new ArrayList<>();
-            it.forEachRemaining(list::add);
-            Map<String, Pair<Boolean, List<CleanFileInfo>>> res = planner.getDeletePaths(list);
-            return res.entrySet().iterator();
+          .mapPartitions(partitionIterator -> {
+            List<String> partitionList = new ArrayList<>();
+            partitionIterator.forEachRemaining(partitionList::add);
+            Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanResult = planner.getDeletePaths(partitionList);
+            return cleanResult.entrySet().iterator();
           }, false).collectAsList()
           .stream()
-          .collect(Collectors.toMap(it -> it.getKey(), it -> it.getValue()));
+          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
       Map<String, List<HoodieCleanFileInfo>> cleanOps = cleanOpsWithPartitionMeta.entrySet().stream()
           .collect(Collectors.toMap(Map.Entry::getKey,
