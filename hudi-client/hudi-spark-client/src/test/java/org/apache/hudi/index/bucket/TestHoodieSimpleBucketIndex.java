@@ -128,9 +128,9 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
       testTable.addCommit("002").withInserts("2016/01/31", getRecordFileId(record2), record2);
       testTable.addCommit("003").withInserts("2016/01/31", getRecordFileId(record3), record3);
     } else {
-      testTable.addCommit("001").withAppends("2016/01/31", getRecordFileId(record1), record1);
-      testTable.addCommit("002").withAppends("2016/01/31", getRecordFileId(record2), record2);
-      testTable.addCommit("003").withAppends("2016/01/31", getRecordFileId(record3), record3);
+      testTable.addCommit("001").withLogAppends("2016/01/31", getRecordFileId(record1), record1);
+      testTable.addCommit("002").withLogAppends("2016/01/31", getRecordFileId(record2), record2);
+      testTable.addCommit("003").withLogAppends("2016/01/31", getRecordFileId(record3), record3);
     }
 
     taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context,

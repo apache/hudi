@@ -119,12 +119,12 @@ public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
     return super.withInserts(partition, fileId, records, new SparkTaskContextSupplier());
   }
 
-  public HoodieSparkWriteableTestTable withAppends(String partition, String fileId, HoodieRecord... records) throws Exception {
-    withAppends(partition, fileId, Arrays.asList(records));
+  public HoodieSparkWriteableTestTable withLogAppends(String partition, String fileId, HoodieRecord... records) throws Exception {
+    withLogAppends(partition, fileId, Arrays.asList(records));
     return this;
   }
 
-  public Map<String, List<HoodieLogFile>> withAppends(String partition, String fileId, List<HoodieRecord> records) throws Exception {
-    return super.withAppends(partition, fileId, records);
+  public Map<String, List<HoodieLogFile>> withLogAppends(String partition, String fileId, List<HoodieRecord> records) throws Exception {
+    return super.withLogAppends(partition, fileId, records);
   }
 }

@@ -151,7 +151,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
     return baseFilePath;
   }
 
-  public Map<String, List<HoodieLogFile>> withAppends(String partition, String fileId, List<HoodieRecord> records) throws Exception {
+  public Map<String, List<HoodieLogFile>> withLogAppends(String partition, String fileId, List<HoodieRecord> records) throws Exception {
     Map<String, List<HoodieLogFile>> partitionToLogfilesMap = new HashMap<>();
     final Pair<String, HoodieLogFile> appendedLogFile = appendRecordsToLogFile(partition, fileId, records);
     partitionToLogfilesMap.computeIfAbsent(appendedLogFile.getKey(), k -> new ArrayList<>()).add(appendedLogFile.getValue());
