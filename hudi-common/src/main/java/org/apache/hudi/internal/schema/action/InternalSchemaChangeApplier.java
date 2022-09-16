@@ -51,7 +51,8 @@ public class InternalSchemaChangeApplier {
       TableChange.ColumnPositionChange.ColumnPositionType positionType) {
     TableChanges.ColumnAddChange add = TableChanges.ColumnAddChange.get(latestSchema);
     String parentName = TableChangesHelper.getParentName(colName);
-    add.addColumns(parentName, colName, colType, doc);
+    String leafName = TableChangesHelper.getLeafName(colName);
+    add.addColumns(parentName, leafName, colType, doc);
     if (positionType != null) {
       switch (positionType) {
         case NO_OPERATION:
