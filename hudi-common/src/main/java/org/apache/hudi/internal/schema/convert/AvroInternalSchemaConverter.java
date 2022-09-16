@@ -159,7 +159,11 @@ public class AvroInternalSchemaConverter {
           internalFields.add(Types.Field.get(nextAssignId, AvroInternalSchemaConverter.isOptional(field.schema()), field.name(), fieldType, field.doc()));
           nextAssignId += 1;
         }
-        return Types.RecordType.get(internalFields, schema.getName());
+        // NOTE: We're keeping a tab of full-name here to make sure we stay
+        //       compatible across various Spark (>= 2.4) and Avro (>= 1.8.2) versions;
+        //       Avro will be properly handling fully-qualified names on its own (splitting
+        //       them up into namespace/struct-name pair)
+        return Types.RecordType.get(internalFields, schema.getFullName());
       case UNION:
         List<Type> fTypes = new ArrayList<>();
         schema.getTypes().stream().forEach(t -> {
