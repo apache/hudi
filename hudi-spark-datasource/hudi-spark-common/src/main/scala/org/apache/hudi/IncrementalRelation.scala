@@ -204,7 +204,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val endInstantTime = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp)
       val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
-      var scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
+      val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")
         fullTableScanDataFrame(startInstantTime, endInstantTime)
       } else {
@@ -264,15 +264,14 @@ class IncrementalRelation(val sqlContext: SQLContext,
                 .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
                   commitsToReturn.last.getTimestamp)))
             }
+            // COMMIT_TIME_METADATA_FIELD is previously added to the schema to do incremental read
+            // now remove COMMIT_TIME_METADATA_FIELD from the data frame if it is not requested by the user
+            if (!requiredColumns.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
+              df = df.toDF().drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+            }
             df
           }
         }
-      }
-
-      // COMMIT_TIME_METADATA_FIELD is previously added to the schema to do incremental read
-      // now remove COMMIT_TIME_METADATA_FIELD from the data frame if it is not requested by the user
-      if (!requiredColumns.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
-        scanDf = scanDf.toDF().drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
       }
       filters.foldLeft(scanDf)((e, f) => e.filter(f)).rdd
     }
