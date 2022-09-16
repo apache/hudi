@@ -111,7 +111,7 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
         Types.Field.get(0, "bool", Types.BooleanType.get()),
         Types.Field.get(1, "int", Types.IntType.get()),
     }));
-    return new InternalSchema(record.fields());
+    return new InternalSchema(record);
   }
 }
 

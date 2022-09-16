@@ -94,7 +94,7 @@ public class InternalSchemaUtils {
         }
       }
     }
-    return new InternalSchema(newFields.isEmpty() ? recordType.fields() : newFields);
+    return new InternalSchema(newFields.isEmpty() ? recordType : Types.RecordType.get(newFields));
   }
 
   /**

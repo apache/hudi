@@ -101,7 +101,7 @@ public class SchemaChangeUtils {
     // deal with root level changes
     List<Types.Field> newFields = TableChangesHelper.applyAddChange2Fields(newType.fields(),
         adds.getParentId2AddCols().get(-1), adds.getPositionChangeMap().get(-1));
-    return new InternalSchema(newFields);
+    return new InternalSchema(Types.RecordType.get(newFields));
   }
 
   /**
@@ -174,7 +174,7 @@ public class SchemaChangeUtils {
    */
   public static InternalSchema applyTableChanges2Schema(InternalSchema internalSchema, TableChanges.ColumnDeleteChange deletes) {
     Types.RecordType newType = (Types.RecordType)applyTableChange2Type(internalSchema.getRecord(), deletes);
-    return new InternalSchema(newType.fields());
+    return new InternalSchema(newType);
   }
 
   /**
@@ -239,7 +239,7 @@ public class SchemaChangeUtils {
     // deal with root level changes
     List<Types.Field> newFields = TableChangesHelper.applyAddChange2Fields(newType.fields(),
         new ArrayList<>(), updates.getPositionChangeMap().get(-1));
-    return new InternalSchema(newFields);
+    return new InternalSchema(Types.RecordType.get(newFields));
   }
 
   /**

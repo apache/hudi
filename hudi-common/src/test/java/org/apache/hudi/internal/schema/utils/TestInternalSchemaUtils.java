@@ -41,24 +41,24 @@ public class TestInternalSchemaUtils {
   @Test
   public void testPruneSchema() {
     Types.RecordType record = getSimpleRecordType();
-    InternalSchema originSchema = new InternalSchema(record.fields());
+    InternalSchema originSchema = new InternalSchema(Types.RecordType.get(record.fields()));
     List<Integer> prunedCols = new ArrayList<>();
     prunedCols.add(4);
     prunedCols.add(3);
     prunedCols.add(0);
     prunedCols.add(2);
     InternalSchema prunedSchema = InternalSchemaUtils.pruneInternalSchemaByID(originSchema, prunedCols, null);
-    InternalSchema checkedSchema = new InternalSchema(Arrays.asList(new Types.Field[] {
-        Types.Field.get(0, "bool", Types.BooleanType.get()),
-        Types.Field.get(2, "long", Types.LongType.get()),
-        Types.Field.get(3, "float", Types.FloatType.get()),
-        Types.Field.get(4, "double", Types.DoubleType.get())
-    }));
+    InternalSchema checkedSchema = new InternalSchema(Types.RecordType.get(Arrays.asList(new Types.Field[] {
+            Types.Field.get(0, "bool", Types.BooleanType.get()),
+            Types.Field.get(2, "long", Types.LongType.get()),
+            Types.Field.get(3, "float", Types.FloatType.get()),
+            Types.Field.get(4, "double", Types.DoubleType.get())
+        })));
     Assertions.assertEquals(prunedSchema, checkedSchema);
 
     // nest schema
     Types.RecordType nestRecord = getNestRecordType();
-    InternalSchema originNestSchema = new InternalSchema(nestRecord.fields());
+    InternalSchema originNestSchema = new InternalSchema(Types.RecordType.get(nestRecord.fields()));
     List<Integer> prunedNestCols = new ArrayList<>();
     prunedNestCols.add(0);
     prunedNestCols.add(1);

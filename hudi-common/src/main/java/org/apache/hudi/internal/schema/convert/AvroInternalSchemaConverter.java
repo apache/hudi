@@ -85,8 +85,7 @@ public class AvroInternalSchemaConverter {
 
   /** Convert an avro schema into internalSchema. */
   public static InternalSchema convert(Schema schema) {
-    List<Types.Field> fields = ((Types.RecordType) convertToField(schema)).fields();
-    return new InternalSchema(fields);
+    return new InternalSchema((Types.RecordType) convertToField(schema));
   }
 
   /** Check whether current avro schema is optional?. */

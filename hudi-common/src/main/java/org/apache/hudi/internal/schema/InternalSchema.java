@@ -23,10 +23,9 @@ import org.apache.hudi.internal.schema.Types.Field;
 import org.apache.hudi.internal.schema.Types.RecordType;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -51,38 +50,34 @@ public class InternalSchema implements Serializable {
   private transient Map<Integer, String> idToName = null;
 
   public static InternalSchema getEmptyInternalSchema() {
-    return new InternalSchema(-1L, new ArrayList<>());
+    return new InternalSchema(-1L, RecordType.get());
   }
 
   public boolean isEmptySchema() {
     return versionId < 0;
   }
 
-  public InternalSchema(List<Field> columns) {
-    this(DEFAULT_VERSION_ID, columns);
+  public InternalSchema(RecordType recordType) {
+    this(DEFAULT_VERSION_ID, recordType);
   }
 
-  public InternalSchema(Field... columns) {
-    this(DEFAULT_VERSION_ID, Arrays.asList(columns));
-  }
-
-  public InternalSchema(long versionId, List<Field> cols) {
-    this.versionId = versionId;
-    this.record = RecordType.get(cols);
-    idToName = cols.isEmpty() ? new HashMap<>() : InternalSchemaBuilder.getBuilder().buildIdToName(record);
-    nameToId = cols.isEmpty() ? new HashMap<>() : idToName.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
-    maxColumnId = idToName.isEmpty() ? -1 : idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
-  }
-
-  public InternalSchema(long versionId, int maxColumnId, List<Field> cols) {
+  public InternalSchema(long versionId, int maxColumnId, RecordType recordType) {
     this.maxColumnId = maxColumnId;
     this.versionId = versionId;
-    this.record = RecordType.get(cols);
+    this.record = recordType;
     buildIdToName();
   }
 
-  public InternalSchema(long versionId, int maxColumnId, Field... cols) {
-    this(versionId, maxColumnId, Arrays.asList(cols));
+  public InternalSchema(long versionId, RecordType recordType) {
+    this.versionId = versionId;
+    this.record = recordType;
+    this.idToName = recordType.fields().isEmpty()
+        ? Collections.emptyMap()
+        : InternalSchemaBuilder.getBuilder().buildIdToName(record);
+    this.nameToId = recordType.fields().isEmpty()
+        ? Collections.emptyMap()
+        : idToName.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
+    this.maxColumnId = idToName.isEmpty() ? -1 : idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
   }
 
   public RecordType getRecord() {

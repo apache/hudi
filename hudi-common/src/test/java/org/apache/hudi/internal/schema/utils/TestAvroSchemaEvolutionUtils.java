@@ -164,7 +164,7 @@ public class TestAvroSchemaEvolutionUtils {
   public void testComplexConvert() {
     Schema schema = new Schema.Parser().parse(schemaStr);
 
-    InternalSchema internalSchema = new InternalSchema(Types.Field.get(0, false, "id", Types.IntType.get()),
+    Types.RecordType recordType = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
         Types.Field.get(2, true, "preferences",
             Types.RecordType.get(Types.Field.get(7, false, "feature1",
@@ -173,9 +173,10 @@ public class TestAvroSchemaEvolutionUtils {
             Types.RecordType.get(Types.Field.get(11, false, "lat", Types.FloatType.get()), Types.Field.get(12, false, "long", Types.FloatType.get())), false)),
         Types.Field.get(4, true, "points", Types.ArrayType.get(13, true,
             Types.RecordType.get(Types.Field.get(14, false, "x", Types.LongType.get()), Types.Field.get(15, false, "y", Types.LongType.get())))),
-        Types.Field.get(5, false,"doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
+        Types.Field.get(5, false, "doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
         Types.Field.get(6, true, "properties", Types.MapType.get(17, 18, Types.StringType.get(), Types.StringType.get()))
     );
+    InternalSchema internalSchema = new InternalSchema(recordType);
 
     Type convertRecord = AvroInternalSchemaConverter.convert(schema).getRecord();
     Assertions.assertEquals(convertRecord, internalSchema.getRecord());
@@ -394,7 +395,7 @@ public class TestAvroSchemaEvolutionUtils {
                 Types.Field.get(12, false, "long", Types.FloatType.get())), false)
         )
     );
-    InternalSchema oldSchema = new InternalSchema(oldRecord.fields());
+    InternalSchema oldSchema = new InternalSchema(oldRecord);
     Types.RecordType evolvedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
