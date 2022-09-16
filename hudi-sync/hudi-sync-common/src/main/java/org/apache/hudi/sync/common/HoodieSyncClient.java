@@ -23,7 +23,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -42,8 +41,8 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -88,23 +87,16 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   }
 
   /**
-   * Get the set of dropped partitions based on the latest commit metadata.
-   * Returns empty set if the latest commit was not due to DELETE_PARTITION operation.
+   * Get the set of dropped partitions since the last synced commit.
+   * If last sync time is not known then consider only active timeline.
+   * Going through archive timeline is a costly operation, and it should be avoided unless some start time is given.
    */
-  public Set<String> getDroppedPartitions() {
-    try {
-      Option<HoodieCommitMetadata> hoodieCommitMetadata = getLatestCommitMetadata(metaClient);
-
-      if (hoodieCommitMetadata.isPresent()
-          && WriteOperationType.DELETE_PARTITION.equals(hoodieCommitMetadata.get().getOperationType())) {
-        Map<String, List<String>> partitionToReplaceFileIds =
-            ((HoodieReplaceCommitMetadata) hoodieCommitMetadata.get()).getPartitionToReplaceFileIds();
-        return partitionToReplaceFileIds.keySet();
-      }
-    } catch (Exception e) {
-      throw new HoodieSyncException("Failed to get commit metadata", e);
-    }
-    return Collections.emptySet();
+  public Set<String> getDroppedPartitions(Option<String> lastCommitTimeSynced) {
+    HoodieTimeline timeline = lastCommitTimeSynced.isPresent() ? metaClient.getArchivedTimeline(lastCommitTimeSynced.get())
+        .mergeTimeline(metaClient.getActiveTimeline())
+        .getCommitsTimeline()
+        .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE) : metaClient.getActiveTimeline();
+    return new HashSet<>(TimelineUtils.getPartitionsDropped(timeline));
   }
 
   @Override

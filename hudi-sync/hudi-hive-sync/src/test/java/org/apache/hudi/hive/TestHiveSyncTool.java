@@ -865,20 +865,21 @@ public class TestHiveSyncTool {
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
 
-    // create a replace commit to delete current partitions
+    // create two replace commits to delete current partitions, but do not sync in between
     String partitiontoDelete = partitions.get(0).getValues().get(0).replace("-", "/");
     String instantTime3 = "102";
     HiveTestUtil.createReplaceCommit(instantTime3, partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true);
+    String instantTime4 = "103";
+    HiveTestUtil.createReplaceCommit(instantTime4, newPartition, WriteOperationType.DELETE_PARTITION, true, true);
 
-    // sync drop partitions
+    // now run hive sync
     reinitHiveSyncClient();
     reSyncHiveTable();
 
     List<Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    assertEquals(1, hivePartitions.size(),
-        "Table should have 1 partition that was added for instant " + instantTime2);
-    assertEquals(newPartition, hivePartitions.get(0).getValues().get(0).replace("-", "/"));
-    assertEquals(instantTime3, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+    assertEquals(0, hivePartitions.size(),
+        "Table should have no partitions");
+    assertEquals(instantTime4, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
   }
 
