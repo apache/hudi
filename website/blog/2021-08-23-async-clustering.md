@@ -3,7 +3,7 @@ title: "Asynchronous Clustering using Hudi"
 excerpt: "How to setup Hudi for asynchronous clustering"
 author: codope
 category: blog
-image: /assets/images/example_perf_improvement-0eaeaa2d62ff5684c0d3769446388660.png
+image: /assets/images/blog/clustering/example_perf_improvement.png
 ---
 
 In one of the [previous blog](/blog/2021/01/27/hudi-clustering-intro) posts, we introduced a new
