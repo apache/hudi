@@ -36,7 +36,7 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, L
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SQLContext, SparkSession}
+import org.apache.spark.sql.{HoodieCatalogUtils, HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import java.util.Locale

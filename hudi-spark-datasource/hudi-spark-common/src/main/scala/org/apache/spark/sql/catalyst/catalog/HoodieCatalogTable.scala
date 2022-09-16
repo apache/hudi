@@ -291,7 +291,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       val primaryKeys = table.properties.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName).getOrElse(SQL_KEY_TABLE_PRIMARY_KEY.defaultValue.get)
       val partitions = table.partitionColumnNames.mkString(",")
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
-        DataSourceOptionsHelper.inferKeyGenClazz(primaryKeys, partitions)
+        HoodieSparkKeyGeneratorFactory.inferKeyGenClazz(primaryKeys, partitions)
     }
     extraConfig.toMap
   }
