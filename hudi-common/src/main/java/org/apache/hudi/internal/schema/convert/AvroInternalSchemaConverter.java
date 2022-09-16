@@ -49,11 +49,11 @@ public class AvroInternalSchemaConverter {
    * Convert internalSchema to avro Schema.
    *
    * @param internalSchema internal schema.
-   * @param tableName the record name.
+   * @param name the record name.
    * @return an avro Schema.
    */
-  public static Schema convert(InternalSchema internalSchema, String tableName) {
-    return buildAvroSchemaFromInternalSchema(internalSchema, tableName);
+  public static Schema convert(InternalSchema internalSchema, String name) {
+    return buildAvroSchemaFromInternalSchema(internalSchema, name);
   }
 
   /**
