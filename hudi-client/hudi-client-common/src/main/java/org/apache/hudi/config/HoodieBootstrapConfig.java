@@ -65,13 +65,6 @@ public class HoodieBootstrapConfig extends HoodieConfig {
   public static final ConfigProperty<String> MODE_SELECTOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.mode.selector")
       .defaultValue(MetadataOnlyBootstrapModeSelector.class.getCanonicalName())
-      /*.withInferFunction(cfg -> {
-        if (FULL_RECORD.name().equals(cfg.getString(PARTITION_SELECTOR_REGEX_MODE.key()))) {
-          return Option.of(FullRecordBootstrapModeSelector.class.getCanonicalName());
-        } else {
-          return Option.of(MetadataOnlyBootstrapModeSelector.class.getCanonicalName());
-        }
-      })*/
       .sinceVersion("0.6.0")
       .withDocumentation("Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped");
 
