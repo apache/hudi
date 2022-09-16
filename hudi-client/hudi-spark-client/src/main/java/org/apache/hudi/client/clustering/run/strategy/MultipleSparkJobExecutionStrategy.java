@@ -394,8 +394,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       paths = baseFilePaths;
     }
 
+    String readPathString = String.join(",", Arrays.stream(paths).map(Path::toString).toArray(String[]::new));
+    params.put("hoodie.datasource.read.paths", readPathString);
     // Building HoodieFileIndex needs this param to decide query path
-    params.put("glob.paths", String.join(",", Arrays.stream(paths).map(Path::toString).toArray(String[]::new)));
+    params.put("glob.paths", readPathString);
 
     // Let Hudi relations to fetch the schema from the table itself
     BaseRelation relation = JavaSparkAdaptorSupport.sparkAdapter()
