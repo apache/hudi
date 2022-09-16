@@ -145,7 +145,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
                                                                             final Map<String, String> strategyParams,
                                                                             final Schema schema,
                                                                             final List<HoodieFileGroupId> fileGroupIdList,
-                                                                            final boolean shouldPreserveHoodieMetadata);
+                                                                            final boolean shouldPreserveHoodieMetadata,
+                                                                            final Map<String, String> extraMetadata);
 
   /**
    * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters.
@@ -245,7 +246,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
           .collect(Collectors.toList());
-      return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, shouldPreserveHoodieMetadata);
+      return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, shouldPreserveHoodieMetadata,
+          clusteringGroup.getExtraMetadata());
     });
   }
 

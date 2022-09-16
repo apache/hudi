@@ -76,7 +76,6 @@ public class HoodieSparkKeyGeneratorFactory {
     }
   }
 
-
   public static String inferKeyGenClazz(TypedProperties props) {
     String partitionFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), null);
     String recordsKeyFields = props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), KeyGeneratorOptions.RECORDKEY_FIELD_NAME.defaultValue());

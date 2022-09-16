@@ -64,7 +64,8 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
                                                                    Map<String, String> strategyParams,
                                                                    Schema schema,
                                                                    List<HoodieFileGroupId> fileGroupIdList,
-                                                                   boolean shouldPreserveHoodieMetadata) {
+                                                                   boolean shouldPreserveHoodieMetadata,
+                                                                   Map<String, String> extraMetadata) {
     if (numOutputGroups != 1 || fileGroupIdList.size() != 1) {
       throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
     }
@@ -83,13 +84,13 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
 
   @Override
   public HoodieData<WriteStatus> performClusteringWithRecordsRDD(HoodieData<HoodieRecord<T>> inputRecords,
-                                                              int numOutputGroups,
-                                                              String instantTime,
-                                                              Map<String, String> strategyParams,
-                                                              Schema schema,
-                                                              List<HoodieFileGroupId> fileGroupIdList,
-                                                              boolean shouldPreserveHoodieMetadata,
-                                                              Map<String, String> extraMetadata) {
+                                                                 int numOutputGroups,
+                                                                 String instantTime,
+                                                                 Map<String, String> strategyParams,
+                                                                 Schema schema,
+                                                                 List<HoodieFileGroupId> fileGroupIdList,
+                                                                 boolean shouldPreserveHoodieMetadata,
+                                                                 Map<String, String> extraMetadata) {
     if (numOutputGroups != 1 || fileGroupIdList.size() != 1) {
       throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
     }

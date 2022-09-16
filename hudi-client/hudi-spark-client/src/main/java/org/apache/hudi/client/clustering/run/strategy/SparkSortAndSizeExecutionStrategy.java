@@ -61,7 +61,8 @@ public class SparkSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
                                                                    String instantTime, Map<String, String> strategyParams,
                                                                    Schema schema,
                                                                    List<HoodieFileGroupId> fileGroupIdList,
-                                                                   boolean shouldPreserveHoodieMetadata) {
+                                                                   boolean shouldPreserveHoodieMetadata,
+                                                                   Map<String, String> extraMetadata) {
     LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
         .withBulkInsertParallelism(numOutputGroups)
