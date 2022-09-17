@@ -21,6 +21,8 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
+
 import org.apache.spark.sql.SQLContext;
 
 /**
@@ -37,6 +39,10 @@ public class HoodieReadClient<T extends HoodieRecordPayload<T>> extends SparkRDD
 
   public HoodieReadClient(HoodieSparkEngineContext context, String basePath, SQLContext sqlContext) {
     super(context, basePath, sqlContext);
+  }
+
+  public HoodieReadClient(HoodieSparkEngineContext context, String basePath, SQLContext sqlContext, HoodieIndex.IndexType indexType) {
+    super(context, basePath, sqlContext, indexType);
   }
 
   public HoodieReadClient(HoodieSparkEngineContext context, HoodieWriteConfig clientConfig) {
