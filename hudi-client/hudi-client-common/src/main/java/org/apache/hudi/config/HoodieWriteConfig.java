@@ -938,11 +938,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Get the write schema for written records.
+   * Returns schema used for writing records
    *
-   * If the WRITE_SCHEMA has specified, we use the WRITE_SCHEMA.
-   * Or else we use the AVRO_SCHEMA as the write schema.
-   * @return
+   * NOTE: This method respects {@link HoodieWriteConfig#WRITE_SCHEMA_OVERRIDE} being
+   *       specified overriding original writing schema
    */
   public String getWriteSchema() {
     if (props.containsKey(WRITE_SCHEMA_OVERRIDE.key())) {

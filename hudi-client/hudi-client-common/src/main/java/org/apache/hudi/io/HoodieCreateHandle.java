@@ -185,9 +185,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
         final String key = keyIterator.next();
         HoodieRecord<T> record = recordMap.get(key);
         if (useWriterSchema) {
-          write(record, record.getData().getInsertValue(tableSchemaWithMetaFields, config.getProps()));
+          write(record, record.getData().getInsertValue(writeSchemaWithMetaFields, config.getProps()));
         } else {
-          write(record, record.getData().getInsertValue(tableSchema, config.getProps()));
+          write(record, record.getData().getInsertValue(writeSchema, config.getProps()));
         }
       }
     } catch (IOException io) {

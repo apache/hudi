@@ -79,20 +79,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   public static IgnoreRecord IGNORE_RECORD = new IgnoreRecord();
 
   /**
-   * The specified schema of the table. ("specified" denotes that this is configured by the client,
-   * as opposed to being implicitly fetched out of the commit metadata)
-   */
-  protected final Schema tableSchema;
-  protected final Schema tableSchemaWithMetaFields;
-
-  /**
-   * The write schema. In most case the write schema is the same to the
-   * input schema. But if HoodieWriteConfig#WRITE_SCHEMA is specified,
-   * we use the WRITE_SCHEMA as the write schema.
-   *
-   * This is useful for the case of custom HoodieRecordPayload which do some conversion
-   * to the incoming record in it. e.g. the ExpressionPayload do the sql expression conversion
-   * to the input.
+   * Schema used to write records into data files
    */
   protected final Schema writeSchema;
   protected final Schema writeSchemaWithMetaFields;
@@ -118,8 +105,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-    this.tableSchema = overriddenSchema.orElseGet(() -> getSpecifiedTableSchema(config));
-    this.tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(tableSchema, config.allowOperationMetadataField());
     this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
     this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     this.timer = HoodieTimer.start();
@@ -128,25 +113,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
     schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
-  }
-
-  /**
-   * Get the specified table schema.
-   * @param config
-   * @return
-   */
-  private static Schema getSpecifiedTableSchema(HoodieWriteConfig config) {
-    return new Schema.Parser().parse(config.getSchema());
-  }
-
-  /**
-   * Get the schema, of the actual write.
-   *
-   * @param config
-   * @return
-   */
-  private static Schema getWriteSchema(HoodieWriteConfig config) {
-    return new Schema.Parser().parse(config.getWriteSchema());
   }
 
   /**
@@ -268,6 +234,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
   protected long getAttemptId() {
     return taskContextSupplier.getAttemptIdSupplier().get();
+  }
+
+  private static Schema getWriteSchema(HoodieWriteConfig config) {
+    return new Schema.Parser().parse(config.getWriteSchema());
   }
 
   protected HoodieLogFormat.Writer createLogWriter(
