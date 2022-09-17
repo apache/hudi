@@ -63,9 +63,16 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
       (dateFormatter, timestampFormatter)
     })
 
-    val (partitionValues, _) = parsePartition(path, typeInference, basePaths, userSpecifiedDataTypes,
-      validatePartitionValues, tz.toZoneId, dateFormatter, timestampFormatter)
+    var partitionStr  = path.toString
+    userSpecifiedDataTypes.keySet.foreach { name =>
+      val dataType = userSpecifiedDataTypes.get(name).getOrElse("")
+      if (!dataType.isInstanceOf[StringType]) {
+        partitionStr = partitionStr.replace(s"$name=default", s"$name=__HIVE_DEFAULT_PARTITION__")
+      }
+    }
 
+    val (partitionValues, _) = parsePartition(new Path(partitionStr), typeInference, basePaths, userSpecifiedDataTypes,
+      validatePartitionValues, tz.toZoneId, dateFormatter, timestampFormatter)
     partitionValues.map {
       case PartitionValues(columnNames: Seq[String], typedValues: Seq[TypedPartValue]) =>
         val rowValues = columnNames.zip(typedValues).map { case (columnName, typedValue) =>

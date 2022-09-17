@@ -610,7 +610,7 @@ public class HoodieAvroUtils {
    * @return field value either converted (for certain data types) or as it is.
    */
   public static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue, boolean consistentLogicalTimestampEnabled) {
-    if (fieldSchema == null) {
+    if (fieldSchema == null || fieldValue == null) {
       return fieldValue;
     }
 
