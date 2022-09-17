@@ -657,7 +657,7 @@ public class FSUtils {
    * Chdfs will throw {@code IOException} instead of {@code EOFException}. It will cause error in isBlockCorrupted().
    * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
    */
-  public static boolean isCHDSFileSystem(FileSystem fs) {
+  public static boolean isCHDFileSystem(FileSystem fs) {
     return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
   }
 

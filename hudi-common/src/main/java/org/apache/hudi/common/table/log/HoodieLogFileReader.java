@@ -46,7 +46,6 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hbase.util.Bytes;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -479,7 +478,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       return new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCS(fsDataInputStream, logFile, bufferSize), true);
     }
 
-    if (FSUtils.isCHDSFileSystem(fs)) {
+    if (FSUtils.isCHDFileSystem(fs)) {
       return new BoundedFsDataInputStream(fs, logFile.getPath(), fsDataInputStream);
     }
 
