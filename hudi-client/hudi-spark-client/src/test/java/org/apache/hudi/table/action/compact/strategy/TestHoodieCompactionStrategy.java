@@ -253,7 +253,7 @@ public class TestHoodieCompactionStrategy {
     LogFileNumBasedCompactionStrategy strategy = new LogFileNumBasedCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
             HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(1024)
-                .withLogFileNumThresholdBasedCompaction(2).build())
+                .withCompactionLogFileNumThreshold(2).build())
         .build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
     List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());

@@ -387,7 +387,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withLogFileNumThresholdBasedCompaction(int logFileNumThreshold) {
+    public Builder withCompactionLogFileNumThreshold(int logFileNumThreshold) {
       compactionConfig.setValue(COMPACTION_LOG_FILE_NUM_THRESHOLD, String.valueOf(logFileNumThreshold));
       return this;
     }
