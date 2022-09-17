@@ -439,7 +439,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             } else {
               // if no savepoint present, then don't filter
               // stop at first savepoint commit
-              return !(firstSavepoint.isPresent() && compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
+              return !(firstSavepoint.isPresent() && compareTimestamps(s.getTimestamp(), LESSER_THAN_OR_EQUALS, firstSavepoint.get().getTimestamp()));
             }
           }).filter(s -> {
             // Ensure commits >= oldest pending compaction commit is retained
