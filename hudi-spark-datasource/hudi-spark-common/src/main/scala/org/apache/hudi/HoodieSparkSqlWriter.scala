@@ -190,6 +190,8 @@ object HoodieSparkSqlWriter {
 
       val (structName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
       val reconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
+      val shouldValidateSchemasCompatibility = parameters.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
+        HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
 
       val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
       var internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
@@ -224,7 +226,12 @@ object HoodieSparkSqlWriter {
                 // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
                 //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
                 //       and [[latestTableSchema]] is treated as a writer's schema)
-                if (TableSchemaResolver.isSchemaCompatible(sourceSchema, latestTableSchema)) {
+                //
+                // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
+                //       w/ the table's one and allow schemas to diverge. This is required in cases where
+                //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
+                //       only incoming dataset's projection has to match the table's schema, and not the whole one
+                if (!shouldValidateSchemasCompatibility || TableSchemaResolver.isSchemaCompatible(sourceSchema, latestTableSchema)) {
                   latestTableSchema
                 } else {
                   log.error(
@@ -246,7 +253,12 @@ object HoodieSparkSqlWriter {
             // In case reconciliation is disabled, we have to validate that the source's schema
             // is compatible w/ the table's latest schema, such that we're able to read existing table's
             // records using [[sourceSchema]].
-            if (TableSchemaResolver.isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema)) {
+            //
+            // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
+            //       w/ the table's one and allow schemas to diverge. This is required in cases where
+            //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
+            //       only incoming dataset's projection has to match the table's schema, and not the whole one
+            if (!shouldValidateSchemasCompatibility || TableSchemaResolver.isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema)) {
               canonicalizedSourceSchema
             } else {
               log.error(
