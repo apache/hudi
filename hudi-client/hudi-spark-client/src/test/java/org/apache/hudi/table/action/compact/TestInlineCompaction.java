@@ -117,7 +117,7 @@ public class TestInlineCompaction extends CompactionTestBase {
 
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
       List<HoodieRecord> records = dataGen.generateInserts(instants.get(0), 100);
-      HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
+      SparkRDDReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
       // step 1: create and complete 4 delta commit, then create 1 compaction request after this
       runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
