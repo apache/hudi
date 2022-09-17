@@ -50,4 +50,4 @@ small files together in the background to generate larger files. NOTE that durin
 
 *Please note that Hudi always creates immutable files on disk. To be able to do auto-sizing or clustering, Hudi will 
 always create a newer version of the smaller file, resulting in 2 versions of the same file. 
-The [cleaner service](/docs/next/hoodie_cleaner) will later kick in and delte the older version small file and keep the latest one.*
+The [cleaner service](/docs/next/hoodie_cleaner) will later kick in and delete the older version small file and keep the latest one.*
