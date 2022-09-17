@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
+import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -347,8 +348,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       serializedInsertConditionAndExpressions(insertActions))
 
     // Remove the meta fields from the sourceDF as we do not need these when writing.
-    val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
-    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
+    val trimmedSourceDF = removeMetaFields(sourceDF)
+
+    // Supply original record's Avro schema to provided to [[ExpressionPayload]]
+    writeParams += (PAYLOAD_RECORD_AVRO_SCHEMA ->
+      convertStructTypeToAvroSchema(trimmedSourceDF.schema, "record", "").toString)
+
+    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, trimmedSourceDF)
   }
 
   private def checkUpdateAssignments(updateActions: Seq[UpdateAction]): Unit = {
