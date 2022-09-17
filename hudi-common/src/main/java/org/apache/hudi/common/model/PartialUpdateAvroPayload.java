@@ -89,12 +89,6 @@ import java.util.Properties;
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
 
-  /*
-    flag for deleted record combine logic
-    1 preCombine: if delete record is newer, return merged record with _hoodie_is_deleted=true
-    1 combineAndGetUpdateValue:  return empty since we don't need to store deleted data to storage
-   */
-  private boolean isPrecombining = false;
   public PartialUpdateAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
@@ -112,7 +106,6 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     // pick the payload with greater ordering value as insert record
     final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0 ? true : false;
     try {
-      isPrecombining = true;
       GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
       Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord);
       if (mergedRecord.isPresent()) {
@@ -121,8 +114,6 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       }
     } catch (Exception ex) {
       return this;
-    } finally {
-      isPrecombining = false;
     }
     return this;
   }
@@ -147,18 +138,6 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-
-  @Override
-  protected Option<IndexedRecord> mergeRecords(Schema schema, GenericRecord baseRecord, GenericRecord mergedRecord) {
-    if (isDeleteRecord(baseRecord) && !isPrecombining) {
-      return Option.empty();
-    } else {
-      final GenericRecordBuilder builder = new GenericRecordBuilder(schema);
-      List<Schema.Field> fields = schema.getFields();
-      fields.forEach(field -> setField(baseRecord, mergedRecord, builder, field));
-      return Option.of(builder.build());
-    }
-  }
 
   private Option<IndexedRecord> mergeOldRecord(IndexedRecord oldRecord,
       Schema schema,
@@ -193,7 +172,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       Schema schema,
       GenericRecord oldRecord,
       GenericRecord updatingRecord) {
-    if (isDeleteRecord(oldRecord) && !isPrecombining) {
+    if (isDeleteRecord(oldRecord)) {
       return Option.empty();
     } else {
       final GenericRecordBuilder builder = new GenericRecordBuilder(schema);

@@ -157,8 +157,8 @@ public class TestPartialUpdateAvroPayload {
     PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L);
     PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(delRecord1, 1L);
 
-    assertArrayEquals(payload1.preCombine(payload2, schema, new Properties()).recordBytes, payload2.recordBytes);
-    assertArrayEquals(payload2.preCombine(payload1, schema, new Properties()).recordBytes, payload2.recordBytes);
+    assertArrayEquals(payload1.preCombine(payload2).recordBytes, payload2.recordBytes);
+    assertArrayEquals(payload2.preCombine(payload1).recordBytes, payload2.recordBytes);
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
     assertFalse(payload2.getInsertValue(schema).isPresent());
