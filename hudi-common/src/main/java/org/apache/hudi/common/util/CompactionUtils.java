@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.BaseFile;
@@ -279,7 +281,7 @@ public class CompactionUtils {
    */
   public static Option<Pair<HoodieTimeline, HoodieInstant>> getDeltaCommitsSinceLatestCompaction(
       HoodieActiveTimeline activeTimeline) {
-    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitTimeline()
+    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitTimeline().filter(s -> !s.getAction().equals(REPLACE_COMMIT_ACTION))
         .filterCompletedInstants().lastInstant();
     HoodieTimeline deltaCommits = activeTimeline.getDeltaCommitTimeline();
 
