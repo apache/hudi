@@ -20,7 +20,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.12.0-SNAPSHOT</version>
+        <version>0.13.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -113,7 +113,6 @@
                                     <include>io.prometheus:simpleclient_dropwizard</include>
                                     <include>io.prometheus:simpleclient_pushgateway</include>
                                     <include>io.prometheus:simpleclient_common</include>
-                                    <include>com.yammer.metrics:metrics-core</include>
                                     <include>com.google.protobuf:protobuf-java</include>
                                     <include>org.objenesis:objenesis</include>
                                     <include>com.esotericsoftware:kryo-shaded</include>
@@ -282,20 +281,6 @@
             <artifactId>hudi-kafka-connect</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.logging.log4j</groupId>
-                    <artifactId>log4j-api</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.logging.log4j</groupId>
-                    <artifactId>log4j-core</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.logging.log4j</groupId>
-                    <artifactId>log4j-1.2-api</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.hudi</groupId>

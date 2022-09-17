@@ -19,11 +19,10 @@ package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -32,7 +31,10 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.{HoodieCatalystPlansUtils, HoodieSpark3CatalystPlanUtils, Row, SparkSession}
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SparkSession}
+import org.apache.spark.storage.StorageLevel
+import org.apache.spark.storage.StorageLevel._
 
 import scala.util.control.NonFatal
 
@@ -41,15 +43,16 @@ import scala.util.control.NonFatal
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
-  override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
+  def getCatalogUtils: HoodieSpark3CatalogUtils
+
+  override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
+    val encoder = RowEncoder(schema).resolveAndBind()
     new Spark3RowSerDe(encoder)
   }
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
-  override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = {
-    new Spark3ParsePartitionUtil(conf)
-  }
+  override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil
 
   override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
     parser.parseMultipartIdentifier(sqlText)
@@ -81,23 +84,27 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     }
   }
 
-  override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
-    // since spark3.2.1 support datasourceV2, so we need to a new SqlParser to deal DDL statment
-    if (SPARK_VERSION.startsWith("3.1")) {
-      val loadClassName = "org.apache.spark.sql.parser.HoodieSpark312ExtendedSqlParser"
-      Some {
-        (spark: SparkSession, delegate: ParserInterface) => {
-          val clazz = Class.forName(loadClassName, true, Thread.currentThread().getContextClassLoader)
-          val ctor = clazz.getConstructors.head
-          ctor.newInstance(spark, delegate).asInstanceOf[ParserInterface]
-        }
-      }
-    } else {
-      None
-    }
-  }
-
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
     Predicate.createInterpreted(e)
+  }
+
+  /**
+   * Converts instance of [[StorageLevel]] to a corresponding string
+   */
+  override def convertStorageLevelToString(level: StorageLevel): String = level match {
+    case NONE => "NONE"
+    case DISK_ONLY => "DISK_ONLY"
+    case DISK_ONLY_2 => "DISK_ONLY_2"
+    case DISK_ONLY_3 => "DISK_ONLY_3"
+    case MEMORY_ONLY => "MEMORY_ONLY"
+    case MEMORY_ONLY_2 => "MEMORY_ONLY_2"
+    case MEMORY_ONLY_SER => "MEMORY_ONLY_SER"
+    case MEMORY_ONLY_SER_2 => "MEMORY_ONLY_SER_2"
+    case MEMORY_AND_DISK => "MEMORY_AND_DISK"
+    case MEMORY_AND_DISK_2 => "MEMORY_AND_DISK_2"
+    case MEMORY_AND_DISK_SER => "MEMORY_AND_DISK_SER"
+    case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
+    case OFF_HEAP => "OFF_HEAP"
+    case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
 }

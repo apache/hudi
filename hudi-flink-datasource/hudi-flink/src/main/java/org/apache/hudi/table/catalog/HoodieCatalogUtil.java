@@ -18,8 +18,10 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 
+import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -33,6 +35,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 import static org.apache.hudi.table.catalog.CatalogOptions.HIVE_SITE_FILE;
@@ -92,5 +98,19 @@ public class HoodieCatalogUtil {
    */
   public static boolean isEmbeddedMetastore(HiveConf hiveConf) {
     return isNullOrWhitespaceOnly(hiveConf.getVar(HiveConf.ConfVars.METASTOREURIS));
+  }
+
+  /**
+   * Returns the partition key list with given table.
+   */
+  public static List<String> getPartitionKeys(CatalogTable table) {
+    // the PARTITIONED BY syntax always has higher priority than option FlinkOptions#PARTITION_PATH_FIELD
+    if (table.isPartitioned()) {
+      return table.getPartitionKeys();
+    } else if (table.getOptions().containsKey(FlinkOptions.PARTITION_PATH_FIELD.key())) {
+      return Arrays.stream(table.getOptions().get(FlinkOptions.PARTITION_PATH_FIELD.key()).split(","))
+          .collect(Collectors.toList());
+    }
+    return Collections.emptyList();
   }
 }

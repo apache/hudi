@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
@@ -86,7 +87,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -443,7 +443,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       //create hive table
       client.createTable(hiveTable);
       //init hoodie metaClient
-      initTableIfNotExists(tablePath, (CatalogTable)table);
+      initTableIfNotExists(tablePath, (CatalogTable) table);
     } catch (AlreadyExistsException e) {
       if (!ignoreIfExists) {
         throw new TableAlreadyExistException(getName(), tablePath, e);
@@ -536,28 +536,26 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     //set sd
     StorageDescriptor sd = new StorageDescriptor();
-    List<FieldSchema> allColumns = HiveSchemaUtils.createHiveColumns(table.getSchema());
+    // the metadata fields should be included to keep sync with the hive sync tool,
+    // because since Hive 3.x, there is validation when altering table,
+    // when the metadata fields are synced through the hive sync tool,
+    // a compatability issue would be reported.
+    List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table.getSchema());
 
     // Table columns and partition keys
-    if (table instanceof CatalogTable) {
-      CatalogTable catalogTable = (CatalogTable) table;
+    CatalogTable catalogTable = (CatalogTable) table;
 
-      if (catalogTable.isPartitioned()) {
-        int partitionKeySize = catalogTable.getPartitionKeys().size();
-        List<FieldSchema> regularColumns =
-            allColumns.subList(0, allColumns.size() - partitionKeySize);
-        List<FieldSchema> partitionColumns =
-            allColumns.subList(
-                allColumns.size() - partitionKeySize, allColumns.size());
+    final List<String> partitionKeys = HoodieCatalogUtil.getPartitionKeys(catalogTable);
+    if (partitionKeys.size() > 0) {
+      Pair<List<FieldSchema>, List<FieldSchema>> splitSchemas = HiveSchemaUtils.splitSchemaByPartitionKeys(allColumns, partitionKeys);
+      List<FieldSchema> regularColumns = splitSchemas.getLeft();
+      List<FieldSchema> partitionColumns = splitSchemas.getRight();
 
-        sd.setCols(regularColumns);
-        hiveTable.setPartitionKeys(partitionColumns);
-      } else {
-        sd.setCols(allColumns);
-        hiveTable.setPartitionKeys(new ArrayList<>());
-      }
+      sd.setCols(regularColumns);
+      hiveTable.setPartitionKeys(partitionColumns);
     } else {
       sd.setCols(allColumns);
+      hiveTable.setPartitionKeys(Collections.emptyList());
     }
 
     HoodieFileFormat baseFileFormat = HoodieFileFormat.PARQUET;
@@ -572,7 +570,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     serdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(!useRealTimeInputFormat));
     serdeProperties.put("serialization.format", "1");
 
-    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark((CatalogTable)table, hiveConf, properties));
+    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys));
 
     sd.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
 
@@ -899,9 +897,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     } else {
       Map<String, String> newOptions = new HashMap<>(options);
       // set up hive sync options
-      newOptions.put(FlinkOptions.HIVE_SYNC_ENABLED.key(), "true");
-      newOptions.put(FlinkOptions.HIVE_SYNC_METASTORE_URIS.key(), hiveConf.getVar(HiveConf.ConfVars.METASTOREURIS));
-      newOptions.put(FlinkOptions.HIVE_SYNC_MODE.key(), "hms");
+      newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_ENABLED.key(), "true");
+      newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_METASTORE_URIS.key(), hiveConf.getVar(HiveConf.ConfVars.METASTOREURIS));
+      newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_MODE.key(), "hms");
       newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP.key(), "true");
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_DB.key(), k -> tablePath.getDatabaseName());
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_TABLE.key(), k -> tablePath.getObjectName());

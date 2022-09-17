@@ -81,6 +81,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Flink hoodie write client.
+ *
+ * <p>The client is used both on driver (for starting/committing transactions)
+ * and executor (for writing dataset).
+ *
+ * @param <T> type of the payload
+ */
 @SuppressWarnings("checkstyle:LineLength")
 public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
@@ -173,7 +181,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   public List<WriteStatus> insert(List<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.INSERT, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
+    table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
     // create the write handle if not exists
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
@@ -254,7 +262,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
+  public void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     // Note: the code to read the commit metadata is not thread safe for JSON deserialization,
     // remove the table metadata sync
@@ -267,14 +275,21 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     if (this.metadataWriter == null) {
       initMetadataWriter();
     }
-    // refresh the timeline
+    try {
+      // guard the metadata writer with concurrent lock
+      this.txnManager.getLockManager().lock();
 
-    // Note: the data meta client is not refreshed currently, some code path
-    // relies on the meta client for resolving the latest data schema,
-    // the schema expects to be immutable for SQL jobs but may be not for non-SQL
-    // jobs.
-    this.metadataWriter.initTableMetadata();
-    this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
+      // refresh the timeline
+
+      // Note: the data meta client is not refreshed currently, some code path
+      // relies on the meta client for resolving the latest data schema,
+      // the schema expects to be immutable for SQL jobs but may be not for non-SQL
+      // jobs.
+      this.metadataWriter.initTableMetadata();
+      this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
+    } finally {
+      this.txnManager.getLockManager().unlock();
+    }
   }
 
   /**

@@ -34,7 +34,6 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -134,7 +133,7 @@ public class HoodieMultiWriterTestSuiteJob {
     AtomicBoolean jobFailed = new AtomicBoolean(false);
     AtomicInteger counter = new AtomicInteger(0);
     List<Long> waitTimes = new ArrayList<>();
-    for (int i = 0;i < jobIndex ;i++) {
+    for (int i = 0; i < jobIndex; i++) {
       if (i == 0) {
         waitTimes.add(0L);
       } else {

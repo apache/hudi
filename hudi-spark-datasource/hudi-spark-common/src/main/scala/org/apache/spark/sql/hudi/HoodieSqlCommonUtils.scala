@@ -201,7 +201,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val conf = sparkSession.sessionState.newHadoopConf()
     uri.map(makePathQualified(_, conf))
       .map(removePlaceHolder)
-      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${identifier}"))
+      .getOrElse(throw new IllegalArgumentException(s"Missing location for $identifier"))
   }
 
   private def removePlaceHolder(path: String): String = {
@@ -317,8 +317,8 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
     child match {
       case Literal(nul, NullType) => Literal(nul, dataType)
-      case _ => if (child.dataType != dataType)
-        Cast(child, dataType, Option(conf.sessionLocalTimeZone)) else child
+      case expr if child.dataType != dataType => Cast(expr, dataType, Option(conf.sessionLocalTimeZone))
+      case _ => child
     }
   }
 

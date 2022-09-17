@@ -130,6 +130,16 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue("TIMESTAMP_MICROS")
       .withDocumentation("Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.");
 
+  // SPARK-38094 Spark 3.3 checks if this field is enabled. Hudi has to provide this or there would be NPE thrown
+  // Would ONLY be effective with Spark 3.3+
+  // default value is true which is in accordance with Spark 3.3
+  public static final ConfigProperty<String> PARQUET_FIELD_ID_WRITE_ENABLED = ConfigProperty
+      .key("hoodie.parquet.field_id.write.enabled")
+      .defaultValue("true")
+      .sinceVersion("0.12.0")
+      .withDocumentation("Would only be effective with Spark 3.3+. Sets spark.sql.parquet.fieldId.write.enabled. "
+          + "If enabled, Spark will write out parquet native field ids that are stored inside StructField's metadata as parquet.field.id to parquet files.");
+
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_NAME = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")
       .defaultValue("GZ")
@@ -334,6 +344,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetOutputTimestampType(String parquetOutputTimestampType) {
       storageConfig.setValue(PARQUET_OUTPUT_TIMESTAMP_TYPE, parquetOutputTimestampType);
+      return this;
+    }
+
+    public Builder parquetFieldIdWrite(String parquetFieldIdWrite) {
+      storageConfig.setValue(PARQUET_FIELD_ID_WRITE_ENABLED, parquetFieldIdWrite);
       return this;
     }
 

@@ -78,8 +78,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     String nonpartitionedTableName = "nonpartitioned_" + tableName();
     nonpartitionedTablePath = tablePath(nonpartitionedTableName);
     new TableCommand().createTable(
-            nonpartitionedTablePath, nonpartitionedTableName,
-            "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        nonpartitionedTablePath, nonpartitionedTableName,
+        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -119,8 +119,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     String partitionedTableName = "partitioned_" + tableName();
     partitionedTablePath = tablePath(partitionedTableName);
     new TableCommand().createTable(
-            partitionedTablePath, partitionedTableName,
-            "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        partitionedTablePath, partitionedTableName,
+        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -161,7 +161,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
   @Test
   public void testShowCommits() {
     // Test default show fsview all
-    CommandResult cr = shell().executeCommand("show fsview all");
+    CommandResult cr = shell().executeCommand("show fsview all --pathRegex */*/*");
     assertTrue(cr.isSuccess());
 
     // Get all file groups
@@ -209,7 +209,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
   @Test
   public void testShowCommitsWithSpecifiedValues() {
     // Test command with options, baseFileOnly and maxInstant is 2
-    CommandResult cr = shell().executeCommand("show fsview all --baseFileOnly true --maxInstant 2");
+    CommandResult cr = shell().executeCommand("show fsview all --pathRegex */*/* --baseFileOnly true --maxInstant 2");
     assertTrue(cr.isSuccess());
 
     List<Comparable[]> rows = new ArrayList<>();
@@ -287,7 +287,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     return rows;
   }
 
-  /**(
+  /**
+   * (
    * Test case for command 'show fsview latest'.
    */
   @Test

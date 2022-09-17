@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.cow;
 
+import java.util.Comparator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
 import org.apache.hudi.util.DataTypeUtils;
@@ -42,7 +43,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -108,9 +108,20 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     LinkedHashMap<String, String> partSpec = PartitionPathUtils.extractPartitionSpecFromPath(
         fileSplit.getPath());
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> partObjects.put(k, DataTypeUtils.resolvePartition(
-        partDefaultName.equals(v) ? null : v,
-        fullFieldTypes[fieldNameList.indexOf(k)])));
+    partSpec.forEach((k, v) -> {
+      final int idx = fieldNameList.indexOf(k);
+      if (idx == -1) {
+        // for any rare cases that the partition field does not exist in schema,
+        // fallback to file read
+        return;
+      }
+      DataType fieldType = fullFieldTypes[idx];
+      if (!DataTypeUtils.isDatetimeType(fieldType)) {
+        // date time type partition field is formatted specifically,
+        // read directly from the data file to avoid format mismatch or precision loss
+        partObjects.put(k, DataTypeUtils.resolvePartition(partDefaultName.equals(v) ? null : v, fieldType));
+      }
+    });
 
     this.reader = ParquetSplitReaderUtil.genPartColumnarRowReader(
         utcTimestamp,
@@ -209,13 +220,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
         // get the block locations and make sure they are in order with respect to their offset
         final BlockLocation[] blocks = fs.getFileBlockLocations(file, 0, len);
-        Arrays.sort(blocks, new Comparator<BlockLocation>() {
-          @Override
-          public int compare(BlockLocation o1, BlockLocation o2) {
-            long diff = o1.getLength() - o2.getOffset();
-            return Long.compare(diff, 0L);
-          }
-        });
+        Arrays.sort(blocks, Comparator.comparingLong(BlockLocation::getOffset));
 
         long bytesUnassigned = len;
         long position = 0;
@@ -388,4 +393,5 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       return null;
     }
   }
+
 }

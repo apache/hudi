@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.conf.Configuration;
@@ -67,6 +68,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
 
 /**
  * Utility functions related to accessing the file storage.
@@ -216,8 +219,8 @@ public class FSUtils {
    * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
   public static String getRelativePartitionPath(Path basePath, Path fullPartitionPath) {
-    basePath = Path.getPathWithoutSchemeAndAuthority(basePath);
-    fullPartitionPath = Path.getPathWithoutSchemeAndAuthority(fullPartitionPath);
+    basePath = getPathWithoutSchemeAndAuthority(basePath);
+    fullPartitionPath = getPathWithoutSchemeAndAuthority(fullPartitionPath);
 
     String fullPartitionPathStr = fullPartitionPath.toString();
 
@@ -607,12 +610,30 @@ public class FSUtils {
     String properPartitionPath = partitionPath.startsWith("/")
         ? partitionPath.substring(1)
         : partitionPath;
-    return getPartitionPath(new Path(basePath), properPartitionPath);
+    return getPartitionPath(new CachingPath(basePath), properPartitionPath);
   }
 
   public static Path getPartitionPath(Path basePath, String partitionPath) {
-    // FOr non-partitioned table, return only base-path
-    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new Path(basePath, partitionPath);
+    // For non-partitioned table, return only base-path
+    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new CachingPath(basePath, partitionPath);
+  }
+
+  /**
+   * Extracts the file name from the relative path based on the table base path.  For example:
+   * "/2022/07/29/file1.parquet", "/2022/07/29" -> "file1.parquet"
+   * "2022/07/29/file2.parquet", "2022/07/29" -> "file2.parquet"
+   * "/file3.parquet", "" -> "file3.parquet"
+   * "file4.parquet", "" -> "file4.parquet"
+   *
+   * @param filePathWithPartition the relative file path based on the table base path.
+   * @param partition             the relative partition path.  For partitioned table, `partition` contains the relative partition path;
+   *                              for non-partitioned table, `partition` is empty
+   * @return Extracted file name in String.
+   */
+  public static String getFileName(String filePathWithPartition, String partition) {
+    int offset = StringUtils.isNullOrEmpty(partition)
+        ? (filePathWithPartition.startsWith("/") ? 1 : 0) : partition.length() + 1;
+    return filePathWithPartition.substring(offset);
   }
 
   /**

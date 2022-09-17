@@ -199,10 +199,10 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "before writing records to the table.");
 
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS = ConfigProperty
-          .key("hoodie.bulkinsert.user.defined.partitioner.sort.columns")
-          .noDefaultValue()
-          .withDocumentation("Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. "
-                  + "For example 'column1,column2'");
+      .key("hoodie.bulkinsert.user.defined.partitioner.sort.columns")
+      .noDefaultValue()
+      .withDocumentation("Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. "
+          + "For example 'column1,column2'");
 
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.class")
@@ -311,7 +311,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BULK_INSERT_SORT_MODE = ConfigProperty
       .key("hoodie.bulkinsert.sort.mode")
-      .defaultValue(BulkInsertSortMode.GLOBAL_SORT.toString())
+      .defaultValue(BulkInsertSortMode.NONE.toString())
       .withDocumentation("Sorting modes to use for sorting records for bulk insert. This is use when user "
           + BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME.key() + "is not configured. Available values are - "
           + "GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. "
@@ -358,11 +358,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("true")
       .withDocumentation("Timeline archiving removes older instants from the timeline, after each write operation, to minimize metadata overhead. "
           + "Controls whether or not, the write should be failed as well, if such archiving fails.");
-
-  public static final ConfigProperty<Boolean> REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT = ConfigProperty
-      .key("hoodie.refresh.timeline.server.based.on.latest.commit")
-      .defaultValue(true)
-      .withDocumentation("Refresh timeline in timeline server based on latest commit apart from timeline hash difference. By default (true).");
 
   public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
@@ -484,6 +479,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("0.11.0")
       .withDocumentation("Auto adjust lock configurations when metadata table is enabled and for async table services.");
+
+  public static final ConfigProperty<Boolean> SKIP_DEFAULT_PARTITION_VALIDATION = ConfigProperty
+      .key("hoodie.skip.default.partition.validation")
+      .defaultValue(false)
+      .sinceVersion("0.12.0")
+      .withDocumentation("When table is upgraded from pre 0.12 to 0.12, we check for \"default\" partition and fail if found one. "
+          + "Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -1105,10 +1107,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(FAIL_ON_TIMELINE_ARCHIVING_ENABLE);
   }
 
-  public boolean isRefreshTimelineServerBasedOnLatestCommit() {
-    return getBoolean(REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT);
-  }
-
   public int getMaxConsistencyChecks() {
     return getInt(MAX_CONSISTENCY_CHECKS);
   }
@@ -1218,7 +1216,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean getArchiveMergeEnable() {
-    return getBoolean(HoodieArchivalConfig.ARCHIVE_MERGE_ENABLE);
+    return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_MERGE_ENABLE);
+  }
+
+  public boolean shouldArchiveBeyondSavepoint() {
+    return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT);
   }
 
   public long getArchiveMergeSmallFileLimitBytes() {
@@ -1271,6 +1273,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public Long getCompactionLogFileSizeThreshold() {
     return getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_SIZE_THRESHOLD);
+  }
+
+  public Long getCompactionLogFileNumThreshold() {
+    return getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_NUM_THRESHOLD);
   }
 
   public Boolean getCompactionLazyBlockReadEnabled() {
@@ -1558,6 +1564,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE);
   }
 
+  public int getHBaseIndexRegionCount() {
+    return getInt(HoodieHBaseIndexConfig.BUCKET_NUMBER);
+  }
+
   public int getBloomIndexParallelism() {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_PARALLELISM);
   }
@@ -1638,6 +1648,22 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getIntOrDefault(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
   }
 
+  public int getBucketIndexMaxNumBuckets() {
+    return getInt(HoodieIndexConfig.BUCKET_INDEX_MAX_NUM_BUCKETS);
+  }
+
+  public int getBucketIndexMinNumBuckets() {
+    return getInt(HoodieIndexConfig.BUCKET_INDEX_MIN_NUM_BUCKETS);
+  }
+
+  public double getBucketSplitThreshold() {
+    return getDouble(HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD);
+  }
+
+  public double getBucketMergeThreshold() {
+    return getDouble(HoodieIndexConfig.BUCKET_MERGE_THRESHOLD);
+  }
+
   public String getBucketIndexHashField() {
     return getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
   }
@@ -1645,6 +1671,19 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * storage properties.
    */
+  public long getMaxFileSize(HoodieFileFormat format) {
+    switch (format) {
+      case PARQUET:
+        return getParquetMaxFileSize();
+      case HFILE:
+        return getHFileMaxFileSize();
+      case ORC:
+        return getOrcMaxFileSize();
+      default:
+        throw new HoodieNotSupportedException("Unknown file format: " + format);
+    }
+  }
+
   public long getParquetMaxFileSize() {
     return getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
   }
@@ -1680,6 +1719,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String parquetOutputTimestampType() {
     return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
+  }
+
+  public String parquetFieldIdWriteEnabled() {
+    return getString(HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED);
   }
 
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
@@ -2033,6 +2076,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public WriteConcurrencyMode getWriteConcurrencyMode() {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
+  }
+
+  // misc configs
+  public Boolean doSkipDefaultPartitionValidation() {
+    return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
   }
 
   /**
@@ -2514,8 +2562,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withRefreshTimelineServerBasedOnLatestCommit(boolean refreshTimelineServerBasedOnLatestCommit) {
-      writeConfig.setValue(REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT, Boolean.toString(refreshTimelineServerBasedOnLatestCommit));
+    public Builder doSkipDefaultPartitionValidation(boolean skipDefaultPartitionValidation) {
+      writeConfig.setValue(SKIP_DEFAULT_PARTITION_VALIDATION, String.valueOf(skipDefaultPartitionValidation));
       return this;
     }
 

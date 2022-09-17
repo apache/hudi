@@ -29,14 +29,13 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, SchemaTestUtil}
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 import java.io.IOException
 import java.net.URL
 import java.nio.file.{Files, Paths}
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
-class TestRepairsProcedure extends HoodieSparkSqlTestBase {
+class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call repair_add_partition_meta Procedure") {
     withTempDir { tmp =>

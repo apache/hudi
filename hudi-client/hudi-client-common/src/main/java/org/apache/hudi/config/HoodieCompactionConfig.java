@@ -106,6 +106,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Only if the log file size is greater than the threshold in bytes,"
           + " the file group will be compacted.");
 
+  public static final ConfigProperty<Long> COMPACTION_LOG_FILE_NUM_THRESHOLD = ConfigProperty
+      .key("hoodie.compaction.logfile.num.threshold")
+      .defaultValue(0L)
+      .withDocumentation("Only if the log file num is greater than the threshold,"
+          + " the file group will be compacted.");
+
   public static final ConfigProperty<String> COMPACTION_STRATEGY = ConfigProperty
       .key("hoodie.compaction.strategy")
       .defaultValue(LogFileSizeBasedCompactionStrategy.class.getName())
@@ -378,6 +384,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withLogFileSizeThresholdBasedCompaction(long logFileSizeThreshold) {
       compactionConfig.setValue(COMPACTION_LOG_FILE_SIZE_THRESHOLD, String.valueOf(logFileSizeThreshold));
+      return this;
+    }
+
+    public Builder withCompactionLogFileNumThreshold(int logFileNumThreshold) {
+      compactionConfig.setValue(COMPACTION_LOG_FILE_NUM_THRESHOLD, String.valueOf(logFileNumThreshold));
       return this;
     }
 

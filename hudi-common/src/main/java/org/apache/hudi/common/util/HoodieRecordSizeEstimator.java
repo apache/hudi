@@ -26,12 +26,14 @@ import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.Serializable;
+
 /**
  * Size Estimator for Hoodie record payload.
  * 
  * @param <T>
  */
-public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements SizeEstimator<HoodieRecord<T>> {
+public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements SizeEstimator<HoodieRecord<T>>, Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieRecordSizeEstimator.class);
 
@@ -48,9 +50,7 @@ public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements
     // note the sizes and differences. A correct estimation in such cases is handled in
     /** {@link ExternalSpillableMap} **/
     long sizeOfRecord = ObjectSizeCalculator.getObjectSize(hoodieRecord);
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("SizeOfRecord => " + sizeOfRecord + " SizeOfSchema => " + sizeOfSchema);
-    }
+    LOG.debug("SizeOfRecord => " + sizeOfRecord + " SizeOfSchema => " + sizeOfSchema);
     return sizeOfRecord;
   }
 }

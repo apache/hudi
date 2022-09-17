@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import com.codahale.metrics.{Histogram, Snapshot, UniformReservoir}
-import com.google.common.collect.{Lists, Maps}
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -46,7 +45,7 @@ class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
     StructField("95th", DataTypes.DoubleType, nullable = true, Metadata.empty),
     StructField("max", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("num_files", DataTypes.IntegerType, nullable = true, Metadata.empty),
-    StructField("stddev", DataTypes.DoubleType, nullable = true, Metadata.empty)
+    StructField("std_dev", DataTypes.DoubleType, nullable = true, Metadata.empty)
   ))
 
   override def call(args: ProcedureArgs): Seq[Row] = {
@@ -60,7 +59,7 @@ class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
     val statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath))
 
     val globalHistogram = new Histogram(new UniformReservoir(MAX_FILES))
-    val commitHistogramMap: java.util.Map[String, Histogram] = Maps.newHashMap()
+    val commitHistogramMap = new java.util.HashMap[String, Histogram]()
     statuses.asScala.foreach(
       status => {
         val instantTime = FSUtils.getCommitTime(status.getPath.getName)
@@ -70,7 +69,7 @@ class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
         globalHistogram.update(len)
       }
     )
-    val rows: java.util.List[Row] = Lists.newArrayList()
+    val rows: java.util.List[Row] = new java.util.ArrayList[Row]()
     commitHistogramMap.asScala.foreach {
       case (instantTime, histogram) =>
         val snapshot = histogram.getSnapshot
@@ -100,7 +99,7 @@ class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
 
 object StatsFileSizeProcedure {
   val MAX_FILES = 1000000
-  val NAME = "stats_filesizes"
+  val NAME = "stats_file_sizes"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
     override def get(): ProcedureBuilder = new StatsFileSizeProcedure()

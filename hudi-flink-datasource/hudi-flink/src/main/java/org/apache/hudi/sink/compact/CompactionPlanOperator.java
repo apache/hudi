@@ -32,6 +32,7 @@ import org.apache.hudi.util.FlinkTables;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
@@ -47,7 +48,7 @@ import static java.util.stream.Collectors.toList;
  * <p>It should be singleton to avoid conflicts.
  */
 public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPlanEvent>
-    implements OneInputStreamOperator<Object, CompactionPlanEvent> {
+    implements OneInputStreamOperator<Object, CompactionPlanEvent>, BoundedOneInput {
 
   /**
    * Config options.
@@ -140,5 +141,11 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @VisibleForTesting
   public void setOutput(Output<StreamRecord<CompactionPlanEvent>> output) {
     this.output = output;
+  }
+
+  @Override
+  public void endInput() throws Exception {
+    // Called when the input data ends, only used in batch mode.
+    notifyCheckpointComplete(-1);
   }
 }

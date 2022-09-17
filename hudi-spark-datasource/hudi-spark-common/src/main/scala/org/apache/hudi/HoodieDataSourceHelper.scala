@@ -41,15 +41,17 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
   /**
    * Wrapper for `buildReaderWithPartitionValues` of [[ParquetFileFormat]] handling [[ColumnarBatch]],
    * when Parquet's Vectorized Reader is used
+   *
+   * TODO move to HoodieBaseRelation, make private
    */
-  def buildHoodieParquetReader(sparkSession: SparkSession,
-                               dataSchema: StructType,
-                               partitionSchema: StructType,
-                               requiredSchema: StructType,
-                               filters: Seq[Filter],
-                               options: Map[String, String],
-                               hadoopConf: Configuration,
-                               appendPartitionValues: Boolean = false): PartitionedFile => Iterator[InternalRow] = {
+  private[hudi] def buildHoodieParquetReader(sparkSession: SparkSession,
+                                             dataSchema: StructType,
+                                             partitionSchema: StructType,
+                                             requiredSchema: StructType,
+                                             filters: Seq[Filter],
+                                             options: Map[String, String],
+                                             hadoopConf: Configuration,
+                                             appendPartitionValues: Boolean = false): PartitionedFile => Iterator[InternalRow] = {
     val parquetFileFormat: ParquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(appendPartitionValues).get
     val readParquetFile: PartitionedFile => Iterator[Any] = parquetFileFormat.buildReaderWithPartitionValues(
       sparkSession = sparkSession,

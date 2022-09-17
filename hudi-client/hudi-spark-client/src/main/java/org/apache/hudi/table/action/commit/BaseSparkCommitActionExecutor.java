@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
@@ -112,10 +113,18 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
   }
 
-  private HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
+  private HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
     context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering: " + config.getTableName());
+    Set<HoodieFileGroupId> fileGroupsInPendingClustering =
+        table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
+    // Skip processing if there is no inflight clustering
+    if (fileGroupsInPendingClustering.isEmpty()) {
+      return inputRecords;
+    }
+
     UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy = (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils
-        .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, fileGroupsInPendingClustering);
+        .loadClass(config.getClusteringUpdatesStrategyClass(), new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
+            this.context, table, fileGroupsInPendingClustering);
     Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
         updateStrategy.handleUpdate(inputRecords);
     Set<HoodieFileGroupId> fileGroupsWithUpdatesAndPendingClustering = recordsAndPendingClusteringFileGroups.getRight();
@@ -150,10 +159,13 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
     }
 
+    // Handle records update with clustering
+    HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
+
     WorkloadProfile workloadProfile = null;
     if (isWorkloadProfileNeeded()) {
-      context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile: " + config.getTableName());
-      workloadProfile = new WorkloadProfile(buildProfile(inputRecords), operationType, table.getIndex().canIndexLogFiles());
+      context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
+      workloadProfile = new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
       LOG.debug("Input workload profile :" + workloadProfile);
     }
 
@@ -163,11 +175,6 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
     }
 
-    // handle records update with clustering
-    Set<HoodieFileGroupId> fileGroupsInPendingClustering =
-        table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
-    HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = fileGroupsInPendingClustering.isEmpty() ? inputRecords : clusteringHandleUpdate(inputRecords, fileGroupsInPendingClustering);
-
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
@@ -175,6 +182,9 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return result;
   }
 
+  /**
+   * Count the number of updates/inserts for each file in each partition.
+   */
   private Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(HoodieData<HoodieRecord<T>> inputRecords) {
     HashMap<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
     WorkloadStat globalStat = new WorkloadStat();
@@ -228,7 +238,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     if (table.requireSortedRecords()) {
       // Partition and sort within each partition as a single step. This is faster than partitioning first and then
       // applying a sort.
-      Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> comparator = (Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> & Serializable)(t1, t2) -> {
+      Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> comparator = (Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> & Serializable) (t1, t2) -> {
         HoodieKey key1 = t1._1;
         HoodieKey key2 = t2._1;
         return key1.getRecordKey().compareTo(key2.getRecordKey());
@@ -254,7 +264,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     writeStatuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
     Instant indexStartTime = Instant.now();
     // Update the index back
-    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
+    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     return statuses;
@@ -268,7 +278,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   @Override
   protected String getCommitActionType() {
-    return  table.getMetaClient().getCommitActionType();
+    return table.getMetaClient().getCommitActionType();
   }
 
   @Override
@@ -344,6 +354,13 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       LOG.info("Empty partition with fileId => " + fileId);
       return Collections.emptyIterator();
     }
+
+    // Pre-check: if the old file does not exist (which may happen in bucket index case), fallback to insert
+    if (!table.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).isPresent()
+        && HoodieIndex.IndexType.BUCKET.equals(config.getIndexType())) {
+      return handleInsert(fileId, recordItr);
+    }
+
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
     return handleUpdateInternal(upsertHandle, fileId);
@@ -379,8 +396,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr)
-      throws Exception {
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition");

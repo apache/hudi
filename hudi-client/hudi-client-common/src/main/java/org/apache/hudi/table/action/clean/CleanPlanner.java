@@ -104,7 +104,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * Get the list of data file names savepointed.
    */
   public Stream<String> getSavepointedDataFiles(String savepointTime) {
-    if (!hoodieTable.getSavepoints().contains(savepointTime)) {
+    if (!hoodieTable.getSavepointTimestamps().contains(savepointTime)) {
       throw new HoodieSavepointException(
           "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
     }
@@ -227,7 +227,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         + " file versions. ");
     List<CleanFileInfo> deletePaths = new ArrayList<>();
     // Collect all the datafiles savepointed by all the savepoints
-    List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
+    List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()
         .flatMap(this::getSavepointedDataFiles)
         .collect(Collectors.toList());
 
@@ -248,17 +248,17 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
 
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
+        fileSliceIterator.next();
+        keepVersions--;
+      }
+      // Delete the remaining files
+      while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
         Option<HoodieBaseFile> dataFile = nextSlice.getBaseFile();
         if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
           // do not clean up a savepoint data file
           continue;
         }
-        keepVersions--;
-      }
-      // Delete the remaining files
-      while (fileSliceIterator.hasNext()) {
-        FileSlice nextSlice = fileSliceIterator.next();
         deletePaths.addAll(getCleanFileInfoForSlice(nextSlice));
       }
     }
@@ -295,7 +295,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     List<CleanFileInfo> deletePaths = new ArrayList<>();
 
     // Collect all the datafiles savepointed by all the savepoints
-    List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
+    List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()
         .flatMap(this::getSavepointedDataFiles)
         .collect(Collectors.toList());
 
@@ -473,6 +473,17 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
               HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
     }
     return earliestCommitToRetain;
+  }
+
+  /**
+   * Returns the last completed commit timestamp before clean.
+   */
+  public String getLastCompletedCommitTimestamp() {
+    if (commitTimeline.lastInstant().isPresent()) {
+      return commitTimeline.lastInstant().get().getTimestamp();
+    } else {
+      return "";
+    }
   }
 
   /**

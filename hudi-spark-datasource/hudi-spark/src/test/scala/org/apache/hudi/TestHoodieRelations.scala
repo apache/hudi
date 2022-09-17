@@ -51,6 +51,4 @@ class TestHoodieRelations {
       requiredStructSchema.fields.toSeq
     )
   }
-
-
 }

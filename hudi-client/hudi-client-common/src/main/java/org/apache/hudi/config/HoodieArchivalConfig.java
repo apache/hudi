@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -34,8 +35,8 @@ import java.util.Properties;
  */
 @Immutable
 @ConfigClassProperty(name = "Archival Configs",
-        groupName = ConfigGroups.Names.WRITE_CLIENT,
-        description = "Configurations that control archival.")
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control archival.")
 public class HoodieArchivalConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> AUTO_ARCHIVE = ConfigProperty
@@ -55,9 +56,9 @@ public class HoodieArchivalConfig extends HoodieConfig {
   public static final ConfigProperty<String> MAX_COMMITS_TO_KEEP = ConfigProperty
       .key("hoodie.keep.max.commits")
       .defaultValue("30")
-      .withDocumentation("Archiving service moves older entries from timeline into an archived log after each write, to "
+      .withDocumentation("Archiving service moves older entries from timeline into an archived log after each write, to"
           + " keep the metadata overhead constant, even as the table size grows."
-          + "This config controls the maximum number of instants to retain in the active timeline. ");
+          + " This config controls the maximum number of instants to retain in the active timeline. ");
 
   public static final ConfigProperty<Integer> DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.archive.delete.parallelism")
@@ -68,7 +69,7 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .key("hoodie.keep.min.commits")
       .defaultValue("20")
       .withDocumentation("Similar to " + MAX_COMMITS_TO_KEEP.key() + ", but controls the minimum number of"
-          + "instants to retain in the active timeline.");
+          + " instants to retain in the active timeline.");
 
   public static final ConfigProperty<String> COMMITS_ARCHIVAL_BATCH_SIZE = ConfigProperty
       .key("hoodie.commits.archival.batch")
@@ -92,6 +93,13 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .withDocumentation("When enable, hoodie will auto merge several small archive files into larger one. It's"
           + " useful when storage scheme doesn't support append operation.");
 
+  public static final ConfigProperty<Boolean> ARCHIVE_BEYOND_SAVEPOINT = ConfigProperty
+      .key("hoodie.archive.beyond.savepoint")
+      .defaultValue(false)
+      .sinceVersion("0.12.0")
+      .withDocumentation("If enabled, archival will proceed beyond savepoint, skipping savepoint commits."
+          + " If disabled, archival will stop at the earliest savepoint commit.");
+
   /**
    * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead
    */
@@ -107,7 +115,9 @@ public class HoodieArchivalConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String COMMITS_ARCHIVAL_BATCH_SIZE_PROP = COMMITS_ARCHIVAL_BATCH_SIZE.key();
-  /** @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead */
+  /**
+   * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_MAX_COMMITS_TO_KEEP = MAX_COMMITS_TO_KEEP.defaultValue();
   /**
@@ -183,6 +193,11 @@ public class HoodieArchivalConfig extends HoodieConfig {
 
     public HoodieArchivalConfig.Builder withCommitsArchivalBatchSize(int batchSize) {
       archivalConfig.setValue(COMMITS_ARCHIVAL_BATCH_SIZE, String.valueOf(batchSize));
+      return this;
+    }
+
+    public Builder withArchiveBeyondSavepoint(boolean archiveBeyondSavepoint) {
+      archivalConfig.setValue(ARCHIVE_BEYOND_SAVEPOINT, String.valueOf(archiveBeyondSavepoint));
       return this;
     }
 

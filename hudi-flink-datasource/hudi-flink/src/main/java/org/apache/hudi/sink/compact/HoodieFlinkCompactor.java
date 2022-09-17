@@ -37,6 +37,7 @@ import org.apache.hudi.util.StreamerUtil;
 import com.beust.jcommander.JCommander;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.client.deployment.application.ApplicationExecutionException;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
@@ -56,6 +57,8 @@ import java.util.stream.Collectors;
 public class HoodieFlinkCompactor {
 
   protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCompactor.class);
+
+  private static final String NO_EXECUTE_KEYWORD = "no execute";
 
   /**
    * Flink Execution Environment.
@@ -94,6 +97,12 @@ public class HoodieFlinkCompactor {
       LOG.info("Hoodie Flink Compactor running only single round");
       try {
         compactionScheduleService.compact();
+      } catch (ApplicationExecutionException aee) {
+        if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
+          LOG.info("Compaction is not performed");
+        } else {
+          throw aee;
+        }
       } catch (Exception e) {
         LOG.error("Got error running delta sync once. Shutting down", e);
         throw e;
@@ -121,6 +130,7 @@ public class HoodieFlinkCompactor {
    * Schedules compaction in service.
    */
   public static class AsyncCompactionService extends HoodieAsyncTableService {
+
     private static final long serialVersionUID = 1L;
 
     /**
@@ -173,6 +183,8 @@ public class HoodieFlinkCompactor {
       // set table schema
       CompactionUtil.setAvroSchema(conf, metaClient);
 
+      CompactionUtil.setPreCombineField(conf, metaClient);
+
       // infer changelog mode
       CompactionUtil.inferChangelogMode(conf, metaClient);
 
@@ -191,6 +203,12 @@ public class HoodieFlinkCompactor {
             try {
               compact();
               Thread.sleep(cfg.minCompactionIntervalSeconds * 1000);
+            } catch (ApplicationExecutionException aee) {
+              if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
+                LOG.info("Compaction is not performed.");
+              } else {
+                throw new HoodieException(aee.getMessage(), aee);
+              }
             } catch (Exception e) {
               LOG.error("Shutting down compaction service due to exception", e);
               error = true;

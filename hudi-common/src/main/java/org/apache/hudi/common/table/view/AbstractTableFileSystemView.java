@@ -95,8 +95,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   private BootstrapIndex bootstrapIndex;
 
-  private String getPartitionPathFromFilePath(String fullPath) {
-    return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), new Path(fullPath).getParent());
+  private String getPartitionPathFor(HoodieBaseFile baseFile) {
+    return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), baseFile.getHadoopPath().getParent());
   }
 
   /**
@@ -166,8 +166,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected List<HoodieFileGroup> buildFileGroups(Stream<HoodieBaseFile> baseFileStream,
       Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline, boolean addPendingCompactionFileSlice) {
     Map<Pair<String, String>, List<HoodieBaseFile>> baseFiles =
-        baseFileStream.collect(Collectors.groupingBy((baseFile) -> {
-          String partitionPathStr = getPartitionPathFromFilePath(baseFile.getPath());
+        baseFileStream.collect(Collectors.groupingBy(baseFile -> {
+          String partitionPathStr = getPartitionPathFor(baseFile);
           return Pair.of(partitionPathStr, baseFile.getFileId());
         }));
 
@@ -183,7 +183,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     List<HoodieFileGroup> fileGroups = new ArrayList<>();
     fileIdSet.forEach(pair -> {
       String fileId = pair.getValue();
-      HoodieFileGroup group = new HoodieFileGroup(pair.getKey(), fileId, timeline);
+      String partitionPath = pair.getKey();
+      HoodieFileGroup group = new HoodieFileGroup(partitionPath, fileId, timeline);
       if (baseFiles.containsKey(pair)) {
         baseFiles.get(pair).forEach(group::addBaseFile);
       }
@@ -373,7 +374,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param baseFile base File
    */
   protected boolean isBaseFileDueToPendingCompaction(HoodieBaseFile baseFile) {
-    final String partitionPath = getPartitionPathFromFilePath(baseFile.getPath());
+    final String partitionPath = getPartitionPathFor(baseFile);
 
     Option<Pair<String, CompactionOperation>> compactionWithInstantTime =
         getPendingCompactionOperationWithInstant(new HoodieFileGroupId(partitionPath, baseFile.getFileId()));

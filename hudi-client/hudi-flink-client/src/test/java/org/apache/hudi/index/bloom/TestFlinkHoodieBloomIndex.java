@@ -18,8 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -38,6 +36,9 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 import org.apache.hudi.testutils.HoodieFlinkWriteableTestTable;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -376,8 +377,8 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     Map<HoodieKey, Option<Pair<String, String>>> recordLocations = new HashMap<>();
     for (HoodieRecord taggedRecord : taggedRecords) {
       recordLocations.put(taggedRecord.getKey(), taggedRecord.isCurrentLocationKnown()
-                ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
-                : Option.empty());
+          ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
+          : Option.empty());
     }
     // Should not find any files
     for (Option<Pair<String, String>> record : recordLocations.values()) {
@@ -401,8 +402,8 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     recordLocations.clear();
     for (HoodieRecord taggedRecord : taggedRecords) {
       recordLocations.put(taggedRecord.getKey(), taggedRecord.isCurrentLocationKnown()
-                ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
-                : Option.empty());
+          ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
+          : Option.empty());
     }
 
     // Check results

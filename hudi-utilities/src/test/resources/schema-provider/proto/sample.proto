@@ -1,0 +1,77 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+syntax = "proto3";
+
+package test;
+
+option java_package = "org.apache.hudi.utilities.test.proto";
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+// Creates a message to cover all the various types you can encounter in a proto3 message
+message Sample {
+  // primitive types
+  double primitive_double = 1;
+  float primitive_float = 2;
+  int32 primitive_int = 3;
+  int64 primitive_long = 4;
+  uint32 primitive_unsigned_int = 5;
+  uint64 primitive_unsigned_long = 6;
+  sint32 primitive_signed_int = 7;
+  sint64 primitive_signed_long = 8;
+  fixed32 primitive_fixed_int = 9;
+  fixed64 primitive_fixed_long = 10;
+  sfixed32 primitive_fixed_signed_int = 11;
+  sfixed64 primitive_fixed_signed_long = 12;
+  bool primitive_boolean = 13;
+  string primitive_string = 14;
+  bytes primitive_bytes = 15;
+  repeated int32 repeated_primitive = 16;
+  map<string, int32> map_primitive = 17;
+  // nested custom message
+  Nested nested_message = 18;
+  repeated Nested repeated_message = 19;
+  map<string, Nested> map_message = 20;
+  // well known types
+  google.protobuf.StringValue wrapped_string = 21;
+  google.protobuf.Int32Value wrapped_int = 22;
+  google.protobuf.Int64Value wrapped_long = 23;
+  google.protobuf.UInt32Value wrapped_unsigned_int = 24;
+  google.protobuf.UInt64Value wrapped_unsigned_long = 25;
+  google.protobuf.DoubleValue wrapped_double = 26;
+  google.protobuf.FloatValue wrapped_float = 27;
+  google.protobuf.BoolValue wrapped_boolean = 28;
+  google.protobuf.BytesValue wrapped_bytes = 29;
+  // enum
+  SampleEnum enum = 30;
+  // timestamp
+  google.protobuf.Timestamp timestamp = 31;
+}
+
+message Nested {
+  int32 nested_int = 1;
+}
+
+enum SampleEnum {
+  FIRST = 0;
+  SECOND = 1;
+}

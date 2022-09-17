@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.{ConfigProperty, DFSPropertiesConfiguration
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
@@ -386,13 +386,14 @@ object DataSourceWriteOptions {
     .withDocumentation(" Config to indicate how long (by millisecond) before a retry should issued for failed microbatch")
 
   /**
-   * By default true (in favor of streaming progressing over data integrity)
+   * By default false. If users prefer streaming progress over data integrity, can set this to true.
    */
   val STREAMING_IGNORE_FAILED_BATCH: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.ignore.failed.batch")
-    .defaultValue("true")
+    .defaultValue("false")
     .withDocumentation("Config to indicate whether to ignore any non exception error (e.g. writestatus error)"
-      + " within a streaming microbatch")
+      + " within a streaming microbatch. Turning this on, could hide the write status errors while the spark checkpoint moves ahead." +
+      "So, would recommend users to use this with caution.")
 
   val META_SYNC_CLIENT_TOOL_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.meta.sync.client.tool.class")
@@ -426,17 +427,17 @@ object DataSourceWriteOptions {
   @Deprecated
   val METASTORE_URIS: ConfigProperty[String] = HiveSyncConfigHolder.METASTORE_URIS
   @Deprecated
-  val hivePartitionFieldsInferFunc: JavaFunction[HoodieConfig, Option[String]] = HoodieSyncConfig.PARTITION_FIELDS_INFERENCE_FUNCTION
-  @Deprecated
   val HIVE_PARTITION_FIELDS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_FIELDS
-  @Deprecated
-  val hivePartitionExtractorInferFunc: JavaFunction[HoodieConfig, Option[String]] = HoodieSyncConfig.PARTITION_EXTRACTOR_CLASS_FUNCTION
   @Deprecated
   val HIVE_PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS
   @Deprecated
   val HIVE_ASSUME_DATE_PARTITION: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION
   @Deprecated
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT: ConfigProperty[String] = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT
+
+  /** @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
+  @Deprecated
+  val HIVE_USE_JDBC: ConfigProperty[String] = HiveSyncConfigHolder.HIVE_USE_JDBC
   @Deprecated
   val HIVE_AUTO_CREATE_DATABASE: ConfigProperty[String] = HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE
   @Deprecated
@@ -496,6 +497,9 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link HIVE_USE_PRE_APACHE_INPUT_FORMAT} and its methods instead */
   @Deprecated
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT.key()
+  /** @deprecated Use {@link HIVE_USE_JDBC} and its methods instead */
+  @Deprecated
+  val HIVE_USE_JDBC_OPT_KEY = HiveSyncConfigHolder.HIVE_USE_JDBC.key()
   /** @deprecated Use {@link HIVE_AUTO_CREATE_DATABASE} and its methods instead */
   @Deprecated
   val HIVE_AUTO_CREATE_DATABASE_OPT_KEY = HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE.key()
@@ -686,6 +690,9 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.defaultValue()
   @Deprecated
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
+  /** @deprecated Use {@link HIVE_USE_JDBC} and its methods instead */
+  @Deprecated
+  val DEFAULT_HIVE_USE_JDBC_OPT_VAL = HiveSyncConfigHolder.HIVE_USE_JDBC.defaultValue()
   /** @deprecated Use {@link HIVE_AUTO_CREATE_DATABASE} and its methods instead */
   @Deprecated
   val DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY = HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE.defaultValue()
@@ -780,9 +787,13 @@ object DataSourceOptionsHelper {
 
   def inferKeyGenClazz(props: TypedProperties): String = {
     val partitionFields = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), null)
-    if (partitionFields != null) {
+    val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
+    inferKeyGenClazz(recordsKeyFields, partitionFields)
+  }
+
+  def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
+    if (!StringUtils.isNullOrEmpty(partitionFields)) {
       val numPartFields = partitionFields.split(",").length
-      val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
       val numRecordKeyFields = recordsKeyFields.split(",").length
       if (numPartFields == 1 && numRecordKeyFields == 1) {
         classOf[SimpleKeyGenerator].getName

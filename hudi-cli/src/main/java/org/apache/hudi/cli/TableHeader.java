@@ -40,6 +40,16 @@ public class TableHeader {
   }
 
   /**
+   * Add fields from another {@link TableHeader} instance.
+   *
+   * @param tableHeader {@link TableHeader} instance.
+   */
+  public TableHeader addTableHeaderFields(TableHeader tableHeader) {
+    fieldNames.addAll(tableHeader.getFieldNames());
+    return this;
+  }
+
+  /**
    * Get all field names.
    */
   public List<String> getFieldNames() {

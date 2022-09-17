@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
@@ -154,6 +156,10 @@ public class FileCreateUtils {
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
     }
+  }
+
+  public static void createSavepointCommit(String basePath, String instantTime, HoodieSavepointMetadata savepointMetadata) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.SAVEPOINT_EXTENSION, TimelineMetadataUtils.serializeSavepointMetadata(savepointMetadata).get());
   }
 
   public static void createCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
@@ -285,6 +291,10 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
   }
 
+  public static void createInflightSavepoint(String basePath, String instantTime) throws IOException {
+    createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION);
+  }
+
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
@@ -312,7 +322,9 @@ public class FileCreateUtils {
     if (Files.notExists(baseFilePath)) {
       Files.createFile(baseFilePath);
     }
-    new RandomAccessFile(baseFilePath.toFile(), "rw").setLength(length);
+    RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw");
+    raf.setLength(length);
+    raf.close();
     Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
   }
 
@@ -334,7 +346,9 @@ public class FileCreateUtils {
     if (Files.notExists(logFilePath)) {
       Files.createFile(logFilePath);
     }
-    new RandomAccessFile(logFilePath.toFile(), "rw").setLength(length);
+    RandomAccessFile raf = new RandomAccessFile(logFilePath.toFile(), "rw");
+    raf.setLength(length);
+    raf.close();
   }
 
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)
@@ -380,13 +394,13 @@ public class FileCreateUtils {
     removeMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION);
   }
 
-  public static java.nio.file.Path renameFileToTemp(java.nio.file.Path sourcePath, String instantTime) throws IOException {
-    java.nio.file.Path dummyFilePath = sourcePath.getParent().resolve(instantTime + ".temp");
+  public static Path renameFileToTemp(Path sourcePath, String instantTime) throws IOException {
+    Path dummyFilePath = sourcePath.getParent().resolve(instantTime + ".temp");
     Files.move(sourcePath, dummyFilePath);
     return dummyFilePath;
   }
 
-  public static void renameTempToMetaFile(java.nio.file.Path tempFilePath, java.nio.file.Path destPath) throws IOException {
+  public static void renameTempToMetaFile(Path tempFilePath, Path destPath) throws IOException {
     Files.move(tempFilePath, destPath);
   }
 
@@ -438,5 +452,10 @@ public class FileCreateUtils {
 
   public static void deleteDeltaCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
     deleteMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, fs);
+  }
+
+  public static void deleteSavepointCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION, fs);
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.SAVEPOINT_EXTENSION, fs);
   }
 }

@@ -24,7 +24,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.12.0-SNAPSHOT</version>
+        <version>0.13.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -78,12 +78,12 @@
                                     <include>org.apache.hudi:hudi-hive-sync</include>
                                     <include>org.apache.hudi:hudi-aws</include>
                                     <include>org.apache.parquet:parquet-avro</include>
-                                    <include>org.apache.avro:avro</include>
                                     <include>com.amazonaws:dynamodb-lock-client</include>
                                     <include>com.amazonaws:aws-java-sdk-cloudwatch</include>
                                     <include>com.amazonaws:aws-java-sdk-dynamodb</include>
                                     <include>com.amazonaws:aws-java-sdk-core</include>
                                     <include>com.amazonaws:aws-java-sdk-glue</include>
+                                    <include>io.dropwizard.metrics:metrics-core</include>
                                     <include>com.beust:jcommander</include>
                                     <include>commons-io:commons-io</include>
                                     <include>org.apache.hbase:hbase-common</include>
@@ -142,12 +142,8 @@
                                     <shadedPattern>org.apache.hudi.com.amazonaws.</shadedPattern>
                                 </relocation>
                                 <relocation>
-                                    <pattern>org.apache.parquet.avro.</pattern>
-                                    <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>org.apache.avro.</pattern>
-                                    <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                                    <pattern>com.codahale.metrics.</pattern>
+                                    <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
                                 </relocation>
                                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
                                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
@@ -279,18 +275,12 @@
             <artifactId>hudi-aws</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- Need parquet and avro to run AWSGlueCatalogSyncTool using run_sync_tool with this bundle.
-        Parquet and avro from other packages have already been shaded above-->
+
+        <!-- Parquet -->
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-avro</artifactId>
             <version>${parquet.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.avro</groupId>
-            <artifactId>avro</artifactId>
-            <version>${avro.version}</version>
             <scope>compile</scope>
         </dependency>
     </dependencies>

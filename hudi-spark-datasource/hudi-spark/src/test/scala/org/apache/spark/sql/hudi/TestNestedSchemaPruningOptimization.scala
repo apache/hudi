@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
-import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec, RowDataSourceScanExec, SparkPlan}
 import org.apache.spark.sql.internal.SQLConf
@@ -31,6 +30,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
     val explainCommand = sparkAdapter.getCatalystPlanUtils.createExplainCommand(plan, extended = true)
     executePlan(explainCommand)
       .executeCollect()
+      .map(_.getString(0))
       .mkString("\n")
   }
 

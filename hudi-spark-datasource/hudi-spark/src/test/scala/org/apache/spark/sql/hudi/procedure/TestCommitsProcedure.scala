@@ -17,9 +17,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-
-class TestCommitsProcedure extends HoodieSparkSqlTestBase {
+class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call show_archived_commits Procedure") {
     withTempDir { tmp =>
@@ -62,7 +60,7 @@ class TestCommitsProcedure extends HoodieSparkSqlTestBase {
 
       // collect archived commits for table
       val endTs = commits(0).get(0).toString
-      val archivedCommits = spark.sql(s"""call show_archived_commits(table => '$tableName', endTs => '$endTs')""").collect()
+      val archivedCommits = spark.sql(s"""call show_archived_commits(table => '$tableName', end_ts => '$endTs')""").collect()
       assertResult(4) {
         archivedCommits.length
       }
@@ -110,7 +108,7 @@ class TestCommitsProcedure extends HoodieSparkSqlTestBase {
 
       // collect archived commits for table
       val endTs = commits(0).get(0).toString
-      val archivedCommits = spark.sql(s"""call show_archived_commits_metadata(table => '$tableName', endTs => '$endTs')""").collect()
+      val archivedCommits = spark.sql(s"""call show_archived_commits_metadata(table => '$tableName', end_ts => '$endTs')""").collect()
       assertResult(4) {
         archivedCommits.length
       }

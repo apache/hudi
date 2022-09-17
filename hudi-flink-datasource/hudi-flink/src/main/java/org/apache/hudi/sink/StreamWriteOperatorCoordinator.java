@@ -153,11 +153,6 @@ public class StreamWriteOperatorCoordinator
   private CkpMetadata ckpMetadata;
 
   /**
-   * Current checkpoint.
-   */
-  private long checkpointId = -1;
-
-  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -219,7 +214,6 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void checkpointCoordinator(long checkpointId, CompletableFuture<byte[]> result) {
-    this.checkpointId = checkpointId;
     executor.execute(
         () -> {
           try {
@@ -265,15 +259,6 @@ public class StreamWriteOperatorCoordinator
           }
         }, "commits the instant %s", this.instant
     );
-  }
-
-  @Override
-  public void notifyCheckpointAborted(long checkpointId) {
-    if (checkpointId == this.checkpointId && !WriteMetadataEvent.BOOTSTRAP_INSTANT.equals(this.instant)) {
-      executor.execute(() -> {
-        this.ckpMetadata.abortInstant(this.instant);
-      }, "abort instant %s", this.instant);
-    }
   }
 
   @Override
@@ -439,6 +424,11 @@ public class StreamWriteOperatorCoordinator
         Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
         // sync Hive synchronously if it is enabled in batch mode.
         syncHive();
+        // schedules the compaction plan in batch execution mode
+        if (tableState.scheduleCompaction) {
+          // if async compaction is on, schedule the compaction
+          CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, true);
+        }
       }
     }
   }
