@@ -1523,7 +1523,7 @@
     </repository>
     <repository>
       <id>Spark-3.3.1</id>
-      <url>https://repository.apache.org/content/repositories/orgapachespark-1418/</url>
+      <url>https://repository.apache.org/content/repositories/orgapachespark-1418</url>
     </repository>
   </repositories>
 
