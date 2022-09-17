@@ -109,6 +109,27 @@ public class TestAWSDmsAvroPayload {
   }
 
   @Test
+  public void testDeleteWithEmptyPayLoad() {
+    Schema avroSchema = new Schema.Parser().parse(AVRO_SCHEMA_STRING);
+    Properties properties = new Properties();
+
+    GenericRecord oldRecord = new GenericData.Record(avroSchema);
+    oldRecord.put("field1", 2);
+    oldRecord.put("Op", "U");
+
+    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.empty());
+
+    try {
+      Option<IndexedRecord> outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema, properties);
+      // expect nothing to be committed to table
+      assertFalse(outputPayload.isPresent());
+    } catch (Exception e) {
+      e.printStackTrace();
+      fail("Unexpected exception");
+    }
+  }
+
+  @Test
   public void testPreCombineWithDelete() {
     Schema avroSchema = new Schema.Parser().parse(AVRO_SCHEMA_STRING);
     GenericRecord deleteRecord = new GenericData.Record(avroSchema);
