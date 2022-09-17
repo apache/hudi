@@ -441,11 +441,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
       .key("hoodie.write.schema")
       .noDefaultValue()
-      .withDocumentation("Config allowing to override writing schema. This might be necessary in " +
-          "cases when writing schema derived from the incoming dataset diverges is not the schema " +
-          "we actually want to be leveraged for writing. This is the case for 'partial-update' use-cases " +
-          "(like `MERGE INTO` Spark SQL statement for ex) where only a projection of the incoming dataset " +
-          "might be used to persist into the existing table, prompting us to override the original schema");
+      .withDocumentation("Config allowing to override writing schema. This might be necessary in "
+          + "cases when writing schema derived from the incoming dataset diverges is not the schema "
+          + "we actually want to be leveraged for writing. This is the case for 'partial-update' use-cases "
+          + "(like `MERGE INTO` Spark SQL statement for ex) where only a projection of the incoming dataset "
+          + "might be used to persist into the existing table, prompting us to override the original schema");
 
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
