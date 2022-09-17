@@ -278,9 +278,9 @@ object ExpressionPayload {
     .maximumSize(16).build[String, Schema]()
 
   def setWriteSchema(properties: Properties): Schema = {
-    ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA.key),
-      s"Missing ${HoodieWriteConfig.WRITE_SCHEMA.key}")
-    writeSchemaCache.get(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA.key),
+    ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key),
+      s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key}")
+    writeSchemaCache.get(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key),
       new Function[String, Schema] {
         override def apply(t: String): Schema = new Schema.Parser().parse(t)
     })

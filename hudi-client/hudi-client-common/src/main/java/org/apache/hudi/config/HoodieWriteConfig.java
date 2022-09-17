@@ -438,15 +438,14 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "OPTIMISTIC_CONCURRENCY_CONTROL: Multiple writers can operate on the table and exactly one of them succeed "
           + "if a conflict (writes affect the same file group) is detected.");
 
-  /**
-   * Currently the  use this to specify the write schema.
-   */
-  public static final ConfigProperty<String> WRITE_SCHEMA = ConfigProperty
+  public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
       .key("hoodie.write.schema")
       .noDefaultValue()
-      .withDocumentation("The specified write schema. In most case, we do not need set this parameter,"
-          + " but for the case the write schema is not equal to the specified table schema, we can"
-          + " specify the write schema by this parameter. Used by MergeIntoHoodieTableCommand");
+      .withDocumentation("Config allowing to override writing schema. This might be necessary in " +
+          "cases when writing schema derived from the incoming dataset diverges is not the schema " +
+          "we actually want to be leveraged for writing. This is the case for 'partial-update' use-cases " +
+          "(like `MERGE INTO` Spark SQL statement for ex) where only a projection of the incoming dataset " +
+          "might be used to persist into the existing table, prompting us to override the original schema");
 
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
@@ -938,6 +937,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     setValue(AVRO_SCHEMA_STRING, schemaStr);
   }
 
+  /**
+   * Get the write schema for written records.
+   *
+   * If the WRITE_SCHEMA has specified, we use the WRITE_SCHEMA.
+   * Or else we use the AVRO_SCHEMA as the write schema.
+   * @return
+   */
+  public String getWriteSchema() {
+    if (props.containsKey(WRITE_SCHEMA_OVERRIDE.key())) {
+      return getString(WRITE_SCHEMA_OVERRIDE);
+    }
+    return getSchema();
+  }
+
   public String getInternalSchema() {
     return getString(INTERNAL_SCHEMA_STRING);
   }
@@ -962,21 +975,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     setValue(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
   }
 
-  /**
-   * Get the write schema for written records.
-   *
-   * If the WRITE_SCHEMA has specified, we use the WRITE_SCHEMA.
-   * Or else we use the AVRO_SCHEMA as the write schema.
-   * @return
-   */
-  public String getWriteSchema() {
-    if (props.containsKey(WRITE_SCHEMA.key())) {
-      return getString(WRITE_SCHEMA);
-    }
-    return getSchema();
-  }
-
-  public boolean getAvroSchemaValidate() {
+  public boolean shouldValidateAvroSchema() {
     return getBoolean(AVRO_SCHEMA_VALIDATE_ENABLE);
   }
 

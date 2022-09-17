@@ -781,7 +781,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
 
-    if (!config.getAvroSchemaValidate() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+    if (!config.shouldValidateAvroSchema() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
       // Check not required
       return;
     }
@@ -808,7 +808,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     try {
       validateSchema();
     } catch (HoodieException e) {
-      throw new HoodieUpsertException("Failed upsert schema compatibility check.", e);
+      throw new HoodieUpsertException("Failed upsert schema compatibility check", e);
     }
   }
 
@@ -816,7 +816,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     try {
       validateSchema();
     } catch (HoodieException e) {
-      throw new HoodieInsertException("Failed insert schema compability check.", e);
+      throw new HoodieInsertException("Failed insert schema compatibility check", e);
     }
   }
 

@@ -299,7 +299,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // insert actions.
     var writeParams = parameters +
       (OPERATION.key -> operation) +
-      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString) +
+      (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key -> getTableSchema.toString) +
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
     val updateActions = mergeInto.matchedActions.filter(_.isInstanceOf[UpdateAction])
