@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFileReader;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -124,12 +125,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setUp() throws IOException, InterruptedException {
-    this.fs = MiniClusterUtil.fileSystem;
+    FileSystem fileSystemOriginal = MiniClusterUtil.fileSystem;
 
-    assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
+    assertTrue(fileSystemOriginal.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
     this.partitionPath = new Path(tempDir.toAbsolutePath().toString());
     this.basePath = tempDir.getParent().toString();
-    HoodieTestUtils.init(MiniClusterUtil.configuration, basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTableMetaClient init = HoodieTestUtils.init(MiniClusterUtil.configuration, basePath, HoodieTableType.MERGE_ON_READ);
+    this.fs = init.getFs();
   }
 
   @AfterEach
