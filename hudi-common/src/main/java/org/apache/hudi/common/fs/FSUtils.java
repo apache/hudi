@@ -653,6 +653,14 @@ public class FSUtils {
     return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
   }
 
+  /**
+   * Chdfs will throw {@code IOException} instead of {@code EOFException}. It will cause error in isBlockCorrupted().
+   * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
+   */
+  public static boolean isCHDSFileSystem(FileSystem fs) {
+    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
+  }
+
   public static Configuration registerFileSystem(Path file, Configuration conf) {
     Configuration returnConf = new Configuration(conf);
     String scheme = FSUtils.getFs(file.toString(), conf).getScheme();

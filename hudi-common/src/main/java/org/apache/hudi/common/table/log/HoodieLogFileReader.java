@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.fs.BoundedFsDataInputStream;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
@@ -476,6 +477,10 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     if (FSUtils.isGCSFileSystem(fs)) {
       // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception
       return new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCS(fsDataInputStream, logFile, bufferSize), true);
+    }
+
+    if (FSUtils.isCHDSFileSystem(fs)) {
+      return new BoundedFsDataInputStream(fs, logFile.getPath(), fsDataInputStream);
     }
 
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
