@@ -52,7 +52,6 @@ public class HoodieLockMetrics {
     this.writeConfig = writeConfig;
 
     if (isMetricsEnabled) {
-      Metrics.init(writeConfig);
       MetricRegistry registry = Metrics.getInstance().getRegistry();
 
       lockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME));
