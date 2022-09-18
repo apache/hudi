@@ -278,9 +278,15 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
   protected HoodieLogFormat.Writer createLogWriter(
       Option<FileSlice> fileSlice, String baseCommitTime) throws IOException {
+    return createLogWriter(fileSlice, baseCommitTime, "");
+  }
+
+  protected HoodieLogFormat.Writer createLogWriter(
+      Option<FileSlice> fileSlice, String baseCommitTime, String fileSuffix) throws IOException {
     int logVersion = HoodieLogFile.LOGFILE_BASE_VERSION;
     long logFileSize = 0L;
-    String logWriteToken = writeToken;
+    String logWriteToken = writeToken + fileSuffix;
+    String rolloverLogWriteToken = writeToken + fileSuffix;
     if (fileSlice.isPresent()) {
       Option<HoodieLogFile> latestLogFileOpt = fileSlice.get().getLatestLogFile();
       if (latestLogFileOpt.isPresent()) {
@@ -298,7 +304,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
         .withFileSize(logFileSize)
         .withSizeThreshold(config.getLogFileMaxSize())
         .withFs(fs)
-        .withRolloverLogWriteToken(writeToken)
+        .withRolloverLogWriteToken(rolloverLogWriteToken)
         .withLogWriteToken(logWriteToken)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
   }

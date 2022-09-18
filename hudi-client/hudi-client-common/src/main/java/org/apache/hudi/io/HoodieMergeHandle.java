@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -219,7 +220,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
             config,
             hoodieTable.getMetaClient().getTableConfig(),
             tableSchema,
-            createLogWriter(Option.empty(), instantTime),
+            createLogWriter(Option.empty(), instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
             IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
       }
     } catch (IOException io) {

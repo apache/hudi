@@ -26,6 +26,8 @@ import org.apache.hudi.exception.HoodieException;
 
 public class HoodieCDCUtils {
 
+  public static final String CDC_LOGFILE_SUFFIX = "-cdc";
+
   /* the `op` column represents how a record is changed. */
   public static final String CDC_OPERATION_TYPE = "op";
 
