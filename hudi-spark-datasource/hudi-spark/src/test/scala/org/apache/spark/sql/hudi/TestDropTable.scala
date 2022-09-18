@@ -349,7 +349,6 @@ class TestDropTable extends HoodieSparkSqlTestBase {
          |""".stripMargin)
 
     spark.sql(s"drop view $viewName")
-    checkAnswer(s"show views like '$viewName'")()
   }
 
   test("Drop global temporary view should not fail") {
@@ -361,7 +360,6 @@ class TestDropTable extends HoodieSparkSqlTestBase {
          |""".stripMargin)
 
     spark.sql(s"drop view global_temp.$viewName")
-    checkAnswer(s"show views in global_temp like '$viewName'")()
   }
 
   private def alterSerdeProperties(sessionCatalog: SessionCatalog, tableIdt: TableIdentifier,
