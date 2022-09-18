@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -259,6 +260,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
 
     boolean hiveStylePartitioning = Boolean.parseBoolean(metaClient.getTableConfig().getHiveStylePartitioningEnable());
+    boolean urlEncodePartitioning = Boolean.parseBoolean(this.metaClient.getTableConfig().getUrlEncodePartitioning());
     Map<String, Integer> partitionNamesToIdx = IntStream.range(0, partitionNames.length)
         .mapToObj(i -> Pair.of(i, partitionNames[i]))
         .collect(Collectors.toMap(Pair::getValue, Pair::getKey));
@@ -268,11 +270,13 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       String columnNames = this.partitionColumns[idx];
       if (partitionNamesToIdx.containsKey(columnNames)) {
         int k = partitionNamesToIdx.get(columnNames);
-        queryPartitionPath.append(hiveStylePartitioning ? columnNames + "=" : "").append(values[k]).append("/");
+        String value =  urlEncodePartitioning ? PartitionPathEncodeUtils.escapePathName(values[k]) : values[k];
+        queryPartitionPath.append(hiveStylePartitioning ? columnNames + "=" : "").append(value).append("/");
       } else {
         break;
       }
     }
+    queryPartitionPath.deleteCharAt(queryPartitionPath.length() - 1);
     // Return directly if all partition values are specified.
     if (idx == this.partitionColumns.length) {
       return Collections.singletonList(new PartitionPath(queryPartitionPath.toString(), parsePartitionColumnValues(partitionColumns, queryPartitionPath.toString())));

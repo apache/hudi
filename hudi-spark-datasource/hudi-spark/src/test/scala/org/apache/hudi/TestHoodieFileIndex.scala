@@ -185,8 +185,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testPartitionPruneWithPartitionEncode(partitionEncode: Boolean): Unit = {
+  @CsvSource(Array("true,true", "true,false", "false,true", "false,false"))
+  def testPartitionPruneWithPartitionEncode(partitionEncode: Boolean, refreshOnInitialization: Boolean): Unit = {
     val props = new Properties()
     props.setProperty(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, String.valueOf(partitionEncode))
     initMetaClient(props)
@@ -201,7 +201,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
+    val opts = queryOpts +
+      (DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.key -> refreshOnInitialization.toString)
+    val fileIndex = HoodieFileIndex(spark, metaClient, None, opts)
 
     val partitionFilter1 = EqualTo(attribute("partition"), literal("2021/03/08"))
     val partitionName = if (partitionEncode) PartitionPathEncodeUtils.escapePathName("2021/03/08")
