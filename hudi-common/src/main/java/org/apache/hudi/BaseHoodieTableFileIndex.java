@@ -55,6 +55,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.hadoop.CachingPath.createPathUnsafe;
 
@@ -283,6 +284,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     List<String> matchedPartitionPaths = queryRelativePartitionPaths.stream()
         .flatMap(prefix -> {
           try {
+            // Handle wildcard specially. This will have FileIndex to query the table as non-partitioned-table
+            if (prefix.contains("*")) {
+              return Stream.empty();
+            }
             return tableMetadata.getPartitionPathsWithPrefix(prefix).stream();
           } catch (IOException e) {
             throw new HoodieIOException("Error fetching partition paths with prefix: " + prefix, e);
