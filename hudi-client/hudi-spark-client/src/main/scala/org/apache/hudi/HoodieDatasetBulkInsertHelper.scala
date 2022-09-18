@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.SparkHoodieIndexFactory
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BuiltinKeyGenerator, SparkKeyGeneratorInterface}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper
@@ -59,7 +58,8 @@ object HoodieDatasetBulkInsertHelper extends Logging {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
 
-    val keyGeneratorClassName = getKeyGenClassName(config)
+    val keyGeneratorClassName = config.getStringOrThrow(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME,
+      "Key-generator class name is required")
 
     val prependedRdd: RDD[InternalRow] =
       df.queryExecution.toRdd.mapPartitions { iter =>
@@ -154,11 +154,6 @@ object HoodieDatasetBulkInsertHelper extends Logging {
     table.getContext.parallelize(writeStatuses.toList.asJava)
   }
 
-  private def getKeyGenClassName(config: HoodieWriteConfig): String = {
-    Option(config.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()))
-      .getOrElse(HoodieSparkKeyGeneratorFactory.inferKeyGenClazz(config.getProps))
-  }
-
   private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean): RDD[InternalRow] = {
     val recordKeyMetaFieldOrd = schema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
     val partitionPathMetaFieldOrd = schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
@@ -203,7 +198,7 @@ object HoodieDatasetBulkInsertHelper extends Logging {
   }
 
   private def getPartitionPathFields(config: HoodieWriteConfig): Seq[String] = {
-    val keyGeneratorClassName = getKeyGenClassName(config)
+    val keyGeneratorClassName = config.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME)
     val keyGenerator = ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps)).asInstanceOf[BuiltinKeyGenerator]
     keyGenerator.getPartitionPathFields.asScala
   }

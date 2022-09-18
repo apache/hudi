@@ -136,7 +136,7 @@ object SqlKeyGenerator {
     if (beforeKeyGenClassName != null && beforeKeyGenClassName.nonEmpty) {
       HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(beforeKeyGenClassName)
     } else {
-      HoodieSparkKeyGeneratorFactory.inferKeyGenClazz(props)
+      DataSourceOptionsHelper.inferKeyGenClazz(props)
     }
   }
 }
