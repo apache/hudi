@@ -64,12 +64,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> INLINE_COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key("hoodie.compact.inline.max.delta.commits")
       .defaultValue("5")
-      .withDocumentation("Number of delta commits after the last compaction, before scheduling of a new compaction is attempted.");
+      .withDocumentation("Number of delta commits after the last compaction, before scheduling of a new compaction is attempted. "
+          + "This config takes effect only for the compaction triggering strategy based on the number of commits, "
+          + "i.e., NUM_COMMITS, NUM_COMMITS_AFTER_LAST_REQUEST, NUM_AND_TIME, and NUM_OR_TIME.");
 
   public static final ConfigProperty<String> INLINE_COMPACT_TIME_DELTA_SECONDS = ConfigProperty
       .key("hoodie.compact.inline.max.delta.seconds")
       .defaultValue(String.valueOf(60 * 60))
-      .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a new one.");
+      .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a new one. "
+          + "This config takes effect only for the compaction triggering strategy based on the elapsed time, "
+          + "i.e., TIME_ELAPSED, NUM_AND_TIME, and NUM_OR_TIME.");
 
   public static final ConfigProperty<String> INLINE_COMPACT_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.compact.inline.trigger.strategy")
