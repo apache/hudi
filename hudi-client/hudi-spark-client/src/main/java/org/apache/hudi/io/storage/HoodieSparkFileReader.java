@@ -36,6 +36,8 @@ public interface HoodieSparkFileReader extends HoodieFileReader<InternalRow> {
 
   ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema) throws IOException;
 
+  ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
+
   default ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema) throws IOException {
     ClosableIterator<InternalRow> iterator = getInternalRowIterator(readerSchema);
     StructType structType = HoodieInternalRowUtils.getCachedSchema(readerSchema);
@@ -44,7 +46,8 @@ public interface HoodieSparkFileReader extends HoodieFileReader<InternalRow> {
 
   @Override
   default ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    // TODO used in HoodieParquetDataBlock
-    return getRecordIterator(readerSchema);
+    ClosableIterator<InternalRow> iterator = getInternalRowIterator(readerSchema, requestedSchema);
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
+    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data, structType)));
   }
 }

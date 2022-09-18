@@ -121,10 +121,10 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
   private def upsertThenReadBenchmark(): Unit = {
     val avroMerger = classOf[HoodieAvroRecordMerger].getName
     val sparkMerger = classOf[HoodieSparkRecordMerger].getName
-    val df = createComplexDataFrame(100, 5)
+    val df = createComplexDataFrame(1000000, 1)
     withTempDir { avroPath =>
       withTempDir { sparkPath =>
-        val upsertBenchmark = new HoodieBenchmark("pref upsert", 100, 3)
+        val upsertBenchmark = new HoodieBenchmark("pref upsert", 1000000, 3)
         prepareHoodieTable(avroTable, new Path(avroPath.getCanonicalPath, avroTable).toUri.toString, "mor", avroMerger, df)
         prepareHoodieTable(sparkTable, new Path(sparkPath.getCanonicalPath, sparkTable).toUri.toString, "mor", sparkMerger, df)
         df.createOrReplaceTempView("input_df")
@@ -133,9 +133,9 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
             spark.sql(s"update $tableName set s1 = 's1_new' where id > 0")
           }
         }
-        // upsertBenchmark.run()
+        upsertBenchmark.run()
 
-        val readBenchmark = new HoodieBenchmark("pref read", 100000, 3)
+        val readBenchmark = new HoodieBenchmark("pref read", 1000000, 3)
         Seq(avroMerger, sparkMerger).zip(Seq(avroTable, sparkTable)).foreach {
           case (merger, tableName) => readBenchmark.addCase(merger) { _ =>
             spark.sql(s"select * from $tableName").collect()

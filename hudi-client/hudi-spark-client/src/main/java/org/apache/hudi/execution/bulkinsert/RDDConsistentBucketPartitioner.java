@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ConsistentHashingNode;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -235,8 +234,8 @@ public class RDDConsistentBucketPartitioner<T> extends RDDBucketIndexPartitioner
     final String[] sortColumns = sortColumnNames;
     final SerializableSchema schema = new SerializableSchema(HoodieAvroUtils.addMetadataFields((new Schema.Parser().parse(table.getConfig().getSchema()))));
     Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
-      Object obj1 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) t1, sortColumns, schema, consistentLogicalTimestampEnabled);
-      Object obj2 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)t2, sortColumns, schema, consistentLogicalTimestampEnabled);
+      Object obj1 = t1.getRecordColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
+      Object obj2 = t2.getRecordColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
       return ((Comparable) obj1).compareTo(obj2);
     };
 

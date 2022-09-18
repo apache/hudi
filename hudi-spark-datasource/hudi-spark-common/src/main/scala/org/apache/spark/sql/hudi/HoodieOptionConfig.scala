@@ -77,7 +77,7 @@ object HoodieOptionConfig {
     .build()
 
   val SQL_MERGER_STRATEGY: HoodieSQLOption[String] = buildConf()
-    .withSqlKey("mergerSTRATEGY")
+    .withSqlKey("mergerStrategy")
     .withHoodieKey(DataSourceWriteOptions.MERGER_STRATEGY.key)
     .withTableConfigKey(HoodieTableConfig.MERGER_STRATEGY.key)
     .defaultValue(StringUtils.DEFAULT_MERGER_STRATEGY_UUID)

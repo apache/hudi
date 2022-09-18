@@ -71,8 +71,18 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public ClosableIterator<InternalRow> getInternalRowIterator(Schema schema) throws IOException {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
-    conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), structType.json());
+    return getInternalRowIterator(schema, null);
+  }
+
+  @Override
+  public ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    if (requestedSchema == null) {
+      requestedSchema = readerSchema;
+    }
+    StructType readerStructType = HoodieInternalRowUtils.getCachedSchema(readerSchema);
+    StructType requestedStructType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
+    conf.set(ParquetReadSupport.PARQUET_READ_SCHEMA, readerStructType.json());
+    conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), requestedStructType.json());
     conf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(), (Boolean) SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()));
     conf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), (Boolean) SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()));
     InputFile inputFile = HadoopInputFile.fromPath(path, conf);
