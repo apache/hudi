@@ -31,13 +31,18 @@ import java.util.concurrent.TimeUnit;
 
 public class HoodieLockMetrics {
 
+  public static final String LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME = "lock.acquire.attempts";
+  public static final String LOCK_ACQUIRE_SUCCESS_COUNTER_NAME = "lock.acquire.success";
+  public static final String LOCK_ACQUIRE_FAILURES_COUNTER_NAME = "lock.acquire.failure";
+  public static final String LOCK_ACQUIRE_DURATION_TIMER_NAME = "lock.acquire.duration";
+  public static final String LOCK_REQUEST_LATENCY_TIMER_NAME = "lock.request.latency";
   private final HoodieWriteConfig writeConfig;
   private final boolean isMetricsEnabled;
   private final int keepLastNtimes = 100;
   private final transient HoodieTimer lockDurationTimer = HoodieTimer.create();
   private final transient HoodieTimer lockApiRequestDurationTimer = HoodieTimer.create();
   private transient Counter lockAttempts;
-  private transient Counter succesfulLockAttempts;
+  private transient Counter successfulLockAttempts;
   private transient Counter failedLockAttempts;
   private transient Timer lockDuration;
   private transient Timer lockApiRequestDuration;
@@ -50,17 +55,17 @@ public class HoodieLockMetrics {
       Metrics.init(writeConfig);
       MetricRegistry registry = Metrics.getInstance().getRegistry();
 
-      lockAttempts = registry.counter(getMetricsName("acquire.attempts"));
-      succesfulLockAttempts = registry.counter(getMetricsName("acquire.success"));
-      failedLockAttempts = registry.counter(getMetricsName("acquire.failure"));
+      lockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME));
+      successfulLockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_SUCCESS_COUNTER_NAME));
+      failedLockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_FAILURES_COUNTER_NAME));
 
-      lockDuration = createTimerForMetrics(registry, "acquire.duration");
-      lockApiRequestDuration = createTimerForMetrics(registry, "request.latency");
+      lockDuration = createTimerForMetrics(registry, LOCK_ACQUIRE_DURATION_TIMER_NAME);
+      lockApiRequestDuration = createTimerForMetrics(registry, LOCK_REQUEST_LATENCY_TIMER_NAME);
     }
   }
 
   private String getMetricsName(String metric) {
-    return writeConfig == null ? null : String.format("%s.%s.%s", writeConfig.getMetricReporterMetricsNamePrefix(), "lock", metric);
+    return writeConfig == null ? null : String.format("%s.%s", writeConfig.getMetricReporterMetricsNamePrefix(), metric);
   }
 
   private Timer createTimerForMetrics(MetricRegistry registry, String metric) {
@@ -84,12 +89,7 @@ public class HoodieLockMetrics {
       long durationMs = lockApiRequestDurationTimer.endTimer();
       lockApiRequestDuration.update(durationMs, TimeUnit.MILLISECONDS);
       lockAttempts.inc();
-    }
-  }
-
-  public void startLockHeldTimerContext() {
-    if (isMetricsEnabled) {
-      succesfulLockAttempts.inc();
+      successfulLockAttempts.inc();
       lockDurationTimer.startTimer();
     }
   }

@@ -73,7 +73,6 @@ public class LockManager implements Serializable, AutoCloseable {
           acquired = lockProvider.tryLock(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS);
           if (acquired) {
             metrics.updateLockAcquiredMetric();
-            metrics.startLockHeldTimerContext();
             break;
           }
           metrics.updateLockNotAcquiredMetric();
