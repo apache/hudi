@@ -18,16 +18,13 @@
 
 package org.apache.hudi.index.bucket;
 
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -56,17 +53,8 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     HoodieIndexUtils
         .getLatestFileSlicesForPartition(partition, hoodieTable)
         .forEach(fileSlice -> {
-          String fileId;
-          String commitTime;
-          if (fileSlice.getBaseFile().isPresent()) {
-            HoodieBaseFile file = fileSlice.getBaseFile().get();
-            fileId = file.getFileId();
-            commitTime = file.getCommitTime();
-          } else {
-            HoodieLogFile logFile = fileSlice.getLatestLogFile().get();
-            fileId = logFile.getFileId();
-            commitTime = logFile.getBaseCommitTime();
-          }
+          String fileId = fileSlice.getFileId();
+          String commitTime = fileSlice.getBaseInstantTime();
 
           int bucketId = BucketIdentifier.bucketIdFromFileId(fileId);
           if (!bucketIdToFileIdMapping.containsKey(bucketId)) {
