@@ -726,6 +726,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(30)
       .withDescription("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30");
 
+  public static final ConfigOption<String> CLUSTERING_UPDATE_STRATEGY = ConfigOptions
+      .key("hoodie.clustering.updates.strategy")
+      .stringType()
+      .defaultValue("org.apache.hudi.sink.clustering.update.strategy.FlinkRejectUpdateStrategy")
+      .withDescription("Determine how to handle updates of file groups that are under clustering. Default strategy rejects the updates");
+
   // ------------------------------------------------------------------------
   //  Hive Sync Options
   // ------------------------------------------------------------------------

@@ -54,6 +54,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy";
   public static final String FLINK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy";
+  public static final String FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy";
   public static final String SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy";
   public static final String JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
@@ -601,19 +603,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     private void setDefaults() {
-      // Consistent hashing bucket index
-      if (clusteringConfig.contains(HoodieIndexConfig.INDEX_TYPE.key())
-          && clusteringConfig.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
-          && clusteringConfig.getString(HoodieIndexConfig.INDEX_TYPE.key()).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name())
-          && clusteringConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key()).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name())) {
-        clusteringConfig.setDefaultValue(PLAN_STRATEGY_CLASS_NAME, SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
-        clusteringConfig.setDefaultValue(EXECUTION_STRATEGY_CLASS_NAME, SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
-      } else {
-        clusteringConfig.setDefaultValue(
-            PLAN_STRATEGY_CLASS_NAME, getDefaultPlanStrategyClassName(engineType));
-        clusteringConfig.setDefaultValue(
-            EXECUTION_STRATEGY_CLASS_NAME, getDefaultExecutionStrategyClassName(engineType));
-      }
+      clusteringConfig.setDefaultValue(PLAN_STRATEGY_CLASS_NAME, getDefaultPlanStrategyClassName(engineType));
+      clusteringConfig.setDefaultValue(EXECUTION_STRATEGY_CLASS_NAME, getDefaultExecutionStrategyClassName(engineType));
       clusteringConfig.setDefaults(HoodieClusteringConfig.class.getName());
     }
 
@@ -624,23 +615,28 @@ public class HoodieClusteringConfig extends HoodieConfig {
               + "schedule inline clustering (%s) can be enabled. Both can't be set to true at the same time. %s,%s", HoodieClusteringConfig.INLINE_CLUSTERING.key(),
           HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), inlineCluster, inlineClusterSchedule));
 
-      // Consistent hashing bucket index
-      if (clusteringConfig.contains(HoodieIndexConfig.INDEX_TYPE.key())
-          && clusteringConfig.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
-          && clusteringConfig.getString(HoodieIndexConfig.INDEX_TYPE.key()).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name())
-          && clusteringConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key()).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name())) {
-        ValidationUtils.checkArgument(clusteringConfig.getString(PLAN_STRATEGY_CLASS_NAME).equals(SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY),
-            "Consistent hashing bucket index only supports clustering plan strategy : " + SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
-        ValidationUtils.checkArgument(clusteringConfig.getString(EXECUTION_STRATEGY_CLASS_NAME).equals(SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY),
+      if (isConsistentHashingBucketIndex()) {
+        String planStrategy = clusteringConfig.getString(PLAN_STRATEGY_CLASS_NAME);
+        ValidationUtils.checkArgument(planStrategy.equals(SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY) || planStrategy.equals(FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY),
+            "Consistent hashing bucket index only supports clustering plan strategy : " + SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY + " | " + FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
+        ValidationUtils.checkArgument(engineType == EngineType.FLINK || clusteringConfig.getString(EXECUTION_STRATEGY_CLASS_NAME).equals(SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY),
             "Consistent hashing bucket index only supports clustering execution strategy : " + SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
       }
+    }
+
+    private boolean isConsistentHashingBucketIndex() {
+      return clusteringConfig.contains(HoodieIndexConfig.INDEX_TYPE.key())
+          && clusteringConfig.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
+          && clusteringConfig.getString(HoodieIndexConfig.INDEX_TYPE.key()).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name())
+          && clusteringConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key()).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name());
     }
 
     private String getDefaultPlanStrategyClassName(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+          return isConsistentHashingBucketIndex() ? SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY : SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
         case FLINK:
+          return isConsistentHashingBucketIndex() ? FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY : FLINK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
         case JAVA:
           return JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
         default:
@@ -651,7 +647,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     private String getDefaultExecutionStrategyClassName(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
+          return isConsistentHashingBucketIndex() ? SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY : SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
         case FLINK:
         case JAVA:
           return JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY;

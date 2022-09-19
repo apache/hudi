@@ -316,6 +316,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
     return Collections.unmodifiableList(new ArrayList<>(bucketInfoMap.values()));
   }
 
+  @Override
   public BucketInfo getBucketInfo(int bucketNumber) {
     return bucketInfoMap.get(bucketNumber);
   }

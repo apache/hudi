@@ -53,7 +53,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
+import org.apache.hudi.table.action.cluster.update.strategy.UpdateStrategy;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;

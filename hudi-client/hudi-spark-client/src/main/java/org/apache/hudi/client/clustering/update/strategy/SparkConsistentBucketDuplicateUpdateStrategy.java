@@ -39,9 +39,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
-import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
+import org.apache.hudi.table.action.cluster.update.strategy.ConsistentHashingUpdateStrategyUtils;
+import org.apache.hudi.table.action.cluster.update.strategy.UpdateStrategy;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -87,65 +87,20 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
       return Pair.of(taggedRecordsRDD, Collections.emptySet());
     }
 
-    // Read all pending/ongoing clustering plans
-    List<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlanPairs =
-        table.getMetaClient().getActiveTimeline().filterInflightsAndRequested().filter(instant -> instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).getInstants()
-            .map(instant -> ClusteringUtils.getClusteringPlan(table.getMetaClient(), instant))
-            .flatMap(o -> o.isPresent() ? Stream.of(o.get()) : Stream.empty())
-            .collect(Collectors.toList());
-
-    // Construct child node for each partition & build the bucket identifier
     final Set<String> partitions = new HashSet<>(filteredRecordsRDD.map(HoodieRecord::getPartitionPath).distinct().collectAsList());
-    Map<String, HoodieConsistentHashingMetadata> partitionToHashingMeta = new HashMap<>();
-    Map<String, String> partitionToInstant = new HashMap<>();
-    for (Pair<HoodieInstant, HoodieClusteringPlan> pair : instantPlanPairs) {
-      String instant = pair.getLeft().getTimestamp();
-      HoodieClusteringPlan plan = pair.getRight();
-      extractHashingMetadataFromClusteringPlan(instant, plan, partitions, partitionToHashingMeta, partitionToInstant);
-    }
-    Map<String, ConsistentBucketIdentifier> partitionToIdentifier = partitionToHashingMeta.entrySet().stream()
-        .collect(Collectors.toMap(Map.Entry::getKey, e -> new ConsistentBucketIdentifier(e.getValue())));
+    Map<String, Pair<String, ConsistentBucketIdentifier>> partitionToIdentifier =
+        ConsistentHashingUpdateStrategyUtils.constructPartitionToIdentifier(partitions, table.getMetaClient());
 
     // Produce records tagged with new record location
     List<String> indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
     HoodieData<HoodieRecord<T>> redirectedRecordsRDD = filteredRecordsRDD.map(r -> {
-      ConsistentHashingNode node = partitionToIdentifier.get(r.getPartitionPath()).getBucket(r.getKey(), indexKeyFields);
+      Pair<String, ConsistentBucketIdentifier> identifierPair = partitionToIdentifier.get(r.getPartitionPath());
+      ConsistentHashingNode node = identifierPair.getValue().getBucket(r.getKey(), indexKeyFields);
       return getTaggedRecord(new HoodieAvroRecord(r.getKey(), r.getData(), r.getOperation()),
-          Option.ofNullable(new HoodieRecordLocation(partitionToInstant.get(r.getPartitionPath()), FSUtils.createNewFileId(node.getFileIdPrefix(), 0))));
+          Option.ofNullable(new HoodieRecordLocation(identifierPair.getKey(), FSUtils.createNewFileId(node.getFileIdPrefix(), 0))));
     });
 
     // Return combined iterator (the original and records with new location)
     return Pair.of(taggedRecordsRDD.union(redirectedRecordsRDD), Collections.emptySet());
   }
-
-  private void extractHashingMetadataFromClusteringPlan(String instant, HoodieClusteringPlan plan, final Set<String> recordPartitions,
-                                                        Map<String, HoodieConsistentHashingMetadata> partitionToHashingMeta, Map<String, String> partitionToInstant) {
-    for (HoodieClusteringGroup group : plan.getInputGroups()) {
-      Map<String, String> groupMeta = group.getExtraMetadata();
-      String p = groupMeta.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
-      checkState(p != null, "Clustering plan does not has partition info, plan: " + plan);
-      // Skip unrelated clustering group
-      if (!recordPartitions.contains(p)) {
-        return;
-      }
-
-      String preInstant = partitionToInstant.putIfAbsent(p, instant);
-      checkState(preInstant == null || preInstant.equals(instant), "Find a partition: " + p + " with two clustering instants");
-      if (!partitionToHashingMeta.containsKey(p)) {
-        Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(table.getMetaClient(), p);
-        checkState(metadataOption.isPresent(), "Failed to load consistent hashing metadata for partition: " + p);
-        partitionToHashingMeta.put(p, metadataOption.get());
-      }
-
-      try {
-        String nodeJson = group.getExtraMetadata().get(SparkConsistentBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY);
-        List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(nodeJson);
-        partitionToHashingMeta.get(p).getChildrenNodes().addAll(nodes);
-      } catch (Exception e) {
-        LOG.error("Failed to parse child nodes in clustering plan", e);
-        throw new HoodieException("Failed to parse child nodes in clustering plan, partition: " + p + ", cluster group: " + group, e);
-      }
-    }
-  }
-
 }

@@ -19,7 +19,9 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,10 +29,12 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sink.clustering.update.strategy.BaseFlinkUpdateStrategy;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
@@ -107,6 +111,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    */
   private transient TotalSizeTracer tracer;
 
+  private transient BaseFlinkUpdateStrategy updateStrategy;
+
   /**
    * Constructs a StreamingSinkFunction.
    *
@@ -121,6 +127,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.tracer = new TotalSizeTracer(this.config);
     initBuffer();
     initWriteFunction();
+    this.updateStrategy = (BaseFlinkUpdateStrategy) ReflectionUtils.loadClass(
+        config.get(FlinkOptions.CLUSTERING_UPDATE_STRATEGY), new Class<?>[] {HoodieEngineContext.class}, this.writeClient.getEngineContext());
   }
 
   @Override
@@ -129,6 +137,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     // it would check the validity.
     // wait for the buffer data flush out and request a new instant
     flushRemaining(false);
+    this.updateStrategy.reset();
   }
 
   @Override
@@ -147,6 +156,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   /**
    * End input action for batch source.
    */
+  @Override
   public void endInput() {
     super.endInput();
     flushRemaining(true);
@@ -233,6 +243,21 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   /**
+   * Used for setting up before flush: patch up the first record with correct partition path and fileID.
+   *
+   * <p>Note: the method may modify the given records {@code records}.
+   */
+  private void patchFileIdToRecords(List<HoodieRecord> records, String fileId) {
+    // rewrite the first record with expected fileID
+    HoodieRecord<?> first = records.get(0);
+    HoodieRecord<?> record = new HoodieAvroRecord<>(first.getKey(), (HoodieRecordPayload) first.getData(), first.getOperation());
+    HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileId);
+    record.setCurrentLocation(newLoc);
+
+    records.set(0, record);
+  }
+
+  /**
    * Data bucket.
    */
   private static class DataBucket {
@@ -256,21 +281,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       return records.stream()
           .map(record -> record.toHoodieRecord(partitionPath))
           .collect(Collectors.toList());
-    }
-
-    /**
-     * Sets up before flush: patch up the first record with correct partition path and fileID.
-     *
-     * <p>Note: the method may modify the given records {@code records}.
-     */
-    public void preWrite(List<HoodieRecord> records) {
-      // rewrite the first record with expected fileID
-      HoodieRecord<?> first = records.get(0);
-      HoodieRecord<?> record = new HoodieAvroRecord<>(first.getKey(), (HoodieRecordPayload) first.getData(), first.getOperation());
-      HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileID);
-      record.setCurrentLocation(newLoc);
-
-      records.set(0, record);
     }
 
     public void reset() {
@@ -386,7 +396,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     if (flushBucket) {
       if (flushBucket(bucket)) {
         this.tracer.countDown(bucket.detector.totalSize);
-        bucket.reset();
       }
     } else if (flushBuffer) {
       // find the max size bucket and flush it out
@@ -396,7 +405,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       final DataBucket bucketToFlush = sortedBuckets.get(0);
       if (flushBucket(bucketToFlush)) {
         this.tracer.countDown(bucketToFlush.detector.totalSize);
-        bucketToFlush.reset();
       } else {
         LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
       }
@@ -419,13 +427,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     }
 
     List<HoodieRecord> records = bucket.writeBuffer();
-    ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
-    if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-      records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1, this.writeClient.getConfig().getSchema());
-    }
-    bucket.preWrite(records);
-    final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
-    records.clear();
+    final List<WriteStatus> writeStatus = writeBucket(instant, bucket, records);
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
@@ -437,6 +439,26 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.eventGateway.sendEventToCoordinator(event);
     writeStatuses.addAll(writeStatus);
     return true;
+  }
+
+  private List<WriteStatus> writeBucket(String instant, DataBucket bucket, List<HoodieRecord> records) {
+    ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
+    if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
+      records = FlinkWriteHelper.newInstance().deduplicateRecords(records, null, -1, this.writeClient.getConfig().getSchema());
+    }
+    this.updateStrategy.initialize(this.writeClient);
+    Pair<List<BaseFlinkUpdateStrategy.RecordsInstantPair>, List<HoodieFileGroupId>> recordListFgPair =
+        this.updateStrategy.handleUpdate(new HoodieFileGroupId(bucket.partitionPath, bucket.fileID),
+            Collections.singletonList(BaseFlinkUpdateStrategy.RecordsInstantPair.of(records, instant)));
+    List<WriteStatus> ret = new ArrayList<>();
+    for (int i = 0; i < recordListFgPair.getKey().size(); ++i) {
+      BaseFlinkUpdateStrategy.RecordsInstantPair recordsInstantPair = recordListFgPair.getKey().get(i);
+      patchFileIdToRecords(recordsInstantPair.records, recordListFgPair.getValue().get(i).getFileId());
+      ret.addAll(writeFunction.apply(recordsInstantPair.records, recordsInstantPair.instantTime));
+    }
+
+    bucket.reset();
+    return ret;
   }
 
   @SuppressWarnings("unchecked, rawtypes")
@@ -455,14 +477,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
           .forEach(bucket -> {
             List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
-              if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-                records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1,
-                    this.writeClient.getConfig().getSchema());
-              }
-              bucket.preWrite(records);
-              writeStatus.addAll(writeFunction.apply(records, currentInstant));
-              records.clear();
-              bucket.reset();
+              writeStatus.addAll(writeBucket(currentInstant, bucket, records));
             }
           });
     } else {

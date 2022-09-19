@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
+import org.apache.hudi.table.action.cluster.update.strategy.UpdateStrategy;
 
 import java.util.List;
 import java.util.Set;

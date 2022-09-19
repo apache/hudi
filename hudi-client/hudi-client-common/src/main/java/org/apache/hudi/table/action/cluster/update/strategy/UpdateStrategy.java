@@ -7,16 +7,17 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.table.action.cluster.strategy;
+package org.apache.hudi.table.action.cluster.update.strategy;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -34,7 +36,7 @@ public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> implement
 
   protected final transient HoodieEngineContext engineContext;
   protected final HoodieTable table;
-  protected final Set<HoodieFileGroupId> fileGroupsInPendingClustering;
+  protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;
 
   public UpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
     this.engineContext = engineContext;
@@ -49,5 +51,13 @@ public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> implement
    * @return the recordsRDD strategy updated and a set of file groups to be updated while pending clustering.
    */
   public abstract Pair<I, Set<HoodieFileGroupId>> handleUpdate(I taggedRecordsRDD);
+
+  /**
+   * Check the update records to the file group in clustering with given file group id
+   * NOTE: used in flink engine
+   */
+  public Pair<I, List<HoodieFileGroupId>> handleUpdate(HoodieFileGroupId fileId, I records) {
+    throw new UnsupportedOperationException("Unsupported");
+  }
 
 }

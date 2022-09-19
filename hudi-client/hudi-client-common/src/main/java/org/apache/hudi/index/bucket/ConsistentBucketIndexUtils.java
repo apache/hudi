@@ -92,6 +92,9 @@ public class ConsistentBucketIndexUtils {
 
     try {
       HoodieWrapperFileSystem fs = metaClient.getFs();
+      if (!fs.exists(metadataPath)) {
+        return Option.empty();
+      }
       FileStatus[] metaFiles = fs.listStatus(metadataPath);
       final HoodieTimeline completedCommits = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
       Predicate<FileStatus> metaFilePredicate = fileStatus -> {

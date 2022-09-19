@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -57,6 +58,9 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
 
   private List<String> indexKeyFields;
   private Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
+  /**
+   * Cache mapping between node -> location, to avoid repeated creation of the same location objects.
+   */
   private Map<ConsistentHashingNode, HoodieRecordLocation> nodeToRecordLocation;
 
   /**
@@ -107,9 +111,9 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     return partitionToIdentifier.computeIfAbsent(partition, p -> {
-      HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadMetadata(this.metaClient, p);
-      ValidationUtils.checkArgument(metadata != null);
-      return new ConsistentBucketIdentifier(metadata);
+      Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(this.metaClient, p);
+      ValidationUtils.checkArgument(metadataOption.isPresent());
+      return new ConsistentBucketIdentifier(metadataOption.get());
     });
   }
 
