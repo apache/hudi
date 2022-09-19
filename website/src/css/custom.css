@@ -10,7 +10,9 @@
   --ifm-color-primary-text: rgb(13, 177, 249);
   --ifm-color-secondary-text: rgb(41, 85, 122);
   --ifm-navbar-link-hover-color: var(--ifm-color-primary-text);
-  --ifm-color-primary: rgba(7, 159, 202, 255);
+  --ifm-link-color: var(--ifm-color-primary-text);
+  --ifm-menu-color-active: var(--ifm-color-primary-text);
+  --ifm-color-primary:  var(--ifm-color-primary-text);
   --ifm-color-primary-dark: rgba(10, 159, 202, 255);
   --ifm-color-primary-darker: rgba(0,78,127,255);
   --ifm-color-primary-darkest: rgba(0,55,103,255);
@@ -52,6 +54,61 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
   height: 30px;
   width: 30px;
   
+}
+
+@font-face {
+  font-family: "Rubik";
+  src: url('/assets/fonts/rubic/Rubik-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: "Rubik Bold";
+  src: url('/assets/fonts/rubic/Rubik-Bold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: "Rubik SemiBold";
+  src: url('/assets/fonts/rubic/Rubik-SemiBold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: "Work Sans";
+  src: url('/assets/fonts/work_sans/WorkSans-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: "Work SansMedium";
+  src: url('/assets/fonts/work_sans/WorkSans-Medium.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: "Work SansSemiBold";
+  src: url('/assets/fonts/work_sans/WorkSans-SemiBold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: "Work SansBold";
+  src: url('/assets/fonts/work_sans/WorkSans-Bold.ttf') format('truetype');
+}
+
+body {
+  font-family: "Work Sans";
+}
+
+h1 {
+  font-family: "Rubik Bold" !important;
+}
+
+h2 {
+  font-family: "Rubik SemiBold" !important;
+}
+
+h3, h4 {
+  font-family: "Work SansBold";
+}
+
+h5 {
+  font-family: "Work SansMedium";
 }
 
 @media (max-width: 767px) {

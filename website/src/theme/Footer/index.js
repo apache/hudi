@@ -62,7 +62,7 @@ function MultiColumnLinks({ links }) {
     <>
       {links.map((linkItem, i) => (
         <div key={i} className="col footer__col">
-          <div className="footer__title">{linkItem.title}</div>
+          <h2 className="footer__title">{linkItem.title}</h2>
           <ul className="footer__items">
             {linkItem.items.map((item, key) =>
               item.html ? (
@@ -174,7 +174,7 @@ function Footer() {
             ))}
         </div>
         {copyright && (
-          <div className="footer__bottom text--center">
+          <div className="footer__bottom">
             {copyright ? (
               <div
                 className={clsx("footer__copyright", styles.footerCopyright)} // Developer provided the HTML, so assume it's safe.

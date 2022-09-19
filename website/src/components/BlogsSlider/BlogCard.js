@@ -42,7 +42,7 @@ const BlogCard = ({ blog }) => {
             <div className={styles.date}>{formattedDate}</div>
 
           </div>
-          <h2 className={styles.blogTitle}>{title}</h2>
+          <h5 className={styles.blogTitle}>{title}</h5>
         </div>
       </div>
     </div>

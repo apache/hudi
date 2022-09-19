@@ -6,7 +6,7 @@ const WhyHudiCards = ({ icon, title, subtitle }) => {
   return (
     <div className={styles.cardWrapper}>
       <div className={styles.iconWrapper}>{Icon && <Icon />}</div>
-      <div className={styles.title}>{title}</div>
+      <h3 className={styles.title}>{title}</h3>
       <div className={styles.subtitle}>{subtitle}</div>
     </div>
   );
