@@ -48,8 +48,8 @@ $CONFLUENT_DIR/bin/confluent-hub install confluentinc/kafka-connect-hdfs:10.1.0
 cp -r $CONFLUENT_DIR/share/confluent-hub-components/confluentinc-kafka-connect-hdfs/* /usr/local/share/kafka/plugins/
 ```
 
-Now, build the packaged jar that contains all the hudi classes, including the Hudi Kafka Connector. And copy it 
-to the plugin path that contains all the other jars (`/usr/local/share/kafka/plugins/lib`)
+Now, build the packaged jar that contains all the hudi classes, including the Hudi Kafka Connector. And copy it to the
+plugin path that contains all the other jars (`/usr/local/share/kafka/plugins/lib`)
 
 ```bash
 cd $HUDI_DIR
@@ -58,8 +58,20 @@ mkdir -p /usr/local/share/kafka/plugins/lib
 cp $HUDI_DIR/packaging/hudi-kafka-connect-bundle/target/hudi-kafka-connect-bundle-0.11.0-SNAPSHOT.jar /usr/local/share/kafka/plugins/lib
 ```
 
-Set up a Kafka broker locally. Download the latest apache kafka from [here](https://kafka.apache.org/downloads). 
-Once downloaded and built, run the Zookeeper server and Kafka server using the command line tools.
+If the Hudi Sink Connector writes to a target Hudi table on [Amazon S3](https://aws.amazon.com/s3/), you need two
+additional jars, `hadoop-aws-2.10.1.jar` and `aws-java-sdk-bundle-1.11.271.jar`, in the `plugins/lib` folder. You may
+download them using the following commands. Note that, when you specify the target table path on S3, you need to use
+`s3a://` prefix.
+
+```bash
+cd /usr/local/share/kafka/plugins/lib
+wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.11.271/aws-java-sdk-bundle-1.11.271.jar
+wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/2.10.1/hadoop-aws-2.10.1.jar
+```
+
+Set up a Kafka broker locally. Download the latest apache kafka from [here](https://kafka.apache.org/downloads). Once
+downloaded and built, run the Zookeeper server and Kafka server using the command line tools.
+
 ```bash
 export KAFKA_HOME=/path/to/kafka_install_dir
 cd $KAFKA_HOME
@@ -67,6 +79,7 @@ cd $KAFKA_HOME
 ./bin/zookeeper-server-start.sh ./config/zookeeper.properties
 ./bin/kafka-server-start.sh ./config/server.properties
 ```
+
 Wait until the kafka cluster is up and running.
 
 ### 2 - Set up the schema registry
@@ -426,5 +439,30 @@ Generally, we support both Read-Optimized that reads only parquet base files and
 records across base and log files. However, currently there is a limitation where we are not able to read records from 
 only log files. Hence, the queries for Hudi Kafka Connect will only work after compaction merges the records into base files. Alternatively,
 users have the option to reconfigure the table type to `COPY_ON_WRITE` in config-sink.json.
+
+### 9 - Troubleshoot
+
+#### javax.security.auth.login.LoginException
+If during the execution of Hudi Sink connector, you see this error:
+
+```Caused by: javax.security.auth.login.LoginException: java.lang.NullPointerException: invalid null input: name```
+, is very likely that your Kafka Connect service was started by an unnamed user. To see if this is your case,
+ssh into your Kafka Connect container/server and run:
+`whoami`
+
+If you receive a message like this `whoami: cannot find name for user ID ...`, you'll need to change the service user starting Kafka Connect.
+If you are using Docker images, modify your Dockerfile.
+
+To change the service user of your docker image, add this to your Dockerfile:
+```dockerfile
+USER <name of an existing service user>
+```
+
+To create a new service user for your docker image, add this to your Dockerfile:
+```dockerfile
+RUN useradd kafka-conn-service -r 
+USER kafka-conn-service
+```
+
 
 

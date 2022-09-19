@@ -21,8 +21,7 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
-import org.apache.hudi.common.data.HoodieList;
-import org.apache.hudi.common.data.HoodieMapPair;
+import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -104,7 +103,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
   public void testLoadInvolvedFiles(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieBloomIndex index = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
-    HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient, false);
+    HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
     HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Create some partitions, and put some files
@@ -185,8 +184,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
           partitionRecordKeyMap.put(t.getLeft(), recordKeyList);
         });
 
-    List<Pair<String, HoodieKey>> comparisonKeyList = HoodieList.getList(
-        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieMapPair.of(partitionRecordKeyMap)));
+    List<Pair<String, HoodieKey>> comparisonKeyList = index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.lazy(partitionRecordKeyMap)).collectAsList();
 
     assertEquals(10, comparisonKeyList.size());
     java.util.Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
@@ -379,8 +377,8 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     Map<HoodieKey, Option<Pair<String, String>>> recordLocations = new HashMap<>();
     for (HoodieRecord taggedRecord : taggedRecords) {
       recordLocations.put(taggedRecord.getKey(), taggedRecord.isCurrentLocationKnown()
-                ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
-                : Option.empty());
+          ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
+          : Option.empty());
     }
     // Should not find any files
     for (Option<Pair<String, String>> record : recordLocations.values()) {
@@ -404,8 +402,8 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     recordLocations.clear();
     for (HoodieRecord taggedRecord : taggedRecords) {
       recordLocations.put(taggedRecord.getKey(), taggedRecord.isCurrentLocationKnown()
-                ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
-                : Option.empty());
+          ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
+          : Option.empty());
     }
 
     // Check results

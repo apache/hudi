@@ -28,11 +28,13 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.conf.Configuration;
@@ -67,6 +69,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
+
 /**
  * Utility functions related to accessing the file storage.
  */
@@ -95,22 +99,26 @@ public class FSUtils {
     return conf;
   }
 
-  public static FileSystem getFs(String path, Configuration conf) {
+  public static FileSystem getFs(String pathStr, Configuration conf) {
+    return getFs(new Path(pathStr), conf);
+  }
+
+  public static FileSystem getFs(Path path, Configuration conf) {
     FileSystem fs;
     prepareHadoopConf(conf);
     try {
-      fs = new Path(path).getFileSystem(conf);
+      fs = path.getFileSystem(conf);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to get instance of " + FileSystem.class.getName(), e);
     }
     return fs;
   }
 
-  public static FileSystem getFs(String path, Configuration conf, boolean localByDefault) {
+  public static FileSystem getFs(String pathStr, Configuration conf, boolean localByDefault) {
     if (localByDefault) {
-      return getFs(addSchemeIfLocalPath(path).toString(), conf);
+      return getFs(addSchemeIfLocalPath(pathStr), conf);
     }
-    return getFs(path, conf);
+    return getFs(pathStr, conf);
   }
 
   /**
@@ -154,12 +162,12 @@ public class FSUtils {
   }
 
   // TODO: this should be removed
-  public static String makeDataFileName(String instantTime, String writeToken, String fileId) {
+  public static String makeBaseFileName(String instantTime, String writeToken, String fileId) {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime,
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
   }
 
-  public static String makeDataFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
+  public static String makeBaseFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, fileExtension);
   }
 
@@ -177,7 +185,7 @@ public class FSUtils {
   }
 
   public static String getCommitTime(String fullFileName) {
-    if (isLogFile(new Path(fullFileName))) {
+    if (isLogFile(fullFileName)) {
       return fullFileName.split("_")[1].split("\\.")[0];
     }
     return fullFileName.split("_")[2].split("\\.")[0];
@@ -211,8 +219,8 @@ public class FSUtils {
    * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
   public static String getRelativePartitionPath(Path basePath, Path fullPartitionPath) {
-    basePath = Path.getPathWithoutSchemeAndAuthority(basePath);
-    fullPartitionPath = Path.getPathWithoutSchemeAndAuthority(fullPartitionPath);
+    basePath = getPathWithoutSchemeAndAuthority(basePath);
+    fullPartitionPath = getPathWithoutSchemeAndAuthority(fullPartitionPath);
 
     String fullPartitionPathStr = fullPartitionPath.toString();
 
@@ -229,7 +237,7 @@ public class FSUtils {
 
   /**
    * Obtain all the partition paths, that are present in this table, denoted by presence of
-   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}.
+   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE_PREFIX}.
    *
    * If the basePathStr is a subdirectory of .hoodie folder then we assume that the partitions of an internal
    * table (a hoodie table within the .hoodie directory) are to be obtained.
@@ -245,7 +253,7 @@ public class FSUtils {
     final List<String> partitions = new ArrayList<>();
     processFiles(fs, basePathStr, (locatedFileStatus) -> {
       Path filePath = locatedFileStatus.getPath();
-      if (filePath.getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+      if (filePath.getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
         partitions.add(getRelativePartitionPath(basePath, filePath.getParent()));
       }
       return true;
@@ -341,6 +349,10 @@ public class FSUtils {
    */
   public static String createNewFileIdPfx() {
     return UUID.randomUUID().toString();
+  }
+
+  public static String createNewFileId(String idPfx, int id) {
+    return String.format("%s-%d", idPfx, id);
   }
 
   /**
@@ -460,8 +472,12 @@ public class FSUtils {
   }
 
   public static boolean isLogFile(Path logPath) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
-    return matcher.find() && logPath.getName().contains(".log");
+    return isLogFile(logPath.getName());
+  }
+
+  public static boolean isLogFile(String fileName) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
+    return matcher.find() && fileName.contains(".log");
   }
 
   /**
@@ -585,12 +601,39 @@ public class FSUtils {
   }
 
   public static Path getPartitionPath(String basePath, String partitionPath) {
-    return getPartitionPath(new Path(basePath), partitionPath);
+    if (StringUtils.isNullOrEmpty(partitionPath)) {
+      return new Path(basePath);
+    }
+
+    // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
+    //       absolute path
+    String properPartitionPath = partitionPath.startsWith("/")
+        ? partitionPath.substring(1)
+        : partitionPath;
+    return getPartitionPath(new CachingPath(basePath), properPartitionPath);
   }
 
   public static Path getPartitionPath(Path basePath, String partitionPath) {
-    // FOr non-partitioned table, return only base-path
-    return ((partitionPath == null) || (partitionPath.isEmpty())) ? basePath : new Path(basePath, partitionPath);
+    // For non-partitioned table, return only base-path
+    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new CachingPath(basePath, partitionPath);
+  }
+
+  /**
+   * Extracts the file name from the relative path based on the table base path.  For example:
+   * "/2022/07/29/file1.parquet", "/2022/07/29" -> "file1.parquet"
+   * "2022/07/29/file2.parquet", "2022/07/29" -> "file2.parquet"
+   * "/file3.parquet", "" -> "file3.parquet"
+   * "file4.parquet", "" -> "file4.parquet"
+   *
+   * @param filePathWithPartition the relative file path based on the table base path.
+   * @param partition             the relative partition path.  For partitioned table, `partition` contains the relative partition path;
+   *                              for non-partitioned table, `partition` is empty
+   * @return Extracted file name in String.
+   */
+  public static String getFileName(String filePathWithPartition, String partition) {
+    int offset = StringUtils.isNullOrEmpty(partition)
+        ? (filePathWithPartition.startsWith("/") ? 1 : 0) : partition.length() + 1;
+    return filePathWithPartition.substring(offset);
   }
 
   /**
@@ -608,6 +651,14 @@ public class FSUtils {
    */
   public static boolean isGCSFileSystem(FileSystem fs) {
     return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
+  }
+
+  /**
+   * Chdfs will throw {@code IOException} instead of {@code EOFException}. It will cause error in isBlockCorrupted().
+   * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
+   */
+  public static boolean isCHDFileSystem(FileSystem fs) {
+    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
   }
 
   public static Configuration registerFileSystem(Path file, Configuration conf) {

@@ -36,6 +36,7 @@ import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUI
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_CONNECTION_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_SESSION_TIMEOUT_MS;
+import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_DATABASE_NAME_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_METASTORE_URI_PROP_KEY;
@@ -92,7 +93,7 @@ public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_NUM_RETRIES = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY)
-      .defaultValue(String.valueOf(0))
+      .defaultValue(String.valueOf(10))
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum number of times to retry to acquire lock additionally from the lock manager.");
 
@@ -106,7 +107,13 @@ public class HoodieLockConfig extends HoodieConfig {
       .key(FILESYSTEM_LOCK_PATH_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
-      .withDocumentation("For DFS based lock providers, path to store the locks under.");
+      .withDocumentation("For DFS based lock providers, path to store the locks under. use Table's meta path as default");
+
+  public static final ConfigProperty<Integer> FILESYSTEM_LOCK_EXPIRE = ConfigProperty
+        .key(FILESYSTEM_LOCK_EXPIRE_PROP_KEY)
+        .defaultValue(0)
+        .sinceVersion("0.12.0")
+        .withDocumentation("For DFS based lock providers, expire time in minutes, must be a nonnegative number, default means no expire");
 
   public static final ConfigProperty<String> HIVE_DATABASE_NAME = ConfigProperty
       .key(HIVE_DATABASE_NAME_PROP_KEY)
@@ -301,6 +308,16 @@ public class HoodieLockConfig extends HoodieConfig {
 
     public HoodieLockConfig.Builder withConflictResolutionStrategy(ConflictResolutionStrategy conflictResolutionStrategy) {
       lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME, conflictResolutionStrategy.getClass().getName());
+      return this;
+    }
+
+    public HoodieLockConfig.Builder withFileSystemLockPath(String path) {
+      lockConfig.setValue(FILESYSTEM_LOCK_PATH, path);
+      return this;
+    }
+
+    public HoodieLockConfig.Builder withFileSystemLockExpire(Integer expireTime) {
+      lockConfig.setValue(FILESYSTEM_LOCK_EXPIRE, String.valueOf(expireTime));
       return this;
     }
 

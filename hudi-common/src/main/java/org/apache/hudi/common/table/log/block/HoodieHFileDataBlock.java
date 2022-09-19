@@ -40,12 +40,12 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.io.storage.HoodieHFileReader;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -65,6 +65,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
 
   private final Option<Compression.Algorithm> compressionAlgorithm;
+  // This path is used for constructing HFile reader context, which should not be
+  // interpreted as the actual file path for the HFile data blocks
+  private final Path pathForReader;
 
   public HoodieHFileDataBlock(FSDataInputStream inputStream,
                               Option<byte[]> content,
@@ -73,16 +76,20 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Option<Schema> readerSchema,
                               Map<HeaderMetadataType, String> header,
                               Map<HeaderMetadataType, String> footer,
-                              boolean enablePointLookups) {
+                              boolean enablePointLookups,
+                              Path pathForReader) {
     super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME, enablePointLookups);
     this.compressionAlgorithm = Option.empty();
+    this.pathForReader = pathForReader;
   }
 
   public HoodieHFileDataBlock(List<IndexedRecord> records,
                               Map<HeaderMetadataType, String> header,
-                              Compression.Algorithm compressionAlgorithm) {
+                              Compression.Algorithm compressionAlgorithm,
+                              Path pathForReader) {
     super(records, header, new HashMap<>(), HoodieHFileReader.KEY_FIELD_NAME);
     this.compressionAlgorithm = Option.of(compressionAlgorithm);
+    this.pathForReader = pathForReader;
   }
 
   @Override
@@ -95,6 +102,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     HFileContext context = new HFileContextBuilder()
         .withBlockSize(DEFAULT_BLOCK_SIZE)
         .withCompression(compressionAlgorithm.get())
+        .withCellComparator(new HoodieHBaseKVComparator())
         .build();
 
     Configuration conf = new Configuration();
@@ -128,7 +136,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     }
 
     HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withOutputStream(ostream).withFileContext(context).withComparator(new HoodieHBaseKVComparator()).create();
+        .withOutputStream(ostream).withFileContext(context).create();
 
     // Write the records
     sortedRecordsMap.forEach((recordKey, recordBytes) -> {
@@ -139,6 +147,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         throw new HoodieIOException("IOException serializing records", e);
       }
     });
+
+    writer.appendFileInfo(HoodieHFileReader.SCHEMA_KEY.getBytes(), getSchema().toString().getBytes());
 
     writer.close();
     ostream.flush();
@@ -155,9 +165,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     // Read the content
-    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(content);
-    // Sets up the writer schema
-    reader.withSchema(writerSchema);
+    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(null, pathForReader, content, Option.of(writerSchema));
     Iterator<IndexedRecord> recordIterator = reader.getRecordIterator(readerSchema);
     return new ClosableIterator<IndexedRecord>() {
       @Override
@@ -179,13 +187,14 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   // TODO abstract this w/in HoodieDataBlock
   @Override
-  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
     Configuration inlineConf = new Configuration(blockContentLoc.getHadoopConf());
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+    inlineConf.setClassLoader(Thread.currentThread().getContextClassLoader());
 
     Path inlinePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
@@ -193,13 +202,18 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    // HFile read will be efficient if keys are sorted, since on storage, records are sorted by key. This will avoid unnecessary seeks.
-    Collections.sort(keys);
+    // HFile read will be efficient if keys are sorted, since on storage records are sorted by key.
+    // This will avoid unnecessary seeks.
+    List<String> sortedKeys = new ArrayList<>(keys);
+    Collections.sort(sortedKeys);
 
     final HoodieHFileReader<IndexedRecord> reader =
              new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf));
+
     // Get writer's schema from the header
-    final ClosableIterator<IndexedRecord> recordIterator = reader.getRecordIterator(keys, readerSchema);
+    final ClosableIterator<IndexedRecord> recordIterator =
+        fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
+
     return new ClosableIterator<IndexedRecord>() {
       @Override
       public boolean hasNext() {

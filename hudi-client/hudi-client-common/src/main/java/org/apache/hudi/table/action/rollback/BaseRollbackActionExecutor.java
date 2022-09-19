@@ -57,19 +57,19 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   protected final HoodieInstant instantToRollback;
   protected final boolean deleteInstants;
   protected final boolean skipTimelinePublish;
-  protected final boolean useMarkerBasedStrategy;
   private final TransactionManager txnManager;
   private final boolean skipLocking;
 
+  protected HoodieInstant resolvedInstant;
+
   public BaseRollbackActionExecutor(HoodieEngineContext context,
-      HoodieWriteConfig config,
-      HoodieTable<T, I, K, O> table,
-      String instantTime,
-      HoodieInstant instantToRollback,
-      boolean deleteInstants,
-      boolean skipLocking) {
-    this(context, config, table, instantTime, instantToRollback, deleteInstants,
-        false, config.shouldRollbackUsingMarkers(), skipLocking);
+                                    HoodieWriteConfig config,
+                                    HoodieTable<T, I, K, O> table,
+                                    String instantTime,
+                                    HoodieInstant instantToRollback,
+                                    boolean deleteInstants,
+                                    boolean skipLocking) {
+    this(context, config, table, instantTime, instantToRollback, deleteInstants, false, skipLocking);
   }
 
   public BaseRollbackActionExecutor(HoodieEngineContext context,
@@ -79,17 +79,12 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
       HoodieInstant instantToRollback,
       boolean deleteInstants,
       boolean skipTimelinePublish,
-      boolean useMarkerBasedStrategy,
       boolean skipLocking) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
+    this.resolvedInstant = instantToRollback;
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
-    this.useMarkerBasedStrategy = useMarkerBasedStrategy;
-    if (useMarkerBasedStrategy) {
-      ValidationUtils.checkArgument(!instantToRollback.isCompleted(),
-          "Cannot use marker based rollback strategy on completed instant:" + instantToRollback);
-    }
     this.skipLocking = skipLocking;
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
@@ -105,8 +100,6 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   private HoodieRollbackMetadata runRollback(HoodieTable<T, I, K, O> table, HoodieInstant rollbackInstant, HoodieRollbackPlan rollbackPlan) {
     ValidationUtils.checkArgument(rollbackInstant.getState().equals(HoodieInstant.State.REQUESTED)
         || rollbackInstant.getState().equals(HoodieInstant.State.INFLIGHT));
-    final HoodieTimer timer = new HoodieTimer();
-    timer.startTimer();
     final HoodieInstant inflightInstant = rollbackInstant.isRequested()
         ? table.getActiveTimeline().transitionRollbackRequestedToInflight(rollbackInstant)
         : rollbackInstant;
@@ -118,9 +111,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
         Option.of(rollbackTimer.endTimer()),
         Collections.singletonList(instantToRollback),
         stats);
-    if (!skipTimelinePublish) {
-      finishRollback(inflightInstant, rollbackMetadata);
-    }
+    finishRollback(inflightInstant, rollbackMetadata);
 
     // Finally, remove the markers post rollback.
     WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp())
@@ -185,7 +176,12 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
         }
       }
 
-      List<String> inflights = inflightAndRequestedCommitTimeline.getInstants().map(HoodieInstant::getTimestamp)
+      List<String> inflights = inflightAndRequestedCommitTimeline.getInstants().filter(instant -> {
+        if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+          return true;
+        }
+        return !ClusteringUtils.isPendingClusteringInstant(table.getMetaClient(), instant);
+      }).map(HoodieInstant::getTimestamp)
           .collect(Collectors.toList());
       if ((instantTimeToRollback != null) && !inflights.isEmpty()
           && (inflights.indexOf(instantTimeToRollback) != inflights.size() - 1)) {
@@ -237,19 +233,33 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   }
 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
+    boolean enableLocking = (!skipLocking && !skipTimelinePublish);
     try {
-      if (!skipLocking) {
-        this.txnManager.beginTransaction(Option.empty(), Option.empty());
+      if (enableLocking) {
+        this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
-      writeTableMetadata(rollbackMetadata);
-      table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
-          TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
-      LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
+
+      // If publish the rollback to the timeline, we first write the rollback metadata
+      // to metadata table
+      if (!skipTimelinePublish) {
+        writeTableMetadata(rollbackMetadata);
+      }
+
+      // Then we delete the inflight instant in the data table timeline if enabled
+      deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
+
+      // If publish the rollback to the timeline, we finally transition the inflight rollback
+      // to complete in the data table timeline
+      if (!skipTimelinePublish) {
+        table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
+            TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
+        LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
+      }
     } catch (IOException e) {
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     } finally {
-      if (!skipLocking) {
-        this.txnManager.endTransaction(Option.empty());
+      if (enableLocking) {
+        this.txnManager.endTransaction(Option.of(inflightInstant));
       }
     }
   }

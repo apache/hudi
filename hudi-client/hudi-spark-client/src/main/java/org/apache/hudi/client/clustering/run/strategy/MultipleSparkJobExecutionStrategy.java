@@ -46,6 +46,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.io.IOUtils;
@@ -128,7 +129,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    */
   public abstract HoodieData<WriteStatus> performClusteringWithRecordsRDD(final HoodieData<HoodieRecord<T>> inputRecords, final int numOutputGroups, final String instantTime,
                                                                        final Map<String, String> strategyParams, final Schema schema,
-                                                                       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
+                                                                       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata,
+                                                                       final Map<String, String> extraMetadata);
 
   /**
    * Create {@link BulkInsertPartitioner} based on strategy params.
@@ -137,7 +139,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    * @param schema         Schema of the data including metadata fields.
    * @return {@link RDDCustomColumnsSortPartitioner} if sort columns are provided, otherwise empty.
    */
-  protected Option<BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
+  protected BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
     Option<String[]> orderByColumnsOpt =
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
             .map(listStr -> listStr.split(","));
@@ -159,7 +161,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
-    });
+    }).orElse(BulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode()));
   }
 
   /**
@@ -174,7 +176,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
           .collect(Collectors.toList());
-      return performClusteringWithRecordsRDD(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, preserveHoodieMetadata);
+      return performClusteringWithRecordsRDD(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, preserveHoodieMetadata,
+          clusteringGroup.getExtraMetadata());
     });
   }
 
@@ -220,6 +223,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
               .withBufferSize(config.getMaxDFSStreamBufferSize())
               .withSpillableMapBasePath(config.getSpillableMapBasePath())
               .withPartition(clusteringOp.getPartitionPath())
+              .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+              .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .build();
 
           Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())

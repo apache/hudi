@@ -48,7 +48,6 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -90,7 +89,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @ValueSource(booleans = {true})
   public void testMergeOnReadRollbackActionExecutor(boolean isUsingMarkers) throws IOException {
     //1. prepare data and assert data result
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
@@ -125,8 +124,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     for (Map.Entry<String, HoodieRollbackPartitionMetadata> entry : rollbackMetadata.entrySet()) {
       HoodieRollbackPartitionMetadata meta = entry.getValue();
-      assertTrue(meta.getFailedDeleteFiles() == null || meta.getFailedDeleteFiles().size() == 0);
-      assertTrue(meta.getSuccessDeleteFiles() == null || meta.getSuccessDeleteFiles().size() == 0);
+      assertEquals(0, meta.getFailedDeleteFiles().size());
+      assertEquals(0, meta.getSuccessDeleteFiles().size());
     }
 
     //4. assert file group after rollback, and compare to the rollbackstat
@@ -280,21 +279,6 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertTrue(partitionMetadata.getFailedDeleteFiles().isEmpty());
     assertTrue(partitionMetadata.getRollbackLogFiles().isEmpty());
     assertEquals(1, partitionMetadata.getSuccessDeleteFiles().size());
-  }
-
-  @Test
-  public void testFailForCompletedInstants() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> {
-      HoodieInstant rollBackInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
-      new MergeOnReadRollbackActionExecutor(context, getConfigBuilder().build(),
-          getHoodieTable(metaClient, getConfigBuilder().build()),
-          "003",
-          rollBackInstant,
-          true,
-          true,
-          true,
-          false).execute();
-    });
   }
 
   /**

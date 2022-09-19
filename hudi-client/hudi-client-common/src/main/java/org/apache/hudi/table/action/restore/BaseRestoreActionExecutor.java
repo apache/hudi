@@ -126,9 +126,9 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
 
     HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(
         instantTime, durationInMs, instantsRolledBack, instantToMetadata);
-    writeToMetadata(restoreMetadata);
-    table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, instantTime),
-        TimelineMetadataUtils.serializeRestoreMetadata(restoreMetadata));
+    HoodieInstant restoreInflightInstant = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, instantTime);
+    writeToMetadata(restoreMetadata, restoreInflightInstant);
+    table.getActiveTimeline().saveAsComplete(restoreInflightInstant, TimelineMetadataUtils.serializeRestoreMetadata(restoreMetadata));
     // get all pending rollbacks instants after restore instant time and delete them.
     // if not, rollbacks will be considered not completed and might hinder metadata table compaction.
     List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getRollbackTimeline()
@@ -136,6 +136,9 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
         .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), restoreInstantTime))
         .collect(Collectors.toList());
     instantsToRollback.forEach(entry -> {
+      if (entry.isCompleted()) {
+        table.getActiveTimeline().deleteCompletedRollback(entry);
+      }
       table.getActiveTimeline().deletePending(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, entry.getTimestamp()));
       table.getActiveTimeline().deletePending(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, entry.getTimestamp()));
     });
@@ -148,12 +151,12 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
    *
    * @param restoreMetadata instance of {@link HoodieRestoreMetadata} to be applied to metadata.
    */
-  private void writeToMetadata(HoodieRestoreMetadata restoreMetadata) {
+  private void writeToMetadata(HoodieRestoreMetadata restoreMetadata, HoodieInstant restoreInflightInstant) {
     try {
-      this.txnManager.beginTransaction(Option.empty(), Option.empty());
+      this.txnManager.beginTransaction(Option.of(restoreInflightInstant), Option.empty());
       writeTableMetadata(restoreMetadata);
     } finally {
-      this.txnManager.endTransaction(Option.empty());
+      this.txnManager.endTransaction(Option.of(restoreInflightInstant));
     }
   }
 }

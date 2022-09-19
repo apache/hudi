@@ -42,7 +42,6 @@ import org.apache.hudi.exception.HoodieDependentSystemUnavailableException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HRegionLocation;
@@ -60,10 +59,12 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkFiles;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -72,6 +73,7 @@ import org.joda.time.DateTime;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -150,9 +152,28 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     }
     String port = String.valueOf(config.getHbaseZkPort());
     hbaseConfig.set("hbase.zookeeper.property.clientPort", port);
+
     try {
-      return ConnectionFactory.createConnection(hbaseConfig);
-    } catch (IOException e) {
+      String authentication = config.getHBaseIndexSecurityAuthentication();
+      if (authentication.equals("kerberos")) {
+        hbaseConfig.set("hbase.security.authentication", "kerberos");
+        hbaseConfig.set("hadoop.security.authentication", "kerberos");
+        hbaseConfig.set("hbase.security.authorization", "true");
+        hbaseConfig.set("hbase.regionserver.kerberos.principal", config.getHBaseIndexRegionserverPrincipal());
+        hbaseConfig.set("hbase.master.kerberos.principal", config.getHBaseIndexMasterPrincipal());
+
+        String principal = config.getHBaseIndexKerberosUserPrincipal();
+        String keytab = SparkFiles.get(config.getHBaseIndexKerberosUserKeytab());
+
+        UserGroupInformation.setConfiguration(hbaseConfig);
+        UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(principal, keytab);
+        return ugi.doAs((PrivilegedExceptionAction<Connection>) () ->
+          (Connection) ConnectionFactory.createConnection(hbaseConfig)
+        );
+      } else {
+        return ConnectionFactory.createConnection(hbaseConfig);
+      }
+    } catch (IOException | InterruptedException e) {
       throw new HoodieDependentSystemUnavailableException(HoodieDependentSystemUnavailableException.HBASE,
           quorum + ":" + port, e);
     }
@@ -184,12 +205,16 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   }
 
   private Get generateStatement(String key) throws IOException {
-    return new Get(Bytes.toBytes(key)).setMaxVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
+    return new Get(Bytes.toBytes(getHBaseKey(key))).setMaxVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
         .addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN).addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN);
   }
 
   private Get generateStatement(String key, long startTime, long endTime) throws IOException {
     return generateStatement(key).setTimeRange(startTime, endTime);
+  }
+
+  protected String getHBaseKey(String key) {
+    return key;
   }
 
   private boolean checkIfValidCommit(HoodieTableMetaClient metaClient, String commitTs) {
@@ -278,6 +303,8 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
         }
       } catch (IOException e) {
         throw new HoodieIndexException("Failed to Tag indexed locations because of exception with HBase Client", e);
+      } finally {
+        limiter.stop();
       }
       return taggedRecords.iterator();
     };
@@ -313,8 +340,8 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
       final long startTimeForPutsTask = DateTime.now().getMillis();
       LOG.info("startTimeForPutsTask for this task: " + startTimeForPutsTask);
 
+      final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
       try (BufferedMutator mutator = hbaseConnection.getBufferedMutator(TableName.valueOf(tableName))) {
-        final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
         while (statusIterator.hasNext()) {
           WriteStatus writeStatus = statusIterator.next();
           List<Mutation> mutations = new ArrayList<>();
@@ -333,14 +360,14 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
                     // This is an update, no need to update index
                     continue;
                   }
-                  Put put = new Put(Bytes.toBytes(rec.getRecordKey()));
+                  Put put = new Put(Bytes.toBytes(getHBaseKey(rec.getRecordKey())));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN, Bytes.toBytes(loc.get().getInstantTime()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN, Bytes.toBytes(loc.get().getFileId()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN, Bytes.toBytes(rec.getPartitionPath()));
                   mutations.add(put);
                 } else {
                   // Delete existing index for a deleted record
-                  Delete delete = new Delete(Bytes.toBytes(rec.getRecordKey()));
+                  Delete delete = new Delete(Bytes.toBytes(getHBaseKey(rec.getRecordKey())));
                   mutations.add(delete);
                 }
               }
@@ -362,6 +389,8 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
         LOG.info("hbase puts task time for this task: " + (endPutsTime - startTimeForPutsTask));
       } catch (IOException e) {
         throw new HoodieIndexException("Failed to Update Index locations because of exception with HBase Client", e);
+      } finally {
+        limiter.stop();
       }
       return writeStatusList.iterator();
     };
@@ -561,10 +590,9 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
         hbaseConnection = getHBaseConnection();
       }
     }
+    final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
     try (HTable hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName));
          BufferedMutator mutator = hbaseConnection.getBufferedMutator(TableName.valueOf(tableName))) {
-      final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
-
       Long rollbackTime = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
       Long currentTime = new Date().getTime();
       Scan scan = new Scan();
@@ -613,6 +641,8 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     } catch (Exception e) {
       LOG.error("hbase index roll back failed", e);
       return false;
+    } finally {
+      limiter.stop();
     }
     return true;
   }

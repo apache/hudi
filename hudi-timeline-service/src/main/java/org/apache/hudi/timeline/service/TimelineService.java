@@ -123,9 +123,6 @@ public class TimelineService {
     @Parameter(names = {"--marker-parallelism", "-mdp"}, description = "Parallelism to use for reading and deleting marker files")
     public int markerParallelism = 100;
 
-    @Parameter(names = {"--refreshTimelineBasedOnLatestCommit"}, description = "Refresh local timeline based on latest commit in addition to timeline hash value")
-    public boolean refreshTimelineBasedOnLatestCommit = true;
-
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
 
@@ -150,7 +147,6 @@ public class TimelineService {
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
-      private boolean refreshTimelineBasedOnLatestCommit = false;
 
       public Builder() {
       }
@@ -197,11 +193,6 @@ public class TimelineService {
 
       public Builder compress(boolean compress) {
         this.compress = compress;
-        return this;
-      }
-
-      public Builder refreshTimelineBasedOnLatestCommit(boolean refreshTimelineBasedOnLatestCommit) {
-        this.refreshTimelineBasedOnLatestCommit = refreshTimelineBasedOnLatestCommit;
         return this;
       }
 

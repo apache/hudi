@@ -84,7 +84,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testMakeDataFileName() {
     String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
-    assertEquals(FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + BASE_FILE_EXTENSION);
+    assertEquals(FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + BASE_FILE_EXTENSION);
   }
 
   @Test
@@ -159,7 +159,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testGetCommitTime() {
     String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
     // test log file name
     fullFileName = FSUtils.makeLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
@@ -170,7 +170,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testGetFileNameWithoutMeta() {
     String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
     assertEquals(fileName, FSUtils.getFileId(fullFileName));
   }
 
@@ -304,7 +304,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     final String LOG_EXTENTION = "." + LOG_STR;
 
     // data file name
-    String dataFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId);
+    String dataFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId);
     assertEquals(instantTime, FSUtils.getCommitTime(dataFileName));
     assertEquals(fileId, FSUtils.getFileId(dataFileName));
 
@@ -326,9 +326,17 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     Files.createFile(partitionPath.resolve(log3));
 
     assertEquals(3, (int) FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
-            new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime).get().getLeft());
+        new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime).get().getLeft());
     assertEquals(4, FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
-            new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime));
+        new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime));
+  }
+
+  @Test
+  public void testGetFilename() {
+    assertEquals("file1.parquet", FSUtils.getFileName("/2022/07/29/file1.parquet", "/2022/07/29"));
+    assertEquals("file2.parquet", FSUtils.getFileName("2022/07/29/file2.parquet", "2022/07/29"));
+    assertEquals("file3.parquet", FSUtils.getFileName("/file3.parquet", ""));
+    assertEquals("file4.parquet", FSUtils.getFileName("file4.parquet", ""));
   }
 
   private void prepareTestDirectory(FileSystem fileSystem, String rootDir) throws IOException {

@@ -20,6 +20,12 @@ package org.apache.hudi.common.util;
 
 import javax.annotation.Nullable;
 
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 /**
  * Simple utility for operations on strings.
  */
@@ -46,7 +52,7 @@ public class StringUtils {
    * </pre>
    */
   public static <T> String join(final String... elements) {
-    return join(elements, "");
+    return join(elements, EMPTY_STRING);
   }
 
   public static <T> String joinUsingDelim(String delim, final String... elements) {
@@ -58,6 +64,18 @@ public class StringUtils {
       return null;
     }
     return org.apache.hadoop.util.StringUtils.join(separator, array);
+  }
+
+  /**
+   * Wrapper of {@link java.lang.String#join(CharSequence, Iterable)}.
+   *
+   * Allow return {@code null} when {@code Iterable} is {@code null}.
+   */
+  public static String join(CharSequence delimiter, Iterable<? extends CharSequence> elements) {
+    if (elements == null) {
+      return null;
+    }
+    return String.join(delimiter, elements);
   }
 
   public static String toHexString(byte[] bytes) {
@@ -72,6 +90,9 @@ public class StringUtils {
     return str == null || str.length() == 0;
   }
 
+  public static boolean nonEmpty(String str) {
+    return !isNullOrEmpty(str);
+  }
 
   /**
    * Returns the given string if it is non-null; the empty string otherwise.
@@ -84,7 +105,10 @@ public class StringUtils {
   }
 
   public static String objToString(@Nullable Object obj) {
-    return obj == null ? null : obj.toString();
+    if (obj == null) {
+      return null;
+    }
+    return obj instanceof ByteBuffer ? toHexString(((ByteBuffer) obj).array()) : obj.toString();
   }
 
   /**
@@ -99,5 +123,16 @@ public class StringUtils {
 
   private static boolean stringIsNullOrEmpty(@Nullable String string) {
     return string == null || string.isEmpty();
+  }
+
+  /**
+   * Splits input string, delimited {@code delimiter} into a list of non-empty strings
+   * (skipping any empty string produced during splitting)
+   */
+  public static List<String> split(@Nullable String input, String delimiter) {
+    if (isNullOrEmpty(input)) {
+      return Collections.emptyList();
+    }
+    return Stream.of(input.split(delimiter)).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
   }
 }

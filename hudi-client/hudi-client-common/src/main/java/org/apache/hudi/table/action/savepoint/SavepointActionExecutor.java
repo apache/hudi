@@ -84,7 +84,7 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
       ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.GREATER_THAN_OR_EQUALS, lastCommitRetained),
           "Could not savepoint commit " + instantTime + " as this is beyond the lookup window " + lastCommitRetained);
 
-      context.setJobStatus(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime);
+      context.setJobStatus(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime + " " + table.getConfig().getTableName());
       List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
       Map<String, List<String>> latestFilesMap = context.mapToPair(partitions, partitionPath -> {
         // Scan all partitions files with this commit time

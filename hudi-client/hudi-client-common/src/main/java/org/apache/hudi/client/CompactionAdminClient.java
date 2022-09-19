@@ -18,8 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -44,6 +42,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.compact.OperationResult;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -85,7 +86,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
     if (plan.getOperations() != null) {
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      context.setJobStatus(this.getClass().getSimpleName(), "Validate compaction operations");
+      context.setJobStatus(this.getClass().getSimpleName(), "Validate compaction operations: " + config.getTableName());
       return context.map(ops, op -> {
         try {
           return validateCompactionOperation(metaClient, compactionInstant, op, Option.of(fsView));
@@ -172,7 +173,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       Path inflightPath = new Path(metaClient.getMetaPath(), inflight.getFileName());
       if (metaClient.getFs().exists(inflightPath)) {
         // revert if in inflight state
-        metaClient.getActiveTimeline().revertCompactionInflightToRequested(inflight);
+        metaClient.getActiveTimeline().revertInstantFromInflightToRequested(inflight);
       }
       // Overwrite compaction plan with updated info
       metaClient.getActiveTimeline().saveToCompactionRequested(
@@ -351,7 +352,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
     } else {
       LOG.info("The following compaction renaming operations needs to be performed to un-schedule");
       if (!dryRun) {
-        context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations");
+        context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations: " + config.getTableName());
         return context.map(renameActions, lfPair -> {
           try {
             LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
@@ -394,7 +395,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
           "Number of Compaction Operations :" + plan.getOperations().size() + " for instant :" + compactionInstant);
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      context.setJobStatus(this.getClass().getSimpleName(), "Generate compaction unscheduling operations");
+      context.setJobStatus(this.getClass().getSimpleName(), "Generate compaction unscheduling operations: " + config.getTableName());
       return context.flatMap(ops, op -> {
         try {
           return getRenamingActionsForUnschedulingCompactionOperation(metaClient, compactionInstant, op,

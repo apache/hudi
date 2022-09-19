@@ -55,6 +55,10 @@ public class HoodieInternalWriteStatus implements Serializable {
     this.random = new Random(RANDOM_SEED);
   }
 
+  public boolean isTrackingSuccessfulWrites() {
+    return trackSuccessRecords;
+  }
+
   public void markSuccess(String recordKey) {
     if (trackSuccessRecords) {
       this.successRecordKeys.add(recordKey);

@@ -21,7 +21,6 @@ package org.apache.hudi.client.utils;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
@@ -34,6 +33,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -125,6 +125,46 @@ public class MetadataConversionUtils {
     return archivedMetaWrapper;
   }
 
+  public static HoodieArchivedMetaEntry createMetaWrapperForEmptyInstant(HoodieInstant hoodieInstant) throws IOException {
+    HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
+    archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
+    archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
+    switch (hoodieInstant.getAction()) {
+      case HoodieTimeline.CLEAN_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.clean.name());
+        break;
+      }
+      case HoodieTimeline.COMMIT_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.commit.name());
+        break;
+      }
+      case HoodieTimeline.DELTA_COMMIT_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
+        break;
+      }
+      case HoodieTimeline.REPLACE_COMMIT_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
+        break;
+      }
+      case HoodieTimeline.ROLLBACK_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.rollback.name());
+        break;
+      }
+      case HoodieTimeline.SAVEPOINT_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.savepoint.name());
+        break;
+      }
+      case HoodieTimeline.COMPACTION_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.compaction.name());
+        break;
+      }
+      default: {
+        throw new UnsupportedOperationException("Action not fully supported yet");
+      }
+    }
+    return archivedMetaWrapper;
+  }
+
   public static Option<HoodieCommitMetadata> getInflightReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
     Option<byte[]> inflightContent = metaClient.getActiveTimeline().getInstantDetails(instant);
     if (!inflightContent.isPresent() || inflightContent.get().length == 0) {
@@ -144,6 +184,19 @@ public class MetadataConversionUtils {
       return Option.empty();
     }
     return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(requestedContent.get()));
+  }
+
+  public static Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant hoodieInstant) throws IOException {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+
+    if (hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      return Option.of(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant).get(),
+          HoodieReplaceCommitMetadata.class));
+    }
+    return Option.of(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant).get(),
+        HoodieCommitMetadata.class));
+
   }
 
   public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(

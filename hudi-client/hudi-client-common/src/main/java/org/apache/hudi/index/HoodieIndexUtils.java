@@ -22,6 +22,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -73,6 +74,26 @@ public class HoodieIndexUtils {
   }
 
   /**
+   * Fetches Pair of partition path and {@link FileSlice}s for interested partitions.
+   *
+   * @param partition   Partition of interest
+   * @param hoodieTable Instance of {@link HoodieTable} of interest
+   * @return the list of {@link FileSlice}
+   */
+  public static List<FileSlice> getLatestFileSlicesForPartition(
+          final String partition,
+          final HoodieTable hoodieTable) {
+    Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
+            .filterCompletedInstants().lastInstant();
+    if (latestCommitTime.isPresent()) {
+      return hoodieTable.getHoodieView()
+              .getLatestFileSlicesBeforeOrOn(partition, latestCommitTime.get().getTimestamp(), true)
+              .collect(toList());
+    }
+    return Collections.emptyList();
+  }
+
+  /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
    *
    * @param partitions  list of partitions of interest
@@ -83,7 +104,7 @@ public class HoodieIndexUtils {
   public static List<Pair<String, HoodieBaseFile>> getLatestBaseFilesForAllPartitions(final List<String> partitions,
                                                                                       final HoodieEngineContext context,
                                                                                       final HoodieTable hoodieTable) {
-    context.setJobStatus(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions");
+    context.setJobStatus(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions: " + hoodieTable.getConfig().getTableName());
     return context.flatMap(partitions, partitionPath -> {
       List<Pair<String, HoodieBaseFile>> filteredFiles =
           getLatestBaseFilesForPartition(partitionPath, hoodieTable).stream()

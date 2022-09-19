@@ -18,6 +18,8 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -27,15 +29,11 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.exception.TableNotFoundException;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -57,8 +55,8 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 /**
  * CLI command to display hudi table options.
  */
-@Component
-public class TableCommand implements CommandMarker {
+@ShellComponent
+public class TableCommand {
 
   private static final Logger LOG = LogManager.getLogger(TableCommand.class);
 
@@ -66,17 +64,17 @@ public class TableCommand implements CommandMarker {
     System.out.println("Table command getting loaded");
   }
 
-  @CliCommand(value = "connect", help = "Connect to a hoodie table")
+  @ShellMethod(key = "connect", value = "Connect to a hoodie table")
   public String connect(
-      @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the table") final String path,
-      @CliOption(key = {"layoutVersion"}, help = "Timeline Layout version") Integer layoutVersion,
-      @CliOption(key = {"eventuallyConsistent"}, unspecifiedDefaultValue = "false",
+      @ShellOption(value = {"--path"}, help = "Base Path of the table") final String path,
+      @ShellOption(value = {"--layoutVersion"}, help = "Timeline Layout version", defaultValue = ShellOption.NULL) Integer layoutVersion,
+      @ShellOption(value = {"--eventuallyConsistent"}, defaultValue = "false",
           help = "Enable eventual consistency") final boolean eventuallyConsistent,
-      @CliOption(key = {"initialCheckIntervalMs"}, unspecifiedDefaultValue = "2000",
+      @ShellOption(value = {"--initialCheckIntervalMs"}, defaultValue = "2000",
           help = "Initial wait time for eventual consistency") final Integer initialConsistencyIntervalMs,
-      @CliOption(key = {"maxWaitIntervalMs"}, unspecifiedDefaultValue = "300000",
+      @ShellOption(value = {"--maxWaitIntervalMs"}, defaultValue = "300000",
           help = "Max wait time for eventual consistency") final Integer maxConsistencyIntervalMs,
-      @CliOption(key = {"maxCheckIntervalMs"}, unspecifiedDefaultValue = "7",
+      @ShellOption(value = {"--maxCheckIntervalMs"}, defaultValue = "7",
           help = "Max checks for eventual consistency") final Integer maxConsistencyChecks)
       throws IOException {
     HoodieCLI
@@ -94,20 +92,22 @@ public class TableCommand implements CommandMarker {
   /**
    * Create a Hoodie Table if it does not exist.
    *
-   * @param path Base Path
-   * @param name Hoodie Table Name
+   * @param path         Base Path
+   * @param name         Hoodie Table Name
    * @param tableTypeStr Hoodie Table Type
    * @param payloadClass Payload Class
    */
-  @CliCommand(value = "create", help = "Create a hoodie table if not present")
+  @ShellMethod(key = "create", value = "Create a hoodie table if not present")
   public String createTable(
-      @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the table") final String path,
-      @CliOption(key = {"tableName"}, mandatory = true, help = "Hoodie Table Name") final String name,
-      @CliOption(key = {"tableType"}, unspecifiedDefaultValue = "COPY_ON_WRITE",
+      @ShellOption(value = {"--path"}, help = "Base Path of the table") final String path,
+      @ShellOption(value = {"--tableName"}, help = "Hoodie Table Name") final String name,
+      @ShellOption(value = {"--tableType"}, defaultValue = "COPY_ON_WRITE",
           help = "Hoodie Table Type. Must be one of : COPY_ON_WRITE or MERGE_ON_READ") final String tableTypeStr,
-      @CliOption(key = {"archiveLogFolder"}, help = "Folder Name for storing archived timeline") String archiveFolder,
-      @CliOption(key = {"layoutVersion"}, help = "Specific Layout Version to use") Integer layoutVersion,
-      @CliOption(key = {"payloadClass"}, unspecifiedDefaultValue = "org.apache.hudi.common.model.HoodieAvroPayload",
+      @ShellOption(value = {"--archiveLogFolder"}, help = "Folder Name for storing archived timeline",
+          defaultValue = ShellOption.NULL) String archiveFolder,
+      @ShellOption(value = {"--layoutVersion"}, help = "Specific Layout Version to use",
+          defaultValue = ShellOption.NULL) Integer layoutVersion,
+      @ShellOption(value = {"--payloadClass"}, defaultValue = "org.apache.hudi.common.model.HoodieAvroPayload",
           help = "Payload Class") final String payloadClass) throws IOException {
 
     boolean initialized = HoodieCLI.initConf();
@@ -127,12 +127,12 @@ public class TableCommand implements CommandMarker {
     }
 
     HoodieTableMetaClient.withPropertyBuilder()
-      .setTableType(tableTypeStr)
-      .setTableName(name)
-      .setArchiveLogFolder(archiveFolder)
-      .setPayloadClassName(payloadClass)
-      .setTimelineLayoutVersion(layoutVersion)
-      .initTable(HoodieCLI.conf, path);
+        .setTableType(tableTypeStr)
+        .setTableName(name)
+        .setArchiveLogFolder(archiveFolder)
+        .setPayloadClassName(payloadClass)
+        .setTimelineLayoutVersion(layoutVersion)
+        .initTable(HoodieCLI.conf, path);
     // Now connect to ensure loading works
     return connect(path, layoutVersion, false, 0, 0, 0);
   }
@@ -140,7 +140,7 @@ public class TableCommand implements CommandMarker {
   /**
    * Describes table properties.
    */
-  @CliCommand(value = "desc", help = "Describe Hoodie Table properties")
+  @ShellMethod(key = "desc", value = "Describe Hoodie Table properties")
   public String descTable() {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     TableHeader header = new TableHeader().addTableHeaderField("Property").addTableHeaderField("Value");
@@ -157,8 +157,8 @@ public class TableCommand implements CommandMarker {
   /**
    * Refresh table metadata.
    */
-  @CliCommand(value = {"refresh", "metadata refresh", "commits refresh", "cleans refresh", "savepoints refresh"},
-      help = "Refresh table metadata")
+  @ShellMethod(key = {"refresh", "metadata refresh", "commits refresh", "cleans refresh", "savepoints refresh"},
+      value = "Refresh table metadata")
   public String refreshMetadata() {
     HoodieCLI.refreshTableMetadata();
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
@@ -167,9 +167,10 @@ public class TableCommand implements CommandMarker {
   /**
    * Fetches table schema in avro format.
    */
-  @CliCommand(value = "fetch table schema", help = "Fetches latest table schema")
+  @ShellMethod(key = "fetch table schema", value = "Fetches latest table schema")
   public String fetchTableSchema(
-      @CliOption(key = {"outputFilePath"}, mandatory = false, help = "File path to write schema") final String outputFilePath) throws Exception {
+      @ShellOption(value = {"--outputFilePath"}, defaultValue = ShellOption.NULL,
+              help = "File path to write schema") final String outputFilePath) throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(client);
     Schema schema = tableSchemaResolver.getTableAvroSchema();
@@ -182,7 +183,7 @@ public class TableCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "table recover-configs", help = "Recover table configs, from update/delete that failed midway.")
+  @ShellMethod(key = "table recover-configs", value = "Recover table configs, from update/delete that failed midway.")
   public String recoverTableConfig() throws IOException {
     HoodieCLI.refreshTableMetadata();
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
@@ -191,9 +192,9 @@ public class TableCommand implements CommandMarker {
     return descTable();
   }
 
-  @CliCommand(value = "table update-configs", help = "Update the table configs with configs with provided file.")
+  @ShellMethod(key = "table update-configs", value = "Update the table configs with configs with provided file.")
   public String updateTableConfig(
-      @CliOption(key = {"props-file"}, mandatory = true, help = "Path to a properties file on local filesystem")
+      @ShellOption(value = {"--props-file"}, help = "Path to a properties file on local filesystem")
       final String updatePropsFilePath) throws IOException {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Map<String, String> oldProps = client.getTableConfig().propsMap();
@@ -208,10 +209,10 @@ public class TableCommand implements CommandMarker {
     return renderOldNewProps(newProps, oldProps);
   }
 
-  @CliCommand(value = "table delete-configs", help = "Delete the supplied table configs from the table.")
+  @ShellMethod(key = "table delete-configs", value = "Delete the supplied table configs from the table.")
   public String deleteTableConfig(
-      @CliOption(key = {"comma-separated-configs"}, mandatory = true, help = "Comma separated list of configs to delete.")
-      final String csConfigs) {
+      @ShellOption(value = {"--comma-separated-configs"},
+              help = "Comma separated list of configs to delete.") final String csConfigs) {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Map<String, String> oldProps = client.getTableConfig().propsMap();
 
@@ -232,7 +233,7 @@ public class TableCommand implements CommandMarker {
     String[][] rows = new String[allPropKeys.size()][];
     int ind = 0;
     for (String propKey : allPropKeys) {
-      String[] row = new String[]{
+      String[] row = new String[] {
           propKey,
           oldProps.getOrDefault(propKey, "null"),
           newProps.getOrDefault(propKey, "null")
@@ -245,8 +246,9 @@ public class TableCommand implements CommandMarker {
 
   /**
    * Use Streams when you are dealing with raw data.
+   *
    * @param filePath output file path.
-   * @param data to be written to file.
+   * @param data     to be written to file.
    */
   private static void writeToFile(String filePath, String data) throws IOException {
     File outFile = new File(filePath);

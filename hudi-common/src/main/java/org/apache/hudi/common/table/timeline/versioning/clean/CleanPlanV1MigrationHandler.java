@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline.versioning.clean;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -56,11 +57,9 @@ public class CleanPlanV1MigrationHandler extends AbstractMigratorBase<HoodieClea
         "This version do not support METADATA_ONLY bootstrapped tables. Failed to downgrade.");
     }
     Map<String, List<String>> filesPerPartition = plan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
-        .map(e -> {
-          return Pair.of(e.getKey(), e.getValue().stream().map(v -> new Path(v.getFilePath()).getName())
-            .collect(Collectors.toList()));
-        }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    return new HoodieCleanerPlan(plan.getEarliestInstantToRetain(), plan.getPolicy(), filesPerPartition, VERSION,
-        new HashMap<>());
+        .map(e -> Pair.of(e.getKey(), e.getValue().stream().map(v -> new Path(v.getFilePath()).getName())
+          .collect(Collectors.toList()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    return new HoodieCleanerPlan(plan.getEarliestInstantToRetain(), plan.getLastCompletedCommitTimestamp(),
+        plan.getPolicy(), filesPerPartition, VERSION, new HashMap<>(), new ArrayList<>());
   }
 }

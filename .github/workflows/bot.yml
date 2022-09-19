@@ -9,6 +9,8 @@ on:
     branches:
       - master
       - 'release-*'
+env:
+  MVN_ARGS: -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
 
 jobs:
   build:
@@ -16,18 +18,30 @@ jobs:
     strategy:
       matrix:
         include:
-          - scala: "scala-2.11"
-            spark: "spark2"
-          - scala: "scala-2.11"
-            spark: "spark2,spark-shade-unbundle-avro"
-          - scala: "scala-2.12"
-            spark: "spark3.1.x"
-          - scala: "scala-2.12"
-            spark: "spark3.1.x,spark-shade-unbundle-avro"
-          - scala: "scala-2.12"
-            spark: "spark3"
-          - scala: "scala-2.12"
-            spark: "spark3,spark-shade-unbundle-avro"
+          - scalaProfile: "scala-2.11"
+            sparkProfile: "spark2.4"
+            flinkProfile: "flink1.13"
+
+          - scalaProfile: "scala-2.11"
+            sparkProfile: "spark2.4"
+            flinkProfile: "flink1.14"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark2.4"
+            flinkProfile: "flink1.13"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.1"
+            flinkProfile: "flink1.14"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.2"
+            flinkProfile: "flink1.14"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            flinkProfile: "flink1.14"
+
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -38,6 +52,23 @@ jobs:
           architecture: x64
       - name: Build Project
         env:
-          SCALA_PROFILE: ${{ matrix.scala }}
-          SPARK_PROFILE: ${{ matrix.spark }}
-        run: mvn install -P "$SCALA_PROFILE,$SPARK_PROFILE" -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        run:
+          mvn clean install -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true $MVN_ARGS
+      - name: Quickstart Test
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        run:
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-flink,hudi-examples/hudi-examples-java,hudi-examples/hudi-examples-spark $MVN_ARGS
+      - name: Spark SQL Test
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
+        run:
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" '-Dtest=Test*' -pl hudi-spark-datasource/hudi-spark $MVN_ARGS

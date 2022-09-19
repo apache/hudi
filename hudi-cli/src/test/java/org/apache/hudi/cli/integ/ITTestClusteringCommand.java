@@ -20,14 +20,14 @@ package org.apache.hudi.cli.integ;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -37,12 +37,13 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestBase;
-
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -59,23 +60,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A command use SparkLauncher need load jars under lib which generate during mvn package.
  * Use integration test instead of unit test.
  */
-public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
+public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
 
-  private String tablePath;
-  private String tableName;
+  @Autowired
+  private Shell shell;
 
   @BeforeEach
   public void init() throws IOException {
     tableName = "test_table_" + ITTestClusteringCommand.class.getName();
-    tablePath = Paths.get(basePath, tableName).toString();
+    basePath = Paths.get(basePath, tableName).toString();
 
     HoodieCLI.conf = jsc.hadoopConfiguration();
     // Create table and connect
     new TableCommand().createTable(
-        tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
+        basePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    metaClient.setBasePath(tablePath);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    initMetaClient();
   }
 
   /**
@@ -86,11 +88,11 @@ public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
     // generate commits
     generateCommits();
 
-    CommandResult cr = scheduleClustering();
+    Object result = scheduleClustering();
     assertAll("Command run failed",
-        () -> assertTrue(cr.isSuccess()),
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
         () -> assertTrue(
-            cr.getResult().toString().startsWith("Succeeded to schedule clustering for")));
+            result.toString().startsWith("Succeeded to schedule clustering for")));
 
     // there is 1 requested clustering
     HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
@@ -105,23 +107,24 @@ public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
     // generate commits
     generateCommits();
 
-    CommandResult cr1 = scheduleClustering();
-    assertTrue(cr1.isSuccess());
+    Object result1 = scheduleClustering();
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result1));
 
     // get clustering instance
     HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    Option<String> instance =
+    Option<String> instanceOpt =
         timeline.filterPendingReplaceTimeline().firstInstant().map(HoodieInstant::getTimestamp);
-    assertTrue(instance.isPresent(), "Must have pending clustering.");
+    assertTrue(instanceOpt.isPresent(), "Must have pending clustering.");
+    final String instance = instanceOpt.get();
 
-    CommandResult cr2 = getShell().executeCommand(
-        String.format("clustering run --parallelism %s --clusteringInstant %s --sparkMaster %s",
+    Object result2 = shell.evaluate(() ->
+            String.format("clustering run --parallelism %s --clusteringInstant %s --sparkMaster %s",
             2, instance, "local"));
 
     assertAll("Command run failed",
-        () -> assertTrue(cr2.isSuccess()),
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result2)),
         () -> assertTrue(
-            cr2.getResult().toString().startsWith("Succeeded to run clustering for ")));
+            result2.toString().startsWith("Succeeded to run clustering for ")));
 
     // assert clustering complete
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
@@ -143,13 +146,13 @@ public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
     // generate commits
     generateCommits();
 
-    CommandResult cr2 = getShell().executeCommand(
-        String.format("clustering scheduleAndExecute --parallelism %s --sparkMaster %s", 2, "local"));
+    Object result = shell.evaluate(() ->
+            String.format("clustering scheduleAndExecute --parallelism %s --sparkMaster %s", 2, "local"));
 
     assertAll("Command run failed",
-        () -> assertTrue(cr2.isSuccess()),
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
         () -> assertTrue(
-            cr2.getResult().toString().startsWith("Succeeded to run clustering for scheduleAndExecute")));
+            result.toString().startsWith("Succeeded to run clustering for scheduleAndExecute")));
 
     // assert clustering complete
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
@@ -158,17 +161,17 @@ public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
         "Completed clustering couldn't be 0");
   }
 
-  private CommandResult scheduleClustering() {
+  private Object scheduleClustering() {
     // generate requested clustering
-    return getShell().executeCommand(
-        String.format("clustering schedule --hoodieConfigs hoodie.clustering.inline.max.commits=1 --sparkMaster %s", "local"));
+    return shell.evaluate(() ->
+            String.format("clustering schedule --hoodieConfigs hoodie.clustering.inline.max.commits=1 --sparkMaster %s", "local"));
   }
 
   private void generateCommits() throws IOException {
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
     // Create the write client to write some records in
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();

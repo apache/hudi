@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.11.0-SNAPSHOT</version>
+    <version>0.13.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -90,6 +90,9 @@
             <import>${basedir}/src/main/avro/HoodieClusteringPlan.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRequestedReplaceMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieIndexPartitionInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieIndexPlan.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieIndexCommitMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieArchivedMetaEntry.avsc</import>
           </imports>
         </configuration>
@@ -98,6 +101,12 @@
   </build>
 
   <dependencies>
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-1.2-api</artifactId>
+    </dependency>
+
     <!-- Fasterxml -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
@@ -112,6 +121,12 @@
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
+    </dependency>
+
+    <!-- caffeine -->
+    <dependency>
+      <groupId>com.github.ben-manes.caffeine</groupId>
+      <artifactId>caffeine</artifactId>
     </dependency>
 
     <!-- Parquet -->
@@ -174,6 +189,13 @@
     </dependency>
 
     <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
       <scope>test</scope>
@@ -221,14 +243,23 @@
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-client</artifactId>
       <version>${hbase.version}</version>
-      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>log4j</groupId>
+          <artifactId>log4j</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
-
+    
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-server</artifactId>
       <version>${hbase.version}</version>
-      <!-- Unfortunately, HFile is packaged ONLY under hbase-server --> 
+      <!-- Unfortunately, HFile is packaged ONLY under hbase-server -->
       <scope>compile</scope>
       <exclusions>
         <exclusion>
@@ -257,5 +288,10 @@
       <version>1.8.0</version>
     </dependency>
 
+    <dependency>
+      <groupId>joda-time</groupId>
+      <artifactId>joda-time</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

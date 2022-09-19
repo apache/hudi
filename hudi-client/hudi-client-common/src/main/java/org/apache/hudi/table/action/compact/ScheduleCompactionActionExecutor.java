@@ -71,7 +71,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
         && !config.getFailedWritesCleanPolicy().isLazy()) {
       // TODO(yihua): this validation is removed for Java client used by kafka-connect.  Need to revisit this.
-      if (config.getEngineType() != EngineType.JAVA) {
+      if (config.getEngineType() == EngineType.SPARK) {
         // if there are inflight writes, their instantTime must not be less than that of compaction instant time
         table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
             .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
@@ -119,7 +119,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
             .collect(Collectors.toSet());
         // exclude files in pending clustering from compaction.
         fgInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
-        context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan");
+        context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan: " + config.getTableName());
         return compactor.generateCompactionPlan(context, table, config, instantTime, fgInPendingCompactionAndClustering);
       } catch (IOException e) {
         throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
@@ -140,6 +140,17 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     return Option.empty();
   }
 
+  private Option<Pair<Integer, String>> getLatestDeltaCommitInfoSinceLastCompactionRequest() {
+    Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
+          CompactionUtils.getDeltaCommitsSinceLatestCompactionRequest(table.getActiveTimeline());
+    if (deltaCommitsInfo.isPresent()) {
+      return Option.of(Pair.of(
+            deltaCommitsInfo.get().getLeft().countInstants(),
+            deltaCommitsInfo.get().getRight().getTimestamp()));
+    }
+    return Option.empty();
+  }
+
   private boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
     boolean compactable;
     // get deltaCommitsSinceLastCompaction and lastCompactionTs
@@ -155,6 +166,18 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
         if (compactable) {
           LOG.info(String.format("The delta commits >= %s, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
+        }
+        break;
+      case NUM_COMMITS_AFTER_LAST_REQUEST:
+        latestDeltaCommitInfoOption = getLatestDeltaCommitInfoSinceLastCompactionRequest();
+
+        if (!latestDeltaCommitInfoOption.isPresent()) {
+          return false;
+        }
+        latestDeltaCommitInfo = latestDeltaCommitInfoOption.get();
+        compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
+        if (compactable) {
+          LOG.info(String.format("The delta commits >= %s since the last compaction request, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
         }
         break;
       case TIME_ELAPSED:

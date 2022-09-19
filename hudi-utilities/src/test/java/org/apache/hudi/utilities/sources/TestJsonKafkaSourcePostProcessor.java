@@ -25,15 +25,23 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
+import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.maxwell.MaxwellJsonKafkaSourcePostProcessor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.streaming.kafka010.KafkaTestUtils;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -48,17 +56,41 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
-public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
+public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestHarness {
+  private static KafkaTestUtils testUtils;
+
+  private final HoodieDeltaStreamerMetrics metrics = mock(HoodieDeltaStreamerMetrics.class);
+  private SchemaProvider schemaProvider;
+
+  @BeforeAll
+  public static void initClass() {
+    testUtils = new KafkaTestUtils();
+    testUtils.setup();
+  }
+
+  @AfterAll
+  public static void cleanupClass() {
+    testUtils.teardown();
+  }
+
+  @BeforeEach
+  public void init() throws Exception {
+    String schemaFilePath = Objects.requireNonNull(TestJsonKafkaSource.SCHEMA_FILE_URL).toURI().getPath();
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
+    schemaProvider = new FilebasedSchemaProvider(props, jsc());
+  }
 
   @Test
   public void testNoPostProcessor() {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testNoPostProcessor";
+    final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testNoPostProcessor";
     testUtils.createTopic(topic, 2);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(topic, null, "earliest");
+    TypedProperties props = TestJsonKafkaSource.createPropsForJsonKafkaSource(testUtils.brokerAddress(), topic, null, "earliest");
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
@@ -72,11 +104,11 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
   @Test
   public void testSampleJsonKafkaSourcePostProcessor() {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testSampleJsonKafkaSourcePostProcessor";
+    final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testSampleJsonKafkaSourcePostProcessor";
     testUtils.createTopic(topic, 2);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(topic, null, "earliest");
+    TypedProperties props = TestJsonKafkaSource.createPropsForJsonKafkaSource(testUtils.brokerAddress(), topic, null, "earliest");
 
     // processor class name setup
     props.setProperty(JSON_KAFKA_PROCESSOR_CLASS_OPT.key(), SampleJsonKafkaSourcePostProcessor.class.getName());
@@ -93,11 +125,11 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
   @Test
   public void testInvalidJsonKafkaSourcePostProcessor() {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testInvalidJsonKafkaSourcePostProcessor";
+    final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testInvalidJsonKafkaSourcePostProcessor";
     testUtils.createTopic(topic, 2);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(topic, null, "earliest");
+    TypedProperties props = TestJsonKafkaSource.createPropsForJsonKafkaSource(testUtils.brokerAddress(), topic, null, "earliest");
 
     // processor class name setup
     props.setProperty(JSON_KAFKA_PROCESSOR_CLASS_OPT.key(), "InvalidJsonKafkaSourcePostProcessor");
@@ -113,11 +145,11 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
   @Test
   public void testChainedJsonKafkaSourcePostProcessor() {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testChainedJsonKafkaSourcePostProcessor";
+    final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testChainedJsonKafkaSourcePostProcessor";
     testUtils.createTopic(topic, 2);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(topic, null, "earliest");
+    TypedProperties props = TestJsonKafkaSource.createPropsForJsonKafkaSource(testUtils.brokerAddress(), topic, null, "earliest");
 
     // processor class name setup
     props.setProperty(JSON_KAFKA_PROCESSOR_CLASS_OPT.key(), SampleJsonKafkaSourcePostProcessor.class.getName()
@@ -174,6 +206,12 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
 
     // database hudi_02, table hudi_maxwell_02, insert
     String hudi02Maxwell02Insert = "{\"database\":\"hudi_02\",\"table\":\"hudi_maxwell_02\",\"type\":\"insert\","
+        + "\"ts\":1647073916,\"xid\":4990,\"commit\":true,\"data\":{\"id\":\"9bb17f316ee8488cb107621ddf0f3cb0\","
+        + "\"name\":\"andy\",\"age\":17,\"insert_time\":\"2022-03-12 08:31:56\","
+        + "\"update_time\":\"2022-03-12 08:31:56\"}}";
+
+    // database hudi_02, table hudi_maxwell_01, insert
+    String hudi02Maxwell01Insert = "{\"database\":\"hudi_02\",\"table\":\"hudi_maxwell_01\",\"type\":\"insert\","
         + "\"ts\":1647073916,\"xid\":4990,\"commit\":true,\"data\":{\"id\":\"9bb17f316ee8488cb107621ddf0f3cb0\","
         + "\"name\":\"andy\",\"age\":17,\"insert_time\":\"2022-03-12 08:31:56\","
         + "\"update_time\":\"2022-03-12 08:31:56\"}}";
@@ -248,6 +286,14 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
     // ddl data will be ignored, ths count should be 0
     long ddlDataNum = processor.process(ddlData).count();
     assertEquals(0, ddlDataNum);
+
+    // test table regex without database regex
+    props.remove(MaxwellJsonKafkaSourcePostProcessor.Config.DATABASE_NAME_REGEX_PROP.key());
+    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.TABLE_NAME_REGEX_PROP.key(), "hudi_maxwell(_)?[0-9]{0,2}");
+
+    JavaRDD<String> dataWithoutDatabaseRegex = jsc().parallelize(Arrays.asList(hudiMaxwell01Insert, hudi02Maxwell01Insert));
+    long countWithoutDatabaseRegex = processor.process(dataWithoutDatabaseRegex).count();
+    assertEquals(2, countWithoutDatabaseRegex);
   }
 
   /**

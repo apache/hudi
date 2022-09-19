@@ -115,7 +115,7 @@ public abstract class ITTestBase {
         .append(" --master local[2] --driver-class-path ").append(HADOOP_CONF_DIR)
         .append(
             " --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --executor-memory 1G --num-executors 1 ")
-        .append(" --packages org.apache.spark:spark-avro_2.11:2.4.4 ").append(" -i ").append(commandFile).toString();
+        .append(" -i ").append(commandFile).toString();
   }
 
   static String getPrestoConsoleCommand(String commandFile) {
@@ -223,7 +223,7 @@ public abstract class ITTestBase {
 
     boolean completed =
         dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
-        .awaitCompletion(540, SECONDS);
+            .awaitCompletion(540, SECONDS);
     if (!completed) {
       callback.getStderr().flush();
       callback.getStdout().flush();
@@ -235,6 +235,7 @@ public abstract class ITTestBase {
     }
     int exitCode = dockerClient.inspectExecCmd(createCmdResponse.getId()).exec().getExitCode();
     LOG.info("Exit code for command : " + exitCode);
+
     if (exitCode != 0) {
       LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
     }

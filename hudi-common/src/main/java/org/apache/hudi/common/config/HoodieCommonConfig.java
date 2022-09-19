@@ -31,6 +31,18 @@ import java.util.Properties;
     description = "The following set of configurations are common across Hudi.")
 public class HoodieCommonConfig extends HoodieConfig {
 
+  public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
+      .key("hoodie.schema.on.read.enable")
+      .defaultValue(false)
+      .withDocumentation("Enables support for Schema Evolution feature");
+
+  public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
+      .key("hoodie.datasource.write.reconcile.schema")
+      .defaultValue(false)
+      .withDocumentation("When a new batch of write has records with old schema, but latest table schema got "
+        + "evolved, this config will upgrade the records to leverage latest table schema(default values will be "
+        + "injected to missing fields). If not, the write batch would fail.");
+
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
       .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK)

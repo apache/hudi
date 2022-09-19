@@ -18,9 +18,6 @@
 
 package org.apache.hudi.hadoop.testutils;
 
-import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.fs.RawLocalFileSystem;
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -37,6 +34,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.avro.Schema;
@@ -44,7 +42,10 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RawLocalFileSystem;
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.JobConf;
@@ -70,16 +71,38 @@ public class InputFormatTestUtil {
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
   public static File prepareTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
-                                  String commitNumber)
-      throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-        baseFileFormat);
+                                  String commitNumber) throws IOException {
+    return prepareCustomizedTable(basePath, baseFileFormat, numberOfFiles, commitNumber, false, true, false, null);
+  }
 
-    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
+  public static File prepareCustomizedTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
+                                  String commitNumber, boolean useNonPartitionedKeyGen, boolean populateMetaFields, boolean injectData, Schema schema)
+      throws IOException {
+    if (useNonPartitionedKeyGen) {
+      HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+          baseFileFormat, true, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", populateMetaFields);
+    } else {
+      HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+          baseFileFormat);
+    }
+
+    java.nio.file.Path partitionPath = useNonPartitionedKeyGen
+        ? basePath
+        : basePath.resolve(Paths.get("2016", "05", "01"));
+
     setupPartition(basePath, partitionPath);
 
-    return simulateInserts(partitionPath.toFile(), baseFileFormat.getFileExtension(), "fileId1", numberOfFiles,
-        commitNumber);
+    if (injectData) {
+      try {
+        createSimpleData(schema, partitionPath, numberOfFiles, 100, commitNumber);
+        return partitionPath.toFile();
+      } catch (Exception e) {
+        throw new IOException("Excpetion thrown while writing data ", e);
+      }
+    } else {
+      return simulateInserts(partitionPath.toFile(), baseFileFormat.getFileExtension(), "fileId1", numberOfFiles,
+          commitNumber);
+    }
   }
 
   public static File prepareMultiPartitionTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
@@ -100,7 +123,7 @@ public class InputFormatTestUtil {
       throws IOException {
     for (int i = 0; i < numberOfFiles; i++) {
       Files.createFile(partitionPath.toPath()
-          .resolve(FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, fileId + i, baseFileExtension)));
+          .resolve(FSUtils.makeBaseFileName(commitNumber, TEST_WRITE_TOKEN, fileId + i, baseFileExtension)));
     }
     return partitionPath;
   }
@@ -117,7 +140,7 @@ public class InputFormatTestUtil {
     List<File> toUpdateList = dataFiles.subList(0, Math.min(numberOfFilesUpdated, dataFiles.size()));
     for (File file : toUpdateList) {
       String fileId = FSUtils.getFileId(file.getName());
-      Files.createFile(directory.toPath().resolve(FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId,
+      Files.createFile(directory.toPath().resolve(FSUtils.makeBaseFileName(newCommit, TEST_WRITE_TOKEN, fileId,
           baseFileExtension)));
     }
   }
@@ -185,7 +208,7 @@ public class InputFormatTestUtil {
   public static void setupSnapshotScanMode(JobConf jobConf) {
     setupSnapshotScanMode(jobConf, false);
   }
-  
+
   private static void setupSnapshotScanMode(JobConf jobConf, boolean includePending) {
     setUpScanMode(jobConf);
     String includePendingCommitsName =
@@ -269,7 +292,7 @@ public class InputFormatTestUtil {
       String commitNumber) throws IOException {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
-      String fileId = FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
+      String fileId = FSUtils.makeBaseFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
       parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema);
       try {
         for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber, fileId)) {
@@ -285,7 +308,7 @@ public class InputFormatTestUtil {
       String commitNumber) throws Exception {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
-      String fileId = FSUtils.makeDataFileName(commitNumber, "1", "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
+      String fileId = FSUtils.makeBaseFileName(commitNumber, "1", "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
       parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema);
       try {
         List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numberOfRecords);
@@ -317,7 +340,7 @@ public class InputFormatTestUtil {
     File fileToUpdate = Objects.requireNonNull(directory.listFiles((dir, name) -> name.endsWith("parquet")))[0];
     String fileId = FSUtils.getFileId(fileToUpdate.getName());
     File dataFile = new File(directory,
-        FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId, HoodieFileFormat.PARQUET.getFileExtension()));
+        FSUtils.makeBaseFileName(newCommit, TEST_WRITE_TOKEN, fileId, HoodieFileFormat.PARQUET.getFileExtension()));
     try (AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema)) {
       for (GenericRecord record : generateAvroRecords(schema, totalNumberOfRecords, originalCommit, fileId)) {
         if (numberOfRecordsToUpdate > 0) {
@@ -373,7 +396,8 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchema.toString());
     HoodieDataBlock dataBlock = null;
     if (logBlockType == HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK) {
-      dataBlock = new HoodieHFileDataBlock(records, header, Compression.Algorithm.GZ);
+      dataBlock = new HoodieHFileDataBlock(
+          records, header, Compression.Algorithm.GZ, writer.getLogFile().getPath());
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       dataBlock = new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP);
     } else {
@@ -466,8 +490,8 @@ public class InputFormatTestUtil {
             new LocalFileSystem(lfs),
             "0",
             new Path(basePath.toAbsolutePath().toString()),
-            new Path(partitionPath.toAbsolutePath().toString())
-        );
+            new Path(partitionPath.toAbsolutePath().toString()),
+            Option.of(HoodieFileFormat.PARQUET));
 
     partitionMetadata.trySave((int) (Math.random() * 1000));
   }

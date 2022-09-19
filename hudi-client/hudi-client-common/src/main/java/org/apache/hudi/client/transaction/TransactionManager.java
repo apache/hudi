@@ -45,14 +45,6 @@ public class TransactionManager implements Serializable {
     this.isOptimisticConcurrencyControlEnabled = config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
   }
 
-  public void beginTransaction() {
-    if (isOptimisticConcurrencyControlEnabled) {
-      LOG.info("Transaction starting without a transaction owner");
-      lockManager.lock();
-      LOG.info("Transaction started without a transaction owner");
-    }
-  }
-
   public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
                                Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
     if (isOptimisticConcurrencyControlEnabled) {
@@ -65,30 +57,25 @@ public class TransactionManager implements Serializable {
     }
   }
 
-  public void endTransaction() {
-    if (isOptimisticConcurrencyControlEnabled) {
-      LOG.info("Transaction ending without a transaction owner");
-      lockManager.unlock();
-      LOG.info("Transaction ended without a transaction owner");
-    }
-  }
-
   public void endTransaction(Option<HoodieInstant> currentTxnOwnerInstant) {
     if (isOptimisticConcurrencyControlEnabled) {
       LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstant);
-      reset(currentTxnOwnerInstant, Option.empty(), Option.empty());
-      lockManager.unlock();
-      LOG.info("Transaction ended with transaction owner " + currentTxnOwnerInstant);
+      if (reset(currentTxnOwnerInstant, Option.empty(), Option.empty())) {
+        lockManager.unlock();
+        LOG.info("Transaction ended with transaction owner " + currentTxnOwnerInstant);
+      }
     }
   }
 
-  private synchronized void reset(Option<HoodieInstant> callerInstant,
+  private synchronized boolean reset(Option<HoodieInstant> callerInstant,
                                   Option<HoodieInstant> newTxnOwnerInstant,
                                   Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
     if (!this.currentTxnOwnerInstant.isPresent() || this.currentTxnOwnerInstant.get().equals(callerInstant.get())) {
       this.currentTxnOwnerInstant = newTxnOwnerInstant;
       this.lastCompletedTxnOwnerInstant = lastCompletedTxnOwnerInstant;
+      return true;
     }
+    return false;
   }
 
   public void close() {
@@ -96,6 +83,10 @@ public class TransactionManager implements Serializable {
       lockManager.close();
       LOG.info("Transaction manager closed");
     }
+  }
+
+  public LockManager getLockManager() {
+    return lockManager;
   }
 
   public Option<HoodieInstant> getLastCompletedTransactionOwner() {

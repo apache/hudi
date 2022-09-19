@@ -126,7 +126,7 @@ NOTE : The properties-file should have all the necessary information required to
  information on what properties need to be set, take a look at the test suite section under demo steps.
 ```
 shell$ ./prepare_integration_suite.sh --spark-command
-spark-submit --packages com.databricks:spark-avro_2.11:4.0.0 --master prepare_integration_suite.sh --deploy-mode
+spark-submit --master prepare_integration_suite.sh --deploy-mode
 --properties-file  --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob target/hudi-integ-test-0.6
 .0-SNAPSHOT.jar --source-class  --source-ordering-field  --input-base-path  --target-base-path  --target-table  --props  --storage-type  --payload-class  --workload-yaml-path  --input-file-size  --<deltastreamer-ingest>
 ```
@@ -198,7 +198,6 @@ Launch a Copy-on-Write job:
 =========================
 ## Run the following command to start the test suite
 spark-submit \
---packages org.apache.spark:spark-avro_2.11:2.4.0 \
 --conf spark.task.cpus=1 \
 --conf spark.executor.cores=1 \
 --conf spark.task.maxFailures=100 \
@@ -245,7 +244,6 @@ Or a Merge-on-Read job:
 =========================
 ## Run the following command to start the test suite
 spark-submit \
---packages org.apache.spark:spark-avro_2.11:2.4.0 \
 --conf spark.task.cpus=1 \
 --conf spark.executor.cores=1 \
 --conf spark.task.maxFailures=100 \
@@ -438,7 +436,6 @@ docker exec -it adhoc-2 /bin/bash
 Sample COW command
 ```
 spark-submit \
---packages org.apache.spark:spark-avro_2.11:2.4.0 \
 --conf spark.task.cpus=1 \
 --conf spark.executor.cores=1 \
 --conf spark.task.maxFailures=100 \
@@ -524,6 +521,128 @@ Spark submit with the flag:
 ```
 --saferSchemaEvolution
 ```
+
+### Multi-writer tests
+Integ test framework also supports multi-writer tests. 
+
+#### Multi-writer tests with deltastreamer and a spark data source writer. 
+
+Sample spark-submit command to test one delta streamer and a spark data source writer. 
+```shell
+./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.0 \
+--conf spark.task.cpus=3 --conf spark.executor.cores=3  \
+--conf spark.task.maxFailures=100 --conf spark.memory.fraction=0.4 \  
+--conf spark.rdd.compress=true  --conf spark.kryoserializer.buffer.max=2000m \ 
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.memory.storageFraction=0.1 --conf spark.shuffle.service.enabled=true \  
+--conf spark.sql.hive.convertMetastoreParquet=false  --conf spark.driver.maxResultSize=12g \ 
+--conf spark.executor.heartbeatInterval=120s --conf spark.network.timeout=600s \
+--conf spark.yarn.max.executor.failures=10 \
+--conf spark.sql.catalogImplementation=hive \
+--class org.apache.hudi.integ.testsuite.HoodieMultiWriterTestSuiteJob \ 
+<HUDI_REPO_DIR>/packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.12.0-SNAPSHOT.jar \ 
+--source-ordering-field test_suite_source_ordering_field \
+--use-deltastreamer \
+--target-base-path /tmp/hudi/output \ 
+--input-base-paths "/tmp/hudi/input1,/tmp/hudi/input2" \ 
+--target-table table1 \
+--props-paths "file:<HUDI_REPO_DIR>/docker/demo/config/test-suite/multi-writer-local-1.properties,file:<HUDI_REPO_DIR>/hudi/docker/demo/config/test-suite/multi-writer-local-2.properties" \ 
+--schemaprovider-class org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider \
+--source-class org.apache.hudi.utilities.sources.AvroDFSSource \
+--input-file-size 125829120 \
+--workload-yaml-paths "file:<HUDI_REPO_DIR>/docker/demo/config/test-suite/multi-writer-1-ds.yaml,file:<HUDI_REPO_DIR>/docker/demo/config/test-suite/multi-writer-2-sds.yaml" \ 
+--workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
+--table-type COPY_ON_WRITE \
+--compact-scheduling-minshare 1 \ 
+--input-base-path "dummyValue" \
+--workload-yaml-path "dummyValue" \ 
+--props "dummyValue" \
+--use-hudi-data-to-generate-updates 
+```
+
+#### Multi-writer tests with 4 concurrent spark data source writer. 
+
+```shell
+./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.0 \
+--conf spark.task.cpus=3 --conf spark.executor.cores=3 \
+--conf spark.task.maxFailures=100 --conf spark.memory.fraction=0.4 \  
+--conf spark.rdd.compress=true  --conf spark.kryoserializer.buffer.max=2000m \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.memory.storageFraction=0.1 --conf spark.shuffle.service.enabled=true  \
+--conf spark.sql.hive.convertMetastoreParquet=false  --conf spark.driver.maxResultSize=12g \
+--conf spark.executor.heartbeatInterval=120s --conf spark.network.timeout=600s \
+--conf spark.yarn.max.executor.failures=10 --conf spark.sql.catalogImplementation=hive \
+--class org.apache.hudi.integ.testsuite.HoodieMultiWriterTestSuiteJob \
+<BUNDLE_LOCATION>/hudi-integ-test-bundle-0.12.0-SNAPSHOT.jar \
+--source-ordering-field test_suite_source_ordering_field \
+--use-deltastreamer \
+--target-base-path /tmp/hudi/output \
+--input-base-paths "/tmp/hudi/input1,/tmp/hudi/input2,/tmp/hudi/input3,/tmp/hudi/input4" \
+--target-table table1 \
+--props-paths "file:<PROPS_LOCATION>/multi-writer-local-1.properties,file:<PROPS_LOCATION>/multi-writer-local-2.properties,file:<PROPS_LOCATION>/multi-writer-local-3.properties,file:<PROPS_LOCATION>/multi-writer-local-4.properties" 
+--schemaprovider-class org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider \
+--source-class org.apache.hudi.utilities.sources.AvroDFSSource \
+--input-file-size 125829120 \
+--workload-yaml-paths "file:<PROPS_LOCATION>/multi-writer-1-sds.yaml,file:<PROPS_LOCATION>/multi-writer-2-sds.yaml,file:<PROPS_LOCATION>/multi-writer-3-sds.yaml,file:<PROPS_LOCATION>/multi-writer-4-sds.yaml" \
+--workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
+--table-type COPY_ON_WRITE \
+--compact-scheduling-minshare 1 \
+--input-base-path "dummyValue" \
+--workload-yaml-path "dummyValue" \
+--props "dummyValue" \
+--use-hudi-data-to-generate-updates
+```
+
+=======
+### Testing async table services
+We can test async table services with deltastreamer using below command. 3 additional arguments are required to test async 
+table services comapared to previous command. 
+
+```shell
+--continuous \
+--test-continuous-mode \
+--min-sync-interval-seconds 20
+```
+
+Here is the full command: 
+```shell
+./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ --conf spark.task.cpus=1 --conf spark.executor.cores=1 \
+--conf spark.task.maxFailures=100 \
+--conf spark.memory.fraction=0.4 \
+--conf spark.rdd.compress=true \
+--conf spark.kryoserializer.buffer.max=2000m \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.memory.storageFraction=0.1 \
+--conf spark.shuffle.service.enabled=true \
+--conf spark.sql.hive.convertMetastoreParquet=false \
+--conf spark.driver.maxResultSize=12g \
+--conf spark.executor.heartbeatInterval=120s \
+--conf spark.network.timeout=600s \
+--conf spark.yarn.max.executor.failures=10 \
+--conf spark.sql.catalogImplementation=hive \
+--class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob <PATH_TO_BUNDLE>/hudi-integ-test-bundle-0.12.0-SNAPSHOT.jar \
+--source-ordering-field test_suite_source_ordering_field \
+--use-deltastreamer \
+--target-base-path /tmp/hudi/output \
+--input-base-path /tmp/hudi/input \
+--target-table table1 \
+-props file:/tmp/test.properties \
+--schemaprovider-class org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider \
+--source-class org.apache.hudi.utilities.sources.AvroDFSSource \
+--input-file-size 125829120 \
+--workload-yaml-path file:/tmp/simple-deltastreamer.yaml \
+--workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
+--table-type COPY_ON_WRITE \
+--compact-scheduling-minshare 1 \
+--clean-input \
+--clean-output \
+--continuous \
+--test-continuous-mode \
+--min-sync-interval-seconds 20
+```
+
+We can use any yaml and properties file w/ above spark-submit command to test deltastreamer w/ async table services. 
 
 ## Automated tests for N no of yamls in Local Docker environment
 

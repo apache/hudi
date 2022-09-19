@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
@@ -36,14 +35,8 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Node to validate data set sanity like total file versions retained, has cleaning happened, has archival happened, etc.
@@ -77,8 +70,8 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
           log.warn("Earliest commit to retain : " + earliestCommitToRetain);
           long unCleanedInstants = metaClient.getActiveTimeline().filterCompletedInstants().filter(instant ->
               HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestCommitToRetain)).getInstants().count();
-          ValidationUtils.checkArgument(unCleanedInstants >= (maxCommitsRetained + 1), "Total uncleaned instants " + unCleanedInstants +
-              " mismatched with max commits retained " + (maxCommitsRetained + 1));
+          ValidationUtils.checkArgument(unCleanedInstants >= (maxCommitsRetained + 1), "Total uncleaned instants " + unCleanedInstants
+              + " mismatched with max commits retained " + (maxCommitsRetained + 1));
         }
 
         if (config.validateArchival() || config.validateClean()) {

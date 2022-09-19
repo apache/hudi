@@ -18,13 +18,14 @@
 
 package org.apache.hudi.integ.testsuite.configuration;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -42,7 +43,7 @@ public class DeltaConfig implements Serializable {
   private final SerializableConfiguration configuration;
 
   public DeltaConfig(DeltaOutputMode deltaOutputMode, DeltaInputType deltaInputType,
-                     SerializableConfiguration configuration) {
+      SerializableConfiguration configuration) {
     this.deltaOutputMode = deltaOutputMode;
     this.deltaInputType = deltaInputType;
     this.configuration = configuration;
@@ -69,9 +70,14 @@ public class DeltaConfig implements Serializable {
     public static final String TYPE = "type";
     public static final String NODE_NAME = "name";
     public static final String DEPENDENCIES = "deps";
+    public static final String NO_DEPENDENCY_VALUE = "none";
     public static final String CHILDREN = "children";
     public static final String HIVE_QUERIES = "hive_queries";
     public static final String HIVE_PROPERTIES = "hive_props";
+    public static final String PRESTO_QUERIES = "presto_queries";
+    public static final String PRESTO_PROPERTIES = "presto_props";
+    public static final String TRINO_QUERIES = "trino_queries";
+    public static final String TRINO_PROPERTIES = "trino_props";
     private static String NUM_RECORDS_INSERT = "num_records_insert";
     private static String NUM_RECORDS_UPSERT = "num_records_upsert";
     private static String NUM_RECORDS_DELETE = "num_records_delete";
@@ -99,6 +105,9 @@ public class DeltaConfig implements Serializable {
     private static String ENABLE_METADATA_VALIDATE = "enable_metadata_validate";
     private static String VALIDATE_FULL_DATA = "validate_full_data";
     private static String DELETE_INPUT_DATA_EXCEPT_LATEST = "delete_input_data_except_latest";
+    private static String PARTITIONS_TO_DELETE = "partitions_to_delete";
+    private static String INPUT_PARTITIONS_TO_SKIP_VALIDATE = "input_partitions_to_skip_validate";
+    private static String MAX_WAIT_TIME_FOR_DELTASTREAMER_TO_CATCH_UP_MS = "max_wait_time_for_deltastreamer_catch_up_ms";
 
     // Spark SQL Create Table
     private static String TABLE_TYPE = "table_type";
@@ -201,6 +210,10 @@ public class DeltaConfig implements Serializable {
       return Boolean.valueOf(configsMap.getOrDefault(DISABLE_INGEST, false).toString());
     }
 
+    public String getPartitionsToDelete() {
+      return configsMap.getOrDefault(PARTITIONS_TO_DELETE, "").toString();
+    }
+
     public boolean getReinitContext() {
       return Boolean.valueOf(configsMap.getOrDefault(REINIT_CONTEXT, false).toString());
     }
@@ -221,6 +234,10 @@ public class DeltaConfig implements Serializable {
       return Integer.valueOf(configsMap.getOrDefault(VALIDATE_ONCE_EVERY_ITR, 1).toString());
     }
 
+    public String inputPartitonsToSkipWithValidate() {
+      return configsMap.getOrDefault(INPUT_PARTITIONS_TO_SKIP_VALIDATE, "").toString();
+    }
+
     public boolean isValidateFullData() {
       return Boolean.valueOf(configsMap.getOrDefault(VALIDATE_FULL_DATA, false).toString());
     }
@@ -239,6 +256,10 @@ public class DeltaConfig implements Serializable {
 
     public boolean enableRowWriting() {
       return Boolean.valueOf(configsMap.getOrDefault(ENABLE_ROW_WRITING, false).toString());
+    }
+
+    public long maxWaitTimeForDeltastreamerToCatchupMs() {
+      return Long.valueOf(configsMap.getOrDefault(MAX_WAIT_TIME_FOR_DELTASTREAMER_TO_CATCH_UP_MS, 5 * 60 * 1000).toString());
     }
 
     public Option<String> getTableType() {
@@ -266,7 +287,7 @@ public class DeltaConfig implements Serializable {
 
     public Option<String> getPartitionField() {
       return !configsMap.containsKey(PARTITION_FIELD) ? Option.empty()
-              : Option.of(configsMap.get(PARTITION_FIELD).toString());
+          : Option.of(configsMap.get(PARTITION_FIELD).toString());
     }
 
     public String getMergeCondition() {
@@ -302,7 +323,7 @@ public class DeltaConfig implements Serializable {
 
     public List<Pair<String, Integer>> getHiveQueries() {
       try {
-        return (List<Pair<String, Integer>>) this.configsMap.getOrDefault("hive_queries", new ArrayList<>());
+        return (List<Pair<String, Integer>>) this.configsMap.getOrDefault(HIVE_QUERIES, new ArrayList<>());
       } catch (Exception e) {
         throw new RuntimeException("unable to get hive queries from configs");
       }
@@ -314,6 +335,30 @@ public class DeltaConfig implements Serializable {
 
     public List<String> getHiveProperties() {
       return (List<String>) this.configsMap.getOrDefault(HIVE_PROPERTIES, new ArrayList<>());
+    }
+
+    public List<String> getPrestoProperties() {
+      return (List<String>) this.configsMap.getOrDefault(PRESTO_PROPERTIES, new ArrayList<>());
+    }
+
+    public List<String> getTrinoProperties() {
+      return (List<String>) this.configsMap.getOrDefault(TRINO_PROPERTIES, new ArrayList<>());
+    }
+
+    public List<Pair<String, Integer>> getPrestoQueries() {
+      try {
+        return (List<Pair<String, Integer>>) this.configsMap.getOrDefault(PRESTO_QUERIES, new ArrayList<>());
+      } catch (Exception e) {
+        throw new RuntimeException("unable to get presto queries from configs");
+      }
+    }
+
+    public List<Pair<String, Integer>> getTrinoQueries() {
+      try {
+        return (List<Pair<String, Integer>>) this.configsMap.getOrDefault(TRINO_QUERIES, new ArrayList<>());
+      } catch (Exception e) {
+        throw new RuntimeException("unable to get trino queries from configs");
+      }
     }
 
     @Override
@@ -429,6 +474,26 @@ public class DeltaConfig implements Serializable {
 
       public Builder withHiveProperties(List<String> hiveProperties) {
         this.configsMap.put(HIVE_PROPERTIES, hiveProperties);
+        return this;
+      }
+
+      public Builder withPrestoProperties(List<String> prestoProperties) {
+        this.configsMap.put(PRESTO_PROPERTIES, prestoProperties);
+        return this;
+      }
+
+      public Builder withTrinoProperties(List<String> trinoProperties) {
+        this.configsMap.put(TRINO_PROPERTIES, trinoProperties);
+        return this;
+      }
+
+      public Builder withPrestoQueryAndResults(List<Pair<String, Integer>> prestoQueries) {
+        this.configsMap.put(PRESTO_QUERIES, prestoQueries);
+        return this;
+      }
+
+      public Builder withTrinoQueryAndResults(List<Pair<String, Integer>> trinoQueries) {
+        this.configsMap.put(TRINO_QUERIES, trinoQueries);
         return this;
       }
 

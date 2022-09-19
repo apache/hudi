@@ -26,9 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
@@ -37,28 +35,31 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Hash indexing mechanism.
  */
-public class HoodieBucketIndex extends HoodieIndex<Object, Object> {
+public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
-  private static final Logger LOG =  LogManager.getLogger(HoodieBucketIndex.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieBucketIndex.class);
 
-  private final int numBuckets;
+  protected final int numBuckets;
+  protected final List<String> indexKeyFields;
 
   public HoodieBucketIndex(HoodieWriteConfig config) {
     super(config);
-    numBuckets = config.getBucketIndexNumBuckets();
-    LOG.info("use bucket index, numBuckets=" + numBuckets);
+
+    this.numBuckets = config.getBucketIndexNumBuckets();
+    this.indexKeyFields = Arrays.asList(config.getBucketIndexHashField().split(","));
+    LOG.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
   }
 
   @Override
   public HoodieData<WriteStatus> updateLocation(HoodieData<WriteStatus> writeStatuses,
-      HoodieEngineContext context,
-      HoodieTable hoodieTable)
+                                                HoodieEngineContext context,
+                                                HoodieTable hoodieTable)
       throws HoodieIndexException {
     return writeStatuses;
   }
@@ -68,62 +69,36 @@ public class HoodieBucketIndex extends HoodieIndex<Object, Object> {
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable)
       throws HoodieIndexException {
-    HoodieData<HoodieRecord<R>> taggedRecords = records.mapPartitions(recordIter -> {
-      // partitionPath -> bucketId -> fileInfo
-      Map<String, Map<Integer, Pair<String, String>>> partitionPathFileIDList = new HashMap<>();
-      return new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(recordIter) {
+    // Get bucket location mapper for the given partitions
+    List<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collectAsList();
+    LOG.info("Get BucketIndexLocationMapper for partitions: " + partitions);
+    BucketIndexLocationMapper mapper = getLocationMapper(hoodieTable, partitions);
 
-        @Override
-        protected void start() {
-
-        }
-
-        @Override
-        protected HoodieRecord<R> computeNext() {
-          HoodieRecord record = recordIter.next();
-          int bucketId = BucketIdentifier.getBucketId(record, config.getBucketIndexHashField(), numBuckets);
-          String partitionPath = record.getPartitionPath();
-          if (!partitionPathFileIDList.containsKey(partitionPath)) {
-            partitionPathFileIDList.put(partitionPath, loadPartitionBucketIdFileIdMapping(hoodieTable, partitionPath));
+    return records.mapPartitions(iterator ->
+        new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(iterator) {
+          @Override
+          protected HoodieRecord<R> computeNext() {
+            // TODO maybe batch the operation to improve performance
+            HoodieRecord record = inputItr.next();
+            Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record.getKey());
+            return HoodieIndexUtils.getTaggedRecord(record, loc);
           }
-          if (partitionPathFileIDList.get(partitionPath).containsKey(bucketId)) {
-            Pair<String, String> fileInfo = partitionPathFileIDList.get(partitionPath).get(bucketId);
-            return HoodieIndexUtils.getTaggedRecord(record, Option.of(
-                new HoodieRecordLocation(fileInfo.getRight(), fileInfo.getLeft())
-            ));
-          }
-          return record;
-        }
-
-        @Override
-        protected void end() {
-
-        }
-      };
-    }, true);
-    return taggedRecords;
+        },
+        false
+    );
   }
 
-  private Map<Integer, Pair<String, String>> loadPartitionBucketIdFileIdMapping(
-      HoodieTable hoodieTable,
-      String partition) {
-    // bucketId -> fileIds
-    Map<Integer, Pair<String, String>> fileIDList = new HashMap<>();
-    HoodieIndexUtils
-        .getLatestBaseFilesForPartition(partition, hoodieTable)
-        .forEach(file -> {
-          String fileId = file.getFileId();
-          String commitTime = file.getCommitTime();
-          int bucketId = BucketIdentifier.bucketIdFromFileId(fileId);
-          if (!fileIDList.containsKey(bucketId)) {
-            fileIDList.put(bucketId, Pair.of(fileId, commitTime));
-          } else {
-            // check if bucket data is valid
-            throw new HoodieIOException("Find multiple files at partition path="
-                + partition + " belongs to the same bucket id = " + bucketId);
-          }
-        });
-    return fileIDList;
+  @Override
+  public boolean requiresTagging(WriteOperationType operationType) {
+    switch (operationType) {
+      case INSERT:
+      case INSERT_OVERWRITE:
+      case UPSERT:
+      case DELETE:
+        return true;
+      default:
+        return false;
+    }
   }
 
   @Override
@@ -138,7 +113,7 @@ public class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
   @Override
   public boolean canIndexLogFiles() {
-    return false;
+    return true;
   }
 
   @Override
@@ -146,19 +121,12 @@ public class HoodieBucketIndex extends HoodieIndex<Object, Object> {
     return true;
   }
 
-  @Override
-  public boolean requiresTagging(WriteOperationType operationType) {
-    switch (operationType) {
-      case INSERT:
-      case INSERT_OVERWRITE:
-      case UPSERT:
-        return true;
-      default:
-        return false;
-    }
-  }
-
   public int getNumBuckets() {
     return numBuckets;
   }
+
+  /**
+   * Get a location mapper for the given table & partitionPath
+   */
+  protected abstract BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath);
 }

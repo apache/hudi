@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -56,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -82,6 +84,8 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
+  public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
+  public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -90,7 +94,7 @@ public class HoodieTableConfig extends HoodieConfig {
           + "we can set it to limit the table name under a specific database");
 
   public static final ConfigProperty<String> NAME = ConfigProperty
-      .key("hoodie.table.name")
+      .key(HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with Hive. Needs to be same across runs.");
 
@@ -187,6 +191,17 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(HoodieTimelineTimeZone.LOCAL)
       .withDocumentation("User can set hoodie commit timeline timezone, such as utc, local and so on. local is default");
 
+  public static final ConfigProperty<Boolean> PARTITION_METAFILE_USE_BASE_FORMAT = ConfigProperty
+      .key("hoodie.partition.metafile.use.base.format")
+      .defaultValue(false)
+      .withDocumentation("If true, partition metafiles are saved in the same format as base-files for this dataset (e.g. Parquet / ORC). "
+          + "If false (default) partition metafiles are saved as properties files.");
+
+  public static final ConfigProperty<Boolean> DROP_PARTITION_COLUMNS = ConfigProperty
+      .key("hoodie.datasource.write.drop.partition.columns")
+      .defaultValue(false)
+      .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
@@ -205,6 +220,20 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("0.11.0")
       .withDocumentation("Table checksum is used to guard against partial writes in HDFS. It is added as the last entry in hoodie.properties and then used to validate while reading table config.");
+
+  public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS_INFLIGHT = ConfigProperty
+      .key("hoodie.table.metadata.partitions.inflight")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of metadata partitions whose building is in progress. "
+          + "These partitions are not yet ready for use by the readers.");
+
+  public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS = ConfigProperty
+      .key("hoodie.table.metadata.partitions")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
+          + "These partitions are ready for use by the readers");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
@@ -244,8 +273,8 @@ public class HoodieTableConfig extends HoodieConfig {
    * @throws IOException
    */
   private static String storeProperties(Properties props, FSDataOutputStream outputStream) throws IOException {
-    String checksum;
-    if (props.containsKey(TABLE_CHECKSUM.key()) && validateChecksum(props)) {
+    final String checksum;
+    if (isValidChecksum(props)) {
       checksum = props.getProperty(TABLE_CHECKSUM.key());
       props.store(outputStream, "Updated at " + Instant.now());
     } else {
@@ -257,8 +286,8 @@ public class HoodieTableConfig extends HoodieConfig {
     return checksum;
   }
 
-  private boolean isValidChecksum() {
-    return contains(TABLE_CHECKSUM) && validateChecksum(props);
+  private static boolean isValidChecksum(Properties props) {
+    return props.containsKey(TABLE_CHECKSUM.key()) && validateChecksum(props);
   }
 
   /**
@@ -270,20 +299,13 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private void fetchConfigs(FileSystem fs, String metaPath) throws IOException {
     Path cfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
-    Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
     try (FSDataInputStream is = fs.open(cfgPath)) {
       props.load(is);
-      // validate checksum for latest table version
-      if (getTableVersion().versionCode() >= HoodieTableVersion.FOUR.versionCode() && !isValidChecksum()) {
-        LOG.warn("Checksum validation failed. Falling back to backed up configs.");
-        try (FSDataInputStream fsDataInputStream = fs.open(backupCfgPath)) {
-          props.load(fsDataInputStream);
-        }
-      }
     } catch (IOException ioe) {
       if (!fs.exists(cfgPath)) {
         LOG.warn("Run `table recover-configs` if config update/delete failed midway. Falling back to backed up configs.");
         // try the backup. this way no query ever fails if update fails midway.
+        Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
         try (FSDataInputStream is = fs.open(backupCfgPath)) {
           props.load(is);
         }
@@ -403,6 +425,9 @@ public class HoodieTableConfig extends HoodieConfig {
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
+
+      hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
+
       storeProperties(hoodieConfig.getProps(), outputStream);
     }
   }
@@ -461,11 +486,9 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Option<String[]> getRecordKeyFields() {
-    if (contains(RECORDKEY_FIELDS)) {
-      return Option.of(Arrays.stream(getString(RECORDKEY_FIELDS).split(","))
-          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
-    }
-    return Option.empty();
+    String keyFieldsValue = getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    return Option.of(Arrays.stream(keyFieldsValue.split(","))
+        .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
   }
 
   public Option<String[]> getPartitionFields() {
@@ -571,11 +594,15 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public String getHiveStylePartitioningEnable() {
-    return getString(HIVE_STYLE_PARTITIONING_ENABLE);
+    return getStringOrDefault(HIVE_STYLE_PARTITIONING_ENABLE);
   }
 
   public String getUrlEncodePartitioning() {
-    return getString(URL_ENCODE_PARTITIONING);
+    return getStringOrDefault(URL_ENCODE_PARTITIONING);
+  }
+
+  public Boolean shouldDropPartitionColumns() {
+    return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
   }
 
   /**
@@ -583,6 +610,29 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   private Long getTableChecksum() {
     return getLong(TABLE_CHECKSUM);
+  }
+
+  public List<String> getMetadataPartitionsInflight() {
+    return StringUtils.split(
+        getStringOrDefault(TABLE_METADATA_PARTITIONS_INFLIGHT, StringUtils.EMPTY_STRING),
+        CONFIG_VALUES_DELIMITER
+    );
+  }
+
+  public Set<String> getMetadataPartitions() {
+    return new HashSet<>(
+        StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
+            CONFIG_VALUES_DELIMITER));
+  }
+
+  /**
+   * Returns the format to use for partition meta files.
+   */
+  public Option<HoodieFileFormat> getPartitionMetafileFormat() {
+    if (getBooleanOrDefault(PARTITION_METAFILE_USE_BASE_FORMAT)) {
+      return Option.of(getBaseFileFormat());
+    }
+    return Option.empty();
   }
 
   public Map<String, String> propsMap() {

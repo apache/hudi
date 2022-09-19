@@ -30,7 +30,21 @@ import java.util.Deque;
 public class HoodieTimer {
 
   // Ordered stack of TimeInfo's to make sure stopping the timer returns the correct elapsed time
-  Deque<TimeInfo> timeInfoDeque = new ArrayDeque<>();
+  private final Deque<TimeInfo> timeInfoDeque = new ArrayDeque<>();
+
+  /**
+   * @deprecated please use either {@link HoodieTimer#start} or {@link HoodieTimer#create} APIs
+   */
+  @Deprecated
+  public HoodieTimer() {
+    this(false);
+  }
+
+  private HoodieTimer(boolean shouldStart) {
+    if (shouldStart) {
+      startTimer();
+    }
+  }
 
   static class TimeInfo {
 
@@ -68,5 +82,13 @@ public class HoodieTimer {
       throw new HoodieException("Timer was not started");
     }
     return timeInfoDeque.pop().stop();
+  }
+
+  public static HoodieTimer start() {
+    return new HoodieTimer(true);
+  }
+
+  public static HoodieTimer create() {
+    return new HoodieTimer(false);
   }
 }

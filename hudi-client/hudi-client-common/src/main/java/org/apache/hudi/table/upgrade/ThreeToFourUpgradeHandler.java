@@ -23,9 +23,14 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import java.util.Hashtable;
 import java.util.Map;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
 /**
  * UpgradeHandler to assist in upgrading {@link org.apache.hudi.table.HoodieTable} from version 3 to 4.
@@ -35,7 +40,12 @@ public class ThreeToFourUpgradeHandler implements UpgradeHandler {
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
-    tablePropsToAdd.put(HoodieTableConfig.TABLE_CHECKSUM, String.valueOf(HoodieTableConfig.generateChecksum(config.getProps())));
+    tablePropsToAdd.put(TABLE_CHECKSUM, String.valueOf(HoodieTableConfig.generateChecksum(config.getProps())));
+    // if metadata is enabled and files partition exist then update TABLE_METADATA_INDEX_COMPLETED
+    // schema for the files partition is same between the two versions
+    if (config.isMetadataTableEnabled() && metadataPartitionExists(config.getBasePath(), context, MetadataPartitionType.FILES)) {
+      tablePropsToAdd.put(TABLE_METADATA_PARTITIONS, MetadataPartitionType.FILES.getPartitionPath());
+    }
     return tablePropsToAdd;
   }
 }

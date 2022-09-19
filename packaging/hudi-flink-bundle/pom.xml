@@ -21,21 +21,22 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.11.0-SNAPSHOT</version>
+    <version>0.13.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-  <artifactId>hudi-flink-bundle_${scala.binary.version}</artifactId>
+  <artifactId>hudi-flink${flink.bundle.version}-bundle</artifactId>
   <packaging>jar</packaging>
 
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <skipTests>true</skipTests>
     <flink.bundle.hive.scope>provided</flink.bundle.hive.scope>
     <flink.bundle.shade.prefix>org.apache.hudi.</flink.bundle.shade.prefix>
     <javax.servlet.version>3.1.0</javax.servlet.version>
-    <!-- override to be same with flink 1.12.2 -->
-    <parquet.version>1.11.1</parquet.version>
+    <!-- override to be same with flink 1.15.x -->
+    <parquet.version>${flink.format.parquet.version}</parquet.version>
     <hive.version>2.3.1</hive.version>
     <thrift.version>0.9.3</thrift.version>
   </properties>
@@ -70,13 +71,15 @@
                   <resource>META-INF/LICENSE</resource>
                   <file>target/classes/META-INF/LICENSE</file>
                 </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-flink-client</include>
-                  <include>org.apache.hudi:hudi-flink_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-flink</include>
+                  <include>org.apache.hudi:${hudi.flink.module}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
@@ -109,6 +112,7 @@
 
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
@@ -119,7 +123,6 @@
                   <include>io.prometheus:simpleclient_dropwizard</include>
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
-                  <include>com.yammer.metrics:metrics-core</include>
 
                   <!-- Used for HUDI TimelineService -->
                   <include>org.eclipse.jetty:*</include>
@@ -127,17 +130,17 @@
                   <include>javax.servlet:javax.servlet-api</include>
 
                   <!-- Used for HUDI write handle -->
-                  <inclide>com.esotericsoftware:kryo-shaded</inclide>
+                  <include>com.esotericsoftware:kryo-shaded</include>
 
-                  <include>org.apache.flink:flink-hadoop-compatibility_${scala.binary.version}</include>
+                  <include>org.apache.flink:${flink.hadoop.compatibility.artifactId}</include>
                   <include>org.apache.flink:flink-json</include>
-                  <include>org.apache.flink:flink-parquet_${scala.binary.version}</include>
+                  <include>org.apache.flink:${flink.parquet.artifactId}</include>
 
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-service-rpc</include>
-		  <include>org.apache.hive:hive-exec</include>
-		  <include>org.apache.hive:hive-standalone-metastore</include>
+		          <include>org.apache.hive:hive-exec</include>
+                  <include>org.apache.hive:hive-standalone-metastore</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
                   <include>org.datanucleus:datanucleus-core</include>
@@ -147,10 +150,19 @@
 
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-client</include>
-                  <include>org.apache.hbase:hbase-server</include>
+                  <include>org.apache.hbase:hbase-hadoop-compat</include>
+                  <include>org.apache.hbase:hbase-hadoop2-compat</include>
+                  <include>org.apache.hbase:hbase-metrics</include>
+                  <include>org.apache.hbase:hbase-metrics-api</include>
                   <include>org.apache.hbase:hbase-protocol</include>
-                  <include>org.apache.htrace:htrace-core</include>
+                  <include>org.apache.hbase:hbase-protocol-shaded</include>
+                  <include>org.apache.hbase:hbase-server</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+                  <include>org.apache.htrace:htrace-core4</include>
                   <include>commons-codec:commons-codec</include>
+                  <include>commons-io:commons-io</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -161,6 +173,25 @@
                 <relocation>
                   <pattern>org.apache.avro.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.io.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hbase.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
+                  <excludes>
+                    <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
+                  </excludes>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hbase.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.htrace.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>
@@ -191,6 +222,74 @@
                   <pattern>com.fasterxml.jackson.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.fasterxml.jackson.</shadedPattern>
                 </relocation>
+                <!-- The classes below in org.apache.hadoop.metrics2 package come from
+                hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
+                instead of shading all classes under org.apache.hadoop.metrics2 including ones
+                from hadoop. -->
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
+                  </shadedPattern>
+                </relocation>
               </relocations>
               <filters>
                 <filter>
@@ -200,6 +299,8 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>**/*.proto</exclude>
+                    <exclude>hbase-webapps/**</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -249,12 +350,22 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-aws</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-flink-client</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-flink_${scala.binary.version}</artifactId>
+      <artifactId>${hudi.flink.module}</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-flink</artifactId>
       <version>${project.version}</version>
       <exclusions>
         <exclusion>
@@ -267,11 +378,23 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hadoop-mr</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hive-sync</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -281,6 +404,10 @@
         <exclusion>
           <artifactId>rocksdbjni</artifactId>
           <groupId>org.rocksdb</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -293,13 +420,13 @@
     <!-- Flink -->
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-hadoop-compatibility_${scala.binary.version}</artifactId>
+      <artifactId>${flink.hadoop.compatibility.artifactId}</artifactId>
       <version>${flink.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-parquet_${scala.binary.version}</artifactId>
+      <artifactId>${flink.parquet.artifactId}</artifactId>
       <version>${flink.version}</version>
       <scope>compile</scope>
     </dependency>
@@ -374,8 +501,7 @@
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-      <!-- Override the version to be same with Flink avro -->
-      <version>1.10.0</version>
+      <version>${avro.version}</version>
       <scope>compile</scope>
     </dependency>
 
@@ -544,66 +670,6 @@
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-annotations</artifactId>
       <scope>compile</scope>
-    </dependency>
-
-    <!-- Hbase -->
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-common</artifactId>
-      <version>${hbase.version}</version>
-      <exclusions>
-        <exclusion>
-          <artifactId>guava</artifactId>
-          <groupId>com.google.guava</groupId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-server</artifactId>
-      <version>${hbase.version}</version>
-      <scope>compile</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>guava</artifactId>
-          <groupId>com.google.guava</groupId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.hbase</groupId>
-          <artifactId>hbase-common</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.codehaus.jackson</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.mortbay.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>tomcat</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-client</artifactId>
-      <version>${hbase.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-protocol</artifactId>
-      <version>${hbase.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.htrace</groupId>
-      <artifactId>htrace-core</artifactId>
-      <version>${htrace.version}</version>
     </dependency>
   </dependencies>
 

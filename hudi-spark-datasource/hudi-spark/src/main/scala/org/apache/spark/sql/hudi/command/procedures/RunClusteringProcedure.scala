@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, Option => HOption}
@@ -26,7 +26,8 @@ import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row}
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.{resolveExpr, splitPartitionAndDataPredicates}
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.types._
@@ -34,7 +35,11 @@ import org.apache.spark.sql.types._
 import java.util.function.Supplier
 import scala.collection.JavaConverters._
 
-class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with PredicateHelper with Logging {
+class RunClusteringProcedure extends BaseProcedure
+  with ProcedureBuilder
+  with PredicateHelper
+  with Logging {
+
   /**
    * OPTIMIZE table_name|table_path [WHERE predicate]
    * [ORDER BY (col_name1 [, ...] ) ]
@@ -43,13 +48,15 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Pr
     ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
     ProcedureParameter.optional(1, "path", DataTypes.StringType, None),
     ProcedureParameter.optional(2, "predicate", DataTypes.StringType, None),
-    ProcedureParameter.optional(3, "order", DataTypes.StringType, None)
+    ProcedureParameter.optional(3, "order", DataTypes.StringType, None),
+    ProcedureParameter.optional(4, "show_involved_partition", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("timestamp", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("groups", DataTypes.IntegerType, nullable = true, Metadata.empty)
+    StructField("input_group_size", DataTypes.IntegerType, nullable = true, Metadata.empty),
+    StructField("state", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("involved_partitions", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -63,6 +70,7 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Pr
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
     val predicate = getArgValueOrDefault(args, PARAMETERS(2))
     val orderColumns = getArgValueOrDefault(args, PARAMETERS(3))
+    val showInvolvedPartitions = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Boolean]
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
@@ -74,7 +82,7 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Pr
           HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
           HoodieClusteringConfig.PARTITION_SELECTED.key() -> prunedPartitions
         )
-        logInfo(s"Partition predicates: ${p}, partition selected: ${prunedPartitions}")
+        logInfo(s"Partition predicates: $p, partition selected: $prunedPartitions")
       case _ =>
         logInfo("No partition predicates")
     }
@@ -86,7 +94,7 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Pr
         conf = conf ++ Map(
           HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> o.asInstanceOf[String]
         )
-        logInfo(s"Order columns: ${o}")
+        logInfo(s"Order columns: $o")
       case _ =>
         logInfo("No order columns")
     }
@@ -107,7 +115,27 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Pr
     pendingClustering.foreach(client.cluster(_, true))
     logInfo(s"Finish clustering all the instants: ${pendingClustering.mkString(",")}," +
       s" time cost: ${System.currentTimeMillis() - startTs}ms.")
-    Seq.empty[Row]
+
+    val clusteringInstants = metaClient.reloadActiveTimeline().getInstants.iterator().asScala
+      .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION && pendingClustering.contains(p.getTimestamp))
+      .toSeq
+      .sortBy(f => f.getTimestamp)
+      .reverse
+
+    val clusteringPlans = clusteringInstants.map(instant =>
+      ClusteringUtils.getClusteringPlan(metaClient, instant)
+    )
+
+    if (showInvolvedPartitions) {
+      clusteringPlans.map { p =>
+        Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
+          p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala))
+      }
+    } else {
+      clusteringPlans.map { p =>
+        Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(), p.get().getLeft.getState.name(), "*")
+      }
+    }
   }
 
   override def build: Procedure = new RunClusteringProcedure()
@@ -120,9 +148,9 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Pr
     // Resolve partition predicates
     val schemaResolver = new TableSchemaResolver(metaClient)
     val tableSchema = AvroConversionUtils.convertAvroSchemaToStructType(schemaResolver.getTableAvroSchema)
-    val condition = HoodieCatalystExpressionUtils.resolveFilterExpr(sparkSession, predicate, tableSchema)
+    val condition = resolveExpr(sparkSession, predicate, tableSchema)
     val partitionColumns = metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())
-    val (partitionPredicates, dataPredicates) = HoodieCatalystExpressionUtils.splitPartitionAndDataPredicates(
+    val (partitionPredicates, dataPredicates) = splitPartitionAndDataPredicates(
       sparkSession, splitConjunctivePredicates(condition).toArray, partitionColumns)
     checkArgument(dataPredicates.isEmpty, "Only partition predicates are allowed")
 

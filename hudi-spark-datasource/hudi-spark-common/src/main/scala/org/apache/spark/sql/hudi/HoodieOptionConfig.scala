@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload
+import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ValidationUtils
 import org.apache.spark.sql.SparkSession
@@ -66,7 +66,7 @@ object HoodieOptionConfig {
     .withSqlKey("payloadClass")
     .withHoodieKey(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key)
     .withTableConfigKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key)
-    .defaultValue(classOf[DefaultHoodieRecordPayload].getName)
+    .defaultValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue())
     .build()
 
   /**
@@ -198,14 +198,14 @@ object HoodieOptionConfig {
       .map(_.split(",").filter(_.length > 0))
     ValidationUtils.checkArgument(primaryKeys.nonEmpty, "No `primaryKey` is specified.")
     primaryKeys.get.foreach { primaryKey =>
-      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, primaryKey)),
+      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(primaryKey))),
         s"Can't find primaryKey `$primaryKey` in ${schema.treeString}.")
     }
 
     // validate preCombine key
     val preCombineKey = sqlOptions.get(SQL_KEY_PRECOMBINE_FIELD.sqlKeyName)
     if (preCombineKey.isDefined && preCombineKey.get.nonEmpty) {
-      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, preCombineKey.get)),
+      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(preCombineKey.get))),
         s"Can't find preCombineKey `${preCombineKey.get}` in ${schema.treeString}.")
     }
 

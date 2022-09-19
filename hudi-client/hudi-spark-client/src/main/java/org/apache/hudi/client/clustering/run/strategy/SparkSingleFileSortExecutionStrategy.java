@@ -38,7 +38,6 @@ import org.apache.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * This strategy is similar to {@link SparkSortAndSizeExecutionStrategy} with the difference being that
@@ -62,18 +61,19 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
                                                               Map<String, String> strategyParams,
                                                               Schema schema,
                                                               List<HoodieFileGroupId> fileGroupIdList,
-                                                              boolean preserveHoodieMetadata) {
+                                                              boolean preserveHoodieMetadata,
+                                                              Map<String, String> extraMetadata) {
     if (numOutputGroups != 1 || fileGroupIdList.size() != 1) {
       throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
     }
     LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
-    Properties props = getWriteConfig().getProps();
-    props.put(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key(), String.valueOf(numOutputGroups));
-    // We are calling another action executor - disable auto commit. Strategy is only expected to write data in new files.
-    props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), Boolean.FALSE.toString());
+
+    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
+        .withBulkInsertParallelism(numOutputGroups)
+        .withProps(getWriteConfig().getProps()).build();
     // Since clustering will write to single file group using HoodieUnboundedCreateHandle, set max file size to a large value.
-    props.put(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(Long.MAX_VALUE));
-    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
+    newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
+
     return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
         false, getPartitioner(strategyParams, schema), true, numOutputGroups, new SingleFileHandleCreateFactory(fileGroupIdList.get(0).getFileId(), preserveHoodieMetadata));
   }

@@ -80,6 +80,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   protected final TaskContextSupplier taskContextSupplier;
   protected final TransactionManager txnManager;
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxn;
+  protected Set<String> pendingInflightAndRequestedInstants;
 
   public BaseCommitActionExecutor(HoodieEngineContext context, HoodieWriteConfig config,
                                   HoodieTable<T, I, K, O> table, String instantTime, WriteOperationType operationType,
@@ -91,7 +92,9 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link BaseHoodieWriteClient}.
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
     this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
-    if (table.getStorageLayout().doesNotSupport(operationType)) {
+    this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(table.getMetaClient());
+    this.pendingInflightAndRequestedInstants.remove(instantTime);
+    if (!table.getStorageLayout().writeOperationSupported(operationType)) {
       throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
           + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
     }
@@ -184,7 +187,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
       setCommitMetadata(result);
       // reload active timeline so as to get all updates after current transaction have started. hence setting last arg to true.
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-          result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner(), true);
+          result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner(), true, pendingInflightAndRequestedInstants);
       commit(extraMetadata, result);
     } finally {
       this.txnManager.endTransaction(inflightInstant);
@@ -233,6 +236,9 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
     table.getMetaClient().reloadActiveTimeline();
 
+    // Disable auto commit. Strategy is only expected to write data in new files.
+    config.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE, Boolean.FALSE.toString());
+
     final Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = (
         (ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>)
@@ -256,7 +262,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   private HoodieData<WriteStatus> updateIndex(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
-    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
+    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     return statuses;

@@ -51,23 +51,40 @@ public class TestParquetSchemaConverter {
     final String expected = "message converted {\n"
         + "  optional group f_array (LIST) {\n"
         + "    repeated group list {\n"
-        + "      optional binary element (UTF8);\n"
+        + "      optional binary element (STRING);\n"
         + "    }\n"
         + "  }\n"
         + "  optional group f_map (MAP) {\n"
         + "    repeated group key_value {\n"
         + "      optional int32 key;\n"
-        + "      optional binary value (UTF8);\n"
+        + "      optional binary value (STRING);\n"
         + "    }\n"
         + "  }\n"
         + "  optional group f_row {\n"
         + "    optional int32 f_row_f0;\n"
-        + "    optional binary f_row_f1 (UTF8);\n"
+        + "    optional binary f_row_f1 (STRING);\n"
         + "    optional group f_row_f2 {\n"
         + "      optional int32 f_row_f2_f0;\n"
-        + "      optional binary f_row_f2_f1 (UTF8);\n"
+        + "      optional binary f_row_f2_f1 (STRING);\n"
         + "    }\n"
         + "  }\n"
+        + "}\n";
+    assertThat(messageType.toString(), is(expected));
+  }
+
+  @Test
+  void testConvertTimestampTypes() {
+    DataType dataType = DataTypes.ROW(
+        DataTypes.FIELD("ts_3", DataTypes.TIMESTAMP(3)),
+        DataTypes.FIELD("ts_6", DataTypes.TIMESTAMP(6)),
+        DataTypes.FIELD("ts_9", DataTypes.TIMESTAMP(9)));
+    org.apache.parquet.schema.MessageType messageType =
+        ParquetSchemaConverter.convertToParquetMessageType("converted", (RowType) dataType.getLogicalType());
+    assertThat(messageType.getColumns().size(), is(3));
+    final String expected = "message converted {\n"
+        + "  optional int64 ts_3 (TIMESTAMP(MILLIS,true));\n"
+        + "  optional int96 ts_6;\n"
+        + "  optional int96 ts_9;\n"
         + "}\n";
     assertThat(messageType.toString(), is(expected));
   }

@@ -19,22 +19,32 @@
 package org.apache.hudi.functional
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, LocatedFileStatus, Path}
+import org.apache.hadoop.fs.{LocatedFileStatus, Path}
+import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
+import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.HoodieConversionUtils.toProperties
+import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ParquetUtils
-import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
+import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
+import org.apache.hudi.functional.TestColumnStatsIndex.ColumnStatsTestCase
 import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
-import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 
 import java.math.BigInteger
 import java.sql.{Date, Timestamp}
 import scala.collection.JavaConverters._
 import scala.util.Random
 
+@Tag("functional")
 class TestColumnStatsIndex extends HoodieClientTestBase {
   var spark: SparkSession = _
 
@@ -54,6 +64,10 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     initPath()
     initSparkContexts()
     initFileSystem()
+
+    setTableName("hoodie_test")
+    initMetaClient()
+
     spark = sqlContext.sparkSession
   }
 
@@ -63,191 +77,195 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     cleanupSparkContexts()
   }
 
-  @Test
-  def testZIndexTableComposition(): Unit = {
-    val targetParquetTablePath = tempDir.resolve("index/zorder/input-table").toAbsolutePath.toString
-    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/zorder/input-table-json").toString
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParams"))
+  def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
 
-    bootstrapParquetInputTableFromJSON(sourceJSONTablePath, targetParquetTablePath)
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      // NOTE: Currently only this setting is used like following by different MT partitions:
+      //          - Files: using it
+      //          - Column Stats: NOT using it (defaults to doing "point-lookups")
+      HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.key -> testCase.forceFullLogScan.toString,
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    ) ++ metadataOpts
 
-    val inputDf =
+    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/input-table-json",
+      expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+
+    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/another-input-table-json",
+      expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+
+    val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-updated2-column-stats-index-table.json"
+    } else {
+      "index/colstats/mor-updated2-column-stats-index-table.json"
+    }
+    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/update-input-table-json",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testMetadataColumnStatsIndexPartialProjection(shouldReadInMemory: Boolean): Unit = {
+    val targetColumnsToIndex = Seq("c1", "c2", "c3")
+
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
+    )
+
+    val opts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    ) ++ metadataOpts
+
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
+
     // NOTE: Schema here is provided for validation that the input date is in the appropriate format
-      spark.read
-        .schema(sourceTableSchema)
-        .parquet(targetParquetTablePath)
+    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
 
-    val zorderedCols = Seq("c1", "c2", "c3", "c5", "c6", "c7", "c8")
-    val zorderedColsSchemaFields = inputDf.schema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
+    inputDF
+      .sort("c1")
+      .repartition(4, new Column("c1"))
+      .write
+      .format("hudi")
+      .options(opts)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
 
-    // {@link TimestampType} is not supported, and will throw -- hence skipping "c4"
-    val newZIndexTableDf =
-      ColumnStatsIndexHelper.buildColumnStatsTableFor(
-        inputDf.sparkSession,
-        inputDf.inputFiles.toSeq.asJava,
-        zorderedColsSchemaFields.asJava
-      )
+    metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    val indexSchema =
-      ColumnStatsIndexHelper.composeIndexSchema(
-        sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq.asJava
-      )
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(toProperties(metadataOpts))
+      .build()
 
-    // Collect Z-index stats manually (reading individual Parquet files)
-    val manualZIndexTableDf =
-      buildColumnStatsTableManually(targetParquetTablePath, zorderedCols, indexSchema)
+    ////////////////////////////////////////////////////////////////////////
+    // Case #1: Empty CSI projection
+    //          Projection is requested for columns which are NOT indexed
+    //          by the CSI
+    ////////////////////////////////////////////////////////////////////////
 
-    // NOTE: Z-index is built against stats collected w/in Parquet footers, which will be
-    //       represented w/ corresponding Parquet schema (INT, INT64, INT96, etc).
-    //
-    //       When stats are collected manually, produced Z-index table is inherently coerced into the
-    //       schema of the original source Parquet base-file and therefore we have to similarly coerce newly
-    //       built Z-index table (built off Parquet footers) into the canonical index schema (built off the
-    //       original source file schema)
-    assertEquals(asJson(sort(manualZIndexTableDf)), asJson(sort(newZIndexTableDf)))
+    {
+      // These are NOT indexed
+      val requestedColumns = Seq("c4")
 
-    // Match against expected Z-index table
-    val expectedZIndexTableDf =
-      spark.read
-        .schema(indexSchema)
-        .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-    assertEquals(asJson(sort(expectedZIndexTableDf)), asJson(sort(replace(newZIndexTableDf))))
-  }
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { emptyTransposedColStatsDF =>
+        assertEquals(0, emptyTransposedColStatsDF.collect().length)
+      }
+    }
 
-  @Test
-  def testZIndexTableMerge(): Unit = {
-    val testZIndexPath = new Path(basePath, "zindex")
+    ////////////////////////////////////////////////////////////////////////
+    // Case #2: Partial CSI projection
+    //          Projection is requested for set of columns some of which are
+    //          NOT indexed by the CSI
+    ////////////////////////////////////////////////////////////////////////
 
-    val firstParquetTablePath = tempDir.resolve("index/zorder/input-table").toAbsolutePath.toString
-    val firstJSONTablePath = getClass.getClassLoader.getResource("index/zorder/input-table-json").toString
+    {
+      // We have to include "c1", since we sort the expected outputs by this column
+      val requestedColumns = Seq("c4", "c1")
 
-    // Bootstrap FIRST source Parquet table
-    bootstrapParquetInputTableFromJSON(firstJSONTablePath, firstParquetTablePath)
+      val expectedColStatsSchema = composeIndexSchema(requestedColumns.sorted, sourceTableSchema)
+      // Match against expected column stats table
+      val expectedColStatsIndexTableDf =
+        spark.read
+          .schema(expectedColStatsSchema)
+          .json(getClass.getClassLoader.getResource("index/colstats/partial-column-stats-index-table.json").toString)
 
-    val zorderedCols = Seq("c1", "c2", "c3", "c5", "c6", "c7", "c8")
-    val indexSchema =
-      ColumnStatsIndexHelper.composeIndexSchema(
-        sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq.asJava
-      )
+      // Collect Column Stats manually (reading individual Parquet files)
+      val manualColStatsTableDF =
+        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
-    //
-    // Bootstrap Z-index table
-    //
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-    val firstCommitInstance = "0"
-    val firstInputDf = spark.read.parquet(firstParquetTablePath)
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
+        assertEquals(expectedColStatsIndexTableDf.schema, partialTransposedColStatsDF.schema)
+        // NOTE: We have to drop the `fileName` column as it contains semi-random components
+        //       that we can't control in this test. Nevertheless, since we manually verify composition of the
+        //       ColStats Index by reading Parquet footers from individual Parquet files, this is not an issue
+        assertEquals(asJson(sort(expectedColStatsIndexTableDf)), asJson(sort(partialTransposedColStatsDF.drop("fileName"))))
+        assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(partialTransposedColStatsDF)))
+      }
+    }
 
-    ColumnStatsIndexHelper.updateColumnStatsIndexFor(
-      firstInputDf.sparkSession,
-      sourceTableSchema,
-      firstInputDf.inputFiles.toSeq.asJava,
-      zorderedCols.asJava,
-      testZIndexPath.toString,
-      firstCommitInstance,
-      Seq().asJava
-    )
+    ////////////////////////////////////////////////////////////////////////
+    // Case #3: Aligned CSI projection
+    //          Projection is requested for set of columns some of which are
+    //          indexed only for subset of files
+    ////////////////////////////////////////////////////////////////////////
 
-    // NOTE: We don't need to provide schema upon reading from Parquet, since Spark will be able
-    //       to reliably retrieve it
-    val initialZIndexTable =
-    spark.read
-      .parquet(new Path(testZIndexPath, firstCommitInstance).toString)
+    {
+      // NOTE: The update we're writing is intentionally omitting some of the columns
+      //       present in an earlier source
+      val missingCols = Seq("c2", "c3")
+      val partialSourceTableSchema = StructType(sourceTableSchema.fields.filterNot(f => missingCols.contains(f.name)))
 
-    val expectedInitialZIndexTableDf =
-      spark.read
-        .schema(indexSchema)
-        .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
+      val updateJSONTablePath = getClass.getClassLoader.getResource("index/colstats/partial-another-input-table-json").toString
+      val updateDF = spark.read
+        .schema(partialSourceTableSchema)
+        .json(updateJSONTablePath)
 
-    assertEquals(asJson(sort(expectedInitialZIndexTableDf)), asJson(sort(replace(initialZIndexTable))))
+      updateDF.repartition(4)
+        .write
+        .format("hudi")
+        .options(opts)
+        .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .mode(SaveMode.Append)
+        .save(basePath)
 
-    // Bootstrap SECOND source Parquet table
-    val secondParquetTablePath = tempDir.resolve("index/zorder/another-input-table").toAbsolutePath.toString
-    val secondJSONTablePath = getClass.getClassLoader.getResource("index/zorder/another-input-table-json").toString
+      metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    bootstrapParquetInputTableFromJSON(secondJSONTablePath, secondParquetTablePath)
+      val requestedColumns = sourceTableSchema.fieldNames
 
-    val secondCommitInstance = "1"
-    val secondInputDf =
-      spark.read
-        .schema(sourceTableSchema)
-        .parquet(secondParquetTablePath)
+      val expectedColStatsSchema = composeIndexSchema(requestedColumns.sorted, sourceTableSchema)
+      val expectedColStatsIndexUpdatedDF =
+        spark.read
+          .schema(expectedColStatsSchema)
+          .json(getClass.getClassLoader.getResource("index/colstats/updated-partial-column-stats-index-table.json").toString)
 
-    //
-    // Update Z-index table
-    //
+      // Collect Column Stats manually (reading individual Parquet files)
+      val manualUpdatedColStatsTableDF =
+        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
-    ColumnStatsIndexHelper.updateColumnStatsIndexFor(
-      secondInputDf.sparkSession,
-      sourceTableSchema,
-      secondInputDf.inputFiles.toSeq.asJava,
-      zorderedCols.asJava,
-      testZIndexPath.toString,
-      secondCommitInstance,
-      Seq(firstCommitInstance).asJava
-    )
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-    // NOTE: We don't need to provide schema upon reading from Parquet, since Spark will be able
-    //       to reliably retrieve it
-    val mergedZIndexTable =
-    spark.read
-      .parquet(new Path(testZIndexPath, secondCommitInstance).toString)
+      // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
+      // we should be able to read CSI, which will be properly padded (with nulls) after transposition
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { transposedUpdatedColStatsDF =>
+        assertEquals(expectedColStatsIndexUpdatedDF.schema, transposedUpdatedColStatsDF.schema)
 
-    val expectedMergedZIndexTableDf =
-      spark.read
-        .schema(indexSchema)
-        .json(getClass.getClassLoader.getResource("index/zorder/z-index-table-merged.json").toString)
-
-    assertEquals(asJson(sort(expectedMergedZIndexTableDf)), asJson(sort(replace(mergedZIndexTable))))
-  }
-
-  @Test
-  def testColumnStatsTablesGarbageCollection(): Unit = {
-    val targetParquetTablePath = tempDir.resolve("index/zorder/input-table").toAbsolutePath.toString
-    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/zorder/input-table-json").toString
-
-    bootstrapParquetInputTableFromJSON(sourceJSONTablePath, targetParquetTablePath)
-
-    val inputDf = spark.read.parquet(targetParquetTablePath)
-
-    val testColumnStatsIndexPath = new Path(tempDir.resolve("zindex").toAbsolutePath.toString)
-    val fs = testColumnStatsIndexPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
-
-    // Try to save statistics
-    ColumnStatsIndexHelper.updateColumnStatsIndexFor(
-      inputDf.sparkSession,
-      sourceTableSchema,
-      inputDf.inputFiles.toSeq.asJava,
-      Seq("c1","c2","c3","c5","c6","c7","c8").asJava,
-      testColumnStatsIndexPath.toString,
-      "2",
-      Seq("0", "1").asJava
-    )
-
-    // Save again
-    ColumnStatsIndexHelper.updateColumnStatsIndexFor(
-      inputDf.sparkSession,
-      sourceTableSchema,
-      inputDf.inputFiles.toSeq.asJava,
-      Seq("c1","c2","c3","c5","c6","c7","c8").asJava,
-      testColumnStatsIndexPath.toString,
-      "3",
-      Seq("0", "1", "2").asJava
-    )
-
-    // Test old index table being cleaned up
-    ColumnStatsIndexHelper.updateColumnStatsIndexFor(
-      inputDf.sparkSession,
-      sourceTableSchema,
-      inputDf.inputFiles.toSeq.asJava,
-      Seq("c1","c2","c3","c5","c6","c7","c8").asJava,
-      testColumnStatsIndexPath.toString,
-      "4",
-      Seq("0", "1", "3").asJava
-    )
-
-    assertEquals(!fs.exists(new Path(testColumnStatsIndexPath, "2")), true)
-    assertEquals(!fs.exists(new Path(testColumnStatsIndexPath, "3")), true)
-    assertEquals(fs.exists(new Path(testColumnStatsIndexPath, "4")), true)
+        assertEquals(asJson(sort(expectedColStatsIndexUpdatedDF)), asJson(sort(transposedUpdatedColStatsDF.drop("fileName"))))
+        assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
+      }
+    }
   }
 
   @Test
@@ -289,14 +307,53 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     })
   }
 
-  private def buildColumnStatsTableManually(tablePath: String, zorderedCols: Seq[String], indexSchema: StructType) = {
+  private def doWriteAndValidateColumnStats(testCase: ColumnStatsTestCase,
+                                            metadataOpts: Map[String, String],
+                                            hudiOpts: Map[String, String],
+                                            dataSourcePath: String,
+                                            expectedColStatsSourcePath: String,
+                                            operation: String,
+                                            saveMode: SaveMode): Unit = {
+    val sourceJSONTablePath = getClass.getClassLoader.getResource(dataSourcePath).toString
+
+    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
+    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+
+    inputDF
+      .sort("c1")
+      .repartition(4, new Column("c1"))
+      .write
+      .format("hudi")
+      .options(hudiOpts)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
+      .option(DataSourceWriteOptions.OPERATION.key, operation)
+      .mode(saveMode)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    // Only parquet files are supported for the validation against the generated column stats,
+    // constructing the column stats  from parquet data files using Spark SQL and comparing that
+    // with column stats index. This means that the following operations are support for such
+    // validation: (1) COW: all operations; (2) MOR: insert only.
+    val validateColumnStatsAgainstDataFiles =
+    (testCase.tableType == HoodieTableType.COPY_ON_WRITE
+      || operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL))
+    validateColumnStatsIndex(
+      testCase, metadataOpts, expectedColStatsSourcePath, validateColumnStatsAgainstDataFiles)
+  }
+
+  private def buildColumnStatsTableManually(tablePath: String,
+                                            includedCols: Seq[String],
+                                            indexedCols: Seq[String],
+                                            indexSchema: StructType): DataFrame = {
     val files = {
       val it = fs.listFiles(new Path(tablePath), true)
       var seq = Seq[LocatedFileStatus]()
       while (it.hasNext) {
         seq = seq :+ it.next()
       }
-      seq
+      seq.filter(fs => fs.getPath.getName.endsWith(".parquet"))
     }
 
     spark.createDataFrame(
@@ -304,16 +361,25 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
         val df = spark.read.schema(sourceTableSchema).parquet(file.getPath.toString)
         val exprs: Seq[String] =
           s"'${typedLit(file.getPath.getName)}' AS file" +:
+          s"sum(1) AS valueCount" +:
             df.columns
-              .filter(col => zorderedCols.contains(col))
+              .filter(col => includedCols.contains(col))
               .flatMap(col => {
                 val minColName = s"${col}_minValue"
                 val maxColName = s"${col}_maxValue"
-                Seq(
-                  s"min($col) AS $minColName",
-                  s"max($col) AS $maxColName",
-                  s"sum(cast(isnull($col) AS long)) AS ${col}_num_nulls"
-                )
+                if (indexedCols.contains(col)) {
+                  Seq(
+                    s"min($col) AS $minColName",
+                    s"max($col) AS $maxColName",
+                    s"sum(cast(isnull($col) AS long)) AS ${col}_nullCount"
+                  )
+                } else {
+                  Seq(
+                    s"null AS $minColName",
+                    s"null AS $maxColName",
+                    s"null AS ${col}_nullCount"
+                  )
+                }
               })
 
         df.selectExpr(exprs: _*)
@@ -323,41 +389,43 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     )
   }
 
-  def bootstrapParquetInputTableFromJSON(sourceJSONTablePath: String, targetParquetTablePath: String): Unit = {
-    val jsonInputDF =
-    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
-      spark.read
-        .schema(sourceTableSchema)
-        .json(sourceJSONTablePath)
+  private def validateColumnStatsIndex(testCase: ColumnStatsTestCase,
+                                       metadataOpts: Map[String, String],
+                                       expectedColStatsSourcePath: String,
+                                       validateColumnStatsAgainstDataFiles: Boolean): Unit = {
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(toProperties(metadataOpts))
+      .build()
 
-    jsonInputDF
-      .sort("c1")
-      .repartition(4, new Column("c1"))
-      .write
-      .format("parquet")
-      .mode("overwrite")
-      .save(targetParquetTablePath)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-    val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
-    // Have to cleanup additional artefacts of Spark write
-    fs.delete(new Path(targetParquetTablePath, "_SUCCESS"), false)
-  }
+    val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, sourceTableSchema)
+    val validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue")
 
-  def replace(ds: Dataset[Row]): DataFrame = {
-    val uuidRegexp = "[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}"
+    columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { transposedColStatsDF =>
+      // Match against expected column stats table
+      val expectedColStatsIndexTableDf =
+        spark.read
+          .schema(expectedColStatsSchema)
+          .json(getClass.getClassLoader.getResource(expectedColStatsSourcePath).toString)
 
-    val uuids =
-      ds.selectExpr(s"regexp_extract(file, '(${uuidRegexp})')")
-        .distinct()
-        .collect()
-        .map(_.getString(0))
+      assertEquals(expectedColStatsIndexTableDf.schema, transposedColStatsDF.schema)
+      // NOTE: We have to drop the `fileName` column as it contains semi-random components
+      //       that we can't control in this test. Nevertheless, since we manually verify composition of the
+      //       ColStats Index by reading Parquet footers from individual Parquet files, this is not an issue
+      assertEquals(asJson(sort(expectedColStatsIndexTableDf, validationSortColumns)),
+        asJson(sort(transposedColStatsDF.drop("fileName"), validationSortColumns)))
 
-    val uuidToIdx: UserDefinedFunction = functions.udf((fileName: String) => {
-      val uuid = uuids.find(uuid => fileName.contains(uuid)).get
-      fileName.replace(uuid, "xxx")
-    })
+      if (validateColumnStatsAgainstDataFiles) {
+        // TODO(HUDI-4557): support validation of column stats of avro log files
+        // Collect Column Stats manually (reading individual Parquet files)
+        val manualColStatsTableDF =
+        buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, sourceTableSchema.fieldNames, expectedColStatsSchema)
 
-    ds.withColumn("file", uuidToIdx(ds("file")))
+        assertEquals(asJson(sort(manualColStatsTableDF, validationSortColumns)),
+          asJson(sort(transposedColStatsDF, validationSortColumns)))
+      }
+    }
   }
 
   private def generateRandomDataFrame(spark: SparkSession): DataFrame = {
@@ -368,9 +436,9 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
         // NOTE: We're testing different values for precision of the decimal to make sure
         //       we execute paths bearing different underlying representations in Parquet
         // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#DECIMAL
-        .add("c3a", DecimalType(9,3))
-        .add("c3b", DecimalType(10,3))
-        .add("c3c", DecimalType(20,3))
+        .add("c3a", DecimalType(9, 3))
+        .add("c3b", DecimalType(10, 3))
+        .add("c3c", DecimalType(20, 3))
         .add("c4", TimestampType)
         .add("c5", ShortType)
         .add("c6", DateType)
@@ -405,11 +473,28 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       .mkString("\n")
 
   private def sort(df: DataFrame): DataFrame = {
-    val sortedCols = df.columns.sorted
-    // Sort dataset by the first 2 columns (to minimize non-determinism in case multiple files have the same
-    // value of the first column)
-    df.select(sortedCols.head, sortedCols.tail: _*)
-      .sort("c1_maxValue", "c1_minValue")
+    sort(df, Seq("c1_maxValue", "c1_minValue"))
   }
 
+  private def sort(df: DataFrame, sortColumns: Seq[String]): DataFrame = {
+    val sortedCols = df.columns.sorted
+    // Sort dataset by specified columns (to minimize non-determinism in case multiple files have the same
+    // value of the first column)
+    df.select(sortedCols.head, sortedCols.tail: _*)
+      .sort(sortColumns.head, sortColumns.tail: _*)
+  }
+}
+
+object TestColumnStatsIndex {
+
+  case class ColumnStatsTestCase(tableType: HoodieTableType, forceFullLogScan: Boolean, shouldReadInMemory: Boolean)
+
+  def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
+      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = false, shouldReadInMemory = true)),
+        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = false, shouldReadInMemory = false)),
+        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = true, shouldReadInMemory = false)),
+        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = true, shouldReadInMemory = true)))
+    ): _*)
+  }
 }

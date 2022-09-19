@@ -18,37 +18,44 @@
 
 package org.apache.hudi.hive.replication;
 
-import com.beust.jcommander.Parameter;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hive.HiveSyncConfig;
 
-public class GlobalHiveSyncConfig extends HiveSyncConfig {
-  @Parameter(names = {"--replicated-timestamp"}, description = "Add globally replicated timestamp to enable consistent reads across clusters")
-  public String globallyReplicatedTimeStamp;
+import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParametersDelegate;
+import org.apache.hadoop.conf.Configuration;
 
-  public static GlobalHiveSyncConfig copy(GlobalHiveSyncConfig cfg) {
-    GlobalHiveSyncConfig newConfig = new GlobalHiveSyncConfig();
-    newConfig.basePath = cfg.basePath;
-    newConfig.assumeDatePartitioning = cfg.assumeDatePartitioning;
-    newConfig.databaseName = cfg.databaseName;
-    newConfig.hivePass = cfg.hivePass;
-    newConfig.hiveUser = cfg.hiveUser;
-    newConfig.partitionFields = cfg.partitionFields;
-    newConfig.partitionValueExtractorClass = cfg.partitionValueExtractorClass;
-    newConfig.jdbcUrl = cfg.jdbcUrl;
-    newConfig.tableName = cfg.tableName;
-    newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
-    newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
-    newConfig.supportTimestamp = cfg.supportTimestamp;
-    newConfig.decodePartition = cfg.decodePartition;
-    newConfig.batchSyncNum = cfg.batchSyncNum;
-    newConfig.globallyReplicatedTimeStamp = cfg.globallyReplicatedTimeStamp;
-    return newConfig;
+import java.util.Properties;
+
+public class GlobalHiveSyncConfig extends HiveSyncConfig {
+
+  public static final ConfigProperty<String> META_SYNC_GLOBAL_REPLICATE_TIMESTAMP = ConfigProperty
+      .key("hoodie.meta_sync.global.replicate.timestamp")
+      .noDefaultValue()
+      .withDocumentation("");
+
+  public GlobalHiveSyncConfig(Properties props, Configuration hadoopConf) {
+    super(props, hadoopConf);
   }
 
-  @Override
-  public String toString() {
-    return "GlobalHiveSyncConfig{" + super.toString()
-        + " globallyReplicatedTimeStamp=" + globallyReplicatedTimeStamp + "}";
+  public static class GlobalHiveSyncConfigParams {
+
+    @ParametersDelegate()
+    public final HiveSyncConfigParams hiveSyncConfigParams = new HiveSyncConfigParams();
+
+    @Parameter(names = {"--replicated-timestamp"}, description = "Add globally replicated timestamp to enable consistent reads across clusters")
+    public String globallyReplicatedTimeStamp;
+
+    public boolean isHelp() {
+      return hiveSyncConfigParams.isHelp();
+    }
+
+    public TypedProperties toProps() {
+      final TypedProperties props = hiveSyncConfigParams.toProps();
+      props.setPropertyIfNonNull(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key(), globallyReplicatedTimeStamp);
+      return props;
+    }
   }
 
 }

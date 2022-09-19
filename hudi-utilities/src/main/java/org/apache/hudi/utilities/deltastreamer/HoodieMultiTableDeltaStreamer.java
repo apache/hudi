@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import com.beust.jcommander.Parameter;
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -28,6 +27,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -134,7 +135,7 @@ public class HoodieMultiTableDeltaStreamer {
       Helpers.deepCopyConfigs(config, cfg);
       String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
-      if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE().key(), ""))) {
+      if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), ""))) {
         throw new HoodieException("Meta sync table field not provided!");
       }
       populateSchemaProviderProps(cfg, tableProperties);
@@ -206,6 +207,7 @@ public class HoodieMultiTableDeltaStreamer {
     static void deepCopyConfigs(Config globalConfig, HoodieDeltaStreamer.Config tableConfig) {
       tableConfig.enableHiveSync = globalConfig.enableHiveSync;
       tableConfig.enableMetaSync = globalConfig.enableMetaSync;
+      tableConfig.syncClientToolClassNames = globalConfig.syncClientToolClassNames;
       tableConfig.schemaProviderClassName = globalConfig.schemaProviderClassName;
       tableConfig.sourceOrderingField = globalConfig.sourceOrderingField;
       tableConfig.sourceClassName = globalConfig.sourceClassName;
@@ -227,6 +229,8 @@ public class HoodieMultiTableDeltaStreamer {
       tableConfig.compactSchedulingWeight = globalConfig.compactSchedulingWeight;
       tableConfig.deltaSyncSchedulingMinShare = globalConfig.deltaSyncSchedulingMinShare;
       tableConfig.deltaSyncSchedulingWeight = globalConfig.deltaSyncSchedulingWeight;
+      tableConfig.clusterSchedulingWeight = globalConfig.clusterSchedulingWeight;
+      tableConfig.clusterSchedulingMinShare = globalConfig.clusterSchedulingMinShare;
       tableConfig.sparkMaster = globalConfig.sparkMaster;
     }
   }
@@ -234,15 +238,21 @@ public class HoodieMultiTableDeltaStreamer {
   public static void main(String[] args) throws IOException {
     final Config config = new Config();
 
-    if (config.enableHiveSync) {
-      logger.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
-    }
-
     JCommander cmd = new JCommander(config, null, args);
     if (config.help || args.length == 0) {
       cmd.usage();
       System.exit(1);
     }
+
+    if (config.enableHiveSync) {
+      logger.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
+    }
+
+    if (config.targetTableName != null) {
+      logger.warn(String.format("--target-table is deprecated and will be removed in a future release due to it's useless;"
+              + " please use %s to configure multiple target tables", Constants.TABLES_TO_BE_INGESTED_PROP));
+    }
+
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-delta-streamer", Constants.LOCAL_SPARK_MASTER);
     try {
       new HoodieMultiTableDeltaStreamer(config, jssc).sync();
@@ -257,7 +267,8 @@ public class HoodieMultiTableDeltaStreamer {
         description = "base path prefix for multi table support via HoodieMultiTableDeltaStreamer class")
     public String basePathPrefix;
 
-    @Parameter(names = {"--target-table"}, description = "name of the target table", required = true)
+    @Deprecated
+    @Parameter(names = {"--target-table"}, description = "name of the target table")
     public String targetTableName;
 
     @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
@@ -326,6 +337,9 @@ public class HoodieMultiTableDeltaStreamer {
     @Parameter(names = {"--enable-sync"}, description = "Enable syncing meta")
     public Boolean enableMetaSync = false;
 
+    @Parameter(names = {"--sync-tool-classes"}, description = "Meta sync client tool, using comma to separate multi tools")
+    public String syncClientToolClassNames = HiveSyncTool.class.getName();
+
     @Parameter(names = {"--max-pending-compactions"},
         description = "Maximum number of outstanding inflight/requested compactions. Delta Sync will not happen unless"
         + "outstanding compactions is less than this number")
@@ -344,8 +358,10 @@ public class HoodieMultiTableDeltaStreamer {
         description = "the min sync interval of each sync in continuous mode")
     public Integer minSyncIntervalSeconds = 0;
 
-    @Parameter(names = {"--spark-master"}, description = "spark master to use.")
-    public String sparkMaster = "local[2]";
+    @Parameter(names = {"--spark-master"},
+        description = "spark master to use, if not defined inherits from your environment taking into "
+            + "account Spark Configuration priority rules (e.g. not using spark-submit command).")
+    public String sparkMaster = "";
 
     @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written")
     public Boolean commitOnErrors = false;
@@ -379,6 +395,14 @@ public class HoodieMultiTableDeltaStreamer {
      */
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
+
+    @Parameter(names = {"--cluster-scheduling-weight"}, description = "Scheduling weight for clustering as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer clusterSchedulingWeight = 1;
+
+    @Parameter(names = {"--cluster-scheduling-minshare"}, description = "Minshare for clustering as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer clusterSchedulingMinShare = 0;
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;

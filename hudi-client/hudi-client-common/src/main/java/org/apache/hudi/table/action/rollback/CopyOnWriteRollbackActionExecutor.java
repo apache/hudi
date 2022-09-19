@@ -55,9 +55,8 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
                                            HoodieInstant commitInstant,
                                            boolean deleteInstants,
                                            boolean skipTimelinePublish,
-                                           boolean useMarkerBasedStrategy,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, useMarkerBasedStrategy, skipLocking);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking);
   }
 
   @Override
@@ -67,7 +66,6 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
 
     List<HoodieRollbackStat> stats = new ArrayList<>();
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieInstant resolvedInstant = instantToRollback;
 
     if (instantToRollback.isCompleted()) {
       LOG.info("Unpublishing instant " + instantToRollback);
@@ -86,8 +84,6 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
 
     dropBootstrapIndexIfNeeded(instantToRollback);
 
-    // Delete Inflight instant if enabled
-    deleteInflightAndRequestedInstant(deleteInstants, activeTimeline, resolvedInstant);
     LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
     return stats;
   }

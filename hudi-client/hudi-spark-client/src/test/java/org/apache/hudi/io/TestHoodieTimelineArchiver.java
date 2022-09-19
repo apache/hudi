@@ -19,12 +19,16 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -41,7 +45,10 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -59,7 +66,9 @@ import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -71,11 +80,18 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
+import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -131,7 +147,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
                                                            int maxDeltaCommitsMetadataTable,
                                                            HoodieTableType tableType) throws Exception {
     return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits,
-        maxDeltaCommits, maxDeltaCommitsMetadataTable, tableType, false, 10, 209715200);
+        maxDeltaCommits, maxDeltaCommitsMetadataTable, tableType, false, 10, 209715200,
+        HoodieFailedWritesCleaningPolicy.EAGER, WriteConcurrencyMode.SINGLE_WRITER);
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
@@ -140,7 +157,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
                                                            int maxDeltaCommitsMetadataTable,
                                                            HoodieTableType tableType) throws Exception {
     return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits,
-        5, maxDeltaCommitsMetadataTable, tableType, false, 10, 209715200);
+        5, maxDeltaCommitsMetadataTable, tableType, false, 10, 209715200,
+        HoodieFailedWritesCleaningPolicy.EAGER, WriteConcurrencyMode.SINGLE_WRITER);
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
@@ -151,7 +169,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
                                                            int archiveFilesBatch,
                                                            long size) throws Exception {
     return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, 5,
-        maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, enableArchiveMerge, archiveFilesBatch, size);
+        maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, enableArchiveMerge, archiveFilesBatch, size,
+        HoodieFailedWritesCleaningPolicy.EAGER, WriteConcurrencyMode.SINGLE_WRITER);
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
@@ -162,20 +181,55 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
                                                            HoodieTableType tableType,
                                                            boolean enableArchiveMerge,
                                                            int archiveFilesBatch,
-                                                           long size) throws Exception {
+                                                           long size,
+                                                           HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                           WriteConcurrencyMode writeConcurrencyMode) throws Exception {
+    return initTestTableAndGetWriteConfig(
+        enableMetadata,
+        minArchivalCommits,
+        maxArchivalCommits,
+        maxDeltaCommits,
+        maxDeltaCommitsMetadataTable,
+        tableType,
+        enableArchiveMerge,
+        archiveFilesBatch,
+        size,
+        failedWritesCleaningPolicy,
+        writeConcurrencyMode,
+        ARCHIVE_BEYOND_SAVEPOINT.defaultValue());
+  }
+
+  private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
+                                                           int minArchivalCommits,
+                                                           int maxArchivalCommits,
+                                                           int maxDeltaCommits,
+                                                           int maxDeltaCommitsMetadataTable,
+                                                           HoodieTableType tableType,
+                                                           boolean enableArchiveMerge,
+                                                           int archiveFilesBatch,
+                                                           long size,
+                                                           HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                           WriteConcurrencyMode writeConcurrencyMode,
+                                                           boolean archiveProceedBeyondSavepoints) throws Exception {
     init(tableType);
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minArchivalCommits, maxArchivalCommits)
-            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommits)
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).withFailedWritesCleaningPolicy(failedWritesCleaningPolicy).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .withArchiveMergeEnable(enableArchiveMerge)
             .withArchiveMergeFilesBatchSize(archiveFilesBatch)
             .withArchiveMergeSmallFileLimit(size)
-            .build())
+            .archiveCommitsWith(minArchivalCommits, maxArchivalCommits)
+            .withArchiveBeyondSavepoint(archiveProceedBeyondSavepoints).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommits).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable).build())
+        .withWriteConcurrencyMode(writeConcurrencyMode)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
+            .build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, enableMetadata);
     return writeConfig;
@@ -225,6 +279,59 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         assertEquals(originalCommits, commitsAfterArchival);
       }
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testSavepointWithArchival(boolean archiveBeyondSavepoint) throws Exception {
+    boolean enableMetadata = false;
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 5, 2, HoodieTableType.COPY_ON_WRITE,
+        false, 10, 209715200, HoodieFailedWritesCleaningPolicy.EAGER, WriteConcurrencyMode.SINGLE_WRITER, archiveBeyondSavepoint);
+
+    // min archival commits is 2 and max archival commits is 4. and so, after 5th commit, 3 commits will be archived.
+    for (int i = 1; i < 5; i++) {
+      testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    }
+
+    // savepoint 3rd commit
+    String commitToSavepoint = String.format("%08d", 3);
+    HoodieSavepointMetadata savepointMetadata = testTable.doSavepoint(commitToSavepoint);
+    testTable.addSavepoint(commitToSavepoint, savepointMetadata);
+
+    for (int i = 5; i < 7; i++) {
+      testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    }
+    // trigger archival
+    Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
+    List<HoodieInstant> originalCommits = commitsList.getKey();
+    List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
+
+    if (archiveBeyondSavepoint) {
+      // retains only 2 commits. C3 and C8. and savepointed commit for C3.
+      verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000004", "00000005")),
+          Stream.concat(getActiveCommitInstants(Arrays.asList("00000003", "00000006")).stream(), getActiveSavepointedCommitInstants(Arrays.asList("00000003")).stream())
+              .collect(Collectors.toList()), commitsAfterArchival);
+    } else {
+      // archives only C1 and C2. stops at first savepointed commit C3.
+      verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002")),
+          Stream.concat(getActiveCommitInstants(Arrays.asList("00000003", "00000004", "00000005", "00000006")).stream(),
+                  getActiveSavepointedCommitInstants(Arrays.asList("00000003")).stream())
+              .collect(Collectors.toList()), commitsAfterArchival);
+    }
+
+    for (int i = 7; i < 10; i++) {
+      testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    }
+
+    // once savepoint is removed. C3 will be archived.
+    testTable.deleteSavepoint(commitToSavepoint);
+    commitsList = archiveAndGetCommitsList(writeConfig);
+    originalCommits = commitsList.getKey();
+    commitsAfterArchival = commitsList.getValue();
+
+    metaClient.reloadActiveTimeline();
+    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002","00000003", "00000004", "00000005", "00000006", "00000007")),
+        getActiveCommitInstants(Arrays.asList("00000008", "00000009")), commitsAfterArchival);
   }
 
   @ParameterizedTest
@@ -406,6 +513,79 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
+  public void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 5, 2,
+        HoodieTableType.COPY_ON_WRITE, false, 10, 209715200,
+        HoodieFailedWritesCleaningPolicy.LAZY, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
+
+    final ExecutorService executors = Executors.newFixedThreadPool(2);
+    List<CompletableFuture<Boolean>> completableFutureList = new ArrayList<>();
+    CountDownLatch countDownLatch = new CountDownLatch(1);
+    IntStream.range(0, 2).forEach(index -> {
+      completableFutureList.add(CompletableFuture.supplyAsync(() -> {
+        HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+        try {
+          // wait until 4 commits are available so that archival thread will have something to archive.
+          countDownLatch.await(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+          throw new HoodieException("Should not have thrown InterruptedException ", e);
+        }
+        metaClient.reloadActiveTimeline();
+        while (!metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp().endsWith("29")
+            || metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 4) {
+          try {
+            HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
+            archiver.archiveIfRequired(context, true);
+            // if not for below sleep, both archiving threads acquires lock in quick succession and does not give space for main thread
+            // to complete the write operation when metadata table is enabled.
+            if (enableMetadata) {
+              Thread.sleep(2);
+            }
+          } catch (IOException e) {
+            throw new HoodieException("IOException thrown while archiving ", e);
+          } catch (InterruptedException e) {
+            throw new HoodieException("Should not have thrown InterruptedException ", e);
+          }
+          table.getMetaClient().reloadActiveTimeline();
+        }
+        return true;
+      }, executors));
+    });
+
+    // do ingestion and trigger archive actions here.
+    for (int i = 1; i < 30; i++) {
+      testTable.doWriteOperation("0000000" + String.format("%02d", i), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      if (i == 5) {
+        // start up archival threads only after 4 commits.
+        countDownLatch.countDown();
+      }
+    }
+
+    try {
+      CompletableFuture completableFuture = allOfTerminateOnFailure(completableFutureList);
+      completableFuture.get();
+    } finally {
+      executors.shutdownNow();
+    }
+  }
+
+  public static CompletableFuture allOfTerminateOnFailure(List<CompletableFuture<Boolean>> futures) {
+    CompletableFuture<?> failure = new CompletableFuture();
+    AtomicBoolean jobFailed = new AtomicBoolean(false);
+    for (CompletableFuture<?> f : futures) {
+      f.exceptionally(ex -> {
+        if (!jobFailed.getAndSet(true)) {
+          LOG.warn("One of the job failed. Cancelling all other futures. " + ex.getCause() + ", " + ex.getMessage());
+          futures.forEach(future -> future.cancel(true));
+        }
+        return null;
+      });
+    }
+    return CompletableFuture.anyOf(failure, CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
   public void testLoadArchiveTimelineWithUncompletedMergeArchiveFile(boolean enableArchiveMerge) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 3, 2, enableArchiveMerge, 3, 209715200);
     for (int i = 1; i < 8; i++) {
@@ -468,13 +648,23 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     assertEquals(originalCommits, commitsAfterArchival);
   }
 
+  private static Stream<Arguments> archiveCommitSavepointNoHoleParams() {
+    return Arrays.stream(new Boolean[][] {
+        {true, true},
+        {false, true},
+        {true, false},
+        {false, false}
+    }).map(Arguments::of);
+  }
+
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testArchiveCommitSavepointNoHole(boolean enableMetadataTable) throws Exception {
+  @MethodSource("archiveCommitSavepointNoHoleParams")
+  public void testArchiveCommitSavepointNoHole(boolean enableMetadataTable, boolean archiveBeyondSavepoint) throws Exception {
     init();
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 5).withArchiveBeyondSavepoint(archiveBeyondSavepoint).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
@@ -500,14 +690,30 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
     assertTrue(archiver.archiveIfRequired(context));
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    assertEquals(5, timeline.countInstants(),
-        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)");
-    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")),
-        "Archived commits should always be safe");
-    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")),
-        "Archived commits should always be safe");
-    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")),
-        "Archived commits should always be safe");
+    if (archiveBeyondSavepoint) {
+      // commits in active timeline = 101 and 105.
+      assertEquals(2, timeline.countInstants(),
+          "Since archiveBeyondSavepoint config is enabled, we will archive commits 102, 103 ");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")),
+          "Savepointed commits should always be safe");
+      assertFalse(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")),
+          "102 expected to be archived");
+      assertFalse(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")),
+          "103 expected to be archived");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "105")),
+          "104 expected to be archived");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "105")),
+          "105 expected to be in active timeline");
+    } else {
+      assertEquals(5, timeline.countInstants(),
+          "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")),
+          "Archived commits should always be safe");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")),
+          "Archived commits should always be safe");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")),
+          "Archived commits should always be safe");
+    }
   }
 
   @ParameterizedTest
@@ -624,7 +830,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieWriteConfig cfg =
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table")
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+            .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
+            .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
             .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
                 .withRemoteServerPort(timelineServicePort).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
@@ -789,20 +996,27 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieWriteConfig cfg =
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table")
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minInstantsToKeep, maxInstantsToKeep).build())
-            .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-                .withRemoteServerPort(timelineServicePort).build())
+          .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
+              .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minInstantsToKeep, maxInstantsToKeep).build())
+              .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
             .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     int startInstant = 1;
+    List<HoodieInstant> expectedArchivedInstants = new ArrayList<>();
     for (int i = 0; i < maxInstantsToKeep + 1; i++, startInstant++) {
-      createCleanMetadata(startInstant + "", false, isEmpty || i % 2 == 0);
+      createCleanMetadata(startInstant + "", false, false, isEmpty || i % 2 == 0);
+      expectedArchivedInstants.add(new HoodieInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startInstant + ""));
+      expectedArchivedInstants.add(new HoodieInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, startInstant + ""));
+      expectedArchivedInstants.add(new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, startInstant + ""));
     }
 
     for (int i = 0; i < maxInstantsToKeep + 1; i++, startInstant += 2) {
       createCommitAndRollbackFile(startInstant + 1 + "", startInstant + "", false, isEmpty || i % 2 == 0);
+      expectedArchivedInstants.add(new HoodieInstant(State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, startInstant + ""));
+      expectedArchivedInstants.add(new HoodieInstant(State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, startInstant + ""));
+      expectedArchivedInstants.add(new HoodieInstant(State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, startInstant + ""));
     }
 
     if (enableMetadataTable) {
@@ -824,6 +1038,14 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
     assertTrue(actionInstantMap.containsKey("rollback"), "Rollback Action key must be preset");
     assertEquals(minInstantsToKeep, actionInstantMap.get("rollback").size(), "Should have min instant");
+
+    // verify all expected instants are part of archived timeline
+    metaClient.getArchivedTimeline().loadCompletedInstantDetailsInMemory();
+    HoodieInstant firstInstant = metaClient.reloadActiveTimeline().firstInstant().get();
+    expectedArchivedInstants = expectedArchivedInstants.stream()
+        .filter(entry -> HoodieTimeline.compareTimestamps(entry.getTimestamp(), HoodieTimeline.LESSER_THAN, firstInstant.getTimestamp()
+        )).collect(Collectors.toList());
+    expectedArchivedInstants.forEach(entry -> assertTrue(metaClient.getArchivedTimeline().containsInstant(entry)));
   }
 
   @ParameterizedTest
@@ -833,7 +1055,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieWriteConfig cfg =
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table")
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+            .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
+                .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
             .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
                 .withRemoteServerPort(timelineServicePort).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
@@ -1039,8 +1262,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     // Test configs where metadata table has more aggressive archival configs than the compaction config
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .retainCommits(1).archiveCommitsWith(2, 4).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 4).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
@@ -1054,7 +1277,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))
         .setLoadActiveTimelineOnLoad(true).build();
 
-    for (int i = 1; i <= 16; i++) {
+    for (int i = 1; i <= 17; i++) {
       testTable.doWriteOperation("000000" + String.format("%02d", i), WriteOperationType.UPSERT,
           i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       // archival
@@ -1075,6 +1298,30 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         IntStream.range(1, i + 1).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j))));
+      } else if (i == 8) {
+        // i == 8
+        // The instant "00000000000000" was archived since it's less than
+        // the earliest instant on the dataset active timeline,
+        // the dataset active timeline has instants of range [00000001 ~ 00000008]
+        // because when it does the archiving, no compaction instant on the
+        // metadata active timeline exists yet.
+        assertEquals(9, metadataTableInstants.size());
+        assertTrue(metadataTableInstants.contains(
+            new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000007001")));
+        IntStream.range(1, i + 1).forEach(j ->
+            assertTrue(metadataTableInstants.contains(
+                new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j))));
+      } else if (i <= 11) {
+        // In the metadata table timeline, the first delta commit is "00000007"
+        // because it equals with the earliest commit on the dataset timeline, after archival,
+        // delta commits "00000008" till "00000011" are added later on without archival or compaction
+        assertEquals(i - 5, metadataTableInstants.size());
+        assertTrue(metadataTableInstants.contains(
+            new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000007001")));
+        IntStream.range(7, i + 1).forEach(j ->
+            assertTrue(metadataTableInstants.contains(
+                new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
+                    "000000" + String.format("%02d", j)))));
       } else if (i <= 14) {
         // In the metadata table timeline, the first delta commit is "00000007001"
         // from metadata table compaction, after archival, delta commits "00000008"
@@ -1095,14 +1342,27 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
                     "000000" + String.format("%02d", j)))));
-      } else {
+      } else if (i == 16) {
         // i == 16
-        // Only commit "00000015001" and delta commit "00000016" are in the active timeline
-        assertEquals(2, metadataTableInstants.size());
+        // dataset timeline has commits "00000015" and "00000016",
+        // the metadata timeline has commits [00000008, 00000016] and "00000015001"
+        assertEquals(10, metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000015001")));
+        IntStream.range(8, 17).forEach(j ->
+            assertTrue(metadataTableInstants.contains(
+                new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
+                    "000000" + String.format("%02d", j)))));
+      } else {
+        // i == 17
+        // Only commits [00000015, 00000017] and "00000015001" are on the metadata timeline
+        assertEquals(4, metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "00000016")));
+            new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000015001")));
+        IntStream.range(15, 18).forEach(j ->
+            assertTrue(metadataTableInstants.contains(
+                new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
+                    "000000" + String.format("%02d", j)))));
       }
     }
   }
@@ -1133,7 +1393,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieTimeline timeline = metaClient.getActiveTimeline();
     expectedArchivedInstants.forEach(entry -> {
           // check safety
-          if (entry.getAction() != HoodieTimeline.ROLLBACK_ACTION) {
+          if (!entry.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
             assertTrue(timeline.containsOrBeforeTimelineStarts(entry.getTimestamp()), "Archived commits should always be safe");
           }
         }
@@ -1142,7 +1402,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
   private List<HoodieInstant> getArchivedInstants(HoodieInstant instant) {
     List<HoodieInstant> instants = new ArrayList<>();
-    if (instant.getAction() == HoodieTimeline.COMMIT_ACTION || instant.getAction() == HoodieTimeline.DELTA_COMMIT_ACTION || instant.getAction() == HoodieTimeline.CLEAN_ACTION) {
+    if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) || instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)
+        || instant.getAction().equals(HoodieTimeline.CLEAN_ACTION) || instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
       instants.add(new HoodieInstant(State.REQUESTED, instant.getAction(), instant.getTimestamp()));
     }
     instants.add(new HoodieInstant(State.INFLIGHT, instant.getAction(), instant.getTimestamp()));
@@ -1162,6 +1423,10 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
   private List<HoodieInstant> getActiveCommitInstants(List<String> commitTimes) {
     return getActiveCommitInstants(commitTimes, HoodieTimeline.COMMIT_ACTION);
+  }
+
+  private List<HoodieInstant> getActiveSavepointedCommitInstants(List<String> commitTimes) {
+    return getActiveCommitInstants(commitTimes, HoodieTimeline.SAVEPOINT_ACTION);
   }
 
   private List<HoodieInstant> getActiveCommitInstants(List<String> commitTimes, String action) {

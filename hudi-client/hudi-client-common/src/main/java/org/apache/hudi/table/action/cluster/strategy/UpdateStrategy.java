@@ -22,19 +22,23 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.table.HoodieTable;
 
+import java.io.Serializable;
 import java.util.Set;
 
 /**
  * When file groups in clustering, write records to these file group need to check.
  */
-public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> {
+public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> implements Serializable {
 
-  protected final HoodieEngineContext engineContext;
-  protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;
+  protected final transient HoodieEngineContext engineContext;
+  protected final HoodieTable table;
+  protected final Set<HoodieFileGroupId> fileGroupsInPendingClustering;
 
-  protected UpdateStrategy(HoodieEngineContext engineContext, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
+  public UpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
     this.engineContext = engineContext;
+    this.table = table;
     this.fileGroupsInPendingClustering = fileGroupsInPendingClustering;
   }
 

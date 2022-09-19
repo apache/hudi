@@ -154,13 +154,14 @@ class HoodieStreamSource(
     } else {
       // Consume the data between (startCommitTime, endCommitTime]
       val incParams = parameters ++ Map(
+        DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
         DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
         DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
       )
 
       val rdd = tableType match {
         case HoodieTableType.COPY_ON_WRITE =>
-          val serDe = sparkAdapter.createSparkRowSerDe(RowEncoder(schema))
+          val serDe = sparkAdapter.createSparkRowSerDe(schema)
           new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
             .buildScan()
             .map(serDe.serializeRow)

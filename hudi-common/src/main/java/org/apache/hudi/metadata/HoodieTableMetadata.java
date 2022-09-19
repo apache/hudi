@@ -24,7 +24,9 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -36,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Interface that supports querying various pieces of metadata about a hudi table.
@@ -73,6 +76,17 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   }
 
   /**
+   * Return the base path of the dataset.
+   *
+   * @param metadataTableBasePath The base path of the metadata table
+   */
+  static String getDatasetBasePath(String metadataTableBasePath) {
+    int endPos = metadataTableBasePath.lastIndexOf(Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
+    checkState(endPos != -1, metadataTableBasePath + " should be base path of the metadata table");
+    return metadataTableBasePath.substring(0, endPos);
+  }
+
+  /**
    * Returns {@code True} if the given path contains a metadata table.
    *
    * @param basePath The base path to check
@@ -92,11 +106,25 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,
                                     String spillableMapPath, boolean reuse) {
     if (metadataConfig.enabled()) {
-      return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, reuse);
+      return createHoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, reuse);
     } else {
-      return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
-          datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
+      return createFSBackedTableMetadata(engineContext, metadataConfig, datasetBasePath);
     }
+  }
+
+  static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
+                                                                   HoodieMetadataConfig metadataConfig,
+                                                                   String datasetBasePath) {
+    return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
+        datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
+  }
+
+  static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,
+                                                                   HoodieMetadataConfig metadataConfig,
+                                                                   String datasetBasePath,
+                                                                   String spillableMapPath,
+                                                                   boolean reuse) {
+    return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, reuse);
   }
 
   /**
@@ -145,6 +173,18 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException;
+
+  /**
+   * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,
+   * actual keys in metadata partition is encoded values of column name, partition name and file name. So, key prefixes passed to this method is expected to be encoded already.
+   *
+   * @param keyPrefixes list of key prefixes for which interested records are looked up for.
+   * @param partitionName partition name in metadata table where the records are looked up for.
+   * @return {@link HoodieData} of {@link HoodieRecord}s with records matching the passed in key prefixes.
+   */
+  HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
+                                                                          String partitionName,
+                                                                          boolean shouldLoadInMemory);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

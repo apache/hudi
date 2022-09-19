@@ -19,17 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericArray;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -47,6 +36,18 @@ import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericArray;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.orc.TypeDescription;
@@ -95,9 +96,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final String[] DEFAULT_PARTITION_PATHS =
       {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
   public static final int DEFAULT_PARTITION_DEPTH = 3;
+
   public static final String TRIP_SCHEMA_PREFIX = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
-      + "{\"name\": \"partition_path\", \"type\": \"string\"},"
+      + "{\"name\": \"partition_path\", \"type\": [\"null\", \"string\"], \"default\": null },"
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
@@ -205,7 +207,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) {
     for (String partitionPath : partitionPaths) {
-      new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath)).trySave(0);
+      new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath), Option.empty()).trySave(0);
     }
   }
 
@@ -860,12 +862,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return false;
   }
 
+  public GenericRecord generateGenericRecord() {
+    return generateGenericRecord(genPseudoRandomUUID(rand).toString(), "0",
+        genPseudoRandomUUID(rand).toString(), genPseudoRandomUUID(rand).toString(), rand.nextLong());
+  }
+
   public List<GenericRecord> generateGenericRecords(int numRecords) {
     List<GenericRecord> list = new ArrayList<>();
-    IntStream.range(0, numRecords).forEach(i -> {
-      list.add(generateGenericRecord(genPseudoRandomUUID(rand).toString(), "0",
-          genPseudoRandomUUID(rand).toString(), genPseudoRandomUUID(rand).toString(), rand.nextLong()));
-    });
+    IntStream.range(0, numRecords).forEach(i -> list.add(generateGenericRecord()));
     return list;
   }
 
@@ -896,7 +900,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return anchorTs + r.nextLong() % 259200000L;
   }
 
-  private static UUID genPseudoRandomUUID(Random r) {
+  public static UUID genPseudoRandomUUID(Random r) {
     byte[] bytes = new byte[16];
     r.nextBytes(bytes);
 

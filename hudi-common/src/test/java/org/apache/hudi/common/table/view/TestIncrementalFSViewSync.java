@@ -536,7 +536,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     Map<String, List<String>> partititonToFiles = deleteFiles(files);
     List<HoodieCleanStat> cleanStats = partititonToFiles.entrySet().stream().map(e ->
         new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, e.getKey(), e.getValue(), e.getValue(),
-        new ArrayList<>(), Integer.toString(Integer.parseInt(instant) + 1))).collect(Collectors.toList());
+        new ArrayList<>(), Integer.toString(Integer.parseInt(instant) + 1), "")).collect(Collectors.toList());
 
     HoodieInstant cleanInflightInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);
@@ -826,7 +826,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         File file = new File(basePath + "/" + p + "/"
             + (deltaCommit
             ? FSUtils.makeLogFileName(f, ".log", baseInstant, Integer.parseInt(instant), TEST_WRITE_TOKEN)
-            : FSUtils.makeDataFileName(instant, TEST_WRITE_TOKEN, f)));
+            : FSUtils.makeBaseFileName(instant, TEST_WRITE_TOKEN, f)));
         file.createNewFile();
         HoodieWriteStat w = new HoodieWriteStat();
         w.setFileId(f);
@@ -860,7 +860,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
                                  List<Pair<String, HoodieWriteStat>> writeStats,
                                  Map<String, List<String>> partitionToReplaceFileIds) throws IOException {
     // created requested
-    HoodieInstant newRequestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant);
+    HoodieInstant newRequestedInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setOperationType(WriteOperationType.UNKNOWN.name()).build();
     metaClient.getActiveTimeline().saveToPendingReplaceCommit(newRequestedInstant,

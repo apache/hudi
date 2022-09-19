@@ -18,9 +18,11 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -36,6 +38,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -46,6 +49,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -56,6 +62,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -90,6 +97,7 @@ public abstract class AbstractHoodieLogRecordReader {
   private final String payloadClassFQN;
   // preCombine field
   private final String preCombineField;
+  private final Properties payloadProps = new Properties();
   // simple key gen fields
   private Option<Pair<String, String>> simpleKeyGenFields = Option.empty();
   // Log File Paths
@@ -109,6 +117,10 @@ public abstract class AbstractHoodieLogRecordReader {
   private final FileSystem fs;
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
+  // Internal schema, used to support full schema evolution.
+  private InternalSchema internalSchema;
+  // Hoodie table path.
+  private final String path;
   // Total log blocks read - for metrics
   private AtomicLong totalLogBlocks = new AtomicLong(0);
   // Total log records read - for metrics
@@ -120,7 +132,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Store the last instant log blocks (needed to implement rollback)
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
   // Enables full scan of log records
-  protected final boolean enableFullScan;
+  protected final boolean forceFullScan;
   private int totalScannedLogFiles;
   // Progress
   private float progress = 0.0f;
@@ -135,14 +147,14 @@ public abstract class AbstractHoodieLogRecordReader {
                                           int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField) {
     this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, true, Option.empty());
+        instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema());
   }
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
-                                          boolean withOperationField, boolean enableFullScan,
-                                          Option<String> partitionName) {
+                                          boolean withOperationField, boolean forceFullScan,
+                                          Option<String> partitionName, InternalSchema internalSchema) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
@@ -150,6 +162,9 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
     this.preCombineField = tableConfig.getPreCombineField();
+    if (this.preCombineField != null) {
+      this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
+    }
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
@@ -158,7 +173,9 @@ public abstract class AbstractHoodieLogRecordReader {
     this.bufferSize = bufferSize;
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
-    this.enableFullScan = enableFullScan;
+    this.forceFullScan = forceFullScan;
+    this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.path = basePath;
 
     // Key fields when populate meta fields is disabled (that is, virtual keys enabled)
     if (!tableConfig.populateMetaFields()) {
@@ -178,10 +195,14 @@ public abstract class AbstractHoodieLogRecordReader {
   }
 
   public synchronized void scan() {
-    scan(Option.empty());
+    scanInternal(Option.empty());
   }
 
-  public synchronized void scan(Option<List<String>> keys) {
+  public synchronized void scan(List<String> keys) {
+    scanInternal(Option.of(new KeySpec(keys, true)));
+  }
+
+  protected synchronized void scanInternal(Option<KeySpec> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -194,15 +215,16 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
-
       // Get the key field based on populate meta fields config
       // and the table type
       final String keyField = getKeyField();
 
       // Iterate over the paths
+      boolean enableRecordLookups = !forceFullScan;
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan, keyField);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, enableRecordLookups, keyField, internalSchema);
+
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
@@ -239,7 +261,7 @@ public abstract class AbstractHoodieLogRecordReader {
             if (isNewInstantBlock(logBlock) && !readBlocksLazily) {
               // If this is an avro data block belonging to a different commit/instant,
               // then merge the last blocks and records into the main result
-              processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keys);
+              processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
             }
             // store the current block
             currentInstantLogBlocks.push(logBlock);
@@ -249,7 +271,7 @@ public abstract class AbstractHoodieLogRecordReader {
             if (isNewInstantBlock(logBlock) && !readBlocksLazily) {
               // If this is a delete data block belonging to a different commit/instant,
               // then merge the last blocks and records into the main result
-              processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keys);
+              processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
             }
             // store deletes so can be rolled back
             currentInstantLogBlocks.push(logBlock);
@@ -324,7 +346,7 @@ public abstract class AbstractHoodieLogRecordReader {
       // merge the last read block when all the blocks are done reading
       if (!currentInstantLogBlocks.isEmpty()) {
         LOG.info("Merging the final data blocks");
-        processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keys);
+        processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
       }
       // Done
       progress = 1.0f;
@@ -359,15 +381,39 @@ public abstract class AbstractHoodieLogRecordReader {
    * Iterate over the GenericRecord in the block, read the hoodie key and partition path and call subclass processors to
    * handle it.
    */
-  private void processDataBlock(HoodieDataBlock dataBlock, Option<List<String>> keys) throws Exception {
-    try (ClosableIterator<IndexedRecord> recordItr = dataBlock.getRecordItr(keys.orElse(Collections.emptyList()))) {
-      while (recordItr.hasNext()) {
-        IndexedRecord record = recordItr.next();
+  private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
+    try (ClosableIterator<IndexedRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt)) {
+      Option<Schema> schemaOption = getMergedSchema(dataBlock);
+      while (recordIterator.hasNext()) {
+        IndexedRecord currentRecord = recordIterator.next();
+        IndexedRecord record = schemaOption.isPresent() ? HoodieAvroUtils.rewriteRecordWithNewSchema(currentRecord, schemaOption.get(), Collections.emptyMap()) : currentRecord;
         processNextRecord(createHoodieRecord(record, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
             this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
         totalLogRecords.incrementAndGet();
       }
     }
+  }
+
+  /**
+   * Get final Read Schema for support evolution.
+   * step1: find the fileSchema for current dataBlock.
+   * step2: determine whether fileSchema is compatible with the final read internalSchema.
+   * step3: merge fileSchema and read internalSchema to produce final read schema.
+   *
+   * @param dataBlock current processed block
+   * @return final read schema.
+   */
+  private Option<Schema> getMergedSchema(HoodieDataBlock dataBlock) {
+    Option<Schema> result = Option.empty();
+    if (!internalSchema.isEmptySchema()) {
+      Long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
+      InternalSchema fileSchema = InternalSchemaCache
+          .searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient, false);
+      Schema mergeSchema = AvroInternalSchemaConverter
+          .convert(new InternalSchemaMerger(fileSchema, internalSchema, true, false).mergeSchema(), readerSchema.getName());
+      result = Option.of(mergeSchema);
+    }
+    return result;
   }
 
   /**
@@ -404,33 +450,33 @@ public abstract class AbstractHoodieLogRecordReader {
   protected abstract void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws Exception;
 
   /**
-   * Process next deleted key.
+   * Process next deleted record.
    *
-   * @param key Deleted record key
+   * @param deleteRecord Deleted record(hoodie key and ordering value)
    */
-  protected abstract void processNextDeletedKey(HoodieKey key);
+  protected abstract void processNextDeletedRecord(DeleteRecord deleteRecord);
 
   /**
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
   private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen,
-                                             Option<List<String>> keys) throws Exception {
+                                             Option<KeySpec> keySpecOpt) throws Exception {
     while (!logBlocks.isEmpty()) {
       LOG.info("Number of remaining logblocks to merge " + logBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
       HoodieLogBlock lastBlock = logBlocks.pollLast();
       switch (lastBlock.getBlockType()) {
         case AVRO_DATA_BLOCK:
-          processDataBlock((HoodieAvroDataBlock) lastBlock, keys);
+          processDataBlock((HoodieAvroDataBlock) lastBlock, keySpecOpt);
           break;
         case HFILE_DATA_BLOCK:
-          processDataBlock((HoodieHFileDataBlock) lastBlock, keys);
+          processDataBlock((HoodieHFileDataBlock) lastBlock, keySpecOpt);
           break;
         case PARQUET_DATA_BLOCK:
-          processDataBlock((HoodieParquetDataBlock) lastBlock, keys);
+          processDataBlock((HoodieParquetDataBlock) lastBlock, keySpecOpt);
           break;
         case DELETE_BLOCK:
-          Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(this::processNextDeletedKey);
+          Arrays.stream(((HoodieDeleteBlock) lastBlock).getRecordsToDelete()).forEach(this::processNextDeletedRecord);
           break;
         case CORRUPT_BLOCK:
           LOG.warn("Found a corrupt block which was not rolled back");
@@ -440,7 +486,16 @@ public abstract class AbstractHoodieLogRecordReader {
       }
     }
     // At this step the lastBlocks are consumed. We track approximate progress by number of log-files seen
-    progress = numLogFilesSeen - 1 / logFilePaths.size();
+    progress = (numLogFilesSeen - 1) / logFilePaths.size();
+  }
+
+  private ClosableIterator<IndexedRecord> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
+    if (keySpecOpt.isPresent()) {
+      KeySpec keySpec = keySpecOpt.get();
+      return dataBlock.getRecordIterator(keySpec.keys, keySpec.fullKey);
+    }
+
+    return dataBlock.getRecordIterator();
   }
 
   /**
@@ -466,7 +521,7 @@ public abstract class AbstractHoodieLogRecordReader {
     return payloadClassFQN;
   }
 
-  protected Option<String> getPartitionName() {
+  public Option<String> getPartitionName() {
     return partitionName;
   }
 
@@ -480,6 +535,20 @@ public abstract class AbstractHoodieLogRecordReader {
 
   public boolean isWithOperationField() {
     return withOperationField;
+  }
+
+  protected Properties getPayloadProps() {
+    return payloadProps;
+  }
+
+  protected static class KeySpec {
+    private final List<String> keys;
+    private final boolean fullKey;
+
+    public KeySpec(List<String> keys, boolean fullKey) {
+      this.keys = keys;
+      this.fullKey = fullKey;
+    }
   }
 
   /**

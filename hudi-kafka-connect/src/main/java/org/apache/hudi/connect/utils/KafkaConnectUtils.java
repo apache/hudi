@@ -18,6 +18,8 @@
 
 package org.apache.hudi.connect.utils;
 
+import com.google.protobuf.ByteString;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -32,16 +34,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.CustomAvroKeyGenerator;
 import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-
-import com.google.protobuf.ByteString;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -51,15 +48,14 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -268,33 +264,5 @@ public class KafkaConnectUtils {
   public static List<WriteStatus> getWriteStatuses(ControlMessage.ParticipantInfo participantInfo) {
     ControlMessage.ConnectWriteStatus connectWriteStatus = participantInfo.getWriteStatus();
     return SerializationUtils.deserialize(connectWriteStatus.getSerializedWriteStatus().toByteArray());
-  }
-
-  /**
-   * Build Hive Sync Config
-   * Note: This method is a temporary solution.
-   * Future solutions can be referred to: https://issues.apache.org/jira/browse/HUDI-3199
-   */
-  public static HiveSyncConfig buildSyncConfig(TypedProperties props, String tableBasePath) {
-    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.basePath = tableBasePath;
-    hiveSyncConfig.usePreApacheInputFormat = props.getBoolean(KafkaConnectConfigs.HIVE_USE_PRE_APACHE_INPUT_FORMAT, false);
-    hiveSyncConfig.databaseName = props.getString(KafkaConnectConfigs.HIVE_DATABASE, "default");
-    hiveSyncConfig.tableName = props.getString(KafkaConnectConfigs.HIVE_TABLE, "");
-    hiveSyncConfig.hiveUser = props.getString(KafkaConnectConfigs.HIVE_USER, "");
-    hiveSyncConfig.hivePass = props.getString(KafkaConnectConfigs.HIVE_PASS, "");
-    hiveSyncConfig.jdbcUrl = props.getString(KafkaConnectConfigs.HIVE_URL, "");
-    hiveSyncConfig.partitionFields = props.getStringList(KafkaConnectConfigs.HIVE_PARTITION_FIELDS, ",", Collections.emptyList());
-    hiveSyncConfig.partitionValueExtractorClass =
-            props.getString(KafkaConnectConfigs.HIVE_PARTITION_EXTRACTOR_CLASS, SlashEncodedDayPartitionValueExtractor.class.getName());
-    hiveSyncConfig.useJdbc = props.getBoolean(KafkaConnectConfigs.HIVE_USE_JDBC, true);
-    if (props.containsKey(KafkaConnectConfigs.HIVE_SYNC_MODE)) {
-      hiveSyncConfig.syncMode = props.getString(KafkaConnectConfigs.HIVE_SYNC_MODE);
-    }
-    hiveSyncConfig.autoCreateDatabase = props.getBoolean(KafkaConnectConfigs.HIVE_AUTO_CREATE_DATABASE, true);
-    hiveSyncConfig.ignoreExceptions = props.getBoolean(KafkaConnectConfigs.HIVE_IGNORE_EXCEPTIONS, false);
-    hiveSyncConfig.skipROSuffix = props.getBoolean(KafkaConnectConfigs.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE, false);
-    hiveSyncConfig.supportTimestamp = props.getBoolean(KafkaConnectConfigs.HIVE_SUPPORT_TIMESTAMP_TYPE, false);
-    return hiveSyncConfig;
   }
 }

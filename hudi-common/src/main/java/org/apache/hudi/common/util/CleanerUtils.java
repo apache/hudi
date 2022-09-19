@@ -61,27 +61,29 @@ public class CleanerUtils {
 
     int totalDeleted = 0;
     String earliestCommitToRetain = null;
+    String lastCompletedCommitTimestamp = "";
     for (HoodieCleanStat stat : cleanStats) {
       HoodieCleanPartitionMetadata metadata =
           new HoodieCleanPartitionMetadata(stat.getPartitionPath(), stat.getPolicy().name(),
-              stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles());
+              stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), stat.isPartitionDeleted());
       partitionMetadataMap.put(stat.getPartitionPath(), metadata);
       if ((null != stat.getDeleteBootstrapBasePathPatterns())
           && (!stat.getDeleteBootstrapBasePathPatterns().isEmpty())) {
         HoodieCleanPartitionMetadata bootstrapMetadata = new HoodieCleanPartitionMetadata(stat.getPartitionPath(),
             stat.getPolicy().name(), stat.getDeleteBootstrapBasePathPatterns(), stat.getSuccessDeleteBootstrapBaseFiles(),
-            stat.getFailedDeleteBootstrapBaseFiles());
+            stat.getFailedDeleteBootstrapBaseFiles(), stat.isPartitionDeleted());
         partitionBootstrapMetadataMap.put(stat.getPartitionPath(), bootstrapMetadata);
       }
       totalDeleted += stat.getSuccessDeleteFiles().size();
       if (earliestCommitToRetain == null) {
         // This will be the same for all partitions
         earliestCommitToRetain = stat.getEarliestCommitToRetain();
+        lastCompletedCommitTimestamp = stat.getLastCompletedCommitTimestamp();
       }
     }
 
-    return new HoodieCleanMetadata(startCleanTime, durationInMs.orElseGet(() -> -1L), totalDeleted,
-      earliestCommitToRetain, partitionMetadataMap, CLEAN_METADATA_VERSION_2, partitionBootstrapMetadataMap);
+    return new HoodieCleanMetadata(startCleanTime, durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
+      lastCompletedCommitTimestamp, partitionMetadataMap, CLEAN_METADATA_VERSION_2, partitionBootstrapMetadataMap);
   }
 
   /**

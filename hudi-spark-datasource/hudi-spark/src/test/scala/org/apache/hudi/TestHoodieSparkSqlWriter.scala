@@ -18,10 +18,9 @@
 package org.apache.hudi
 
 import org.apache.commons.io.FileUtils
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -29,7 +28,6 @@ import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
-import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.spark.api.java.JavaSparkContext
@@ -37,16 +35,16 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
+import org.junit.jupiter.params.provider.Arguments.arguments
+import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
-import org.scalatest.Matchers.{assertResult, be, convertToAnyShouldWrapper, intercept}
+import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
 import java.io.IOException
 import java.time.Instant
@@ -171,13 +169,20 @@ class TestHoodieSparkSqlWriter {
    * @param sortMode           Bulk insert sort mode
    * @param populateMetaFields Flag for populating meta fields
    */
-  def testBulkInsertWithSortMode(sortMode: BulkInsertSortMode, populateMetaFields: Boolean = true): Unit = {
+  def testBulkInsertWithSortMode(sortMode: BulkInsertSortMode, populateMetaFields: Boolean = true, enableOCCConfigs: Boolean = false): Unit = {
     //create a new table
-    val fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
+    var fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
       .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
       .updated(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields))
       .updated(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), sortMode.name())
+
+    if (enableOCCConfigs) {
+      fooTableModifier = fooTableModifier
+        .updated("hoodie.write.concurrency.mode","optimistic_concurrency_control")
+        .updated("hoodie.cleaner.policy.failed.writes","LAZY")
+        .updated("hoodie.write.lock.provider","org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+    }
 
     // generate the inserts
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -277,6 +282,29 @@ class TestHoodieSparkSqlWriter {
   }
 
   /**
+    * Test case for Do not validate table config if save mode is set to Overwrite
+    */
+  @Test
+  def testValidateTableConfigWithOverwriteSaveMode(): Unit = {
+    //create a new table
+    val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "uuid")
+    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
+
+    //on same path try write with different RECORDKEY_FIELD_NAME and Append SaveMode should throw an exception
+    val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "ts")
+    val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
+    assert(hoodieException.getMessage.contains("Config conflict"))
+    assert(hoodieException.getMessage.contains(s"RecordKey:\tts\tuuid"))
+
+    //on same path try write with different RECORDKEY_FIELD_NAME and Overwrite SaveMode should be successful.
+    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier2, dataFrame2)._1)
+  }
+
+  /**
    * Test case for each bulk insert sort mode
    *
    * @param sortMode Bulk insert sort mode
@@ -285,6 +313,11 @@ class TestHoodieSparkSqlWriter {
   @EnumSource(value = classOf[BulkInsertSortMode])
   def testBulkInsertForSortMode(sortMode: BulkInsertSortMode): Unit = {
     testBulkInsertWithSortMode(sortMode, populateMetaFields = true)
+  }
+
+  @Test
+  def testBulkInsertForSortModeWithOCC(): Unit = {
+    testBulkInsertWithSortMode(BulkInsertSortMode.GLOBAL_SORT, populateMetaFields = true, true)
   }
 
   /**
@@ -454,11 +487,8 @@ class TestHoodieSparkSqlWriter {
    * @param populateMetaFields Flag for populating meta fields
    */
   @ParameterizedTest
-  @CsvSource(
-    Array("COPY_ON_WRITE,parquet,true", "COPY_ON_WRITE,parquet,false", "MERGE_ON_READ,parquet,true", "MERGE_ON_READ,parquet,false",
-      "COPY_ON_WRITE,orc,true", "COPY_ON_WRITE,orc,false", "MERGE_ON_READ,orc,true", "MERGE_ON_READ,orc,false"
-    ))
-  def testDatasourceInsertForTableTypeBaseFileMetaFields(tableType: String, baseFileFormat: String, populateMetaFields: Boolean): Unit = {
+  @MethodSource(Array("testDatasourceInsert"))
+  def testDatasourceInsertForTableTypeBaseFileMetaFields(tableType: String, populateMetaFields: Boolean, baseFileFormat: String): Unit = {
     val hoodieFooTableName = "hoodie_foo_tbl"
     val fooTableModifier = Map("path" -> tempBasePath,
       HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
@@ -478,7 +508,7 @@ class TestHoodieSparkSqlWriter {
     val records = DataSourceTestUtils.generateRandomRows(100)
     val recordsSeq = convertRowListToSeq(records)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-    initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = false)
+    initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = false, initBasePath = true)
     val client = spy(DataSourceUtils.createHoodieClient(
       new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
       mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
@@ -535,7 +565,7 @@ class TestHoodieSparkSqlWriter {
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
         HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
-      initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true)
+      initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
       val client = spy(DataSourceUtils.createHoodieClient(
         new JavaSparkContext(sc),
@@ -563,7 +593,7 @@ class TestHoodieSparkSqlWriter {
     }
   }
 
-  def initializeMetaClientForBootstrap(fooTableParams : Map[String, String], tableType: String, addBootstrapPath : Boolean) : Unit = {
+  def initializeMetaClientForBootstrap(fooTableParams : Map[String, String], tableType: String, addBootstrapPath : Boolean, initBasePath: Boolean) : Unit = {
     // when metadata is enabled, directly instantiating write client using DataSourceUtils.createHoodieClient
     // will hit a code which tries to instantiate meta client for data table. if table does not exist, it fails.
     // hence doing an explicit instantiation here.
@@ -582,7 +612,9 @@ class TestHoodieSparkSqlWriter {
         tableMetaClientBuilder
           .setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))
       }
-    tableMetaClientBuilder.initTable(sc.hadoopConfiguration, tempBasePath)
+    if (initBasePath) {
+      tableMetaClientBuilder.initTable(sc.hadoopConfiguration, tempBasePath)
+    }
   }
 
   /**
@@ -662,55 +694,6 @@ class TestHoodieSparkSqlWriter {
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
     val expectedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(evolStructType, structName, nameSpace)
     assertEquals(expectedSchema, actualSchema)
-  }
-
-  /**
-   * Test case for build sync config for spark sql.
-   */
-  @Test
-  def testBuildSyncConfigForSparkSql(): Unit = {
-    val params = Map(
-      "path" -> tempBasePath,
-      DataSourceWriteOptions.TABLE_NAME.key -> "test_hoodie",
-      DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key -> "partition",
-      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key -> "true",
-      DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key -> "true"
-    )
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
-    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
-
-    val buildSyncConfigMethod =
-      HoodieSparkSqlWriter.getClass.getDeclaredMethod("buildSyncConfig", classOf[Path],
-        classOf[HoodieConfig], classOf[SQLConf])
-    buildSyncConfigMethod.setAccessible(true)
-
-    val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
-      new Path(tempBasePath), hoodieConfig, spark.sessionState.conf).asInstanceOf[HiveSyncConfig]
-    assertTrue(hiveSyncConfig.skipROSuffix)
-    assertTrue(hiveSyncConfig.createManagedTable)
-    assertTrue(hiveSyncConfig.syncAsSparkDataSourceTable)
-    assertResult(spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD))(hiveSyncConfig.sparkSchemaLengthThreshold)
-  }
-
-  /**
-   * Test case for build sync config for skip Ro Suffix values.
-   */
-  @Test
-  def testBuildSyncConfigForSkipRoSuffixValues(): Unit = {
-    val params = Map(
-      "path" -> tempBasePath,
-      DataSourceWriteOptions.TABLE_NAME.key -> "test_hoodie",
-      DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key -> "partition"
-    )
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
-    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
-    val buildSyncConfigMethod =
-      HoodieSparkSqlWriter.getClass.getDeclaredMethod("buildSyncConfig", classOf[Path],
-        classOf[HoodieConfig], classOf[SQLConf])
-    buildSyncConfigMethod.setAccessible(true)
-    val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
-      new Path(tempBasePath), hoodieConfig, spark.sessionState.conf).asInstanceOf[HiveSyncConfig]
-    assertFalse(hiveSyncConfig.skipROSuffix)
   }
 
   /**
@@ -891,7 +874,7 @@ class TestHoodieSparkSqlWriter {
       .setBasePath(tablePath1).build().getTableConfig
     assert(tableConfig1.getHiveStylePartitioningEnable == "true")
     assert(tableConfig1.getUrlEncodePartitioning == "false")
-    assert(tableConfig1.getKeyGeneratorClassName == classOf[ComplexKeyGenerator].getName)
+    assert(tableConfig1.getKeyGeneratorClassName == classOf[SimpleKeyGenerator].getName)
     df.write.format("hudi")
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
@@ -937,6 +920,139 @@ class TestHoodieSparkSqlWriter {
   }
 
   @Test
+  def testNonpartitonedToDefaultKeyGen(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val options = Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+    )
+
+    // case 1: When commit C1 specificies a key generator and commit C2 does not specify key generator
+    val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+
+    // the first write need to specify KEYGENERATOR_CLASS_NAME params
+    df.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
+      .mode(SaveMode.Overwrite).save(tablePath1)
+
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    // raise exception when no KEYGENERATOR_CLASS_NAME is specified and it is expected to default to SimpleKeyGenerator
+    val configConflictException = intercept[HoodieException] {
+      df2.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .mode(SaveMode.Append).save(tablePath1)
+    }
+    assert(configConflictException.getMessage.contains("Config conflict"))
+    assert(configConflictException.getMessage.contains(s"KeyGenerator:\t${classOf[SimpleKeyGenerator].getName}\t${classOf[NonpartitionedKeyGenerator].getName}"))
+  }
+
+  @Test
+  def testDefaultKeyGenToNonpartitoned(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val options = Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+    )
+
+    // case 1: When commit C1 does not specify key generator and commit C2 specificies a key generator
+    val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+
+    // the first write need to specify KEYGENERATOR_CLASS_NAME params
+    df.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .mode(SaveMode.Overwrite).save(tablePath1)
+
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    // raise exception when NonpartitionedKeyGenerator is specified
+    val configConflictException = intercept[HoodieException] {
+      df2.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
+        .mode(SaveMode.Append).save(tablePath1)
+    }
+    assert(configConflictException.getMessage.contains("Config conflict"))
+    assert(configConflictException.getMessage.contains(s"KeyGenerator:\t${classOf[NonpartitionedKeyGenerator].getName}\t${classOf[SimpleKeyGenerator].getName}"))
+  }
+
+
+  @Test
+  def testNoKeyGenToSimpleKeyGen(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val options = Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+    )
+
+    // case 1: When commit C1 specificies a key generator and commkt C2 does not specify key generator
+    val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+
+    // the first write need to specify KEYGENERATOR_CLASS_NAME params
+    df.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .mode(SaveMode.Overwrite).save(tablePath1)
+
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    // No Exception Should be raised
+    try {
+      df2.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+        .mode(SaveMode.Append).save(tablePath1)
+    } catch {
+      case _ => fail("Switching from no keygen to explicit SimpleKeyGenerator should not fail");
+    }
+  }
+
+  @Test
+  def testSimpleKeyGenToNoKeyGen(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val options = Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+    )
+
+    // case 1: When commit C1 specificies a key generator and commkt C2 does not specify key generator
+    val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+
+    // the first write need to specify KEYGENERATOR_CLASS_NAME params
+    df.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+      .mode(SaveMode.Overwrite).save(tablePath1)
+
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    // No Exception Should be raised when default keygen is used
+    try {
+      df2.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .mode(SaveMode.Append).save(tablePath1)
+    } catch {
+      case _ => fail("Switching from  explicit SimpleKeyGenerator to default keygen should not fail");
+    }
+  }
+
+  @Test
   def testGetOriginKeyGenerator(): Unit = {
     // for dataframe write
     val m1 = Map(
@@ -952,5 +1068,28 @@ class TestHoodieSparkSqlWriter {
     )
     val kg2 = HoodieWriterUtils.getOriginKeyGenerator(m2)
     assertTrue(kg2 == classOf[SimpleKeyGenerator].getName)
+  }
+}
+
+object TestHoodieSparkSqlWriter {
+  def testDatasourceInsert: java.util.stream.Stream[Arguments] = {
+    val scenarios = Array(
+      Seq("COPY_ON_WRITE", true),
+      Seq("COPY_ON_WRITE", false),
+      Seq("MERGE_ON_READ", true),
+      Seq("MERGE_ON_READ", false)
+    )
+
+    val parquetScenarios = scenarios.map { _ :+ "parquet" }
+    val orcScenarios = scenarios.map { _ :+ "orc" }
+
+    // TODO(HUDI-4496) Fix Orc support in Spark 3.x
+    val targetScenarios = if (gteqSpark3_0) {
+      parquetScenarios
+    } else {
+      parquetScenarios ++ orcScenarios
+    }
+
+    java.util.Arrays.stream(targetScenarios.map(as => arguments(as.map(_.asInstanceOf[AnyRef]):_*)))
   }
 }

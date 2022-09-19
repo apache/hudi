@@ -20,6 +20,10 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{PredicateHelper, SpecificInternalRow, UnsafeProjection}
@@ -31,22 +35,25 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.collection.JavaConverters._
 
-object HoodieDataSourceHelper extends PredicateHelper {
+object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
 
 
   /**
-   * Wrapper `buildReaderWithPartitionValues` of [[ParquetFileFormat]]
-   * to deal with [[ColumnarBatch]] when enable parquet vectorized reader if necessary.
+   * Wrapper for `buildReaderWithPartitionValues` of [[ParquetFileFormat]] handling [[ColumnarBatch]],
+   * when Parquet's Vectorized Reader is used
+   *
+   * TODO move to HoodieBaseRelation, make private
    */
-  def buildHoodieParquetReader(sparkSession: SparkSession,
-                               dataSchema: StructType,
-                               partitionSchema: StructType,
-                               requiredSchema: StructType,
-                               filters: Seq[Filter],
-                               options: Map[String, String],
-                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-
-    val readParquetFile: PartitionedFile => Iterator[Any] = new ParquetFileFormat().buildReaderWithPartitionValues(
+  private[hudi] def buildHoodieParquetReader(sparkSession: SparkSession,
+                                             dataSchema: StructType,
+                                             partitionSchema: StructType,
+                                             requiredSchema: StructType,
+                                             filters: Seq[Filter],
+                                             options: Map[String, String],
+                                             hadoopConf: Configuration,
+                                             appendPartitionValues: Boolean = false): PartitionedFile => Iterator[InternalRow] = {
+    val parquetFileFormat: ParquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(appendPartitionValues).get
+    val readParquetFile: PartitionedFile => Iterator[Any] = parquetFileFormat.buildReaderWithPartitionValues(
       sparkSession = sparkSession,
       dataSchema = dataSchema,
       partitionSchema = partitionSchema,
@@ -65,28 +72,6 @@ object HoodieDataSourceHelper extends PredicateHelper {
     }
   }
 
-  /**
-   * Convert [[InternalRow]] to [[SpecificInternalRow]].
-   */
-  def createInternalRowWithSchema(
-      row: InternalRow,
-      schema: StructType,
-      positions: Seq[Int]): InternalRow = {
-    val rowToReturn = new SpecificInternalRow(schema)
-    var curIndex = 0
-    schema.zip(positions).foreach { case (field, pos) =>
-      val curField = if (row.isNullAt(pos)) {
-        null
-      } else {
-        row.get(pos, field.dataType)
-      }
-      rowToReturn.update(curIndex, curField)
-      curIndex += 1
-    }
-    rowToReturn
-  }
-
-
   def splitFiles(
       sparkSession: SparkSession,
       file: FileStatus,
@@ -99,5 +84,4 @@ object HoodieDataSourceHelper extends PredicateHelper {
       PartitionedFile(partitionValues, filePath.toUri.toString, offset, size)
     }
   }
-
 }

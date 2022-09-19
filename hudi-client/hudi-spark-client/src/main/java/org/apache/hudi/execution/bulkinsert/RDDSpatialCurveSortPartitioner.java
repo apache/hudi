@@ -49,9 +49,9 @@ import java.util.List;
 public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
-  private final HoodieSparkEngineContext sparkEngineContext;
+  private final transient HoodieSparkEngineContext sparkEngineContext;
   private final String[] orderByColumns;
-  private final Schema schema;
+  private final SerializableSchema schema;
   private final HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy;
   private final HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType;
 
@@ -64,14 +64,13 @@ public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
     this.orderByColumns = orderByColumns;
     this.layoutOptStrategy = layoutOptStrategy;
     this.curveCompositionStrategyType = curveCompositionStrategyType;
-    this.schema = schema;
+    this.schema = new SerializableSchema(schema);
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
-    SerializableSchema serializableSchema = new SerializableSchema(schema);
     JavaRDD<GenericRecord> genericRecordsRDD =
-        records.map(f -> (GenericRecord) f.getData().getInsertValue(serializableSchema.get()).get());
+        records.map(f -> (GenericRecord) f.getData().getInsertValue(schema.get()).get());
 
     Dataset<Row> sourceDataset =
         AvroConversionUtils.createDataFrame(
@@ -82,7 +81,7 @@ public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
 
     Dataset<Row> sortedDataset = reorder(sourceDataset, outputSparkPartitions);
 
-    return HoodieSparkUtils.createRdd(sortedDataset, schema.getName(), schema.getNamespace(), false, Option.empty())
+    return HoodieSparkUtils.createRdd(sortedDataset, schema.get().getName(), schema.get().getNamespace(), false, Option.empty())
         .toJavaRDD()
         .map(record -> {
           String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();

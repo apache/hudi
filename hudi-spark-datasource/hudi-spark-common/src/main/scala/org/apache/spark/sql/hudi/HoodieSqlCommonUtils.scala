@@ -19,30 +19,27 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
-
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.{Resolver, UnresolvedRelation}
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
+import org.apache.spark.sql.catalyst.analysis.Resolver
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
-import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
-import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
 
 import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.{Locale, Properties}
-
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Map
 
@@ -56,7 +53,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
     table match {
-      case SubqueryAlias(name, _) => sparkAdapter.toTableIdentifier(name)
+      case SubqueryAlias(name, _) => sparkAdapter.getCatalystPlanUtils.toTableIdentifier(name)
       case _ => throw new IllegalArgumentException(s"Illegal table: $table")
     }
   }
@@ -204,7 +201,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val conf = sparkSession.sessionState.newHadoopConf()
     uri.map(makePathQualified(_, conf))
       .map(removePlaceHolder)
-      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${identifier}"))
+      .getOrElse(throw new IllegalArgumentException(s"Missing location for $identifier"))
   }
 
   private def removePlaceHolder(path: String): String = {
@@ -256,8 +253,11 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
         .filterKeys(_.startsWith("hoodie."))
   }
 
-  def isEnableHive(sparkSession: SparkSession): Boolean =
-    "hive" == sparkSession.sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)
+  /**
+   * Checks whether Spark is using Hive as Session's Catalog
+   */
+  def isUsingHiveCatalog(sparkSession: SparkSession): Boolean =
+    sparkSession.sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION) == "hive"
 
   /**
    * Convert different query instant time format to the commit time format.
@@ -317,8 +317,61 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
     child match {
       case Literal(nul, NullType) => Literal(nul, dataType)
-      case _ => if (child.dataType != dataType)
-        Cast(child, dataType, Option(conf.sessionLocalTimeZone)) else child
+      case expr if child.dataType != dataType => Cast(expr, dataType, Option(conf.sessionLocalTimeZone))
+      case _ => child
     }
+  }
+
+  def normalizePartitionSpec[T](
+                                 partitionSpec: Map[String, T],
+                                 partColNames: Seq[String],
+                                 tblName: String,
+                                 resolver: Resolver): Map[String, T] = {
+    val normalizedPartSpec = partitionSpec.toSeq.map { case (key, value) =>
+      val normalizedKey = partColNames.find(resolver(_, key)).getOrElse {
+        throw new AnalysisException(s"$key is not a valid partition column in table $tblName.")
+      }
+      normalizedKey -> value
+    }
+
+    if (normalizedPartSpec.size < partColNames.size) {
+      throw new AnalysisException(
+        "All partition columns need to be specified for Hoodie's partition")
+    }
+
+    val lowerPartColNames = partColNames.map(_.toLowerCase)
+    if (lowerPartColNames.distinct.length != lowerPartColNames.length) {
+      val duplicateColumns = lowerPartColNames.groupBy(identity).collect {
+        case (x, ys) if ys.length > 1 => s"`$x`"
+      }
+      throw new AnalysisException(
+        s"Found duplicate column(s) in the partition schema: ${duplicateColumns.mkString(", ")}")
+    }
+
+    normalizedPartSpec.toMap
+  }
+
+  def getPartitionPathToDrop(
+                              hoodieCatalogTable: HoodieCatalogTable,
+                              normalizedSpecs: Seq[Map[String, String]]): String = {
+    val table = hoodieCatalogTable.table
+    val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
+    val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
+    val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
+    val partitionsToDrop = normalizedSpecs.map { spec =>
+      hoodieCatalogTable.partitionFields.map { partitionColumn =>
+        val encodedPartitionValue = if (enableEncodeUrl) {
+          PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
+        } else {
+          spec(partitionColumn)
+        }
+        if (enableHiveStylePartitioning) {
+          partitionColumn + "=" + encodedPartitionValue
+        } else {
+          encodedPartitionValue
+        }
+      }.mkString("/")
+    }.mkString(",")
+    partitionsToDrop
   }
 }

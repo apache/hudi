@@ -38,6 +38,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.net.URL;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -90,16 +91,33 @@ public class DFSPropertiesConfiguration {
   }
 
   /**
-   * Load global props from hudi-defaults.conf which is under CONF_FILE_DIR_ENV_NAME.
+   * Load global props from hudi-defaults.conf which is under class loader or CONF_FILE_DIR_ENV_NAME.
    * @return Typed Properties
    */
   public static TypedProperties loadGlobalProps() {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration();
+
+    // First try loading the external config file from class loader
+    URL configFile = Thread.currentThread().getContextClassLoader().getResource(DEFAULT_PROPERTIES_FILE);
+    if (configFile != null) {
+      try (BufferedReader br = new BufferedReader(new InputStreamReader(configFile.openStream()))) {
+        conf.addPropsFromStream(br);
+        return conf.getProps();
+      } catch (IOException ioe) {
+        throw new HoodieIOException(
+            String.format("Failed to read %s from class loader", DEFAULT_PROPERTIES_FILE), ioe);
+      }
+    }
+    // Try loading the external config file from local file system
     Option<Path> defaultConfPath = getConfPathFromEnv();
     if (defaultConfPath.isPresent()) {
       conf.addPropsFromFile(defaultConfPath.get());
     } else {
-      conf.addPropsFromFile(DEFAULT_PATH);
+      try {
+        conf.addPropsFromFile(DEFAULT_PATH);
+      } catch (Exception e) {
+        LOG.warn("Cannot load default config file: " + DEFAULT_PATH, e);
+      }
     }
     return conf.getProps();
   }
@@ -126,13 +144,17 @@ public class DFSPropertiesConfiguration {
         filePath.toString(),
         Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
     );
+
     try {
       if (filePath.equals(DEFAULT_PATH) && !fs.exists(filePath)) {
         LOG.warn("Properties file " + filePath + " not found. Ignoring to load props file");
         return;
       }
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Cannot check if the properties file exist: " + filePath, ioe);
+    }
 
-      BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(filePath)));
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(filePath)))) {
       visitedFilePaths.add(filePath.toString());
       currentFilePath = filePath;
       addPropsFromStream(reader);
@@ -172,6 +194,12 @@ public class DFSPropertiesConfiguration {
     final TypedProperties globalProps = new TypedProperties();
     globalProps.putAll(GLOBAL_PROPS);
     return globalProps;
+  }
+
+  // test only
+  public static TypedProperties addToGlobalProps(String key, String value) {
+    GLOBAL_PROPS.put(key, value);
+    return GLOBAL_PROPS;
   }
 
   public TypedProperties getProps() {

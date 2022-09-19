@@ -21,7 +21,7 @@
     <parent>
         <artifactId>hudi-spark-datasource</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.11.0-SNAPSHOT</version>
+        <version>0.13.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -158,23 +158,10 @@
     </build>
 
     <dependencies>
-        <dependency>
-            <groupId>org.scala-lang</groupId>
-            <artifactId>scala-library</artifactId>
-            <version>${scala12.version}</version>
-        </dependency>
 
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_2.12</artifactId>
-            <version>${spark3.version}</version>
-            <scope>provided</scope>
-            <optional>true</optional>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.spark</groupId>
-            <artifactId>spark-avro_2.12</artifactId>
             <version>${spark3.version}</version>
             <scope>provided</scope>
             <optional>true</optional>
@@ -208,6 +195,12 @@
         </dependency>
 
         <!-- Hoodie - Test -->
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-tests-common</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-client-common</artifactId>

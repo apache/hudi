@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -29,8 +30,8 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public class BucketIdentifier {
-  // compatible with the spark bucket name
+public class BucketIdentifier implements Serializable {
+  // Compatible with the spark bucket name
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
 
   public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets) {
@@ -38,23 +39,41 @@ public class BucketIdentifier {
   }
 
   public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
-    List<String> hashKeyFields;
-    if (!hoodieKey.getRecordKey().contains(":")) {
-      hashKeyFields = Collections.singletonList(hoodieKey.getRecordKey());
-    } else {
-      Map<String, String> recordKeyPairs = Arrays.stream(hoodieKey.getRecordKey().split(","))
-          .map(p -> p.split(":"))
-          .collect(Collectors.toMap(p -> p[0], p -> p[1]));
-      hashKeyFields = Arrays.stream(indexKeyFields.split(","))
-          .map(f -> recordKeyPairs.get(f))
-          .collect(Collectors.toList());
-    }
+    return (getHashKeys(hoodieKey, indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+  }
+
+  public static int getBucketId(HoodieKey hoodieKey, List<String> indexKeyFields, int numBuckets) {
+    return (getHashKeys(hoodieKey.getRecordKey(), indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+  }
+
+  public static int getBucketId(String recordKey, String indexKeyFields, int numBuckets) {
+    return getBucketId(getHashKeys(recordKey, indexKeyFields), numBuckets);
+  }
+
+  public  static int getBucketId(List<String> hashKeyFields, int numBuckets) {
     return (hashKeyFields.hashCode() & Integer.MAX_VALUE) % numBuckets;
   }
 
-  // only for test
-  public  static int getBucketId(List<String> hashKeyFields, int numBuckets) {
-    return hashKeyFields.hashCode() % numBuckets;
+  public static List<String> getHashKeys(HoodieKey hoodieKey, String indexKeyFields) {
+    return getHashKeys(hoodieKey.getRecordKey(), indexKeyFields);
+  }
+
+  protected static List<String> getHashKeys(String recordKey, String indexKeyFields) {
+    return !recordKey.contains(":") ? Collections.singletonList(recordKey) :
+        getHashKeysUsingIndexFields(recordKey, Arrays.asList(indexKeyFields.split(",")));
+  }
+
+  protected static List<String> getHashKeys(String recordKey, List<String> indexKeyFields) {
+    return !recordKey.contains(":") ? Collections.singletonList(recordKey) :
+        getHashKeysUsingIndexFields(recordKey, indexKeyFields);
+  }
+
+  private static List<String> getHashKeysUsingIndexFields(String recordKey, List<String> indexKeyFields) {
+    Map<String, String> recordKeyPairs = Arrays.stream(recordKey.split(","))
+        .map(p -> p.split(":"))
+        .collect(Collectors.toMap(p -> p[0], p -> p[1]));
+    return indexKeyFields.stream()
+        .map(recordKeyPairs::get).collect(Collectors.toList());
   }
 
   public static String partitionBucketIdStr(String partition, int bucketId) {

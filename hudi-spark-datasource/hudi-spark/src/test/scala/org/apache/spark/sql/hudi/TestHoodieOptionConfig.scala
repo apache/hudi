@@ -19,27 +19,13 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.testutils.HoodieClientTestBase
-
-import org.apache.spark.sql.SparkSession
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.types._
-
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.{BeforeEach, Test}
-
+import org.junit.jupiter.api.Test
 import org.scalatest.Matchers.intercept
 
-class TestHoodieOptionConfig extends HoodieClientTestBase {
-
-  var spark: SparkSession = _
-
-  /**
-   * Setup method running before each test.
-   */
-  @BeforeEach override def setUp() {
-    initSparkContexts()
-    spark = sqlContext.sparkSession
-  }
+class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
 
   @Test
   def testWithDefaultSqlOptions(): Unit = {
@@ -48,12 +34,12 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
     assertTrue(with1.size == 3)
     assertTrue(with1("primaryKey") == "id")
     assertTrue(with1("type") == "cow")
-    assertTrue(with1("payloadClass") == classOf[DefaultHoodieRecordPayload].getName)
+    assertTrue(with1("payloadClass") == classOf[OverwriteWithLatestAvroPayload].getName)
 
     val ops2 = Map("primaryKey" -> "id",
       "preCombineField" -> "timestamp",
       "type" -> "mor",
-      "payloadClass" -> classOf[OverwriteWithLatestAvroPayload].getName
+      "payloadClass" -> classOf[DefaultHoodieRecordPayload].getName
     )
     val with2 = HoodieOptionConfig.withDefaultSqlOptions(ops2)
     assertTrue(ops2 == with2)

@@ -88,6 +88,18 @@ public abstract class HoodieIndex<I, O> implements Serializable {
       HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException;
 
+
+  /**
+   * Extracts the location of written records, and updates the index.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public HoodieData<WriteStatus> updateLocation(
+      HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
+      HoodieTable hoodieTable, String instant) throws HoodieIndexException {
+    return updateLocation(writeStatuses, context, hoodieTable);
+  }
+
+
   /**
    * Rollback the effects of the commit made at instantTime.
    */
@@ -121,7 +133,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public abstract boolean isImplicitWithStorage();
 
   /**
-   * If the `getCustomizedPartitioner` returns a partitioner, it has to be true.
+   * To indicate if a operation type requires location tagging before writing
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public boolean requiresTagging(WriteOperationType operationType) {
@@ -142,5 +154,9 @@ public abstract class HoodieIndex<I, O> implements Serializable {
 
   public enum IndexType {
     HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET, FLINK_STATE
+  }
+
+  public enum BucketIndexEngineType {
+    SIMPLE, CONSISTENT_HASHING
   }
 }

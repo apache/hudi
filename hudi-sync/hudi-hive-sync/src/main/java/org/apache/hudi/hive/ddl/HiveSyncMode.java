@@ -27,14 +27,17 @@ public enum HiveSyncMode {
    */
   HMS,
   /**
+   * The GLUE mode use the glue client to sync metadata.
+   */
+  GLUE,
+  /**
    * The HIVEQL mode execute hive ql to sync metadata.
    */
   HIVEQL,
   /**
    * The JDBC mode use hive jdbc to sync metadata.
    */
-  JDBC
-  ;
+  JDBC;
 
   public static HiveSyncMode of(String syncMode) {
     return HiveSyncMode.valueOf(syncMode.toUpperCase(Locale.ROOT));

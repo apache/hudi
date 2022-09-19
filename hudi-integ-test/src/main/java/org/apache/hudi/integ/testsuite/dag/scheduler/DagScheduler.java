@@ -24,7 +24,6 @@ import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.DelayNode;
-import org.apache.hudi.metrics.Metrics;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
@@ -117,9 +116,6 @@ public class DagScheduler {
       if (curRound < workflowDag.getRounds()) {
         new DelayNode(workflowDag.getIntermittentDelayMins()).execute(executionContext, curRound);
       }
-
-      // After each level, report and flush the metrics
-      Metrics.flush();
     } while (curRound++ < workflowDag.getRounds());
     log.info("Finished workloads");
   }

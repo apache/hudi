@@ -35,6 +35,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -42,6 +43,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -51,6 +53,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -127,7 +130,6 @@ public class HoodieDeltaStreamer implements Serializable {
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                              Option<TypedProperties> propsOverride) throws IOException {
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
-
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
           UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, this.properties);
@@ -156,7 +158,14 @@ public class HoodieDeltaStreamer implements Serializable {
       hoodieConfig.setAll(UtilHelpers.readConfig(hadoopConf, new Path(cfg.propsFilePath), cfg.configs).getProps());
     }
 
+    // set any configs that Deltastreamer has to override explicitly
     hoodieConfig.setDefaultValue(DataSourceWriteOptions.RECONCILE_SCHEMA());
+    // we need auto adjustment enabled for deltastreamer since async table services are feasible within the same JVM.
+    hoodieConfig.setValue(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
+    if (cfg.tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
+      // Explicitly set the table type
+      hoodieConfig.setValue(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    }
 
     return hoodieConfig.getProps(true);
   }
@@ -200,6 +209,7 @@ public class HoodieDeltaStreamer implements Serializable {
           throw ex;
         } finally {
           deltaSyncService.ifPresent(DeltaSyncService::close);
+          Metrics.shutdown();
           LOG.info("Shut down delta streamer");
         }
       }
@@ -297,8 +307,11 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--enable-sync"}, description = "Enable syncing meta")
     public Boolean enableMetaSync = false;
 
+    @Parameter(names = {"--force-empty-sync"}, description = "Force syncing meta even on empty commit")
+    public Boolean forceEmptyMetaSync = false;
+
     @Parameter(names = {"--sync-tool-classes"}, description = "Meta sync client tool, using comma to separate multi tools")
-    public String syncClientToolClass = HiveSyncTool.class.getName();
+    public String syncClientToolClassNames = HiveSyncTool.class.getName();
 
     @Parameter(names = {"--max-pending-compactions"},
         description = "Maximum number of outstanding inflight/requested compactions. Delta Sync will not happen unless"
@@ -318,8 +331,10 @@ public class HoodieDeltaStreamer implements Serializable {
         description = "the min sync interval of each sync in continuous mode")
     public Integer minSyncIntervalSeconds = 0;
 
-    @Parameter(names = {"--spark-master"}, description = "spark master to use.")
-    public String sparkMaster = "local[2]";
+    @Parameter(names = {"--spark-master"},
+        description = "spark master to use, if not defined inherits from your environment taking into "
+            + "account Spark Configuration priority rules (e.g. not using spark-submit command).")
+    public String sparkMaster = "";
 
     @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written")
     public Boolean commitOnErrors = false;
@@ -388,6 +403,17 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--retry-last-pending-inline-clustering", "-rc"}, description = "Retry last pending inline clustering plan before writing to sink.")
     public Boolean retryLastPendingInlineClusteringJob = false;
 
+    @Parameter(names = {"--cluster-scheduling-weight"}, description = "Scheduling weight for clustering as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer clusterSchedulingWeight = 1;
+
+    @Parameter(names = {"--cluster-scheduling-minshare"}, description = "Minshare for clustering as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer clusterSchedulingMinShare = 0;
+
+    @Parameter(names = {"--post-write-termination-strategy-class"}, description = "Post writer termination strategy class to gracefully shutdown deltastreamer in continuous mode")
+    public String postWriteTerminationStrategyClass = "";
+
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
@@ -423,6 +449,9 @@ public class HoodieDeltaStreamer implements Serializable {
               && operation == config.operation
               && Objects.equals(filterDupes, config.filterDupes)
               && Objects.equals(enableHiveSync, config.enableHiveSync)
+              && Objects.equals(enableMetaSync, config.enableMetaSync)
+              && Objects.equals(forceEmptyMetaSync, config.forceEmptyMetaSync)
+              && Objects.equals(syncClientToolClassNames, config.syncClientToolClassNames)
               && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
               && Objects.equals(maxPendingClustering, config.maxPendingClustering)
               && Objects.equals(continuousMode, config.continuousMode)
@@ -431,8 +460,10 @@ public class HoodieDeltaStreamer implements Serializable {
               && Objects.equals(commitOnErrors, config.commitOnErrors)
               && Objects.equals(deltaSyncSchedulingWeight, config.deltaSyncSchedulingWeight)
               && Objects.equals(compactSchedulingWeight, config.compactSchedulingWeight)
+              && Objects.equals(clusterSchedulingWeight, config.clusterSchedulingWeight)
               && Objects.equals(deltaSyncSchedulingMinShare, config.deltaSyncSchedulingMinShare)
               && Objects.equals(compactSchedulingMinShare, config.compactSchedulingMinShare)
+              && Objects.equals(clusterSchedulingMinShare, config.clusterSchedulingMinShare)
               && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
               && Objects.equals(checkpoint, config.checkpoint)
               && Objects.equals(initialCheckpointProvider, config.initialCheckpointProvider)
@@ -445,13 +476,13 @@ public class HoodieDeltaStreamer implements Serializable {
               baseFileFormat, propsFilePath, configs, sourceClassName,
               sourceOrderingField, payloadClassName, schemaProviderClassName,
               transformerClassNames, sourceLimit, operation, filterDupes,
-              enableHiveSync, maxPendingCompactions, maxPendingClustering, continuousMode,
-              minSyncIntervalSeconds, sparkMaster, commitOnErrors,
-              deltaSyncSchedulingWeight, compactSchedulingWeight, deltaSyncSchedulingMinShare,
-              compactSchedulingMinShare, forceDisableCompaction, checkpoint,
+              enableHiveSync, enableMetaSync, forceEmptyMetaSync, syncClientToolClassNames, maxPendingCompactions, maxPendingClustering,
+              continuousMode, minSyncIntervalSeconds, sparkMaster, commitOnErrors,
+              deltaSyncSchedulingWeight, compactSchedulingWeight, clusterSchedulingWeight, deltaSyncSchedulingMinShare,
+              compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
               initialCheckpointProvider, help);
     }
-  
+
     @Override
     public String toString() {
       return "Config{"
@@ -470,6 +501,9 @@ public class HoodieDeltaStreamer implements Serializable {
               + ", operation=" + operation
               + ", filterDupes=" + filterDupes
               + ", enableHiveSync=" + enableHiveSync
+              + ", enableMetaSync=" + enableMetaSync
+              + ", forceEmptyMetaSync=" + forceEmptyMetaSync
+              + ", syncClientToolClassNames=" + syncClientToolClassNames
               + ", maxPendingCompactions=" + maxPendingCompactions
               + ", maxPendingClustering=" + maxPendingClustering
               + ", continuousMode=" + continuousMode
@@ -478,8 +512,10 @@ public class HoodieDeltaStreamer implements Serializable {
               + ", commitOnErrors=" + commitOnErrors
               + ", deltaSyncSchedulingWeight=" + deltaSyncSchedulingWeight
               + ", compactSchedulingWeight=" + compactSchedulingWeight
+              + ", clusterSchedulingWeight=" + clusterSchedulingWeight
               + ", deltaSyncSchedulingMinShare=" + deltaSyncSchedulingMinShare
               + ", compactSchedulingMinShare=" + compactSchedulingMinShare
+              + ", clusterSchedulingMinShare=" + clusterSchedulingMinShare
               + ", forceDisableCompaction=" + forceDisableCompaction
               + ", checkpoint='" + checkpoint + '\''
               + ", initialCheckpointProvider='" + initialCheckpointProvider + '\''
@@ -519,9 +555,12 @@ public class HoodieDeltaStreamer implements Serializable {
   public static void main(String[] args) throws Exception {
     final Config cfg = getConfig(args);
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    JavaSparkContext jssc =
-        UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
-
+    JavaSparkContext jssc = null;
+    if (StringUtils.isNullOrEmpty(cfg.sparkMaster)) {
+      jssc = UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, additionalSparkConfigs);
+    } else {
+      jssc = UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
+    }
     if (cfg.enableHiveSync) {
       LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
@@ -584,6 +623,8 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
+    private final Option<PostWriteTerminationStrategy> postWriteTerminationStrategy;
+
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
       this.cfg = cfg;
@@ -591,6 +632,8 @@ public class HoodieDeltaStreamer implements Serializable {
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();
       this.asyncClusteringService = Option.empty();
+      this.postWriteTerminationStrategy = StringUtils.isNullOrEmpty(cfg.postWriteTerminationStrategyClass) ? Option.empty() :
+          TerminationStrategyUtils.createPostWriteTerminationStrategy(properties.get(), cfg.postWriteTerminationStrategyClass);
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
         HoodieTableMetaClient meta =
@@ -606,8 +649,8 @@ public class HoodieDeltaStreamer implements Serializable {
         ValidationUtils.checkArgument(baseFileFormat.equals(cfg.baseFileFormat) || cfg.baseFileFormat == null,
             "Hoodie table's base file format is of type " + baseFileFormat + " but passed in CLI argument is "
                 + cfg.baseFileFormat);
-        cfg.baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
-        this.cfg.baseFileFormat = cfg.baseFileFormat;
+        cfg.baseFileFormat = baseFileFormat;
+        this.cfg.baseFileFormat = baseFileFormat;
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
         if (cfg.baseFileFormat == null) {
@@ -674,6 +717,14 @@ public class HoodieDeltaStreamer implements Serializable {
                     error = true;
                     throw new HoodieException("Async clustering failed.  Shutting down Delta Sync...");
                   }
+                }
+              }
+              // check if deltastreamer need to be shutdown
+              if (postWriteTerminationStrategy.isPresent()) {
+                if (postWriteTerminationStrategy.get().shouldShutdown(scheduledCompactionInstantAndRDD.isPresent() ? Option.of(scheduledCompactionInstantAndRDD.get().getRight()) :
+                    Option.empty())) {
+                  error = true;
+                  shutdown(false);
                 }
               }
               long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
@@ -762,7 +813,7 @@ public class HoodieDeltaStreamer implements Serializable {
         if (asyncClusteringService.isPresent()) {
           asyncClusteringService.get().updateWriteClient(writeClient);
         } else {
-          asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(writeClient));
+          asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(new HoodieSparkEngineContext(jssc), writeClient));
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
               .setConf(new Configuration(jssc.hadoopConfiguration()))
               .setBasePath(cfg.targetBasePath)
@@ -788,7 +839,7 @@ public class HoodieDeltaStreamer implements Serializable {
      * Close all resources.
      */
     public void close() {
-      if (null != deltaSync) {
+      if (deltaSync != null) {
         deltaSync.close();
       }
     }
