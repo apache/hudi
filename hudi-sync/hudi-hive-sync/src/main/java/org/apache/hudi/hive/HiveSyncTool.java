@@ -43,6 +43,7 @@ import org.apache.parquet.schema.MessageType;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
@@ -199,9 +200,6 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     // Check if the necessary table exists
     boolean tableExists = syncClient.tableExists(tableName);
 
-    // check if isDropPartition
-    boolean isDropPartition = syncClient.isDropPartition();
-
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = syncClient.getStorageSchema();
 
@@ -225,11 +223,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
     }
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
-    List<String> writtenPartitionsSince = syncClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
+    List<String> writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced);
     LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
 
     // Sync the partitions if needed
-    boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, isDropPartition);
+    // find dropped partitions, if any, in the latest commit
+    Set<String> droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced);
+    boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
     boolean meetSyncConditions = schemaChanged || partitionsChanged;
     if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions) {
       syncClient.updateLastCommitTimeSynced(tableName);
@@ -310,12 +310,12 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    * Syncs the list of storage partitions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).
    */
-  private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, boolean isDropPartition) {
+  private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, Set<String> droppedPartitions) {
     boolean partitionsChanged;
     try {
       List<Partition> hivePartitions = syncClient.getAllPartitions(tableName);
       List<PartitionEvent> partitionEvents =
-          syncClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, isDropPartition);
+          syncClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, droppedPartitions);
 
       List<String> newPartitions = filterPartitions(partitionEvents, PartitionEventType.ADD);
       if (!newPartitions.isEmpty()) {
