@@ -22,16 +22,18 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.RollbacksCommand;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -53,7 +55,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Use integration test instead of unit test.
  */
 @Disabled("HUDI-4226")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
+
+  @Autowired
+  private Shell shell;
 
   @Override
   protected HoodieTableType getTableType() {
@@ -96,12 +102,12 @@ public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
         .addCommit("102")
         .withBaseFilesInPartitions(partitionAndFileId);
 
-    CommandResult cr = getShell().executeCommand(String.format("commit rollback --commit %s --sparkMaster %s --sparkMemory %s",
-        "102", "local", "4G"));
+    Object result = shell.evaluate(() -> String.format("commit rollback --commit %s --sparkMaster %s --sparkMemory %s",
+            "102", "local", "4G"));
 
     assertAll("Command run failed",
-        () -> assertTrue(cr.isSuccess()),
-        () -> assertEquals("Commit 102 rolled back", cr.getResult().toString()));
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
+        () -> assertEquals("Commit 102 rolled back", result.toString()));
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
@@ -112,11 +118,12 @@ public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(2, timeline.getCommitsTimeline().countInstants(), "There should have 2 instants.");
 
     // rollback complete commit
-    CommandResult cr2 = getShell().executeCommand(String.format("commit rollback --commit %s --sparkMaster %s --sparkMemory %s",
-        "101", "local", "4G"));
+    Object result2 = shell.evaluate(() -> String.format("commit rollback --commit %s --sparkMaster %s --sparkMemory %s",
+            "101", "local", "4G"));
+
     assertAll("Command run failed",
-        () -> assertTrue(cr2.isSuccess()),
-        () -> assertEquals("Commit 101 rolled back", cr2.getResult().toString()));
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result2)),
+        () -> assertEquals("Commit 101 rolled back", result2.toString()));
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
@@ -127,14 +134,13 @@ public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(1, timeline2.getCommitsTimeline().countInstants(), "There should have 1 instants.");
 
     // rollback with rollbackUsingMarkers==false
-    CommandResult cr3 = getShell().executeCommand(
-        String.format("commit rollback --commit %s --rollbackUsingMarkers false --sparkMaster %s --sparkMemory %s",
-        "100", "local", "4G"));
+    Object result3 = shell.evaluate(() ->
+            String.format("commit rollback --commit %s --rollbackUsingMarkers false --sparkMaster %s --sparkMemory %s",
+            "100", "local", "4G"));
 
     assertAll("Command run failed",
-        () -> assertTrue(cr3.isSuccess()),
-        () -> assertEquals("Commit 100 rolled back", cr3.getResult().toString()));
-
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result3)),
+        () -> assertEquals("Commit 100 rolled back", result3.toString()));
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
     HoodieActiveTimeline rollbackTimeline3 = new RollbacksCommand.RollbackTimeline(metaClient);
