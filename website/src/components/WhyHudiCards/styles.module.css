@@ -27,7 +27,7 @@
   text-align: center;
 }
 .iconWrapper {
-  background-color: var(--ifm-color-primary-text);
+  background-color: var(--ifm-color-secondary-text);
   width: 100px;
   height: 100px;
   border-radius: 50%;

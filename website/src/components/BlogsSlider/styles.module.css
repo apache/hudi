@@ -40,7 +40,7 @@
 
 .blogContent {
     padding: 12px 0 10px 0;
-    color: var(--ifm-color-primary-text);
+    color: var(--ifm-color-secondary-text);
     font-weight: 400;
     font-size: 14px;
     display: flex;
@@ -49,7 +49,7 @@
 }
 
 .authorName {
-    color: var(--ifm-color-primary-text);
+    color: var(--ifm-color-secondary-text);
 }
 
 .date {
@@ -68,7 +68,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: var(--ifm-color-primary-text);
+    background: var(--ifm-color-secondary-text);
 }
 .sliderActionsWrapper {
     display: flex;
@@ -90,7 +90,7 @@
     cursor: pointer;
 }
 .activeSliderDots {
-    background: var(--ifm-color-secondary-text);
+    background: var(--ifm-color-primary-text);
     width: 24px;
     border-radius: 4px;
 }

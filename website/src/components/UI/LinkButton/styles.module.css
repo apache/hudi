@@ -13,13 +13,13 @@
 }
 
 .primary:hover, .secondary {
-    color: var(--ifm-color-secondary-text);
+    color: var(--ifm-color-primary-text);
     background: var(--ifm-color-white);
-    border: 1px solid var(--ifm-color-secondary-text);
+    border: 1px solid var(--ifm-color-primary-text);
 }
 
 .primary, .secondary:hover {
     color: var(--ifm-color-white);
-    background: var(--ifm-color-secondary-text);
+    background: var(--ifm-color-primary-text);
     border: 1px solid transparent;
 }

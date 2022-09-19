@@ -4,8 +4,8 @@
   font-weight: bold;
 }
 .primaryTxt {
-  color: var(--ifm-color-primary-text);
+  color: var(--ifm-color-secondary-text);
 }
 .secondaryTxt {
-  color: var(--ifm-color-secondary-text);
+  color: var(--ifm-color-primary-text);
 }

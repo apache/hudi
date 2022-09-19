@@ -29,11 +29,11 @@
 }
 .heroTitle {
     width: unset;
-    color: var(--ifm-color-primary-text);
+    color: var(--ifm-color-secondary-text);
 }
 
 .heroTitle span {
-    color: var(--ifm-color-secondary-text);
+    color: var(--ifm-color-primary-text);
 }
 
 @media screen and (max-width: 966px) {
