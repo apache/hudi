@@ -255,7 +255,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
-            splitter = IdentitySplitter.class)
+        splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--source-class"},
@@ -435,92 +435,92 @@ public class HoodieDeltaStreamer implements Serializable {
       }
       Config config = (Config) o;
       return sourceLimit == config.sourceLimit
-              && Objects.equals(targetBasePath, config.targetBasePath)
-              && Objects.equals(targetTableName, config.targetTableName)
-              && Objects.equals(tableType, config.tableType)
-              && Objects.equals(baseFileFormat, config.baseFileFormat)
-              && Objects.equals(propsFilePath, config.propsFilePath)
-              && Objects.equals(configs, config.configs)
-              && Objects.equals(sourceClassName, config.sourceClassName)
-              && Objects.equals(sourceOrderingField, config.sourceOrderingField)
-              && Objects.equals(payloadClassName, config.payloadClassName)
-              && Objects.equals(schemaProviderClassName, config.schemaProviderClassName)
-              && Objects.equals(transformerClassNames, config.transformerClassNames)
-              && operation == config.operation
-              && Objects.equals(filterDupes, config.filterDupes)
-              && Objects.equals(enableHiveSync, config.enableHiveSync)
-              && Objects.equals(enableMetaSync, config.enableMetaSync)
-              && Objects.equals(forceEmptyMetaSync, config.forceEmptyMetaSync)
-              && Objects.equals(syncClientToolClassNames, config.syncClientToolClassNames)
-              && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
-              && Objects.equals(maxPendingClustering, config.maxPendingClustering)
-              && Objects.equals(continuousMode, config.continuousMode)
-              && Objects.equals(minSyncIntervalSeconds, config.minSyncIntervalSeconds)
-              && Objects.equals(sparkMaster, config.sparkMaster)
-              && Objects.equals(commitOnErrors, config.commitOnErrors)
-              && Objects.equals(deltaSyncSchedulingWeight, config.deltaSyncSchedulingWeight)
-              && Objects.equals(compactSchedulingWeight, config.compactSchedulingWeight)
-              && Objects.equals(clusterSchedulingWeight, config.clusterSchedulingWeight)
-              && Objects.equals(deltaSyncSchedulingMinShare, config.deltaSyncSchedulingMinShare)
-              && Objects.equals(compactSchedulingMinShare, config.compactSchedulingMinShare)
-              && Objects.equals(clusterSchedulingMinShare, config.clusterSchedulingMinShare)
-              && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
-              && Objects.equals(checkpoint, config.checkpoint)
-              && Objects.equals(initialCheckpointProvider, config.initialCheckpointProvider)
-              && Objects.equals(help, config.help);
+          && Objects.equals(targetBasePath, config.targetBasePath)
+          && Objects.equals(targetTableName, config.targetTableName)
+          && Objects.equals(tableType, config.tableType)
+          && Objects.equals(baseFileFormat, config.baseFileFormat)
+          && Objects.equals(propsFilePath, config.propsFilePath)
+          && Objects.equals(configs, config.configs)
+          && Objects.equals(sourceClassName, config.sourceClassName)
+          && Objects.equals(sourceOrderingField, config.sourceOrderingField)
+          && Objects.equals(payloadClassName, config.payloadClassName)
+          && Objects.equals(schemaProviderClassName, config.schemaProviderClassName)
+          && Objects.equals(transformerClassNames, config.transformerClassNames)
+          && operation == config.operation
+          && Objects.equals(filterDupes, config.filterDupes)
+          && Objects.equals(enableHiveSync, config.enableHiveSync)
+          && Objects.equals(enableMetaSync, config.enableMetaSync)
+          && Objects.equals(forceEmptyMetaSync, config.forceEmptyMetaSync)
+          && Objects.equals(syncClientToolClassNames, config.syncClientToolClassNames)
+          && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
+          && Objects.equals(maxPendingClustering, config.maxPendingClustering)
+          && Objects.equals(continuousMode, config.continuousMode)
+          && Objects.equals(minSyncIntervalSeconds, config.minSyncIntervalSeconds)
+          && Objects.equals(sparkMaster, config.sparkMaster)
+          && Objects.equals(commitOnErrors, config.commitOnErrors)
+          && Objects.equals(deltaSyncSchedulingWeight, config.deltaSyncSchedulingWeight)
+          && Objects.equals(compactSchedulingWeight, config.compactSchedulingWeight)
+          && Objects.equals(clusterSchedulingWeight, config.clusterSchedulingWeight)
+          && Objects.equals(deltaSyncSchedulingMinShare, config.deltaSyncSchedulingMinShare)
+          && Objects.equals(compactSchedulingMinShare, config.compactSchedulingMinShare)
+          && Objects.equals(clusterSchedulingMinShare, config.clusterSchedulingMinShare)
+          && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
+          && Objects.equals(checkpoint, config.checkpoint)
+          && Objects.equals(initialCheckpointProvider, config.initialCheckpointProvider)
+          && Objects.equals(help, config.help);
     }
 
     @Override
     public int hashCode() {
       return Objects.hash(targetBasePath, targetTableName, tableType,
-              baseFileFormat, propsFilePath, configs, sourceClassName,
-              sourceOrderingField, payloadClassName, schemaProviderClassName,
-              transformerClassNames, sourceLimit, operation, filterDupes,
-              enableHiveSync, enableMetaSync, forceEmptyMetaSync, syncClientToolClassNames, maxPendingCompactions, maxPendingClustering,
-              continuousMode, minSyncIntervalSeconds, sparkMaster, commitOnErrors,
-              deltaSyncSchedulingWeight, compactSchedulingWeight, clusterSchedulingWeight, deltaSyncSchedulingMinShare,
-              compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
-              initialCheckpointProvider, help);
+          baseFileFormat, propsFilePath, configs, sourceClassName,
+          sourceOrderingField, payloadClassName, schemaProviderClassName,
+          transformerClassNames, sourceLimit, operation, filterDupes,
+          enableHiveSync, enableMetaSync, forceEmptyMetaSync, syncClientToolClassNames, maxPendingCompactions, maxPendingClustering,
+          continuousMode, minSyncIntervalSeconds, sparkMaster, commitOnErrors,
+          deltaSyncSchedulingWeight, compactSchedulingWeight, clusterSchedulingWeight, deltaSyncSchedulingMinShare,
+          compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
+          initialCheckpointProvider, help);
     }
 
     @Override
     public String toString() {
       return "Config{"
-              + "targetBasePath='" + targetBasePath + '\''
-              + ", targetTableName='" + targetTableName + '\''
-              + ", tableType='" + tableType + '\''
-              + ", baseFileFormat='" + baseFileFormat + '\''
-              + ", propsFilePath='" + propsFilePath + '\''
-              + ", configs=" + configs
-              + ", sourceClassName='" + sourceClassName + '\''
-              + ", sourceOrderingField='" + sourceOrderingField + '\''
-              + ", payloadClassName='" + payloadClassName + '\''
-              + ", schemaProviderClassName='" + schemaProviderClassName + '\''
-              + ", transformerClassNames=" + transformerClassNames
-              + ", sourceLimit=" + sourceLimit
-              + ", operation=" + operation
-              + ", filterDupes=" + filterDupes
-              + ", enableHiveSync=" + enableHiveSync
-              + ", enableMetaSync=" + enableMetaSync
-              + ", forceEmptyMetaSync=" + forceEmptyMetaSync
-              + ", syncClientToolClassNames=" + syncClientToolClassNames
-              + ", maxPendingCompactions=" + maxPendingCompactions
-              + ", maxPendingClustering=" + maxPendingClustering
-              + ", continuousMode=" + continuousMode
-              + ", minSyncIntervalSeconds=" + minSyncIntervalSeconds
-              + ", sparkMaster='" + sparkMaster + '\''
-              + ", commitOnErrors=" + commitOnErrors
-              + ", deltaSyncSchedulingWeight=" + deltaSyncSchedulingWeight
-              + ", compactSchedulingWeight=" + compactSchedulingWeight
-              + ", clusterSchedulingWeight=" + clusterSchedulingWeight
-              + ", deltaSyncSchedulingMinShare=" + deltaSyncSchedulingMinShare
-              + ", compactSchedulingMinShare=" + compactSchedulingMinShare
-              + ", clusterSchedulingMinShare=" + clusterSchedulingMinShare
-              + ", forceDisableCompaction=" + forceDisableCompaction
-              + ", checkpoint='" + checkpoint + '\''
-              + ", initialCheckpointProvider='" + initialCheckpointProvider + '\''
-              + ", help=" + help
-              + '}';
+          + "targetBasePath='" + targetBasePath + '\''
+          + ", targetTableName='" + targetTableName + '\''
+          + ", tableType='" + tableType + '\''
+          + ", baseFileFormat='" + baseFileFormat + '\''
+          + ", propsFilePath='" + propsFilePath + '\''
+          + ", configs=" + configs
+          + ", sourceClassName='" + sourceClassName + '\''
+          + ", sourceOrderingField='" + sourceOrderingField + '\''
+          + ", payloadClassName='" + payloadClassName + '\''
+          + ", schemaProviderClassName='" + schemaProviderClassName + '\''
+          + ", transformerClassNames=" + transformerClassNames
+          + ", sourceLimit=" + sourceLimit
+          + ", operation=" + operation
+          + ", filterDupes=" + filterDupes
+          + ", enableHiveSync=" + enableHiveSync
+          + ", enableMetaSync=" + enableMetaSync
+          + ", forceEmptyMetaSync=" + forceEmptyMetaSync
+          + ", syncClientToolClassNames=" + syncClientToolClassNames
+          + ", maxPendingCompactions=" + maxPendingCompactions
+          + ", maxPendingClustering=" + maxPendingClustering
+          + ", continuousMode=" + continuousMode
+          + ", minSyncIntervalSeconds=" + minSyncIntervalSeconds
+          + ", sparkMaster='" + sparkMaster + '\''
+          + ", commitOnErrors=" + commitOnErrors
+          + ", deltaSyncSchedulingWeight=" + deltaSyncSchedulingWeight
+          + ", compactSchedulingWeight=" + compactSchedulingWeight
+          + ", clusterSchedulingWeight=" + clusterSchedulingWeight
+          + ", deltaSyncSchedulingMinShare=" + deltaSyncSchedulingMinShare
+          + ", compactSchedulingMinShare=" + compactSchedulingMinShare
+          + ", clusterSchedulingMinShare=" + clusterSchedulingMinShare
+          + ", forceDisableCompaction=" + forceDisableCompaction
+          + ", checkpoint='" + checkpoint + '\''
+          + ", initialCheckpointProvider='" + initialCheckpointProvider + '\''
+          + ", help=" + help
+          + '}';
     }
   }
 
@@ -651,6 +651,7 @@ public class HoodieDeltaStreamer implements Serializable {
                 + cfg.baseFileFormat);
         cfg.baseFileFormat = baseFileFormat;
         this.cfg.baseFileFormat = baseFileFormat;
+        validateConfigs(meta.getTableConfig(), properties.get());
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
         if (cfg.baseFileFormat == null) {
@@ -669,6 +670,46 @@ public class HoodieDeltaStreamer implements Serializable {
 
       deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, conf,
           this::onInitializingWriteClient);
+    }
+
+    private void validateConfigs(HoodieTableConfig htc, TypedProperties props) throws HoodieException {
+      StringBuilder diffs = new StringBuilder();
+      String dataRecordKey = props.getString(HoodieTableConfig.RECORDKEY_FIELDS.key());
+      String tableRecordKey = htc.getRecordKeyFieldProp();
+
+      if (!Objects.equals(dataRecordKey, tableRecordKey)) {
+        diffs.append("RecordKey:\t");
+        diffs.append(dataRecordKey);
+        diffs.append("\t");
+        diffs.append(tableRecordKey);
+        diffs.append("\n");
+      }
+
+      String dataPreCombineKey = props.getString(HoodieTableConfig.PRECOMBINE_FIELD.key());
+      String tablePreCombineKey = htc.getPreCombineField();
+      if (!Objects.equals(dataPreCombineKey, tablePreCombineKey)) {
+        diffs.append("PreCombineKey:\t");
+        diffs.append(dataRecordKey);
+        diffs.append("\t");
+        diffs.append(tableRecordKey);
+        diffs.append("\n");
+      }
+
+      String dataKeyGen = props.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key());
+      String tableKeyGen = htc.getKeyGeneratorClassName();
+      if (!Objects.equals(dataKeyGen, tableKeyGen)) {
+        diffs.append("KeyGenerator:\t");
+        diffs.append(dataRecordKey);
+        diffs.append("\t");
+        diffs.append(tableRecordKey);
+        diffs.append("\n");
+      }
+
+      if (diffs.length() > 0) {
+        diffs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n");
+        throw new HoodieException(diffs.toString().trim());
+      }
+
     }
 
     public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf)
