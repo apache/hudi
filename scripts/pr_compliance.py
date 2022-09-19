@@ -33,6 +33,138 @@ def test_title():
 
 
 
+class Outcomes:
+    ERROR = 0
+    CONTINUE = 1
+    NEXTSECTION = 2
+    SUCCESS = 3
+
+
+class ParseSectionData:
+    def __init__(self, name, identifier, lineAfter, nextSection):
+        self.name = name
+        self.identifier = identifier
+        self.lineAfter = lineAfter
+        self.nextSection = nextSection
+
+class ParseSections:
+    def __init__(self):
+        self.sections = {}
+    
+    def validateOthers(self, line, value):
+        for section in self.sections:
+            if section.name != value:
+                if section.identify(line):
+                    return True
+        return False    
+    
+    def get(self, name):
+        return self.sections.get(name)
+
+class ParseSection:
+    def __init__(self, name: str, identifier: str, lineAfter: str, nextSection: str, sections: ParseSections, debug=False):
+        self.found = False
+        self.debug = debug
+        self.name = name
+        self.identifier = identifier
+        self.sections = sections
+        self.lineAfter = lineAfter
+        self.nextSection = nextSection
+
+    def identify(self, line):
+        return line == self.identifier
+
+    def error(self, message):
+        if self.debug:
+            print(f"ERROR:(state: {self.name}, found: {self.found}, message: {message}")
+
+    def validateAfter(self, line):
+        return self.found and line != self.lineAfter
+
+    def processIdentify(self, line):
+        if self.found:
+            self.error(f"duplicate \"{self.identifier}\"")
+            return Outcomes.ERROR
+        self.found = True
+        return Outcomes.CONTINUE
+    
+    def validateLine(self,line):
+        # see if it matches template
+        if self.identify(line):
+            o = self.processIdentify(line)
+            if self.nextSection == "SUCCESS" and o == Outcomes.NEXTSECTION:
+                return Outcomes.SUCCESS
+            return o
+        elif self.sections.validateOthers(line, self.name):
+            self.error(f"Out of order section or missing description \"{line}\"")
+            return Outcomes.ERROR
+        elif self.validateAfter(line):
+            return Outcomes.NEXTSECTION
+        return Outcomes.CONTINUE
+
+class RiskLevel(ParseSection):
+    def __init__(self, name: str, identifier: str, lineAfter: str, nextSection: str, sections: ParseSections, debug=False):
+        super().__init__(name, identifier, lineAfter, nextSection, sections, debug)
+
+    def validateAfter(self, line: str):
+        return line.startswith(self.identifier)
+
+    def processIdentify(self, line):
+        if self.found:
+            self.error(f"duplicate line starting with \"{self.identifier}\"")
+            return Outcomes.ERROR
+        if line == "**Risk level: none | low | medium | high**":
+            self.error("risk level not chosen")
+            return Outcomes.ERROR
+        # an explanation is not required for none or low
+        if "NONE" in line.upper() or "LOW" in line.upper():
+            return Outcomes.NEXTSECTION
+        elif "MEDIUM" in line.upper() or "HIGH" in line.upper():
+            # an explanation is required so we don't change state
+            self.found = True
+            return Outcomes.CONTINUE
+        else:
+            #they put something weird in for risk level
+            self.error("invalid choice for risk level")
+            return Outcomes.ERROR
+
+
+class ValidateBody:
+    def __init__(self, body: str, firstSection: str, sections: ParseSections, debug=False):
+        self.body = body
+        self.debug = debug
+        self.firstSection = firstSection
+        self.section = None
+        self.sections = sections
+
+    def nextSection(self):
+        if self.section is None:
+            data = self.sections.get(self.firstSection)
+        else:
+            data = self.sections.get(self.section.nextSection)
+        if data.name == "RISKLEVEL":
+            self.section = RiskLevel(name=data.name, identifier=data.identifier, lineAfter=data.lineAfter,nextSection=data.nextSection, sections=self.sections, debug=self.debug)
+        else:
+            self.section = ParseSection(name=data.name, identifier=data.identifier, lineAfter=data.lineAfter,nextSection=data.nextSection, sections=self.sections, debug=self.debug)
+
+    def validate(self):
+        self.nextSection()
+        for line in self.body.splitlines():
+            if len(line) == 0:
+                continue
+            o = self.section.validateLine(line)
+            if o == Outcomes.ERROR:
+                return False
+            elif o == Outcomes.SUCCESS:
+                return True
+            elif o == Outcomes.NEXTSECTION:
+                self.nextSection()
+        self.section.error("template is not filled out properly")
+        return False
+        
+
+
+
 
 
 def body_is_ok(body,PRINT_DEBUG=False):
@@ -482,6 +614,24 @@ if __name__ == '__main__':
     body = os.getenv("REQUEST_BODY")
     if not title_is_ok(title):
         exit(-1)
+    
+    changelogs = ParseSectionData("CHANGELOGS",
+        "### Change Logs",
+        "_Describe context and summary for this change. Highlight if any code was copied._",
+        "IMPACT")
+    impact = ParseSectionData("IMPACT"
+        "### Impact"
+        "_Describe any public API or user-facing feature change or any performance impact._",
+        "RISKLEVEL")
+    risklevel = ParseSectionData("RISKLEVEL",
+        "**Risk level:",
+        "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
+        "CHECKLIST")
+    checklist = ParseSectionData("CHECKLIST",
+        "### Contributor's checklist",
+        "",
+        "SUCCESS")
+        
     if not body_is_ok(body):
         exit(-2)
     exit(0)
