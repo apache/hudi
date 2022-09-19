@@ -23,6 +23,7 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
@@ -50,7 +51,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -83,7 +86,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test class for {@link RepairsCommand}.
  */
 @Tag("functional")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class TestRepairsCommand extends CLIFunctionalTestHarness {
+
+  @Autowired
+  private Shell shell;
 
   private String tablePath;
   private FileSystem fs;
@@ -122,8 +129,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     assertTrue(fs.mkdirs(new Path(partition3)));
 
     // default is dry run.
-    CommandResult cr = shell().executeCommand("repair addpartitionmeta");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "repair addpartitionmeta");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // expected all 'No'.
     String[][] rows = FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, tablePath)
@@ -133,7 +140,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     String expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_PARTITION_PATH,
         HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_ACTION}, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -153,8 +160,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     assertTrue(fs.mkdirs(new Path(partition2)));
     assertTrue(fs.mkdirs(new Path(partition3)));
 
-    CommandResult cr = shell().executeCommand("repair addpartitionmeta --dryrun false");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "repair addpartitionmeta --dryrun false");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     List<String> paths = FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, tablePath);
     // after dry run, the action will be 'Repaired'
@@ -164,10 +171,10 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     String expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_PARTITION_PATH,
         HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_ACTION}, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
 
-    cr = shell().executeCommand("repair addpartitionmeta");
+    result = shell.evaluate(() -> "repair addpartitionmeta");
 
     // after real run, Metadata is present now.
     rows = paths.stream()
@@ -176,7 +183,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_PARTITION_PATH,
         HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_ACTION}, rows);
     expected = removeNonWordAndStripSpace(expected);
-    got = removeNonWordAndStripSpace(cr.getResult().toString());
+    got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -188,8 +195,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     URL newProps = this.getClass().getClassLoader().getResource("table-config.properties");
     assertNotNull(newProps, "New property file must exist");
 
-    CommandResult cr = shell().executeCommand("repair overwrite-hoodie-props --new-props-file " + newProps.getPath());
-    assertTrue(cr.isSuccess());
+    Object cmdResult = shell.evaluate(() -> "repair overwrite-hoodie-props --new-props-file " + newProps.getPath());
+    assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
 
     Map<String, String> oldProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
 
@@ -217,7 +224,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     String expect = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY,
         HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
     expect = removeNonWordAndStripSpace(expect);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(cmdResult.toString());
     assertEquals(expect, got);
   }
 
@@ -244,8 +251,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     // first, there are four instants
     assertEquals(4, metaClient.getActiveTimeline().filterInflightsAndRequested().getInstants().count());
 
-    CommandResult cr = shell().executeCommand("repair corrupted clean files");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "repair corrupted clean files");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // reload meta client
     metaClient = HoodieTableMetaClient.reload(metaClient);

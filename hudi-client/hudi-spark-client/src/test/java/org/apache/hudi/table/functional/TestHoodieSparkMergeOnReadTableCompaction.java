@@ -22,10 +22,12 @@ package org.apache.hudi.table.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -45,7 +47,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -75,6 +76,11 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     return Stream.of(data).map(Arguments::of);
   }
 
+  private static Stream<Arguments> writePayloadTest() {
+    // Payload class
+    return Stream.of(new Object[] {DefaultHoodieRecordPayload.class.getName(), PartialUpdateAvroPayload.class.getName()}).map(Arguments::of);
+  }
+
   private HoodieTestDataGenerator dataGen;
   private SparkRDDWriteClient client;
   private HoodieTableMetaClient metaClient;
@@ -84,14 +90,16 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     dataGen = new HoodieTestDataGenerator();
   }
 
-  @Test
-  public void testWriteDuringCompaction() throws IOException {
+  @ParameterizedTest
+  @MethodSource("writePayloadTest")
+  public void testWriteDuringCompaction(String payloadClass) throws IOException {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
         .withPath(basePath())
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withAutoCommit(false)
+        .withWritePayLoad(payloadClass)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder()
