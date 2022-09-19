@@ -130,11 +130,11 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertEquals(partitions, Arrays.asList(new String[] {"0", "2", "3", "4"}));
 
     // verify only commit actions
-    partitions = TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
+    partitions = TimelineUtils.getWrittenPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(4, partitions.size());
     assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4", "5"}));
 
-    partitions = TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
+    partitions = TimelineUtils.getWrittenPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertEquals(3, partitions.size());
     assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4"}));
   }

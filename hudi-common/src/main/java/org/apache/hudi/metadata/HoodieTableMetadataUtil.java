@@ -1357,22 +1357,4 @@ public class HoodieTableMetadataUtil {
     inflightAndCompletedPartitions.addAll(tableConfig.getMetadataPartitions());
     return inflightAndCompletedPartitions;
   }
-
-  /**
-   * Get Last commit's Metadata.
-   */
-  public static Option<HoodieCommitMetadata> getLatestCommitMetadata(HoodieTableMetaClient metaClient) {
-    try {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      if (timeline.lastInstant().isPresent()) {
-        HoodieInstant instant = timeline.lastInstant().get();
-        byte[] data = timeline.getInstantDetails(instant).get();
-        return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
-      } else {
-        return Option.empty();
-      }
-    } catch (Exception e) {
-      throw new HoodieException("Failed to get commit metadata", e);
-    }
-  }
 }
