@@ -25,6 +25,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.HoodieTestReplaceCommitMetadataGenerator;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -50,7 +51,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -70,7 +73,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test class for {@link org.apache.hudi.cli.commands.CommitsCommand}.
  */
 @Tag("functional")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class TestCommitsCommand extends CLIFunctionalTestHarness {
+
+  @Autowired
+  private Shell shell;
 
   private String tableName1;
   private String tableName2;
@@ -183,12 +190,12 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   public void testShowCommits() throws Exception {
     Map<String, Integer[]> data = generateData();
 
-    CommandResult cr = shell().executeCommand("commits show");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "commits show");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     String expected = generateExpectData(1, data);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -198,12 +205,12 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     data.remove("101");
     data.remove("102");
 
-    CommandResult cr = shell().executeCommand("commits show --includeExtraMetadata true --includeArchivedTimeline true --partition 2015/03/16");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "commits show --includeExtraMetadata true --includeArchivedTimeline true --partition 2015/03/16");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     String expected = generateExpectDataWithExtraMetadata(1, data);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -236,8 +243,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   public void testShowArchivedCommits(boolean enableMetadataTable) throws Exception {
     Map<String, Integer[]> data = generateDataAndArchive(enableMetadataTable);
 
-    CommandResult cr = shell().executeCommand(String.format("commits showarchived --startTs %s --endTs %s", "100", "104"));
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> String.format("commits showarchived --startTs %s --endTs %s", "100", "104"));
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // archived 101 and 102 instant, generate expect data
     assertEquals(2, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
@@ -248,7 +255,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     data.remove("104");
     String expected = generateExpectData(1, data);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -331,8 +338,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
       archiver.archiveIfRequired(context());
     }
 
-    CommandResult cr = shell().executeCommand(String.format("commits showarchived --startTs %s --endTs %s", "160", "174"));
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> String.format("commits showarchived --startTs %s --endTs %s", "160", "174"));
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
     assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
         "There should 3 instants not be archived!");
 
@@ -342,7 +349,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     }
     String expected = generateExpectData(1, data2);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -354,8 +361,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     Map<String, Integer[]> data = generateData();
 
     String commitInstant = "101";
-    CommandResult cr = shell().executeCommand(String.format("commit showpartitions --commit %s", commitInstant));
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> String.format("commit showpartitions --commit %s", commitInstant));
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     Integer[] value = data.get(commitInstant);
     List<Comparable[]> rows = new ArrayList<>();
@@ -380,7 +387,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     String expected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -389,9 +396,10 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     Map<HoodieInstant, Integer[]> data = generateMixedData();
 
     for (HoodieInstant commitInstant : data.keySet()) {
-      CommandResult cr = shell().executeCommand(String.format("commit showpartitions --commit %s", commitInstant.getTimestamp()));
+      Object result = shell.evaluate(() ->
+              String.format("commit showpartitions --commit %s", commitInstant.getTimestamp()));
 
-      assertTrue(cr.isSuccess());
+      assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
       Integer[] value = data.get(commitInstant);
       List<Comparable[]> rows = new ArrayList<>();
@@ -416,7 +424,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
       String expected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, rows);
       expected = removeNonWordAndStripSpace(expected);
-      String got = removeNonWordAndStripSpace(cr.getResult().toString());
+      String got = removeNonWordAndStripSpace(result.toString());
       assertEquals(expected, got);
     }
   }
@@ -429,8 +437,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     Map<String, Integer[]> data = generateData();
 
     String commitInstant = "101";
-    CommandResult cr = shell().executeCommand(String.format("commit showfiles --commit %s", commitInstant));
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> String.format("commit showfiles --commit %s", commitInstant));
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     Integer[] value = data.get(commitInstant);
     List<Comparable[]> rows = new ArrayList<>();
@@ -453,7 +461,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -462,8 +470,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     Map<HoodieInstant, Integer[]> data = generateMixedData();
 
     for (HoodieInstant commitInstant : data.keySet()) {
-      CommandResult cr = shell().executeCommand(String.format("commit showfiles --commit %s", commitInstant.getTimestamp()));
-      assertTrue(cr.isSuccess());
+      Object result = shell.evaluate(() -> String.format("commit showfiles --commit %s", commitInstant.getTimestamp()));
+      assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
       Integer[] value = data.get(commitInstant);
       List<Comparable[]> rows = new ArrayList<>();
@@ -486,7 +494,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
       String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
       expected = removeNonWordAndStripSpace(expected);
-      String got = removeNonWordAndStripSpace(cr.getResult().toString());
+      String got = removeNonWordAndStripSpace(result.toString());
       assertEquals(expected, got);
     }
   }
@@ -508,15 +516,15 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
           Option.of(value[0]), Option.of(value[1]));
     }
 
-    CommandResult cr = shell().executeCommand(String.format("commits compare --path %s", tablePath2));
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> String.format("commits compare --path %s", tablePath2));
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // the latest instant of test_table2 is 101
     List<String> commitsToCatchup = metaClient.getActiveTimeline().findInstantsAfter("101", Integer.MAX_VALUE)
         .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     String expected = String.format("Source %s is ahead by %d commits. Commits to catch up - %s",
         tableName1, commitsToCatchup.size(), commitsToCatchup);
-    assertEquals(expected, cr.getResult().toString());
+    assertEquals(expected, result.toString());
   }
 
   /**
@@ -537,10 +545,10 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
           Option.of(value[0]), Option.of(value[1]));
     }
 
-    CommandResult cr = shell().executeCommand(String.format("commits sync --path %s", tablePath2));
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> String.format("commits sync --path %s", tablePath2));
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     String expected = String.format("Load sync state between %s and %s", tableName1, tableName2);
-    assertEquals(expected, cr.getResult().toString());
+    assertEquals(expected, result.toString());
   }
 }

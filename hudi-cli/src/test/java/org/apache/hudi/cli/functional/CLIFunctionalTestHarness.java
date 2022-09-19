@@ -35,8 +35,6 @@ import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.shell.Bootstrap;
-import org.springframework.shell.core.JLineShellComponent;
 
 import java.nio.file.Paths;
 
@@ -49,7 +47,7 @@ public class CLIFunctionalTestHarness implements SparkProvider {
   private static transient SparkSession spark;
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;
-  private static transient JLineShellComponent shell;
+
   /**
    * An indicator of the initialization status.
    */
@@ -81,10 +79,6 @@ public class CLIFunctionalTestHarness implements SparkProvider {
     return context;
   }
 
-  public JLineShellComponent shell() {
-    return shell;
-  }
-
   public String tableName() {
     return tableName("_test_table");
   }
@@ -103,7 +97,7 @@ public class CLIFunctionalTestHarness implements SparkProvider {
 
   @BeforeEach
   public synchronized void runBeforeEach() {
-    initialized = spark != null && shell != null;
+    initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
       SparkRDDWriteClient.registerClasses(sparkConf);
@@ -112,7 +106,6 @@ public class CLIFunctionalTestHarness implements SparkProvider {
       sqlContext = spark.sqlContext();
       jsc = new JavaSparkContext(spark.sparkContext());
       context = new HoodieSparkEngineContext(jsc);
-      shell = new Bootstrap().getJLineShellComponent();
       timelineService = HoodieClientTestUtils.initTimelineService(
           context, basePath(), incrementTimelineServicePortToUse());
       timelineServicePort = timelineService.getServerPort();
@@ -124,10 +117,6 @@ public class CLIFunctionalTestHarness implements SparkProvider {
     if (spark != null) {
       spark.close();
       spark = null;
-    }
-    if (shell != null) {
-      shell.stop();
-      shell = null;
     }
     if (timelineService != null) {
       timelineService.close();

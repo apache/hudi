@@ -32,10 +32,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,38 +54,42 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  * Given a file id or partition value, this command line utility tracks the changes to the file group or partition across range of commits.
  * Usage: diff file --fileId <fileId>
  */
-@Component
-public class DiffCommand implements CommandMarker {
+@ShellComponent
+public class DiffCommand {
 
   private static final BiFunction<HoodieWriteStat, String, Boolean> FILE_ID_CHECKER = (writeStat, fileId) -> fileId.equals(writeStat.getFileId());
   private static final BiFunction<HoodieWriteStat, String, Boolean> PARTITION_CHECKER = (writeStat, partitionPath) -> partitionPath.equals(writeStat.getPartitionPath());
 
-  @CliCommand(value = "diff file", help = "Check how file differs across range of commits")
+  @ShellMethod(key = "diff file", value = "Check how file differs across range of commits")
   public String diffFile(
-      @CliOption(key = {"fileId"}, help = "File ID to diff across range of commits", mandatory = true) String fileId,
-      @CliOption(key = {"startTs"}, help = "start time for compactions, default: now - 10 days") String startTs,
-      @CliOption(key = {"endTs"}, help = "end time for compactions, default: now - 1 day") String endTs,
-      @CliOption(key = {"limit"}, help = "Limit compactions", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"includeArchivedTimeline"}, help = "Include archived commits as well",
-          unspecifiedDefaultValue = "false") final boolean includeArchivedTimeline) throws IOException {
+      @ShellOption(value = {"--fileId"}, help = "File ID to diff across range of commits") String fileId,
+      @ShellOption(value = {"--startTs"}, help = "start time for compactions, default: now - 10 days",
+              defaultValue = ShellOption.NULL) String startTs,
+      @ShellOption(value = {"--endTs"}, help = "end time for compactions, default: now - 1 day",
+              defaultValue = ShellOption.NULL) String endTs,
+      @ShellOption(value = {"--limit"}, help = "Limit compactions", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only", defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
+          defaultValue = "false") final boolean includeArchivedTimeline) throws IOException {
     HoodieDefaultTimeline timeline = getTimelineInRange(startTs, endTs, includeArchivedTimeline);
     return printCommitsWithMetadataForFileId(timeline, limit, sortByField, descending, headerOnly, "", fileId);
   }
 
-  @CliCommand(value = "diff partition", help = "Check how file differs across range of commits. It is meant to be used only for partitioned tables.")
+  @ShellMethod(key = "diff partition", value = "Check how file differs across range of commits. It is meant to be used only for partitioned tables.")
   public String diffPartition(
-      @CliOption(key = {"partitionPath"}, help = "Relative partition path to diff across range of commits", mandatory = true) String partitionPath,
-      @CliOption(key = {"startTs"}, help = "start time for compactions, default: now - 10 days") String startTs,
-      @CliOption(key = {"endTs"}, help = "end time for compactions, default: now - 1 day") String endTs,
-      @CliOption(key = {"limit"}, help = "Limit compactions", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"includeArchivedTimeline"}, help = "Include archived commits as well",
-          unspecifiedDefaultValue = "false") final boolean includeArchivedTimeline) throws IOException {
+      @ShellOption(value = {"--partitionPath"}, help = "Relative partition path to diff across range of commits") String partitionPath,
+      @ShellOption(value = {"--startTs"}, help = "start time for compactions, default: now - 10 days",
+              defaultValue = ShellOption.NULL) String startTs,
+      @ShellOption(value = {"--endTs"}, help = "end time for compactions, default: now - 1 day",
+              defaultValue = ShellOption.NULL) String endTs,
+      @ShellOption(value = {"--limit"}, help = "Limit compactions", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only", defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
+          defaultValue = "false") final boolean includeArchivedTimeline) throws IOException {
     HoodieDefaultTimeline timeline = getTimelineInRange(startTs, endTs, includeArchivedTimeline);
     return printCommitsWithMetadataForPartition(timeline, limit, sortByField, descending, headerOnly, "", partitionPath);
   }
