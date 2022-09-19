@@ -672,7 +672,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
               .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
               .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime));
       if (includeFileSlicesInPendingCompaction) {
-        return allFileSliceStream.flatMap(this::filterBaseFileAfterPendingCompaction).map(this::addBootstrapBaseFileIfPresent);
+        return allFileSliceStream.map(this::filterBaseFileAfterPendingCompaction)
+                .map(sliceStream -> Option.fromJavaOptional(sliceStream.findFirst())).filter(Option::isPresent).map(Option::get)
+                .map(this::addBootstrapBaseFileIfPresent);
       } else {
         return allFileSliceStream
                 .map(sliceStream ->
