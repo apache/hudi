@@ -111,10 +111,31 @@
 
 .embla {
     overflow: hidden;
+    width: 100%;
 }
 .embla__container {
     display: flex;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    margin-left: -10px;
 }
 .embla__slide {
-    flex: 0 0 33.33%;
+    position: relative;
+    min-width: 33.33%;
+    padding-left: 10px;
+}
+
+@media (max-width:1025px)  {
+    .embla__slide {
+        position: relative;
+        min-width: 50%;
+    }
+}
+
+@media (max-width:641px)  {
+    .embla__slide {
+        position: relative;
+        min-width: 100%;
+    }
 }
