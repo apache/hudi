@@ -353,4 +353,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
   }
 
+  Table getTable(String tableName) {
+    try {
+      return client.getTable(databaseName, tableName);
+    } catch (TException e) {
+      throw new HoodieHiveSyncException(String.format("Database: %s, Table: %s  does not exist", databaseName, tableName), e);
+    }
+  }
 }
