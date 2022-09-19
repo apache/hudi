@@ -43,9 +43,27 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
              | partitioned by(ts)
              | location '$basePath'
        """.stripMargin)
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+        spark.sql(s"insert into $tableName values(1, 'a1', 3.2d, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 5.5d, 1001)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 1.25d, 1002)")
+
+        // Check query result
+        val selectResult1 = spark.sql(s"select id, name, price, ts from $tableName where id = 1").collect()
+        assertResult(Seq(1, "a1", 3.2, 1000))(selectResult1(0).toSeq)
+
+        val selectResult2 = spark.sql(s"select id, name, price, ts from $tableName order by id").collect()
+        assertResult(3)(selectResult2.length)
+        assertResult(Seq(1, "a1", 3.2, 1000),
+          Seq(2, "a2", 5.5, 1001),
+          Seq(3, "a3", 1.25, 1002)
+        )(selectResult2(0).toSeq, selectResult2(1).toSeq, selectResult2(2).toSeq)
+
+        val selectResult3 = spark.sql(s"select id, name, price, ts from $tableName where name = 'a2'").collect()
+        assertResult(Seq(2, "a2", 5.5, 1001))(selectResult3(0).toSeq)
+
+        val selectResult4 = spark.sql(s"select id, name, price, ts from $tableName where price = 1.25").collect()
+        assertResult(Seq(3, "a3", 1.25, 1002))(selectResult4(0).toSeq)
+
         checkAnswer(s"show indexes from default.$tableName")()
 
         checkAnswer(s"create index idx_name on $tableName using lucene (name) options(block_size=1024)")()
@@ -70,6 +88,17 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           Seq("idx_name", "name", "lucene", "", "{\"block_size\":\"1024\"}"),
           Seq("idx_price", "price", "lucene", "{\"price\":{\"order\":\"desc\"}}", "{\"block_size\":\"512\"}")
         )
+
+        // Build secondary index for this table
+        spark.sql(s"call run_build(table => '$tableName')").show()
+        spark.sql(s"call show_build(table => '$tableName')").show()
+
+        // Check query result again
+        spark.sql(s"select id, name, price, ts from $tableName order by id").show()
+        assertResult(selectResult1)(spark.sql(s"select id, name, price, ts from $tableName where id = 1").collect())
+        assertResult(selectResult2)(spark.sql(s"select id, name, price, ts from $tableName order by id").collect())
+        assertResult(selectResult3)(spark.sql(s"select id, name, price, ts from $tableName where name = 'a2'").collect())
+        assertResult(selectResult4)(spark.sql(s"select id, name, price, ts from $tableName where price = 1.25").collect())
 
         checkAnswer(s"drop index idx_name on $tableName")()
         checkException(s"drop index idx_name on $tableName")("Secondary index not exists: idx_name")
