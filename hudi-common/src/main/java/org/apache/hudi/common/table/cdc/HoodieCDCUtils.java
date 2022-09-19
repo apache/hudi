@@ -31,8 +31,8 @@ public class HoodieCDCUtils {
   /* the `op` column represents how a record is changed. */
   public static final String CDC_OPERATION_TYPE = "op";
 
-  /* the `ts_ms` column represents when a record is changed. */
-  public static final String CDC_COMMIT_TIMESTAMP = "ts_ms";
+  /* the `ts` column represents when a record is changed. */
+  public static final String CDC_COMMIT_TIMESTAMP = "ts";
 
   /* the pre-image before one record is changed */
   public static final String CDC_BEFORE_IMAGE = "before";
@@ -57,7 +57,7 @@ public class HoodieCDCUtils {
   public static final String CDC_SCHEMA_STRING = "{\"type\":\"record\",\"name\":\"Record\","
       + "\"fields\":["
       + "{\"name\":\"op\",\"type\":[\"string\",\"null\"]},"
-      + "{\"name\":\"ts_ms\",\"type\":[\"string\",\"null\"]},"
+      + "{\"name\":\"ts\",\"type\":[\"string\",\"null\"]},"
       + "{\"name\":\"before\",\"type\":[\"string\",\"null\"]},"
       + "{\"name\":\"after\",\"type\":[\"string\",\"null\"]}"
       + "]}";

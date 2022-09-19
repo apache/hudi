@@ -23,10 +23,14 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -37,14 +41,12 @@ import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -52,9 +54,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+/**
+ * This class encapsulates all the cdc-writing functions.
+ */
 public class HoodieCDCLogger implements Closeable {
 
   private final String commitTime;
@@ -64,8 +68,6 @@ public class HoodieCDCLogger implements Closeable {
   private final Schema dataSchema;
 
   private final boolean populateMetaFields;
-
-  private final KeyGenerator keyGenerator;
 
   // writer for cdc data
   private final HoodieLogFormat.Writer cdcWriter;
@@ -78,9 +80,6 @@ public class HoodieCDCLogger implements Closeable {
 
   // the cdc data
   private final Map<String, HoodieAvroPayload> cdcData;
-
-  // the count of records currently being written, used to generate the same seqno for the cdc data
-  private final AtomicLong writtenRecordCount = new AtomicLong(-1);
 
   public HoodieCDCLogger(
       String commitTime,
@@ -95,12 +94,6 @@ public class HoodieCDCLogger implements Closeable {
       this.populateMetaFields = config.populateMetaFields();
       this.keyField = populateMetaFields ? HoodieRecord.RECORD_KEY_METADATA_FIELD
           : tableConfig.getRecordKeyFieldProp();
-
-      TypedProperties props = new TypedProperties();
-      props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), tableConfig.getKeyGeneratorClassName());
-      props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), tableConfig.getRecordKeyFieldProp());
-      props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), tableConfig.getPartitionFieldProp());
-      this.keyGenerator = KeyGenUtils.createKeyGeneratorByClassName(new TypedProperties(props));
       this.cdcWriter = cdcWriter;
 
       this.cdcEnabled = config.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED);
@@ -128,17 +121,12 @@ public class HoodieCDCLogger implements Closeable {
     }
   }
 
-  public void put(HoodieRecord hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
+  public void put(HoodieRecord hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> newRecord) {
     if (cdcEnabled) {
-      String recordKey;
-      if (oldRecord == null) {
-        recordKey = hoodieRecord.getRecordKey();
-      } else {
-        recordKey = this.keyGenerator.getKey(oldRecord).getRecordKey();
-      }
+      String recordKey = hoodieRecord.getRecordKey();
       GenericData.Record cdcRecord;
-      if (indexedRecord.isPresent()) {
-        GenericRecord record = (GenericRecord) indexedRecord.get();
+      if (newRecord.isPresent()) {
+        GenericRecord record = (GenericRecord) newRecord.get();
         if (oldRecord == null) {
           // inserted cdc record
           cdcRecord = createCDCRecord(HoodieCDCOperation.INSERT, recordKey,
@@ -182,10 +170,6 @@ public class HoodieCDCLogger implements Closeable {
       return newRecord;
     }
     return record;
-  }
-
-  public long getAndIncrement() {
-    return writtenRecordCount.getAndIncrement();
   }
 
   public boolean isEmpty() {
@@ -233,13 +217,42 @@ public class HoodieCDCLogger implements Closeable {
 
   @Override
   public void close() {
-    if (cdcWriter != null) {
-      try {
+    try {
+      if (cdcWriter != null) {
         cdcWriter.close();
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to close HoodieCDCLogger", e);
       }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to close HoodieCDCLogger", e);
+    } finally {
+      cdcData.clear();
     }
-    cdcData.clear();
+  }
+
+  public static void setCDCStatIfNeeded(HoodieWriteStat stat,
+                                        String partitionPath,
+                                        HoodieCDCLogger cdcLogger,
+                                        long recordsWritten,
+                                        long insertRecordsWritten,
+                                        FileSystem fs) {
+    try {
+      if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
+        // the following cases where we do not need to write out the cdc file:
+        // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
+        // case 2: all the data are new-coming,
+        return;
+      }
+
+      Option<AppendResult> cdcResult = cdcLogger.writeCDCData();
+      if (cdcResult.isPresent()) {
+        Path cdcLogFile = cdcResult.get().logFile().getPath();
+        String cdcFileName = cdcLogFile.getName();
+        String cdcPath = StringUtils.isNullOrEmpty(partitionPath) ? cdcFileName : partitionPath + "/" + cdcFileName;
+        long cdcFileSizeInBytes = FSUtils.getFileSize(fs, cdcLogFile);
+        stat.setCdcPath(cdcPath);
+        stat.setCdcWriteBytes(cdcFileSizeInBytes);
+      }
+    } catch (IOException e) {
+      throw new HoodieUpsertException("Failed to set cdc write stat", e);
+    }
   }
 }
