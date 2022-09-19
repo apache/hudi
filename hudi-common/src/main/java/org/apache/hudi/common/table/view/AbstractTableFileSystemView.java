@@ -412,19 +412,20 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * With async compaction, it is possible to see partial/complete base-files due to inflight-compactions, Ignore those
    * base-files.
    *
-   * @param fileSlice File Slice
+   * @param fileSliceStream Stream of FileSlice
    */
-  protected FileSlice filterBaseFileAfterPendingCompaction(FileSlice fileSlice) {
-    if (isFileSliceAfterPendingCompaction(fileSlice)) {
-      LOG.debug("File Slice (" + fileSlice + ") is in pending compaction");
-      // Base file is filtered out of the file-slice as the corresponding compaction
-      // instant not completed yet.
-      FileSlice transformed =
-          new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
-      fileSlice.getLogFiles().forEach(transformed::addLogFile);
-      return transformed;
-    }
-    return fileSlice;
+  protected Stream<FileSlice> filterBaseFileAfterPendingCompaction(Stream<FileSlice> fileSliceStream) {
+    return fileSliceStream.map(fileSlice -> {
+      if (isFileSliceAfterPendingCompaction(fileSlice)) {
+        LOG.debug("File Slice (" + fileSlice + ") is in pending compaction");
+        // Base file is filtered out of the file-slice as the corresponding compaction
+        // instant not completed yet.
+        FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
+        fileSlice.getLogFiles().forEach(transformed::addLogFile);
+        return transformed;
+      }
+      return fileSlice;
+    }).filter(slice -> !slice.isEmpty());
   }
 
   protected HoodieFileGroup addBootstrapBaseFileIfPresent(HoodieFileGroup fileGroup) {
@@ -605,9 +606,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
-      return fetchLatestFileSlices(partitionPath)
-          .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
-          .map(this::filterBaseFileAfterPendingCompaction)
+      return filterBaseFileAfterPendingCompaction(fetchLatestFileSlices(partitionPath)
+          .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId())))
           .map(this::addBootstrapBaseFileIfPresent);
     } finally {
       readLock.unlock();
@@ -627,7 +627,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return Option.empty();
       } else {
         Option<FileSlice> fs = fetchLatestFileSlice(partitionPath, fileId);
-        return fs.map(this::filterBaseFileAfterPendingCompaction).map(this::addBootstrapBaseFileIfPresent);
+        if (!fs.isPresent()) {
+          return Option.empty();
+        }
+        return Option.ofNullable(filterBaseFileAfterPendingCompaction(Stream.of(fs.get())).map(this::addBootstrapBaseFileIfPresent).findFirst().orElse(null));
       }
     } finally {
       readLock.unlock();
@@ -669,13 +672,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
               .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
               .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime));
       if (includeFileSlicesInPendingCompaction) {
-        return allFileSliceStream
-                .map(sliceStream ->
-                        Option.fromJavaOptional(sliceStream
-                                .map(this::filterBaseFileAfterPendingCompaction)
-                                .filter(slice -> !slice.isEmpty())
-                                .findFirst()))
-                .filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+        return allFileSliceStream.flatMap(this::filterBaseFileAfterPendingCompaction).map(this::addBootstrapBaseFileIfPresent);
       } else {
         return allFileSliceStream
                 .map(sliceStream ->
@@ -904,7 +901,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Fetch all bootstrap data files.
    */
   abstract Stream<BootstrapBaseFileMapping> fetchBootstrapBaseFiles();
-
 
   /**
    * Checks if partition is pre-loaded and available in store.
