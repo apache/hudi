@@ -1,7 +1,7 @@
 import React from "react";
 import {useBaseUrlUtils} from "@docusaurus/core/lib/client/exports/useBaseUrl";
+import Link from '@docusaurus/Link';
 
-import useLongPress from "@site/src/hooks/useLongPress";
 import AuthorName from "@site/src/components/AuthorName";
 
 import styles from "./styles.module.css";
@@ -17,34 +17,28 @@ const BlogCard = ({ blog }) => {
     formattedDate,
     title,
     authors,
+    permalink,
   } = metadata;
   const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi.png';
-  const onClick = () => {
-    window.location.href = blog.link;
-  };
-
-  const longPressEvent = useLongPress(() => {}, onClick, {
-    shouldPreventDefault: true,
-    delay: 100,
-  });
 
   return (
     <div className={styles.blogsWrapper}>
-      <div className={styles.cardBlogs} {...longPressEvent}>
-        <div>
-          <div className={styles.blogImgWrapper}>
-            <img src={withBaseUrl(image, {
-              absolute: true,
-            })} alt={title} className={styles.blogImg} />
+      <Link itemProp="url" to={permalink} className={styles.link}>
+        <div className={styles.cardBlogs}>
+          <div>
+            <div className={styles.blogImgWrapper}>
+              <img src={withBaseUrl(image, {
+                absolute: true,
+              })} alt={title} className={styles.blogImg} />
+            </div>
+            <div className={styles.blogContent}>
+              <AuthorName authors={authors} className={styles.authorName} />
+              <div className={styles.date}>{formattedDate}</div>
+            </div>
+            <h5 className={styles.blogTitle}>{title}</h5>
           </div>
-          <div className={styles.blogContent}>
-            <AuthorName authors={authors} className={styles.authorName} />
-            <div className={styles.date}>{formattedDate}</div>
-
-          </div>
-          <h5 className={styles.blogTitle}>{title}</h5>
         </div>
-      </div>
+      </Link>
     </div>
   );
 };

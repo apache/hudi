@@ -9,6 +9,7 @@
 :root {
   --ifm-color-primary-text: rgb(13, 177, 249);
   --ifm-color-secondary-text: rgb(41, 85, 122);
+  --ifm-color-black: rgba(28, 30, 33, 1);
   --ifm-navbar-link-hover-color: var(--ifm-color-primary-text);
   --ifm-link-color: var(--ifm-color-primary-text);
   --ifm-menu-color-active: var(--ifm-color-primary-text);

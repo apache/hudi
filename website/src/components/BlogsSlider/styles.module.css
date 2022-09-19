@@ -19,6 +19,12 @@
     height: 100%;
     cursor: pointer;
     transition: 0.3s;
+    color: var(--ifm-color-black);
+}
+
+.link:hover {
+    color: var(--ifm-color-black);
+    text-decoration: none;
 }
 .cardBlogs:hover {
     box-shadow: 0px 3px 12px rgba(0, 0, 0, 0.1);
