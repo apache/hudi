@@ -6,8 +6,8 @@ import HomepageFeatures from "@site/src/components/HomepageFeatures";
 import JoinCommunity from "@site/src/components/JoinCommunity";
 import WhyHudi from "@site/src/components/WhyHudi";
 import HomepageHeader from "@site/src/components/HomepageHeader";
-import BlogsSlider from "../components/BlogsSlider";
-
+import BlogsSlider from "@site/src/components/BlogsSlider";
+import styles from './styles.module.css';
 
 function NewReleaseMessage() {
   return (
@@ -25,6 +25,7 @@ export default function Home() {
     <Layout
       title={`Hello from ${siteConfig.title}`}
       description="Description will go into a meta tag in <head />"
+      wrapperClassName={styles.homePage}
     >
       <NewReleaseMessage />
       <HomepageHeader />
