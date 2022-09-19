@@ -299,7 +299,7 @@ const BlogsSlider = () => {
           />
         </div>
         <div className={styles.blogViewAllBtnWrapper}>
-          <LinkButton to="/releases/release-0.12.0" className={styles.blogBtn}>
+          <LinkButton to="/blog" className={styles.blogBtn}>
             View All
           </LinkButton>
         </div>
