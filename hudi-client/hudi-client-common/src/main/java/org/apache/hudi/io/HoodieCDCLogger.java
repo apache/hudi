@@ -121,7 +121,9 @@ public class HoodieCDCLogger implements Closeable {
     }
   }
 
-  public void put(HoodieRecord hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> newRecord) {
+  public void put(HoodieRecord hoodieRecord,
+                  GenericRecord oldRecord,
+                  Option<IndexedRecord> newRecord) {
     if (cdcEnabled) {
       String recordKey = hoodieRecord.getRecordKey();
       GenericData.Record cdcRecord;
@@ -154,7 +156,8 @@ public class HoodieCDCLogger implements Closeable {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), commitTime,
           removeCommitMetadata(oldRecord), newRecord);
     } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
-      record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey, removeCommitMetadata(oldRecord));
+      record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey,
+          removeCommitMetadata(oldRecord));
     } else {
       record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey);
     }
@@ -208,9 +211,11 @@ public class HoodieCDCLogger implements Closeable {
     if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, HoodieCDCUtils.CDC_SCHEMA_STRING);
     } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE_STRING);
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA,
+          HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE_STRING);
     } else {
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY_STRING);
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA,
+          HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY_STRING);
     }
     return header;
   }
