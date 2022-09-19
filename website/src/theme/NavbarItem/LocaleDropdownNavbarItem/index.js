@@ -9,6 +9,8 @@ import DropdownNavbarItem from "@theme/NavbarItem/DropdownNavbarItem";
 import IconLanguage from "@theme/IconLanguage";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import { useAlternatePageUtils } from "@docusaurus/theme-common";
+import Globe from '../Icons/globe.svg';
+
 import styles from "./styles.module.css";
 export default function LocaleDropdownNavbarItem({
   mobile,
@@ -46,6 +48,7 @@ export default function LocaleDropdownNavbarItem({
     <DropdownNavbarItem
       {...props}
       mobile={mobile}
+      customIcon={Globe}
       label={
         <span>
           <IconLanguage className={styles.iconLanguage} />

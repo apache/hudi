@@ -24,6 +24,7 @@ export function NavLink({
   activeClassName = "",
   prependBaseUrlToHref,
   isDropdownNavbarItem,
+  customIcon,
   ...props
 }) {
   // TODO all this seems hacky
@@ -35,6 +36,7 @@ export function NavLink({
   });
   const isExternalLink = label && href && !isInternalUrl(href);
   const isDropdownLink = activeClassName === dropdownLinkActiveClass;
+  const CustomIcon = customIcon;
   return (
     <Link
       {...(href
@@ -71,7 +73,7 @@ export function NavLink({
       ) : (
         <div className={styles.labelWrapperDropdown}>
           {label}
-          {isDropdownNavbarItem && <ArrowDown />}
+          {isDropdownNavbarItem && (CustomIcon ? <CustomIcon /> : <ArrowDown />)}
         </div>
       )}
     </Link>
