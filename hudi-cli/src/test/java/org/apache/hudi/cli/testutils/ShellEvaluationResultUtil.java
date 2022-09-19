@@ -16,28 +16,21 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.cli;
+package org.apache.hudi.cli.testutils;
 
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
-import org.springframework.shell.plugin.support.DefaultHistoryFileNameProvider;
-import org.springframework.stereotype.Component;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-/**
- * CLI history file provider.
- */
-@Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
-public class HoodieHistoryFileNameProvider extends DefaultHistoryFileNameProvider {
+public class ShellEvaluationResultUtil {
+  private static final Logger LOGGER = LogManager.getLogger(ShellEvaluationResultUtil.class);
+  private ShellEvaluationResultUtil() {}
 
-  @Override
-  public String getHistoryFileName() {
-    return "hoodie-cmd.log";
+  public static boolean isSuccess(Object shellEvaluationResult) {
+    boolean hasError = shellEvaluationResult instanceof Throwable;
+    if (hasError) {
+      Throwable throwable = (Throwable) shellEvaluationResult;
+      LOGGER.error(throwable.toString());
+    }
+    return !hasError;
   }
-
-  @Override
-  public String getProviderName() {
-    return "Hoodie file name provider";
-  }
-
 }

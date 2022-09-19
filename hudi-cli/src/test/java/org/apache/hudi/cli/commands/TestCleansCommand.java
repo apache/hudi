@@ -25,6 +25,7 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -44,7 +45,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.io.IOException;
 import java.net.URL;
@@ -63,7 +66,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test Cases for {@link CleansCommand}.
  */
 @Tag("functional")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class TestCleansCommand extends CLIFunctionalTestHarness {
+
+  @Autowired
+  private Shell shell;
 
   private URL propsFilePath;
   private HoodieTableMetaClient metaClient;
@@ -123,8 +130,8 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
     assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count(),
         "Loaded 1 clean and the count should match");
 
-    CommandResult cr = shell().executeCommand("cleans show");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "cleans show");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().findFirst().orElse(null);
     assertNotNull(clean);
@@ -142,7 +149,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -161,8 +168,8 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
     HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().findFirst().get();
 
-    CommandResult cr = shell().executeCommand("clean showpartitions --clean " + clean.getTimestamp());
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "clean showpartitions --clean " + clean.getTimestamp());
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_CLEANING_POLICY)
@@ -180,7 +187,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 

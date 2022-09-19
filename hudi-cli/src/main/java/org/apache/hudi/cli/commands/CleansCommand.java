@@ -32,13 +32,12 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.utilities.UtilHelpers;
-
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
+import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -48,21 +47,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import scala.collection.JavaConverters;
-
 /**
  * CLI command to show cleans options.
  */
-@Component
-public class CleansCommand implements CommandMarker {
+@ShellComponent
+public class CleansCommand {
 
-  @CliCommand(value = "cleans show", help = "Show the cleans")
+  @ShellMethod(key = "cleans show", value = "Show the cleans")
   public String showCleans(
-      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
@@ -84,14 +81,14 @@ public class CleansCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "clean showpartitions", help = "Show partition level details of a clean")
+  @ShellMethod(key = "clean showpartitions", value = "Show partition level details of a clean")
   public String showCleanPartitions(
-      @CliOption(key = {"clean"}, help = "clean to show") final String instantTime,
-      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--clean"}, help = "clean to show") final String instantTime,
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly)
       throws Exception {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
@@ -122,15 +119,15 @@ public class CleansCommand implements CommandMarker {
 
   }
 
-  @CliCommand(value = "cleans run", help = "run clean")
+  @ShellMethod(key = "cleans run", value = "run clean")
   public String runClean(
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+      @ShellOption(value = "--sparkMemory", defaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory,
-      @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for cleaning",
-          unspecifiedDefaultValue = "") final String propsFilePath,
-      @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
-          unspecifiedDefaultValue = "") final String[] configs,
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master ") String master) throws IOException, InterruptedException, URISyntaxException {
+      @ShellOption(value = "--propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for cleaning",
+          defaultValue = "") final String propsFilePath,
+      @ShellOption(value = "--hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+          defaultValue = "") final String[] configs,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master ") String master) throws IOException, InterruptedException, URISyntaxException {
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
