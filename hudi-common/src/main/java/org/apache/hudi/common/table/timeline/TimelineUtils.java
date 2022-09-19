@@ -53,7 +53,7 @@ public class TimelineUtils {
    * Returns partitions that have new data strictly after commitTime.
    * Does not include internal operations such as clean in the timeline.
    */
-  public static List<String> getPartitionsWritten(HoodieTimeline timeline) {
+  public static List<String> getWrittenPartitions(HoodieTimeline timeline) {
     HoodieTimeline timelineToSync = timeline.getWriteTimeline();
     return getAffectedPartitions(timelineToSync);
   }
@@ -62,7 +62,7 @@ public class TimelineUtils {
    * Returns partitions that have been deleted or marked for deletion in the given timeline.
    * Does not include internal operations such as clean in the timeline.
    */
-  public static List<String> getPartitionsDropped(HoodieTimeline timeline) {
+  public static List<String> getDroppedPartitions(HoodieTimeline timeline) {
     HoodieTimeline replaceCommitTimeline = timeline.getWriteTimeline().filterCompletedInstants().getCompletedReplaceTimeline();
 
     return replaceCommitTimeline.getInstants().flatMap(instant -> {

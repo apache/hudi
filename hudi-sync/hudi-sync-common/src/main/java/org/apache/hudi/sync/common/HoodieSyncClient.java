@@ -20,17 +20,13 @@ package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
@@ -91,12 +87,12 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
    * If last sync time is not known then consider only active timeline.
    * Going through archive timeline is a costly operation, and it should be avoided unless some start time is given.
    */
-  public Set<String> getDroppedPartitions(Option<String> lastCommitTimeSynced) {
+  public Set<String> getDroppedPartitionsSince(Option<String> lastCommitTimeSynced) {
     HoodieTimeline timeline = lastCommitTimeSynced.isPresent() ? metaClient.getArchivedTimeline(lastCommitTimeSynced.get())
         .mergeTimeline(metaClient.getActiveTimeline())
         .getCommitsTimeline()
         .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE) : metaClient.getActiveTimeline();
-    return new HashSet<>(TimelineUtils.getPartitionsDropped(timeline));
+    return new HashSet<>(TimelineUtils.getDroppedPartitions(timeline));
   }
 
   @Override
@@ -108,7 +104,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     }
   }
 
-  public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
+  public List<String> getWrittenPartitionsSince(Option<String> lastCommitTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in "
           + config.getString(META_SYNC_BASE_PATH)
@@ -120,7 +116,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
           config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION));
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
-      return TimelineUtils.getPartitionsWritten(
+      return TimelineUtils.getWrittenPartitions(
           metaClient.getArchivedTimeline(lastCommitTimeSynced.get())
               .mergeTimeline(metaClient.getActiveTimeline())
               .getCommitsTimeline()
@@ -162,24 +158,5 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       }
     }
     return events;
-  }
-
-  /**
-   * Get Last commit's Metadata.
-   */
-  private static Option<HoodieCommitMetadata> getLatestCommitMetadata(HoodieTableMetaClient metaClient) {
-    try {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      if (timeline.lastInstant().isPresent()) {
-        HoodieInstant instant = timeline.lastInstant().get();
-        byte[] data = timeline.getInstantDetails(instant).get();
-        return HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction()) ? Option.of(HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class)) :
-            Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
-      } else {
-        return Option.empty();
-      }
-    } catch (Exception e) {
-      throw new HoodieException("Failed to get commit metadata", e);
-    }
   }
 }

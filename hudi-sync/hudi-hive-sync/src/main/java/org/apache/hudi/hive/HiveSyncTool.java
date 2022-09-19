@@ -223,12 +223,12 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
     }
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
-    List<String> writtenPartitionsSince = syncClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
+    List<String> writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced);
     LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
 
     // Sync the partitions if needed
     // find dropped partitions, if any, in the latest commit
-    Set<String> droppedPartitions = syncClient.getDroppedPartitions(lastCommitTimeSynced);
+    Set<String> droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced);
     boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
     boolean meetSyncConditions = schemaChanged || partitionsChanged;
     if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions) {
