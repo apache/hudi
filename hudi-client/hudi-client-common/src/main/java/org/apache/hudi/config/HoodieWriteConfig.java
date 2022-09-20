@@ -139,8 +139,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MERGER_STRATEGY = ConfigProperty
       .key("hoodie.datasource.write.merger.strategy")
-      .defaultValue(StringUtils.DEFAULT_MERGER_STRATEGY_UUID)
-      .withDocumentation("Id of merger strategy.  Hudi will pick RecordMergers in hoodie.datasource.write.merger.impls which has the same merger strategy id");
+      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.class")

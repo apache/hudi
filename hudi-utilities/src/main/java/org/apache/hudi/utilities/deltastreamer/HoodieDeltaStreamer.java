@@ -34,6 +34,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -280,8 +281,8 @@ public class HoodieDeltaStreamer implements Serializable {
         + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)")
     public String mergerImpls = HoodieAvroRecordMerger.class.getName();
 
-    @Parameter(names = {"--merger-strategy"}, description = "Id of merger strategy. Hudi will pick RecordMergers in merger-impls which has the same merger strategy id")
-    public String mergerStrategy = StringUtils.DEFAULT_MERGER_STRATEGY_UUID;
+    @Parameter(names = {"--merger-strategy"}, description = "Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in merger-impls which has the same merger strategy id")
+    public String mergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 
     @Parameter(names = {"--schemaprovider-class"}, description = "subclass of org.apache.hudi.utilities.schema"
         + ".SchemaProvider to attach schemas to input & target table data, built in options: "

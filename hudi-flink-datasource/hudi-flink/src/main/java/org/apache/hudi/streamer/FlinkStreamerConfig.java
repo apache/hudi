@@ -21,6 +21,7 @@ package org.apache.hudi.streamer;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.StringUtils;
@@ -124,8 +125,8 @@ public class FlinkStreamerConfig extends Configuration {
       + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)")
   public String mergerImpls = HoodieAvroRecordMerger.class.getName();
 
-  @Parameter(names = {"--merger-strategy"}, description = "Id of merger strategy. Hudi will pick RecordMergers in merger-impls which has the same merger strategy id")
-  public String mergerStrategy = StringUtils.DEFAULT_MERGER_STRATEGY_UUID;
+  @Parameter(names = {"--merger-strategy"}, description = "Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in merger-impls which has the same merger strategy id")
+  public String mergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 
   @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
       + "is purely new data/inserts to gain speed).", converter = OperationConverter.class)

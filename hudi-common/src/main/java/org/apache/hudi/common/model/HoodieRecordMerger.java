@@ -37,6 +37,8 @@ import java.util.Properties;
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface HoodieRecordMerger extends Serializable {
 
+  String DEFAULT_MERGER_STRATEGY_UUID = "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5";
+
   /**
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.
    * It'd be associative operation: f(a, f(b, c)) = f(f(a, b), c) (which we can translate as having 3 versions A, B, C

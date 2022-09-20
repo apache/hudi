@@ -83,7 +83,7 @@ public abstract class BaseMergeHelper<T, I, K, O> {
   @Nonnull
   private static HoodieRecord mergeRecords(HoodieRecord left, HoodieRecord right, Schema targetSchema) {
     try {
-      return left.mergeWith(right, targetSchema);
+      return left.joinWith(right, targetSchema);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to merge records", e);
     }

@@ -123,7 +123,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public HoodieRecord mergeWith(HoodieRecord other, Schema targetSchema) throws IOException {
+  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) throws IOException {
     StructType otherStructType = ((HoodieSparkRecord) other).getStructType();
     StructType writerStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
     InternalRow mergeRow = HoodieInternalRowUtils.stitchRecords(data, getStructType(), (InternalRow) other.getData(), otherStructType, writerStructType);
