@@ -174,9 +174,10 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
-   * Update the table SerDeInfo in metastore.
+   * Update the SerDe properties in metastore.
    */
-  default void updateTableSerDeInfo(String tableName, String serdeClass, Map<String, String> serdeProperties) {
+  default void updateSerdeProperties(String tableName, Map<String, String> serdeProperties) {
+
   }
 
   /**
