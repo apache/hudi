@@ -18,11 +18,14 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
@@ -52,6 +55,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
@@ -115,7 +119,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
-    if (tableProperties == null || tableProperties.isEmpty()) {
+    if (MapUtils.isNullOrEmpty(tableProperties)) {
       return;
     }
     try {
@@ -130,34 +134,29 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
   }
 
-  /**
-   * Update the table serde properties to the table.
-   */
   @Override
-  public void updateTableSerDeInfo(String tableName, String serdeClass, Map<String, String> serdeProperties) {
-    if (serdeProperties == null || serdeProperties.isEmpty()) {
+  public void updateSerdeProperties(String tableName, Map<String, String> serdeProperties) {
+    if (MapUtils.isNullOrEmpty(serdeProperties)) {
       return;
     }
     try {
+      serdeProperties.putIfAbsent("serialization.format", "1");
       Table table = client.getTable(databaseName, tableName);
-      serdeProperties.put("serialization.format", "1");
       StorageDescriptor storageDescriptor = table.getSd();
       SerDeInfo serdeInfo = storageDescriptor.getSerdeInfo();
       if (serdeInfo != null && serdeInfo.getParametersSize() == serdeProperties.size()) {
         Map<String, String> parameters = serdeInfo.getParameters();
-        boolean same = true;
-        for (String key : serdeProperties.keySet()) {
-          if (!parameters.containsKey(key) | !parameters.get(key).equals(serdeProperties.get(key))) {
-            same = false;
-            break;
-          }
-        }
-        if (same) {
-          LOG.debug("Table " + tableName + " serdeProperties already up to date, skip update");
+        boolean different = serdeProperties.entrySet().stream().anyMatch(e ->
+            !parameters.containsKey(e.getKey()) || !parameters.get(e.getKey()).equals(e.getValue()));
+        if (!different) {
+          LOG.debug("Table " + tableName + " serdeProperties already up to date, skip update serde properties.");
           return;
         }
       }
-      storageDescriptor.setSerdeInfo(new SerDeInfo(null, serdeClass, serdeProperties));
+
+      HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
+      String serDeClassName = HoodieInputFormatUtils.getSerDeClassName(baseFileFormat);
+      storageDescriptor.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
       client.alter_table(databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to update table serde info for table: "
@@ -353,11 +352,4 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
   }
 
-  Table getTable(String tableName) {
-    try {
-      return client.getTable(databaseName, tableName);
-    } catch (TException e) {
-      throw new HoodieHiveSyncException(String.format("Database: %s, Table: %s  does not exist", databaseName, tableName), e);
-    }
-  }
 }
