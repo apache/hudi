@@ -314,7 +314,6 @@ class TestDropTable extends HoodieSparkSqlTestBase {
     }
   }
 
-
   test("Drop an MANAGED table which path is lost.") {
     val tableName = generateTableName
     spark.sql(
@@ -339,6 +338,28 @@ class TestDropTable extends HoodieSparkSqlTestBase {
     filesystem.delete(tablePath, true)
     spark.sql(s"drop table ${tableName}")
     checkAnswer("show tables")()
+  }
+
+  test("Drop local temporary view should not fail") {
+    val viewName = generateTableName
+    spark.sql(
+      s"""
+         |create temporary view $viewName as
+         | select 1
+         |""".stripMargin)
+
+    spark.sql(s"drop view $viewName")
+  }
+
+  test("Drop global temporary view should not fail") {
+    val viewName = generateTableName
+    spark.sql(
+      s"""
+         |create global temporary view $viewName as
+         | select 1
+         |""".stripMargin)
+
+    spark.sql(s"drop view global_temp.$viewName")
   }
 
   private def alterSerdeProperties(sessionCatalog: SessionCatalog, tableIdt: TableIdentifier,
