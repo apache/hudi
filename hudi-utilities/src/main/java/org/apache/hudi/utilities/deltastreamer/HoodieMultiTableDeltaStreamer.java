@@ -135,6 +135,7 @@ public class HoodieMultiTableDeltaStreamer {
       if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), ""))) {
         throw new HoodieException("Meta sync table field not provided!");
       }
+      populateTransformerProps(cfg, tableProperties);
       populateSchemaProviderProps(cfg, tableProperties);
       executionContext = new TableExecutionContext();
       executionContext.setProperties(tableProperties);
@@ -142,6 +143,13 @@ public class HoodieMultiTableDeltaStreamer {
       executionContext.setDatabase(database);
       executionContext.setTableName(currentTable);
       this.tableExecutionContexts.add(executionContext);
+    }
+  }
+
+  private void populateTransformerProps(HoodieDeltaStreamer.Config cfg, TypedProperties typedProperties) {
+    String transformerClassNameOverride = typedProperties.getString(Constants.TRANSFORMER_CLASS, null);
+    if (not StringUtils.isNullOrEmpty(transformerClassNameOverride)) {
+      cfg.transformerClassNames = transformerClassNameOverride;
     }
   }
 
@@ -458,6 +466,7 @@ public class HoodieMultiTableDeltaStreamer {
     private static final String DELIMITER = ".";
     private static final String UNDERSCORE = "_";
     private static final String COMMA_SEPARATOR = ",";
+    private static final String TRANSFORMER_CLASS = "hoodie.deltastreamer.transformer.class";
   }
 
   public Set<String> getSuccessTables() {
