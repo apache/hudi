@@ -15,7 +15,7 @@ There are two configurations required for Hudi-S3 compatibility:
 
 ### AWS Credentials
 
-Simplest way to use Hudi with S3, is to configure your `SparkSession` or `SparkContext` with S3 credentials. Hudi will automatically pick this up and talk to S3.
+The simplest way to use Hudi with S3, is to configure your `SparkSession` or `SparkContext` with S3 credentials. Hudi will automatically pick this up and talk to S3.
 
 Alternatively, add the required configs in your core-site.xml from where Hudi can fetch them. Replace the `fs.defaultFS` with your S3 bucket name and Hudi should be able to read/write from the bucket.
 
@@ -23,11 +23,6 @@ Alternatively, add the required configs in your core-site.xml from where Hudi ca
   <property>
       <name>fs.defaultFS</name>
       <value>s3://ysharma</value>
-  </property>
-
-  <property>
-      <name>fs.s3.impl</name>
-      <value>org.apache.hadoop.fs.s3native.NativeS3FileSystem</value>
   </property>
 
   <property>
@@ -41,13 +36,28 @@ Alternatively, add the required configs in your core-site.xml from where Hudi ca
   </property>
 
   <property>
-       <name>fs.s3n.awsAccessKeyId</name>
+       <name>fs.s3a.awsAccessKeyId</name>
        <value>AWS_KEY</value>
   </property>
 
   <property>
-       <name>fs.s3n.awsSecretAccessKey</name>
+       <name>fs.s3a.awsSecretAccessKey</name>
        <value>AWS_SECRET</value>
+  </property>
+
+<property>
+       <name>fs.s3a.endpoint</name>
+       <value>http://IP-Address:Port</value>
+  </property>
+
+<property>
+       <name>fs.s3a.path.style.access</name>
+       <value>true</value>
+  </property>
+
+<property>
+       <name>fs.s3a.signing-algorithm</name>
+       <value>S3SignerType</value>
   </property>
 ```
 
@@ -60,9 +70,6 @@ export HOODIE_ENV_fs_DOT_s3a_DOT_access_DOT_key=$accessKey
 export HOODIE_ENV_fs_DOT_s3a_DOT_secret_DOT_key=$secretKey
 export HOODIE_ENV_fs_DOT_s3_DOT_awsAccessKeyId=$accessKey
 export HOODIE_ENV_fs_DOT_s3_DOT_awsSecretAccessKey=$secretKey
-export HOODIE_ENV_fs_DOT_s3n_DOT_awsAccessKeyId=$accessKey
-export HOODIE_ENV_fs_DOT_s3n_DOT_awsSecretAccessKey=$secretKey
-export HOODIE_ENV_fs_DOT_s3n_DOT_impl=org.apache.hadoop.fs.s3a.S3AFileSystem
 ```
 
 
