@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
-import org.apache.hudi.JavaSparkAdaptorSupport;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -400,8 +400,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     params.put("glob.paths", readPathString);
 
     // Let Hudi relations to fetch the schema from the table itself
-    BaseRelation relation = JavaSparkAdaptorSupport.sparkAdapter()
-        .createRelation(getHoodieTable().getMetaClient(), sqlContext, null, paths, params);
+    BaseRelation relation = SparkAdapterSupport$.MODULE$.sparkAdapter()
+        .createRelation(sqlContext, getHoodieTable().getMetaClient(), null, paths, params);
     return sqlContext.baseRelationToDataFrame(relation);
   }
 

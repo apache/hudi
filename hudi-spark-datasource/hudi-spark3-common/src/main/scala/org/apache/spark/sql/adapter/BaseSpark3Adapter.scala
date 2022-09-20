@@ -93,13 +93,13 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     Predicate.createInterpreted(e)
   }
 
-  override def createRelation(metaClient: HoodieTableMetaClient,
-                              sqlContext: SQLContext,
+  override def createRelation(sqlContext: SQLContext,
+                              metaClient: HoodieTableMetaClient,
                               schema: Schema,
                               globPaths: Array[Path],
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
-    DefaultSource.createRelation(metaClient, sqlContext, dataSchema, globPaths, parameters.asScala.toMap)
+    DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
   }
 
   /**

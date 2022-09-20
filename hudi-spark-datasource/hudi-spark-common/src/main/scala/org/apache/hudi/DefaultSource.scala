@@ -107,12 +107,8 @@ class DefaultSource extends RelationProvider
     log.info("Obtained hudi table path: " + tablePath)
 
     val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
-    val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
-    val tableType = metaClient.getTableType
-    val queryType = parameters(QUERY_TYPE.key)
-    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
-    DefaultSource.createRelation(metaClient, sqlContext, schema, globPaths, parameters)
+    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
   }
 
   def getValidCommits(metaClient: HoodieTableMetaClient): String = {
@@ -199,14 +195,19 @@ class DefaultSource extends RelationProvider
 
 object DefaultSource {
 
-  def createRelation(metaClient: HoodieTableMetaClient,
-                     sqlContext: SQLContext,
+  private val log = LogManager.getLogger(classOf[DefaultSource])
+
+  def createRelation(sqlContext: SQLContext,
+                     metaClient: HoodieTableMetaClient,
                      schema: StructType,
                      globPaths: Seq[Path],
                      parameters: Map[String, String]): BaseRelation = {
     val tableType = metaClient.getTableType
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val queryType = parameters(QUERY_TYPE.key)
+
+    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+
     // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
     //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
     //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema

@@ -31,10 +31,9 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
-import java.util
-import java.util.{function, stream}
 import scala.collection.JavaConversions._
 
 @Tag("functional")
@@ -85,8 +84,8 @@ class TestLayoutOptimization extends HoodieClientTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("testLayoutOptimizationParameters"))
-  def testLayoutOptimizationFunctional(clusteringAsRow: String,
-                                       tableType: String,
+  def testLayoutOptimizationFunctional(tableType: String,
+                                       clusteringAsRow: String,
                                        layoutOptimizationStrategy: String,
                                        spatialCurveCompositionStrategy: String): Unit = {
     val curveCompositionStrategy =
@@ -167,27 +166,29 @@ class TestLayoutOptimization extends HoodieClientTestBase {
 
 object TestLayoutOptimization {
   def testLayoutOptimizationParameters(): java.util.stream.Stream[Arguments] = {
+    // TableType, enableClusteringAsRow, layoutOptimizationStrategy, spatialCurveCompositionStrategy
     java.util.stream.Stream.of(
-      Seq("COPY_ON_WRITE", "linear", null),
-      Seq("COPY_ON_WRITE", "z-order", "direct"),
-      Seq("COPY_ON_WRITE", "z-order", "sample"),
-      Seq("COPY_ON_WRITE", "hilbert", "direct"),
-      Seq("COPY_ON_WRITE", "hilbert", "sample"),
-      Seq("MERGE_ON_READ", "linear", null),
-      Seq("MERGE_ON_READ", "z-order", "direct"),
-      Seq("MERGE_ON_READ", "z-order", "sample"),
-      Seq("MERGE_ON_READ", "hilbert", "direct"),
-      Seq("MERGE_ON_READ", "hilbert", "sample")
-    ).flatMap(new function.Function[Seq[String], util.stream.Stream[Arguments]] {
-      override def apply(args: Seq[String]): stream.Stream[Arguments] = {
-        val enableRowClusteringArgs = "true" +: args
-        val disableRowClusteringArgs = "false" +: args
+      arguments("COPY_ON_WRITE", "true", "linear", null),
+      arguments("COPY_ON_WRITE", "true", "z-order", "direct"),
+      arguments("COPY_ON_WRITE", "true", "z-order", "sample"),
+      arguments("COPY_ON_WRITE", "true", "hilbert", "direct"),
+      arguments("COPY_ON_WRITE", "true", "hilbert", "sample"),
+      arguments("COPY_ON_WRITE", "false", "linear", null),
+      arguments("COPY_ON_WRITE", "false", "z-order", "direct"),
+      arguments("COPY_ON_WRITE", "false", "z-order", "sample"),
+      arguments("COPY_ON_WRITE", "false", "hilbert", "direct"),
+      arguments("COPY_ON_WRITE", "false", "hilbert", "sample"),
 
-        java.util.stream.Stream.of(
-        Arguments.of(enableRowClusteringArgs.toArray:_*),
-        Arguments.of(disableRowClusteringArgs.toArray:_*)
-        )
-      }
-    })
+      arguments("MERGE_ON_READ", "true", "linear", null),
+      arguments("MERGE_ON_READ", "true", "z-order", "direct"),
+      arguments("MERGE_ON_READ", "true", "z-order", "sample"),
+      arguments("MERGE_ON_READ", "true", "hilbert", "direct"),
+      arguments("MERGE_ON_READ", "true", "hilbert", "sample"),
+      arguments("MERGE_ON_READ", "false", "linear", null),
+      arguments("MERGE_ON_READ", "false", "z-order", "direct"),
+      arguments("MERGE_ON_READ", "false", "z-order", "sample"),
+      arguments("MERGE_ON_READ", "false", "hilbert", "direct"),
+      arguments("MERGE_ON_READ", "false", "hilbert", "sample")
+    )
   }
 }

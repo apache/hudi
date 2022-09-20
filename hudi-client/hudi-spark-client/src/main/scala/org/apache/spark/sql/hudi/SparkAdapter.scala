@@ -153,8 +153,8 @@ trait SparkAdapter extends Serializable {
   /**
    * Create Hoodie relation based on globPaths, otherwise use tablePath if it's empty
    */
-  def createRelation(metaClient: HoodieTableMetaClient,
-                     sqlContext: SQLContext,
+  def createRelation(sqlContext: SQLContext,
+                     metaClient: HoodieTableMetaClient,
                      schema: Schema,
                      globPaths: Array[Path],
                      parameters: java.util.Map[String, String]): BaseRelation

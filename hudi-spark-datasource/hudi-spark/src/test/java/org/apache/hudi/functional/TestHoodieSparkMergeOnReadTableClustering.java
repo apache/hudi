@@ -47,7 +47,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
@@ -60,26 +59,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> testClustering() {
+    // enableClusteringAsRow, doUpdates, populateMetaFields, preserveCommitMetadata
     return Stream.of(
-        Arrays.asList(true, true, true),
-        Arrays.asList(true, true, false),
-        Arrays.asList(true, false, true),
-        Arrays.asList(true, false, false),
-        Arrays.asList(false, true, true),
-        Arrays.asList(false, true, false),
-        Arrays.asList(false, false, true),
-        Arrays.asList(false, false, false))
-        .flatMap(arguments -> {
-          ArrayList<Boolean> enableRowClusteringArgs = new ArrayList<>();
-          enableRowClusteringArgs.add(true);
-          enableRowClusteringArgs.addAll(arguments);
-          ArrayList<Boolean> disableRowClusteringArgs = new ArrayList<>();
-          disableRowClusteringArgs.add(false);
-          disableRowClusteringArgs.addAll(arguments);
-          return Stream.of(
-              Arguments.of(enableRowClusteringArgs.toArray(new Boolean[0])),
-              Arguments.of(disableRowClusteringArgs.toArray(new Boolean[0])));
-        });
+        Arguments.of(true, true, true, true),
+        Arguments.of(true, true, true, false),
+        Arguments.of(true, true, false, true),
+        Arguments.of(true, true, false, false),
+        Arguments.of(true, false, true, true),
+        Arguments.of(true, false, true, false),
+        Arguments.of(true, false, false, true),
+        Arguments.of(true, false, false, false),
+        Arguments.of(false, true, true, true),
+        Arguments.of(false, true, true, false),
+        Arguments.of(false, true, false, true),
+        Arguments.of(false, true, false, false),
+        Arguments.of(false, false, true, true),
+        Arguments.of(false, false, true, false),
+        Arguments.of(false, false, false, true),
+        Arguments.of(false, false, false, false)
+    );
   }
 
   @ParameterizedTest
