@@ -290,6 +290,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         // Sync the table properties if the schema has changed
         if (config.getString(HIVE_TABLE_PROPERTIES) != null || config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
           syncClient.updateTableProperties(tableName, tableProperties);
+          HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
+          String serDeFormatClassName = HoodieInputFormatUtils.getSerDeClassName(baseFileFormat);
+          syncClient.updateTableSerDeInfo(tableName, serDeFormatClassName, serdeProperties);
           LOG.info("Sync table properties for " + tableName + ", table properties is: " + tableProperties);
         }
         schemaChanged = true;
