@@ -857,7 +857,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites(skipLocking));
 
-    HoodieCleanMetadata metadata = null;
     HoodieTable table = createTable(config, hadoopConf);
     if (config.allowMultipleCleans() || !table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
       LOG.info("Cleaner started");
@@ -866,15 +865,16 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
         table.getMetaClient().reloadActiveTimeline();
       }
+    }
 
-      metadata = table.clean(context, cleanInstantTime, skipLocking);
-      if (timerContext != null && metadata != null) {
-        long durationMs = metrics.getDurationInMs(timerContext.stop());
-        metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
-        LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files"
-            + " Earliest Retained Instant :" + metadata.getEarliestCommitToRetain()
-            + " cleanerElapsedMs" + durationMs);
-      }
+    // Proceeds to execute any requested or inflight clean instances in the timeline
+    HoodieCleanMetadata metadata = table.clean(context, cleanInstantTime, skipLocking);
+    if (timerContext != null && metadata != null) {
+      long durationMs = metrics.getDurationInMs(timerContext.stop());
+      metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
+      LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files"
+          + " Earliest Retained Instant :" + metadata.getEarliestCommitToRetain()
+          + " cleanerElapsedMs" + durationMs);
     }
     return metadata;
   }

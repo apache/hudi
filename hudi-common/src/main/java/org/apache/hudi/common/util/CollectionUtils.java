@@ -44,7 +44,15 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public class CollectionUtils {
 
-  public static final Properties EMPTY_PROPERTIES = new Properties();
+  private static final Properties EMPTY_PROPERTIES = new Properties();
+
+  /**
+   * Returns an empty {@code Properties} instance. The props instance is a singleton,
+   * it should not be modified in any case.
+   */
+  public static Properties emptyProps() {
+    return EMPTY_PROPERTIES;
+  }
 
   public static boolean isNullOrEmpty(Collection<?> c) {
     return Objects.isNull(c) || c.isEmpty();

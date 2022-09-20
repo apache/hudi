@@ -255,7 +255,7 @@ public class TestCleaner extends HoodieClientTestBase {
 
 
   /**
-   * Tests no more than 1 clean is scheduled/executed if HoodieCompactionConfig.allowMultipleCleanSchedule config is disabled.
+   * Tests no more than 1 clean is scheduled if hoodie.clean.allow.multiple config is set to false.
    */
   @Test
   public void testMultiClean() {
@@ -299,22 +299,27 @@ public class TestCleaner extends HoodieClientTestBase {
       client.startCommitWithTime(newCommitTime);
       client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
 
-      // Initiate another clean. The previous leftover clean will be attempted first, followed by another clean
-      // due to the commit above.
+      // Try to schedule another clean
       String newCleanInstantTime = "00" + index++;
       HoodieCleanMetadata cleanMetadata = client.clean(newCleanInstantTime);
-      // subsequent clean should not be triggered since allowMultipleCleanSchedules is set to false
-      assertNull(cleanMetadata);
-
-      // let the old clean complete
-      table = HoodieSparkTable.create(writeConfig, context);
-      cleanMetadata = table.clean(context, cleanInstantTime, false);
+      // When hoodie.clean.allow.multiple is set to false, a new clean action should not be scheduled.
+      // The existing requested clean should complete execution.
       assertNotNull(cleanMetadata);
+      assertTrue(metaClient.reloadActiveTimeline().getCleanerTimeline()
+          .filterCompletedInstants().containsInstant(cleanInstantTime));
+      assertFalse(metaClient.getActiveTimeline().getCleanerTimeline()
+          .containsInstant(newCleanInstantTime));
 
-      // any new clean should go ahead
+      // 1 file cleaned
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 1);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size(), 0);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns().size(), 1);
+
+      // Now that there is no requested or inflight clean instant, a new clean action can be scheduled
       cleanMetadata = client.clean(newCleanInstantTime);
-      // subsequent clean should not be triggered since allowMultipleCleanSchedules is set to false
       assertNotNull(cleanMetadata);
+      assertTrue(metaClient.reloadActiveTimeline().getCleanerTimeline()
+          .containsInstant(newCleanInstantTime));
 
       // 1 file cleaned
       assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 1);

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.FileSlice;
@@ -233,7 +233,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc().parallelize(updatedRecords, 1);
 
-      HoodieReadClient readClient = new HoodieReadClient(context(), config);
+      SparkRDDReadClient readClient = new SparkRDDReadClient(context(), config);
       JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = readClient.tagLocation(updatedRecordsRDD);
 
       writeClient.startCommitWithTime(newCommitTime);

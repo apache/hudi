@@ -20,25 +20,23 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.exception.HoodieException;
-
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 /**
  * CLI command to query/delete temp views.
  */
-@Component
-public class TempViewCommand implements CommandMarker {
+@ShellComponent
+public class TempViewCommand {
 
   public static final String QUERY_SUCCESS = "Query ran successfully!";
   public static final String QUERY_FAIL = "Query ran failed!";
   public static final String SHOW_SUCCESS = "Show all views name successfully!";
 
-  @CliCommand(value = {"temp_query", "temp query"}, help = "query against created temp view")
+  @ShellMethod(key = {"temp_query", "temp query"}, value = "query against created temp view")
   public String query(
-      @CliOption(key = {"sql"}, mandatory = true, help = "select query to run against view") final String sql) {
+      @ShellOption(value = {"--sql"}, help = "select query to run against view") final String sql) {
 
     try {
       HoodieCLI.getTempViewProvider().runQuery(sql);
@@ -49,7 +47,7 @@ public class TempViewCommand implements CommandMarker {
 
   }
 
-  @CliCommand(value = {"temps_show", "temps show"}, help = "Show all views name")
+  @ShellMethod(key = {"temps_show", "temps show"}, value = "Show all views name")
   public String showAll() {
 
     try {
@@ -60,9 +58,9 @@ public class TempViewCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = {"temp_delete", "temp delete"}, help = "Delete view name")
+  @ShellMethod(key = {"temp_delete", "temp delete"}, value = "Delete view name")
   public String delete(
-      @CliOption(key = {"view"}, mandatory = true, help = "view name") final String tableName) {
+      @ShellOption(value = {"--view"}, help = "view name") final String tableName) {
 
     try {
       HoodieCLI.getTempViewProvider().deleteTable(tableName);

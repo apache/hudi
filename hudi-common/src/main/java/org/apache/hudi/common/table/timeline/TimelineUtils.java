@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -52,9 +53,32 @@ public class TimelineUtils {
    * Returns partitions that have new data strictly after commitTime.
    * Does not include internal operations such as clean in the timeline.
    */
-  public static List<String> getPartitionsWritten(HoodieTimeline timeline) {
+  public static List<String> getWrittenPartitions(HoodieTimeline timeline) {
     HoodieTimeline timelineToSync = timeline.getWriteTimeline();
     return getAffectedPartitions(timelineToSync);
+  }
+
+  /**
+   * Returns partitions that have been deleted or marked for deletion in the given timeline.
+   * Does not include internal operations such as clean in the timeline.
+   */
+  public static List<String> getDroppedPartitions(HoodieTimeline timeline) {
+    HoodieTimeline replaceCommitTimeline = timeline.getWriteTimeline().filterCompletedInstants().getCompletedReplaceTimeline();
+
+    return replaceCommitTimeline.getInstants().flatMap(instant -> {
+      try {
+        HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+            replaceCommitTimeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        if (WriteOperationType.DELETE_PARTITION.equals(commitMetadata.getOperationType())) {
+          Map<String, List<String>> partitionToReplaceFileIds = commitMetadata.getPartitionToReplaceFileIds();
+          return partitionToReplaceFileIds.keySet().stream();
+        } else {
+          return Stream.empty();
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to get partitions modified at " + instant, e);
+      }
+    }).distinct().filter(partition -> !partition.isEmpty()).collect(Collectors.toList());
   }
 
   /**

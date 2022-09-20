@@ -18,12 +18,13 @@
 
 package org.apache.hudi.examples.quickstart;
 
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.testutils.providers.SparkProvider;
+
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -94,7 +95,7 @@ public class TestHoodieSparkQuickstart implements SparkProvider {
     if (!initialized) {
       SparkConf sparkConf = conf();
       SparkRDDWriteClient.registerClasses(sparkConf);
-      HoodieReadClient.addHoodieSupport(sparkConf);
+      SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
       jsc = new JavaSparkContext(spark.sparkContext());

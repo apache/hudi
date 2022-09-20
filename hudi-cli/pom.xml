@@ -27,8 +27,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <spring.shell.version>1.2.0.RELEASE</spring.shell.version>
-    <jar.mainclass>org.springframework.shell.Bootstrap</jar.mainclass>
+    <jar.mainclass>org.apache.hudi.cli.Main</jar.mainclass>
     <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
 
@@ -130,8 +129,26 @@
     </plugins>
   </build>
 
-
   <dependencies>
+    <!--  Spring Boot  -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-logging</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+      <version>${junit.platform.version}</version>
+      <scope>test</scope>
+    </dependency>
+
     <!-- Scala -->
     <dependency>
       <groupId>org.scala-lang</groupId>
@@ -213,7 +230,10 @@
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
-      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
     </dependency>
 
     <dependency>
@@ -239,8 +259,7 @@
 
     <dependency>
       <groupId>org.springframework.shell</groupId>
-      <artifactId>spring-shell</artifactId>
-      <version>${spring.shell.version}</version>
+      <artifactId>spring-shell-starter</artifactId>
       <exclusions>
         <exclusion>
           <groupId>com.google.guava</groupId>
@@ -264,10 +283,22 @@
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>com.google.code.gson</groupId>
+          <artifactId>gson</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.6.2</version>
     </dependency>
 
     <!-- HDFS test dependencies -->
