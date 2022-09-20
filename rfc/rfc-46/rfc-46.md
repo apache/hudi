@@ -90,7 +90,7 @@ CombineAndGetUpdateValue and Precombine will converge to one API. Stateless comp
 interface HoodieRecordMerger {
 
    /**
-    * The kind of merging strategy this recordMerger belongs to. An UUID represents merging strategy.
+    * The kind of merging strategy this recordMerger belongs to. A UUID represents merging strategy.
     */
    String getMergingStrategy();
   
@@ -203,7 +203,7 @@ Following major components will be refactored:
    1. API will be returning opaque `HoodieRecord` instead of raw Avro payload
 
 ### Config for RecordMerger
-The RecordMerger is engine-aware. We provide a config called MERGER_IMPLS. You can set a list of RecordMerger class name to it. And you can set MERGER_STRATEGY which is Id of merger strategy. Hudi will pick RecordMergers in MERGER_IMPLS which has the same merger strategy id with MERGER_STRATEGY according to the engine type at runtime.
+The RecordMerger is engine-aware. We provide a config called MERGER_IMPLS. You can set a list of RecordMerger class name to it. And you can set MERGER_STRATEGY which is UUID of RecordMerger. Hudi will pick RecordMergers in MERGER_IMPLS which has the same MERGER_STRATEGY according to the engine type at runtime.
 
 ### Public Api in HoodieRecord
 Because we implement different types of records, we need to implement functionality similar to AvroUtils in HoodieRecord for different data(avro, InternalRow, RowData).
@@ -239,8 +239,8 @@ class HoodieRecord {
 
    HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema) throws IOException;
 
-   HoodieRecord updateValues(Schema recordSchema, Properties props,
-           Map<String, String> metadataValues) throws IOException;
+   HoodieRecord updateMetadataValues(Schema recordSchema, Properties props,
+           MetadataValues metadataValues) throws IOException;
 
    boolean isDelete(Schema recordSchema, Properties props) throws IOException;
 
