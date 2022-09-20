@@ -77,9 +77,13 @@ So There is also a good savings for long periods of data
 
 At the same time, it has benefit for incremental computing resource saving
 
-3. Typical scenarios 
-    * Time travel for a long time in a convenience way
-    * More flexible pipeline schedule&execution
+3. Some typical scenarios
+   1. Every day generate a new snapshot base on original Hudi table which named tbl-YYYYMMDD, user can use snapshot table to generate derived tables,
+   provide report data. if user's downstream calculation logic changed, can choose relevant snapshot to re-process.
+   user also can set retain days as X day, clean out-of-date data automatically. SCD-2 should also can be achieved here.
+   2. One archived branch named yyyy-archived can be generated after compress and optimize. if our retention policy has been 
+   changed(let's say remove some sensitive information), then can generate a new snapshot base on this branch after operation done.
+   3. One Snapshot named pre-prod can release to customer after some Quality validations base on external tools.
    
 ## Implementation
 Describe the new thing you want to do in appropriate detail, how it fits into the project architecture. 
@@ -151,6 +155,7 @@ Or it may be a few sentences. Use judgement based on the scope of the change.
 	]
 }
 ```
+
 ### Operations
 * Create Snapshot View
   create savepoint on a specific commit, meanwhile, create a new Hive external table name tablename_YYYYMMDD, add table storage properties as.of.instant=savepoint's timestamp， this table has the same basepath with the original one
@@ -188,7 +193,7 @@ call show_savepoints(table => 'hudi_table');
 |  --------------  | -------  | ------- | ------- |
 | `table`          | `true`   | `--`    | the Hive table name you want to show savepoint list, must be a Hudi table |
 * Retain
-  we need to extend clean service to clean expired savepoints. user should set a retain number or period in table config
+  we need to extend clean service to clean expired savepoints. user should set a retained number or period in table config
 * Reader 
   Spark/Flink/Presto/Trino side all can read the Storage properties to get timestamp then get the specific file view.
 
