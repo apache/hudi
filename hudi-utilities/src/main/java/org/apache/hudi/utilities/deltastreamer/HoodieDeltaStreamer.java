@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieWriterUtils;
 import org.apache.hudi.async.AsyncClusteringService;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.async.HoodieAsyncService;
@@ -71,18 +72,21 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import scala.Boolean;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import scala.Predef;
+import scala.collection.JavaConverters;
 
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
@@ -652,7 +656,9 @@ public class HoodieDeltaStreamer implements Serializable {
                 + cfg.baseFileFormat);
         cfg.baseFileFormat = baseFileFormat;
         this.cfg.baseFileFormat = baseFileFormat;
-        validateConfigs(jssc, meta.getTableConfig(), properties.get());
+        HashMap<String,String> scalaprops = new HashMap<>();
+        properties.get().forEach((k,v) -> scalaprops.put(k.toString(),v.toString()));
+        HoodieWriterUtils.validateTableConfig(this.sparkSession, JavaConverters.mapAsScalaMapConverter(scalaprops).asScala().toMap(Predef.conforms()), meta.getTableConfig());
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
         if (cfg.baseFileFormat == null) {
@@ -671,59 +677,6 @@ public class HoodieDeltaStreamer implements Serializable {
 
       deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, conf,
           this::onInitializingWriteClient);
-    }
-
-    private void validateConfigs(JavaSparkContext jssc, HoodieTableConfig htc, TypedProperties props) throws HoodieException {
-      StringBuilder diffs = new StringBuilder();
-      scala.Function2<String,String, scala.runtime.RichBoolean> resolver = this.sparkSession.sessionState().conf().resolver();
-      htc.getProps().forEach((k, v) -> {
-          if (props.containsKey(k) &&  !resolver.apply(v.toString(),props.get(v).toString()).) {
-            diffs.append(this.sparkSession.sessionState().conf().resolver().toString());
-//            diffs.append(k.toString());
-//            diffs.append("\t");
-//            diffs.append(v.toString());
-//            diffs.append("\t");
-//            diffs.append(props.get(k).toString());
-            diffs.append("\n");
-          }
-      });
-
-//      String dataRecordKey =  props.getString(HoodieTableConfig.RECORDKEY_FIELDS.key(),"");
-//      String tableRecordKey = htc.getRecordKeyFieldProp();
-//
-//      if (!dataRecordKey.isEmpty() && !Objects.equals(dataRecordKey, tableRecordKey)) {
-//        diffs.append("RecordKey:\t");
-//        diffs.append(dataRecordKey);
-//        diffs.append("\t");
-//        diffs.append(tableRecordKey);
-//        diffs.append("\n");
-//      }
-//
-//      String dataPreCombineKey = props.getString(HoodieTableConfig.PRECOMBINE_FIELD.key(),"");
-//      String tablePreCombineKey = htc.getPreCombineField();
-//      if (!dataPreCombineKey.isEmpty() && !Objects.equals(dataPreCombineKey, tablePreCombineKey)) {
-//        diffs.append("PreCombineKey:\t");
-//        diffs.append(dataRecordKey);
-//        diffs.append("\t");
-//        diffs.append(tableRecordKey);
-//        diffs.append("\n");
-//      }
-//
-//      String dataKeyGen = props.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(),"");
-//      String tableKeyGen = htc.getKeyGeneratorClassName();
-//      if (!dataKeyGen.isEmpty() && !Objects.equals(dataKeyGen, tableKeyGen)) {
-//        diffs.append("KeyGenerator:\t");
-//        diffs.append(dataRecordKey);
-//        diffs.append("\t");
-//        diffs.append(tableRecordKey);
-//        diffs.append("\n");
-//      }
-
-      if (diffs.length() > 0) {
-        diffs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n");
-        throw new HoodieException(diffs.toString().trim());
-      }
-
     }
 
     public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf)

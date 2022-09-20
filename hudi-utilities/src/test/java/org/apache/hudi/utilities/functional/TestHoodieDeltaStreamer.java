@@ -685,15 +685,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // upsert() #1
     cfg.sourceLimit = 2000;
     cfg.operation = WriteOperationType.UPSERT;
-    cfg.configs.add(HoodieTableConfig.RECORDKEY_FIELDS.key() + "=idk");
-    try {
-      new HoodieDeltaStreamer(cfg, jsc).sync();
-    } catch (HoodieException e) {
-      System.out.println("JONVEX");
-      System.out.println(e.getMessage());
-    }
+    cfg.configs.add(HoodieTableConfig.RECORDKEY_FIELDS.key() + "=differentval");
+    assertThrows(HoodieException.class, () -> new HoodieDeltaStreamer(cfg, jsc).sync());
 
-    TestHelpers.assertRecordCount(1950, tableBasePath, sqlContext);
+    TestHelpers.assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertDistanceCount(1950, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
     List<Row> counts = TestHelpers.countsPerCommit(tableBasePath, sqlContext);
