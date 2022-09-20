@@ -730,6 +730,8 @@ public class HoodieTableMetaClient implements Serializable {
     private String baseFileFormat;
     private String preCombineField;
     private String partitionFields;
+    private Boolean cdcEnabled;
+    private String cdcSupplementalLoggingMode;
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
     private Boolean bootstrapIndexEnable;
@@ -813,6 +815,16 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setPartitionFields(String partitionFields) {
       this.partitionFields = partitionFields;
+      return this;
+    }
+
+    public PropertyBuilder setCDCEnabled(boolean cdcEnabled) {
+      this.cdcEnabled = cdcEnabled;
+      return this;
+    }
+
+    public PropertyBuilder setCDCSupplementalLoggingMode(String cdcSupplementalLoggingMode) {
+      this.cdcSupplementalLoggingMode = cdcSupplementalLoggingMode;
       return this;
     }
 
@@ -955,6 +967,12 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)) {
         setRecordKeyFields(hoodieConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.CDC_ENABLED)) {
+        setCDCEnabled(hoodieConfig.getBoolean(HoodieTableConfig.CDC_ENABLED));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE)) {
+        setCDCSupplementalLoggingMode(hoodieConfig.getString(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.CREATE_SCHEMA)) {
         setTableCreateSchema(hoodieConfig.getString(HoodieTableConfig.CREATE_SCHEMA));
       }
@@ -1044,6 +1062,12 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != recordKeyFields) {
         tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, recordKeyFields);
+      }
+      if (null != cdcEnabled) {
+        tableConfig.setValue(HoodieTableConfig.CDC_ENABLED, Boolean.toString(cdcEnabled));
+        if (cdcEnabled && null != cdcSupplementalLoggingMode) {
+          tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE, cdcSupplementalLoggingMode);
+        }
       }
       if (null != populateMetaFields) {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
