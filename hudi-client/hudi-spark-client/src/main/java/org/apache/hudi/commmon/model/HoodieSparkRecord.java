@@ -176,6 +176,15 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
+  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props,
+      String keyName,
+      String keyValue) {
+    int pos = getStructType().fieldIndex(keyName);
+    data.update(pos, CatalystTypeConverters.convertToCatalyst(keyValue));
+    return this;
+  }
+
+  @Override
   public boolean isDelete(Schema schema, Properties props) throws IOException {
     if (null == data) {
       return true;

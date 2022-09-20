@@ -132,6 +132,15 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
+  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props,
+      String keyName,
+      String keyValue) throws IOException {
+    GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
+    avroRecordPayload.put(keyName, keyValue);
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
+  }
+
+  @Override
   public boolean isDelete(Schema schema, Properties props) throws IOException {
     return !getData().getInsertValue(schema, props).isPresent();
   }

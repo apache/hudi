@@ -42,4 +42,10 @@ public interface HoodieRecordCompatibilityInterface {
    * This method used to extract HoodieKey through keyGenerator. This method used in ClusteringExecutionStrategy.
    */
   HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen);
+
+  /**
+   * This method used to overwrite record key field.
+   */
+  HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyName,
+      String keyValue) throws IOException;
 }

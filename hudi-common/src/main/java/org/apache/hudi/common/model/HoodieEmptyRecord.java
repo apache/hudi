@@ -122,6 +122,13 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
+  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props,
+      String keyName,
+      String keyValue) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public boolean isDelete(Schema schema, Properties props) throws IOException {
     return true;
   }

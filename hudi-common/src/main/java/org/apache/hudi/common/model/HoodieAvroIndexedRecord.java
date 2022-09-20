@@ -126,6 +126,14 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
+  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props,
+      String keyName,
+      String keyValue) {
+    ((GenericRecord) data).put(keyName, keyValue);
+    return this;
+  }
+
+  @Override
   public boolean isDelete(Schema schema, Properties props) {
     return false;
   }
