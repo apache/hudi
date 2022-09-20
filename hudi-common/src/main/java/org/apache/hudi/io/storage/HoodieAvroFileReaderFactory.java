@@ -26,17 +26,6 @@ import java.io.IOException;
 
 public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
 
-  private static class SingletonHolder {
-    private static final HoodieAvroFileReaderFactory INSTANCE = new HoodieAvroFileReaderFactory();
-  }
-
-  private HoodieAvroFileReaderFactory() {
-  }
-
-  public static HoodieFileReaderFactory getFileReaderFactory() {
-    return SingletonHolder.INSTANCE;
-  }
-
   protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
     return new HoodieAvroParquetReader(conf, path);
   }

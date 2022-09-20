@@ -29,7 +29,6 @@ import org.apache.hudi.exception.HoodieException;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
@@ -40,13 +39,12 @@ public class HoodieFileReaderFactory {
   public static HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (recordType) {
       case AVRO:
-        return HoodieAvroFileReaderFactory.getFileReaderFactory();
+        return new HoodieAvroFileReaderFactory();
       case SPARK:
         try {
           Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory");
-          Method method = clazz.getMethod("getFileReaderFactory", null);
-          return (HoodieFileReaderFactory) method.invoke(null,null);
-        } catch (NoSuchMethodException | IllegalArgumentException | InvocationTargetException | IllegalAccessException e) {
+          return (HoodieFileReaderFactory) clazz.newInstance();
+        } catch (IllegalArgumentException | IllegalAccessException | InstantiationException e) {
           throw new HoodieException("Unable to create hoodie spark file writer factory", e);
         }
       default:

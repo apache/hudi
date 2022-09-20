@@ -37,7 +37,6 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
@@ -48,13 +47,12 @@ public class HoodieFileWriterFactory {
   private static HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (recordType) {
       case AVRO:
-        return HoodieAvroFileWriterFactory.getFileReaderFactory();
+        return new HoodieAvroFileWriterFactory();
       case SPARK:
         try {
           Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory");
-          Method method = clazz.getMethod("getFileWriterFactory", null);
-          return (HoodieFileWriterFactory) method.invoke(null, null);
-        } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+          return (HoodieFileWriterFactory) clazz.newInstance();
+        } catch (IllegalAccessException | IllegalArgumentException | InstantiationException e) {
           throw new HoodieException("Unable to create hoodie spark file writer factory", e);
         }
       default:
