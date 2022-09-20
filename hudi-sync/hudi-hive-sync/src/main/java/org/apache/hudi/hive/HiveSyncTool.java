@@ -20,6 +20,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -43,11 +44,13 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hive.HiveSyncConfig.META_SYNC_FILTER_PUSHDOWN_MAX_SIZE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_OMIT_METADATA_FIELDS;
@@ -60,7 +63,14 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.*;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
@@ -305,52 +315,130 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     return schemaChanged;
   }
 
-  private String generateFilter(List<String> partitionKeys, List<String> partitionValues) {
+  /**
+   * Combine filter with existing filters.
+   *
+   * 1. If no filter left in the filterBuilder, will simply add it.
+   * 2. If filterBuilder is not empty, will combine the existing filters
+   *    and new adding filter with operator. Wrap these filters with parenthesis.
+   */
+  private void combineFilter(StringBuilder filterBuilder, String operator, Option<String> filter) {
+    boolean shouldEnclosed = false;
+    if (filter.isPresent() && !filter.get().isEmpty()) {
+      if (filterBuilder.length() != 0) {
+        // If filterBuilder is not empty, which means there already has some filters
+        // in the filterBuilder, we need to use operator to combine already existed filters
+        // and the new filter.
+        filterBuilder.insert(0, "(");
+        filterBuilder.append(" " + operator + " ");
+        shouldEnclosed = true;
+      }
+
+      filterBuilder.append(filter.get());
+    }
+
+    if (shouldEnclosed) {
+      filterBuilder.append(")");
+    }
+  }
+
+  private String quoteStringLiteral(String value) {
+    if (!value.contains("\"")) {
+      return "\"" + value + "\"";
+    } else if (!value.contains("'")) {
+      return "'" + value + "'";
+    } else {
+      throw new UnsupportedOperationException("Cannot pushdown filters if \" and ' both exist");
+    }
+  }
+
+  private Option<String> extractLiteralValue(String type, String value) {
+    switch (type.toLowerCase(Locale.ROOT)) {
+      case HiveSchemaUtil.STRING_TYPE_NAME:
+        return Option.of(quoteStringLiteral(value));
+      case HiveSchemaUtil.INT_TYPE_NAME:
+      case HiveSchemaUtil.BIGINT_TYPE_NAME:
+      case HiveSchemaUtil.DATE_TYPE_NAME:
+        return Option.of(value);
+      default:
+        return Option.empty();
+    }
+  }
+
+  private Option<String> generateEqualFilter(String key, String type, String value) {
+    Option<String> extracted = extractLiteralValue(type, value);
+    if (extracted.isPresent()) {
+      return Option.of(key + " = " + extracted.get());
+    }
+    return Option.empty();
+  }
+
+  /**
+   * Visit the partition and generate filters.
+   *
+   * Examples:
+   * 1. date=2022-09-20 => date = 2022-09-20
+   * 2. date=2022-09-20/hour=9 => (date = 2022-09-20 AND hour = 9)
+   * 3. date=2022-09-20/hour=9/min=30 => ((date = 2022-09-20 AND hour = 9) AND min = 30)
+   */
+  private String visitPartition(List<String> partitionKeys,
+                                Map<String, String> keyWithTypes,
+                                List<String> partitionValues) {
     if (partitionKeys.size() != partitionValues.size()) {
       throw new HoodieHiveSyncException("Partition key and values should be same length"
           + ", but got partitionKey: " + partitionKeys + " with values: " + partitionValues);
     }
 
-    StringBuilder filter = new StringBuilder();
-    for (int i = 0; i < partitionKeys.size(); i++) {
-      filter.append("(")
-          .append(partitionKeys.get(i))
-          .append(" = ")
-          .append(partitionValues.get(i)).append(")");
-      if (i != (partitionKeys.size() - 1)) {
-        filter.append(" AND ");
-      }
+    StringBuilder filterBuilder = new StringBuilder();
+    for (int i = 0; i < partitionValues.size(); i++) {
+      String key = partitionKeys.get(i);
+      combineFilter(filterBuilder, "AND",
+          generateEqualFilter(key, keyWithTypes.get(key), partitionValues.get(i)));
     }
-    return filter.toString();
+
+    return filterBuilder.toString();
   }
+
+  protected String generateWrittenPartitionsFilter(String tableName,
+                                                   List<String> partitionKeys,
+                                                   List<List<String>> partitionVals) {
+    List<String> partitionTypes = syncClient.getMetastoreFieldSchemas(tableName)
+        .stream()
+        .filter(f -> partitionKeys.contains(f.getName()))
+        .map(FieldSchema::getType)
+        .collect(Collectors.toList());
+
+    Map<String, String> keyWithTypes = CollectionUtils.zipToMap(partitionKeys, partitionTypes);
+
+    StringBuilder filterBuilder = new StringBuilder();
+    for (int i = 0; i < partitionVals.size(); i++) {
+      combineFilter(filterBuilder, "OR",
+          Option.of(visitPartition(partitionKeys, keyWithTypes, partitionVals.get(i))));
+    }
+    return filterBuilder.toString();
+  }
+
+  /**
+   * Fetch partitions from meta service, will try to push down more filters to avoid fetching
+   * too many unnecessary partitions.
+   */
   private List<Partition> getTablePartitions(String tableName, List<String> writtenPartitionsSince) {
     PartitionValueExtractor partitionValueExtractor = ReflectionUtils
         .loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
     List<String> partitionKeys = config.getSplitStrings(META_SYNC_PARTITION_FIELDS);
-    writtenPartitionsSince
-        .stream().map(value -> {partitionValueExtractor.extractPartitionValuesInPath(value)})
-    syncClient.getMetastoreFieldSchemas(tableName)
-        .stream()
-        .filter(f -> partitionKeys.contains(f.getName()))
-        .map(field -> {
+    List<List<String>> partitionVals = writtenPartitionsSince
+        .stream().map(partitionValueExtractor::extractPartitionValuesInPath)
+        .collect(Collectors.toList());
 
-        });
-
-    if (partitionKeys.size() * writtenPartitionsSince.size() > config.getIntOrDefault(META_SYNC_FILTER_PUSHDOWN_MAX_SIZE)) {
-
+    int estimateSize = partitionKeys.size() * partitionVals.size();
+    if (estimateSize > config.getIntOrDefault(META_SYNC_FILTER_PUSHDOWN_MAX_SIZE)) {
+      return syncClient.getAllPartitions(tableName);
     }
 
-    StringBuilder filter = new StringBuilder();
-    for (String storagePartition : writtenPartitionsSince) {
-      List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
-      filter.append("(")
-          .append(generateFilter(partitionKeys, partitionValues))
-          .append(")");
-      filter.append(" OR ");
-    }
-    filter.delete(filter.length() - 4, filter.length());
-    return syncClient.getPartitionsByFilter(tableName, filter.toString());
+    return syncClient.getPartitionsByFilter(tableName,
+        generateWrittenPartitionsFilter(tableName, partitionKeys, partitionVals));
   }
+
   /**
    * Syncs the list of storage partitions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).

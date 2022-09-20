@@ -65,6 +65,12 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<String> HIVE_SYNC_BUCKET_SYNC_SPEC = HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
   public static final ConfigProperty<String> HIVE_SYNC_COMMENT = HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 
+  public static final ConfigProperty<Integer> META_SYNC_FILTER_PUSHDOWN_MAX_SIZE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.filter_pushdown_max_size")
+      .defaultValue(1000)
+      .withDocumentation("Max size limit to push down partition filters, if the estimate push down "
+          + "filters exceed this size, will directly try to fetch all partitions");
+
   public static String getBucketSpec(String bucketCols, int bucketNum) {
     return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";
   }

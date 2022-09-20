@@ -1168,6 +1168,44 @@ public class TestHiveSyncTool {
     assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());
   }
 
+  @Test
+  public void testSyncWithPushDownFilters() {
+    List<String> partitionKeys = new ArrayList<>(4);
+    partitionKeys.add("date");
+    partitionKeys.add("year");
+    partitionKeys.add("month");
+    partitionKeys.add("day");
+    ArrayList<String> partitionTypes = new ArrayList<>(4);
+    partitionTypes.add("date");
+    partitionTypes.add("string");
+    partitionTypes.add("int");
+    partitionTypes.add("bigint");
+    HiveSyncTool syncTool = new HiveSyncTool(hiveSyncProps, getHiveConf()) {
+      @Override
+      protected void initSyncClient(HiveSyncConfig config) {
+        this.syncClient = new HoodieHiveSyncClient(config) {
+          @Override
+          public List<FieldSchema> getMetastoreFieldSchemas(String tableName) {
+            ArrayList<FieldSchema> fields = new ArrayList<>(partitionKeys.size());
+            for (int i = 0; i < partitionKeys.size(); i++) {
+              fields.add(new FieldSchema(partitionKeys.get(i), partitionTypes.get(i)));
+            }
+            return fields;
+          }
+        };
+      }
+    };
+    List<List<String>> writtenPartitions = new ArrayList<>();
+    writtenPartitions.add(Arrays.asList("2022-09-01", "2022", "9", "1"));
+    assertEquals("(((date = 2022-09-01 AND year = \"2022\") AND month = 9) AND day = 1)",
+        syncTool.generateWrittenPartitionsFilter("randomName", partitionKeys,writtenPartitions));
+
+    writtenPartitions.add(Arrays.asList("2022-09-02", "2022", "9", "2"));
+    assertEquals(
+        "((((date = 2022-09-01 AND year = \"2022\") AND month = 9) AND day = 1) OR (((date = 2022-09-02 AND year = \"2022\") AND month = 9) AND day = 2))",
+        syncTool.generateWrittenPartitionsFilter("randomName", partitionKeys,writtenPartitions));
+  }
+
   private void reSyncHiveTable() {
     hiveSyncTool.syncHoodieTable();
     // we need renew the hiveclient after tool.syncHoodieTable(), because it will close hive
