@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -444,7 +445,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       }
 
       // if there are cdc data written, set the CDC-related information.
-      HoodieCDCLogger.setCDCStatIfNeeded(stat, partitionPath, cdcLogger, recordsWritten, insertRecordsWritten, fs);
+      Option<AppendResult> cdcResult =
+          HoodieCDCLogger.writeCDCDataIfNeeded(cdcLogger, recordsWritten, insertRecordsWritten);
+      HoodieCDCLogger.setCDCStatIfNeeded(stat, cdcResult, partitionPath, fs);
 
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
       stat.setTotalWriteBytes(fileSizeInBytes);

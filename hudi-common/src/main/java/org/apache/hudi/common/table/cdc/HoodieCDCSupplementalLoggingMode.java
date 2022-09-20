@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.cdc;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 public enum HoodieCDCSupplementalLoggingMode {
-  OP_KEY("op_key"),
+  OP_KEY("cdc_op_key"),
   WITH_BEFORE("cdc_data_before"),
   WITH_BEFORE_AFTER("cdc_data_before_after");
 
@@ -36,14 +36,15 @@ public enum HoodieCDCSupplementalLoggingMode {
   }
 
   public static HoodieCDCSupplementalLoggingMode parse(String value) {
-    if (value.equals("op_key")) {
-      return OP_KEY;
-    } else if (value.equals("cdc_data_before")) {
-      return WITH_BEFORE;
-    } else if (value.equals("cdc_data_before_after")) {
-      return WITH_BEFORE_AFTER;
-    } else {
-      throw new HoodieNotSupportedException("Unsupported value: " + value);
+    switch (value) {
+      case "cdc_op_key":
+        return OP_KEY;
+      case "cdc_data_before":
+        return WITH_BEFORE;
+      case "cdc_data_before_after":
+        return WITH_BEFORE_AFTER;
+      default:
+        throw new HoodieNotSupportedException("Unsupported value: " + value);
     }
   }
 }

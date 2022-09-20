@@ -78,6 +78,8 @@ public class HoodieCDCLogger implements Closeable {
 
   private final Schema cdcSchema;
 
+  private final String cdcSchemaString;
+
   // the cdc data
   private final Map<String, HoodieAvroPayload> cdcData;
 
@@ -102,10 +104,13 @@ public class HoodieCDCLogger implements Closeable {
 
       if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
         this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA;
+        this.cdcSchemaString = HoodieCDCUtils.CDC_SCHEMA_STRING;
       } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
         this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE;
+        this.cdcSchemaString = HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE_STRING;
       } else {
         this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY;
+        this.cdcSchemaString = HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY_STRING;
       }
 
       this.cdcData = new ExternalSpillableMap<>(
@@ -165,14 +170,7 @@ public class HoodieCDCLogger implements Closeable {
   }
 
   private GenericRecord removeCommitMetadata(GenericRecord record) {
-    if (record != null && populateMetaFields) {
-      GenericData.Record newRecord = new GenericData.Record(dataSchema);
-      for (Schema.Field field : dataSchema.getFields()) {
-        newRecord.put(field.name(), record.get(field.name()));
-      }
-      return newRecord;
-    }
-    return record;
+    return HoodieAvroUtils.rewriteRecordWithNewSchema(record, dataSchema, new HashMap<>());
   }
 
   public boolean isEmpty() {
@@ -183,8 +181,8 @@ public class HoodieCDCLogger implements Closeable {
     if (isEmpty()) {
       return Option.empty();
     }
+
     try {
-      Map<HoodieLogBlock.HeaderMetadataType, String> header = buildCDCBlockHeader();
       List<IndexedRecord> records = cdcData.values().stream()
           .map(record -> {
             try {
@@ -193,6 +191,11 @@ public class HoodieCDCLogger implements Closeable {
               throw new HoodieIOException("Failed to get cdc record", e);
             }
           }).collect(Collectors.toList());
+
+      Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, commitTime);
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, cdcSchemaString);
+
       HoodieLogBlock block = new HoodieCDCDataBlock(records, header, keyField);
       AppendResult result = cdcWriter.appendBlocks(Collections.singletonList(block));
 
@@ -203,21 +206,6 @@ public class HoodieCDCLogger implements Closeable {
     } catch (Exception e) {
       throw new HoodieException("Failed to write the cdc data to " + cdcWriter.getLogFile().getPath(), e);
     }
-  }
-
-  private Map<HoodieLogBlock.HeaderMetadataType, String> buildCDCBlockHeader() {
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, commitTime);
-    if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, HoodieCDCUtils.CDC_SCHEMA_STRING);
-    } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA,
-          HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE_STRING);
-    } else {
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA,
-          HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY_STRING);
-    }
-    return header;
   }
 
   @Override
@@ -233,21 +221,23 @@ public class HoodieCDCLogger implements Closeable {
     }
   }
 
+  public static Option<AppendResult> writeCDCDataIfNeeded(HoodieCDCLogger cdcLogger,
+                                                          long recordsWritten,
+                                                          long insertRecordsWritten) {
+    if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
+      // the following cases where we do not need to write out the cdc file:
+      // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
+      // case 2: all the data are new-coming,
+      return Option.empty();
+    }
+    return cdcLogger.writeCDCData();
+  }
+
   public static void setCDCStatIfNeeded(HoodieWriteStat stat,
+                                        Option<AppendResult> cdcResult,
                                         String partitionPath,
-                                        HoodieCDCLogger cdcLogger,
-                                        long recordsWritten,
-                                        long insertRecordsWritten,
                                         FileSystem fs) {
     try {
-      if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
-        // the following cases where we do not need to write out the cdc file:
-        // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
-        // case 2: all the data are new-coming,
-        return;
-      }
-
-      Option<AppendResult> cdcResult = cdcLogger.writeCDCData();
       if (cdcResult.isPresent()) {
         Path cdcLogFile = cdcResult.get().logFile().getPath();
         String cdcFileName = cdcLogFile.getName();

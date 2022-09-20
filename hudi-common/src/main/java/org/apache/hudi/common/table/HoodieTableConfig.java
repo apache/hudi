@@ -140,7 +140,7 @@ public class HoodieTableConfig extends HoodieConfig {
           HoodieCDCSupplementalLoggingMode.OP_KEY.getValue(),
           HoodieCDCSupplementalLoggingMode.WITH_BEFORE.getValue(),
           HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER.getValue())
-      .withDocumentation("When 'op_key' persist the 'op' and the record key only,"
+      .withDocumentation("When 'cdc_op_key' persist the 'op' and the record key only,"
           + " when 'cdc_data_before' persist the additional 'before' image ,"
           + " and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.");
 

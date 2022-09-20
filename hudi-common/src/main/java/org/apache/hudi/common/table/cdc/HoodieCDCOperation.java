@@ -36,14 +36,15 @@ public enum HoodieCDCOperation {
   }
 
   public static HoodieCDCOperation parse(String value) {
-    if (value.equals("i")) {
-      return INSERT;
-    } else if (value.equals("u")) {
-      return UPDATE;
-    } else if (value.equals("d")) {
-      return DELETE;
-    } else {
-      throw new HoodieNotSupportedException("Unsupported value: " + value);
+    switch (value) {
+      case "i":
+        return INSERT;
+      case "u":
+        return UPDATE;
+      case "d":
+        return DELETE;
+      default:
+        throw new HoodieNotSupportedException("Unsupported value: " + value);
     }
   }
 }

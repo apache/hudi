@@ -29,8 +29,11 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -60,6 +63,7 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -357,10 +361,23 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
                 deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
               }
             });
-            // since the cow tables may also write out the log files in cdc scenario, we need to clean the log files
-            // for this commit no matter the table type is mor or cow.
-            deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-                .collect(Collectors.toList()));
+            if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
+              // If merge on read, then clean the log files for the commits as well
+              Predicate<HoodieLogFile> notCDCLogFile =
+                  hoodieLogFile -> !hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+              deletePaths.addAll(
+                  aSlice.getLogFiles().filter(notCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+                      .collect(Collectors.toList()));
+            }
+            if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+              // The cdc log files will be written out in cdc scenario, no matter the table type is mor or cow.
+              // Here we need to clean uo these cdc log files.
+              Predicate<HoodieLogFile> isCDCLogFile =
+                  hoodieLogFile -> hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+              deletePaths.addAll(
+                  aSlice.getLogFiles().filter(isCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+                      .collect(Collectors.toList()));
+            }
           }
         }
       }
@@ -423,10 +440,23 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         cleanPaths.add(new CleanFileInfo(dataFile.getBootstrapBaseFile().get().getPath(), true));
       }
     }
-    // since the cow tables may also write out the log files in cdc scenario, we need to clean the log files
-    // for this commit no matter the table type is mor or cow.
-    cleanPaths.addAll(nextSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-        .collect(Collectors.toList()));
+    if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
+      // If merge on read, then clean the log files for the commits as well
+      Predicate<HoodieLogFile> notCDCLogFile =
+          hoodieLogFile -> !hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+      cleanPaths.addAll(
+          nextSlice.getLogFiles().filter(notCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+              .collect(Collectors.toList()));
+    }
+    if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+      // The cdc log files will be written out in cdc scenario, no matter the table type is mor or cow.
+      // Here we need to clean uo these cdc log files.
+      Predicate<HoodieLogFile> isCDCLogFile =
+          hoodieLogFile -> hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+      cleanPaths.addAll(
+          nextSlice.getLogFiles().filter(isCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+              .collect(Collectors.toList()));
+    }
     return cleanPaths;
   }
 
