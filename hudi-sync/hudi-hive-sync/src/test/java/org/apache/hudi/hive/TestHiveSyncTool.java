@@ -160,8 +160,8 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
     assertEquals("org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe",
-      hiveClient.getTable(HiveTestUtil.TABLE_NAME).getSd().getSerdeInfo().getSerializationLib(),
-      "SerDe info not updated or does not match");
+        hiveClient.getTable(HiveTestUtil.TABLE_NAME).getSd().getSerdeInfo().getSerializationLib(),
+        "SerDe info not updated or does not match");
     assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
         hiveClient.getStorageSchema().getColumns().size() + 1,
         "Hive Schema should match the table schema + partition field");
