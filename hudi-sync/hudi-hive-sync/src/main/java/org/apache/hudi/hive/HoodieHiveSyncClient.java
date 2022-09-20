@@ -34,6 +34,8 @@ import org.apache.hudi.sync.common.model.Partition;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
+import org.apache.hadoop.hive.metastore.api.SerDeInfo;
+import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.log4j.LogManager;
@@ -124,6 +126,41 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       client.alter_table(databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to update table properties for table: "
+          + tableName, e);
+    }
+  }
+
+  /**
+   * Update the table serde properties to the table.
+   */
+  @Override
+  public void updateTableSerDeInfo(String tableName, String serdeClass, Map<String, String> serdeProperties) {
+    if (serdeProperties == null || serdeProperties.isEmpty()) {
+      return;
+    }
+    try {
+      Table table = client.getTable(databaseName, tableName);
+      serdeProperties.put("serialization.format", "1");
+      StorageDescriptor storageDescriptor = table.getSd();
+      SerDeInfo serdeInfo = storageDescriptor.getSerdeInfo();
+      if (serdeInfo != null && serdeInfo.getParametersSize() == serdeProperties.size()) {
+        Map<String, String> parameters = serdeInfo.getParameters();
+        boolean same = true;
+        for (String key : serdeProperties.keySet()) {
+          if (!parameters.containsKey(key) | !parameters.get(key).equals(serdeProperties.get(key))) {
+            same = false;
+            break;
+          }
+        }
+        if (same) {
+          LOG.debug("Table " + tableName + " serdeProperties already up to date, skip update");
+          return;
+        }
+      }
+      storageDescriptor.setSerdeInfo(new SerDeInfo(null, serdeClass, serdeProperties));
+      client.alter_table(databaseName, tableName, table);
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to update table serde info for table: "
           + tableName, e);
     }
   }
@@ -316,4 +353,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
   }
 
+  Table getTable(String tableName) {
+    try {
+      return client.getTable(databaseName, tableName);
+    } catch (TException e) {
+      throw new HoodieHiveSyncException(String.format("Database: %s, Table: %s  does not exist", databaseName, tableName), e);
+    }
+  }
 }
