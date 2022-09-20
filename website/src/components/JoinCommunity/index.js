@@ -5,6 +5,7 @@ import GitHubIcon from "@site/src/components/JoinCommunity/Icons/github.svg";
 import SlackIcon from "@site/src/components/JoinCommunity/Icons/slack.svg";
 import TwitterIcon from "@site/src/components/JoinCommunity/Icons/twitter.svg";
 import MailIcon from "@site/src/components/JoinCommunity/Icons/mail.svg";
+import YoutubeIcon from "@site/src/components/JoinCommunity/Icons/youtube.svg";
 import Title from "@site/src/components/Title";
 
 const JoinCommunity = () => {
@@ -32,6 +33,12 @@ const JoinCommunity = () => {
       title: "Mailing",
       linkText: "Subscribe",
       url: "mailto:dev-subscribe@hudi.apache.org?Subject=SubscribeToHudi",
+    },
+    {
+      icon: YoutubeIcon,
+      title: "Youtube",
+      linkText: "Subscribe",
+      url: "https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw",
     },
   ];
 

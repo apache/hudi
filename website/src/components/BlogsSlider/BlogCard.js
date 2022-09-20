@@ -3,7 +3,7 @@ import {useBaseUrlUtils} from "@docusaurus/core/lib/client/exports/useBaseUrl";
 import Link from '@docusaurus/Link';
 
 import AuthorName from "@site/src/components/AuthorName";
-
+import ArrowRight from "./Icons/arrow-right.svg";
 import styles from "./styles.module.css";
 
 const BlogCard = ({ blog }) => {
@@ -35,7 +35,12 @@ const BlogCard = ({ blog }) => {
               <AuthorName authors={authors} className={styles.authorName} />
               <div className={styles.date}>{formattedDate}</div>
             </div>
-            <h5 className={styles.blogTitle}>{title}</h5>
+            <div className={styles.cardTitleWrapper}>
+              <h5 className={styles.blogTitle}>{title}</h5>
+              <div>
+                <ArrowRight />
+              </div>
+            </div>
           </div>
         </div>
       </Link>

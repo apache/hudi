@@ -16,54 +16,63 @@ const HomepageFeatures = () => {
       title: "Upserts, Deletes with fast, pluggable indexing.",
       description:
         "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
+      link: "/docs/clustering"
     },
     {
       icon: null,
       title: "Incremental queries, Record level change streams.",
       description:
         "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
+      link: "/docs/clustering"
     },
     {
       icon: TransactionsRollbackIcon,
       title: "Transactions, Rollbacks, Concurrency Control.",
       description:
         "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
+      link: "/docs/clustering"
     },
     {
       icon: SqlIcon,
       title: "SQL Read/Writes from Spark, Presto, Trino, Hive & more.",
       description:
         "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
+      link: "/docs/clustering"
     },
     {
       icon: CloudClusteringIcon,
       title: "Automatic file sizing, data clustering, compactions, cleaning.\t",
       description:
         "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
+      link: "/docs/clustering"
     },
     {
       icon: StreamingIngestionIcon,
       title: "Streaming ingestion, Built-in CDC sources & tools.",
       description:
         "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
+      link: "/docs/clustering"
     },
     {
       icon: BuiltMetadataTrackingIcon,
       title: "Built-in metadata tracking for scalable storage access.\t",
       description:
         "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
+      link: "/docs/clustering"
     },
     {
       icon: CompatibleSchemaIcon,
       title: "Backwards compatible schema evolution and enforcement.",
       description:
         "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
+      link: "/docs/clustering"
     },
     {
       icon: null,
       title: "Backwards compatible schema evolution and enforcement.",
       description:
         "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
+      link: "/docs/clustering"
     },
   ];
   return (

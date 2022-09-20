@@ -17,7 +17,14 @@
     background: var(--ifm-color-white);
     border-radius: 12px;
     padding: 25px;
+
 }
+
+.boxWrapper a {
+    text-decoration: none;
+    color: currentColor;
+}
+
 .iconWrapper {
     background: var(--ifm-color-icon-backgroung);
     border-radius: 8px;
@@ -40,6 +47,8 @@
     color: var(--ifm-color-gray-900);
     margin: 0 0 10px;
 }
+
+
 
 @media only screen and (max-width: 992px) {
     .wrapperContainer {

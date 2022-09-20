@@ -11,6 +11,11 @@
     text-align: center;
     margin-bottom: 45px;
 }
+
+.cardTitleWrapper {
+    display: flex;
+}
+
 .cardBlogs {
     background: var(--ifm-color-white);
     border-radius: 12px;

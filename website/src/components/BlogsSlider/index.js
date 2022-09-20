@@ -6,8 +6,8 @@ import LinkButton from "@site/src/components/UI/LinkButton";
 import Title from "@site/src/components/Title";
 
 import BlogCard from "./BlogCard";
-import RightIcon from "./Images/left_slider_icon.svg";
-import LeftIcon from "./Images/right_slider_icon.svg";
+import RightIcon from "./Icons/left_slider_icon.svg";
+import LeftIcon from "./Icons/right_slider_icon.svg";
 
 import styles from "./styles.module.css";
 
@@ -29,11 +29,14 @@ const allPosts = ((ctx) => {
   );
 })(require.context('../../../blog', true));
 
+const sortedPosts = allPosts.sort((a,b) => new Date(a.metadata.date).getTime() - new Date(b.metadata.date).getTime()).reverse();
+const latestPosts = [...sortedPosts.slice(0, 10)];
 
 const BlogsSlider = () => {
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: true,
     slidesToScroll: 1,
+    align: 0
   });
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -71,7 +74,7 @@ const BlogsSlider = () => {
 
         <div className={styles.embla} ref={emblaRef}>
           <div className={styles.embla__container}>
-            {allPosts.map((data, i) => (
+            {latestPosts.map((data, i) => (
               <div className={styles.embla__slide} key={i}>
                 <BlogCard blog={data} />
               </div>
@@ -82,7 +85,7 @@ const BlogsSlider = () => {
         <div className={styles.sliderActionsWrapper}>
           <LeftIcon onClick={() => scrollPrev()} className={styles.arrowIcon} />
           <div className={styles.dotsWrapper}>
-            {allPosts.map((blog, i) => (
+            {latestPosts.map((blog, i) => (
               <div
                 key={i}
                 role="button"
