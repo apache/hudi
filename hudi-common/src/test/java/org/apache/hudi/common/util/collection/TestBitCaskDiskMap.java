@@ -20,7 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -187,7 +187,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     schema = SchemaTestUtil.getSimpleSchema();
     List<IndexedRecord> indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
     hoodieRecords =
-        indexedRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+        indexedRecords.stream().map(r -> new HoodieLegacyAvroRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
             new AvroBinaryTestPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
     payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema));
     assertTrue(payloadSize > 0);
@@ -196,7 +196,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     final Schema simpleSchemaWithMetadata = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
     hoodieRecords = indexedRecords.stream()
-        .map(r -> new HoodieAvroRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+        .map(r -> new HoodieLegacyAvroRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
             new AvroBinaryTestPayload(
                 Option.of(HoodieAvroUtils.rewriteRecord((GenericRecord) r, simpleSchemaWithMetadata)))))
         .collect(Collectors.toList());
@@ -213,7 +213,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     iRecords.forEach(r -> {
       String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-      HoodieRecord value = new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
+      HoodieRecord value = new HoodieLegacyAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
       recordMap.put(key, value);
     });
 

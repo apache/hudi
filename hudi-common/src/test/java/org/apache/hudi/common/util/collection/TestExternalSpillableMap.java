@@ -20,7 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -136,7 +136,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     updatedRecords.forEach(record -> {
       HoodieRecord rec = records.get(((GenericRecord) record).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
       try {
-        assertEquals(((HoodieAvroRecord) rec).getData().getInsertValue(schema).get(), record);
+        assertEquals(((HoodieLegacyAvroRecord) rec).getData().getInsertValue(schema).get(), record);
       } catch (IOException io) {
         throw new UncheckedIOException(io);
       }
@@ -160,13 +160,13 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     IndexedRecord inMemoryRecord = iRecords.get(0);
     String ikey = ((GenericRecord) inMemoryRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
     String iPartitionPath = ((GenericRecord) inMemoryRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-    HoodieRecord inMemoryHoodieRecord = new HoodieAvroRecord<>(new HoodieKey(ikey, iPartitionPath),
+    HoodieRecord inMemoryHoodieRecord = new HoodieLegacyAvroRecord<>(new HoodieKey(ikey, iPartitionPath),
         new HoodieAvroPayload(Option.of((GenericRecord) inMemoryRecord)));
 
     IndexedRecord onDiskRecord = iRecords.get(99);
     String dkey = ((GenericRecord) onDiskRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
     String dPartitionPath = ((GenericRecord) onDiskRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-    HoodieRecord onDiskHoodieRecord = new HoodieAvroRecord<>(new HoodieKey(dkey, dPartitionPath),
+    HoodieRecord onDiskHoodieRecord = new HoodieLegacyAvroRecord<>(new HoodieKey(dkey, dPartitionPath),
         new HoodieAvroPayload(Option.of((GenericRecord) onDiskRecord)));
     // assert size
     assert records.size() == 100;
@@ -242,7 +242,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
     // Get a record from the in-Memory map
     String key = recordKeys.get(0);
-    HoodieAvroRecord record = (HoodieAvroRecord) records.get(key);
+    HoodieLegacyAvroRecord record = (HoodieLegacyAvroRecord) records.get(key);
     List<IndexedRecord> recordsToUpdate = new ArrayList<>();
     recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema).get());
 
@@ -260,7 +260,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
     // Get a record from the disk based map
     key = recordKeys.get(recordKeys.size() - 1);
-    record = (HoodieAvroRecord) records.get(key);
+    record = (HoodieLegacyAvroRecord) records.get(key);
     recordsToUpdate = new ArrayList<>();
     recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema).get());
 

@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -749,7 +749,7 @@ public class TestData {
             if (scanner != null && scanner.getRecords().containsKey(curKey)) {
               keyToSkip.add(curKey);
               // merge row with log.
-              final HoodieAvroRecord<?> record = (HoodieAvroRecord<?>) scanner.getRecords().get(curKey);
+              final HoodieLegacyAvroRecord<?> record = (HoodieLegacyAvroRecord<?>) scanner.getRecords().get(curKey);
               Option<IndexedRecord> combineResult = record.getData().combineAndGetUpdateValue(currentRecord, schema, config.getProps());
               if (combineResult.isPresent()) {
                 GenericRecord avroRecord = buildAvroRecordBySchema(combineResult.get(), schema, requiredPos, recordBuilder);
@@ -765,7 +765,7 @@ public class TestData {
         if (scanner != null) {
           for (String curKey : scanner.getRecords().keySet()) {
             if (!keyToSkip.contains(curKey)) {
-              Option<GenericRecord> record = (Option<GenericRecord>) ((HoodieAvroRecord) scanner.getRecords()
+              Option<GenericRecord> record = (Option<GenericRecord>) ((HoodieLegacyAvroRecord) scanner.getRecords()
                       .get(curKey)).getData()
                       .getInsertValue(schema, config.getProps());
               if (record.isPresent()) {

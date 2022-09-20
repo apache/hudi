@@ -18,7 +18,7 @@
 
 package org.apache.hudi.index.bucket;
 
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.keygen.KeyGenUtils;
@@ -81,7 +81,7 @@ public class TestBucketIdentifier {
     String recordKeyField = "_row_key";
     String indexKeyField = "_row_key";
     GenericRecord record = getRecord();
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(
+    HoodieRecord hoodieRecord = new HoodieLegacyAvroRecord(
         new HoodieKey(KeyGenUtils.getRecordKey(record, recordKeyField, false), ""), null);
     int bucketId = BucketIdentifier.getBucketId(hoodieRecord, indexKeyField, 8);
     assert bucketId == BucketIdentifier.getBucketId(
@@ -93,7 +93,7 @@ public class TestBucketIdentifier {
     List<String> recordKeyField = Arrays.asList("_row_key", "ts_ms");
     String indexKeyField = "_row_key";
     GenericRecord record = getRecord();
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(
+    HoodieRecord hoodieRecord = new HoodieLegacyAvroRecord(
         new HoodieKey(KeyGenUtils.getRecordKey(record, recordKeyField, false), ""), null);
     int bucketId = BucketIdentifier.getBucketId(hoodieRecord, indexKeyField, 8);
     assert bucketId == BucketIdentifier.getBucketId(

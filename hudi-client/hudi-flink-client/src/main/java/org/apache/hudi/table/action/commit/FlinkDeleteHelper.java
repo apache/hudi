@@ -22,7 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
@@ -97,7 +97,7 @@ public class FlinkDeleteHelper<R> extends
       }
 
       List<HoodieRecord<EmptyHoodieRecordPayload>> dedupedRecords =
-          dedupedKeys.stream().map(key -> new HoodieAvroRecord<>(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
+          dedupedKeys.stream().map(key -> new HoodieLegacyAvroRecord<>(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
       Instant beginTag = Instant.now();
       // perform index look up to get existing location of records
       List<HoodieRecord<EmptyHoodieRecordPayload>> taggedRecords = table.getIndex().tagLocation(HoodieListData.eager(dedupedRecords), context, table).collectAsList();

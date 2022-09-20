@@ -23,7 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -91,7 +91,7 @@ public class HoodieDeleteHelper<T, R> extends
       if (recordType == HoodieRecordType.AVRO) {
         // For BWC, will remove when HoodieRecordPayload removed
         dedupedRecords =
-            dedupedKeys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
+            dedupedKeys.map(key -> new HoodieLegacyAvroRecord(key, new EmptyHoodieRecordPayload()));
       } else {
         dedupedRecords = dedupedKeys.map(key -> new HoodieEmptyRecord<>(key, recordType));
       }

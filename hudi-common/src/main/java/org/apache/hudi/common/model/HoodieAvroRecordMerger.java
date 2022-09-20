@@ -43,9 +43,9 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
   public Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.AVRO);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.AVRO);
-    if (older instanceof HoodieAvroRecord && newer instanceof HoodieAvroRecord) {
+    if (older instanceof HoodieLegacyAvroRecord && newer instanceof HoodieLegacyAvroRecord) {
       return Option.of(preCombine(older, newer));
-    } else if (older instanceof HoodieAvroIndexedRecord && newer instanceof HoodieAvroRecord) {
+    } else if (older instanceof HoodieAvroIndexedRecord && newer instanceof HoodieLegacyAvroRecord) {
       return combineAndGetUpdateValue(older, newer, schema, props);
     } else {
       throw new UnsupportedOperationException();
@@ -58,12 +58,12 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
   }
 
   private HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer) {
-    HoodieRecordPayload picked = unsafeCast(((HoodieAvroRecord) newer).getData().preCombine(((HoodieAvroRecord) older).getData()));
+    HoodieRecordPayload picked = unsafeCast(((HoodieLegacyAvroRecord) newer).getData().preCombine(((HoodieLegacyAvroRecord) older).getData()));
     if (picked instanceof HoodieMetadataPayload) {
       // NOTE: HoodieMetadataPayload return a new payload
-      return new HoodieAvroRecord(newer.getKey(), picked, newer.getOperation());
+      return new HoodieLegacyAvroRecord(newer.getKey(), picked, newer.getOperation());
     }
-    return picked.equals(((HoodieAvroRecord) newer).getData()) ? newer : older;
+    return picked.equals(((HoodieLegacyAvroRecord) newer).getData()) ? newer : older;
   }
 
   private Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
@@ -72,7 +72,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
       return Option.empty();
     }
 
-    return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousRecordAvroPayload.get().getData(), schema, props)
+    return ((HoodieLegacyAvroRecord) newer).getData().combineAndGetUpdateValue(previousRecordAvroPayload.get().getData(), schema, props)
         .map(combinedAvroPayload -> new HoodieAvroIndexedRecord((IndexedRecord) combinedAvroPayload));
   }
 }

@@ -34,7 +34,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -696,7 +696,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> scannedRecords = new ArrayList<>();
     for (HoodieRecord record : scanner) {
       scannedRecords.add((IndexedRecord)
-          ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
+          ((HoodieLegacyAvroRecord) record).getData().getInsertValue(schema).get());
     }
 
     assertEquals(scannedRecords.size(), allRecords.stream().mapToLong(Collection::size).sum(),

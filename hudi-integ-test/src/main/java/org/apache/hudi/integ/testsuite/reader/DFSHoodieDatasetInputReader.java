@@ -31,7 +31,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -296,7 +296,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       return StreamSupport.stream(iterable.spliterator(), false)
           .map(e -> {
             try {
-              return (IndexedRecord) ((HoodieAvroRecord)e).getData().getInsertValue(schema).get();
+              return (IndexedRecord) ((HoodieLegacyAvroRecord)e).getData().getInsertValue(schema).get();
             } catch (IOException io) {
               throw new UncheckedIOException(io);
             }

@@ -24,7 +24,7 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -132,7 +132,7 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
             HoodieRecordLocation location = partitionPathLocationPair.get().getRight();
             if (config.getGlobalSimpleIndexUpdatePartitionPath() && !(inputRecord.getPartitionPath().equals(partitionPath))) {
               // Create an empty record to delete the record in the old partition
-              HoodieRecord<R> deleteRecord = new HoodieAvroRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), new EmptyHoodieRecordPayload());
+              HoodieRecord<R> deleteRecord = new HoodieLegacyAvroRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), new EmptyHoodieRecordPayload());
               deleteRecord.setCurrentLocation(location);
               deleteRecord.seal();
               // Tag the incoming record for inserting to the new partition
@@ -141,7 +141,7 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
             } else {
               // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
               // When it differs, the record will still be updated at its old partition.
-              HoodieRecord<R> newRecord = new HoodieAvroRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), (HoodieRecordPayload) inputRecord.getData());
+              HoodieRecord<R> newRecord = new HoodieLegacyAvroRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), (HoodieRecordPayload) inputRecord.getData());
               taggedRecords = Collections.singletonList((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(newRecord, Option.ofNullable(location)));
             }
           } else {

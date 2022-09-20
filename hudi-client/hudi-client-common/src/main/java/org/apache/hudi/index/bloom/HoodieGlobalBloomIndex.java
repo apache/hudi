@@ -24,7 +24,7 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -117,7 +117,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
         if (config.getBloomIndexUpdatePartitionPath()
             && !recordLocationHoodieKeyPair.get().getRight().getPartitionPath().equals(hoodieRecord.getPartitionPath())) {
           // Create an empty record to delete the record in the old partition
-          HoodieRecord<R> deleteRecord = new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(),
+          HoodieRecord<R> deleteRecord = new HoodieLegacyAvroRecord(recordLocationHoodieKeyPair.get().getRight(),
               new EmptyHoodieRecordPayload());
           deleteRecord.setCurrentLocation(recordLocationHoodieKeyPair.get().getLeft());
           deleteRecord.seal();
@@ -128,7 +128,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
           // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
           // When it differs, the record will still be updated at its old partition.
           return Collections.singletonList(
-              (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(), (HoodieRecordPayload) hoodieRecord.getData()),
+              (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(new HoodieLegacyAvroRecord(recordLocationHoodieKeyPair.get().getRight(), (HoodieRecordPayload) hoodieRecord.getData()),
                   Option.ofNullable(recordLocationHoodieKeyPair.get().getLeft()))).iterator();
         }
       } else {

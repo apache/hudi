@@ -24,7 +24,7 @@ import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -279,18 +279,18 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
             // check whether to do partition change processing
             if (updatePartitionPath && !partitionPath.equals(currentRecord.getPartitionPath())) {
               // delete partition old data record
-              HoodieRecord emptyRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+              HoodieRecord emptyRecord = new HoodieLegacyAvroRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
                   new EmptyHoodieRecordPayload());
               emptyRecord.unseal();
               emptyRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
               emptyRecord.seal();
               // insert partition new data record
-              currentRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), currentRecord.getPartitionPath()),
+              currentRecord = new HoodieLegacyAvroRecord(new HoodieKey(currentRecord.getRecordKey(), currentRecord.getPartitionPath()),
                   (HoodieRecordPayload) currentRecord.getData());
               taggedRecords.add(emptyRecord);
               taggedRecords.add(currentRecord);
             } else {
-              currentRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+              currentRecord = new HoodieLegacyAvroRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
                   (HoodieRecordPayload) currentRecord.getData());
               currentRecord.unseal();
               currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));

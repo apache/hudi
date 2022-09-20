@@ -19,7 +19,7 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -229,13 +229,13 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       return new DataItem(
           record.getRecordKey(),
           record.getCurrentLocation().getInstantTime(),
-          ((HoodieAvroRecord) record).getData(),
+          ((HoodieLegacyAvroRecord) record).getData(),
           record.getOperation());
     }
 
     public HoodieRecord<?> toHoodieRecord(String partitionPath) {
       HoodieKey hoodieKey = new HoodieKey(this.key, partitionPath);
-      HoodieRecord<?> record = new HoodieAvroRecord<>(hoodieKey, data, operation);
+      HoodieRecord<?> record = new HoodieLegacyAvroRecord<>(hoodieKey, data, operation);
       HoodieRecordLocation loc = new HoodieRecordLocation(instant, null);
       record.setCurrentLocation(loc);
       return record;
@@ -276,7 +276,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     public void preWrite(List<HoodieRecord> records) {
       // rewrite the first record with expected fileID
       HoodieRecord<?> first = records.get(0);
-      HoodieRecord<?> record = new HoodieAvroRecord<>(first.getKey(), (HoodieRecordPayload) first.getData(), first.getOperation());
+      HoodieRecord<?> record = new HoodieLegacyAvroRecord<>(first.getKey(), (HoodieRecordPayload) first.getData(), first.getOperation());
       HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileID);
       record.setCurrentLocation(newLoc);
 

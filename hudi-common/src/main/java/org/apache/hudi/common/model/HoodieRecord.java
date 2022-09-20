@@ -321,8 +321,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   public abstract boolean shouldIgnore(Schema schema, Properties props) throws IOException;
 
-  public abstract Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema schema, Properties props) throws IOException;
-
   public abstract Option<Map<String, String>> getMetadata();
 
   public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {

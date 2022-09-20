@@ -20,7 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -186,7 +186,7 @@ public class SparkRDDReadClient<T> implements Serializable {
    */
   public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> checkExists(JavaRDD<HoodieKey> hoodieKeys) {
     return HoodieJavaRDD.getJavaRDD(
-        index.tagLocation(HoodieJavaRDD.of(hoodieKeys.map(k -> new HoodieAvroRecord<>(k, null))),
+        index.tagLocation(HoodieJavaRDD.of(hoodieKeys.map(k -> new HoodieLegacyAvroRecord<>(k, null))),
             context, hoodieTable))
         .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
             ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))

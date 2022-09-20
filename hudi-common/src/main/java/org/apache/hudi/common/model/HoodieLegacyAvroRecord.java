@@ -33,41 +33,41 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
-public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
+public class HoodieLegacyAvroRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
 
-  public HoodieAvroRecord(HoodieKey key, T data) {
+  public HoodieLegacyAvroRecord(HoodieKey key, T data) {
     super(key, data);
   }
 
-  public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation operation) {
+  public HoodieLegacyAvroRecord(HoodieKey key, T data, HoodieOperation operation) {
     super(key, data, operation);
   }
 
-  public HoodieAvroRecord(HoodieRecord<T> record) {
+  public HoodieLegacyAvroRecord(HoodieRecord<T> record) {
     super(record);
   }
 
-  public HoodieAvroRecord() {
+  public HoodieLegacyAvroRecord() {
   }
 
   @Override
   public HoodieRecord<T> newInstance() {
-    return new HoodieAvroRecord<>(this);
+    return new HoodieLegacyAvroRecord<>(this);
   }
 
   @Override
   public HoodieRecord<T> newInstance(T data) {
-    return new HoodieAvroRecord<>(key, data, operation);
+    return new HoodieLegacyAvroRecord<>(key, data, operation);
   }
 
   @Override
   public HoodieRecord<T> newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieAvroRecord<>(key, data, op);
+    return new HoodieLegacyAvroRecord<>(key, data, op);
   }
 
   @Override
   public HoodieRecord<T> newInstance(HoodieKey key) {
-    return new HoodieAvroRecord<>(key, data);
+    return new HoodieLegacyAvroRecord<>(key, data);
   }
 
   @Override
@@ -113,14 +113,14 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     Option<IndexedRecord> avroRecordPayloadOpt = getData().getInsertValue(recordSchema, props);
     GenericRecord avroPayloadInNewSchema =
         HoodieAvroUtils.rewriteRecord((GenericRecord) avroRecordPayloadOpt.get(), targetSchema);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroPayloadInNewSchema), getOperation());
+    return new HoodieLegacyAvroRecord<>(getKey(), new RewriteAvroPayload(avroPayloadInNewSchema), getOperation());
   }
 
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException {
     GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
     GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(oldRecord, newSchema, renameCols);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(rewriteRecord), getOperation());
+    return new HoodieLegacyAvroRecord<>(getKey(), new RewriteAvroPayload(rewriteRecord), getOperation());
   }
 
   @Override
@@ -133,7 +133,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       }
     });
 
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
+    return new HoodieLegacyAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
   }
 
   @Override
@@ -142,7 +142,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       String keyValue) throws IOException {
     GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
     avroRecordPayload.put(keyName, keyValue);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
+    return new HoodieLegacyAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
   }
 
   @Override

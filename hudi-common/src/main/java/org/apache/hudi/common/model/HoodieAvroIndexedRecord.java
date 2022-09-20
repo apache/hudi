@@ -177,7 +177,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     HoodieKey hoodieKey = new HoodieKey(key, partition);
 
     HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
+    HoodieRecord hoodieRecord = new HoodieLegacyAvroRecord(hoodieKey, avroPayload);
     return hoodieRecord;
   }
 

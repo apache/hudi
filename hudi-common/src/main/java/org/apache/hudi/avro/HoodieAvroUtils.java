@@ -20,7 +20,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -698,7 +698,7 @@ public class HoodieAvroUtils {
    * @param schema  {@link Schema} instance.
    * @return Column value if a single column, or concatenated String values by comma.
    */
-  public static Object getRecordColumnValues(HoodieAvroRecord record,
+  public static Object getRecordColumnValues(HoodieLegacyAvroRecord record,
                                              String[] columns,
                                              Schema schema, boolean consistentLogicalTimestampEnabled) {
     try {
@@ -727,7 +727,7 @@ public class HoodieAvroUtils {
    * @param schema  {@link SerializableSchema} instance.
    * @return Column value if a single column, or concatenated String values by comma.
    */
-  public static Object getRecordColumnValues(HoodieAvroRecord record,
+  public static Object getRecordColumnValues(HoodieLegacyAvroRecord record,
                                              String[] columns,
                                              SerializableSchema schema, boolean consistentLogicalTimestampEnabled) {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);

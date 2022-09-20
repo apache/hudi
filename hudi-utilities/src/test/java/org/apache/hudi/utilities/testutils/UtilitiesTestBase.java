@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.testutils;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -390,7 +390,7 @@ public class UtilitiesTestBase {
 
     public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, Schema schema) {
       try {
-        Option<IndexedRecord> recordOpt = ((HoodieAvroRecord) hoodieRecord).getData().getInsertValue(schema);
+        Option<IndexedRecord> recordOpt = ((HoodieLegacyAvroRecord) hoodieRecord).getData().getInsertValue(schema);
         return (GenericRecord) recordOpt.get();
       } catch (IOException e) {
         return null;

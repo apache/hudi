@@ -21,7 +21,7 @@ package org.apache.hudi.table.format.mor;
 import java.util.stream.Collectors;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -366,7 +366,7 @@ public class MergeOnReadInputFormat
         while (logRecordsKeyIterator.hasNext()) {
           String curAvroKey = logRecordsKeyIterator.next();
           Option<IndexedRecord> curAvroRecord = null;
-          final HoodieAvroRecord<?> hoodieRecord = (HoodieAvroRecord) scanner.getRecords().get(curAvroKey);
+          final HoodieLegacyAvroRecord<?> hoodieRecord = (HoodieLegacyAvroRecord) scanner.getRecords().get(curAvroKey);
           try {
             curAvroRecord = hoodieRecord.getData().getInsertValue(tableSchema);
           } catch (IOException e) {
@@ -438,7 +438,7 @@ public class MergeOnReadInputFormat
       public boolean hasNext() {
         while (recordsIterator.hasNext()) {
           Option<IndexedRecord> curAvroRecord = null;
-          final HoodieAvroRecord<?> hoodieRecord = (HoodieAvroRecord) recordsIterator.next();
+          final HoodieLegacyAvroRecord<?> hoodieRecord = (HoodieLegacyAvroRecord) recordsIterator.next();
           try {
             curAvroRecord = hoodieRecord.getData().getInsertValue(tableSchema);
           } catch (IOException e) {
@@ -826,7 +826,7 @@ public class MergeOnReadInputFormat
     }
 
     private Option<IndexedRecord> getInsertValue(String curKey) throws IOException {
-      final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
+      final HoodieLegacyAvroRecord<?> record = (HoodieLegacyAvroRecord) scanner.getRecords().get(curKey);
       if (!emitDelete && HoodieOperation.isDelete(record.getOperation())) {
         return Option.empty();
       }
@@ -851,7 +851,7 @@ public class MergeOnReadInputFormat
     private Option<HoodieAvroIndexedRecord> mergeRowWithLog(
         RowData curRow,
         String curKey) throws IOException {
-      final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
+      final HoodieLegacyAvroRecord<?> record = (HoodieLegacyAvroRecord) scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
       HoodieAvroIndexedRecord hoodieAvroIndexedRecord = new HoodieAvroIndexedRecord(historyAvroRecord);
       Option<HoodieRecord> resultRecord = recordMerger.merge(hoodieAvroIndexedRecord, record, tableSchema, payloadProps);

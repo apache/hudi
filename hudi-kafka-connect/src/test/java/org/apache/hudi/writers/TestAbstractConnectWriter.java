@@ -22,7 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -169,7 +169,7 @@ public class TestAbstractConnectWriter {
   }
 
   private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
-    return new HoodieAvroRecord<>(new HoodieKey(key, partitionPath),
+    return new HoodieLegacyAvroRecord<>(new HoodieKey(key, partitionPath),
         new HoodieAvroPayload(Option.of((GenericRecord) iRecord)));
   }
 

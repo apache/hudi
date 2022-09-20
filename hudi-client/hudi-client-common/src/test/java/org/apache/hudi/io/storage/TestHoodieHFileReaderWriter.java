@@ -32,7 +32,7 @@ import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -156,7 +156,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       record.put("number", i);
       if (testAvroWithMeta) {
         // payload does not matter. GenericRecord passed in is what matters
-        writer.writeAvroWithMetadata(new HoodieAvroRecord(new HoodieKey((String) record.get("_row_key"),
+        writer.writeAvroWithMetadata(new HoodieLegacyAvroRecord(new HoodieKey((String) record.get("_row_key"),
                 Integer.toString((Integer) record.get("number"))), new EmptyHoodieRecordPayload()).getKey(), record);
         // only HoodieKey will be looked up from the 2nd arg(HoodieRecord).
       } else {

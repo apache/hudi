@@ -23,7 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -163,19 +163,19 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     RawTripTestPayload rowChange1 =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 =
         new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
     RawTripTestPayload rowChange3 =
         new RawTripTestPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
     RawTripTestPayload rowChange4 =
         new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record4 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01", "2015/03/12");
     List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
@@ -287,16 +287,16 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":32}";
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
     RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieRecord record4 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     // We write record1, record2 to a parquet file, but the bloom filter contains (record1,
     // record2, record3).
@@ -379,16 +379,16 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     String recordStr4 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
     RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieRecord record4 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 
     // Also create the metadata and config
@@ -476,13 +476,13 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     String emptyPartitionPath = "";
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), emptyPartitionPath), rowChange1);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange1.getRowKey(), emptyPartitionPath), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), emptyPartitionPath), rowChange2);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange2.getRowKey(), emptyPartitionPath), rowChange2);
     RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), emptyPartitionPath), rowChange3);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange3.getRowKey(), emptyPartitionPath), rowChange3);
 
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3));
 
@@ -568,15 +568,15 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieKey key1 = new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath());
-    HoodieRecord record1 = new HoodieAvroRecord(key1, rowChange1);
+    HoodieRecord record1 = new HoodieLegacyAvroRecord(key1, rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieKey key2 = new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath());
-    HoodieRecord record2 = new HoodieAvroRecord(key2, rowChange2);
+    HoodieRecord record2 = new HoodieLegacyAvroRecord(key2, rowChange2);
     RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieKey key3 = new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath());
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieKey key4 = new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath());
-    HoodieRecord record4 = new HoodieAvroRecord(key4, rowChange4);
+    HoodieRecord record4 = new HoodieLegacyAvroRecord(key4, rowChange4);
     JavaRDD<HoodieKey> keysRDD = jsc.parallelize(Arrays.asList(key1, key2, key3, key4));
 
     // Also create the metadata and config
@@ -589,7 +589,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     JavaRDD<HoodieRecord> taggedRecords = tagLocation(
-        bloomIndex, keysRDD.map(k -> new HoodieAvroRecord(k, null)), hoodieTable);
+        bloomIndex, keysRDD.map(k -> new HoodieLegacyAvroRecord(k, null)), hoodieTable);
     JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocationsRDD = taggedRecords
         .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
             ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
@@ -637,7 +637,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);
     hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    taggedRecords = tagLocation(bloomIndex, keysRDD.map(k -> new HoodieAvroRecord(k, null)), hoodieTable);
+    taggedRecords = tagLocation(bloomIndex, keysRDD.map(k -> new HoodieLegacyAvroRecord(k, null)), hoodieTable);
     recordLocationsRDD = taggedRecords
         .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
             ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
@@ -676,10 +676,10 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // We write record1 to a parquet file, using a bloom filter having both records
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+        new HoodieLegacyAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
 
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1,
         BloomFilterTypeCode.SIMPLE.name());
