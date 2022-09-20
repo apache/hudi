@@ -299,10 +299,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * @return A {@link Pair} whose left is boolean indicating whether partition itself needs to be deleted,
    *         and right is a list of {@link CleanFileInfo} about the files in the partition that needs to be deleted.
    */
-  private Map<String, Pair<Boolean, List<CleanFileInfo>>> getFilesToCleanKeepingLatestCommits(List<String> partitionPath, int commitsRetained, HoodieCleaningPolicy policy) {
-    LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
+  private Map<String, Pair<Boolean, List<CleanFileInfo>>> getFilesToCleanKeepingLatestCommits(List<String> partitionPaths, int commitsRetained, HoodieCleaningPolicy policy) {
+    LOG.info("Cleaning " + partitionPaths + ", retaining latest " + commitsRetained + " commits. ");
     List<CleanFileInfo> deletePaths = new ArrayList<>();
-    Map<String, Pair<Boolean, List<CleanFileInfo>>> map = new HashMap<>();
+    Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanFileInfoPerPartitionMap = new HashMap<>();
 
     // Collect all the datafiles savepointed by all the savepoints
     List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()
@@ -315,7 +315,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       Option<HoodieInstant> earliestCommitToRetainOption = getEarliestCommitToRetain();
       HoodieInstant earliestCommitToRetain = earliestCommitToRetainOption.get();
       // add active files
-      List<Pair<String, List<HoodieFileGroup>>> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
+      List<Pair<String, List<HoodieFileGroup>>> fileGroups = fileSystemView.getAllFileGroups(partitionPaths).collect(Collectors.toList());
       for (Pair<String, List<HoodieFileGroup>> pairFileGroup : fileGroups) {
 
         // all replaced file groups before earliestCommitToRetain are eligible to clean
@@ -394,10 +394,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         if (fileGroups.isEmpty()) {
           toDeletePartition = true;
         }
-        map.put(pairFileGroup.getLeft(), Pair.of(toDeletePartition, deletePaths));
+        cleanFileInfoPerPartitionMap.put(pairFileGroup.getLeft(), Pair.of(toDeletePartition, deletePaths));
       }
     }
-    return map;
+    return cleanFileInfoPerPartitionMap;
   }
 
   /**
