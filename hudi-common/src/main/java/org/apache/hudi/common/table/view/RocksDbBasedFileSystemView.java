@@ -399,7 +399,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  protected Option<FileSlice> fetchLatestFileSlice(String partitionPath, String fileId) {
+  public Option<FileSlice> fetchLatestFileSlice(String partitionPath, String fileId) {
     // Retries only file-slices of the file and filters for the latest
     return Option.ofNullable(rocksDB
         .<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(),

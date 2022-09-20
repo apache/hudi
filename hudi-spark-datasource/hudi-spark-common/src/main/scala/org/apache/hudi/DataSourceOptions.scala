@@ -61,6 +61,16 @@ object DataSourceReadOptions {
       "(or) Read Optimized mode (obtain latest view, based on base files) (or) Snapshot mode " +
       "(obtain latest view, by merging base and (if any) log files)")
 
+  val INCREMENTAL_FORMAT_LATEST_STATE_VAL = "latest_state"
+  val INCREMENTAL_FORMAT_CDC_VAL = "cdc"
+  val INCREMENTAL_FORMAT: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.query.incremental.format")
+    .defaultValue(INCREMENTAL_FORMAT_LATEST_STATE_VAL)
+    .withValidValues(INCREMENTAL_FORMAT_LATEST_STATE_VAL, INCREMENTAL_FORMAT_CDC_VAL)
+    .withDocumentation("This config is used alone with the 'incremental' query type." +
+      "When set to 'latest_state', it returns the latest records' values." +
+      "When set to 'cdc', it returns the cdc data.")
+
   val REALTIME_SKIP_MERGE_OPT_VAL = "skip_merge"
   val REALTIME_PAYLOAD_COMBINE_OPT_VAL = "payload_combine"
   val REALTIME_MERGE: ConfigProperty[String] = ConfigProperty
