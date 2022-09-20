@@ -56,7 +56,7 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
  */
 public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
-  private StructType structType = null;
+  private transient StructType structType = null;
   private Option<Long> schemaFingerPrint = Option.empty();
 
   public HoodieSparkRecord(InternalRow data, StructType schema) {

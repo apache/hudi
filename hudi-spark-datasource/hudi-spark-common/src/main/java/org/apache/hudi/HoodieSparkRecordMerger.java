@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.Schema;
@@ -34,7 +33,7 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
 
   @Override
   public String getMergingStrategy() {
-    return StringUtils.DEFAULT_MERGER_STRATEGY_UUID;
+    return HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
   }
 
   @Override

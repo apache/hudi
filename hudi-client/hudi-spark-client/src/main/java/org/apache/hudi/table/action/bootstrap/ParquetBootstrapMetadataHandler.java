@@ -44,7 +44,6 @@ import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Properties;
 
 class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {

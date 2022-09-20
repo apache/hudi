@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
-import org.apache.hudi.common.model.HoodieAvroRecordMerger
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
 import org.apache.spark.sql.SparkSession
@@ -80,7 +80,7 @@ object HoodieOptionConfig {
     .withSqlKey("mergerStrategy")
     .withHoodieKey(DataSourceWriteOptions.MERGER_STRATEGY.key)
     .withTableConfigKey(HoodieTableConfig.MERGER_STRATEGY.key)
-    .defaultValue(StringUtils.DEFAULT_MERGER_STRATEGY_UUID)
+    .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
     .build()
 
   /**
