@@ -22,7 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
+import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -74,8 +74,10 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         try {
           String recKey = inp.getRecordKey(Option.of(keyGenerator));
           HoodieRecord hoodieRecord = inp.rewriteRecord(reader.getSchema(), config.getProps(), HoodieAvroUtils.RECORD_KEY_SCHEMA);
+          MetadataValues metadataValues = new MetadataValues();
+          metadataValues.setRecordKey(recKey);
           return hoodieRecord
-              .updateValues(HoodieAvroUtils.RECORD_KEY_SCHEMA, new Properties(), Collections.singletonMap(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(), recKey))
+              .updateMetadataValues(HoodieAvroUtils.RECORD_KEY_SCHEMA, new Properties(), metadataValues)
               .newInstance(new HoodieKey(recKey, partitionPath));
         } catch (IOException e) {
           LOG.error("Unable to overrideMetadataFieldValue", e);

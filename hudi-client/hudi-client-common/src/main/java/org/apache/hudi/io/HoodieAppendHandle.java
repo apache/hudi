@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -253,21 +254,21 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private HoodieRecord populateMetadataFields(HoodieRecord<T> hoodieRecord, Schema schema, Properties prop) throws IOException {
-    Map<String, String> metadataValues = new HashMap<>();
-    String seqId =
-        HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
+    MetadataValues metadataValues = new MetadataValues();
     if (config.populateMetaFields()) {
-      metadataValues.put(HoodieRecord.HoodieMetadataField.FILENAME_METADATA_FIELD.getFieldName(), fileId);
-      metadataValues.put(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName(), partitionPath);
-      metadataValues.put(HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(), hoodieRecord.getRecordKey());
-      metadataValues.put(HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName(), instantTime);
-      metadataValues.put(HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD.getFieldName(), seqId);
+      String seqId =
+          HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
+      metadataValues.setFileName(fileId);
+      metadataValues.setPartitionPath(partitionPath);
+      metadataValues.setRecordKey(hoodieRecord.getRecordKey());
+      metadataValues.setCommitTime(instantTime);
+      metadataValues.setCommitSeqno(seqId);
     }
     if (config.allowOperationMetadataField()) {
-      metadataValues.put(HoodieRecord.HoodieMetadataField.OPERATION_METADATA_FIELD.getFieldName(), hoodieRecord.getOperation().getName());
+      metadataValues.setOperation(hoodieRecord.getOperation().getName());
     }
 
-    return hoodieRecord.updateValues(schema, prop, metadataValues);
+    return hoodieRecord.updateMetadataValues(schema, prop, metadataValues);
   }
 
   private void initNewStatus() {

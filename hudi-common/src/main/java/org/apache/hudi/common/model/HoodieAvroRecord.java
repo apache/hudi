@@ -119,10 +119,10 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord updateValues(Schema recordSchema, Properties props, Map<String, String> metadataValues) throws IOException {
+  public HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException {
     GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
 
-    metadataValues.forEach((key, value) -> {
+    metadataValues.getKv().forEach((key, value) -> {
       if (value != null) {
         avroRecordPayload.put(key, value);
       }

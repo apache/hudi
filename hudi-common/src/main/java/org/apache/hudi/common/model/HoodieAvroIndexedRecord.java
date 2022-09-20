@@ -115,8 +115,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord updateValues(Schema recordSchema, Properties props, Map<String, String> metadataValues) throws IOException {
-    metadataValues.forEach((key, value) -> {
+  public HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException {
+    metadataValues.getKv().forEach((key, value) -> {
       if (value != null) {
         ((GenericRecord) data).put(key, value);
       }

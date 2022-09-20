@@ -314,7 +314,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * This method could change in the future.
    * @temporary
    */
-  public abstract HoodieRecord updateValues(Schema recordSchema, Properties props, Map<String, String> metadataValues) throws IOException;
+  public abstract HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException;
 
   public abstract boolean isDelete(Schema schema, Properties props) throws IOException;
 
