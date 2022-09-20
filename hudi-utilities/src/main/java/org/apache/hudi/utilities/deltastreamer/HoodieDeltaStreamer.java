@@ -71,6 +71,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import scala.Boolean;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -651,7 +652,7 @@ public class HoodieDeltaStreamer implements Serializable {
                 + cfg.baseFileFormat);
         cfg.baseFileFormat = baseFileFormat;
         this.cfg.baseFileFormat = baseFileFormat;
-        validateConfigs(meta.getTableConfig(), properties.get());
+        validateConfigs(jssc, meta.getTableConfig(), properties.get());
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
         if (cfg.baseFileFormat == null) {
@@ -672,38 +673,51 @@ public class HoodieDeltaStreamer implements Serializable {
           this::onInitializingWriteClient);
     }
 
-    private void validateConfigs(HoodieTableConfig htc, TypedProperties props) throws HoodieException {
+    private void validateConfigs(JavaSparkContext jssc, HoodieTableConfig htc, TypedProperties props) throws HoodieException {
       StringBuilder diffs = new StringBuilder();
-      String dataRecordKey = props.getString(HoodieTableConfig.RECORDKEY_FIELDS.key());
-      String tableRecordKey = htc.getRecordKeyFieldProp();
+      scala.Function2<String,String, scala.runtime.RichBoolean> resolver = this.sparkSession.sessionState().conf().resolver();
+      htc.getProps().forEach((k, v) -> {
+          if (props.containsKey(k) &&  !resolver.apply(v.toString(),props.get(v).toString()).) {
+            diffs.append(this.sparkSession.sessionState().conf().resolver().toString());
+//            diffs.append(k.toString());
+//            diffs.append("\t");
+//            diffs.append(v.toString());
+//            diffs.append("\t");
+//            diffs.append(props.get(k).toString());
+            diffs.append("\n");
+          }
+      });
 
-      if (!Objects.equals(dataRecordKey, tableRecordKey)) {
-        diffs.append("RecordKey:\t");
-        diffs.append(dataRecordKey);
-        diffs.append("\t");
-        diffs.append(tableRecordKey);
-        diffs.append("\n");
-      }
-
-      String dataPreCombineKey = props.getString(HoodieTableConfig.PRECOMBINE_FIELD.key());
-      String tablePreCombineKey = htc.getPreCombineField();
-      if (!Objects.equals(dataPreCombineKey, tablePreCombineKey)) {
-        diffs.append("PreCombineKey:\t");
-        diffs.append(dataRecordKey);
-        diffs.append("\t");
-        diffs.append(tableRecordKey);
-        diffs.append("\n");
-      }
-
-      String dataKeyGen = props.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key());
-      String tableKeyGen = htc.getKeyGeneratorClassName();
-      if (!Objects.equals(dataKeyGen, tableKeyGen)) {
-        diffs.append("KeyGenerator:\t");
-        diffs.append(dataRecordKey);
-        diffs.append("\t");
-        diffs.append(tableRecordKey);
-        diffs.append("\n");
-      }
+//      String dataRecordKey =  props.getString(HoodieTableConfig.RECORDKEY_FIELDS.key(),"");
+//      String tableRecordKey = htc.getRecordKeyFieldProp();
+//
+//      if (!dataRecordKey.isEmpty() && !Objects.equals(dataRecordKey, tableRecordKey)) {
+//        diffs.append("RecordKey:\t");
+//        diffs.append(dataRecordKey);
+//        diffs.append("\t");
+//        diffs.append(tableRecordKey);
+//        diffs.append("\n");
+//      }
+//
+//      String dataPreCombineKey = props.getString(HoodieTableConfig.PRECOMBINE_FIELD.key(),"");
+//      String tablePreCombineKey = htc.getPreCombineField();
+//      if (!dataPreCombineKey.isEmpty() && !Objects.equals(dataPreCombineKey, tablePreCombineKey)) {
+//        diffs.append("PreCombineKey:\t");
+//        diffs.append(dataRecordKey);
+//        diffs.append("\t");
+//        diffs.append(tableRecordKey);
+//        diffs.append("\n");
+//      }
+//
+//      String dataKeyGen = props.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(),"");
+//      String tableKeyGen = htc.getKeyGeneratorClassName();
+//      if (!dataKeyGen.isEmpty() && !Objects.equals(dataKeyGen, tableKeyGen)) {
+//        diffs.append("KeyGenerator:\t");
+//        diffs.append(dataRecordKey);
+//        diffs.append("\t");
+//        diffs.append(tableRecordKey);
+//        diffs.append("\n");
+//      }
 
       if (diffs.length() > 0) {
         diffs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n");
