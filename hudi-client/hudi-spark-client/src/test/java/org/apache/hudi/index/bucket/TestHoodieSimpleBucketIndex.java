@@ -139,7 +139,9 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
         .filter(r -> BucketIdentifier.bucketIdFromFileId(r.getCurrentLocation().getFileId())
             != getRecordBucketId(r)).findAny().isPresent());
     assertTrue(taggedRecordRDD.collectAsList().stream().filter(r -> r.getPartitionPath().equals("2015/01/31")
-        && !r.isCurrentLocationKnown()).count() == 1L);
+            && !r.isCurrentLocationKnown()).count() == 1L);
+    assertTrue(taggedRecordRDD.collectAsList().stream().filter(r -> r.getPartitionPath().equals("2016/01/31")
+            && r.isCurrentLocationKnown()).count() == 3L);
   }
 
   private HoodieWriteConfig makeConfig() {
