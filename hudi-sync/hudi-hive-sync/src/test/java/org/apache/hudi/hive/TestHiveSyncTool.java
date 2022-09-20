@@ -39,6 +39,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.Driver;
+import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -159,9 +160,6 @@ public class TestHiveSyncTool {
 
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
-    assertEquals("org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe",
-        hiveClient.getTable(HiveTestUtil.TABLE_NAME).getSd().getSerdeInfo().getSerializationLib(),
-        "SerDe info not updated or does not match");
     assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
         hiveClient.getStorageSchema().getColumns().size() + 1,
         "Hive Schema should match the table schema + partition field");
@@ -303,6 +301,7 @@ public class TestHiveSyncTool {
     hiveDriver.run("SHOW CREATE TABLE " + dbTableName);
     hiveDriver.getResults(results);
     String ddl = String.join("\n", results);
+    assertTrue(ddl.contains(String.format("ROW FORMAT SERDE \n  '%s'", ParquetHiveSerDe.class.getName())));
     assertTrue(ddl.contains("'path'='" + HiveTestUtil.basePath + "'"));
     if (syncAsDataSourceTable) {
       assertTrue(ddl.contains("'" + ConfigUtils.IS_QUERY_AS_RO_TABLE + "'='false'"));
@@ -405,6 +404,7 @@ public class TestHiveSyncTool {
       hiveDriver.run("SHOW CREATE TABLE " + dbTableName);
       hiveDriver.getResults(results);
       String ddl = String.join("\n", results);
+      assertTrue(ddl.contains(String.format("ROW FORMAT SERDE \n  '%s'", ParquetHiveSerDe.class.getName())));
       assertTrue(ddl.contains("'path'='" + HiveTestUtil.basePath + "'"));
       assertTrue(ddl.toLowerCase().contains("create external table"));
       if (syncAsDataSourceTable) {
