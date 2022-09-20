@@ -136,7 +136,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * The cdc operation.
    */
-  private HoodieOperation operation;
+  protected HoodieOperation operation;
 
   public HoodieRecord(HoodieKey key, T data) {
     this(key, data, null);
@@ -162,6 +162,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   }
 
   public abstract HoodieRecord<T> newInstance();
+
+  public abstract HoodieRecord<T> newInstance(T data);
 
   public abstract HoodieRecord<T> newInstance(HoodieKey key, HoodieOperation op);
 
@@ -200,10 +202,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     assert currentLocation == null;
     this.currentLocation = location;
     return this;
-  }
-
-  public void setData(T data) {
-    this.data = data;
   }
 
   public HoodieRecordLocation getCurrentLocation() {

@@ -85,6 +85,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
+  public HoodieRecord<InternalRow> newInstance(InternalRow data) {
+    return new HoodieSparkRecord(key, data, getStructType(), operation);
+  }
+
+  @Override
   public HoodieRecord<InternalRow> newInstance(HoodieKey key, HoodieOperation op) {
     return new HoodieSparkRecord(key, data, getStructType(), op);
   }

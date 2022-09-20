@@ -65,6 +65,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
+  public HoodieRecord<IndexedRecord> newInstance(IndexedRecord data) {
+    return new HoodieAvroIndexedRecord(key, data, operation);
+  }
+
+  @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key, HoodieOperation op) {
     return new HoodieAvroIndexedRecord(key, data, op);
   }

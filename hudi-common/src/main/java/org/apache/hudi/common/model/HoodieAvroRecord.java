@@ -56,6 +56,11 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
+  public HoodieRecord<T> newInstance(T data) {
+    return new HoodieAvroRecord<>(key, data, operation);
+  }
+
+  @Override
   public HoodieRecord<T> newInstance(HoodieKey key, HoodieOperation op) {
     return new HoodieAvroRecord<>(key, data, op);
   }

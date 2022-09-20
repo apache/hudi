@@ -72,6 +72,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
+  public HoodieRecord<T> newInstance(T data) {
+    return new HoodieEmptyRecord<>(key, operation, orderingVal, type);
+  }
+
+  @Override
   public HoodieRecord<T> newInstance(HoodieKey key, HoodieOperation op) {
     return new HoodieEmptyRecord<>(key, op, orderingVal, type);
   }
