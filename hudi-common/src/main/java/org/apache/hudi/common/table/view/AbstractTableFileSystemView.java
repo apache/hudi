@@ -413,8 +413,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * base-files.
    *
    * @param fileSliceStream Stream of FileSlice
+   * @param includeEmptyFileSlice include empty file-slices
    */
-  protected Stream<FileSlice> filterBaseFileAfterPendingCompaction(Stream<FileSlice> fileSliceStream) {
+  protected Stream<FileSlice> filterBaseFileAfterPendingCompaction(Stream<FileSlice> fileSliceStream, boolean includeEmptyFileSlice) {
     return fileSliceStream.map(fileSlice -> {
       if (isFileSliceAfterPendingCompaction(fileSlice)) {
         LOG.debug("File Slice (" + fileSlice + ") is in pending compaction");
@@ -425,7 +426,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return transformed;
       }
       return fileSlice;
-    }).filter(slice -> !slice.isEmpty());
+    }).filter(slice -> includeEmptyFileSlice || !slice.isEmpty());
   }
 
   protected HoodieFileGroup addBootstrapBaseFileIfPresent(HoodieFileGroup fileGroup) {
@@ -607,7 +608,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
       return filterBaseFileAfterPendingCompaction(fetchLatestFileSlices(partitionPath)
-          .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId())))
+          .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId())), true)
           .map(this::addBootstrapBaseFileIfPresent);
     } finally {
       readLock.unlock();
@@ -630,7 +631,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         if (!fs.isPresent()) {
           return Option.empty();
         }
-        return Option.ofNullable(filterBaseFileAfterPendingCompaction(Stream.of(fs.get())).map(this::addBootstrapBaseFileIfPresent).findFirst().orElse(null));
+        return Option.ofNullable(filterBaseFileAfterPendingCompaction(Stream.of(fs.get()), true).map(this::addBootstrapBaseFileIfPresent).findFirst().orElse(null));
       }
     } finally {
       readLock.unlock();
@@ -672,7 +673,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
               .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
               .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime));
       if (includeFileSlicesInPendingCompaction) {
-        return allFileSliceStream.map(this::filterBaseFileAfterPendingCompaction)
+        return allFileSliceStream.map(sliceStream -> this.filterBaseFileAfterPendingCompaction(sliceStream, false))
                 .map(sliceStream -> Option.fromJavaOptional(sliceStream.findFirst())).filter(Option::isPresent).map(Option::get)
                 .map(this::addBootstrapBaseFileIfPresent);
       } else {
