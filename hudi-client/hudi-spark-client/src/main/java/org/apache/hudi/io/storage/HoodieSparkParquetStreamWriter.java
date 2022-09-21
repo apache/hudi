@@ -40,6 +40,7 @@ public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, Au
   public HoodieSparkParquetStreamWriter(FSDataOutputStream outputStream,
       HoodieRowParquetConfig parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
+    this.writeSupport.enableLegacyFormat();
     this.writer = new Builder<>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
         .withWriteMode(ParquetFileWriter.Mode.CREATE)
         .withCompressionCodec(parquetConfig.getCompressionCodecName())

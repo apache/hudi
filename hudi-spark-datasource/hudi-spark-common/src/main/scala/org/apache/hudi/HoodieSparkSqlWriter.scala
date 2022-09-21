@@ -870,6 +870,7 @@ object HoodieSparkSqlWriter {
           hoodieRecord
         }).toJavaRDD()
       case HoodieRecord.HoodieRecordType.SPARK =>
+        log.info("Use spark record")
         // ut will use AvroKeyGenerator, so we need to cast it in spark record
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
         val structType = HoodieInternalRowUtils.getCachedSchema(schema)
