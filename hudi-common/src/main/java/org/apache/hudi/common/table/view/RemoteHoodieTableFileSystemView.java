@@ -51,9 +51,11 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -375,6 +377,16 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
+  }
+
+  @Override
+  public Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPaths) {
+    ArrayList<Pair<String, List<HoodieFileGroup>>> fileGroupPerPartitionList = new ArrayList<>();
+    for (String partitionPath : partitionPaths) {
+      Stream<HoodieFileGroup> fileGroup = getAllFileGroups(partitionPath);
+      fileGroupPerPartitionList.add(Pair.of(partitionPath, fileGroup.collect(Collectors.toList())));
+    }
+    return fileGroupPerPartitionList.stream();
   }
 
   @Override
