@@ -18,14 +18,12 @@
 
 package org.apache.hudi.util;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.hudi.HoodieInternalRowUtils;
-import org.apache.hudi.commmon.model.HoodieSparkRecord;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.FlatLists;
 
 import org.apache.spark.sql.HoodieCatalystExpressionUtils$;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
@@ -35,37 +33,7 @@ import org.apache.spark.sql.types.StructType;
 
 public class HoodieSparkRecordUtils {
 
-  /**
-   * Utility method to convert InternalRow to HoodieRecord using schema and payload class.
-   */
-  public static HoodieRecord<InternalRow> convertToHoodieSparkRecord(StructType structType, InternalRow data, boolean withOperationField) {
-    return convertToHoodieSparkRecord(structType, data,
-        Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
-        withOperationField, Option.empty());
-  }
-
-  public static HoodieRecord<InternalRow> convertToHoodieSparkRecord(StructType structType, InternalRow data, boolean withOperationField,
-      Option<String> partitionName) {
-    return convertToHoodieSparkRecord(structType, data,
-        Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
-        withOperationField, partitionName);
-  }
-
-  /**
-   * Utility method to convert bytes to HoodieRecord using schema and payload class.
-   */
-  public static HoodieRecord<InternalRow> convertToHoodieSparkRecord(StructType structType, InternalRow data, Pair<String, String> recordKeyPartitionPathFieldPair,
-      boolean withOperationField, Option<String> partitionName) {
-    final String recKey = getValue(structType, recordKeyPartitionPathFieldPair.getKey(), data).toString();
-    final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
-        getValue(structType, recordKeyPartitionPathFieldPair.getRight(), data).toString());
-
-    HoodieOperation operation = withOperationField
-        ? HoodieOperation.fromName(getNullableValAsString(structType, data, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
-    return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), data, structType, operation);
-  }
-
-  private static Object getValue(StructType structType, String fieldName, InternalRow row) {
+  public static Object getValue(StructType structType, String fieldName, InternalRow row) {
     NestedFieldPath posList = HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
     return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, posList);
   }
@@ -77,7 +45,7 @@ public class HoodieSparkRecordUtils {
    * @param fieldName The field name
    * @return the string form of the field or empty if the schema does not contain the field name or the value is null
    */
-  private static Option<String> getNullableValAsString(StructType structType, InternalRow row, String fieldName) {
+  public static Option<String> getNullableValAsString(StructType structType, InternalRow row, String fieldName) {
     String fieldVal = !HoodieCatalystExpressionUtils$.MODULE$.existField(structType, fieldName)
         ? null : StringUtils.objToString(getValue(structType, fieldName, row));
     return Option.ofNullable(fieldVal);
@@ -94,18 +62,11 @@ public class HoodieSparkRecordUtils {
   public static Object getRecordColumnValues(InternalRow row,
       String[] columns,
       StructType structType, boolean consistentLogicalTimestampEnabled) {
-    if (columns.length == 1) {
-      NestedFieldPath posList = HoodieInternalRowUtils.getCachedPosList(structType, columns[0]);
-      return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, posList);
-    } else {
-      // TODO this is inefficient, instead we can simply return array of Comparable
-      StringBuilder sb = new StringBuilder();
-      for (String col : columns) {
-        // TODO support consistentLogicalTimestampEnabled
-        NestedFieldPath posList = HoodieInternalRowUtils.getCachedPosList(structType, columns[0]);
-        return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, posList);
-      }
-      return sb.toString();
+    List<Object> result = new ArrayList<>();
+    for (String col : columns) {
+      NestedFieldPath posList = HoodieInternalRowUtils.getCachedPosList(structType, col);
+      result.add(Option.ofNullable(HoodieUnsafeRowUtils.getNestedInternalRowValue(row, posList)).orElse("").toString());
     }
+    return FlatLists.of(result);
   }
 }

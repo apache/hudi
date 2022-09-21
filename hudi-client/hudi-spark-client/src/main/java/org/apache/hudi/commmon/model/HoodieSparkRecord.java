@@ -50,6 +50,8 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.util.HoodieSparkRecordUtils.getNullableValAsString;
+import static org.apache.hudi.util.HoodieSparkRecordUtils.getValue;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
@@ -223,11 +225,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       Option<String> partitionNameOp,
       Boolean populateMetaFields) {
     if (populateMetaFields) {
-      return HoodieSparkRecordUtils.convertToHoodieSparkRecord(getStructType(), data, withOperation);
+      return convertToHoodieSparkRecord(getStructType(), data, withOperation);
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
-      return HoodieSparkRecordUtils.convertToHoodieSparkRecord(getStructType(), data, simpleKeyGenFieldsOpt.get(), withOperation, Option.empty());
+      return convertToHoodieSparkRecord(getStructType(), data, simpleKeyGenFieldsOpt.get(), withOperation, Option.empty());
     } else {
-      return HoodieSparkRecordUtils.convertToHoodieSparkRecord(getStructType(), data, withOperation, partitionNameOp);
+      return convertToHoodieSparkRecord(getStructType(), data, withOperation, partitionNameOp);
     }
   }
 
@@ -284,5 +286,35 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
         .filter(f -> HoodieCatalystExpressionUtils$.MODULE$.existField(structType, f))
         .map(UTF8String::fromString)
         .toArray(UTF8String[]::new);
+  }
+
+  /**
+   * Utility method to convert InternalRow to HoodieRecord using schema and payload class.
+   */
+  private static HoodieRecord<InternalRow> convertToHoodieSparkRecord(StructType structType, InternalRow data, boolean withOperationField) {
+    return convertToHoodieSparkRecord(structType, data,
+        Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        withOperationField, Option.empty());
+  }
+
+  private static HoodieRecord<InternalRow> convertToHoodieSparkRecord(StructType structType, InternalRow data, boolean withOperationField,
+      Option<String> partitionName) {
+    return convertToHoodieSparkRecord(structType, data,
+        Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        withOperationField, partitionName);
+  }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
+   */
+  private static HoodieRecord<InternalRow> convertToHoodieSparkRecord(StructType structType, InternalRow data, Pair<String, String> recordKeyPartitionPathFieldPair,
+      boolean withOperationField, Option<String> partitionName) {
+    final String recKey = getValue(structType, recordKeyPartitionPathFieldPair.getKey(), data).toString();
+    final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
+        getValue(structType, recordKeyPartitionPathFieldPair.getRight(), data).toString());
+
+    HoodieOperation operation = withOperationField
+        ? HoodieOperation.fromName(getNullableValAsString(structType, data, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
+    return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), data, structType, operation);
   }
 }
