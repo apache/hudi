@@ -4,6 +4,9 @@ excerpt: "Ziyue Guan from Bytedance shares the production experience of building
 author: Ziyue Guan, translated to English by yihua
 category: blog
 image: /assets/images/blog/bytedance_hudi.png
+tags:
+- use-case
+- apache hudi
 ---
 
 Ziyue Guan from Bytedance shares the experience of building an ExaByte(EB)-level data lake using Apache Hudi at Bytedance.

@@ -156,6 +156,44 @@ Example: When you change any file in `versioned_docs/version-0.7.0/`, it will on
 ## Configs
 Configs can be automatically updated by following these steps documented at ../hudi-utils/README.md
 
+## Blogs
+
+When adding a new blog, please follow these guidelines.
+
+1. Every Blog should have the `title`, `authors`, `image`, `tags` in the metadata of the blog. For example the front matter 
+for a blog should look like below. 
+```
+---
+title: "Blog title"
+author: FirstName LastName
+category: blog
+image: /assets/images/blog/<image_file>
+tags:
+- how-to
+- deltastreamer
+- incremental-processing
+- apache hudi
+---
+```
+2. The blog can be inline or referring to an external blog. If its an inline blog please save it as `.md` file. 
+Example for an inline blog - (Build Open Lakehouse using Apache Hudi & dbt)[https://github.com/apache/hudi/blob/asf-site/website/blog/2022-07-11-build-open-lakehouse-using-apache-hudi-and-dbt.md]. 
+If the blog is referring to an external blog you would need to embed the redirect url and save it as a `.mdx` file. 
+Take a look at this blog for reference - (Apache Hudi vs Delta Lake vs Apache Iceberg - Lakehouse Feature Compariso)[https://raw.githubusercontent.com/apache/hudi/asf-site/website/blog/2022-08-18-Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison.mdx]
+3. The image must be uploaded in the path /assets/images/blog/<image_file-name> and should be of standard size 1200 * 600
+4. The tags should be representative of these
+   1. tag1
+      - how-to (tutorial, recipes, show case how to use feature x)
+      - use-case (some community users talking about their use-case)
+      - design (technical articles talking about Hudi internal design/impl)
+      - performance (involves performance related blogs)
+   2. tag 2
+       - Represent individual features - clustering, compaction, ingestion, meta-sync etc.
+   3. tag 3
+      - Source. This is usually the second level domain name for this article gathered from the url link.
+       For example if the article is https://www.uber.com/blog/cost-efficiency-big-data/ we would use `uber` as the tag here. 
+       Another example - for https://robinhood.engineering/author-balaji-varadarajan-e3f496815ebf  we would use 
+       `robinhood` as the tag. For blogs directly contributed to hudi repo, we can use `apache hudi` as the tag.
+      
 ## Maintainer
 
 Apache Hudi Community
