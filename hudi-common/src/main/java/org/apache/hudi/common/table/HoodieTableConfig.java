@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
@@ -126,6 +127,22 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Columns used to uniquely identify the table. Concatenated values of these fields are used as "
           + " the record key component of HoodieKey.");
+
+  public static final ConfigProperty<Boolean> CDC_ENABLED = ConfigProperty
+      .key("hoodie.table.cdc.enabled")
+      .defaultValue(false)
+      .withDocumentation("When enable, persist the change data if necessary, and can be queried as a CDC query mode.");
+
+  public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
+      .key("hoodie.table.cdc.supplemental.logging.mode")
+      .defaultValue(HoodieCDCSupplementalLoggingMode.OP_KEY.getValue())
+      .withValidValues(
+          HoodieCDCSupplementalLoggingMode.OP_KEY.getValue(),
+          HoodieCDCSupplementalLoggingMode.WITH_BEFORE.getValue(),
+          HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER.getValue())
+      .withDocumentation("When 'cdc_op_key' persist the 'op' and the record key only,"
+          + " when 'cdc_data_before' persist the additional 'before' image ,"
+          + " and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.");
 
   public static final ConfigProperty<String> CREATE_SCHEMA = ConfigProperty
       .key("hoodie.table.create.schema")
@@ -587,6 +604,14 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public String getRecordKeyFieldProp() {
     return getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+  }
+
+  public boolean isCDCEnabled() {
+    return getBooleanOrDefault(CDC_ENABLED);
+  }
+
+  public String cdcSupplementalLoggingMode() {
+    return getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE);
   }
 
   public String getKeyGeneratorClassName() {
