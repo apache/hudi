@@ -62,7 +62,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.{SPARK_VERSION, SparkContext}
 
 import scala.collection.JavaConversions._
-import scala.collection.JavaConverters.seqAsJavaListConverter
+import scala.collection.JavaConverters.setAsJavaSetConverter
 import scala.collection.mutable
 import scala.util.matching.Regex
 
@@ -482,7 +482,7 @@ object HoodieSparkSqlWriter {
       .map(partitionField => partitionField.trim)
       .filter(_.nonEmpty)
       .toSeq
-    HoodieAvroUtils.removeFields(schema, partitionColumns.asJava)
+    HoodieAvroUtils.removeFields(schema, partitionColumns.toSet.asJava)
   }
 
   def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema]): Map[String, String] = {
