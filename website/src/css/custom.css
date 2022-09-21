@@ -57,61 +57,6 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
   
 }
 
-@font-face {
-  font-family: "Rubik";
-  src: url('/assets/fonts/rubic/Rubik-Regular.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: "Rubik Bold";
-  src: url('/assets/fonts/rubic/Rubik-Bold.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: "Rubik SemiBold";
-  src: url('/assets/fonts/rubic/Rubik-SemiBold.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: "Work Sans";
-  src: url('/assets/fonts/work_sans/WorkSans-Regular.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: "Work SansMedium";
-  src: url('/assets/fonts/work_sans/WorkSans-Medium.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: "Work SansSemiBold";
-  src: url('/assets/fonts/work_sans/WorkSans-SemiBold.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: "Work SansBold";
-  src: url('/assets/fonts/work_sans/WorkSans-Bold.ttf') format('truetype');
-}
-
-body {
-  font-family: "Work Sans";
-}
-
-h1 {
-  font-family: "Rubik Bold" !important;
-}
-
-h2 {
-  font-family: "Rubik SemiBold" !important;
-}
-
-h3, h4 {
-  font-family: "Work SansBold";
-}
-
-h5 {
-  font-family: "Work SansMedium";
-}
-
 @media (max-width: 767px) {
   .hero__img, .header-github-link, .header-slack-link, .header-twitter-link, .header-youtube-link {
     display: none;
