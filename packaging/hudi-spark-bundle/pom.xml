@@ -135,6 +135,8 @@
                   <include>org.apache.curator:curator-recipes</include>
                   <include>commons-codec:commons-codec</include>
                   <include>commons-io:commons-io</include>
+                  <include>org.apache.lucene:lucene-core</include>
+                  <include>org.roaringbitmap:RoaringBitmap</include>
                 </includes>
               </artifactSet>
               <relocations>

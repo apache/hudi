@@ -96,6 +96,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String SCHEMA_FOLDER_NAME = ".schema";
 
   public static final String MARKER_EXTN = ".marker";
+  public static final String INDEX_FOLDER_NAME = ".index";
 
   // NOTE: Since those two parameters lay on the hot-path of a lot of computations, we
   //       use tailored extension of the {@code Path} class allowing to avoid repetitive
@@ -274,6 +275,15 @@ public class HoodieTableMetaClient implements Serializable {
   public String getArchivePath() {
     String archiveFolder = tableConfig.getArchivelogFolder();
     return getMetaPath() + Path.SEPARATOR + archiveFolder;
+  }
+
+  /**
+   * Get lucene index folder path
+   *
+   * @return Lucene index folder path
+   */
+  public String getIndexFolderPath() {
+    return new Path(metaPath.get(), INDEX_FOLDER_NAME).toString();
   }
 
   /**
@@ -744,6 +754,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean shouldDropPartitionColumns;
     private String metadataPartitions;
     private String inflightMetadataPartitions;
+    private String secondaryIndexesMetadata;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -888,6 +899,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setSecondaryIndexesMetadata(String secondaryIndexesMetadata) {
+      this.secondaryIndexesMetadata = secondaryIndexesMetadata;
+      return this;
+    }
+
     private void set(String key, Object value) {
       if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
         this.others.put(key, value);
@@ -895,7 +911,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public PropertyBuilder set(Map<String, Object> props) {
-      for (String key: HoodieTableConfig.PERSISTED_CONFIG_LIST) {
+      for (String key : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
         Object value = props.get(key);
         if (value != null) {
           set(key, value);
@@ -1000,6 +1016,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT)) {
         setInflightMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.SECONDARY_INDEXES_METADATA)) {
+        setSecondaryIndexesMetadata(hoodieConfig.getString(HoodieTableConfig.SECONDARY_INDEXES_METADATA));
+      }
       return this;
     }
 
@@ -1095,6 +1114,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != inflightMetadataPartitions) {
         tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT, inflightMetadataPartitions);
+      }
+      if (null != secondaryIndexesMetadata) {
+        tableConfig.setValue(HoodieTableConfig.SECONDARY_INDEXES_METADATA, secondaryIndexesMetadata);
       }
       return tableConfig.getProps();
     }

@@ -56,6 +56,7 @@ public interface HoodieTimeline extends Serializable {
   String REQUESTED_EXTENSION = ".requested";
   String RESTORE_ACTION = "restore";
   String INDEXING_ACTION = "indexing";
+  String BUILD_ACTION = "build";
   // only for schema save
   String SCHEMA_COMMIT_ACTION = "schemacommit";
 
@@ -90,6 +91,9 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + REQUESTED_EXTENSION;
   String INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION;
+  String INFLIGHT_BUILD_COMMIT_EXTENSION = "." + BUILD_ACTION + INFLIGHT_EXTENSION;
+  String REQUESTED_BUILD_COMMIT_EXTENSION = "." + BUILD_ACTION + REQUESTED_EXTENSION;
+  String BUILD_COMMIT_EXTENSION = "." + BUILD_ACTION;
   String SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION;
   String INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION + REQUESTED_EXTENSION;
@@ -142,7 +146,7 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedAndCompactionInstants();
 
   /**
-   * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
+   * Timeline to just include commits (commit/deltacommit), compaction, replace and build actions.
    * 
    * @return
    */
@@ -225,6 +229,16 @@ public interface HoodieTimeline extends Serializable {
    * Filter this timeline to just include completed index instants.
    */
   HoodieTimeline filterCompletedIndexTimeline();
+
+  /**
+   * Filter this timeline to just include requested and inflight build instants.
+   */
+  HoodieTimeline filterPendingBuildTimeline();
+
+  /**
+   * Filter this timeline to just include completed build instants.
+   */
+  HoodieTimeline filterCompletedBuildTimeline();
 
   /**
    * If the timeline has any instants.
@@ -386,10 +400,19 @@ public interface HoodieTimeline extends Serializable {
     return new HoodieInstant(State.INFLIGHT, INDEXING_ACTION, timestamp);
   }
 
+  static HoodieInstant getBuildRequestedInstant(final String timestamp) {
+    return new HoodieInstant(State.REQUESTED, BUILD_ACTION, timestamp);
+  }
+
+  static HoodieInstant getBuildInflightInstant(String timestamp) {
+    return new HoodieInstant(State.INFLIGHT, BUILD_ACTION, timestamp);
+  }
+
   /**
    * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
    * between inflight and completed instants (compaction <=> commit).
-   * @param instant Hoodie Instant
+   *
+   * @param instant   Hoodie Instant
    * @param tableType Hoodie Table Type
    * @return Inflight Hoodie Instant
    */
@@ -510,6 +533,18 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeRequestedIndexFileName(String instant) {
     return StringUtils.join(instant, HoodieTimeline.REQUESTED_INDEX_COMMIT_EXTENSION);
+  }
+
+  static String makeBuildFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.BUILD_COMMIT_EXTENSION);
+  }
+
+  static String makeInflightBuildFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_BUILD_COMMIT_EXTENSION);
+  }
+
+  static String makeRequestedBuildFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.REQUESTED_BUILD_COMMIT_EXTENSION);
   }
 
   static String makeSchemaFileName(String instantTime) {

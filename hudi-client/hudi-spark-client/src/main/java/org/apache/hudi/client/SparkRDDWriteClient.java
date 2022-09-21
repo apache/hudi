@@ -25,6 +25,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.HoodieBuildCommitMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -40,6 +41,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieBuildException;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
@@ -62,6 +64,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -403,6 +406,55 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     LOG.info("Clustering successfully on commit " + clusteringCommitTime);
   }
 
+  @Override
+  public HoodieBuildCommitMetadata build(String instantTime, boolean shouldComplete) {
+    HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
+    preWrite(instantTime, WriteOperationType.BUILD, table.getMetaClient());
+    HoodieTimeline pendingBuildTimeline = table.getActiveTimeline().filterPendingBuildTimeline();
+    HoodieInstant inflightInstant = HoodieTimeline.getBuildInflightInstant(instantTime);
+
+    // This secondary index instant should be REQUESTED state.
+    // If it is INFLIGHT state, we should roll back it
+    if (pendingBuildTimeline.containsInstant(inflightInstant)) {
+      table.rollbackInflightBuild(inflightInstant, commitToRollback ->
+          getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+      table.getMetaClient().reloadActiveTimeline();
+    }
+    buildTimer = metrics.getBuildCtx();
+    LOG.info("Starting build secondary index at " + instantTime);
+    HoodieBuildCommitMetadata buildMetadata = table.build(context, instantTime);
+    if (shouldComplete) {
+      completeTableService(TableServiceType.BUILD, buildMetadata, table, instantTime);
+    }
+    return buildMetadata;
+  }
+
+  /**
+   * Persistence build commit metadata to completed build instant
+   *
+   * @param metadata        Build commit metadata
+   * @param table           HoodieTable
+   * @param buildCommitTime Build instant time
+   */
+  private void completeBuild(HoodieBuildCommitMetadata metadata,
+                             HoodieTable table,
+                             String buildCommitTime) {
+    if (metadata.getCommittedIndexesInfo().size() <= 0) {
+      throw new HoodieBuildException("No committed index info for this build: " + buildCommitTime);
+    }
+
+    HoodieInstant inflightInstant = HoodieTimeline.getBuildInflightInstant(buildCommitTime);
+    try {
+      this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
+      table.getActiveTimeline().transitionBuildInflightToCompleted(inflightInstant,
+          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      throw new HoodieBuildException("Unable to transition build inflight to completed", e);
+    } finally {
+      this.txnManager.endTransaction(Option.of(inflightInstant));
+    }
+  }
+
   private void updateTableMetadata(HoodieTable table, HoodieCommitMetadata commitMetadata,
                                    HoodieInstant hoodieInstant) {
     boolean isTableServiceAction = table.isTableServiceAction(hoodieInstant.getAction());
@@ -449,6 +501,9 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         break;
       case COMPACT:
         completeCompaction(metadata, table, commitInstant);
+        break;
+      case BUILD:
+        completeBuild((HoodieBuildCommitMetadata) metadata, table, commitInstant);
         break;
       default:
         throw new IllegalArgumentException("This table service is not valid " + tableServiceType);

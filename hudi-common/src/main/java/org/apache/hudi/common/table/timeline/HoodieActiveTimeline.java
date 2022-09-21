@@ -73,6 +73,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       ROLLBACK_EXTENSION, REQUESTED_ROLLBACK_EXTENSION, INFLIGHT_ROLLBACK_EXTENSION,
       REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION,
       REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION,
+      REQUESTED_BUILD_COMMIT_EXTENSION, INFLIGHT_BUILD_COMMIT_EXTENSION, BUILD_COMMIT_EXTENSION,
       REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION, INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION, SAVE_SCHEMA_ACTION_EXTENSION));
 
   private static final Set<String> NOT_PARSABLE_TIMESTAMPS = new HashSet<String>(3) {{
@@ -554,6 +555,38 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return commitInstant;
   }
 
+  /**
+   * Transition build requested to inflight
+   *
+   * @param requestedInstant Requested instant
+   * @param data             Metadata
+   * @return inflight instant
+   */
+  public HoodieInstant transitionBuildRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.BUILD_ACTION));
+    ValidationUtils.checkArgument(requestedInstant.isRequested());
+    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, BUILD_ACTION, requestedInstant.getTimestamp());
+    // Then write to timeline
+    transitionState(requestedInstant, inflightInstant, data);
+    return inflightInstant;
+  }
+
+  /**
+   * Transition build inflight to completed
+   *
+   * @param inflightInstant Inflight instant
+   * @param data            Metadata
+   * @return completed instant
+   */
+  public HoodieInstant transitionBuildInflightToCompleted(HoodieInstant inflightInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.BUILD_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight());
+    HoodieInstant completedInstant = new HoodieInstant(State.COMPLETED, BUILD_ACTION, inflightInstant.getTimestamp());
+    // Then write to timeline
+    transitionState(inflightInstant, completedInstant, data);
+    return completedInstant;
+  }
+
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
     transitionState(fromInstant, toInstant, data, false);
   }
@@ -738,6 +771,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public void saveToPendingIndexAction(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
         String.format("%s is not equal to %s action", instant.getAction(), INDEXING_ACTION));
+    createFileInMetaPath(instant.getFileName(), content, false);
+  }
+
+  /**
+   * Save content for inflight/requested build instant.
+   */
+  public void saveToPendingBuildAction(HoodieInstant instant, Option<byte[]> content) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.BUILD_ACTION),
+        String.format("%s is not equal to %s action", instant.getAction(), BUILD_ACTION));
     createFileInMetaPath(instant.getFileName(), content, false);
   }
 

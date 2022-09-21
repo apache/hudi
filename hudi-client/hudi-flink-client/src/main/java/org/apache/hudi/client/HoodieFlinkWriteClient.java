@@ -24,6 +24,7 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBuildCommitMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -488,6 +489,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       }
     }
     LOG.info("Clustering successfully on commit " + clusteringCommitTime);
+  }
+
+  @Override
+  public HoodieBuildCommitMetadata build(String instantTime, boolean shouldComplete) {
+    throw new HoodieNotSupportedException("Build is not supported in HoodieFlinkWriteClient");
   }
 
   @Override

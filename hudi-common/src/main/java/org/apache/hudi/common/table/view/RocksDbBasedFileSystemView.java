@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -35,6 +33,10 @@ import org.apache.hudi.common.util.RocksDBSchemaHelper;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.RocksDBDAO;
+import org.apache.hudi.secondary.index.HoodieSecondaryIndex;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -483,6 +485,52 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     HoodieInstant replacedInstant =
         rocksDB.get(schemaHelper.getColFamilyForReplacedFileGroups(), lookupKey);
     return Option.ofNullable(replacedInstant);
+  }
+
+  @Override
+  protected void resetSecondaryIndexBaseFiles(Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> secondaryIndexBaseFiles) {
+    LOG.info("Resetting secondary index base files to ROCKSDB based file-system view at "
+        + config.getRocksdbBasePath() + ", total num: " + secondaryIndexBaseFiles.size());
+
+    // Delete all completed secondary index base files
+    rocksDB.prefixDelete(schemaHelper.getColFamilyForCompletedSecondaryIndexBaseFiles(),
+        schemaHelper.getPrefixForSecondaryIndexBaseFiles());
+    // Now add new entries
+    rocksDB.writeBatch(batch ->
+        secondaryIndexBaseFiles.forEach((key, value) ->
+            rocksDB.<HoodieSecondaryIndex, HashMap<String, HoodieInstant>>putInBatch(
+                batch, schemaHelper.getColFamilyForCompletedSecondaryIndexBaseFiles(), key, (HashMap<String, HoodieInstant>) value)));
+    LOG.info("Resetting secondary index base files to ROCKSDB based file-system view complete");
+  }
+
+  @Override
+  protected void resetPendingSecondaryIndexBaseFiles(Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> pendingSecondaryIndexBaseFiles) {
+    LOG.info("Resetting pending secondary index base files to ROCKSDB based file-system view at "
+        + config.getRocksdbBasePath() + ", total num: " + pendingSecondaryIndexBaseFiles.size());
+
+    // Delete all replaced file groups
+    rocksDB.prefixDelete(schemaHelper.getColFamilyForPendingSecondaryIndexBaseFiles(),
+        schemaHelper.getPrefixForSecondaryIndexBaseFiles());
+    // Now add new entries
+    rocksDB.writeBatch(batch ->
+        pendingSecondaryIndexBaseFiles.forEach((key, value) ->
+            rocksDB.<HoodieSecondaryIndex, HashMap<String, HoodieInstant>>putInBatch(
+                batch, schemaHelper.getColFamilyForPendingSecondaryIndexBaseFiles(), key, (HashMap<String, HoodieInstant>) value)));
+    LOG.info("Resetting pending secondary index base files to ROCKSDB based file-system view complete");
+  }
+
+  @Override
+  protected Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> fetchSecondaryIndexBaseFiles() {
+    return rocksDB.<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>>prefixSearch(
+            schemaHelper.getColFamilyForCompletedSecondaryIndexBaseFiles(), "")
+        .map(Pair::getValue);
+  }
+
+  @Override
+  protected Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> fetchPendingSecondaryIndexBaseFiles() {
+    return rocksDB.<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>>prefixSearch(
+            schemaHelper.getColFamilyForPendingSecondaryIndexBaseFiles(), "")
+        .map(Pair::getValue);
   }
 
   private Stream<HoodieFileGroup> getFileGroups(Stream<FileSlice> sliceStream) {

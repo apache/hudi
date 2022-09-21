@@ -27,6 +27,8 @@
 
   <properties>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <lucene.version>8.11.1</lucene.version>
+    <roaringbitmap.version>0.9.28</roaringbitmap.version>
   </properties>
 
   <build>
@@ -92,6 +94,8 @@
             <import>${basedir}/src/main/avro/HoodieMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieIndexPartitionInfo.avsc</import>
             <import>${basedir}/src/main/avro/HoodieIndexPlan.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBuildTask.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBuildPlan.avsc</import>
             <import>${basedir}/src/main/avro/HoodieIndexCommitMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieArchivedMetaEntry.avsc</import>
           </imports>
@@ -105,6 +109,18 @@
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-1.2-api</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-core</artifactId>
+      <version>${lucene.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.roaringbitmap</groupId>
+      <artifactId>RoaringBitmap</artifactId>
+      <version>${roaringbitmap.version}</version>
     </dependency>
 
     <!-- Fasterxml -->

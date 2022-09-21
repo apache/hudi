@@ -40,6 +40,9 @@ import java.util.List;
  * Partitions : Key = "part=<PartitionPath>" Value = Boolean
  *
  * Pending Compactions Key = "part=<PartitionPath>,id=<FileId>" Value = Pair<CompactionTime, CompactionOperation>
+ *
+ * Pending Secondary Index Base Files Key = "index_name=<HoodieSecondaryIndex>" Value = "Map<String, HoodieInstant>"
+ * Completed Secondary Index Base Files Key = "index_name=<HoodieSecondaryIndex>" Value = "Map<String, HoodieInstant>"
  */
 public class RocksDBSchemaHelper {
 
@@ -49,6 +52,8 @@ public class RocksDBSchemaHelper {
   private final String colFamilyForStoredPartitions;
   private final String colFamilyForReplacedFileGroups;
   private final String colFamilyForPendingClusteringFileGroups;
+  private final String colFamilyForPendingSecondaryIndexBaseFiles;
+  private final String colFamilyForCompletedSecondaryIndexBaseFiles;
 
   public RocksDBSchemaHelper(HoodieTableMetaClient metaClient) {
     this.colFamilyForBootstrapBaseFile = "hudi_bootstrap_basefile_" + metaClient.getBasePath().replace("/", "_");
@@ -57,11 +62,14 @@ public class RocksDBSchemaHelper {
     this.colFamilyForView = "hudi_view_" + metaClient.getBasePath().replace("/", "_");
     this.colFamilyForReplacedFileGroups = "hudi_replaced_fg" + metaClient.getBasePath().replace("/", "_");
     this.colFamilyForPendingClusteringFileGroups = "hudi_pending_clustering_fg" + metaClient.getBasePath().replace("/", "_");
+    this.colFamilyForPendingSecondaryIndexBaseFiles = "hudi_pending_secondary_index_base_files" + metaClient.getBasePath().replace("/", "_");
+    this.colFamilyForCompletedSecondaryIndexBaseFiles = "hudi_completed_secondary_index_base_files" + metaClient.getBasePath().replace("/", "_");
   }
 
   public List<String> getAllColumnFamilies() {
     return Arrays.asList(getColFamilyForView(), getColFamilyForPendingCompaction(), getColFamilyForBootstrapBaseFile(),
-        getColFamilyForStoredPartitions(), getColFamilyForReplacedFileGroups(), getColFamilyForFileGroupsInPendingClustering());
+        getColFamilyForStoredPartitions(), getColFamilyForReplacedFileGroups(), getColFamilyForFileGroupsInPendingClustering(),
+        getColFamilyForCompletedSecondaryIndexBaseFiles(), getColFamilyForPendingSecondaryIndexBaseFiles());
   }
 
   public String getKeyForPartitionLookup(String partition) {
@@ -122,6 +130,10 @@ public class RocksDBSchemaHelper {
     return String.format("part=%s,id=%s", fgId.getPartitionPath(), fgId.getFileId());
   }
 
+  public String getPrefixForSecondaryIndexBaseFiles() {
+    return "secondary_index=";
+  }
+
   public String getColFamilyForView() {
     return colFamilyForView;
   }
@@ -144,5 +156,13 @@ public class RocksDBSchemaHelper {
 
   public String getColFamilyForFileGroupsInPendingClustering() {
     return colFamilyForPendingClusteringFileGroups;
+  }
+
+  public String getColFamilyForPendingSecondaryIndexBaseFiles() {
+    return colFamilyForPendingSecondaryIndexBaseFiles;
+  }
+
+  public String getColFamilyForCompletedSecondaryIndexBaseFiles() {
+    return colFamilyForCompletedSecondaryIndexBaseFiles;
   }
 }

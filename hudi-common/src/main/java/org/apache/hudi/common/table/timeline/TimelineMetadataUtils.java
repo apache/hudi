@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieBuildPlan;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -147,6 +148,10 @@ public class TimelineMetadataUtils {
     return serializeAvroMetadata(indexCommitMetadata, HoodieIndexCommitMetadata.class);
   }
 
+  public static Option<byte[]> serializeBuildPlan(HoodieBuildPlan buildPlan) throws IOException {
+    return serializeAvroMetadata(buildPlan, HoodieBuildPlan.class);
+  }
+
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)
       throws IOException {
     DatumWriter<T> datumWriter = new SpecificDatumWriter<>(clazz);
@@ -196,6 +201,10 @@ public class TimelineMetadataUtils {
 
   public static HoodieIndexCommitMetadata deserializeIndexCommitMetadata(byte[] bytes) throws IOException {
     return deserializeAvroMetadata(bytes, HoodieIndexCommitMetadata.class);
+  }
+
+  public static HoodieBuildPlan deserializeBuildPlan(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieBuildPlan.class);
   }
 
   public static <T extends SpecificRecordBase> T deserializeAvroMetadata(byte[] bytes, Class<T> clazz)

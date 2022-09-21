@@ -20,14 +20,19 @@ package org.apache.hudi
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.common.config.HoodieSecondaryIndexConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.BuildUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.secondary.index.SecondaryIndexUtils
 import org.apache.hudi.util.PathUtils
 import org.apache.log4j.LogManager
+import org.apache.parquet.hadoop.util.SerializationUtil
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
@@ -125,6 +130,8 @@ class DefaultSource extends RelationProvider
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, metaClient)
     } else {
+      injectSecondaryIndexData(SparkSession.getActiveSession.get, metaClient)
+
       (tableType, queryType, isBootstrappedTable) match {
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
@@ -147,6 +154,20 @@ class DefaultSource extends RelationProvider
           throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
             s"isBootstrappedTable: $isBootstrappedTable ")
       }
+    }
+  }
+
+  def injectSecondaryIndexData(spark: SparkSession, metaClient: HoodieTableMetaClient): Unit = {
+    val indexMeta = SecondaryIndexUtils.getSecondaryIndexes(metaClient)
+    val indexedBaseFiles = BuildUtils.getBaseFileIndexInfo(metaClient)
+    if (indexMeta.isPresent && !indexMeta.get().isEmpty && !indexedBaseFiles.isEmpty) {
+      spark.sparkContext.hadoopConfiguration.set(
+        SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePathV2.toString)
+      spark.sparkContext.hadoopConfiguration.set(
+        HoodieTableConfig.SECONDARY_INDEXES_METADATA.key(), SecondaryIndexUtils.toJsonString(indexMeta.get()))
+      SerializationUtil.writeObjectToConfAsBase64(
+        HoodieSecondaryIndexConfig.HOODIE_SECONDARY_INDEX_DATA, indexedBaseFiles, spark.sparkContext.hadoopConfiguration)
+      log.info("Write secondary index data to hadoop config")
     }
   }
 

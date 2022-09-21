@@ -31,7 +31,7 @@ case class CreateIndex(
     indexType: String,
     ignoreIfExists: Boolean,
     columns: Seq[(Attribute, Map[String, String])],
-    properties: Map[String, String],
+    options: Map[String, String],
     override val output: Seq[Attribute] = CreateIndex.getOutputAttrs) extends Command {
 
   override def children: Seq[LogicalPlan] = Seq(table)

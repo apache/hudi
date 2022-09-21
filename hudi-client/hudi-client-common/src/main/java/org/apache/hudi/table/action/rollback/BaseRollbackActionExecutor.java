@@ -205,8 +205,11 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
 
     final boolean isPendingClustering = Objects.equals(HoodieTimeline.REPLACE_COMMIT_ACTION, instantToRollback.getAction())
         && !instantToRollback.isCompleted() && ClusteringUtils.getClusteringPlan(table.getMetaClient(), instantToRollback).isPresent();
+
+    final boolean isPendingBuild = Objects.equals(HoodieTimeline.BUILD_ACTION, instantToRollback.getAction())
+        && !instantToRollback.isCompleted();
     validateSavepointRollbacks();
-    if (!isPendingCompaction && !isPendingClustering) {
+    if (!isPendingCompaction && !isPendingClustering && !isPendingBuild) {
       validateRollbackCommitSequence();
     }
 

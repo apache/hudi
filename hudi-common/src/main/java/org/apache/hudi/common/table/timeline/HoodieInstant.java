@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.util.CollectionUtils;
+
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
@@ -180,6 +181,10 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       return isInflight() ? HoodieTimeline.makeInflightSchemaFileName(timestamp)
           : isRequested() ? HoodieTimeline.makeRequestSchemaFileName(timestamp)
           : HoodieTimeline.makeSchemaFileName(timestamp);
+    } else if (HoodieTimeline.BUILD_ACTION.equals(action)) {
+      return isInflight() ? HoodieTimeline.makeInflightBuildFileName(timestamp)
+          : isRequested() ? HoodieTimeline.makeRequestedBuildFileName(timestamp)
+          : HoodieTimeline.makeBuildFileName(timestamp);
     }
     throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
   }

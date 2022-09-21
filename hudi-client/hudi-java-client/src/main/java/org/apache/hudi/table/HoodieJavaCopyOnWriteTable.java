@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.avro.model.HoodieBuildPlan;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -33,6 +34,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieBuildCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -49,6 +51,8 @@ import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
+import org.apache.hudi.table.action.build.BuildPlanActionExecutor;
+import org.apache.hudi.table.action.build.JavaExecuteBuildCommitActionExecutor;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
@@ -70,6 +74,7 @@ import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -316,5 +321,15 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
+  }
+
+  @Override
+  public Option<HoodieBuildPlan> scheduleBuild(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+    return new BuildPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
+  }
+
+  @Override
+  public HoodieBuildCommitMetadata build(HoodieEngineContext context, String instantTime) {
+    return new JavaExecuteBuildCommitActionExecutor<>(context, config, this, instantTime).execute();
   }
 }
