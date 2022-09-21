@@ -23,13 +23,13 @@ import com.twitter.chill.KSerializer
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import org.apache.avro.SchemaNormalization
 import org.apache.commons.io.IOUtils
+import org.apache.hudi.HoodieInternalRowUtils
 import org.apache.hudi.commmon.model.HoodieSparkRecord
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.Utils
-import org.apache.spark.{SparkEnv, SparkException}
+import org.apache.spark.SparkEnv
 import scala.collection.mutable
 
 /**
@@ -38,18 +38,11 @@ import scala.collection.mutable
  * schema, as to reduce network IO.
  * Actions like parsing or compressing schemas are computationally expensive so the serializer
  * caches all previously seen values as to reduce the amount of work needed to do.
- * @param schemas a map where the keys are unique IDs for spark schemas and the values are the
- *                string representation of the Avro schema, used to decrease the amount of data
- *                that needs to be serialized.
  */
-class SparkStructTypeSerializer(schemas: Map[Long, StructType]) extends KSerializer[HoodieSparkRecord] {
+class HoodieSparkRecordSerializer() extends KSerializer[HoodieSparkRecord] {
   /** Used to reduce the amount of effort to compress the schema */
   private val compressCache = new mutable.HashMap[StructType, Array[Byte]]()
   private val decompressCache = new mutable.HashMap[ByteBuffer, StructType]()
-
-  /** Fingerprinting is very expensive so this alleviates most of the work */
-  private val fingerprintCache = new mutable.HashMap[StructType, Long]()
-  private val schemaCache = new mutable.HashMap[Long, StructType]()
 
   // GenericAvroSerializer can't take a SparkConf in the constructor b/c then it would become
   // a member of KryoSerializer, which would make KryoSerializer not Serializable.  We make
@@ -97,25 +90,26 @@ class SparkStructTypeSerializer(schemas: Map[Long, StructType]) extends KSeriali
    */
   def serializeDatum(datum: HoodieSparkRecord, output: Output): Unit = {
     val schema = datum.getStructType
-    val fingerprint = fingerprintCache.getOrElseUpdate(schema, {
-      SchemaNormalization.fingerprint64(schema.json.getBytes(StandardCharsets.UTF_8))
-    })
-    schemas.get(fingerprint) match {
-      case Some(_) =>
-        output.writeBoolean(true)
-        output.writeLong(fingerprint)
-      case None =>
-        output.writeBoolean(false)
-        val compressedSchema = compress(schema)
-        output.writeInt(compressedSchema.length)
-        output.writeBytes(compressedSchema)
+    if (HoodieInternalRowUtils.containsCompressedSchema(schema)) {
+      val fingerprint = HoodieInternalRowUtils.getCachedFingerPrintFromSchema(schema)
+      output.writeBoolean(true)
+      output.writeLong(fingerprint)
+    } else {
+      output.writeBoolean(false)
+      val compressedSchema = compress(schema)
+      output.writeInt(compressedSchema.length)
+      output.writeBytes(compressedSchema)
     }
 
     val record = datum.newInstance().asInstanceOf[HoodieSparkRecord]
     record.setStructType(null)
-    val stream = new ObjectOutputStream(output)
+    val byteStream = new ByteArrayOutputStream()
+    val stream = new ObjectOutputStream(byteStream)
     stream.writeObject(record)
+    output.writeBytes(byteStream.toByteArray)
     stream.close()
+    byteStream.close()
+    // We do not need to close output. Because output is shared.
   }
 
   /**
@@ -126,24 +120,15 @@ class SparkStructTypeSerializer(schemas: Map[Long, StructType]) extends KSeriali
     val schema = {
       if (input.readBoolean()) {
         val fingerprint = input.readLong()
-        schemaCache.getOrElseUpdate(fingerprint, {
-          schemas.get(fingerprint) match {
-            case Some(s) => s
-            case None =>
-              throw new SparkException(
-                "Error reading attempting to read spark data -- encountered an unknown " +
-                  s"fingerprint: $fingerprint, not sure what schema to use.  This could happen " +
-                  "if you registered additional schemas after starting your spark context.")
-          }
-        })
+        HoodieInternalRowUtils.getCachedSchemaFromFingerPrint(fingerprint)
       } else {
         val length = input.readInt()
         decompress(ByteBuffer.wrap(input.readBytes(length)))
       }
     }
+    // We do not need to close input. Because input is shared.
     val stream = new ObjectInputStream(input)
     val record = stream.readObject().asInstanceOf[HoodieSparkRecord]
-    stream.close()
     record.setStructType(schema)
 
     record

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.commmon.model;
 
+import com.esotericsoftware.kryo.DefaultSerializer;
 import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -39,6 +40,7 @@ import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
 import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
+import org.apache.spark.sql.hudi.HoodieSparkRecordSerializer;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
@@ -54,29 +56,29 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
 /**
  * Spark Engine-specific Implementations of `HoodieRecord`.
  */
+@DefaultSerializer(HoodieSparkRecordSerializer.class)
 public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
-  private transient StructType structType = null;
-  private Option<Long> schemaFingerPrint = Option.empty();
+  private StructType structType = null;
 
   public HoodieSparkRecord(InternalRow data, StructType schema) {
     super(null, data);
-    initSchema(schema);
+    this.structType = schema;
   }
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema) {
     super(key, data);
-    initSchema(schema);
+    this.structType = schema;
   }
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation) {
     super(key, data, operation);
-    initSchema(schema);
+    this.structType = schema;
   }
 
   public HoodieSparkRecord(HoodieSparkRecord record) {
     super(record);
-    initSchema(record.getStructType());
+    this.structType = record.structType;
   }
 
   @Override
@@ -133,6 +135,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType otherStructType = ((HoodieSparkRecord) other).getStructType();
     StructType writerStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
     InternalRow mergeRow = HoodieInternalRowUtils.stitchRecords(data, getStructType(), (InternalRow) other.getData(), otherStructType, writerStructType);
+    HoodieInternalRowUtils.addCompressedSchema(writerStructType);
     return new HoodieSparkRecord(getKey(), mergeRow, writerStructType, getOperation());
   }
 
@@ -151,6 +154,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       resultRow = new HoodieInternalRow(metaFields, data, true);
     }
 
+    HoodieInternalRowUtils.addCompressedSchema(targetStructType);
     return new HoodieSparkRecord(getKey(), resultRow, targetStructType, getOperation());
   }
 
@@ -165,6 +169,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       resultRow = new HoodieInternalRow(metaFields, data, true);
     }
 
+    HoodieInternalRowUtils.addCompressedSchema(newStructType);
     return new HoodieSparkRecord(getKey(), resultRow, newStructType, getOperation());
   }
 
@@ -267,26 +272,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   public StructType getStructType() {
-    if (schemaFingerPrint.isPresent()) {
-      return HoodieInternalRowUtils.getCachedSchemaFromFingerPrint(schemaFingerPrint.get());
-    } else {
-      return structType;
-    }
-  }
-
-  private void initSchema(StructType structType) {
-    if (HoodieInternalRowUtils.containsCompressedSchema(structType)) {
-      HoodieInternalRowUtils.addCompressedSchema(structType);
-      this.schemaFingerPrint = Option.of(HoodieInternalRowUtils.getCachedFingerPrintFromSchema(structType));
-    } else {
-      this.structType = structType;
-    }
+    return structType;
   }
 
   public void setStructType(StructType structType) {
-    if (structType != null) {
-      initSchema(structType);
-    }
+    this.structType = structType;
   }
 
   private UTF8String[] extractMetaField(StructType structType) {

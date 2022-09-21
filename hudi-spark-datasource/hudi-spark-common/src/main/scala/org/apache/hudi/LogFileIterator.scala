@@ -43,7 +43,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.hudi.SparkStructTypeSerializer
+import org.apache.spark.sql.hudi.{HoodieSparkRecordSerializer, SparkStructTypeSerializer}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.types.StructType
 import java.io.Closeable
@@ -350,9 +350,8 @@ object LogFileIterator {
   }
 
   private def registerStructTypeSerializerIfNeed(schemas: List[StructType]): Unit = {
-    val schemaMap = schemas.map(schema => (SchemaNormalization.fingerprint64(schema.json.getBytes(StandardCharsets.UTF_8)), schema))
-      .toMap
-    val serializer = new SparkStructTypeSerializer(schemaMap)
+    schemas.foreach(HoodieInternalRowUtils.addCompressedSchema)
+    val serializer = new HoodieSparkRecordSerializer
     SerializationUtils.setOverallRegister(classOf[HoodieSparkRecord].getName, serializer)
   }
 }
