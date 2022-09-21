@@ -102,16 +102,11 @@ public class HoodieCDCLogger implements Closeable {
       this.cdcSupplementalLoggingMode = HoodieCDCSupplementalLoggingMode.parse(
           config.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE));
 
-      if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
-        this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA;
-        this.cdcSchemaString = HoodieCDCUtils.CDC_SCHEMA_STRING;
-      } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
-        this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE;
-        this.cdcSchemaString = HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE_STRING;
-      } else {
-        this.cdcSchema = HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY;
-        this.cdcSchemaString = HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY_STRING;
-      }
+      this.cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
+          cdcSupplementalLoggingMode,
+          dataSchema
+      );
+      this.cdcSchemaString = this.cdcSchema.toString();
 
       this.cdcData = new ExternalSpillableMap<>(
           maxInMemorySizeInBytes,
@@ -158,18 +153,21 @@ public class HoodieCDCLogger implements Closeable {
                                              GenericRecord newRecord) {
     GenericData.Record record;
     if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
-      record = HoodieCDCUtils.cdcRecord(operation.getValue(), commitTime,
+      record = HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), commitTime,
           removeCommitMetadata(oldRecord), newRecord);
     } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
-      record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey,
+      record = HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), recordKey,
           removeCommitMetadata(oldRecord));
     } else {
-      record = HoodieCDCUtils.cdcRecord(operation.getValue(), recordKey);
+      record = HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), recordKey);
     }
     return record;
   }
 
   private GenericRecord removeCommitMetadata(GenericRecord record) {
+    if (record == null) {
+      return null;
+    }
     return HoodieAvroUtils.rewriteRecordWithNewSchema(record, dataSchema, new HashMap<>());
   }
 
@@ -219,18 +217,6 @@ public class HoodieCDCLogger implements Closeable {
     } finally {
       cdcData.clear();
     }
-  }
-
-  public static Option<AppendResult> writeCDCDataIfNeeded(HoodieCDCLogger cdcLogger,
-                                                          long recordsWritten,
-                                                          long insertRecordsWritten) {
-    if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
-      // the following cases where we do not need to write out the cdc file:
-      // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
-      // case 2: all the data are new-coming,
-      return Option.empty();
-    }
-    return cdcLogger.writeCDCData();
   }
 
   public static void setCDCStatIfNeeded(HoodieWriteStat stat,

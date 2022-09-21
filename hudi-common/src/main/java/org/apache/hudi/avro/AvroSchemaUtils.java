@@ -109,6 +109,11 @@ public class AvroSchemaUtils {
     return Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(avroType));
   }
 
+  public static Schema createNullableSchema(Schema schema) {
+    checkState(schema.getType() != Schema.Type.NULL);
+    return Schema.createUnion(Schema.create(Schema.Type.NULL), schema);
+  }
+
   /**
    * Returns true in case when schema contains the field w/ provided name
    */

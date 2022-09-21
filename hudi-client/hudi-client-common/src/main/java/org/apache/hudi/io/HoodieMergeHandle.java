@@ -425,6 +425,16 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
   }
 
+  private Option<AppendResult> writeCDCDataIfNeeded() {
+    if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
+      // the following cases where we do not need to write out the cdc file:
+      // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
+      // case 2: all the data are new-coming,
+      return Option.empty();
+    }
+    return cdcLogger.writeCDCData();
+  }
+
   @Override
   public List<WriteStatus> close() {
     try {
@@ -445,8 +455,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       }
 
       // if there are cdc data written, set the CDC-related information.
-      Option<AppendResult> cdcResult =
-          HoodieCDCLogger.writeCDCDataIfNeeded(cdcLogger, recordsWritten, insertRecordsWritten);
+      Option<AppendResult> cdcResult = writeCDCDataIfNeeded();
       HoodieCDCLogger.setCDCStatIfNeeded(stat, cdcResult, partitionPath, fs);
 
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
