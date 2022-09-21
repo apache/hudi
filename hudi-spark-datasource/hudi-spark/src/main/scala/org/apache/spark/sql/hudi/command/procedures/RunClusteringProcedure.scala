@@ -112,7 +112,7 @@ class RunClusteringProcedure extends BaseProcedure
     logInfo(s"Clustering instants to run: ${pendingClustering.mkString(",")}.")
 
     val startTs = System.currentTimeMillis()
-    pendingClustering.foreach(client.cluster(_, true))
+    pendingClustering.foreach(client.cluster)
     logInfo(s"Finish clustering all the instants: ${pendingClustering.mkString(",")}," +
       s" time cost: ${System.currentTimeMillis() - startTs}ms.")
 

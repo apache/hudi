@@ -19,8 +19,10 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.client.table.manager.HoodieTableManagerClient;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -91,6 +93,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     }
 
     HoodieCompactionPlan plan = scheduleCompaction();
+    Option<HoodieCompactionPlan> option = Option.empty();
     if (plan != null && (plan.getOperations() != null) && (!plan.getOperations().isEmpty())) {
       extraMetadata.ifPresent(plan::setExtraMetadata);
       HoodieInstant compactionInstant =
@@ -101,9 +104,14 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
       } catch (IOException ioe) {
         throw new HoodieIOException("Exception scheduling compaction", ioe);
       }
-      return Option.of(plan);
+      option = Option.of(plan);
     }
-    return Option.empty();
+
+    if (config.getTableManagerConfig().isTableManagerSupportsAction(ActionType.compaction)) {
+      delegateCompactionExecutionToTableManager();
+    }
+
+    return option;
   }
 
   private HoodieCompactionPlan scheduleCompaction() {
@@ -216,5 +224,10 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
       throw new HoodieCompactionException(e.getMessage(), e);
     }
     return timestamp;
+  }
+
+  private void delegateCompactionExecutionToTableManager() {
+    HoodieTableManagerClient tableManagerClient = new HoodieTableManagerClient(table.getMetaClient(), config.getTableManagerConfig());
+    tableManagerClient.executeCompaction();
   }
 }

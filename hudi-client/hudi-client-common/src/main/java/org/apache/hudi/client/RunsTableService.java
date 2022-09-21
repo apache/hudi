@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.log4j.LogManager;
@@ -33,5 +34,13 @@ public interface RunsTableService {
       LOG.warn(String.format("Table services are disabled. Set `%s` to enable.", HoodieWriteConfig.TABLE_SERVICES_ENABLED));
     }
     return enabled;
+  }
+
+  default boolean delegateToTableManagerService(HoodieWriteConfig config, ActionType actionType) {
+    boolean supportsAction = config.getTableManagerConfig().isTableManagerSupportsAction(actionType);
+    if (supportsAction) {
+      LOG.warn(actionType.name() + " delegate to table manager service!");
+    }
+    return supportsAction;
   }
 }
