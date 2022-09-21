@@ -29,7 +29,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode, SparkSession, SparkSessionExtensions, functions}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -80,16 +80,16 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
     System.gc()
   }
 
+  // TODO add test-case for upcasting
+
   @ParameterizedTest
   @CsvSource(value = Array(
-    // COW
     "COPY_ON_WRITE,bulk_insert,true",
     "COPY_ON_WRITE,bulk_insert,false",
     "COPY_ON_WRITE,insert,true",
     "COPY_ON_WRITE,insert,false",
     "COPY_ON_WRITE,upsert,true",
     "COPY_ON_WRITE,upsert,false",
-    // MOR
     "MERGE_ON_READ,bulk_insert,true",
     "MERGE_ON_READ,bulk_insert,false",
     "MERGE_ON_READ,insert,true",
@@ -116,7 +116,7 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
         .save(basePath)
     }
 
-    def loadTable: (StructType, Seq[Row]) = {
+    def loadTable(loadAllVersions: Boolean = true): (StructType, Seq[Row]) = {
       val tableMetaClient = HoodieTableMetaClient.builder()
         .setConf(spark.sparkContext.hadoopConfiguration)
         .setBasePath(basePath)
@@ -127,9 +127,15 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
       val resolver = new TableSchemaResolver(tableMetaClient)
       val latestTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(resolver.getTableAvroSchema(false))
 
+      val tablePath = if (loadAllVersions) {
+        s"$basePath/*/*"
+      } else {
+        basePath
+      }
+
       val df =
         spark.read.format("org.apache.hudi")
-          .load(basePath + "/*/*")
+          .load(tablePath)
           .drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
           .orderBy(functions.col("_row_key").cast(IntegerType))
 
@@ -177,7 +183,7 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
       Row("6", "Jill", "Fiorella", "12", 1, 1))
 
     appendData(secondSchema, secondBatch)
-    val (tableSchemaAfterSecondBatch, rowsAfterSecondBatch) = loadTable
+    val (tableSchemaAfterSecondBatch, rowsAfterSecondBatch) = loadTable()
 
     // NOTE: In case schema reconciliation is ENABLED, Hudi would prefer the table's schema over the new batch
     //       schema, therefore table's schema after commit will actually stay the same, shedding (newly added) columns
@@ -219,7 +225,7 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
       Row("9", "Germiona", "16", 1, 1))
 
     appendData(thirdSchema, thirdBatch)
-    val (tableSchemaAfterThirdBatch, rowsAfterThirdBatch) = loadTable
+    val (tableSchemaAfterThirdBatch, rowsAfterThirdBatch) = loadTable()
 
     // NOTE: In case schema reconciliation is ENABLED, Hudi would prefer the table's schema over the new batch
     //       schema, therefore table's schema after commit will actually stay the same, adding back (dropped) columns
@@ -276,7 +282,7 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
       }
     } else {
       appendData(fourthSchema, fourthBatch)
-      val (latestTableSchema, rows) = loadTable
+      val (latestTableSchema, rows) = loadTable()
 
       assertEquals(fourthSchema, latestTableSchema)
 
@@ -290,23 +296,51 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
 
 
     //
-    // 5. Write 5th batch with another schema (w/ data-type changed for a column `timestamp`, expected to fail)
+    // 6. Write 6th batch with another schema w/ data-type changing for a column `timestamp`;
+    //      - Expected to succeed when reconciliation is off, and
+    //      - Expected to fail when reconciliation is on (b/c we can't down-cast Long to Int)
     //
 
     val fifthSchema = StructType(
       StructField("_row_key", StringType, nullable = true) ::
         StructField("age", StringType, nullable = true) ::
-        StructField("timestamp", StringType, nullable = true) ::
+        StructField("timestamp", LongType, nullable = true) ::
         StructField("partition", IntegerType, nullable = true) :: Nil)
 
     val fifthBatch = Seq(
+      Row("10", "15", 9876543210L, 1),
+      Row("11", "14", 9876543211L, 1),
+      Row("12", "16", 9876543212L, 1))
+
+    if (shouldReconcileSchema) {
+      assertThrows(classOf[SchemaCompatibilityException]) {
+        appendData(fifthSchema, fifthBatch)
+      }
+    } else {
+      // TODO this should actually fail
+      //assertThrows(classOf[SchemaCompatibilityException]) {
+      //  appendData(fifthSchema, fifthBatch)
+      //}
+    }
+
+    //
+    // 6. Write 6th batch with another schema (w/ data-type changed for a column `timestamp`, expected to fail)
+    //
+
+    val sixthSchema = StructType(
+      StructField("_row_key", StringType, nullable = true) ::
+        StructField("age", StringType, nullable = true) ::
+        StructField("timestamp", StringType, nullable = true) ::
+        StructField("partition", IntegerType, nullable = true) :: Nil)
+
+    val sixthBatch = Seq(
       Row("10", "15", "1", 1),
       Row("11", "14", "1", 1),
       Row("12", "16", "1", 1))
 
     // NOTE: Expected to fail in both cases, as such transformation is not permitted
     assertThrows(classOf[SchemaCompatibilityException]) {
-      appendData(fifthSchema, fifthBatch)
+      appendData(sixthSchema, sixthBatch)
     }
 
     // TODO add test w/ overlapping updates
