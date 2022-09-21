@@ -21,6 +21,7 @@ package org.apache.hudi.functional;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
@@ -251,7 +252,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
             .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
         .build();
 
-    SparkRDDWriteClientOverride client = new SparkRDDWriteClientOverride(context, config);
+    SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
     client.bootstrap(Option.empty());
     checkBootstrapResults(totalRecords, schema, bootstrapCommitInstantTs, checkNumRawFiles, numInstantsAfterBootstrap,
         numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants, true);
@@ -262,7 +263,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     } else {
       FileCreateUtils.deleteCommit(metaClient.getBasePath(), bootstrapCommitInstantTs);
     }
-    client.rollbackFailedBootstrap();
+    client.getTableServiceClient().rollbackFailedBootstrap();
     metaClient.reloadActiveTimeline();
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
     assertEquals(0L, BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), basePath, context)
@@ -272,7 +273,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     assertFalse(index.useIndex());
 
     // Run bootstrap again
-    client = new SparkRDDWriteClientOverride(context, config);
+    client = new SparkRDDWriteClient(context, config);
     client.bootstrap(Option.empty());
 
     metaClient.reloadActiveTimeline();

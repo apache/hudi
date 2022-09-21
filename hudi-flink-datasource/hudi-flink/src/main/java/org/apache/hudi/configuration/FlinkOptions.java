@@ -84,6 +84,12 @@ public class FlinkOptions extends HoodieConfig {
   //  Common Options
   // ------------------------------------------------------------------------
 
+  public static final ConfigOption<String> DATABASE_NAME = ConfigOptions
+      .key(HoodieTableConfig.DATABASE_NAME.key())
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Database name to register to Hive metastore");
+
   public static final ConfigOption<String> TABLE_NAME = ConfigOptions
       .key(HoodieWriteConfig.TBL_NAME.key())
       .stringType()

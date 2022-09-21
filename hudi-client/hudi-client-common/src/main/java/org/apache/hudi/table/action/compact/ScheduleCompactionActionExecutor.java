@@ -36,10 +36,10 @@ import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
-
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -108,6 +108,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     }
 
     HoodieCompactionPlan plan = scheduleCompaction();
+    Option<HoodieCompactionPlan> option = Option.empty();
     if (plan != null && (plan.getOperations() != null) && (!plan.getOperations().isEmpty())) {
       extraMetadata.ifPresent(plan::setExtraMetadata);
       try {
@@ -125,9 +126,10 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
       } catch (IOException ioe) {
         throw new HoodieIOException("Exception scheduling compaction", ioe);
       }
-      return Option.of(plan);
+      option = Option.of(plan);
     }
-    return Option.empty();
+
+    return option;
   }
 
   private HoodieCompactionPlan scheduleCompaction() {

@@ -37,6 +37,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -145,6 +146,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
    */
   protected Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
     final HoodieCleanerPlan cleanerPlan = requestClean(context);
+    Option<HoodieCleanerPlan> option = Option.empty();
     if ((cleanerPlan.getFilePathsToBeDeletedPerPartition() != null)
         && !cleanerPlan.getFilePathsToBeDeletedPerPartition().isEmpty()
         && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0) {
@@ -158,9 +160,10 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         LOG.error("Got exception when saving cleaner requested file", e);
         throw new HoodieIOException(e.getMessage(), e);
       }
-      return Option.of(cleanerPlan);
+      option = Option.of(cleanerPlan);
     }
-    return Option.empty();
+
+    return option;
   }
 
   @Override

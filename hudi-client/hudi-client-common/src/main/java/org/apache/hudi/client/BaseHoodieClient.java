@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.fs.FSUtils;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metrics.HoodieMetrics;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -47,9 +49,11 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final transient FileSystem fs;
   protected final transient HoodieEngineContext context;
   protected final transient Configuration hadoopConf;
+  protected final transient HoodieMetrics metrics;
   protected final HoodieWriteConfig config;
   protected final String basePath;
   protected final HoodieHeartbeatClient heartbeatClient;
+  protected final TransactionManager txnManager;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -74,6 +78,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     shouldStopTimelineServer = !timelineServer.isPresent();
     this.heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
         clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
+    this.metrics = new HoodieMetrics(config);
+    this.txnManager = new TransactionManager(config, fs);
     startEmbeddedServerView();
     initWrapperFSMetrics();
   }
@@ -85,6 +91,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   public void close() {
     stopEmbeddedServerView(true);
     this.context.setJobStatus("", "");
+    this.heartbeatClient.stop();
+    this.txnManager.close();
   }
 
   private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
