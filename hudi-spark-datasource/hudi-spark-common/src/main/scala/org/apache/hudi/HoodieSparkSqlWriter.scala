@@ -244,12 +244,18 @@ object HoodieSparkSqlWriter {
                 }
             }
           } else {
+            val shouldCanonicalizeSchema = parameters.getOrDefault(DataSourceWriteOptions.CANONICALIZE_SCHEMA.key,
+              DataSourceWriteOptions.CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
             // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
             // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
             // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
-            // in the table's one we want to proceed w/ such operation, simply relaxing such constraint in the
-            // source schema.
-            val canonicalizedSourceSchema = AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
+            // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
+            val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
+              AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
+            } else {
+              sourceSchema
+            }
+
             // In case reconciliation is disabled, we have to validate that the source's schema
             // is compatible w/ the table's latest schema, such that we're able to read existing table's
             // records using [[sourceSchema]].
@@ -295,7 +301,7 @@ object HoodieSparkSqlWriter {
 
       val (writeResult, writeClient: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]) =
         operation match {
-          case WriteOperationType.DELETE => {
+          case WriteOperationType.DELETE =>
             val genericRecords = HoodieSparkUtils.createRdd(df, structName, namespace, reconcileSchema)
             // Convert to RDD[HoodieKey]
             val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
@@ -322,8 +328,8 @@ object HoodieSparkSqlWriter {
             client.startCommitWithTime(instantTime, commitActionType)
             val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, instantTime)
             (writeStatuses, client)
-          }
-          case WriteOperationType.DELETE_PARTITION => {
+
+          case WriteOperationType.DELETE_PARTITION =>
             if (!tableExists) {
               throw new HoodieException(s"hoodie table at $basePath does not exist")
             }
@@ -347,8 +353,8 @@ object HoodieSparkSqlWriter {
             client.startCommitWithTime(instantTime, commitActionType)
             val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeStatuses, client)
-          }
-          case _ => { // any other operation
+
+          case _ =>
             // Convert to RDD[HoodieRecord]
             val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, namespace, reconcileSchema,
               org.apache.hudi.common.util.Option.of(writerSchema))
@@ -424,7 +430,6 @@ object HoodieSparkSqlWriter {
             client.startCommitWithTime(instantTime, commitActionType)
             val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation)
             (writeResult, client)
-          }
         }
 
       // Check for errors and commit the write.

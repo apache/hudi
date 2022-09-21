@@ -47,9 +47,11 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
-      .withDocumentation("When a new batch of write has records with old schema, but latest table schema got "
-          + "evolved, this config will upgrade the records to leverage latest table schema(default values will be "
-          + "injected to missing fields). If not, the write batch would fail.");
+      .withDocumentation("This controls how incoming batch's schema will be handled relative to existing table's one."
+        + "When schema reconciliation is enabled: table's schema will be favored and will be used it as a writer-schema "
+          + "(entailing that incoming batch will be rewritten in the table's schema). When reconciliation is disabled: "
+        + "incoming batch's schema will be favored and used it as a writer-schema (entailing that newly created files will "
+          + "be written in this new schema potentially rewriting the table's schema)");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
