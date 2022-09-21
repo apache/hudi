@@ -689,10 +689,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertThrows(HoodieException.class, () -> new HoodieDeltaStreamer(cfg, jsc).sync());
 
     TestHelpers.assertRecordCount(1000, tableBasePath, sqlContext);
-    TestHelpers.assertDistanceCount(1950, tableBasePath, sqlContext);
-    TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
+    TestHelpers.assertDistanceCount(1000, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, dfs, 1);
     List<Row> counts = TestHelpers.countsPerCommit(tableBasePath, sqlContext);
-    assertEquals(1950, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+    assertEquals(1000, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
     // Perform bootstrap with tableBasePath as source
     String bootstrapSourcePath = dfsBasePath + "/src_bootstrapped";
