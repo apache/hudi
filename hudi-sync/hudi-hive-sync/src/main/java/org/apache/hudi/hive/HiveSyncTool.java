@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -320,9 +321,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    *
    * 1. If no filter left in the filterBuilder, will simply add it.
    * 2. If filterBuilder is not empty, will combine the existing filters
-   *    and new adding filter with operator. Wrap these filters with parenthesis.
+   *    and new adding filter with operator if the filter is not empty,
+   *    otherwise return empty for OR operator; while return left side
+   *    for ADD operator. Wrap these filters with parenthesis.
    */
   private void combineFilter(StringBuilder filterBuilder, String operator, Option<String> filter) {
+    ValidationUtils.checkArgument(operator.equals("OR") || operator.equals("AND"),
+        "Filters can only accept `OR` or `AND` operator");
     boolean shouldEnclosed = false;
     if (filter.isPresent() && !filter.get().isEmpty()) {
       if (filterBuilder.length() != 0) {
@@ -333,8 +338,12 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         filterBuilder.append(" " + operator + " ");
         shouldEnclosed = true;
       }
-
       filterBuilder.append(filter.get());
+    } else {
+      if (operator.equals("OR")) {
+        filterBuilder.setLength(0);
+        return;
+      }
     }
 
     if (shouldEnclosed) {

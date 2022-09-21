@@ -1204,6 +1204,36 @@ public class TestHiveSyncTool {
     assertEquals(
         "((((date = 2022-09-01 AND year = \"2022\") AND month = 9) AND day = 1) OR (((date = 2022-09-02 AND year = \"2022\") AND month = 9) AND day = 2))",
         syncTool.generateWrittenPartitionsFilter("randomName", partitionKeys,writtenPartitions));
+
+    // If there are incompatible types to convert as filters inside partition
+    partitionKeys.clear();
+    partitionTypes.clear();
+    writtenPartitions.clear();
+    partitionKeys.add("date");
+    partitionKeys.add("finished");
+    partitionTypes.add("date");
+    partitionTypes.add("boolean");
+
+    writtenPartitions.add(Arrays.asList("2022-09-01", "true"));
+    assertEquals("date = 2022-09-01",
+        syncTool.generateWrittenPartitionsFilter("randomName", partitionKeys,writtenPartitions));
+    writtenPartitions.add(Arrays.asList("2022-09-02", "true"));
+    assertEquals("(date = 2022-09-01 OR date = 2022-09-02)",
+        syncTool.generateWrittenPartitionsFilter("randomName", partitionKeys,writtenPartitions));
+
+    // If no compatible types matched to convert as filters
+    partitionKeys.clear();
+    partitionTypes.clear();
+    writtenPartitions.clear();
+    partitionKeys.add("finished");
+    partitionTypes.add("boolean");
+
+    writtenPartitions.add(Collections.singletonList("true"));
+    assertEquals("",
+        syncTool.generateWrittenPartitionsFilter("randomName", partitionKeys,writtenPartitions));
+    writtenPartitions.add(Collections.singletonList("false"));
+    assertEquals("",
+        syncTool.generateWrittenPartitionsFilter("randomName", partitionKeys,writtenPartitions));
   }
 
   private void reSyncHiveTable() {
