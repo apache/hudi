@@ -83,15 +83,20 @@ At the same time, it has benefit for incremental computing resource saving
    user also can set retain days as X day, clean out-of-date data automatically. SCD-2 should also can be achieved here.
    2. One archived branch named yyyy-archived can be generated after compress and optimize. if our retention policy has been 
    changed(let's say remove some sensitive information), then can generate a new snapshot base on this branch after operation done.
-   3. One Snapshot named pre-prod can release to customer after some Quality validations base on external tools.
+   3. One Snapshot named pre-prod can release to customer after some quality validations passed base on any external tools.
    
 ## Implementation
-Describe the new thing you want to do in appropriate detail, how it fits into the project architecture. 
-Provide a detailed description of how you intend to implement this feature.This may be fairly extensive and have large subsections of its own. 
-Or it may be a few sentences. Use judgement based on the scope of the change.
+
 ![basic_arch](basic_arch.png)
 
 ### Extend Savepoint meta 
+Snapshot view need to extend the savepoint metadata, so we are going to add one struct with four fields: 
+* tag_name: tag name for your snapshot
+* retain-days: number of day, So data belongs to this snapshot will be retained for retain-days,  then can be clean after snapshot expire
+* database: database name in Catalog
+* table-name: table name in Catalog 
+
+new Savepoint Metadata should look like below:
 ``` diff
 {
 	"type": "record",
@@ -143,18 +148,43 @@ Or it may be a few sentences. Use judgement based on the scope of the change.
 		"type": ["int", "null"],
 		"default": 1
 +	}, {
-+		"name": "snapshot_view",
-+		"type": {
-+			"type": "string",
-+			"avro.java.string": "String"
-+		}, {
-+		"name": "snapshot_retain_days",
-+		"type": ["int", "null"],
-+		"default": 0
-+	}
-	]
++		"name": "tag",
++		"type": "record",
++	    "fields": [{
++		        "name": "tag_name",
++			    "type": "string",
++		    	"avro.java.string": "String"
++		    }, 
++           {
++    		    "name": "retain_days",
++    	    	"type": ["int", "null"],
++    	    	"default": 0
++    	    },
++           {
++		        "name": "database",
++			    "type": "string",
++		    	"avro.java.string": "String"
++		    }, 
++           {
++		        "name": "table_name", // will infer tag_name's value if doesn't specific
++			    "type": "string",
++		    	"avro.java.string": "String"
++		    }, 
++	    ]
++     }
++	]
 }
 ```
+
+### Meta Sync
+Create a snapshot view also will create a new external table into the Catalogs, and add a timestamp into tbl properties to identify which savepoint you are using.
+for example, if you choose Hive Metastore as the catalog and create a snapshot view on a Hudi table, following steps will be process:
+* create a new savepoint with tag name (let's say tbl-YYYYMMDD)
+* create an external table in HMS, table's name is tbl-YYYYMMDD
+* add as.of.instant= ${savepoint's timestamp} into table tbl-YYYYMMDD's storage properties ，
+
+when user query such a snapshot's external table, engines like Spark/Presto will get the savepoint timestamp from external table's properties then pass back to Hudi for time travel 
+
 
 ### Operations
 * Create Snapshot View
@@ -186,7 +216,7 @@ call delete_snapshot_view(table => 'hudi_table', snapshot_table => 'snapshot_hiv
 | `hms`            | `false`  | `None`  | Hive metastore server used for deleting savepoint information |
 * List Snapshot View
 ```sql
-call show_savepoints(table => 'hudi_table');
+call show_snapshotviews(table => 'hudi_table');
 ```
 
 |  Parameter Name  | Required | Default | Remarks |
@@ -202,11 +232,7 @@ call show_savepoints(table => 'hudi_table');
 ### Precise Event time Snapshot
 
 ## Rollout/Adoption Plan
-
- - What impact (if any) will there be on existing users? 
- - If we are changing behavior how will we phase out the older behavior?
- - If we need special migration tools, describe them here.
- - When will we remove the existing behavior
+there should be no impact on existing users
 
 ## Test Plan
 
