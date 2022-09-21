@@ -180,7 +180,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   }
 
   @Override
-  public void close() {
+  public void close() throws Exception {
+    if (null != this.executor) {
+      this.executor.close();
+    }
     if (this.writeClient != null) {
       this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
