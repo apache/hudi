@@ -149,7 +149,7 @@ public interface TableFileSystemView {
    */
   Stream<HoodieFileGroup> getAllFileGroups(String partitionPath);
 
-  Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPath);
+  Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPaths);
 
   /**
    * Return Pending Compaction Operations.

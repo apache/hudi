@@ -230,7 +230,6 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     LOG.info("Cleaning " + partitionPaths + ", retaining latest " + config.getCleanerFileVersionsRetained()
         + " file versions. ");
     Map<String, Pair<Boolean, List<CleanFileInfo>>> map = new HashMap<>();
-    List<CleanFileInfo> deletePaths = new ArrayList<>();
     // Collect all the datafiles savepointed by all the savepoints
     List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()
         .flatMap(this::getSavepointedDataFiles)
@@ -238,16 +237,17 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
 
     // In this scenario, we will assume that once replaced a file group automatically becomes eligible for cleaning completely
     // In other words, the file versions only apply to the active file groups.
-    List<Pair<String, List<HoodieFileGroup>>> fileGroups = fileSystemView.getAllFileGroups(partitionPaths).collect(Collectors.toList());
-    for (Pair<String, List<HoodieFileGroup>> pairFileGroup : fileGroups) {
-
-      deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, pairFileGroup.getLeft(), Option.empty()));
+    List<Pair<String, List<HoodieFileGroup>>> fileGroupsPerPartition = fileSystemView.getAllFileGroups(partitionPaths).collect(Collectors.toList());
+    for (Pair<String, List<HoodieFileGroup>> partitionFileGroupList : fileGroupsPerPartition) {
+      List<CleanFileInfo> deletePaths = new ArrayList<>(getReplacedFilesEligibleToClean(savepointedFiles, partitionFileGroupList.getLeft(), Option.empty()));
       boolean toDeletePartition = false;
-      for (HoodieFileGroup fileGroup : pairFileGroup.getRight()) {
+      for (HoodieFileGroup fileGroup : partitionFileGroupList.getRight()) {
         int keepVersions = config.getCleanerFileVersionsRetained();
         // do not cleanup slice required for pending compaction
         Iterator<FileSlice> fileSliceIterator =
-            fileGroup.getAllFileSlices().filter(fs -> !isFileSliceNeededForPendingCompaction(fs)).iterator();
+            fileGroup.getAllFileSlices()
+                .filter(fs -> !isFileSliceNeededForPendingCompaction(fs))
+                .iterator();
         if (isFileGroupInPendingCompaction(fileGroup)) {
           // We have already saved the last version of file-groups for pending compaction Id
           keepVersions--;
@@ -270,10 +270,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         }
       }
       // if there are no valid file groups for the partition, mark it to be deleted
-      if (fileGroups.isEmpty()) {
+      if (partitionFileGroupList.getValue().isEmpty()) {
         toDeletePartition = true;
       }
-      map.put(pairFileGroup.getLeft(), Pair.of(toDeletePartition, deletePaths));
+      map.put(partitionFileGroupList.getLeft(), Pair.of(toDeletePartition, deletePaths));
     }
     return map;
   }
@@ -301,7 +301,6 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    */
   private Map<String, Pair<Boolean, List<CleanFileInfo>>> getFilesToCleanKeepingLatestCommits(List<String> partitionPaths, int commitsRetained, HoodieCleaningPolicy policy) {
     LOG.info("Cleaning " + partitionPaths + ", retaining latest " + commitsRetained + " commits. ");
-    List<CleanFileInfo> deletePaths = new ArrayList<>();
     Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanFileInfoPerPartitionMap = new HashMap<>();
 
     // Collect all the datafiles savepointed by all the savepoints
@@ -315,12 +314,12 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       Option<HoodieInstant> earliestCommitToRetainOption = getEarliestCommitToRetain();
       HoodieInstant earliestCommitToRetain = earliestCommitToRetainOption.get();
       // add active files
-      List<Pair<String, List<HoodieFileGroup>>> fileGroups = fileSystemView.getAllFileGroups(partitionPaths).collect(Collectors.toList());
-      for (Pair<String, List<HoodieFileGroup>> pairFileGroup : fileGroups) {
-
+      List<Pair<String, List<HoodieFileGroup>>> fileGroupsPerPartition = fileSystemView.getAllFileGroups(partitionPaths).collect(Collectors.toList());
+      for (Pair<String, List<HoodieFileGroup>> partitionFileGroupList : fileGroupsPerPartition) {
+        List<CleanFileInfo> deletePaths = new ArrayList<>(getReplacedFilesEligibleToClean(savepointedFiles, partitionFileGroupList.getLeft(), earliestCommitToRetainOption));
         // all replaced file groups before earliestCommitToRetain are eligible to clean
-        deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, pairFileGroup.getLeft(), earliestCommitToRetainOption));
-        for (HoodieFileGroup fileGroup : pairFileGroup.getRight()) {
+        deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionFileGroupList.getLeft(), earliestCommitToRetainOption));
+        for (HoodieFileGroup fileGroup : partitionFileGroupList.getRight()) {
           List<FileSlice> fileSliceList = fileGroup.getAllFileSlices().collect(Collectors.toList());
 
           if (fileSliceList.isEmpty()) {
@@ -391,10 +390,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
           }
         }
         // if there are no valid file groups for the partition, mark it to be deleted
-        if (fileGroups.isEmpty()) {
+        if (partitionFileGroupList.getValue().isEmpty()) {
           toDeletePartition = true;
         }
-        cleanFileInfoPerPartitionMap.put(pairFileGroup.getLeft(), Pair.of(toDeletePartition, deletePaths));
+        cleanFileInfoPerPartitionMap.put(partitionFileGroupList.getLeft(), Pair.of(toDeletePartition, deletePaths));
       }
     }
     return cleanFileInfoPerPartitionMap;

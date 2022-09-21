@@ -205,8 +205,8 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
-  public Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPath) {
-    return execute(partitionPath, preferredView::getAllFileGroups, secondaryView::getAllFileGroups);
+  public Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPaths) {
+    return execute(partitionPaths, preferredView::getAllFileGroups, secondaryView::getAllFileGroups);
   }
 
   @Override
