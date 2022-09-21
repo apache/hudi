@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[50127],{47725:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/data-platform","name":"data-platform","count":1,"permalink":"/cn/blog/tags/data-platform"}')}}]);

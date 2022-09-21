@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[44273],{43326:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/storage-spec","name":"storage-spec","count":1,"permalink":"/cn/blog/tags/storage-spec"}')}}]);
