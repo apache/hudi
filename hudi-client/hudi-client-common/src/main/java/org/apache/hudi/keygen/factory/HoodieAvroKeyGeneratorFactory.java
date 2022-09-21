@@ -54,7 +54,7 @@ public class HoodieAvroKeyGeneratorFactory {
     return Objects.isNull(keyGenerator) ? createAvroKeyGeneratorByType(props) : keyGenerator;
   }
 
-  private static KeyGenerator createAvroKeyGeneratorByType(TypedProperties props) throws IOException {
+  public static KeyGenerator createAvroKeyGeneratorByType(TypedProperties props) throws IOException {
     // Use KeyGeneratorType.SIMPLE as default keyGeneratorType
     String keyGeneratorType =
         props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), null);
