@@ -4,6 +4,12 @@ excerpt: "Evolve schema used in Kafkasource of DeltaStreamer to keep data up to 
 author: sbernauer
 category: blog
 image: /assets/images/blog/hudi_schemaevolution.png
+tags:
+- design
+- deltastreamer
+- schema
+- apache hudi
+- apache kafka
 ---
 
 The schema used for data exchange between services can change rapidly with new business requirements.

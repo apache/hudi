@@ -3,6 +3,10 @@ title: "Apache Hudi Key Generators"
 excerpt: "Different key generators available with Apache Hudi"
 author: shivnarayan
 category: blog
+tags:
+- blog
+- key-generators
+- apache hudi
 ---
 
 Every record in Hudi is uniquely identified by a primary key, which is a pair of record key and partition path where

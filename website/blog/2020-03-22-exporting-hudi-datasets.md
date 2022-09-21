@@ -3,6 +3,10 @@ title: "Export Hudi datasets as a copy or as different formats"
 excerpt: "Learn how to copy or export HUDI dataset in various formats."
 author: rxu
 category: blog
+tags:
+- how-to
+- snapshot-exporter
+- apache hudi
 ---
 
 ### Copy to Hudi dataset
