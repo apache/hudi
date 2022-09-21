@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[49220],{90539:o=>{o.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/robinhood","name":"robinhood","count":1,"permalink":"/blog/tags/robinhood"}')}}]);

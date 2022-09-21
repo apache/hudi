@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[97684],{59989:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/cleaner-service","name":"cleaner-service","count":1,"permalink":"/blog/tags/cleaner-service"}')}}]);

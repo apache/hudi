@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[95603],{18593:c=>{c.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/concurrency-control","name":"concurrency-control","count":1,"permalink":"/cn/blog/tags/concurrency-control"}')}}]);
