@@ -517,7 +517,6 @@ public class HoodieWriteConfig extends HoodieConfig {
   private HoodieCommonConfig commonConfig;
   private HoodieStorageConfig storageConfig;
   private EngineType engineType;
-  private HoodieRecordMerger recordMerger;
 
   /**
    * @deprecated Use {@link #TBL_NAME} and its methods instead
@@ -894,7 +893,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     super();
     this.engineType = EngineType.SPARK;
     this.clientSpecifiedViewStorageConfig = null;
-    applyMergerClass();
   }
 
   protected HoodieWriteConfig(EngineType engineType, Properties props) {
@@ -902,7 +900,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     Properties newProps = new Properties();
     newProps.putAll(props);
     this.engineType = engineType;
-    applyMergerClass();
     this.consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().fromProperties(newProps).build();
     this.fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().fromProperties(newProps).build();
     this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
@@ -912,15 +909,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.metastoreConfig = HoodieMetastoreConfig.newBuilder().fromProperties(props).build();
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
-  }
-
-  private void applyMergerClass() {
-    List<String> mergers = getSplitStringsOrDefault(MERGER_IMPLS).stream()
-        .map(String::trim)
-        .distinct()
-        .collect(Collectors.toList());
-    String mergerStrategy = getString(MERGER_STRATEGY);
-    this.recordMerger = HoodieRecordUtils.generateRecordMerger(getString(BASE_PATH), engineType, mergers, mergerStrategy);
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -935,7 +923,12 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieRecordMerger getRecordMerger() {
-    return recordMerger;
+    List<String> mergers = getSplitStringsOrDefault(MERGER_IMPLS).stream()
+        .map(String::trim)
+        .distinct()
+        .collect(Collectors.toList());
+    String mergerStrategy = getString(MERGER_STRATEGY);
+    return HoodieRecordUtils.generateRecordMerger(getString(BASE_PATH), engineType, mergers, mergerStrategy);
   }
 
   public String getSchema() {
