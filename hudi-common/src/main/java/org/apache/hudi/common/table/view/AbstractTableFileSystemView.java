@@ -107,7 +107,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     this.metaClient = metaClient;
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
-    this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
+    this.bootstrapIndex = BootstrapIndex.getBootstrapIndex(metaClient);
     // Load Pending Compaction Operations
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
         .map(e -> Pair.of(e.getKey(), CompactionOperation.convertFromAvroRecordInstance(e.getValue()))));
@@ -121,7 +121,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Refresh commits timeline.
-   * 
+   *
    * @param visibleActiveTimeline Visible Active Timeline
    */
   protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
@@ -163,13 +163,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Build FileGroups from passed in file-status.
    */
   protected List<HoodieFileGroup> buildFileGroups(FileStatus[] statuses, HoodieTimeline timeline,
-      boolean addPendingCompactionFileSlice) {
+                                                  boolean addPendingCompactionFileSlice) {
     return buildFileGroups(convertFileStatusesToBaseFiles(statuses), convertFileStatusesToLogFiles(statuses), timeline,
         addPendingCompactionFileSlice);
   }
 
   protected List<HoodieFileGroup> buildFileGroups(Stream<HoodieBaseFile> baseFileStream,
-      Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline, boolean addPendingCompactionFileSlice) {
+                                                  Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline, boolean addPendingCompactionFileSlice) {
     Map<Pair<String, String>, List<HoodieBaseFile>> baseFiles =
         baseFileStream.collect(Collectors.groupingBy(baseFile -> {
           String partitionPathStr = getPartitionPathFor(baseFile);
@@ -227,7 +227,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
         // get replace instant mapping for each partition, fileId
         return replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream().flatMap(entry -> entry.getValue().stream().map(e ->
-                new AbstractMap.SimpleEntry<>(new HoodieFileGroupId(entry.getKey(), e), instant)));
+            new AbstractMap.SimpleEntry<>(new HoodieFileGroupId(entry.getKey(), e), instant)));
       } catch (HoodieIOException ex) {
 
         if (ex.getIOException() instanceof FileNotFoundException) {
@@ -417,7 +417,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * With async compaction, it is possible to see partial/complete base-files due to inflight-compactions, Ignore those
    * base-files.
    *
-   * @param fileSlice File Slice
+   * @param fileSlice             File Slice
    * @param includeEmptyFileSlice include empty file-slice
    */
   protected Stream<FileSlice> filterBaseFileAfterPendingCompaction(FileSlice fileSlice, boolean includeEmptyFileSlice) {
@@ -557,8 +557,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return Option.empty();
       } else {
         return fetchHoodieFileGroup(partitionPath, fileId).map(fileGroup -> fileGroup.getAllBaseFiles()
-            .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.EQUALS,
-                instantTime)).filter(df -> !isBaseFileDueToPendingCompaction(df) && !isBaseFileDueToPendingClustering(df)).findFirst().orElse(null))
+                .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.EQUALS,
+                    instantTime)).filter(df -> !isBaseFileDueToPendingCompaction(df) && !isBaseFileDueToPendingClustering(df)).findFirst().orElse(null))
             .map(df -> addBootstrapBaseFileIfPresent(new HoodieFileGroupId(partitionPath, fileId), df));
       }
     } finally {
@@ -593,8 +593,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return fetchAllStoredFileGroups()
           .filter(fileGroup -> !isFileGroupReplacedBeforeAny(fileGroup.getFileGroupId(), commitsToReturn))
           .map(fileGroup -> Pair.of(fileGroup.getFileGroupId(), Option.fromJavaOptional(
-          fileGroup.getAllBaseFiles().filter(baseFile -> commitsToReturn.contains(baseFile.getCommitTime())
-              && !isBaseFileDueToPendingCompaction(baseFile) && !isBaseFileDueToPendingClustering(baseFile)).findFirst()))).filter(p -> p.getValue().isPresent())
+              fileGroup.getAllBaseFiles().filter(baseFile -> commitsToReturn.contains(baseFile.getCommitTime())
+                  && !isBaseFileDueToPendingCompaction(baseFile) && !isBaseFileDueToPendingClustering(baseFile)).findFirst()))).filter(p -> p.getValue().isPresent())
           .map(p -> addBootstrapBaseFileIfPresent(p.getKey(), p.getValue().get()));
     } finally {
       readLock.unlock();
@@ -624,9 +624,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchLatestFileSlices(partitionPath)
-              .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
-              .flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, true))
-              .map(this::addBootstrapBaseFileIfPresent);
+          .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
+          .flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, true))
+          .map(this::addBootstrapBaseFileIfPresent);
     } finally {
       readLock.unlock();
     }
@@ -681,26 +681,26 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public final Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionStr, String maxCommitTime,
-      boolean includeFileSlicesInPendingCompaction) {
+                                                               boolean includeFileSlicesInPendingCompaction) {
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
       Stream<Stream<FileSlice>> allFileSliceStream = fetchAllStoredFileGroups(partitionPath)
-              .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
-              .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime));
+          .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
+          .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime));
       if (includeFileSlicesInPendingCompaction) {
         return allFileSliceStream.map(sliceStream -> sliceStream.flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, false)))
-                .map(sliceStream -> Option.fromJavaOptional(sliceStream.findFirst())).filter(Option::isPresent).map(Option::get)
-                .map(this::addBootstrapBaseFileIfPresent);
+            .map(sliceStream -> Option.fromJavaOptional(sliceStream.findFirst())).filter(Option::isPresent).map(Option::get)
+            .map(this::addBootstrapBaseFileIfPresent);
       } else {
         return allFileSliceStream
-                .map(sliceStream ->
-                        Option.fromJavaOptional(sliceStream
-                                .filter(slice -> !isPendingCompactionScheduledForFileId(slice.getFileGroupId()))
-                                .filter(slice -> !slice.isEmpty())
-                                .findFirst()))
-                .filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+            .map(sliceStream ->
+                Option.fromJavaOptional(sliceStream
+                    .filter(slice -> !isPendingCompactionScheduledForFileId(slice.getFileGroupId()))
+                    .filter(slice -> !slice.isEmpty())
+                    .findFirst()))
+            .filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
       }
     } finally {
       readLock.unlock();
@@ -790,6 +790,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Stream<HoodieFileGroup> getAllFileGroups(String partitionStr) {
     return getAllFileGroupsIncludingReplaced(partitionStr).filter(fg -> !isFileGroupReplaced(fg));
+  }
+
+  @Override
+  public final Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPaths) {
+    List<Pair<String, List<HoodieFileGroup>>> allFileGroups = new ArrayList<>();
+    partitionPaths.forEach(partitionPath -> {
+      allFileGroups.add(Pair.of(partitionPath, getAllFileGroups(partitionPath).collect(Collectors.toList())));
+    });
+    return allFileGroups.stream();
   }
 
   private Stream<HoodieFileGroup> getAllFileGroupsIncludingReplaced(final String partitionStr) {
@@ -899,8 +908,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected abstract boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId);
 
   /**
-   *  Get pending clustering instant time for specified file group. Return None if file group is not in pending
-   *  clustering operation.
+   * Get pending clustering instant time for specified file group. Return None if file group is not in pending
+   * clustering operation.
    */
   protected abstract Option<HoodieInstant> getPendingClusteringInstant(final HoodieFileGroupId fileGroupId);
 
@@ -1002,7 +1011,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Add a complete partition view to store.
    *
    * @param partitionPath Partition Path
-   * @param fileGroups File Groups for the partition path
+   * @param fileGroups    File Groups for the partition path
    */
   abstract void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups);
 
@@ -1122,7 +1131,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Helper to merge last 2 file-slices. These 2 file-slices do not have compaction done yet.
    *
-   * @param lastSlice Latest File slice for a file-group
+   * @param lastSlice        Latest File slice for a file-group
    * @param penultimateSlice Penultimate file slice for a file-group in commit timeline order
    */
   private static FileSlice mergeCompactionPendingFileSlices(FileSlice lastSlice, FileSlice penultimateSlice) {
@@ -1187,7 +1196,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Default implementation for fetching latest base-file.
    *
    * @param partitionPath Partition path
-   * @param fileId File Id
+   * @param fileId        File Id
    * @return base File if present
    */
   protected Option<HoodieBaseFile> fetchLatestBaseFile(String partitionPath, String fileId) {
@@ -1199,7 +1208,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Default implementation for fetching file-slice.
    *
    * @param partitionPath Partition path
-   * @param fileId File Id
+   * @param fileId        File Id
    * @return File Slice if present
    */
   public Option<FileSlice> fetchLatestFileSlice(String partitionPath, String fileId) {
