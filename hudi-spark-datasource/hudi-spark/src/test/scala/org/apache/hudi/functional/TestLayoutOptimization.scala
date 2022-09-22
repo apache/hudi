@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -85,6 +85,7 @@ class TestLayoutOptimization extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource(Array("testLayoutOptimizationParameters"))
   def testLayoutOptimizationFunctional(tableType: String,
+                                       clusteringAsRow: String,
                                        layoutOptimizationStrategy: String,
                                        spatialCurveCompositionStrategy: String): Unit = {
     val curveCompositionStrategy =
@@ -112,6 +113,7 @@ class TestLayoutOptimization extends HoodieClientTestBase {
       .option("hoodie.clustering.plan.strategy.small.file.limit", "629145600")
       .option("hoodie.clustering.plan.strategy.max.bytes.per.group", Long.MaxValue.toString)
       .option("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(64 * 1024 * 1024L))
+      .option(DataSourceWriteOptions.ENABLE_ROW_WRITER.key(), clusteringAsRow)
       .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key(), layoutOptimizationStrategy)
       .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.key(), curveCompositionStrategy)
       .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "begin_lat,begin_lon")
@@ -164,18 +166,29 @@ class TestLayoutOptimization extends HoodieClientTestBase {
 
 object TestLayoutOptimization {
   def testLayoutOptimizationParameters(): java.util.stream.Stream[Arguments] = {
+    // TableType, enableClusteringAsRow, layoutOptimizationStrategy, spatialCurveCompositionStrategy
     java.util.stream.Stream.of(
-      arguments("COPY_ON_WRITE", "linear", null),
-      arguments("COPY_ON_WRITE", "z-order", "direct"),
-      arguments("COPY_ON_WRITE", "z-order", "sample"),
-      arguments("COPY_ON_WRITE", "hilbert", "direct"),
-      arguments("COPY_ON_WRITE", "hilbert", "sample"),
+      arguments("COPY_ON_WRITE", "true", "linear", null),
+      arguments("COPY_ON_WRITE", "true", "z-order", "direct"),
+      arguments("COPY_ON_WRITE", "true", "z-order", "sample"),
+      arguments("COPY_ON_WRITE", "true", "hilbert", "direct"),
+      arguments("COPY_ON_WRITE", "true", "hilbert", "sample"),
+      arguments("COPY_ON_WRITE", "false", "linear", null),
+      arguments("COPY_ON_WRITE", "false", "z-order", "direct"),
+      arguments("COPY_ON_WRITE", "false", "z-order", "sample"),
+      arguments("COPY_ON_WRITE", "false", "hilbert", "direct"),
+      arguments("COPY_ON_WRITE", "false", "hilbert", "sample"),
 
-      arguments("MERGE_ON_READ", "linear", null),
-      arguments("MERGE_ON_READ", "z-order", "direct"),
-      arguments("MERGE_ON_READ", "z-order", "sample"),
-      arguments("MERGE_ON_READ", "hilbert", "direct"),
-      arguments("MERGE_ON_READ", "hilbert", "sample")
+      arguments("MERGE_ON_READ", "true", "linear", null),
+      arguments("MERGE_ON_READ", "true", "z-order", "direct"),
+      arguments("MERGE_ON_READ", "true", "z-order", "sample"),
+      arguments("MERGE_ON_READ", "true", "hilbert", "direct"),
+      arguments("MERGE_ON_READ", "true", "hilbert", "sample"),
+      arguments("MERGE_ON_READ", "false", "linear", null),
+      arguments("MERGE_ON_READ", "false", "z-order", "direct"),
+      arguments("MERGE_ON_READ", "false", "z-order", "sample"),
+      arguments("MERGE_ON_READ", "false", "hilbert", "direct"),
+      arguments("MERGE_ON_READ", "false", "hilbert", "sample")
     )
   }
 }
