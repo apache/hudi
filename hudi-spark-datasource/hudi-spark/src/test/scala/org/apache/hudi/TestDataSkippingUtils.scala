@@ -20,7 +20,11 @@ package org.apache.hudi
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
+import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.functions.{col, lower}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
@@ -94,7 +98,8 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
     spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
 
     val resolvedFilterExpr: Expression = exprUtils.resolveExpr(spark, sourceFilterExprStr, sourceTableSchema)
-    val rows: Seq[String] = applyFilterExpr(resolvedFilterExpr, input)
+    val optimizedExpr = optimize(resolvedFilterExpr)
+    val rows: Seq[String] = applyFilterExpr(optimizedExpr, input)
 
     assertEquals(expectedOutput, rows)
   }
@@ -114,7 +119,6 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
     assertEquals(expectedOutput, rows)
   }
 
-
   @ParameterizedTest
   @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
   def testStringsLookupFilterExpressions(sourceExpr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
@@ -133,6 +137,19 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       .toSeq
 
     assertEquals(output, rows)
+  }
+
+
+  private def optimize(expr: Expression): Expression = {
+    val rules: Seq[Rule[LogicalPlan]] =
+      OptimizeIn ::
+        Nil
+
+    val plan: LogicalPlan = DummyExpressionHolder(Seq(expr))
+
+    rules.foldLeft(plan) {
+      case (plan, rule) => rule.apply(plan)
+    }.asInstanceOf[DummyExpressionHolder].exprs.head
   }
 
   private def applyFilterExpr(resolvedExpr: Expression, input: Seq[IndexRow]): Seq[String] = {
@@ -325,6 +342,14 @@ object TestDataSkippingUtils {
           IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_1", "file_2")),
+      arguments(
+        s"B in (${(0 to 10).map(i => s"'a$i'").mkString(",")})",
+        Seq(
+          IndexRow("file_1", valueCount = 1, B_minValue = "a0", B_maxValue = "a10", B_nullCount = 0),
+          IndexRow("file_2", valueCount = 1, B_minValue = "b0", B_maxValue = "b10", B_nullCount = 0),
+          IndexRow("file_3", valueCount = 1, B_minValue = "a10", B_maxValue = "b20", B_nullCount = 0)
+        ),
+        Seq("file_1", "file_3")),
       arguments(
         "A not in (0, 1)",
         Seq(
