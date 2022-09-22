@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.cluster.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -39,11 +40,13 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
   private final HoodieTable<T, I, K, O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
   private final HoodieWriteConfig writeConfig;
+  protected final HoodieRecordType recordType;
 
   public ClusteringExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     this.writeConfig = writeConfig;
     this.hoodieTable = table;
     this.engineContext = engineContext;
+    this.recordType = table.getConfig().getRecordMerger().getRecordType();
   }
 
   /**

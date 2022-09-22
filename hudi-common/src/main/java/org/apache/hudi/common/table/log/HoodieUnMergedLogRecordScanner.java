@@ -20,9 +20,10 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -39,8 +40,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
   private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
-                                         LogRecordScannerCallback callback, Option<InstantRange> instantRange) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, false);
+                                         LogRecordScannerCallback callback, Option<InstantRange> instantRange, HoodieRecordMerger recordMerger) {
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, false, recordMerger);
     this.callback = callback;
   }
 
@@ -52,7 +53,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   }
 
   @Override
-  protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws Exception {
+  protected <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception {
     // Just call callback without merging
     callback.apply(hoodieRecord);
   }
@@ -68,7 +69,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   @FunctionalInterface
   public interface LogRecordScannerCallback {
 
-    void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
+    void apply(HoodieRecord<?> record) throws Exception;
   }
 
   /**
@@ -86,6 +87,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private Option<InstantRange> instantRange = Option.empty();
     // specific configurations
     private LogRecordScannerCallback callback;
+    private HoodieRecordMerger recordMerger;
 
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -140,9 +142,17 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     @Override
+    public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
+      this.recordMerger = recordMerger;
+      return this;
+    }
+
+    @Override
     public HoodieUnMergedLogRecordScanner build() {
+      ValidationUtils.checkArgument(recordMerger != null);
+
       return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
-          latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange);
+          latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange, recordMerger);
     }
   }
 }

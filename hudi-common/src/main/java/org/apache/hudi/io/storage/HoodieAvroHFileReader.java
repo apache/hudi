@@ -171,21 +171,26 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
 
   @SuppressWarnings("unchecked")
   @Override
-  public Option<IndexedRecord> getRecordByKey(String key, Schema readerSchema) throws IOException {
+  public Option<IndexedRecord> getIndexedRecordByKey(String key, Schema readerSchema) throws IOException {
     synchronized (sharedScannerLock) {
       return fetchRecordByKeyInternal(sharedScanner, key, getSchema(), readerSchema);
     }
   }
 
-  public ClosableIterator<IndexedRecord> getRecordIterator(Schema readerSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema) throws IOException {
     // TODO eval whether seeking scanner would be faster than pread
     HFileScanner scanner = getHFileScanner(reader, false);
     return new RecordIterator(scanner, getSchema(), readerSchema);
   }
 
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
   @SuppressWarnings("unchecked")
   @Override
-  public ClosableIterator<IndexedRecord> getRecordsByKeysIterator(List<String> keys, Schema readerSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys, Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
@@ -195,7 +200,7 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
 
   @SuppressWarnings("unchecked")
   @Override
-  public ClosableIterator<IndexedRecord> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
@@ -372,7 +377,7 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
    */
   public static List<IndexedRecord> readAllRecords(HoodieAvroHFileReader reader) throws IOException {
     Schema schema = reader.getSchema();
-    return toStream(reader.getRecordIterator(schema))
+    return toStream(reader.getIndexedRecordIterator(schema))
         .collect(Collectors.toList());
   }
 
@@ -395,7 +400,7 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
                                                               List<String> keys,
                                                               Schema schema) throws IOException {
     Collections.sort(keys);
-    return toStream(reader.getRecordsByKeysIterator(keys, schema))
+    return toStream(reader.getIndexedRecordsByKeysIterator(keys, schema))
         .collect(Collectors.toList());
   }
 

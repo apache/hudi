@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -30,6 +29,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -97,7 +97,7 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O
     Schema schema = useWriterSchemaForCompaction ? tableSchemaWithMetaFields : tableSchema;
     try {
       // NOTE: We're enforcing preservation of the record metadata to keep existing semantic
-      writeToFile(new HoodieKey(key, partitionPath), oldRecord, schema, config.getProps(), true);
+      writeToFile(new HoodieKey(key, partitionPath), oldRecord, schema, config.getPayloadConfig().getProps(), true);
     } catch (IOException | RuntimeException e) {
       String errMsg = String.format("Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));

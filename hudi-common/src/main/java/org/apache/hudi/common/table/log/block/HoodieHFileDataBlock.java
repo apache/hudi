@@ -33,8 +33,14 @@ import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockContentLocation;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -56,6 +62,7 @@ import java.util.Properties;
 import java.util.TreeMap;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
  * HoodieHFileDataBlock contains a list of records stored inside an HFile format. It is used with the HFile
@@ -125,7 +132,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Iterator<HoodieRecord> itr = records.iterator();
     int id = 0;
     while (itr.hasNext()) {
-      HoodieRecord record = itr.next();
+      HoodieRecord<?> record = itr.next();
       String recordKey;
       if (useIntegerKey) {
         recordKey = String.format("%" + keyWidth + "s", id++);
@@ -162,7 +169,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected ClosableIterator<HoodieRecord> deserializeRecords(byte[] content, HoodieRecord.Mapper mapper) throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
     // Get schema from the header
@@ -170,28 +177,12 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
     // Read the content
     HoodieAvroHFileReader reader = new HoodieAvroHFileReader(null, pathForReader, content, Option.of(writerSchema));
-    Iterator<IndexedRecord> recordIterator = reader.getRecordIterator(readerSchema);
-    return new ClosableIterator<HoodieRecord>() {
-      @Override
-      public void close() {
-        reader.close();
-      }
-
-      @Override
-      public boolean hasNext() {
-        return recordIterator.hasNext();
-      }
-
-      @Override
-      public HoodieRecord next() {
-        return mapper.apply(recordIterator.next());
-      }
-    };
+    return unsafeCast(reader.getRecordIterator(readerSchema));
   }
 
   // TODO abstract this w/in HoodieDataBlock
   @Override
-  protected ClosableIterator<HoodieRecord> lookupRecords(List<String> keys, boolean fullKey, HoodieRecord.Mapper mapper) throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
@@ -216,32 +207,16 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
     // Get writer's schema from the header
     final ClosableIterator<IndexedRecord> recordIterator =
-        fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
+        fullKey ? reader.getIndexedRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getIndexedRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
 
-    return new ClosableIterator<HoodieRecord>() {
-      @Override
-      public boolean hasNext() {
-        return recordIterator.hasNext();
-      }
-
-      @Override
-      public HoodieRecord next() {
-        return mapper.apply(recordIterator.next());
-      }
-
-      @Override
-      public void close() {
-        recordIterator.close();
-        reader.close();
-      }
-    };
+    return new MappingIterator<>(recordIterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord((data)));
   }
 
-  private byte[] serializeRecord(HoodieRecord record, Schema schema) throws IOException {
+  private byte[] serializeRecord(HoodieRecord<?> record, Schema schema) throws IOException {
     Option<Schema.Field> keyField = getKeyField(schema);
     // Reset key value w/in the record to avoid duplicating the key w/in payload
     if (keyField.isPresent()) {
-      record.overrideMetadataFieldValue(schema, new Properties(), keyField.get().pos(), StringUtils.EMPTY_STRING);
+      record.updateValues(schema, new Properties(), Collections.singletonMap(keyField.get().name(), StringUtils.EMPTY_STRING));
     }
     return HoodieAvroUtils.recordToBytes(record, schema).get();
   }

@@ -23,11 +23,10 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieMerge;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -52,6 +51,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -104,7 +104,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   private transient BiFunction<List<HoodieRecord>, String, List<WriteStatus>> writeFunction;
 
-  private transient HoodieMerge merge;
+  private transient HoodieRecordMerger recordMerger;
 
   /**
    * Total size tracer.
@@ -201,9 +201,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   private void initMergeClass() {
-    String mergeClassName = metaClient.getTableConfig().getMergeClass();
-    LOG.info("init hoodie merge with class [{}]", mergeClassName);
-    merge = HoodieRecordUtils.loadMerge(mergeClassName);
+    recordMerger = writeClient.getConfig().getRecordMerger();
+    LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
   }
 
   /**
@@ -432,7 +431,9 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     List<HoodieRecord> records = bucket.writeBuffer();
     ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
     if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-      records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1, this.writeClient.getConfig().getSchema(), merge);
+      Properties props = new Properties();
+      config.addAllToProperties(props);
+      records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1, props, this.writeClient.getConfig().getSchema(), recordMerger);
     }
     bucket.preWrite(records);
     final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
@@ -467,8 +468,9 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
             List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
               if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-                records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1,
-                    this.writeClient.getConfig().getSchema() merge);
+                Properties props = new Properties();
+                config.addAllToProperties(props);
+                records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1, this.writeClient.getConfig().getSchema(), props, recordMerger);
               }
               bucket.preWrite(records);
               writeStatus.addAll(writeFunction.apply(records, currentInstant));

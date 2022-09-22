@@ -309,10 +309,15 @@ object DataSourceWriteOptions {
   val PAYLOAD_CLASS_NAME = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME
 
   /**
-   * HoodieMerge will replace the payload to process the merge of data
+   * HoodieMerger will replace the payload to process the merge of data
    * and provide the same capabilities as the payload
    */
-  val MERGE_CLASS_NAME = HoodieWriteConfig.MERGE_CLASS_NAME
+  val MERGER_IMPLS = HoodieWriteConfig.MERGER_IMPLS
+
+  /**
+   * Id of merger strategy
+   */
+  val MERGER_STRATEGY = HoodieWriteConfig.MERGER_STRATEGY
 
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value

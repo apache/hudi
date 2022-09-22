@@ -379,7 +379,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
 
     @Override
     public JavaRDD<HoodieRecord> generateInputRecords(String tableName, String sourceBasePath,
-                                                      List<Pair<String, List<HoodieFileStatus>>> partitionPaths) {
+                                                      List<Pair<String, List<HoodieFileStatus>>> partitionPaths,  HoodieWriteConfig config) {
       String[] filePaths = partitionPaths.stream().map(Pair::getValue)
           .flatMap(f -> f.stream().map(fs -> FileStatusUtils.toPath(fs.getPath()).toString()))
           .toArray(String[]::new);

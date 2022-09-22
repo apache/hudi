@@ -255,7 +255,10 @@ public class DeltaSync implements Serializable, Closeable {
    */
   public void refreshTimeline() throws IOException {
     if (fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).setPayloadClassName(cfg.payloadClassName).build();
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf()))
+          .setBasePath(cfg.targetBasePath).setPayloadClassName(cfg.payloadClassName)
+          .setMergerStrategy(cfg.mergerStrategy)
+          .build();
       switch (meta.getTableType()) {
         case COPY_ON_WRITE:
           this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
@@ -277,7 +280,6 @@ public class DeltaSync implements Serializable, Closeable {
           .setTableName(cfg.targetTableName)
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
           .setPayloadClassName(cfg.payloadClassName)
-          .setMergeClassName(cfg.mergeClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionFields(partitionColumns)
           .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
@@ -376,7 +378,6 @@ public class DeltaSync implements Serializable, Closeable {
           .setTableName(cfg.targetTableName)
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
           .setPayloadClassName(cfg.payloadClassName)
-          .setMergeClassName(cfg.mergeClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionFields(partitionColumns)
           .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
@@ -845,7 +846,11 @@ public class DeltaSync implements Serializable, Closeable {
         if (SchemaCompatibility.checkReaderWriterCompatibility(targetSchema, InputBatch.NULL_SCHEMA).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE
             && SchemaCompatibility.checkReaderWriterCompatibility(InputBatch.NULL_SCHEMA, targetSchema).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE) {
           // target schema is null. fetch schema from commit metadata and use it
-          HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).setPayloadClassName(cfg.payloadClassName).build();
+          HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf()))
+              .setBasePath(cfg.targetBasePath)
+              .setPayloadClassName(cfg.payloadClassName)
+              .setMergerStrategy(cfg.mergerStrategy)
+              .build();
           int totalCompleted = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
           if (totalCompleted > 0) {
             try {

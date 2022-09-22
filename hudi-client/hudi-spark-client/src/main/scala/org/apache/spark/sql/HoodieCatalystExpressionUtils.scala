@@ -251,6 +251,10 @@ object HoodieCatalystExpressionUtils {
     )
   }
 
+  def existField(structType: StructType, name: String): Boolean = {
+    structType.getFieldIndex(name).isDefined
+  }
+
   private def hasUnresolvedRefs(resolvedExpr: Expression): Boolean =
     resolvedExpr.collectFirst {
       case _: UnresolvedAttribute | _: UnresolvedFunction => true

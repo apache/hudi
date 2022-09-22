@@ -84,7 +84,7 @@ public class HoodieInternalRow extends InternalRow {
     this.sourceContainsMetaFields = sourceContainsMetaFields;
   }
 
-  private HoodieInternalRow(UTF8String[] metaFields,
+  public HoodieInternalRow(UTF8String[] metaFields,
                            InternalRow sourceRow,
                            boolean sourceContainsMetaFields) {
     this.metaFields = metaFields;

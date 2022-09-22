@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -1047,7 +1048,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       Path path = new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPath), filename);
       HoodieFileReader fileReader;
       try {
-        fileReader = HoodieFileReaderFactory.getFileReader(metaClient.getHadoopConf(), path);
+        fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(), path);
       } catch (IOException e) {
         Log.error("Failed to get file reader for " + path + " " + e.getMessage());
         return Option.empty();

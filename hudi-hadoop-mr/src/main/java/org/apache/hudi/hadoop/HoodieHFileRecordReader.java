@@ -56,7 +56,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
   @Override
   public boolean next(NullWritable key, ArrayWritable value) throws IOException {
     if (recordIterator == null) {
-      recordIterator = reader.getRecordIterator(schema);
+      recordIterator = reader.getIndexedRecordIterator(schema);
     }
 
     if (!recordIterator.hasNext()) {

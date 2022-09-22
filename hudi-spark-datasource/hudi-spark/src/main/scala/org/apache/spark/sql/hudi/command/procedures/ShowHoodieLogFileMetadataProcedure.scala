@@ -19,9 +19,8 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.hadoop.fs.Path
-import org.apache.avro.generic.IndexedRecord
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieLogFile, HoodieRecord}
+import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.{HeaderMetadataType, HoodieLogBlockType}
 import org.apache.hudi.common.table.log.block.{HoodieCorruptBlock, HoodieDataBlock}
@@ -29,10 +28,10 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
-
 import java.util.Objects
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import scala.collection.JavaConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter}
 
 class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBuilder {
@@ -94,10 +93,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
             }
             block match {
               case dataBlock: HoodieDataBlock =>
-                val mapper = new HoodieRecord.Mapper() {
-                  override def apply(data: IndexedRecord) = new HoodieAvroIndexedRecord(data)
-                }
-                val recordItr = dataBlock.getRecordIterator(mapper)
+                val recordItr = dataBlock.getRecordIterator(HoodieRecordType.AVRO)
                 recordItr.asScala.foreach(_ => recordCount.incrementAndGet())
                 recordItr.close()
             }

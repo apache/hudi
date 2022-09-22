@@ -19,21 +19,18 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
 import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.Serializable;
-
 /**
  * Size Estimator for Hoodie record payload.
  * 
  * @param <T>
  */
-public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements SizeEstimator<HoodieRecord<T>>, Serializable {
+public class HoodieRecordSizeEstimator<T> implements SizeEstimator<HoodieRecord<T>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieRecordSizeEstimator.class);
 

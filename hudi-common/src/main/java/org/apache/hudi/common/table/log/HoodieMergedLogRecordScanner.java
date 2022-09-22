@@ -20,28 +20,26 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieMerge;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.internal.schema.InternalSchema;
-
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -82,8 +80,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
 
-  private final HoodieMerge merge;
-
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
@@ -92,16 +88,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean forceFullScan,
-                                         Option<String> partitionName, InternalSchema internalSchema) {
+                                         Option<String> partitionName, InternalSchema internalSchema, HoodieRecordMerger recordMerger) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField,
-        forceFullScan, partitionName, internalSchema);
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, recordMerger);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
-      this.merge = HoodieRecordUtils.loadMerge(getMergeClassFQN());
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -149,19 +143,19 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   @Override
-  protected void processNextRecord(HoodieRecord hoodieRecord) throws IOException {
+  protected <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws IOException {
     String key = hoodieRecord.getRecordKey();
     if (records.containsKey(key)) {
       // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
       // done when a DELETE (empty payload) is encountered before or after an insert/update.
 
-      HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
-      HoodieRecordPayload oldValue = oldRecord.getData();
-      HoodieRecordPayload combinedValue = (HoodieRecordPayload) merge.preCombine(oldRecord, hoodieRecord, readerSchema, this.getPayloadProps()).getData();
+      HoodieRecord<T> oldRecord = records.get(key);
+      T oldValue = oldRecord.getData();
+      T combinedValue = ((HoodieRecord<T>) recordMerger.merge(oldRecord, hoodieRecord, readerSchema, this.getPayloadProps()).get()).getData();
       // If combinedValue is oldValue, no need rePut oldRecord
       if (combinedValue != oldValue) {
-        HoodieOperation operation = hoodieRecord.getOperation();
-        records.put(key, new HoodieAvroRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
+        hoodieRecord.setData(combinedValue);
+        records.put(key, hoodieRecord);
       }
     } else {
       // Put the record as is
@@ -172,13 +166,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
     String key = deleteRecord.getRecordKey();
-    HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
+    HoodieRecord oldRecord = records.get(key);
     if (oldRecord != null) {
       // Merge and store the merged record. The ordering val is taken to decide whether the same key record
       // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
       // For same ordering values, uses the natural order(arrival time semantics).
 
-      Comparable curOrderingVal = oldRecord.getOrderingValue();
+      Comparable curOrderingVal = oldRecord.getOrderingValue(
+          this.hoodieTableMetaClient.getTableConfig().getProps());
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
@@ -191,8 +186,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       }
     }
     // Put the DELETE record
-    records.put(key, SpillableMapUtils.generateEmptyPayload(key,
-        deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
+    if (recordType == HoodieRecordType.AVRO) {
+      records.put(key, SpillableMapUtils.generateEmptyPayload(key,
+          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
+    } else {
+      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
+      records.put(key, record);
+    }
   }
 
   public long getTotalTimeTakenToReadAndMergeBlocks() {
@@ -228,6 +228,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected String partitionName;
     // operation field default false
     private boolean withOperationField = false;
+    private HoodieRecordMerger recordMerger;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -322,15 +323,23 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
 
     @Override
+    public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
+      this.recordMerger = recordMerger;
+      return this;
+    }
+
+    @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(new Path(basePath), new Path(this.logFilePaths.get(0)).getParent());
       }
+      ValidationUtils.checkArgument(recordMerger != null);
+
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName), internalSchema);
+          Option.ofNullable(partitionName), internalSchema, recordMerger);
     }
   }
 }

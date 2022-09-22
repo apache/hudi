@@ -17,8 +17,9 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieAvroRecordMerger, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -31,15 +32,18 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
   def testWithDefaultSqlOptions(): Unit = {
     val ops1 = Map("primaryKey" -> "id")
     val with1 = HoodieOptionConfig.withDefaultSqlOptions(ops1)
-    assertTrue(with1.size == 3)
+    assertTrue(with1.size == 4)
     assertTrue(with1("primaryKey") == "id")
     assertTrue(with1("type") == "cow")
     assertTrue(with1("payloadClass") == classOf[OverwriteWithLatestAvroPayload].getName)
+    assertTrue(with1("mergerStrategy") == StringUtils.DEFAULT_MERGER_STRATEGY_UUID)
 
     val ops2 = Map("primaryKey" -> "id",
       "preCombineField" -> "timestamp",
       "type" -> "mor",
-      "payloadClass" -> classOf[DefaultHoodieRecordPayload].getName
+      "payloadClass" -> classOf[DefaultHoodieRecordPayload].getName,
+      "mergerImpls" -> classOf[HoodieAvroRecordMerger].getName,
+      "mergerStrategy" -> StringUtils.DEFAULT_MERGER_STRATEGY_UUID
     )
     val with2 = HoodieOptionConfig.withDefaultSqlOptions(ops2)
     assertTrue(ops2 == with2)

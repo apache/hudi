@@ -194,6 +194,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
+        .withRecordMerger(config.getRecordMerger())
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =

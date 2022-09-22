@@ -27,8 +27,11 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -89,10 +92,11 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         .withDiskMapType(jobConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue()))
         .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
             HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
   }
 
-  private Option<GenericRecord> buildGenericRecordwithCustomPayload(HoodieRecord record) throws IOException {
+  private Option<HoodieAvroIndexedRecord> buildGenericRecordwithCustomPayload(HoodieRecord record) throws IOException {
     if (usesCustomPayload) {
       return record.toIndexedRecord(getWriterSchema(), payloadProps);
     } else {
@@ -112,7 +116,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
           this.deltaRecordKeys.remove(key);
           // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
           // deltaRecord may not be a full record and needs values of columns from the parquet
-          Option<GenericRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
+          Option<HoodieAvroIndexedRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
           // If the record is not present, this is a delete record using an empty payload so skip this base record
           // and move to the next record
           if (!rec.isPresent()) {
@@ -129,7 +133,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     }
     while (this.deltaItr.hasNext()) {
       final String key = this.deltaItr.next();
-      Option<GenericRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
+      Option<HoodieAvroIndexedRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
       if (rec.isPresent()) {
         setUpWritable(rec, arrayWritable, key);
         return true;
@@ -138,12 +142,12 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     return false;
   }
 
-  private void setUpWritable(Option<GenericRecord> rec, ArrayWritable arrayWritable, String key) {
-    GenericRecord recordToReturn = rec.get();
+  private void setUpWritable(Option<HoodieAvroIndexedRecord> rec, ArrayWritable arrayWritable, String key) {
+    GenericRecord recordToReturn = (GenericRecord) rec.get().getData();
     if (usesCustomPayload) {
       // If using a custom payload, return only the projection fields. The readerSchema is a schema derived from
       // the writerSchema with only the projection fields
-      recordToReturn = HoodieAvroUtils.rewriteRecord(rec.get(), getReaderSchema());
+      recordToReturn = HoodieAvroUtils.rewriteRecord((GenericRecord) rec.get().getData(), getReaderSchema());
     }
     // we assume, a later safe record in the log, is newer than what we have in the map &
     // replace it. Since we want to return an arrayWritable which is the same length as the elements in the latest

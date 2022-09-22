@@ -22,10 +22,10 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -259,12 +259,12 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
               HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
               // TODO If we can store additional metadata in datablock, we can skip parsing records
               // (such as startTime, endTime of records in the block)
-              try (ClosableIterator<HoodieRecord> itr = avroBlock.getRecordIterator(HoodieAvroIndexedRecord::new)) {
+              try (ClosableIterator<HoodieRecord<IndexedRecord>> itr = avroBlock.getRecordIterator(HoodieRecordType.AVRO)) {
                 StreamSupport.stream(Spliterators.spliteratorUnknownSize(itr, Spliterator.IMMUTABLE), true)
                     // Filter blocks in desired time window
-                    .map(r -> (GenericRecord) ((HoodieAvroIndexedRecord) r).toIndexedRecord().get())
+                    .map(r -> (GenericRecord) r.getData())
                     .filter(commitsFilter::apply)
-                    .map(r -> readCommit((GenericRecord) r, loadInstantDetails))
+                    .map(r -> readCommit(r, loadInstantDetails))
                     .filter(c -> filter == null || filter.isInRange(c))
                     .forEach(instantsInRange::add);
               }

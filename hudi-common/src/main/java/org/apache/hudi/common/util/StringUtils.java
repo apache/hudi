@@ -33,6 +33,8 @@ public class StringUtils {
 
   public static final String EMPTY_STRING = "";
 
+  public static final String DEFAULT_MERGER_STRATEGY_UUID = "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5";
+
   /**
    * <p>
    * Joins the elements of the provided array into a single String containing the provided list of elements.

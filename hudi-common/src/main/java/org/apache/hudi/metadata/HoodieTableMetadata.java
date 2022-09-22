@@ -92,6 +92,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @param basePath The base path to check
    */
   static boolean isMetadataTable(String basePath) {
+    if (basePath == null || basePath.isEmpty()) {
+      return false;
+    }
     if (basePath.endsWith(Path.SEPARATOR)) {
       basePath = basePath.substring(0, basePath.length() - 1);
     }

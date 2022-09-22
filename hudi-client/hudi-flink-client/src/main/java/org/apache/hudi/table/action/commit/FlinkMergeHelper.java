@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -28,21 +27,18 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.BinaryDecoder;
-import org.apache.avro.io.BinaryEncoder;
 import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * Flink merge helper.
@@ -64,42 +60,47 @@ public class FlinkMergeHelper<T> extends BaseMergeHelper<T, List<HoodieRecord<T>
   @Override
   public void runMerge(HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                        HoodieMergeHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> mergeHandle) throws IOException {
-    final GenericDatumWriter<GenericRecord> gWriter;
-    final GenericDatumReader<GenericRecord> gReader;
+    // Support schema evolution
     Schema readSchema;
+    // These two schema used to replace gWriter and gReader.
+    // In previous logic, avro record is serialized by gWriter and then is deserialized by gReader.
+    // Now we converge this logic in record#rewrite.
+    Schema readerSchema;
+    Schema writerSchema;
 
     final boolean externalSchemaTransformation = table.getConfig().shouldUseExternalSchemaTransformation();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
+    Configuration cfgForHoodieFile = new Configuration(table.getHadoopConf());
+    HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(table.getConfig().getRecordMerger().getRecordType()).getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
-      readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
-      gWriter = new GenericDatumWriter<>(readSchema);
-      gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetaFields());
+      readSchema = reader.getSchema();
+      writerSchema = readSchema;
+      readerSchema = mergeHandle.getWriterSchemaWithMetaFields();
     } else {
-      gReader = null;
-      gWriter = null;
+      readerSchema = null;
+      writerSchema = null;
       readSchema = mergeHandle.getWriterSchemaWithMetaFields();
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-    Configuration cfgForHoodieFile = new Configuration(table.getHadoopConf());
-    HoodieAvroFileReader reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
     try {
       final Iterator<HoodieRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
       } else {
-        readerIterator = reader.getRecordIterator(readSchema, HoodieAvroIndexedRecord::new);
+        readerIterator = reader.getRecordIterator(readSchema);
       }
 
-      ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
-      ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
       wrapper = new BoundedInMemoryExecutor(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
           Option.of(new UpdateHandler(mergeHandle)), record -> {
         if (!externalSchemaTransformation) {
           return record;
         }
-        // TODO Other type of record need to change
-        return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) ((HoodieRecord)record).getData());
+        try {
+          return ((HoodieRecord) record).rewriteRecord(writerSchema, new Properties(), readerSchema);
+        } catch (IOException e) {
+          throw new HoodieException(e);
+        }
       });
       wrapper.execute();
     } catch (Exception e) {

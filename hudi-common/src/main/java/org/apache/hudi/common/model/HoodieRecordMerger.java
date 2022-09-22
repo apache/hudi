@@ -19,6 +19,10 @@
 package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
+
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
@@ -30,9 +34,24 @@ import java.util.Properties;
  * It can implement the merging logic of HoodieRecord of different engines
  * and avoid the performance consumption caused by the serialization/deserialization of Avro payload.
  */
-public interface HoodieMerge extends Serializable {
-  
-  HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer);
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
+public interface HoodieRecordMerger extends Serializable {
 
-  Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException;
+  /**
+   * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.
+   * It'd be associative operation: f(a, f(b, c)) = f(f(a, b), c) (which we can translate as having 3 versions A, B, C
+   * of the single record, both orders of operations applications have to yield the same result)
+   */
+  Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException;
+
+  /**
+   * The record type handled by the current merger.
+   * SPARK, AVRO, FLINK
+   */
+  HoodieRecordType getRecordType();
+
+  /**
+   * The kind of merging strategy this recordMerger belongs to. An UUID represents merging strategy.
+   */
+  String getMergingStrategy();
 }

@@ -20,34 +20,32 @@ package org.apache.hudi.table.action.bootstrap;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ParquetReaderIterator;
+import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
-import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Properties;
 
 class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   private static final Logger LOG = LogManager.getLogger(ParquetBootstrapMetadataHandler.class);
@@ -67,18 +65,22 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   @Override
   void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
                         Path sourceFilePath, KeyGeneratorInterface keyGenerator, String partitionPath, Schema avroSchema) throws Exception {
-    BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
-    ParquetReader<IndexedRecord> reader =
-        AvroParquetReader.<IndexedRecord>builder(sourceFilePath).withConf(table.getHadoopConf()).build();
+    BoundedInMemoryExecutor<HoodieRecord, HoodieRecord, Void> wrapper = null;
+    HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(table.getConfig().getRecordMerger().getRecordType())
+            .getFileReader(table.getHadoopConf(), sourceFilePath);
     try {
-      wrapper = new BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
-          new ParquetReaderIterator(reader), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
-        String recKey = keyGenerator.getKey(inp).getRecordKey();
-        GenericRecord gr = new GenericData.Record(HoodieAvroUtils.RECORD_KEY_SCHEMA);
-        gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
-        BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
-        HoodieRecord rec = new HoodieAvroRecord(new HoodieKey(recKey, partitionPath), payload);
-        return rec;
+      wrapper = new BoundedInMemoryExecutor<HoodieRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
+          reader.getRecordIterator(), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
+        try {
+          String recKey = inp.getRecordKey(Option.of(keyGenerator));
+          HoodieRecord hoodieRecord = inp.rewriteRecord(reader.getSchema(), config.getProps(), HoodieAvroUtils.RECORD_KEY_SCHEMA);
+          return hoodieRecord
+              .updateValues(HoodieAvroUtils.RECORD_KEY_SCHEMA, new Properties(), Collections.singletonMap(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(), recKey))
+              .newInstance(new HoodieKey(recKey, partitionPath));
+        } catch (IOException e) {
+          LOG.error("Unable to overrideMetadataFieldValue", e);
+          return null;
+        }
       }, table.getPreExecuteRunnable());
       wrapper.execute();
     } catch (Exception e) {

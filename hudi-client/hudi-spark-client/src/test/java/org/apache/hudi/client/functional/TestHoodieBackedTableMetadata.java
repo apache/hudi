@@ -23,9 +23,9 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -353,7 +353,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {
-            try (ClosableIterator<HoodieRecord> recordItr = ((HoodieDataBlock) logBlock).getRecordIterator(HoodieAvroIndexedRecord::new)) {
+            try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = ((HoodieDataBlock) logBlock).getRecordIterator(HoodieRecordType.AVRO)) {
               recordItr.forEachRemaining(indexRecord -> {
                 final GenericRecord record = (GenericRecord) indexRecord.getData();
                 assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));

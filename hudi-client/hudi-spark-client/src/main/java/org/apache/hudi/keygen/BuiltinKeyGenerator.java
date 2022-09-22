@@ -278,7 +278,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
     if (!hiveStylePartitioning && partitionPathParts.length == 1) {
-      return emptyHandler.apply(converter.apply(partitionPathParts[0]));
+      return encoder.apply(emptyHandler.apply(converter.apply(partitionPathParts[0])));
     }
 
     StringBuilder<S> sb = builderFactory.get();

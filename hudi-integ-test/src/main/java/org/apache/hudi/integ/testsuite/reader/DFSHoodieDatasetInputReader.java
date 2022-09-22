@@ -22,20 +22,25 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
@@ -262,9 +267,9 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     if (fileSlice.getBaseFile().isPresent()) {
       // Read the base files using the latest writer schema.
       Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
-      HoodieAvroFileReader reader = HoodieFileReaderFactory.getFileReader(metaClient.getHadoopConf(),
-          new Path(fileSlice.getBaseFile().get().getPath()));
-      return reader.getRecordIterator(schema);
+      HoodieAvroFileReader reader = TypeUtils.unsafeCast(HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(),
+          new Path(fileSlice.getBaseFile().get().getPath())));
+      return reader.getIndexedRecordIterator(schema);
     } else {
       // If there is no data file, fall back to reading log files
       HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -283,6 +288,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
           .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue())
           .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
           .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
+          .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
           .build();
       // readAvro log files
       Iterable<HoodieRecord> iterable = () -> scanner.iterator();

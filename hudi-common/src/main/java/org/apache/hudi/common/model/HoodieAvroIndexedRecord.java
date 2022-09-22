@@ -19,20 +19,21 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 
 /**
  * This only use by reader returning.
@@ -48,7 +49,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation) {
-    super(key, data, operation, null);
+    super(key, data, operation);
   }
 
   public HoodieAvroIndexedRecord(HoodieRecord<IndexedRecord> record) {
@@ -59,32 +60,28 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public Option<IndexedRecord> toIndexedRecord(Schema schema, Properties prop) {
-    return Option.of(data);
-  }
-
-  public Option<IndexedRecord> toIndexedRecord() {
-    return Option.of(data);
-  }
-
-  @Override
   public HoodieRecord newInstance() {
-    throw new UnsupportedOperationException();
+    return new HoodieAvroIndexedRecord(this);
   }
 
   @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key, HoodieOperation op) {
-    throw new UnsupportedOperationException();
+    return new HoodieAvroIndexedRecord(key, data, op);
   }
 
   @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key) {
-    throw new UnsupportedOperationException();
+    return new HoodieAvroIndexedRecord(key, data);
   }
 
   @Override
   public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt) {
     return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getRecordKey((GenericRecord) data) : ((GenericRecord) data).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+  }
+
+  @Override
+  public HoodieRecordType getRecordType() {
+    return HoodieRecordType.AVRO;
   }
 
   @Override
@@ -95,59 +92,33 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord mergeWith(HoodieRecord other, Schema readerSchema, Schema writerSchema) throws IOException {
-    ValidationUtils.checkState(other instanceof HoodieAvroIndexedRecord);
-    GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), writerSchema);
+  public Object getRecordColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public HoodieRecord mergeWith(HoodieRecord other, Schema targetSchema) throws IOException {
+    GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), targetSchema);
     return new HoodieAvroIndexedRecord(record);
   }
 
   @Override
-  public HoodieRecord rewriteRecord(Schema recordSchema, Schema targetSchema, TypedProperties props) throws IOException {
-    GenericRecord avroPayloadInNewSchema =
-        HoodieAvroUtils.rewriteRecord((GenericRecord) data, targetSchema);
-    return new HoodieAvroIndexedRecord(avroPayloadInNewSchema);
+  public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException {
+    GenericRecord genericRecord = HoodieAvroUtils.rewriteRecord((GenericRecord) data, targetSchema);
+    return new HoodieAvroIndexedRecord(genericRecord);
   }
 
   @Override
-  public HoodieRecord rewriteRecord(Schema recordSchema, Properties prop, boolean schemaOnReadEnabled, Schema writeSchemaWithMetaFields) throws IOException {
-    GenericRecord rewriteRecord = schemaOnReadEnabled ? HoodieAvroUtils.rewriteRecordWithNewSchema(data, writeSchemaWithMetaFields, new HashMap<>())
-        : HoodieAvroUtils.rewriteRecord((GenericRecord) data, writeSchemaWithMetaFields);
-    return new HoodieAvroIndexedRecord(rewriteRecord);
+  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException {
+    GenericRecord genericRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(data, newSchema, renameCols);
+    return new HoodieAvroIndexedRecord(genericRecord);
   }
 
   @Override
-  public HoodieRecord rewriteRecordWithMetadata(Schema recordSchema, Properties prop, boolean schemaOnReadEnabled, Schema writeSchemaWithMetaFields, String fileName) throws IOException {
-    GenericRecord rewriteRecord = schemaOnReadEnabled ? HoodieAvroUtils.rewriteEvolutionRecordWithMetadata((GenericRecord) data, writeSchemaWithMetaFields, fileName)
-        : HoodieAvroUtils.rewriteRecordWithMetadata((GenericRecord) data, writeSchemaWithMetaFields, fileName);
-    return new HoodieAvroIndexedRecord(rewriteRecord);
-  }
-
-  @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema, Map<String, String> renameCols) throws IOException {
-    GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(data, newSchema, renameCols);
-    return new HoodieAvroIndexedRecord(rewriteRecord);
-  }
-
-  @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema, Map<String, String> renameCols, Mapper mapper) throws IOException {
-    GenericRecord oldRecord = (GenericRecord) getData();
-    GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(oldRecord, newSchema, renameCols);
-    return mapper.apply(rewriteRecord);
-  }
-
-  @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema) throws IOException {
-    GenericRecord oldRecord = (GenericRecord) data;
-    GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecord(oldRecord, newSchema);
-    return new HoodieAvroIndexedRecord(rewriteRecord);
-  }
-
-  @Override
-  public HoodieRecord addMetadataValues(Schema recordSchema, Properties prop, Map<HoodieMetadataField, String> metadataValues) throws IOException {
-    Arrays.stream(HoodieMetadataField.values()).forEach(metadataField -> {
-      String value = metadataValues.get(metadataField);
+  public HoodieRecord updateValues(Schema recordSchema, Properties props, Map<String, String> metadataValues) throws IOException {
+    metadataValues.forEach((key, value) -> {
       if (value != null) {
-        ((GenericRecord) data).put(metadataField.getFieldName(), value);
+        ((GenericRecord) data).put(key, value);
       }
     });
 
@@ -155,14 +126,46 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord overrideMetadataFieldValue(Schema recordSchema, Properties prop, int pos, String newValue) throws IOException {
-    data.put(pos, newValue);
-    return this;
+  public boolean isDelete(Schema schema, Properties props) {
+    return false;
   }
 
   @Override
-  public boolean shouldIgnore(Schema schema, Properties prop) throws IOException {
+  public boolean shouldIgnore(Schema schema, Properties props) throws IOException {
     return getData().equals(SENTINEL);
+  }
+
+  @Override
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
+      Schema schema,
+      Properties props,
+      Option<Pair<String, String>> simpleKeyGenFieldsOpt,
+      Boolean withOperation,
+      Option<String> partitionNameOp,
+      Boolean populateMetaFields) {
+    String payloadClass = ConfigUtils.getPayloadClass(props);
+    String preCombineField = ConfigUtils.getOrderingField(props);
+    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields);
+  }
+
+  @Override
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen) {
+    GenericRecord record = (GenericRecord) data;
+    String key;
+    String partition;
+    if (keyGen.isPresent() && !Boolean.parseBoolean(props.getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
+      BaseKeyGenerator keyGeneratorOpt = keyGen.get();
+      key = keyGeneratorOpt.getRecordKey(record);
+      partition = keyGeneratorOpt.getPartitionPath(record);
+    } else {
+      key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+      partition = record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    }
+    HoodieKey hoodieKey = new HoodieKey(key, partition);
+
+    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
+    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
+    return hoodieRecord;
   }
 
   @Override
@@ -171,7 +174,17 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public boolean isPresent(Schema schema, Properties prop) {
-    return true;
+  public Comparable<?> getOrderingValue(Properties props) {
+    boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(props.getProperty(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+    return (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data,
+        ConfigUtils.getOrderingField(props),
+        true, consistentLogicalTimestampEnabled);
+  }
+
+  @Override
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema schema, Properties props) {
+    return Option.of(this);
   }
 }
