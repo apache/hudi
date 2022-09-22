@@ -48,12 +48,14 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBucketIndex.class);
 
-  protected final int numBuckets;
-  protected final List<String> indexKeyFields;
+  protected int numBuckets;
+  protected List<String> indexKeyFields;
 
   public HoodieBucketIndex(HoodieWriteConfig config) {
     super(config);
-
+    if (config.getBucketIndexEngineType() == BucketIndexEngineType.RANGE_BUCKET) {
+      return;
+    }
     this.numBuckets = config.getBucketIndexNumBuckets();
     this.indexKeyFields = Arrays.asList(config.getBucketIndexHashField().split(","));
     LOG.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
