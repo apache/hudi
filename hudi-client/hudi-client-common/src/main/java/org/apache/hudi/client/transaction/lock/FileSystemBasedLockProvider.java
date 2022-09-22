@@ -53,9 +53,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   private static final String LOCK_FILE_NAME = "lock";
 
-  private final int lockTimeoutMinutes;
-  private final transient FileSystem fs;
-  private final transient Path lockFile;
+  protected final int lockTimeoutMinutes;
+  protected final transient FileSystem fs;
+  protected final transient Path lockFile;
   protected LockConfiguration lockConfiguration;
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration) {
@@ -109,7 +109,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     synchronized (LOCK_FILE_NAME) {
       try {
         if (fs.exists(this.lockFile)) {
-          fs.delete(this.lockFile, true);
+          releaseLock();
         }
       } catch (IOException io) {
         throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_RELEASE), io);
@@ -137,12 +137,16 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     return false;
   }
 
-  private void acquireLock() {
+  protected void acquireLock() {
     try {
       fs.create(this.lockFile, false).close();
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
     }
+  }
+
+  protected void releaseLock() throws IOException {
+    fs.delete(this.lockFile, true);
   }
 
   protected String generateLogStatement(LockState state) {
