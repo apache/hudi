@@ -18,36 +18,20 @@
 
 package org.apache.hudi.index.bucket;
 
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.LazyIterableIterator;
-import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Range Bucket indexing mechanism.
  */
-public class HoodieRangeBucketIndex extends HoodieIndex<Object, Object> {
-
-  private static final Logger LOG = LogManager.getLogger(HoodieRangeBucketIndex.class);
+public class HoodieRangeBucketIndex extends HoodieBucketIndex {
 
   private final int bucketRangeStepSize;
 
@@ -57,133 +41,30 @@ public class HoodieRangeBucketIndex extends HoodieIndex<Object, Object> {
   }
 
   @Override
-  public HoodieData<WriteStatus> updateLocation(HoodieData<WriteStatus> writeStatuses,
-                                                HoodieEngineContext context,
-                                                HoodieTable hoodieTable)
-      throws HoodieIndexException {
-    return writeStatuses;
+  protected BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath) {
+    return new RangeBucketIndexLocationMapper(table, partitionPath);
   }
 
-  @Override
-  public <R> HoodieData<HoodieRecord<R>> tagLocation(
-      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable)
-      throws HoodieIndexException {
-    List<Pair<String, Integer>> partitionPathAndBucketNumPair = records.map((SerializableFunction<HoodieRecord<R>, Pair<String, Integer>>) v1 -> {
-      String partitionPath = v1.getPartitionPath();
-      String recordKey = v1.getRecordKey();
-      int bucketNum = BucketIdentifier.getRangeBucketNum(recordKey, bucketRangeStepSize);
-      return Pair.of(partitionPath, bucketNum);
-    }).distinct().collectAsList();
-    int index = 0;
-    for (Pair<String, Integer> partitionBucketNumPair : partitionPathAndBucketNumPair) {
-      partitionBucketNumIndexMap.put(partitionBucketNumPair, index);
-      indexPartitionBucketNumMap.put(index, partitionBucketNumPair);
-      index += 1;
+  public class RangeBucketIndexLocationMapper implements BucketIndexLocationMapper {
+
+    /**
+     * Mapping from partitionPath -> bucketId -> fileInfo
+     */
+    private final Map<String, Map<Integer, HoodieRecordLocation>> partitionPathFileIDList;
+
+    public RangeBucketIndexLocationMapper(HoodieTable table, List<String> partitions) {
+      partitionPathFileIDList = partitions.stream().collect(Collectors.toMap(p -> p, p -> loadPartitionBucketIdFileIdMapping(table, p)));
     }
 
-    HoodieData<HoodieRecord<R>> taggedRecords = records.mapPartitions(recordIter -> {
-      // partitionPath -> bucketId -> fileInfo
-      Map<String, Map<Integer, Pair<String, String>>> partitionPathFileIDList = new HashMap<>();
-      return new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(recordIter) {
-
-        @Override
-        protected void start() {
-
-        }
-
-        @Override
-        protected HoodieRecord<R> computeNext() {
-          HoodieRecord record = recordIter.next();
-          int bucketId = BucketIdentifier.getRangeBucketNum(record.getRecordKey(), bucketRangeStepSize);
-          String partitionPath = record.getPartitionPath();
-          if (!partitionPathFileIDList.containsKey(partitionPath)) {
-            partitionPathFileIDList.put(partitionPath, loadPartitionBucketIdFileIdMapping(hoodieTable, partitionPath));
-          }
-          if (partitionPathFileIDList.get(partitionPath).containsKey(bucketId)) {
-            Pair<String, String> fileInfo = partitionPathFileIDList.get(partitionPath).get(bucketId);
-            return HoodieIndexUtils.getTaggedRecord(record, Option.of(
-              new HoodieRecordLocation(fileInfo.getRight(), fileInfo.getLeft())
-            ));
-          }
-          return record;
-        }
-
-        @Override
-        protected void end() {
-
-        }
-      };
-    }, true);
-    return taggedRecords;
-  }
-
-  private Map<Integer, Pair<String, String>> loadPartitionBucketIdFileIdMapping(HoodieTable hoodieTable, String partition) {
-    // bucketId -> fileIds
-    Map<Integer, Pair<String, String>> fileIDList = new HashMap<>();
-    HoodieIndexUtils
-        .getLatestBaseFilesForPartition(partition, hoodieTable)
-        .forEach(file -> {
-          String fileId = file.getFileId();
-          String commitTime = file.getCommitTime();
-          int bucketId = BucketIdentifier.bucketIdFromFileId(fileId);
-          if (!fileIDList.containsKey(bucketId)) {
-            fileIDList.put(bucketId, Pair.of(fileId, commitTime));
-          } else {
-            // check if bucket data is valid
-            throw new HoodieIOException("Find multiple files at partition path="
-              + partition + " belongs to the same bucket id = " + bucketId);
-          }
-        });
-    return fileIDList;
-  }
-
-  @Override
-  public boolean rollbackCommit(String instantTime) {
-    return true;
-  }
-
-  @Override
-  public boolean isGlobal() {
-    return false;
-  }
-
-  @Override
-  public boolean canIndexLogFiles() {
-    return false;
-  }
-
-  @Override
-  public boolean isImplicitWithStorage() {
-    return true;
-  }
-
-  @Override
-  public boolean requiresTagging(WriteOperationType operationType) {
-    switch (operationType) {
-      case INSERT:
-      case INSERT_OVERWRITE:
-      case UPSERT:
-        return true;
-      default:
-        return false;
+    @Override
+    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key) {
+      int bucketId = BucketIdentifier.getRangeBucketId(key, bucketRangeStepSize);
+      Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(key.getPartitionPath());
+      if (bucketIdToFileIdMapping.containsKey(bucketId)) {
+        return Option.ofNullable(bucketIdToFileIdMapping.get(bucketId));
+      } else {
+        return Option.ofNullable(new HoodieRecordLocation(null, BucketIdentifier.bucketIdStr(bucketId)));
+      }
     }
   }
-
-  public int getBucketRangeStepSize() {
-    return bucketRangeStepSize;
-  }
-
-  public Map<Pair<String, Integer>, Integer> getPartitionBucketNumIndexMap() {
-    return partitionBucketNumIndexMap;
-  }
-
-  public Map<Integer, Pair<String, Integer>> getIndexPartitionBucketNumMap() {
-    return indexPartitionBucketNumMap;
-  }
-
-  private Map<Pair<String, Integer>, Integer> partitionBucketNumIndexMap = new ConcurrentHashMap<>();
-
-  private Map<Integer, Pair<String, Integer>> indexPartitionBucketNumMap = new ConcurrentHashMap<>();
-
 }

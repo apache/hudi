@@ -28,6 +28,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -69,6 +70,21 @@ public class TestHoodieRangeBucketIndex extends HoodieClientTestHarness {
   }
 
   @Test
+  public void testValidateBucketIndexConfig() {
+    boolean makeConfigSuccess = false;
+    try {
+      makeConfig("_row_key,time");
+      makeConfigSuccess = true;
+    } catch (HoodieIndexException e) {
+      LOG.error(e.getMessage());
+      assertFalse(makeConfigSuccess);
+      makeConfig("_row_key");
+      makeConfigSuccess = true;
+    }
+    assertTrue(makeConfigSuccess);
+  }
+
+  @Test
   public void testTagLocation() throws Exception {
     long rowKey1 = 1;
     long rowKey2 = 9;
@@ -90,13 +106,13 @@ public class TestHoodieRangeBucketIndex extends HoodieClientTestHarness {
     HoodieRecord record4 = new HoodieAvroRecord(
         new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
     JavaRDD<HoodieRecord<HoodieAvroRecord>> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
-
-    HoodieWriteConfig config = makeConfig();
+    HoodieWriteConfig config = makeConfig("_row_key");
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     int bucketRangeStepSize = config.getBucketRangeStepSize();
     HoodieRangeBucketIndex bucketIndex = new HoodieRangeBucketIndex(config);
     HoodieData<HoodieRecord<HoodieAvroRecord>> taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context, table);
-    assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(r -> r.isCurrentLocationKnown()));
+    // even first insert, we should know the location
+    assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(r -> !r.isCurrentLocationKnown()));
 
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(table, SCHEMA);
     testTable.addCommit("001").withInserts("2016/01/31", getRecordFileId(record1), record1);
@@ -107,13 +123,13 @@ public class TestHoodieRangeBucketIndex extends HoodieClientTestHarness {
     boolean present = taggedRecordRDD.collectAsList().stream().filter(r -> r.isCurrentLocationKnown())
         .filter(r -> BucketIdentifier.bucketIdFromFileId(r.getCurrentLocation().getFileId()) != getRecordBucketId(r)).findAny().isPresent();
     assertFalse(present);
-    boolean condition = taggedRecordRDD.collectAsList().stream().filter(r -> r.getPartitionPath().equals("2015/01/31") && !r.isCurrentLocationKnown()).count() == 1L;
+    boolean condition = taggedRecordRDD.collectAsList().stream().filter(r -> r.getPartitionPath().equals("2015/01/31") && r.isCurrentLocationKnown()).count() == 1L;
     assertTrue(condition);
   }
 
-  private HoodieWriteConfig makeConfig() {
+  private HoodieWriteConfig makeConfig(String recordkeyField) {
     Properties props = new Properties();
-    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordkeyField);
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString())
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props)
             .withIndexType(HoodieIndex.IndexType.BUCKET)

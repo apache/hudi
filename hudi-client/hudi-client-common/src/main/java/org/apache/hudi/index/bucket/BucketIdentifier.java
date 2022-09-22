@@ -33,6 +33,11 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class BucketIdentifier implements Serializable {
+
+  public static int getRangeBucketId(HoodieKey key, int bucketRangeStepSize) {
+    return getRangeBucketNum(key.getRecordKey(), bucketRangeStepSize);
+  }
+
   // Compatible with the spark bucket name
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
   private static final Logger LOG = LogManager.getLogger(BucketIdentifier.class);
