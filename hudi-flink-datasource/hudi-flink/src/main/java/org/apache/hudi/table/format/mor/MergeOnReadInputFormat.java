@@ -792,8 +792,8 @@ public class MergeOnReadInputFormat
               continue;
             }
             IndexedRecord avroRecord = avroProjection.isPresent()
-                ? avroProjection.get().apply(mergedAvroRecord.get())
-                : mergedAvroRecord.get();
+                ? avroProjection.get().apply(mergedAvroRecord.get().getData())
+                : mergedAvroRecord.get().getData();
             this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
             this.currentRecord.setRowKind(rowKind);
             return false;

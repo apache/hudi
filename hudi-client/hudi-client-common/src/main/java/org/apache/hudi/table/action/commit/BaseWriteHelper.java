@@ -84,9 +84,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> {
   public I deduplicateRecords(
       I records, HoodieTable<T, I, K, O> table, int parallelism) {
     HoodieRecordMerger recordMerger = table.getConfig().getRecordMerger();
-    return deduplicateRecords(records, table.getIndex(), parallelism, table.getConfig().getSchema(), table.getConfig().getProps(), merge);
+    return deduplicateRecords(records, table.getIndex(), parallelism, table.getConfig().getSchema(), table.getConfig().getProps(), recordMerger);
   }
 
   public abstract I deduplicateRecords(
-      I records, HoodieIndex<?, ?> index, int parallelism, String schema, Properties props, HoodieMerge merge);
+      I records, HoodieIndex<?, ?> index, int parallelism, String schema, Properties props, HoodieRecordMerger merge);
 }

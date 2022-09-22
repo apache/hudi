@@ -114,7 +114,7 @@ object HoodieDatasetBulkInsertHelper extends Logging {
    */
   def bulkInsert(dataset: Dataset[Row],
                  instantTime: String,
-                 table: HoodieTable[_ <: HoodieRecordPayload[_ <: HoodieRecordPayload[_ <: AnyRef]], _, _, _],
+                 table: HoodieTable[_, _, _, _],
                  writeConfig: HoodieWriteConfig,
                  partitioner: BulkInsertPartitioner[Dataset[Row]],
                  parallelism: Int,

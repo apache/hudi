@@ -197,7 +197,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         case ZORDER:
         case HILBERT:
           return isRowPartitioner
-              ? new RowSpatialCurveSortPartitioner(getWriteConfig(), recordType)
+              ? new RowSpatialCurveSortPartitioner(getWriteConfig())
               : new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns, layoutOptStrategy,
                   getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema), recordType);
         case LINEAR:

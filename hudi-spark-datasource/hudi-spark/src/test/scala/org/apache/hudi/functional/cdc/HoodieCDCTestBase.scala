@@ -20,7 +20,7 @@ package org.apache.hudi.functional.cdc
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieKey, HoodieLogFile, HoodieRecord}
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieCommitMetadata, HoodieKey, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.log.HoodieLogFormat
@@ -29,17 +29,13 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-
 import org.apache.hadoop.fs.Path
-
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.spark.sql.{DataFrame, SparkSession}
-
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull, assertTrue}
-
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -122,8 +118,8 @@ abstract class HoodieCDCTestBase extends HoodieClientTestBase {
     val reader = HoodieLogFormat.newReader(fs, logFile, cdcSchema);
     assertTrue(reader.hasNext);
 
-    val block = reader.next().asInstanceOf[HoodieDataBlock];
-    block.getRecordIterator.asScala.toList
+    val block = reader.next().asInstanceOf[HoodieDataBlock]
+    block.getRecordIterator[IndexedRecord](HoodieRecordType.AVRO).asScala.toList.map(_.getData)
   }
 
   protected def checkCDCDataForInsertOrUpdate(cdcSupplementalLoggingMode: String,

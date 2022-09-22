@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -145,10 +146,10 @@ public class HoodieCDCLogger implements Closeable {
     }
 
     try {
-      List<IndexedRecord> records = cdcData.values().stream()
+      List<HoodieRecord> records = cdcData.values().stream()
           .map(record -> {
             try {
-              return record.getInsertValue(cdcSchema).get();
+              return new HoodieAvroIndexedRecord(record.getInsertValue(cdcSchema).get());
             } catch (IOException e) {
               throw new HoodieIOException("Failed to get cdc record", e);
             }
