@@ -21,7 +21,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -89,7 +89,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     if (!initialized) {
       SparkConf sparkConf = conf();
       SparkRDDWriteClient.registerClasses(sparkConf);
-      HoodieReadClient.addHoodieSupport(sparkConf);
+      SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
       jsc = new JavaSparkContext(spark.sparkContext());

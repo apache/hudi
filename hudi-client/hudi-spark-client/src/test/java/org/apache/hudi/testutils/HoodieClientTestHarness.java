@@ -28,7 +28,7 @@ import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -132,7 +132,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient ExecutorService executorService;
   protected transient HoodieTableMetaClient metaClient;
   protected transient SparkRDDWriteClient writeClient;
-  protected transient HoodieReadClient readClient;
+  protected transient SparkRDDReadClient readClient;
   protected transient HoodieTableFileSystemView tableView;
   protected transient TimelineService timelineService;
 
@@ -481,8 +481,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     }
   }
 
-  public HoodieReadClient getHoodieReadClient(String basePath) {
-    readClient = new HoodieReadClient(context, basePath, SQLContext.getOrCreate(jsc.sc()));
+  public SparkRDDReadClient getHoodieReadClient(String basePath) {
+    readClient = new SparkRDDReadClient(context, basePath, SQLContext.getOrCreate(jsc.sc()));
     return readClient;
   }
 

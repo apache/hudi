@@ -18,6 +18,9 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -32,14 +35,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -55,35 +53,31 @@ import java.util.stream.Stream;
 /**
  * CLI command to display file system options.
  */
-@Component
-public class FileSystemViewCommand implements CommandMarker {
+@ShellComponent
+public class FileSystemViewCommand {
 
-  @CliCommand(value = "show fsview all", help = "Show entire file-system view")
+  @ShellMethod(key = "show fsview all", value = "Show entire file-system view")
   public String showAllFileSlices(
-      @CliOption(key = {"pathRegex"}, help = "regex to select files, eg: 2016/08/02",
-          unspecifiedDefaultValue = "") String globRegex,
-      @CliOption(key = {"baseFileOnly"}, help = "Only display base files view",
-          unspecifiedDefaultValue = "false") boolean baseFileOnly,
-      @CliOption(key = {"maxInstant"}, help = "File-Slices upto this instant are displayed",
-          unspecifiedDefaultValue = "") String maxInstant,
-      @CliOption(key = {"includeMax"}, help = "Include Max Instant",
-          unspecifiedDefaultValue = "false") boolean includeMaxInstant,
-      @CliOption(key = {"includeInflight"}, help = "Include Inflight Instants",
-          unspecifiedDefaultValue = "false") boolean includeInflight,
-      @CliOption(key = {"excludeCompaction"}, help = "Exclude compaction Instants",
-          unspecifiedDefaultValue = "false") boolean excludeCompaction,
-      @CliOption(key = {"limit"}, help = "Limit rows to be displayed", unspecifiedDefaultValue = "-1") Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--pathRegex"}, help = "regex to select files, eg: par1",
+          defaultValue = "*") String globRegex,
+      @ShellOption(value = {"--baseFileOnly"}, help = "Only display base files view",
+              defaultValue = "false") boolean baseFileOnly,
+      @ShellOption(value = {"--maxInstant"}, help = "File-Slices upto this instant are displayed",
+              defaultValue = "") String maxInstant,
+      @ShellOption(value = {"--includeMax"}, help = "Include Max Instant",
+              defaultValue = "false") boolean includeMaxInstant,
+      @ShellOption(value = {"--includeInflight"}, help = "Include Inflight Instants",
+              defaultValue = "false") boolean includeInflight,
+      @ShellOption(value = {"--excludeCompaction"}, help = "Exclude compaction Instants",
+              defaultValue = "false") boolean excludeCompaction,
+      @ShellOption(value = {"--limit"}, help = "Limit rows to be displayed", defaultValue = "-1") Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+              defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
     globRegex = globRegex == null ? "" : globRegex;
-    // TODO: There is a bug in spring shell, if we pass */*/* to pathRegex, the last '/' will be lost, pathRegex will be */**
-    if (globRegex.endsWith("**")) {
-      globRegex = globRegex.replace("**", "*/*");
-    }
 
     HoodieTableFileSystemView fsView = buildFileSystemView(globRegex, maxInstant, baseFileOnly, includeMaxInstant,
         includeInflight, excludeCompaction);
@@ -123,26 +117,26 @@ public class FileSystemViewCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "show fsview latest", help = "Show latest file-system view")
+  @ShellMethod(key = "show fsview latest", value = "Show latest file-system view")
   public String showLatestFileSlices(
-      @CliOption(key = {"partitionPath"}, help = "A valid partition path", unspecifiedDefaultValue = "") String partition,
-      @CliOption(key = {"baseFileOnly"}, help = "Only display base file view",
-          unspecifiedDefaultValue = "false") boolean baseFileOnly,
-      @CliOption(key = {"maxInstant"}, help = "File-Slices upto this instant are displayed",
-          unspecifiedDefaultValue = "") String maxInstant,
-      @CliOption(key = {"merge"}, help = "Merge File Slices due to pending compaction",
-          unspecifiedDefaultValue = "true") final boolean merge,
-      @CliOption(key = {"includeMax"}, help = "Include Max Instant",
-          unspecifiedDefaultValue = "false") boolean includeMaxInstant,
-      @CliOption(key = {"includeInflight"}, help = "Include Inflight Instants",
-          unspecifiedDefaultValue = "false") boolean includeInflight,
-      @CliOption(key = {"excludeCompaction"}, help = "Exclude compaction Instants",
-          unspecifiedDefaultValue = "false") boolean excludeCompaction,
-      @CliOption(key = {"limit"}, help = "Limit rows to be displayed", unspecifiedDefaultValue = "-1") Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--partitionPath"}, help = "A valid partition path", defaultValue = "") String partition,
+      @ShellOption(value = {"--baseFileOnly"}, help = "Only display base file view",
+              defaultValue = "false") boolean baseFileOnly,
+      @ShellOption(value = {"--maxInstant"}, help = "File-Slices upto this instant are displayed",
+              defaultValue = "") String maxInstant,
+      @ShellOption(value = {"--merge"}, help = "Merge File Slices due to pending compaction",
+              defaultValue = "true") final boolean merge,
+      @ShellOption(value = {"--includeMax"}, help = "Include Max Instant",
+              defaultValue = "false") boolean includeMaxInstant,
+      @ShellOption(value = {"--includeInflight"}, help = "Include Inflight Instants",
+              defaultValue = "false") boolean includeInflight,
+      @ShellOption(value = {"--excludeCompaction"}, help = "Exclude compaction Instants",
+              defaultValue = "false") boolean excludeCompaction,
+      @ShellOption(value = {"--limit"}, help = "Limit rows to be displayed", defaultValue = "-1") Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+              defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
     HoodieTableFileSystemView fsView = buildFileSystemView(partition, maxInstant, baseFileOnly, includeMaxInstant,

@@ -153,6 +153,10 @@ public class HoodieFileGroup implements Serializable {
     return Stream.empty();
   }
 
+  public Stream<FileSlice> getAllFileSlicesBeforeOn(String maxInstantTime) {
+    return fileSlices.values().stream().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime));
+  }
+
   /**
    * Gets the latest slice - this can contain either.
    * <p>

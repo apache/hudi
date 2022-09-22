@@ -23,6 +23,7 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -36,6 +37,7 @@ import org.apache.log4j.Logger;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
@@ -115,5 +117,14 @@ public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
 
   public Path withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
     return super.withInserts(partition, fileId, records, new SparkTaskContextSupplier());
+  }
+
+  public HoodieSparkWriteableTestTable withLogAppends(String partition, String fileId, HoodieRecord... records) throws Exception {
+    withLogAppends(partition, fileId, Arrays.asList(records));
+    return this;
+  }
+
+  public Map<String, List<HoodieLogFile>> withLogAppends(String partition, String fileId, List<HoodieRecord> records) throws Exception {
+    return super.withLogAppends(partition, fileId, records);
   }
 }

@@ -300,7 +300,13 @@ public class MergeOnReadInputFormat
         FilePathUtils.extractPartitionKeys(this.conf));
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
     partSpec.forEach((k, v) -> {
-      DataType fieldType = fieldTypes.get(fieldNames.indexOf(k));
+      final int idx = fieldNames.indexOf(k);
+      if (idx == -1) {
+        // for any rare cases that the partition field does not exist in schema,
+        // fallback to file read
+        return;
+      }
+      DataType fieldType = fieldTypes.get(idx);
       if (!DataTypeUtils.isDatetimeType(fieldType)) {
         // date time type partition field is formatted specifically,
         // read directly from the data file to avoid format mismatch or precision loss

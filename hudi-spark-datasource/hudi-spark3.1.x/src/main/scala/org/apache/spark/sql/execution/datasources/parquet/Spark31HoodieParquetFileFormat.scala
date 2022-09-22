@@ -246,7 +246,7 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       if (enableVectorizedReader) {
         val vectorizedReader =
           if (shouldUseInternalSchema) {
-            new Spark312HoodieVectorizedParquetRecordReader(
+            new Spark31HoodieVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseMode.toString,
               int96RebaseMode.toString,
