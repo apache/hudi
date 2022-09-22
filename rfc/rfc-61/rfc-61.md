@@ -17,7 +17,6 @@
 # RFC-61: Snapshot view management
 
 
-
 ## Proposers
 
 - @<proposer1 @fengjian428>
@@ -38,7 +37,7 @@ For the snapshot view scenario, Hudi already provides two key features to suppor
 * Time travel: user provides a timestamp to query a specific snapshot view of a Hudi table
 * Savepoint/restore: "savepoint" saves the table as of the commit time so that it lets you restore the table to this savepoint at a later point in time if need be.
 but in this case, the user usually uses this to prevent cleaning snapshot view at a specific timestamp, hence, only clean unused files
-The situation is there some inconvenience for users if use them directly
+The situation is there some inconvenience for users if they use them directly
 
 Usually users incline to use a meaningful name instead of querying Hudi table with a timestamp, using the timestamp in SQL may lead to the wrong snapshot view being used. 
 for example, we can announce that a new tag of hudi table with table_nameYYYYMMDD was released, then the user can use this new table name to query.
@@ -54,8 +53,8 @@ typical scenarios and benefits of snapshot view:
 
 Create Snapshot view based on Hudi Savepoint
     * Create Snapshot views periodically by time(date time/processing time)
-    * Use HMS to store view metadata
-   
+    * Use External Metastore(such as HMS) to store external view 
+
 Build periodic snapshots based on the time period required by the user
 These Shapshots are stored as partitions in the metadata management system
 Users can easily use SQL to access this data in Flink Spark or Presto.
@@ -185,10 +184,12 @@ for example, if you choose Hive Metastore as the catalog and create a snapshot v
 
 when user query such a snapshot's external table, engines like Spark/Presto will get the savepoint timestamp from external table's properties then pass back to Hudi for time travel 
 
+### Clean service
+Normal savepoint will never be cleaned in Clean service, but a tagged savepoint is cleanable since it could be out-of-date.
 
 ### Operations
 * Create Snapshot View
-  create savepoint on a specific commit, meanwhile, create a new Hive external table name tablename_YYYYMMDD, add table storage properties as.of.instant=savepoint's timestamp， this table has the same basepath with the original one
+  create savepoint on a specific commit, meanwhile, create a new external table name tablename_YYYYMMDD, add as.of.instant={savepoint's timestamp} into external table storage properties ， this table has the same basepath with the original Hudi table
 ```sql
 call create_snapshot_view(table => 'hudi_table', commit_Time => 'commit_timestamp_from_timeline', snapshot_table => 'snapshot_hive_table');
 ```
@@ -214,6 +215,7 @@ call delete_snapshot_view(table => 'hudi_table', snapshot_table => 'snapshot_hiv
 | `instant_time`   | `true`   | `--`    | the savepoint timestamp from Hudi timeline, must provide |
 | `hive_sync`      | `false`  | `false` | whether to delete savepoint timestamp from Hive table serde properties |
 | `hms`            | `false`  | `None`  | Hive metastore server used for deleting savepoint information |
+
 * List Snapshot View
 ```sql
 call show_snapshotviews(table => 'hudi_table');
@@ -222,14 +224,11 @@ call show_snapshotviews(table => 'hudi_table');
 |  Parameter Name  | Required | Default | Remarks |
 |  --------------  | -------  | ------- | ------- |
 | `table`          | `true`   | `--`    | the Hive table name you want to show savepoint list, must be a Hudi table |
-* Retain
-  we need to extend clean service to clean expired savepoints. user should set a retained number or period in table config
-* Reader 
-  Spark/Flink/Presto/Trino side all can read the Storage properties to get timestamp then get the specific file view.
 
 ### Mor support
+Savepoint is already support Merge-On-Read table
 
-### Precise Event time Snapshot
+### Precise Event time Snapshot On Merge-On-Read table
 
 ## Rollout/Adoption Plan
 there should be no impact on existing users
