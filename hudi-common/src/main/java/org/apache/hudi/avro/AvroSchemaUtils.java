@@ -105,8 +105,7 @@ public class AvroSchemaUtils {
    * wrapping around provided target non-null type
    */
   public static Schema createNullableSchema(Schema.Type avroType) {
-    checkState(avroType != Schema.Type.NULL);
-    return Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(avroType));
+    return createNullableSchema(Schema.create(avroType));
   }
 
   public static Schema createNullableSchema(Schema schema) {
