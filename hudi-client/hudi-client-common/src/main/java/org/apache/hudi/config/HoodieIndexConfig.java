@@ -270,7 +270,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> RANGE_BUCKET_STEP_SIZE = ConfigProperty
       .key("hoodie.range.bucket.index.step.size")
-      .defaultValue(10_0000)
+      .defaultValue(1_000_000)
       .withDocumentation("Only applies if index type is RANGE_BUCKET. Determine the number of buckets in the hudi table, "
           + "and each partition is divided by step size");
 
