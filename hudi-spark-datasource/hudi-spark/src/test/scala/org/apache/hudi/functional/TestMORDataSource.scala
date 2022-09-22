@@ -98,9 +98,12 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     )
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testCount(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getOpts(recordType)
+  @CsvSource(Array("AVRO, AVRO, avro", "AVRO, SPARK, parquet", "SPARK, AVRO, parquet", "SPARK, SPARK, parquet"))
+  def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String) {
+    var (_, readOpts) = getOpts(readType)
+    var (writeOpts, _) = getOpts(writeType)
+    readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
+    writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
 
     // First Operation:
     // Producing parquet files to three default partitions.
