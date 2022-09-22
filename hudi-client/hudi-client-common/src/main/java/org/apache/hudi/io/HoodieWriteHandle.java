@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -307,6 +308,16 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
         .withRolloverLogWriteToken(rolloverLogWriteToken)
         .withLogWriteToken(logWriteToken)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+  }
+
+  protected HoodieLogFormat.Writer createLogWriter(String baseCommitTime, String fileSuffix) {
+    try {
+      return createLogWriter(Option.empty(),baseCommitTime, fileSuffix);
+    } catch (IOException e) {
+      throw new HoodieException("Creating logger writer with fileId: " + fileId + ", "
+          + "base commit time: " + baseCommitTime + ", "
+          + "file suffix: " + fileSuffix + " error");
+    }
   }
 
   private static class IgnoreRecord implements GenericRecord {

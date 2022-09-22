@@ -29,6 +29,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Change log supplemental log data block.
+ */
 public class HoodieCDCDataBlock extends HoodieAvroDataBlock {
 
   public HoodieCDCDataBlock(
@@ -53,5 +56,4 @@ public class HoodieCDCDataBlock extends HoodieAvroDataBlock {
   public HoodieLogBlockType getBlockType() {
     return HoodieLogBlockType.CDC_DATA_BLOCK;
   }
-
 }
