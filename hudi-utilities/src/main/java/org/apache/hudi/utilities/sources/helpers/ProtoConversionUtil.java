@@ -32,6 +32,8 @@ import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
@@ -39,14 +41,18 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
@@ -96,19 +102,21 @@ public class ProtoConversionUtil {
     // A cache with a key as the pair target avro schema and the proto descriptor for the source and the value as an array of proto field descriptors where the order matches the avro ordering.
     // When converting from proto to avro, we want to be able to iterate over the fields in the proto in the same order as they appear in the avro schema.
     private static final Map<Pair<Schema, Descriptors.Descriptor>, Descriptors.FieldDescriptor[]> FIELD_CACHE = new ConcurrentHashMap<>();
-    private static final Map<Descriptors.Descriptor, Schema.Type> WRAPPER_DESCRIPTORS_TO_TYPE = getWrapperDescriptorsToType();
+    private static final Schema UNSIGNED_LONG_SCHEMA = LogicalTypes.decimal(21).addToSchema(Schema.createFixed("unsigned_long", null, "org.apache.hudi.protos", 9));
+    private static final BigInteger UNSIGNED_LONG_MASK = BigInteger.ONE.shiftLeft(Long.SIZE).subtract(BigInteger.ONE);
+    private static final Set<Descriptors.Descriptor> WRAPPER_DESCRIPTORS_TO_TYPE = getWrapperDescriptorsToType();
 
-    private static Map<Descriptors.Descriptor, Schema.Type> getWrapperDescriptorsToType() {
-      Map<Descriptors.Descriptor, Schema.Type> wrapperDescriptorsToType = new HashMap<>();
-      wrapperDescriptorsToType.put(StringValue.getDescriptor(), Schema.Type.STRING);
-      wrapperDescriptorsToType.put(Int32Value.getDescriptor(), Schema.Type.INT);
-      wrapperDescriptorsToType.put(UInt32Value.getDescriptor(), Schema.Type.INT);
-      wrapperDescriptorsToType.put(Int64Value.getDescriptor(), Schema.Type.LONG);
-      wrapperDescriptorsToType.put(UInt64Value.getDescriptor(), Schema.Type.LONG);
-      wrapperDescriptorsToType.put(BoolValue.getDescriptor(), Schema.Type.BOOLEAN);
-      wrapperDescriptorsToType.put(BytesValue.getDescriptor(), Schema.Type.BYTES);
-      wrapperDescriptorsToType.put(DoubleValue.getDescriptor(), Schema.Type.DOUBLE);
-      wrapperDescriptorsToType.put(FloatValue.getDescriptor(), Schema.Type.FLOAT);
+    private static Set<Descriptors.Descriptor> getWrapperDescriptorsToType() {
+      Set<Descriptors.Descriptor> wrapperDescriptorsToType = new HashSet<>();
+      wrapperDescriptorsToType.add(StringValue.getDescriptor());
+      wrapperDescriptorsToType.add(Int32Value.getDescriptor());
+      wrapperDescriptorsToType.add(UInt32Value.getDescriptor());
+      wrapperDescriptorsToType.add(Int64Value.getDescriptor());
+      wrapperDescriptorsToType.add(UInt64Value.getDescriptor());
+      wrapperDescriptorsToType.add(BoolValue.getDescriptor());
+      wrapperDescriptorsToType.add(BytesValue.getDescriptor());
+      wrapperDescriptorsToType.add(DoubleValue.getDescriptor());
+      wrapperDescriptorsToType.add(FloatValue.getDescriptor());
       return wrapperDescriptorsToType;
     }
 
@@ -204,14 +212,15 @@ public class ProtoConversionUtil {
           return schemaFinalizer.apply(Schema.create(Schema.Type.INT));
         case UINT32:
         case INT64:
-        case UINT64:
         case SINT64:
         case FIXED64:
         case SFIXED64:
           return schemaFinalizer.apply(Schema.create(Schema.Type.LONG));
+        case UINT64:
+          return schemaFinalizer.apply(UNSIGNED_LONG_SCHEMA);
         case MESSAGE:
           String updatedPath = appendFieldNameToPath(path, f.getName());
-          if (flattenWrappedPrimitives && WRAPPER_DESCRIPTORS_TO_TYPE.containsKey(f.getMessageType())) {
+          if (flattenWrappedPrimitives && WRAPPER_DESCRIPTORS_TO_TYPE.contains(f.getMessageType())) {
             // all wrapper types have a single field, so we can get the first field in the message's schema
             return schemaFinalizer.apply(Schema.createUnion(Arrays.asList(NULL_SCHEMA, getFieldSchema(f.getMessageType().getFields().get(0), recursionDepths, flattenWrappedPrimitives, updatedPath,
                 maxRecursionDepth))));
@@ -246,11 +255,12 @@ public class ProtoConversionUtil {
         case FIXED32:
         case SFIXED32:
         case INT64:
-        case UINT64:
         case SINT64:
         case FIXED64:
         case SFIXED64:
           return 0;
+        case UINT64:
+          return "\u0000"; // requires bytes for decimal type
         case STRING:
         case BYTES:
           return "";
@@ -314,6 +324,11 @@ public class ProtoConversionUtil {
         case ENUM:
           return GenericData.get().createEnum(value.toString(), schema);
         case FIXED:
+          if (value instanceof Long) {
+            // convert the long to its unsigned value
+            Conversions.DecimalConversion converter = new Conversions.DecimalConversion();
+            return converter.toFixed(new BigDecimal(toUnsignedBigInteger((Long) value)), schema, schema.getLogicalType());
+          }
           return GenericData.get().createFixed(null, ((GenericFixed) value).bytes(), schema);
         case BOOLEAN:
         case DOUBLE:
@@ -370,6 +385,17 @@ public class ProtoConversionUtil {
           return convertObject(schema.getTypes().get(1), value);
         default:
           throw new HoodieException("Proto to Avro conversion failed for schema \"" + schema + "\" and value \"" + value + "\"");
+      }
+    }
+
+    private static BigInteger toUnsignedBigInteger(long input) {
+      if (input >= 0L) {
+        return BigInteger.valueOf(input);
+      } else {
+        int upper = (int) (input >>> 32);
+        int lower = (int) input;
+        // return (upper << 32) + lower
+        return (BigInteger.valueOf(Integer.toUnsignedLong(upper))).shiftLeft(32).add(BigInteger.valueOf(Integer.toUnsignedLong(lower)));
       }
     }
 

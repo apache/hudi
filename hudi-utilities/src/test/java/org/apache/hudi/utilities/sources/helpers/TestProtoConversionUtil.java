@@ -36,10 +36,12 @@ import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import com.google.protobuf.util.Timestamps;
 import org.apache.avro.io.BinaryDecoder;
@@ -52,6 +54,8 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -65,6 +69,7 @@ import java.util.stream.Collectors;
 
 public class TestProtoConversionUtil {
   private static final Random RANDOM = new Random();
+  private static final String MAX_UNSIGNED_LONG = "18446744073709551615";
 
   @Test
   public void allFieldsSet_wellKnownTypesAreNested() throws IOException {
@@ -73,6 +78,10 @@ public class TestProtoConversionUtil {
     Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, true);
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
+    // assert that unsigned long is interpreted correctly
+    Schema unsignedLongSchema = convertedSchema.getField("primitive_unsigned_long").schema();
+    BigDecimal actualUnsignedLong = new Conversions.DecimalConversion().fromFixed((GenericFixed) actual.get("primitive_unsigned_long"), unsignedLongSchema, unsignedLongSchema.getLogicalType());
+    Assertions.assertEquals(MAX_UNSIGNED_LONG, actualUnsignedLong.toString());
   }
 
   @Test
@@ -134,6 +143,7 @@ public class TestProtoConversionUtil {
     Schema nestedMessageSchema = schema.getField("nested_message").schema().getTypes().get(1);
     Schema listMessageSchema = schema.getField("repeated_message").schema().getElementType();
     Schema mapMessageSchema = schema.getField("map_message").schema().getElementType().getField("value").schema().getTypes().get(1);
+    Schema unsignedLongSchema = schema.getField("primitive_unsigned_long").schema();
 
     double primitiveDouble = RANDOM.nextDouble();
     float primitiveFloat = RANDOM.nextFloat();
@@ -245,7 +255,8 @@ public class TestProtoConversionUtil {
     expectedRecord.put("primitive_int", primitiveInt);
     expectedRecord.put("primitive_long", primitiveLong);
     expectedRecord.put("primitive_unsigned_int", (long) primitiveUnsignedInt);
-    expectedRecord.put("primitive_unsigned_long", primitiveUnsignedLong);
+    expectedRecord.put("primitive_unsigned_long", decimalConversion.toFixed(new BigDecimal(toUnsignedBigInteger(Long.parseUnsignedLong(MAX_UNSIGNED_LONG))),
+        unsignedLongSchema, unsignedLongSchema.getLogicalType()));
     expectedRecord.put("primitive_signed_int", primitiveSignedInt);
     expectedRecord.put("primitive_signed_long", primitiveSignedLong);
     expectedRecord.put("primitive_fixed_int", primitiveFixedInt);
@@ -506,6 +517,17 @@ public class TestProtoConversionUtil {
 
   private static <K, V> List<GenericRecord> convertMapToList(final Schema protoSchema, final String fieldName, final Map<K, V> originalMap) {
     return convertMapToList(protoSchema, fieldName, originalMap, Function.identity());
+  }
+
+  private static BigInteger toUnsignedBigInteger(long input) {
+    if (input >= 0L) {
+      return BigInteger.valueOf(input);
+    } else {
+      int upper = (int) (input >>> 32);
+      int lower = (int) input;
+      // return (upper << 32) + lower
+      return (BigInteger.valueOf(Integer.toUnsignedLong(upper))).shiftLeft(32).add(BigInteger.valueOf(Integer.toUnsignedLong(lower)));
+    }
   }
 
   private static String randomString(int size) {
