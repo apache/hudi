@@ -73,7 +73,7 @@ local.properties
 # Maven
 #######################################
 dependency-reduced-pom.xml
-.mvn/*
+
 
 #######################################
 # Docker
