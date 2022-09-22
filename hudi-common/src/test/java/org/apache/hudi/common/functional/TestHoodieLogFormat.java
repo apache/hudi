@@ -19,6 +19,7 @@
 package org.apache.hudi.common.functional;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -37,6 +38,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFileReader;
@@ -561,46 +563,79 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withFs(fs)
         .build();
 
-    GenericRecord record1 = HoodieCDCUtils.cdcRecord("i", "100",
-        null, "{\"uuid\": 1, \"name\": \"apple\"}, \"ts\": 1100}");
-    GenericRecord record2 = HoodieCDCUtils.cdcRecord("u", "100",
-        "{\"uuid\": 2, \"name\": \"banana\"}, \"ts\": 1000}",
-        "{\"uuid\": 2, \"name\": \"blueberry\"}, \"ts\": 1100}");
-    GenericRecord record3 = HoodieCDCUtils.cdcRecord("d", "100",
-        "{\"uuid\": 3, \"name\": \"cherry\"}, \"ts\": 1000}", null);
+    String dataSchameString = "{\"type\":\"record\",\"name\":\"Record\","
+        + "\"fields\":["
+        + "{\"name\":\"uuid\",\"type\":[\"int\",\"null\"]},"
+        + "{\"name\":\"name\",\"type\":[\"string\",\"null\"]},"
+        + "{\"name\":\"ts\",\"type\":[\"long\",\"null\"]}"
+        + "]}";
+    Schema dataSchema = new Schema.Parser().parse(dataSchameString);
+    Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
+        HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER, dataSchema);
+    GenericRecord insertedRecord = new GenericData.Record(dataSchema);
+    insertedRecord.put("uuid", 1);
+    insertedRecord.put("name", "apple");
+    insertedRecord.put("ts", 1100L);
+
+    GenericRecord updateBeforeImageRecord = new GenericData.Record(dataSchema);
+    updateBeforeImageRecord.put("uuid", 2);
+    updateBeforeImageRecord.put("name", "banana");
+    updateBeforeImageRecord.put("ts", 1000L);
+    GenericRecord updateAfterImageRecord = new GenericData.Record(dataSchema);
+    updateAfterImageRecord.put("uuid", 2);
+    updateAfterImageRecord.put("name", "blueberry");
+    updateAfterImageRecord.put("ts", 1100L);
+
+    GenericRecord deletedRecord = new GenericData.Record(dataSchema);
+    deletedRecord.put("uuid", 3);
+    deletedRecord.put("name", "cherry");
+    deletedRecord.put("ts", 1000L);
+
+    GenericRecord record1 = HoodieCDCUtils.cdcRecord(cdcSchema, "i", "100",
+        null, insertedRecord);
+    GenericRecord record2 = HoodieCDCUtils.cdcRecord(cdcSchema, "u", "100",
+        updateBeforeImageRecord, updateAfterImageRecord);
+    GenericRecord record3 = HoodieCDCUtils.cdcRecord(cdcSchema, "d", "100",
+        deletedRecord, null);
     List<IndexedRecord> records = new ArrayList<>(Arrays.asList(record1, record2, record3));
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
-    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, HoodieCDCUtils.CDC_SCHEMA_STRING);
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, cdcSchema.toString());
     HoodieDataBlock dataBlock = getDataBlock(HoodieLogBlockType.CDC_DATA_BLOCK, records, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), HoodieCDCUtils.CDC_SCHEMA);
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), cdcSchema);
     assertTrue(reader.hasNext());
     HoodieLogBlock block = reader.next();
     HoodieDataBlock dataBlockRead = (HoodieDataBlock) block;
     List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
     assertEquals(3, recordsRead.size(),
         "Read records size should be equal to the written records size");
-    assertEquals(dataBlockRead.getSchema(), HoodieCDCUtils.CDC_SCHEMA);
+    assertEquals(dataBlockRead.getSchema(), cdcSchema);
 
     GenericRecord insert = (GenericRecord) recordsRead.stream()
         .filter(record -> record.get(0).toString().equals("i")).findFirst().get();
     assertNull(insert.get("before"));
     assertNotNull(insert.get("after"));
+    assertEquals(((GenericRecord) insert.get("after")).get("name").toString(), "apple");
 
     GenericRecord update = (GenericRecord) recordsRead.stream()
         .filter(record -> record.get(0).toString().equals("u")).findFirst().get();
     assertNotNull(update.get("before"));
     assertNotNull(update.get("after"));
-    assertTrue(update.get("before").toString().contains("banana"));
-    assertTrue(update.get("after").toString().contains("blueberry"));
+    GenericRecord uBefore = (GenericRecord) update.get("before");
+    GenericRecord uAfter = (GenericRecord) update.get("after");
+    assertEquals(String.valueOf(uBefore.get("name")), "banana");
+    assertEquals(Long.valueOf(uBefore.get("ts").toString()), 1000L);
+    assertEquals(String.valueOf(uAfter.get("name")), "blueberry");
+    assertEquals(Long.valueOf(uAfter.get("ts").toString()), 1100L);
 
     GenericRecord delete = (GenericRecord) recordsRead.stream()
         .filter(record -> record.get(0).toString().equals("d")).findFirst().get();
     assertNotNull(delete.get("before"));
     assertNull(delete.get("after"));
+    assertEquals(((GenericRecord) delete.get("before")).get("name").toString(), "cherry");
 
     reader.close();
   }
