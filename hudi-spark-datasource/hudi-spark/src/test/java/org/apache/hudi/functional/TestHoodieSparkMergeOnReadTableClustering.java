@@ -17,8 +17,9 @@
  * under the License.
  */
 
-package org.apache.hudi.table.functional;
+package org.apache.hudi.functional;
 
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -45,7 +46,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -59,21 +59,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> testClustering() {
+    // enableClusteringAsRow, doUpdates, populateMetaFields, preserveCommitMetadata
     return Stream.of(
-        Arguments.of(true, true, true),
-        Arguments.of(true, true, false),
-        Arguments.of(true, false, true),
-        Arguments.of(true, false, false),
-        Arguments.of(false, true, true),
-        Arguments.of(false, true, false),
-        Arguments.of(false, false, true),
-        Arguments.of(false, false, false)
+        Arguments.of(true, true, true, true),
+        Arguments.of(true, true, true, false),
+        Arguments.of(true, true, false, true),
+        Arguments.of(true, true, false, false),
+        Arguments.of(true, false, true, true),
+        Arguments.of(true, false, true, false),
+        Arguments.of(true, false, false, true),
+        Arguments.of(true, false, false, false),
+        Arguments.of(false, true, true, true),
+        Arguments.of(false, true, true, false),
+        Arguments.of(false, true, false, true),
+        Arguments.of(false, true, false, false),
+        Arguments.of(false, false, true, true),
+        Arguments.of(false, false, true, false),
+        Arguments.of(false, false, false, true),
+        Arguments.of(false, false, false, false)
     );
   }
 
   @ParameterizedTest
   @MethodSource
-  void testClustering(boolean doUpdates, boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
+  void testClustering(boolean clusteringAsRow, boolean doUpdates, boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
     // set low compaction small File Size to generate more file groups.
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
@@ -148,13 +157,22 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       assertEquals(allFiles.length, hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
 
       // Do the clustering and validate
-      doClusteringAndValidate(client, clusteringCommitTime, metaClient, cfg, dataGen);
+      doClusteringAndValidate(client, clusteringCommitTime, metaClient, cfg, dataGen, clusteringAsRow);
     }
   }
 
+  private static Stream<Arguments> testClusteringWithNoBaseFiles() {
+    return Stream.of(
+        Arguments.of(true, true),
+        Arguments.of(true, false),
+        Arguments.of(false, true),
+        Arguments.of(false, false)
+    );
+  }
+
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testClusteringWithNoBaseFiles(boolean doUpdates) throws Exception {
+  @MethodSource
+  void testClusteringWithNoBaseFiles(boolean clusteringAsRow, boolean doUpdates) throws Exception {
     // set low compaction small File Size to generate more file groups.
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
@@ -217,7 +235,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       assertEquals(dataGen.getPartitionPaths().length, hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
 
       // do the clustering and validate
-      doClusteringAndValidate(client, clusteringCommitTime, metaClient, cfg, dataGen);
+      doClusteringAndValidate(client, clusteringCommitTime, metaClient, cfg, dataGen, clusteringAsRow);
     }
   }
 
@@ -225,7 +243,12 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
                                        String clusteringCommitTime,
                                        HoodieTableMetaClient metaClient,
                                        HoodieWriteConfig cfg,
-                                       HoodieTestDataGenerator dataGen) {
+                                       HoodieTestDataGenerator dataGen,
+                                       boolean clusteringAsRow) {
+    if (clusteringAsRow) {
+      client.getConfig().setValue(DataSourceWriteOptions.ENABLE_ROW_WRITER(), "true");
+    }
+
     client.cluster(clusteringCommitTime, true);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieTable clusteredTable = HoodieSparkTable.create(cfg, context(), metaClient);
