@@ -234,10 +234,15 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            hset.map(value => genColumnValuesEqualToExpression(colName, value match {
-              case s: UTF8String => Literal(s, StringType)
-              case _ => Literal(value)
-            }, targetExprBuilder)).reduce(Or)
+            hset.map { value =>
+              // NOTE: [[Literal]] has a gap where it could hold [[UTF8String]], but [[Literal#apply]] doesn't
+              //       accept [[UTF8String]]. As such we have to handle it separately
+              val lit = value match {
+                case str: UTF8String => Literal(str.toString)
+                case _ => Literal(value)
+              }
+              genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)
+            }.reduce(Or)
           }
 
       // Filter "expr(colA) not in (B1, B2, ...)"
