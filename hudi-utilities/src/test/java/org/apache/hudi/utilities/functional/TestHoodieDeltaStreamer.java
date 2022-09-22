@@ -694,34 +694,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     List<Row> counts = TestHelpers.countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1000, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
-    // Perform bootstrap with tableBasePath as source
-    String bootstrapSourcePath = dfsBasePath + "/src_bootstrapped";
-    Dataset<Row> sourceDf = sqlContext.read()
-        .format("org.apache.hudi")
-        .load(tableBasePath);
-    sourceDf.write().format("parquet").save(bootstrapSourcePath);
+    HoodieDeltaStreamer.Config newCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    newCfg.sourceLimit = 2000;
+    newCfg.operation = WriteOperationType.UPSERT;
+    new HoodieDeltaStreamer(newCfg, jsc).sync();
 
-    String newDatasetBasePath = dfsBasePath + "/test_dataset_bootstrapped";
-    cfg.runBootstrap = true;
-    cfg.configs.add(String.format("hoodie.bootstrap.base.path=%s", bootstrapSourcePath));
-    cfg.configs.add(String.format("hoodie.bootstrap.keygen.class=%s", SimpleKeyGenerator.class.getName()));
-    cfg.configs.add("hoodie.bootstrap.parallelism=5");
-    cfg.targetBasePath = newDatasetBasePath;
-    new HoodieDeltaStreamer(cfg, jsc).sync();
-    Dataset<Row> res = sqlContext.read().format("org.apache.hudi").load(newDatasetBasePath);
-    LOG.info("Schema :");
-    res.printSchema();
+    TestHelpers.assertRecordCount(1950, tableBasePath, sqlContext);
+    TestHelpers.assertDistanceCount(1950, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
+    List<Row> counts2 = TestHelpers.countsPerCommit(tableBasePath, sqlContext);
+    assertEquals(1950, counts2.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
-    TestHelpers.assertRecordCount(1950, newDatasetBasePath, sqlContext);
-    res.registerTempTable("bootstrapped");
-    assertEquals(1950, sqlContext.sql("select distinct _hoodie_record_key from bootstrapped").count());
-
-    StructField[] fields = res.schema().fields();
-    List<String> fieldNames = Arrays.asList(res.schema().fieldNames());
-    List<String> expectedFieldNames = Arrays.asList(sourceDf.schema().fieldNames());
-    assertEquals(expectedFieldNames.size(), fields.length);
-    assertTrue(fieldNames.containsAll(HoodieRecord.HOODIE_META_COLUMNS));
-    assertTrue(fieldNames.containsAll(expectedFieldNames));
   }
 
   @ParameterizedTest
