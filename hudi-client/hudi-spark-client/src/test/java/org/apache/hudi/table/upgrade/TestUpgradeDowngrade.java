@@ -79,6 +79,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
+import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
@@ -331,20 +332,30 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   @Test
   public void testUpgradeFourtoFive() throws Exception {
-    testUpgradeFourToFiveInternal(false, false);
+    testUpgradeFourToFiveInternal(false, false, false);
   }
 
   @Test
   public void testUpgradeFourtoFiveWithDefaultPartition() throws Exception {
-    testUpgradeFourToFiveInternal(true, false);
+    testUpgradeFourToFiveInternal(true, false, false);
   }
 
   @Test
   public void testUpgradeFourtoFiveWithDefaultPartitionWithSkipValidation() throws Exception {
-    testUpgradeFourToFiveInternal(true, true);
+    testUpgradeFourToFiveInternal(true, true, false);
   }
 
-  private void testUpgradeFourToFiveInternal(boolean assertDefaultPartition, boolean skipDefaultPartitionValidation) throws Exception {
+  @Test
+  public void testUpgradeFourtoFiveWithHiveStyleDefaultPartition() throws Exception {
+    testUpgradeFourToFiveInternal(true, false, true);
+  }
+
+  @Test
+  public void testUpgradeFourtoFiveWithHiveStyleDefaultPartitionWithSkipValidation() throws Exception {
+    testUpgradeFourToFiveInternal(true, true, true);
+  }
+
+  private void testUpgradeFourToFiveInternal(boolean assertDefaultPartition, boolean skipDefaultPartitionValidation, boolean isHiveStyle) throws Exception {
     String tableName = metaClient.getTableConfig().getTableName();
     // clean up and re instantiate meta client w/ right table props
     cleanUp();
@@ -359,14 +370,19 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     initMetaClient(getTableType(), properties);
     // init config, table and client.
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(false)
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(true).withRollbackUsingMarkers(false)
         .doSkipDefaultPartitionValidation(skipDefaultPartitionValidation).withProps(params).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     // Write inserts
     doInsert(client);
 
     if (assertDefaultPartition) {
-      doInsertWithDefaultPartition(client);
+      if (isHiveStyle) {
+        doInsertWithDefaultHiveStylePartition(client);
+        cfg.setValue(HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
+      } else {
+        doInsertWithDefaultPartition(client);
+      }
     }
 
     // downgrade table props
@@ -416,6 +432,16 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   private void doInsertWithDefaultPartition(SparkRDDWriteClient client) {
     // Write 1 (only inserts)
     dataGen = new HoodieTestDataGenerator(new String[]{DEPRECATED_DEFAULT_PARTITION_PATH});
+    String commit1 = "005";
+    client.startCommitWithTime(commit1);
+    List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    client.insert(writeRecords, commit1).collect();
+  }
+
+  private void doInsertWithDefaultHiveStylePartition(SparkRDDWriteClient client) {
+    // Write 1 (only inserts)
+    dataGen = new HoodieTestDataGenerator(new String[]{"partition_path=" + DEPRECATED_DEFAULT_PARTITION_PATH});
     String commit1 = "005";
     client.startCommitWithTime(commit1);
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);
