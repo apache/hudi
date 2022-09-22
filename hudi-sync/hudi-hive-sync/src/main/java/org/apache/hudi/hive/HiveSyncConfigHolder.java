@@ -106,7 +106,7 @@ public class HiveSyncConfigHolder {
   public static final ConfigProperty<Boolean> HIVE_OMIT_METADATA_FIELDS = ConfigProperty
       .key("hoodie.datasource.hive_sync.omit_metadata_fields")
       .defaultValue(false)
-      .sinceVersion("0.12.1")
+      .sinceVersion("0.13.0")
       .withDocumentation("Whether to omit the hoodie metadata fields in the target table.");
   public static final ConfigProperty<Integer> HIVE_BATCH_SYNC_PARTITION_NUM = ConfigProperty
       .key("hoodie.datasource.hive_sync.batch_num")
