@@ -249,7 +249,6 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collectAsList());
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
-    // if we don't cache the write statuses above, validation will call isEmpty which might retrigger the execution again.
     commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
