@@ -125,7 +125,7 @@
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
-    <spark2.version>2.4.8</spark2.version>
+    <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.3.0</spark3.version>
     <sparkbundle.version></sparkbundle.version>
     <flink1.15.version>1.15.1</flink1.15.version>
@@ -134,7 +134,7 @@
     <flink.version>${flink1.15.version}</flink.version>
     <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
     <flink.bundle.version>1.15</flink.bundle.version>
-    <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
+    <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
     <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>

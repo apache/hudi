@@ -251,14 +251,6 @@
       <version>${parquet.version}</version>
       <scope>compile</scope>
     </dependency>
-    <!-- Avro -->
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
-      <version>${avro.version}</version>
-      <scope>compile</scope>
-    </dependency>
-
 
   </dependencies>
 </project>
