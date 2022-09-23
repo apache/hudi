@@ -150,6 +150,10 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = false, isHiveStylePartitioned = false)
   }
 
+  /**
+   * test logs.
+   * @param bootstrapMode
+   */
   @ParameterizedTest
   @ValueSource(strings = Array("METADATA_ONLY", "FULL_RECORD"))
   def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapMode: String): Unit = {
