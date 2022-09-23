@@ -100,7 +100,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private final boolean reuse;
 
   // Readers for the latest file slice corresponding to file groups in the metadata partition
-  private final Map<Pair<String, String>, Pair<HoodieSeekingFileReader<?>, HoodieMetadataMergedLogRecordReader>> partitionReaders =
+  private final Map<Pair<String, String>, Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader>> partitionReaders =
       new ConcurrentHashMap<>();
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
@@ -178,13 +178,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             (SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice -> {
               // NOTE: Since this will be executed by executors, we can't access previously cached
               //       readers, and therefore have to always open new ones
-              Pair<HoodieSeekingFileReader<?>, HoodieMetadataMergedLogRecordReader> readers =
+              Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers =
                   openReaders(partitionName, fileSlice);
               try {
                 List<Long> timings = new ArrayList<>();
 
                 HoodieSeekingFileReader<?> baseFileReader = readers.getKey();
-                HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
+                HoodieMetadataLogRecordReader logRecordScanner = readers.getRight();
 
                 if (baseFileReader == null && logRecordScanner == null) {
                   // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
@@ -224,12 +224,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
     AtomicInteger fileSlicesKeysCount = new AtomicInteger();
     partitionFileSliceToKeysMap.forEach((partitionFileSlicePair, fileSliceKeys) -> {
-      Pair<HoodieSeekingFileReader<?>, HoodieMetadataMergedLogRecordReader> readers =
+      Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers =
           getOrCreateReaders(partitionName, partitionFileSlicePair.getRight());
       try {
         List<Long> timings = new ArrayList<>();
         HoodieSeekingFileReader<?> baseFileReader = readers.getKey();
-        HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
+        HoodieMetadataLogRecordReader logRecordScanner = readers.getRight();
         if (baseFileReader == null && logRecordScanner == null) {
           return;
         }
@@ -256,7 +256,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return result;
   }
 
-  private Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> readLogRecords(HoodieMetadataMergedLogRecordReader logRecordReader,
+  private Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> readLogRecords(HoodieMetadataLogRecordReader logRecordReader,
                                                                                   List<String> keys,
                                                                                   boolean fullKey,
                                                                                   List<Long> timings) {
@@ -413,7 +413,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param slice            - The file slice to open readers for
    * @return File reader and the record scanner pair for the requested file slice
    */
-  private Pair<HoodieSeekingFileReader<?>, HoodieMetadataMergedLogRecordReader> getOrCreateReaders(String partitionName, FileSlice slice) {
+  private Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> getOrCreateReaders(String partitionName, FileSlice slice) {
     if (reuse) {
       Pair<String, String> key = Pair.of(partitionName, slice.getFileId());
       return partitionReaders.computeIfAbsent(key, ignored -> openReaders(partitionName, slice));
@@ -422,7 +422,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
   }
 
-  private Pair<HoodieSeekingFileReader<?>, HoodieMetadataMergedLogRecordReader> openReaders(String partitionName, FileSlice slice) {
+  private Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> openReaders(String partitionName, FileSlice slice) {
     try {
       HoodieTimer timer = HoodieTimer.start();
       // Open base file reader
@@ -432,9 +432,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       // Open the log record scanner using the log files from the latest file slice
       List<HoodieLogFile> logFiles = slice.getLogFiles().collect(Collectors.toList());
-      Pair<HoodieMetadataMergedLogRecordReader, Long> logRecordScannerOpenTimePair =
+      Pair<HoodieMetadataLogRecordReader, Long> logRecordScannerOpenTimePair =
           getLogRecordScanner(logFiles, partitionName, Option.empty());
-      HoodieMetadataMergedLogRecordReader logRecordScanner = logRecordScannerOpenTimePair.getKey();
+      HoodieMetadataLogRecordReader logRecordScanner = logRecordScannerOpenTimePair.getKey();
       final long logScannerOpenMs = logRecordScannerOpenTimePair.getValue();
 
       metrics.ifPresent(metrics -> metrics.updateMetrics(HoodieMetadataMetrics.SCAN_STR,
@@ -487,9 +487,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return validInstantTimestamps;
   }
 
-  public Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
-                                                                             String partitionName,
-                                                                             Option<Boolean> allowFullScanOverride) {
+  public Pair<HoodieMetadataLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
+                                                                       String partitionName,
+                                                                       Option<Boolean> allowFullScanOverride) {
     HoodieTimer timer = HoodieTimer.start();
     List<String> sortedLogFilePaths = logFiles.stream()
         .sorted(HoodieLogFile.getLogFileComparator())
@@ -508,7 +508,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Load the schema
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(metadataConfig.getProps()).build();
-    HoodieMetadataMergedLogRecordReader logRecordScanner = HoodieMetadataMergedLogRecordReader.newBuilder()
+    HoodieMetadataLogRecordReader logRecordScanner = HoodieMetadataLogRecordReader.newBuilder()
         .withFileSystem(metadataMetaClient.getFs())
         .withBasePath(metadataBasePath)
         .withLogFilePaths(sortedLogFilePaths)
@@ -586,7 +586,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param partitionFileSlicePair - Partition and FileSlice
    */
   private synchronized void close(Pair<String, String> partitionFileSlicePair) {
-    Pair<HoodieSeekingFileReader<?>, HoodieMetadataMergedLogRecordReader> readers =
+    Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers =
         partitionReaders.remove(partitionFileSlicePair);
     closeReader(readers);
   }
@@ -601,7 +601,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     partitionReaders.clear();
   }
 
-  private void closeReader(Pair<HoodieSeekingFileReader<?>, HoodieMetadataMergedLogRecordReader> readers) {
+  private void closeReader(Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers) {
     if (readers != null) {
       try {
         if (readers.getKey() != null) {

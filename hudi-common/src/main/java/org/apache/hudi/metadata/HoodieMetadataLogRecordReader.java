@@ -41,19 +41,19 @@ import java.util.stream.Collectors;
  * A {@code HoodieMergedLogRecordScanner} implementation which only merged records matching providing keys. This is
  * useful in limiting memory usage when only a small subset of updates records are to be read.
  */
-public class HoodieMetadataMergedLogRecordReader implements Closeable {
+public class HoodieMetadataLogRecordReader implements Closeable {
 
   private final HoodieMergedLogRecordScanner logRecordScanner;
 
-  private HoodieMetadataMergedLogRecordReader(HoodieMergedLogRecordScanner logRecordScanner) {
+  private HoodieMetadataLogRecordReader(HoodieMergedLogRecordScanner logRecordScanner) {
     this.logRecordScanner = logRecordScanner;
   }
 
   /**
    * Returns the builder for {@code HoodieMetadataMergedLogRecordScanner}.
    */
-  public static HoodieMetadataMergedLogRecordReader.Builder newBuilder() {
-    return new HoodieMetadataMergedLogRecordReader.Builder();
+  public static HoodieMetadataLogRecordReader.Builder newBuilder() {
+    return new HoodieMetadataLogRecordReader.Builder();
   }
 
   @SuppressWarnings("unchecked")
@@ -174,8 +174,8 @@ public class HoodieMetadataMergedLogRecordReader implements Closeable {
       return this;
     }
 
-    public HoodieMetadataMergedLogRecordReader build() {
-      return new HoodieMetadataMergedLogRecordReader(scannerBuilder.build());
+    public HoodieMetadataLogRecordReader build() {
+      return new HoodieMetadataLogRecordReader(scannerBuilder.build());
     }
   }
 
