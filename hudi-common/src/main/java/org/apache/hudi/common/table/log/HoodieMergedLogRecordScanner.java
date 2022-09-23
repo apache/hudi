@@ -45,6 +45,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -110,7 +111,27 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
   }
 
-  protected void performScan() {
+  // TODO java-doc
+  public void scanByFullKeys(List<String> keys) {
+    boolean allCached = keys.stream().allMatch(records::containsKey);
+    if (allCached) {
+      // All the required records are already fetched, no-op
+      return;
+    }
+
+    scanInternal(Option.of(KeySpec.fullKeySpec(keys)));
+  }
+
+  // TODO java-doc
+  public void scanByKeyPrefixes(List<String> keyPrefixes) {
+    // NOTE: When looking up by key-prefixes unfortunately we can't short-circuit
+    //       and will have to scan every time as we can't know (based on just
+    //       the records cached) whether particular prefix was scanned or just records
+    //       matching the prefix looked up (by [[scanByFullKeys]] API)
+    scanInternal(Option.of(KeySpec.prefixKeySpec(keyPrefixes)));
+  }
+
+  private void performScan() {
     // Do the scan and merge
     timer.startTimer();
     scan();

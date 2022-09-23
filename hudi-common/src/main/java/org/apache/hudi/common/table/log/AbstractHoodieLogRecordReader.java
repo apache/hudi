@@ -221,7 +221,8 @@ public abstract class AbstractHoodieLogRecordReader {
     return keyField;
   }
 
-  public synchronized void scan() {
+  // TODO java-doc
+  public void scan() {
     scanInternal(Option.empty(), false);
   }
 
@@ -237,7 +238,7 @@ public abstract class AbstractHoodieLogRecordReader {
     }
   }
 
-  private synchronized void scanInternal(Option<KeySpec> keySpecOpt) {
+  protected synchronized void scanInternal(Option<KeySpec> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -755,13 +756,51 @@ public abstract class AbstractHoodieLogRecordReader {
   /**
    * Key specification with a list of column names.
    */
-  protected static class KeySpec {
-    private final List<String> keys;
-    private final boolean fullKey;
+  protected interface KeySpec {
+    List<String> getKeys();
+    boolean isFullKey();
 
-    public KeySpec(List<String> keys, boolean fullKey) {
+    static KeySpec fullKeySpec(List<String> keys) {
+      return new FullKeySpec(keys);
+    }
+
+    static KeySpec prefixKeySpec(List<String> keyPrefixes) {
+      return new PrefixKeySpec(keyPrefixes);
+    }
+  }
+
+  private static class FullKeySpec implements KeySpec {
+    private final List<String> keys;
+    private FullKeySpec(List<String> keys) {
       this.keys = keys;
-      this.fullKey = fullKey;
+    }
+
+    @Override
+    public List<String> getKeys() {
+      return keys;
+    }
+
+    @Override
+    public boolean isFullKey() {
+      return true;
+    }
+  }
+
+  private static class PrefixKeySpec implements KeySpec {
+    private final List<String> keysPrefixes;
+
+    private PrefixKeySpec(List<String> keysPrefixes) {
+      this.keysPrefixes = keysPrefixes;
+    }
+
+    @Override
+    public List<String> getKeys() {
+      return keysPrefixes;
+    }
+
+    @Override
+    public boolean isFullKey() {
+      return false;
     }
   }
 
