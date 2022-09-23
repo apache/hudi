@@ -621,7 +621,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // upsert() #1
     cfg.sourceLimit = 2000;
     cfg.operation = WriteOperationType.UPSERT;
-    testRecordCount(cfg,1000, tableBasePath, "00001", 2);
+    testRecordCount(cfg,1950, tableBasePath, "00001", 2);
     List<Row> counts = TestHelpers.countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1950, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
@@ -671,9 +671,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.sourceLimit = 2000;
     cfg.operation = WriteOperationType.UPSERT;
     cfg.configs.add(HoodieTableConfig.RECORDKEY_FIELDS.key() + "=differentval");
-    assertThrows(HoodieException.class, () -> new HoodieDeltaStreamer(cfg, jsc).sync());
-
-    testRecordCount(cfg,1000,tableBasePath,"00000",1);
+    assertThrows(HoodieException.class, () -> testRecordCount(cfg,1000,tableBasePath,"00000",1));
     List<Row> counts = TestHelpers.countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1000, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
