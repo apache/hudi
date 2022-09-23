@@ -143,7 +143,7 @@
     <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
     <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
     <spark31.version>3.1.3</spark31.version>
-    <spark32.version>3.2.1</spark32.version>
+    <spark32.version>3.2.2</spark32.version>
     <spark33.version>3.3.0</spark33.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <!-- NOTE: Different Spark versions might require different number of shared
