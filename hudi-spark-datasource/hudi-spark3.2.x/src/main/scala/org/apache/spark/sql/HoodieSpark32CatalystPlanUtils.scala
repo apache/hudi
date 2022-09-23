@@ -18,8 +18,11 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
+import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
+import org.apache.spark.sql.types.StructType
 
 object HoodieSpark32CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
@@ -34,5 +37,21 @@ object HoodieSpark32CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
       case _ =>
         None
     }
+  }
+
+  override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema = {
+    val klass = classOf[ProjectionOverSchema]
+    checkArgument(klass.getConstructors.length == 1)
+    val ctor = klass.getConstructors.head
+
+    val p = if (HoodieSparkUtils.gteqSpark3_2_2) {
+      // Spark >= 3.2.2
+      ctor.newInstance(schema, output)
+    } else {
+      // Spark 3.2.0 and 3.2.1
+      ctor.newInstance(schema) // ProjectionOverSchema(schema)
+    }
+
+    p.asInstanceOf[ProjectionOverSchema]
   }
 }
