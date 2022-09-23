@@ -711,7 +711,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    // Append some arbit byte[] to thee end of the log (mimics a partially written commit)
+    // Append some arbit byte[] to the end of the log (mimics a partially written commit)
     fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
     FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
     // create a block with
@@ -1013,7 +1013,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Write 2
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
-    // Append some arbit byte[] to thee end of the log (mimics a partially written commit)
+    // Append some arbit byte[] to the end of the log (mimics a partially written commit)
     fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
     FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
     // create a block with
@@ -1898,7 +1898,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
-    // Append some arbit byte[] to thee end of the log (mimics a partially written commit)
+    // Append some arbit byte[] to the end of the log (mimics a partially written commit)
     fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
     FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
     // create a block with
