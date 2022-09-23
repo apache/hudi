@@ -145,6 +145,7 @@
     <flink.clients.artifactId>flink-clients</flink.clients.artifactId>
     <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
     <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
+    <rocksdbjni.version>5.17.2</rocksdbjni.version>
     <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.2</spark32.version>
     <spark33.version>3.3.0</spark33.version>
@@ -902,7 +903,7 @@
       <dependency>
         <groupId>org.rocksdb</groupId>
         <artifactId>rocksdbjni</artifactId>
-        <version>5.17.2</version>
+        <version>${rocksdbjni.version}</version>
       </dependency>
 
       <!-- Httpcomponents -->
@@ -1988,6 +1989,19 @@
         <property>
           <name>spark2.4</name>
         </property>
+      </activation>
+    </profile>
+    <profile>
+      <id>m1-mac</id>
+      <properties>
+        <spark2.version>2.4.8</spark2.version>
+        <rocksdbjni.version>6.29.4.1</rocksdbjni.version>
+      </properties>
+      <activation>
+        <os>
+          <family>mac</family>
+          <arch>aarch64</arch>
+        </os>
       </activation>
     </profile>
 
