@@ -69,6 +69,9 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
     return writeStatuses;
   }
 
+  /**
+   * Find exists bucketId -> location in one partition，used by HoodieSimpleBucketIndex & HoodieRangeBucketIndex
+   */
   protected Map<Integer, HoodieRecordLocation> loadPartitionBucketIdFileIdMapping(
       HoodieTable hoodieTable,
       String partition) {
