@@ -522,7 +522,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withDiskMapType(commonConfig.getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(commonConfig.isBitCaskDiskMapCompressionEnabled())
         .withLogBlockTimestamps(validInstantTimestamps)
-        .allowFullScan(allowFullScan)
+        .enableFullScan(allowFullScan)
         .withPartition(partitionName)
         .withUseScanV2(metadataConfig.getUseLogRecordReaderScanV2())
         .build();

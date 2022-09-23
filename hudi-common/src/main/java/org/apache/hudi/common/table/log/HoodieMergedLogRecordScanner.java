@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
@@ -76,23 +77,24 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   protected final ExternalSpillableMap<String, HoodieRecord> records;
   // count of merged records in log
   private long numMergedRecordsInLog;
-  private long maxMemorySizeInBytes;
+  private final long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
-  protected HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-                                         String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
-                                         boolean reverseReader, int bufferSize, String spillableMapBasePath,
-                                         Option<InstantRange> instantRange,
-                                         ExternalSpillableMap.DiskMapType diskMapType,
-                                         boolean isBitCaskDiskMapCompressionEnabled,
-                                         boolean withOperationField, boolean forceFullScan,
-                                         Option<String> partitionName, InternalSchema internalSchema,
-                                         boolean useScanV2, HoodieRecordMerger recordMerger) {
+  private HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+                                       String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
+                                       boolean reverseReader, int bufferSize, String spillableMapBasePath,
+                                       Option<InstantRange> instantRange,
+                                       ExternalSpillableMap.DiskMapType diskMapType,
+                                       boolean isBitCaskDiskMapCompressionEnabled,
+                                       boolean withOperationField, boolean forceFullScan,
+                                       Option<String> partitionName,
+                                       InternalSchema internalSchema,
+                                       Option<String> keyFieldOverride,
+                                       boolean useScanV2, HoodieRecordMerger recordMerger) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField,
-        forceFullScan, partitionName, internalSchema, useScanV2, recordMerger);
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, useScanV2, recordMerger);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -225,27 +227,28 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
   public static class Builder extends AbstractHoodieLogRecordReader.Builder {
-    protected FileSystem fs;
-    protected String basePath;
-    protected List<String> logFilePaths;
-    protected Schema readerSchema;
+    private FileSystem fs;
+    private String basePath;
+    private List<String> logFilePaths;
+    private Schema readerSchema;
     private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
-    protected String latestInstantTime;
-    protected boolean readBlocksLazily;
-    protected boolean reverseReader;
-    protected int bufferSize;
+    private String latestInstantTime;
+    private boolean readBlocksLazily;
+    private boolean reverseReader;
+    private int bufferSize;
     // specific configurations
-    protected Long maxMemorySizeInBytes;
-    protected String spillableMapBasePath;
-    protected ExternalSpillableMap.DiskMapType diskMapType = HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue();
-    protected boolean isBitCaskDiskMapCompressionEnabled = HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue();
+    private Long maxMemorySizeInBytes;
+    private String spillableMapBasePath;
+    private ExternalSpillableMap.DiskMapType diskMapType = HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue();
+    private boolean isBitCaskDiskMapCompressionEnabled = HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue();
     // incremental filtering
-    protected Option<InstantRange> instantRange = Option.empty();
-    protected String partitionName;
-    // auto scan default true
-    private boolean autoScan = true;
+    private Option<InstantRange> instantRange = Option.empty();
+    private String partitionName;
     // operation field default false
     private boolean withOperationField = false;
+    private String keyFieldOverride;
+    // By default, we're doing a full-scan
+    private boolean forceFullScan = true;
     // Use scanV2 method.
     private boolean useScanV2 = false;
     private HoodieRecordMerger recordMerger;
@@ -355,6 +358,16 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    public Builder withKeyFiledOverride(String keyFieldOverride) {
+      this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
+      return this;
+    }
+
+    public Builder withForceFullScan(boolean forceFullScan) {
+      this.forceFullScan = forceFullScan;
+      return this;
+    }
+
     @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
@@ -365,8 +378,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName), internalSchema, useScanV2, recordMerger);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
+          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), useScanV2, recordMerger);
     }
   }
 }

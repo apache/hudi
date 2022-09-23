@@ -20,47 +20,37 @@ package org.apache.hudi.metadata;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * A {@code HoodieMergedLogRecordScanner} implementation which only merged records matching providing keys. This is
  * useful in limiting memory usage when only a small subset of updates records are to be read.
  */
-public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordScanner {
+public class HoodieMetadataMergedLogRecordReader implements Closeable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMetadataMergedLogRecordReader.class);
 
-  private HoodieMetadataMergedLogRecordReader(FileSystem fs, String basePath, String partitionName,
-                                              List<String> logFilePaths,
-                                              Schema readerSchema, String latestInstantTime,
-                                              Long maxMemorySizeInBytes, int bufferSize,
-                                              String spillableMapBasePath,
-                                              ExternalSpillableMap.DiskMapType diskMapType,
-                                              boolean isBitCaskDiskMapCompressionEnabled,
-                                              Option<InstantRange> instantRange, boolean allowFullScan, boolean useScanV2) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, true, false, bufferSize,
-        spillableMapBasePath, instantRange, diskMapType, isBitCaskDiskMapCompressionEnabled, false, allowFullScan,
-            Option.of(partitionName), InternalSchema.getEmptyInternalSchema(), useScanV2, HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()));
+  private final HoodieMergedLogRecordScanner logRecordScanner;
+
+  private HoodieMetadataMergedLogRecordReader(HoodieMergedLogRecordScanner logRecordScanner) {
+    this.logRecordScanner = logRecordScanner;
   }
 
   /**
@@ -111,127 +101,93 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
   }
 
   @Override
-  protected boolean getPopulateMetaFields() {
-    return this.hoodieTableMetaClient.getTableConfig().populateMetaFields() && super.getPopulateMetaFields();
-  }
-
-  @Override
-  protected String getKeyField() {
-    return HoodieMetadataPayload.KEY_FIELD_NAME;
+  public void close() throws IOException {
+    logRecordScanner.close();
   }
 
   /**
    * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
    */
-  public static class Builder extends HoodieMergedLogRecordScanner.Builder {
+  public static class Builder {
+    private final HoodieMergedLogRecordScanner.Builder scannerBuilder =
+        new HoodieMergedLogRecordScanner.Builder()
+            .withKeyFiledOverride(HoodieMetadataPayload.KEY_FIELD_NAME)
+            .withReadBlocksLazily(true)
+            .withReverseReader(false)
+            .withOperationField(false);
 
-    private boolean allowFullScan = HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
-
-    // Use scanV2 method.
-    private boolean useScanV2 = false;
-
-    @Override
     public Builder withFileSystem(FileSystem fs) {
-      this.fs = fs;
+      scannerBuilder.withFileSystem(fs);
       return this;
     }
 
-    @Override
     public Builder withBasePath(String basePath) {
-      this.basePath = basePath;
+      scannerBuilder.withBasePath(basePath);
       return this;
     }
 
-    @Override
     public Builder withLogFilePaths(List<String> logFilePaths) {
-      this.logFilePaths = logFilePaths;
+      scannerBuilder.withLogFilePaths(logFilePaths);
       return this;
     }
 
-    @Override
     public Builder withReaderSchema(Schema schema) {
-      this.readerSchema = schema;
+      scannerBuilder.withReaderSchema(schema);
       return this;
     }
 
-    @Override
-    public Builder withInternalSchema(InternalSchema internalSchema) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public Builder withLatestInstantTime(String latestInstantTime) {
-      this.latestInstantTime = latestInstantTime;
+      scannerBuilder.withLatestInstantTime(latestInstantTime);
       return this;
     }
 
-    @Override
-    public Builder withReadBlocksLazily(boolean readBlocksLazily) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Builder withReverseReader(boolean reverseReader) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public Builder withBufferSize(int bufferSize) {
-      this.bufferSize = bufferSize;
+      scannerBuilder.withBufferSize(bufferSize);
       return this;
     }
 
-    @Override
     public Builder withPartition(String partitionName) {
-      this.partitionName = partitionName;
+      scannerBuilder.withPartition(partitionName);
       return this;
     }
 
-    @Override
     public Builder withMaxMemorySizeInBytes(Long maxMemorySizeInBytes) {
-      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
+      scannerBuilder.withMaxMemorySizeInBytes(maxMemorySizeInBytes);
       return this;
     }
 
-    @Override
     public Builder withSpillableMapBasePath(String spillableMapBasePath) {
-      this.spillableMapBasePath = spillableMapBasePath;
+      scannerBuilder.withSpillableMapBasePath(spillableMapBasePath);
       return this;
     }
 
-    @Override
     public Builder withDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
-      this.diskMapType = diskMapType;
+      scannerBuilder.withDiskMapType(diskMapType);
       return this;
     }
 
-    @Override
     public Builder withBitCaskDiskMapCompressionEnabled(boolean isBitCaskDiskMapCompressionEnabled) {
-      this.isBitCaskDiskMapCompressionEnabled = isBitCaskDiskMapCompressionEnabled;
+      scannerBuilder.withBitCaskDiskMapCompressionEnabled(isBitCaskDiskMapCompressionEnabled);
       return this;
     }
 
     public Builder withLogBlockTimestamps(Set<String> validLogBlockTimestamps) {
-      withInstantRange(Option.of(new ExplicitMatchRange(validLogBlockTimestamps)));
+      scannerBuilder.withInstantRange(Option.of(new ExplicitMatchRange(validLogBlockTimestamps)));
       return this;
     }
 
-    public Builder allowFullScan(boolean enableFullScan) {
-      this.allowFullScan = enableFullScan;
+    public Builder enableFullScan(boolean enableFullScan) {
+      scannerBuilder.withForceFullScan(enableFullScan);
       return this;
     }
 
-    @Override
     public Builder withUseScanV2(boolean useScanV2) {
-      this.useScanV2 = useScanV2;
+      scannerBuilder.withUseScanV2(useScanV2);
       return this;
     }
 
-    @Override
     public HoodieMetadataMergedLogRecordReader build() {
-      return new HoodieMetadataMergedLogRecordReader(fs, basePath, partitionName, logFilePaths, readerSchema,
-          latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, allowFullScan, useScanV2);
+      return new HoodieMetadataMergedLogRecordReader(scannerBuilder.build());
     }
   }
 

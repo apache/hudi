@@ -40,7 +40,6 @@ import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.ClosableIteratorWithSchema;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -102,11 +101,13 @@ public abstract class AbstractHoodieLogRecordReader {
   protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
-  // preCombine field
+  private final String keyField;
+  // Pre-combining field
   protected final String preCombineField;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
   private final TypedProperties payloadProps;
+  // TODO we should remove assumption that virtual keys entail using SimpleKeyGen
   // simple key gen fields
   private Option<Pair<String, String>> simpleKeyGenFields = Option.empty();
   // Log File Paths
@@ -162,14 +163,16 @@ public abstract class AbstractHoodieLogRecordReader {
                                           int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField, HoodieRecordMerger recordMerger) {
     this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema(), false, recordMerger);
+        instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema(), Option.empty(), false, recordMerger);
   }
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField, boolean forceFullScan,
-                                          Option<String> partitionName, InternalSchema internalSchema,
+                                          Option<String> partitionName,
+                                          InternalSchema internalSchema,
+                                          Option<String> keyFieldOverride,
                                           boolean useScanV2, HoodieRecordMerger recordMerger) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
@@ -199,21 +202,23 @@ public abstract class AbstractHoodieLogRecordReader {
     this.useScanV2 = useScanV2;
 
     // Key fields when populate meta fields is disabled (that is, virtual keys enabled)
-    if (!tableConfig.populateMetaFields()) {
+    if (keyFieldOverride.isPresent()) {
+      this.keyField = keyFieldOverride.get();
+    } else if (tableConfig.populateMetaFields()) {
+      this.keyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
+    } else {
       this.populateMetaFields = false;
+      this.keyField = tableConfig.getRecordKeyFieldProp();
       this.simpleKeyGenFields = Option.of(
           Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
     }
+
     this.partitionName = partitionName;
     this.recordType = recordMerger.getRecordType();
   }
 
   protected String getKeyField() {
-    if (this.populateMetaFields) {
-      return HoodieRecord.RECORD_KEY_METADATA_FIELD;
-    }
-    ValidationUtils.checkState(this.simpleKeyGenFields.isPresent());
-    return this.simpleKeyGenFields.get().getKey();
+    return keyField;
   }
 
   public synchronized void scan() {
