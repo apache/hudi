@@ -17,9 +17,7 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.{DefaultSource, SparkAdapterSupport}
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute}
@@ -28,16 +26,13 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.execution.datasources.PreWriteCheck.failAnalysis
-import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, V2SessionCatalog}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, getTableLocation, removeMetaFields, tableExistsInPath}
-import org.apache.spark.sql.hudi.catalog.{HoodieCatalog, HoodieInternalV2Table}
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, removeMetaFields}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
-import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
-
-import scala.collection.JavaConverters.mapAsJavaMapConverter
+import org.apache.spark.sql.{SQLContext, SparkSession}
 
 /**
  * NOTE: PLEASE READ CAREFULLY
@@ -66,12 +61,12 @@ class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
     case s @ InsertIntoStatement(r @ DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _), partitionSpec, _, _, _, _)
       if s.query.resolved && needsSchemaAdjustment(s.query, v2Table.hoodieCatalogTable.table, partitionSpec, r.schema) =>
-        val projection = resolveQueryColumnsByOrdinal(s.query, r.output)
-        if (projection != s.query) {
-          s.copy(query = projection)
-        } else {
-          s
-        }
+      val projection = resolveQueryColumnsByOrdinal(s.query, r.output)
+      if (projection != s.query) {
+        s.copy(query = projection)
+      } else {
+        s
+      }
   }
 
   /**
@@ -130,56 +125,6 @@ class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
 }
 
 /**
-<<<<<<< HEAD:hudi-spark-datasource/hudi-spark3.2.x/src/main/scala/org/apache/spark/sql/hudi/analysis/HoodieSpark3Analysis.scala
- * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
- */
-case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rule[LogicalPlan]
-  with SparkAdapterSupport with ProvidesHoodieConfig {
-
-  def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
-    // Fill schema for Create Table without specify schema info
-    case c @ CreateV2Table(tableCatalog, tableName, schema, partitioning, properties, _)
-      if sparkAdapter.isHoodieTable(properties.asJava) =>
-
-      if (schema.isEmpty && partitioning.nonEmpty) {
-        failAnalysis("It is not allowed to specify partition columns when the table schema is " +
-          "not defined. When the table schema is not provided, schema and partition columns " +
-          "will be inferred.")
-      }
-      val hoodieCatalog = tableCatalog match {
-        case catalog: HoodieCatalog => catalog
-        case _ => tableCatalog.asInstanceOf[V2SessionCatalog]
-      }
-      val tablePath = getTableLocation(properties,
-        TableIdentifier(tableName.name(), tableName.namespace().lastOption), sparkSession)
-
-      val tableExistInCatalog = hoodieCatalog.tableExists(tableName)
-      // Only when the table has not exist in catalog, we need to fill the schema info for creating table.
-      if (!tableExistInCatalog && tableExistsInPath(tablePath, sparkSession.sessionState.newHadoopConf())) {
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(tablePath)
-          .setConf(sparkSession.sessionState.newHadoopConf())
-          .build()
-        val tableSchema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient)
-        if (tableSchema.isDefined && schema.isEmpty) {
-          // Fill the schema with the schema from the table
-          c.copy(tableSchema = tableSchema.get)
-        } else if (tableSchema.isDefined && schema != tableSchema.get) {
-          throw new AnalysisException(s"Specified schema in create table statement is not equal to the table schema." +
-            s"You should not specify the schema for an exist table: $tableName ")
-        } else {
-          c
-        }
-      } else {
-        c
-      }
-    case p => p
-  }
-}
-
-/**
-=======
->>>>>>> 8c296e0356 ([HUDI-4691] Cleaning up duplicated classes in Spark 3.3 module (#6550)):hudi-spark-datasource/hudi-spark3.2plus-common/src/main/scala/org/apache/spark/sql/hudi/analysis/HoodieSpark3Analysis.scala
  * Rule replacing resolved Spark's commands (not working for Hudi tables out-of-the-box) with
  * corresponding Hudi implementations
  */
@@ -218,4 +163,3 @@ private[sql] object HoodieV1OrV2Table extends SparkAdapterSupport {
     case _ => None
   }
 }
-
