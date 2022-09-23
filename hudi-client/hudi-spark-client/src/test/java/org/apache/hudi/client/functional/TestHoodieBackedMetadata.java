@@ -87,7 +87,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
-import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
+import org.apache.hudi.metadata.HoodieMetadataLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -1054,7 +1054,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     if (enableMetaFields) {
       schema = HoodieAvroUtils.addMetadataFields(schema);
     }
-    HoodieMetadataMergedLogRecordReader logRecordReader = HoodieMetadataMergedLogRecordReader.newBuilder()
+    HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder()
         .withFileSystem(metadataMetaClient.getFs())
         .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
@@ -1067,14 +1067,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withDiskMapType(ExternalSpillableMap.DiskMapType.BITCASK)
         .build();
 
-    assertDoesNotThrow(() -> {
-      logRecordReader.scan();
-    }, "Metadata log records materialization failed");
-
-    for (Map.Entry<String, HoodieRecord> entry : logRecordReader.getRecords().entrySet()) {
-      assertFalse(entry.getKey().isEmpty());
-      assertFalse(entry.getValue().getRecordKey().isEmpty());
-      assertEquals(entry.getKey(), entry.getValue().getRecordKey());
+    for (HoodieRecord<? extends HoodieRecordPayload> entry : logRecordReader.getRecords()) {
+      assertFalse(entry.getRecordKey().isEmpty());
+      assertEquals(entry.getKey().getRecordKey(), entry.getRecordKey());
     }
   }
 

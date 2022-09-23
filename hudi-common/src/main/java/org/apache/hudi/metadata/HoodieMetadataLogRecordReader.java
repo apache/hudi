@@ -56,6 +56,16 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     return new HoodieMetadataLogRecordReader.Builder();
   }
 
+  public List<HoodieRecord<HoodieMetadataPayload>> getRecords() {
+    // TODO remove locking
+    synchronized (this) {
+      logRecordScanner.scan();
+      return logRecordScanner.getRecords().values().stream()
+          .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
+          .collect(Collectors.toList());
+    }
+  }
+
   @SuppressWarnings("unchecked")
   public List<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes) {
     // Following operations have to be atomic, otherwise concurrent
