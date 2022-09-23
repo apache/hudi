@@ -292,4 +292,4 @@ xercesImpl/xerces/2.9.1//xercesImpl-2.9.1.jar
 xml-apis/xml-apis/1.3.04//xml-apis-1.3.04.jar
 xmlenc/xmlenc/0.52//xmlenc-0.52.jar
 zookeeper/org.apache.zookeeper/3.4.6//zookeeper-3.4.6.jar
-zookeeper/org.apache.zookeeper/3.4.6/tests/zookeeper-3.4.6-tests.jar
+zookeeper/org.apache.zookeeper/3.4.6/tests/zookeeper-3.4.6-tests.jarr
