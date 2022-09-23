@@ -178,7 +178,7 @@ public class CollectionUtils {
    * NOTE: This is less optimal counterpart to {@link #diff(Collection, Collection)}, accepting {@link List}
    *       as a holding collection to support duplicate elements use-cases
    */
-  public static <E> List<E> diff(List<E> one, List<E> another) {
+  public static <E> List<E> diff(Collection<E> one, Collection<E> another) {
     List<E> diff = new ArrayList<>(one);
     diff.removeAll(another);
     return diff;

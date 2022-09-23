@@ -154,7 +154,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   public Map<String, HoodieRecord> getRecords() {
     checkState(forceFullScan, "Record reader has to be in full-scan mode to use this API");
-    return records;
+    return Collections.unmodifiableMap(records);
   }
 
   public HoodieRecordType getRecordType() {

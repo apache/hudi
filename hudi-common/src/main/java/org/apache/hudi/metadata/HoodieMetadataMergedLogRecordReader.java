@@ -27,8 +27,6 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -45,8 +43,6 @@ import java.util.stream.Collectors;
  */
 public class HoodieMetadataMergedLogRecordReader implements Closeable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataMergedLogRecordReader.class);
-
   private final HoodieMergedLogRecordScanner logRecordScanner;
 
   private HoodieMetadataMergedLogRecordReader(HoodieMergedLogRecordScanner logRecordScanner) {
@@ -60,25 +56,15 @@ public class HoodieMetadataMergedLogRecordReader implements Closeable {
     return new HoodieMetadataMergedLogRecordReader.Builder();
   }
 
-  /**
-   * Retrieve a record given its key.
-   *
-   * @param key Key of the record to retrieve
-   * @return {@code HoodieRecord} if key was found else {@code Option.empty()}
-   */
-  public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordByKey(String key) {
-    checkState(forceFullScan, "Record reader has to be in full-scan mode to use this API");
-    return Collections.singletonList(Pair.of(key, Option.ofNullable((HoodieRecord) records.get(key))));
-  }
-
   @SuppressWarnings("unchecked")
   public List<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes) {
     // Following operations have to be atomic, otherwise concurrent
     // readers would race with each other and could crash when
     // processing log block records as part of scan.
+    // TODO remove locking
     synchronized (this) {
       records.clear();
-      scanInternal(Option.of(new KeySpec(keyPrefixes, false)), false);
+      scanInternal(Option.of(new KeySpec(keyPrefixes, false)));
       return records.values().stream()
           .filter(Objects::nonNull)
           .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
@@ -87,15 +73,17 @@ public class HoodieMetadataMergedLogRecordReader implements Closeable {
   }
 
   @SuppressWarnings("unchecked")
-  public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys) {
+  public List<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys) {
     // Following operations have to be atomic, otherwise concurrent
     // readers would race with each other and could crash when
     // processing log block records as part of scan.
+    // TODO remove locking
     synchronized (this) {
-      records.clear();
-      scan(keys);
+      logRecordScanner.scanByFullKeys(keys);
+      Map<String, HoodieRecord<? extends HoodieRecordPayload>> allRecords = logRecordScanner.getRecords();
       return keys.stream()
-          .map(key -> Pair.of(key, Option.ofNullable((HoodieRecord<HoodieMetadataPayload>) records.get(key))))
+          .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
+          .filter(Objects::nonNull)
           .collect(Collectors.toList());
     }
   }
