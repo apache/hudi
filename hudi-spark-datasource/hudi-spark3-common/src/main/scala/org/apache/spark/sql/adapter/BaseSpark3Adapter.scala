@@ -46,6 +46,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   def getCatalogUtils: HoodieSpark3CatalogUtils
 
+
   override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
     val encoder = RowEncoder(schema).resolveAndBind()
     new Spark3RowSerDe(encoder)
