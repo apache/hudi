@@ -579,6 +579,9 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertFalse(dataFilesToRead.anyMatch(file -> HoodieTimeline.compareTimestamps("002", HoodieTimeline.GREATER_THAN, file.getCommitTime())));
+
+      client.deleteSavepoint("002");
+      assertFalse(metaClient.reloadActiveTimeline().getSavePointTimeline().containsInstant("002"));
     }
   }
 
