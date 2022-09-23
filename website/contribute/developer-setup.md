@@ -275,6 +275,20 @@ Discussion about contributing code to Hudi happens on the [dev@ mailing list](/c
 
 This Quick Video will give a code walkthrough to start with [watch](https://www.youtube.com/watch?v=N2eDfU_rQ_U).
 
+## Running unit tests and local debugger via Intellij IDE
+
+#### IMPORTANT REMINDER FOR BELOW STEPS: When submitting a PR please make sure to NOT commit the changes mentioned in these steps, instead once testing is done make sure to revert the changes and then submit a pr.
+
+0. Build the project with the intended profiles via the `mvn` cli, for example for spark 3.2 use `mvn clean package -Dspark3.2 -Dscala-2.12 -DskipTests`. 
+1. Install the "Maven Helper" plugin from the Intellij IDE.
+2. Make sure IDEA uses Maven to build/run tests:
+   * You need to select the intended Maven profiles (using Maven tool pane in IDEA): select profiles you are targeting for example `spark2.4` and `scala-2.11` or `spark3.2`, `scala-2.12` etc. 
+   * Add `.mvn/maven.config` file at the root of the repo w/ the the profiles you selected in the pane: `-Dspark3.2` `-Dscala-2.12`
+   * Add `.mvn/` to the `.gitignore` file located in the root of the project. 
+3. Make sure you change (temporarily) the `scala.binary.version` in the root `pom.xml` to the intended scala profile version. For example if running with spark3 `scala.binary.version` should be `2.12`
+4. Finally right click on the unit test's method signature you are trying to run, there should be an option with a mvn symbol that allows you to `run <test-name>`, as well as an option to `debug <test-name>`.
+    * For debugging make sure to first set breakpoints in the src code see (https://www.jetbrains.com/help/idea/debugging-code.html)
+
 ## Docker Setup
 
 We encourage you to test your code on docker cluster please follow this for [docker setup](https://hudi.apache.org/docs/docker_demo).
