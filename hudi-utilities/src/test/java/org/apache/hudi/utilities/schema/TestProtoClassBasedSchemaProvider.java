@@ -20,42 +20,49 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.test.proto.Parent;
 import org.apache.hudi.utilities.test.proto.Sample;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.util.Scanner;
+import java.io.IOException;
 
 public class TestProtoClassBasedSchemaProvider {
 
   @Test
-  public void validateDefaultSchemaGeneration() {
+  public void validateDefaultSchemaGeneration() throws IOException {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME, Sample.class.getName());
+    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
-    Schema protoSchema = protoToAvroSchemaProvider.getSourceSchema();
+    Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
     Schema.Parser parser = new Schema.Parser();
-    Schema expectedSchema = parser.parse(getExpectedSchema("schema-provider/proto/sample_schema_nested.txt"));
-    Assertions.assertEquals(expectedSchema, protoSchema);
+    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_nested.avsc"));
+    Assertions.assertEquals(expectedSchema, convertedSchema);
   }
 
   @Test
-  public void validateFlattenedSchemaGeneration() {
+  public void validateFlattenedSchemaGeneration() throws IOException {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME, Sample.class.getName());
-    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_FLATTEN_WRAPPED_PRIMITIVES, "true");
+    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
+    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_FLATTEN_WRAPPED_PRIMITIVES.key(), "true");
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
-    Schema protoSchema = protoToAvroSchemaProvider.getSourceSchema();
+    Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
     Schema.Parser parser = new Schema.Parser();
-    Schema expectedSchema = parser.parse(getExpectedSchema("schema-provider/proto/sample_schema_flattened.txt"));
-    Assertions.assertEquals(expectedSchema, protoSchema);
+    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_flattened.avsc"));
+    Assertions.assertEquals(expectedSchema, convertedSchema);
   }
 
-  private String getExpectedSchema(String pathToExpectedSchema) {
-    try (Scanner scanner = new Scanner(getClass().getClassLoader().getResourceAsStream(pathToExpectedSchema))) {
-      return scanner.next();
-    }
+  @Test
+  public void validateRecursiveSchemaGeneration() throws IOException {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
+    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key(), String.valueOf(2));
+    ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
+    Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
+    Schema.Parser parser = new Schema.Parser();
+    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive.avsc"));
+    Assertions.assertEquals(expectedSchema, convertedSchema);
   }
 }
