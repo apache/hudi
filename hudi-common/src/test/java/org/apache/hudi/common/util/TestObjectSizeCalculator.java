@@ -22,12 +22,14 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.Schema;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.apache.hudi.common.util.ObjectSizeCalculator.getObjectSize;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestObjectSizeCalculator {
 
@@ -51,31 +53,25 @@ public class TestObjectSizeCalculator {
     boolean booleanField = true;
     Object object = new Object();
 
-    Assertions.assertDoesNotThrow(() -> {
-      printObjectSize(emptyString);
-      printObjectSize(string);
-      printObjectSize(stringArray);
-      printObjectSize(anotherStringArray);
-      printObjectSize(stringList);
-      printObjectSize(stringBuilder);
-      printObjectSize(maxIntPrimitive);
-      printObjectSize(minIntPrimitive);
-      printObjectSize(maxInteger);
-      printObjectSize(minInteger);
-      printObjectSize(zeroLong);
-      printObjectSize(zeroDouble);
-      printObjectSize(booleanField);
-      printObjectSize(DayOfWeek.TUESDAY);
-      printObjectSize(object);
-      printObjectSize(emptyClass);
-      printObjectSize(stringClass);
-      printObjectSize(payloadClass);
-      printObjectSize(Schema.create(Schema.Type.STRING));
-    });
-  }
-
-  public static void printObjectSize(Object object) {
-    System.out.println("Object type: " + object.getClass() + ", size: " + ObjectSizeCalculator.getObjectSize(object) + " bytes");
+    assertEquals(24, getObjectSize(emptyString));
+    assertEquals(24, getObjectSize(string));
+    assertEquals(16, getObjectSize(stringArray));
+    assertEquals(416, getObjectSize(anotherStringArray));
+    assertEquals(24, getObjectSize(stringList));
+    assertEquals(24, getObjectSize(stringBuilder));
+    assertEquals(16, getObjectSize(maxIntPrimitive));
+    assertEquals(16, getObjectSize(minIntPrimitive));
+    assertEquals(16, getObjectSize(maxInteger));
+    assertEquals(16, getObjectSize(minInteger));
+    assertEquals(24, getObjectSize(zeroLong));
+    assertEquals(24, getObjectSize(zeroDouble));
+    assertEquals(16, getObjectSize(booleanField));
+    assertEquals(24, getObjectSize(DayOfWeek.TUESDAY));
+    assertEquals(16, getObjectSize(object));
+    assertEquals(32, getObjectSize(emptyClass));
+    assertEquals(24, getObjectSize(stringClass));
+    assertEquals(24, getObjectSize(payloadClass));
+    assertEquals(32, getObjectSize(Schema.create(Schema.Type.STRING)));
   }
 
   class EmptyClass {

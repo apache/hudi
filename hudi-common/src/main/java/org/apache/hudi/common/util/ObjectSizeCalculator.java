@@ -89,7 +89,7 @@ public class ObjectSizeCalculator {
   // added.
   private final int superclassFieldPadding;
 
-  private static final Map<Class<?>, ClassSizeInfo> CLASS_SIZE_INFO_MAP = new IdentityHashMap<>();
+  private final Map<Class<?>, ClassSizeInfo> classSizeInfos = new IdentityHashMap<>();
 
   private final Set<Object> alreadyVisited = Collections.newSetFromMap(new IdentityHashMap<>());
   private final Deque<Object> pending = new ArrayDeque<>(64);
@@ -130,6 +130,14 @@ public class ObjectSizeCalculator {
         obj = pending.removeFirst();
       }
     } catch (IllegalAccessException | SecurityException e) {
+      // JDK versions 16 or later enforce strong encapsulation and do now allow to invoke `setAccessible` on a field,
+      // especially when the `isAccessible` is false. More details in JEP 403. While integrating Hudi with other
+      // software packages that compile against JDK 16 or later (e.g. Trino), the IllegalAccessException will be thrown.
+      // In that case, we use Java Object Layout (JOL) to estimate the object size.
+      //
+      // NOTE: We cannot get the object size base on the amount of byte serialized because there is no guarantee
+      //       that the incoming object is serializable. We could have used Java's Instrumentation API but it
+      //       needs an instrumentation agent that can be hooked to the JVM. In lieu of that, we are using JOL.
       return ClassLayout.parseClass(obj.getClass()).instanceSize();
     } finally {
       alreadyVisited.clear();
@@ -138,15 +146,11 @@ public class ObjectSizeCalculator {
     }
   }
 
-  private static ClassSizeInfo getClassSizeInfo(final Class<?> clazz,
-                                                int referenceSize,
-                                                int superclassFieldPadding,
-                                                int objectHeaderSize,
-                                                int objectPadding) {
-    ClassSizeInfo csi = CLASS_SIZE_INFO_MAP.get(clazz);
+  private ClassSizeInfo getClassSizeInfo(final Class<?> clazz) {
+    ClassSizeInfo csi = classSizeInfos.get(clazz);
     if (csi == null) {
-      csi = new ClassSizeInfo(clazz, referenceSize, superclassFieldPadding, objectHeaderSize, objectPadding);
-      CLASS_SIZE_INFO_MAP.put(clazz, csi);
+      csi = new ClassSizeInfo(clazz);
+      classSizeInfos.put(clazz, csi);
     }
     return csi;
   }
@@ -163,7 +167,7 @@ public class ObjectSizeCalculator {
       if (clazz.isArray()) {
         visitArray(obj);
       } else {
-        getClassSizeInfo(clazz, referenceSize, superclassFieldPadding, objectHeaderSize, objectPadding).visit(obj, this);
+        getClassSizeInfo(clazz).visit(obj, this);
       }
     }
   }
@@ -231,7 +235,7 @@ public class ObjectSizeCalculator {
     return ((x + multiple - 1) / multiple) * multiple;
   }
 
-  private static class ClassSizeInfo {
+  private class ClassSizeInfo {
 
     // Padded fields + header size
     private final long objectSize;
@@ -240,7 +244,7 @@ public class ObjectSizeCalculator {
     private final long fieldsSize;
     private final Field[] referenceFields;
 
-    public ClassSizeInfo(Class<?> clazz, int referenceSize, int superclassFieldPadding, int objectHeaderSize, int objectPadding) {
+    public ClassSizeInfo(Class<?> clazz) {
       long fieldsSize = 0;
       final List<Field> referenceFields = new LinkedList<>();
       for (Field f : clazz.getDeclaredFields()) {
@@ -257,7 +261,7 @@ public class ObjectSizeCalculator {
       }
       final Class<?> superClass = clazz.getSuperclass();
       if (superClass != null) {
-        final ClassSizeInfo superClassInfo = getClassSizeInfo(superClass, referenceSize, superclassFieldPadding, objectHeaderSize, objectPadding);
+        final ClassSizeInfo superClassInfo = getClassSizeInfo(superClass);
         fieldsSize += roundTo(superClassInfo.fieldsSize, superclassFieldPadding);
         referenceFields.addAll(Arrays.asList(superClassInfo.referenceFields));
       }

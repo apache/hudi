@@ -188,7 +188,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0008); // 839 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.00008); // 839 bytes batch size
 
     Map<String, String> expected = getMiniBatchExpected();
 
@@ -213,7 +213,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithDeduplication() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0008); // 839 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.00008); // 839 bytes batch size
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     Map<String, String> expected = new HashMap<>();
@@ -263,7 +263,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     // reset the config option
     conf.setString(FlinkOptions.OPERATION, "insert");
     conf.setBoolean(FlinkOptions.INSERT_CLUSTER, true);
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0008); // 839 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.00008); // 839 bytes buffer size
 
     TestWriteMergeOnRead.TestHarness.instance()
         // record (operation: 'I') is 304 bytes and record (operation: 'U') is 352 bytes.
@@ -312,7 +312,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithSmallBufferSize() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0008); // 839 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.00008); // 839 bytes buffer size
 
     Map<String, String> expected = getMiniBatchExpected();
 
@@ -406,7 +406,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testWriteExactlyOnce() throws Exception {
     // reset the config option
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.00006); // 630 bytes buffer size
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT)
         .emptyEventBuffer()
