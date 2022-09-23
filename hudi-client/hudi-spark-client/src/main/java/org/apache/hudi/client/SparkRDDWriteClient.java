@@ -360,6 +360,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     LOG.info("Starting clustering at " + clusteringInstant);
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = table.cluster(context, clusteringInstant);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusteringMetadata = writeMetadata.clone(HoodieJavaRDD.getJavaRDD(writeMetadata.getWriteStatuses()));
+    // Validation has to be done after cloning. if not, it could result in dereferencing the write status twice which means clustering could get executed twice.
     validateClusteringCommit(clusteringMetadata, clusteringInstant, table);
     // TODO : Where is shouldComplete used ?
     if (shouldComplete && clusteringMetadata.getCommitMetadata().isPresent()) {
