@@ -19,16 +19,15 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.client.functional.TestHoodieBackedMetadata;
+
 import org.junit.platform.runner.JUnitPlatform;
 import org.junit.platform.suite.api.IncludeTags;
-import org.junit.platform.suite.api.SelectPackages;
+import org.junit.platform.suite.api.SelectClasses;
 import org.junit.runner.RunWith;
 
 @RunWith(JUnitPlatform.class)
-@SelectPackages({
-    "org.apache.hudi.client.functional",
-    "org.apache.hudi.table.functional",
-    "org.apache.hudi.index.hbase"})
+@SelectClasses({TestHoodieBackedMetadata.class})
 @IncludeTags("functional")
 public class SparkClientFunctionalTestSuite {
 
