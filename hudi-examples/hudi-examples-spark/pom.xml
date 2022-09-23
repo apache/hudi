@@ -21,7 +21,7 @@
     <parent>
         <artifactId>hudi-examples</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.12.0</version>
+        <version>0.12.1-rc1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
