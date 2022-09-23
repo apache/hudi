@@ -1,0 +1,1 @@
+{"type":"record","name":"WithOneOf","namespace":"test","fields":[{"name":"int","type":["null","int"],"default":null},{"name":"long","type":["null","long"],"default":null},{"name":"message","type":["null",{"type":"record","name":"Nested","fields":[{"name":"nested_int","type":"int","default":0}]}],"default":null}]}

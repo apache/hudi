@@ -30,8 +30,10 @@ import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
+import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+import com.google.protobuf.util.Timestamps;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -64,12 +66,13 @@ public class ProtoConversionUtil {
   /**
    * Creates an Avro {@link Schema} for the provided class. Assumes that the class is a protobuf {@link Message}.
    * @param clazz The protobuf class
-   * @param flattenWrappedPrimitives set to true to treat wrapped primitives like nullable fields instead of nested messages.
+   * @param wrappedPrimitivesAsRecords set to true to treat wrapped primitives like record with a single "value" field instead of simply a nullable field
    * @param maxRecursionDepth the number of times to unravel a recursive proto schema before spilling the rest to bytes
+   * @param timestampsAsRecords if true convert {@link Timestamp} to a Record with a seconds and nanos field, otherwise convert protobuf {@link Timestamp} to a long with the time-mircos logical type.
    * @return An Avro schema
    */
-  public static Schema getAvroSchemaForMessageClass(Class clazz, boolean flattenWrappedPrimitives, int maxRecursionDepth) {
-    return AvroSupport.get().getSchema(clazz, flattenWrappedPrimitives, maxRecursionDepth);
+  public static Schema getAvroSchemaForMessageClass(Class clazz, boolean wrappedPrimitivesAsRecords, int maxRecursionDepth, boolean timestampsAsRecords) {
+    return AvroSupport.get().getSchema(clazz, wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords);
   }
 
   /**
@@ -103,7 +106,6 @@ public class ProtoConversionUtil {
     // When converting from proto to avro, we want to be able to iterate over the fields in the proto in the same order as they appear in the avro schema.
     private static final Map<Pair<Schema, Descriptors.Descriptor>, Descriptors.FieldDescriptor[]> FIELD_CACHE = new ConcurrentHashMap<>();
     private static final Schema UNSIGNED_LONG_SCHEMA = LogicalTypes.decimal(21).addToSchema(Schema.createFixed("unsigned_long", null, "org.apache.hudi.protos", 9));
-    private static final BigInteger UNSIGNED_LONG_MASK = BigInteger.ONE.shiftLeft(Long.SIZE).subtract(BigInteger.ONE);
     private static final Set<Descriptors.Descriptor> WRAPPER_DESCRIPTORS_TO_TYPE = getWrapperDescriptorsToType();
 
     private static Set<Descriptors.Descriptor> getWrapperDescriptorsToType() {
@@ -131,15 +133,15 @@ public class ProtoConversionUtil {
       return (GenericRecord) convertObject(schema, message);
     }
 
-    public Schema getSchema(Class c, boolean flattenWrappedPrimitives, int maxRecursionDepth) {
-      return SCHEMA_CACHE.computeIfAbsent(new SchemaCacheKey(c, flattenWrappedPrimitives, maxRecursionDepth), key -> {
+    public Schema getSchema(Class c, boolean wrappedPrimitivesAsRecords, int maxRecursionDepth, boolean timestampsAsRecords) {
+      return SCHEMA_CACHE.computeIfAbsent(Pair.of(c, wrappedPrimitivesAsRecords), key -> {
         try {
           Object descriptor = c.getMethod("getDescriptor").invoke(null);
           if (c.isEnum()) {
             return getEnumSchema((Descriptors.EnumDescriptor) descriptor);
           } else {
             Descriptors.Descriptor castedDescriptor = (Descriptors.Descriptor) descriptor;
-            return getMessageSchema(castedDescriptor, new CopyOnWriteMap<>(), flattenWrappedPrimitives, getNamespace(castedDescriptor.getFullName()), maxRecursionDepth);
+            return getMessageSchema(castedDescriptor, new CopyOnWriteMap<>(), wrappedPrimitivesAsRecords, getNamespace(castedDescriptor.getFullName()), maxRecursionDepth, timestampsAsRecords);
           }
         } catch (Exception e) {
           throw new RuntimeException(e);
@@ -160,14 +162,15 @@ public class ProtoConversionUtil {
      * @param descriptor the descriptor for the proto message
      * @param recursionDepths a map of the descriptor to the number of times it has been encountered in this depth first traversal of the schema.
      *                        This is used to cap the number of times we recurse on a schema.
-     * @param flattenWrappedPrimitives if true, treat wrapped primitives as nullable primitives, if false, treat them as proto messages
+     * @param wrappedPrimitivesAsRecords if false, treat wrapped primitives as nullable primitives, if true, treat them as proto messages
      * @param path a string prefixed with the namespace of the original message being translated to avro and containing the current dot separated path tracking progress through the schema.
      *             This value is used for a namespace when creating Avro records to avoid an error when reusing the same class name when unraveling a recursive schema.
      * @param maxRecursionDepth the number of times to unravel a recursive proto schema before spilling the rest to bytes
+     * @param timestampsAsRecords if true, treat timestamps as records with a seconds and nanos field. If false, treat as a long with timestamp-micros logical type
      * @return an avro schema
      */
-    private Schema getMessageSchema(Descriptors.Descriptor descriptor, CopyOnWriteMap<Descriptors.Descriptor, Integer> recursionDepths, boolean flattenWrappedPrimitives, String path,
-                                    int maxRecursionDepth) {
+    private Schema getMessageSchema(Descriptors.Descriptor descriptor, CopyOnWriteMap<Descriptors.Descriptor, Integer> recursionDepths, boolean wrappedPrimitivesAsRecords, String path,
+                                    int maxRecursionDepth, boolean timestampsAsRecords) {
       // Parquet does not handle recursive schemas so we "unravel" the proto N levels
       Integer currentRecursionCount = recursionDepths.getOrDefault(descriptor, 0);
       if (currentRecursionCount >= maxRecursionDepth) {
@@ -181,15 +184,26 @@ public class ProtoConversionUtil {
       List<Schema.Field> fields = new ArrayList<>(descriptor.getFields().size());
       for (Descriptors.FieldDescriptor f : descriptor.getFields()) {
         // each branch of the schema traversal requires its own recursion depth tracking so copy the recursionDepths map
-        fields.add(new Schema.Field(f.getName(), getFieldSchema(f, new CopyOnWriteMap<>(recursionDepths), flattenWrappedPrimitives, path, maxRecursionDepth), null, getDefault(f)));
+        fields.add(new Schema.Field(f.getName(), getFieldSchema(f, new CopyOnWriteMap<>(recursionDepths), wrappedPrimitivesAsRecords, path, maxRecursionDepth, timestampsAsRecords),
+            null, getDefault(f)));
       }
       result.setFields(fields);
       return result;
     }
 
-    private Schema getFieldSchema(Descriptors.FieldDescriptor f, CopyOnWriteMap<Descriptors.Descriptor, Integer> recursionDepths, boolean flattenWrappedPrimitives, String path,
-                                  int maxRecursionDepth) {
-      Function<Schema, Schema> schemaFinalizer =  f.isRepeated() ? Schema::createArray : Function.identity();
+    private Schema getFieldSchema(Descriptors.FieldDescriptor f, CopyOnWriteMap<Descriptors.Descriptor, Integer> recursionDepths, boolean wrappedPrimitivesAsRecords, String path,
+                                  int maxRecursionDepth, boolean timestampsAsRecords) {
+      Function<Schema, Schema> schemaFinalizer = schema -> {
+        Schema updatedSchema = schema;
+        // all fields in the oneof will be treated as nullable
+        if (f.getContainingOneof() != null && !(schema.isUnion() && schema.getTypes().get(0).getType() == Schema.Type.NULL)) {
+          updatedSchema = makeSchemaNullable(schema);
+        }
+        if (f.isRepeated()) {
+          updatedSchema = Schema.createArray(updatedSchema);
+        }
+        return updatedSchema;
+      };
       switch (f.getType()) {
         case BOOL:
           return schemaFinalizer.apply(Schema.create(Schema.Type.BOOLEAN));
@@ -220,26 +234,38 @@ public class ProtoConversionUtil {
           return schemaFinalizer.apply(UNSIGNED_LONG_SCHEMA);
         case MESSAGE:
           String updatedPath = appendFieldNameToPath(path, f.getName());
-          if (flattenWrappedPrimitives && WRAPPER_DESCRIPTORS_TO_TYPE.contains(f.getMessageType())) {
+          if (!wrappedPrimitivesAsRecords && WRAPPER_DESCRIPTORS_TO_TYPE.contains(f.getMessageType())) {
             // all wrapper types have a single field, so we can get the first field in the message's schema
-            return schemaFinalizer.apply(Schema.createUnion(Arrays.asList(NULL_SCHEMA, getFieldSchema(f.getMessageType().getFields().get(0), recursionDepths, flattenWrappedPrimitives, updatedPath,
-                maxRecursionDepth))));
+            return schemaFinalizer.apply(makeSchemaNullable(getFieldSchema(f.getMessageType().getFields().get(0), recursionDepths, wrappedPrimitivesAsRecords, updatedPath, maxRecursionDepth,
+                timestampsAsRecords)));
+          }
+          if (!timestampsAsRecords && Timestamp.getDescriptor().equals(f.getMessageType())) {
+            // Handle timestamps as long with logical type
+            return schemaFinalizer.apply(makeSchemaNullable(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
           }
           // if message field is repeated (like a list), elements are non-null
           if (f.isRepeated()) {
-            return schemaFinalizer.apply(getMessageSchema(f.getMessageType(), recursionDepths, flattenWrappedPrimitives, updatedPath, maxRecursionDepth));
+            return schemaFinalizer.apply(getMessageSchema(f.getMessageType(), recursionDepths, wrappedPrimitivesAsRecords, updatedPath, maxRecursionDepth, timestampsAsRecords));
           }
           // otherwise we create a nullable field schema
-          return schemaFinalizer.apply(Schema.createUnion(Arrays.asList(NULL_SCHEMA, getMessageSchema(f.getMessageType(), recursionDepths, flattenWrappedPrimitives, updatedPath, maxRecursionDepth))));
+          return schemaFinalizer.apply(makeSchemaNullable(getMessageSchema(f.getMessageType(), recursionDepths, wrappedPrimitivesAsRecords, updatedPath, maxRecursionDepth, timestampsAsRecords)));
         case GROUP: // groups are deprecated
         default:
           throw new RuntimeException("Unexpected type: " + f.getType());
       }
     }
 
+    private static Schema makeSchemaNullable(Schema schema) {
+      return Schema.createUnion(Arrays.asList(NULL, schema));
+    }
+
     private Object getDefault(Descriptors.FieldDescriptor f) {
       if (f.isRepeated()) { // empty array as repeated fields' default value
         return Collections.emptyList();
+      }
+      if (f.getContainingOneof() != null) {
+        // fields inside oneof are nullable
+        return null;
       }
 
       switch (f.getType()) { // generate default for type
@@ -341,7 +367,12 @@ public class ProtoConversionUtil {
         case LONG:
           Object tmpValue = value;
           if (value instanceof Message) {
-            tmpValue = getWrappedValue(value);
+            // check if this is a Timestamp
+            if (schema.getLogicalType().equals(LogicalTypes.timestampMicros())) {
+              return Timestamps.toMicros((Timestamp) value);
+            } else {
+              tmpValue = getWrappedValue(value);
+            }
           }
           // unsigned ints need to be casted to long
           if (tmpValue instanceof Integer) {
