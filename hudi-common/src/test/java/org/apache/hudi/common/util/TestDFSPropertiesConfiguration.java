@@ -18,13 +18,16 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hudi.exception.HoodieIOException;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterAll;
@@ -173,9 +176,13 @@ public class TestDFSPropertiesConfiguration {
     ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
     // Should not throw any exception when no external configuration file configured
     DFSPropertiesConfiguration.refreshGlobalProps();
-    DFSPropertiesConfiguration defaultDfsPropertiesConfiguration = new DFSPropertiesConfiguration();
-    defaultDfsPropertiesConfiguration.addPropsFromFile(DFSPropertiesConfiguration.DEFAULT_PATH);
-    assertEquals(defaultDfsPropertiesConfiguration.getProps().size(), DFSPropertiesConfiguration.getGlobalProps().size());
+    try {
+      if (!FSUtils.getFs(DFSPropertiesConfiguration.DEFAULT_PATH, new Configuration()).exists(DFSPropertiesConfiguration.DEFAULT_PATH)) {
+        assertEquals(0, DFSPropertiesConfiguration.getGlobalProps().size());
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Cannot check if the default config file exist: " + DFSPropertiesConfiguration.DEFAULT_PATH);
+    }
   }
 
   @Test
