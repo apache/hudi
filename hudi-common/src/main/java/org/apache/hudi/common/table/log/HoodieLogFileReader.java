@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.fs.BoundedFsDataInputStream;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieCorruptBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -45,7 +47,6 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hbase.util.Bytes;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -232,6 +233,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
       case COMMAND_BLOCK:
         return new HoodieCommandBlock(content, inputStream, readBlockLazily, Option.of(logBlockContentLoc), header, footer);
+
+      case CDC_DATA_BLOCK:
+        return new HoodieCDCDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc, readerSchema, header, keyField);
 
       default:
         throw new HoodieNotSupportedException("Unsupported Block " + blockType);
@@ -476,6 +480,10 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     if (FSUtils.isGCSFileSystem(fs)) {
       // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception
       return new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCS(fsDataInputStream, logFile, bufferSize), true);
+    }
+
+    if (FSUtils.isCHDFileSystem(fs)) {
+      return new BoundedFsDataInputStream(fs, logFile.getPath(), fsDataInputStream);
     }
 
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {

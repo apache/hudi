@@ -20,16 +20,13 @@ package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
@@ -41,8 +38,10 @@ import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -83,18 +82,17 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
   }
 
-  public boolean isDropPartition() {
-    try {
-      Option<HoodieCommitMetadata> hoodieCommitMetadata = HoodieTableMetadataUtil.getLatestCommitMetadata(metaClient);
-
-      if (hoodieCommitMetadata.isPresent()
-          && WriteOperationType.DELETE_PARTITION.equals(hoodieCommitMetadata.get().getOperationType())) {
-        return true;
-      }
-    } catch (Exception e) {
-      throw new HoodieSyncException("Failed to get commit metadata", e);
-    }
-    return false;
+  /**
+   * Get the set of dropped partitions since the last synced commit.
+   * If last sync time is not known then consider only active timeline.
+   * Going through archive timeline is a costly operation, and it should be avoided unless some start time is given.
+   */
+  public Set<String> getDroppedPartitionsSince(Option<String> lastCommitTimeSynced) {
+    HoodieTimeline timeline = lastCommitTimeSynced.isPresent() ? metaClient.getArchivedTimeline(lastCommitTimeSynced.get())
+        .mergeTimeline(metaClient.getActiveTimeline())
+        .getCommitsTimeline()
+        .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE) : metaClient.getActiveTimeline();
+    return new HashSet<>(TimelineUtils.getDroppedPartitions(timeline));
   }
 
   @Override
@@ -106,7 +104,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     }
   }
 
-  public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
+  public List<String> getWrittenPartitionsSince(Option<String> lastCommitTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in "
           + config.getString(META_SYNC_BASE_PATH)
@@ -118,8 +116,11 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
           config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION));
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
-      return TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().getCommitsTimeline()
-          .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE));
+      return TimelineUtils.getWrittenPartitions(
+          metaClient.getArchivedTimeline(lastCommitTimeSynced.get())
+              .mergeTimeline(metaClient.getActiveTimeline())
+              .getCommitsTimeline()
+              .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE));
     }
   }
 
@@ -127,7 +128,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
    * Iterate over the storage partitions and find if there are any new partitions that need to be added or updated.
    * Generate a list of PartitionEvent based on the changes required.
    */
-  public List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions, boolean isDropPartition) {
+  public List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions, Set<String> droppedPartitions) {
     Map<String, String> paths = new HashMap<>();
     for (Partition tablePartition : tablePartitions) {
       List<String> hivePartitionValues = tablePartition.getValues();
@@ -143,7 +144,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
 
-      if (isDropPartition) {
+      if (droppedPartitions.contains(storagePartition)) {
         events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
       } else {
         if (!storagePartitionValues.isEmpty()) {

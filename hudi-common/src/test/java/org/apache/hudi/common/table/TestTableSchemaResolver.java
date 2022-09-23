@@ -18,10 +18,12 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIncompatibleSchemaException;
+
+import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,17 +38,17 @@ public class TestTableSchemaResolver {
 
     // case2
     String[] pts1 = new String[0];
-    Schema s2 = TableSchemaResolver.appendPartitionColumns(originSchema, pts1);
+    Schema s2 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts1));
     assertEquals(originSchema, s2);
 
     // case3: partition_path is in originSchema
     String[] pts2 = {"partition_path"};
-    Schema s3 = TableSchemaResolver.appendPartitionColumns(originSchema, pts2);
+    Schema s3 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts2));
     assertEquals(originSchema, s3);
 
     // case4: user_partition is not in originSchema
     String[] pts3 = {"user_partition"};
-    Schema s4 = TableSchemaResolver.appendPartitionColumns(originSchema, pts3);
+    Schema s4 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts3));
     assertNotEquals(originSchema, s4);
     assertTrue(s4.getFields().stream().anyMatch(f -> f.name().equals("user_partition")));
     Schema.Field f = s4.getField("user_partition");
@@ -55,7 +57,7 @@ public class TestTableSchemaResolver {
     // case5: user_partition is in originSchema, but partition_path is in originSchema
     String[] pts4 = {"user_partition", "partition_path"};
     try {
-      TableSchemaResolver.appendPartitionColumns(originSchema, pts3);
+      TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts3));
     } catch (HoodieIncompatibleSchemaException e) {
       assertTrue(e.getMessage().contains("Partial partition fields are still in the schema"));
     }

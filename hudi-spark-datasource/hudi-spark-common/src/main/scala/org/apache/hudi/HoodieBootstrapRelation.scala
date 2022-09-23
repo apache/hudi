@@ -20,18 +20,17 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieBaseFile
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{Row, SQLContext}
 
 import scala.collection.JavaConverters._
 
@@ -147,7 +146,7 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
     if (fullSchema == null) {
       logInfo("Inferring schema..")
       val schemaResolver = new TableSchemaResolver(metaClient)
-      val tableSchema = schemaResolver.getTableAvroSchemaWithoutMetadataFields
+      val tableSchema = TableSchemaResolver.appendPartitionColumns(schemaResolver.getTableAvroSchemaWithoutMetadataFields, metaClient.getTableConfig.getPartitionFields)
       dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
       fullSchema = StructType(skeletonSchema.fields ++ dataSchema.fields)
     }

@@ -34,10 +34,9 @@ import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -54,8 +53,8 @@ import static org.apache.hudi.common.table.timeline.TimelineUtils.getTimeline;
 /**
  * CLI command to display commits options.
  */
-@Component
-public class CommitsCommand implements CommandMarker {
+@ShellComponent
+public class CommitsCommand {
 
   private String printCommits(HoodieDefaultTimeline timeline,
                               final Integer limit,
@@ -139,21 +138,23 @@ public class CommitsCommand implements CommandMarker {
         fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows, tempTableName);
   }
 
-  @CliCommand(value = "commits show", help = "Show the commits")
+  @ShellMethod(key = "commits show", value = "Show the commits")
   public String showCommits(
-      @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
-          unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
-      @CliOption(key = {"createView"}, help = "view name to store output table",
-          unspecifiedDefaultValue = "") final String exportTableName,
-      @CliOption(key = {"limit"}, help = "Limit commits",
-          unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"partition"}, help = "Partition value") final String partition,
-      @CliOption(key = {"includeArchivedTimeline"}, help = "Include archived commits as well",
-          unspecifiedDefaultValue = "false") final boolean includeArchivedTimeline) throws IOException {
+      @ShellOption(value = {"--includeExtraMetadata"}, help = "Include extra metadata",
+          defaultValue = "false") final boolean includeExtraMetadata,
+      @ShellOption(value = {"--createView"}, help = "view name to store output table",
+              defaultValue = "") final String exportTableName,
+      @ShellOption(value = {"--limit"}, help = "Limit commits",
+              defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+              defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"--partition"}, help = "Partition value", defaultValue = ShellOption.NULL) final String partition,
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
+              defaultValue = "false") final boolean includeArchivedTimeline)
+      throws IOException {
+
     HoodieDefaultTimeline timeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
     if (includeExtraMetadata) {
       return printCommitsWithMetadata(timeline, limit, sortByField, descending, headerOnly, exportTableName, partition);
@@ -162,21 +163,21 @@ public class CommitsCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "commits showarchived", help = "Show the archived commits")
+  @ShellMethod(key = "commits showarchived", value = "Show the archived commits")
   public String showArchivedCommits(
-      @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
-          unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
-      @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
-          unspecifiedDefaultValue = "") final String exportTableName,
-      @CliOption(key = {"startTs"}, mandatory = false, help = "start time for commits, default: now - 10 days")
+      @ShellOption(value = {"--includeExtraMetadata"}, help = "Include extra metadata",
+          defaultValue = "false") final boolean includeExtraMetadata,
+      @ShellOption(value = {"--createView"}, help = "view name to store output table",
+          defaultValue = "") final String exportTableName,
+      @ShellOption(value = {"--startTs"}, defaultValue = ShellOption.NULL, help = "start time for commits, default: now - 10 days")
           String startTs,
-      @CliOption(key = {"endTs"}, mandatory = false, help = "end time for commits, default: now - 1 day")
+      @ShellOption(value = {"--endTs"}, defaultValue = ShellOption.NULL, help = "end time for commits, default: now - 1 day")
           String endTs,
-      @CliOption(key = {"limit"}, mandatory = false, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"partition"}, help = "Partition value") final String partition)
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only", defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"--partition"}, help = "Partition value", defaultValue = ShellOption.NULL) final String partition)
       throws IOException {
     if (StringUtils.isNullOrEmpty(startTs)) {
       startTs = getTimeDaysAgo(10);
@@ -199,18 +200,20 @@ public class CommitsCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "commit showpartitions", help = "Show partition level details of a commit")
+  @ShellMethod(key = "commit showpartitions", value = "Show partition level details of a commit")
   public String showCommitPartitions(
-      @CliOption(key = {"createView"}, help = "view name to store output table",
-          unspecifiedDefaultValue = "") final String exportTableName,
-      @CliOption(key = {"commit"}, help = "Commit to show") final String instantTime,
-      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"includeArchivedTimeline"}, help = "Include archived commits as well",
-          unspecifiedDefaultValue = "false") final boolean includeArchivedTimeline) throws Exception {
+      @ShellOption(value = {"--createView"}, help = "view name to store output table",
+          defaultValue = "") final String exportTableName,
+      @ShellOption(value = {"--commit"}, help = "Commit to show") final String instantTime,
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+              defaultValue = "false") final boolean includeArchivedTimeline)
+      throws Exception {
+
     HoodieDefaultTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
     HoodieTimeline timeline = defaultTimeline.getCommitsTimeline().filterCompletedInstants();
 
@@ -265,18 +268,20 @@ public class CommitsCommand implements CommandMarker {
         limit, headerOnly, rows, exportTableName);
   }
 
-  @CliCommand(value = "commit show_write_stats", help = "Show write stats of a commit")
+  @ShellMethod(key = "commit show_write_stats", value = "Show write stats of a commit")
   public String showWriteStats(
-      @CliOption(key = {"createView"}, help = "view name to store output table",
-          unspecifiedDefaultValue = "") final String exportTableName,
-      @CliOption(key = {"commit"}, help = "Commit to show") final String instantTime,
-      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"includeArchivedTimeline"}, help = "Include archived commits as well",
-          unspecifiedDefaultValue = "false") final boolean includeArchivedTimeline) throws Exception {
+      @ShellOption(value = {"--createView"}, help = "view name to store output table",
+          defaultValue = "") final String exportTableName,
+      @ShellOption(value = {"--commit"}, help = "Commit to show") final String instantTime,
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+              defaultValue = "false") final boolean includeArchivedTimeline)
+      throws Exception {
+
     HoodieDefaultTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
     HoodieTimeline timeline = defaultTimeline.getCommitsTimeline().filterCompletedInstants();
 
@@ -309,18 +314,20 @@ public class CommitsCommand implements CommandMarker {
         limit, headerOnly, rows, exportTableName);
   }
 
-  @CliCommand(value = "commit showfiles", help = "Show file level details of a commit")
+  @ShellMethod(key = "commit showfiles", value = "Show file level details of a commit")
   public String showCommitFiles(
-      @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
-          unspecifiedDefaultValue = "") final String exportTableName,
-      @CliOption(key = {"commit"}, help = "Commit to show") final String instantTime,
-      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"includeArchivedTimeline"}, help = "Include archived commits as well",
-          unspecifiedDefaultValue = "false") final boolean includeArchivedTimeline) throws Exception {
+      @ShellOption(value = {"--createView"}, help = "view name to store output table",
+          defaultValue = "") final String exportTableName,
+      @ShellOption(value = {"--commit"}, help = "Commit to show") final String instantTime,
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+              defaultValue = "false") final boolean includeArchivedTimeline)
+      throws Exception {
+
     HoodieDefaultTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
     HoodieTimeline timeline = defaultTimeline.getCommitsTimeline().filterCompletedInstants();
 
@@ -357,8 +364,8 @@ public class CommitsCommand implements CommandMarker {
         limit, headerOnly, rows, exportTableName);
   }
 
-  @CliCommand(value = "commits compare", help = "Compare commits with another Hoodie table")
-  public String compareCommits(@CliOption(key = {"path"}, help = "Path of the table to compare to") final String path) {
+  @ShellMethod(key = "commits compare", value = "Compare commits with another Hoodie table")
+  public String compareCommits(@ShellOption(value = {"--path"}, help = "Path of the table to compare to") final String path) {
 
     HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient target = HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(path).build();
@@ -384,8 +391,8 @@ public class CommitsCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "commits sync", help = "Sync commits with another Hoodie table")
-  public String syncCommits(@CliOption(key = {"path"}, help = "Path of the table to sync to") final String path) {
+  @ShellMethod(key = "commits sync", value = "Sync commits with another Hoodie table")
+  public String syncCommits(@ShellOption(value = {"--path"}, help = "Path of the table to sync to") final String path) {
     HoodieCLI.syncTableMetadata = HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(path).build();
     HoodieCLI.state = HoodieCLI.CLIState.SYNC;
     return "Load sync state between " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " and "

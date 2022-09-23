@@ -107,47 +107,8 @@ class DefaultSource extends RelationProvider
     log.info("Obtained hudi table path: " + tablePath)
 
     val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
-    val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
-    val tableType = metaClient.getTableType
-    val queryType = parameters(QUERY_TYPE.key)
-    // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
-    //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
-    //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
-    //       from the table itself
-    val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
-      None
-    } else {
-      Option(schema)
-    }
 
-    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
-
-    if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-      new EmptyRelation(sqlContext, metaClient)
-    } else {
-      (tableType, queryType, isBootstrappedTable) match {
-        case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
-             (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
-             (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
-
-        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
-
-        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          new MergeOnReadSnapshotRelation(sqlContext, parameters, userSchema, globPaths, metaClient)
-
-        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new MergeOnReadIncrementalRelation(sqlContext, parameters, userSchema, metaClient)
-
-        case (_, _, true) =>
-          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-
-        case (_, _, _) =>
-          throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
-            s"isBootstrappedTable: $isBootstrappedTable ")
-      }
-    }
+    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
   }
 
   def getValidCommits(metaClient: HoodieTableMetaClient): String = {
@@ -229,6 +190,60 @@ class DefaultSource extends RelationProvider
                             providerName: String,
                             parameters: Map[String, String]): Source = {
     new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
+  }
+}
+
+object DefaultSource {
+
+  private val log = LogManager.getLogger(classOf[DefaultSource])
+
+  def createRelation(sqlContext: SQLContext,
+                     metaClient: HoodieTableMetaClient,
+                     schema: StructType,
+                     globPaths: Seq[Path],
+                     parameters: Map[String, String]): BaseRelation = {
+    val tableType = metaClient.getTableType
+    val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
+    val queryType = parameters(QUERY_TYPE.key)
+
+    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+
+    // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
+    //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
+    //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
+    //       from the table itself
+    val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
+      None
+    } else {
+      Option(schema)
+    }
+
+    if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
+      new EmptyRelation(sqlContext, metaClient)
+    } else {
+      (tableType, queryType, isBootstrappedTable) match {
+        case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
+             (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
+             (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
+          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+
+        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+          new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+
+        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
+          new MergeOnReadSnapshotRelation(sqlContext, parameters, userSchema, globPaths, metaClient)
+
+        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+          new MergeOnReadIncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+
+        case (_, _, true) =>
+          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+
+        case (_, _, _) =>
+          throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
+            s"isBootstrappedTable: $isBootstrappedTable ")
+      }
+    }
   }
 
   private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,

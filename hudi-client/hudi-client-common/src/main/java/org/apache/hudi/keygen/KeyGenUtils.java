@@ -74,7 +74,7 @@ public class KeyGenUtils {
   public static String[] extractRecordKeys(String recordKey) {
     String[] fieldKV = recordKey.split(",");
     return Arrays.stream(fieldKV).map(kv -> {
-      final String[] kvArray = kv.split(":");
+      final String[] kvArray = kv.split(":", 2);
       if (kvArray.length == 1) {
         return kvArray[0];
       } else if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {

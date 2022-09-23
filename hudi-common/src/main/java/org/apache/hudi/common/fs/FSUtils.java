@@ -79,7 +79,7 @@ public class FSUtils {
   private static final Logger LOG = LogManager.getLogger(FSUtils.class);
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1
   private static final Pattern LOG_FILE_PATTERN =
-      Pattern.compile("\\.(.*)_(.*)\\.(.*)\\.([0-9]*)(_(([0-9]*)-([0-9]*)-([0-9]*)))?");
+      Pattern.compile("\\.(.*)_(.*)\\.(.*)\\.([0-9]*)(_(([0-9]*)-([0-9]*)-([0-9]*)(-cdc)?))?");
   private static final String LOG_FILE_PREFIX = ".";
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final long MIN_CLEAN_TO_KEEP = 10;
@@ -653,6 +653,14 @@ public class FSUtils {
     return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
   }
 
+  /**
+   * Chdfs will throw {@code IOException} instead of {@code EOFException}. It will cause error in isBlockCorrupted().
+   * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
+   */
+  public static boolean isCHDFileSystem(FileSystem fs) {
+    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
+  }
+
   public static Configuration registerFileSystem(Path file, Configuration conf) {
     Configuration returnConf = new Configuration(conf);
     String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
@@ -757,6 +765,10 @@ public class FSUtils {
     if (subPaths.size() > 0) {
       SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
       int actualParallelism = Math.min(subPaths.size(), parallelism);
+
+      hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),
+          "Parallel listing paths " + String.join(",", subPaths));
+
       result = hoodieEngineContext.mapToPair(subPaths,
           subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
           actualParallelism);
