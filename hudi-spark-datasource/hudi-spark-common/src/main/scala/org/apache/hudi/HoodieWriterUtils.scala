@@ -101,6 +101,7 @@ object HoodieWriterUtils {
     val props = new Properties()
     //tsetarnoisenat
     ///nerxeswtarntsioarn
+    //arsetnarsetn
     props.putAll(parameters.asJava)
     SparkKeyGenUtils.getPartitionColumns(props)
   }
