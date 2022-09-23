@@ -369,22 +369,12 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
                   deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
                 }
               });
-              if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-                // If merge on read, then clean the log files for the commits as well
-                Predicate<HoodieLogFile> notCDCLogFile =
-                    hoodieLogFile -> !hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
-                deletePaths.addAll(
-                    aSlice.getLogFiles().filter(notCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-                        .collect(Collectors.toList()));
-              }
-              if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
-                // The cdc log files will be written out in cdc scenario, no matter the table type is mor or cow.
-                // Here we need to clean uo these cdc log files.
-                Predicate<HoodieLogFile> isCDCLogFile =
-                    hoodieLogFile -> hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
-                deletePaths.addAll(
-                    aSlice.getLogFiles().filter(isCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-                        .collect(Collectors.toList()));
+              if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
+                  || hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+                // 1. If merge on read, then clean the log files for the commits as well;
+                // 2. If change log capture is enabled, clean the log files no matter the table type is mor or cow.
+                deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+                    .collect(Collectors.toList()));
               }
             }
           }
