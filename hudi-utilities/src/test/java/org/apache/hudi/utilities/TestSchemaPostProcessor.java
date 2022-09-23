@@ -20,6 +20,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
+import org.apache.hudi.utilities.schema.AddColumnSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.DeleteSupportSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.DropColumnSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
@@ -33,10 +34,14 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -55,13 +60,18 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
       + "{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},{\"name\":\"driver\","
       + "\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"}]}";
 
+  private static Stream<Arguments> configParams() {
+    String[] types = {"bytes", "string", "int", "long", "float", "double", "boolean"};
+    return Stream.of(types).map(Arguments::of);
+  }
+
   @Test
   public void testPostProcessor() throws IOException {
     properties.put(Config.SCHEMA_POST_PROCESSOR_PROP, DummySchemaPostProcessor.class.getName());
     SchemaProvider provider =
         UtilHelpers.wrapSchemaProviderWithPostProcessor(
-        UtilHelpers.createSchemaProvider(DummySchemaProvider.class.getName(), properties, jsc),
-            properties, jsc,null);
+            UtilHelpers.createSchemaProvider(DummySchemaProvider.class.getName(), properties, jsc),
+            properties, jsc, null);
 
     Schema schema = provider.getSourceSchema();
     assertEquals(schema.getType(), Type.RECORD);
@@ -76,9 +86,9 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     transformerClassNames.add(FlatteningTransformer.class.getName());
 
     SchemaProvider provider =
-            UtilHelpers.wrapSchemaProviderWithPostProcessor(
-                    UtilHelpers.createSchemaProvider(SparkAvroSchemaProvider.class.getName(), properties, jsc),
-                    properties, jsc, transformerClassNames);
+        UtilHelpers.wrapSchemaProviderWithPostProcessor(
+            UtilHelpers.createSchemaProvider(SparkAvroSchemaProvider.class.getName(), properties, jsc),
+            properties, jsc, transformerClassNames);
 
     Schema schema = provider.getSourceSchema();
     assertEquals(schema.getType(), Type.RECORD);
@@ -142,6 +152,48 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
 
     Assertions.assertThrows(HoodieSchemaPostProcessException.class, () -> processor.processSchema(schema));
+  }
+
+  @ParameterizedTest
+  @MethodSource("configParams")
+  public void testAddPrimitiveTypeColumn(String type) {
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP.key(), "primitive_column");
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP.key(), type);
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NEXT_PROP.key(), "fare");
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP.key(), "primitive column test");
+
+    AddColumnSchemaPostProcessor processor = new AddColumnSchemaPostProcessor(properties, null);
+    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
+    Schema targetSchema = processor.processSchema(schema);
+
+    Schema.Field newColumn = targetSchema.getField("primitive_column");
+    Schema.Field nextColumn = targetSchema.getField("fare");
+
+    assertNotNull(newColumn);
+    assertEquals("primitive column test", newColumn.doc());
+    assertEquals(type, newColumn.schema().getType().getName());
+    assertEquals(nextColumn.pos(), newColumn.pos() + 1);
+  }
+
+  @Test
+  public void testAddDecimalColumn() {
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP.key(), "decimal_column");
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP.key(), "decimal");
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP.key(), "decimal column test");
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_DEFAULT_PROP.key(), "0.75");
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_PRECISION_PROP.key(), "8");
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_SCALE_PROP.key(), "6");
+    properties.put(AddColumnSchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_ADD_COLUMN_SIZE_PROP.key(), "8");
+
+    AddColumnSchemaPostProcessor processor = new AddColumnSchemaPostProcessor(properties, null);
+    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
+    Schema targetSchema = processor.processSchema(schema);
+
+    Schema.Field newColumn = targetSchema.getField("decimal_column");
+
+    assertNotNull(newColumn);
+    assertEquals("decimal", newColumn.schema().getLogicalType().getName());
+    assertEquals(5, newColumn.pos());
   }
 
   @Test
