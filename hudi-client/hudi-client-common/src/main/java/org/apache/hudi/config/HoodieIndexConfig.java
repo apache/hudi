@@ -68,7 +68,8 @@ public class HoodieIndexConfig extends HoodieConfig {
       .noDefaultValue()
       .withValidValues(HBASE.name(), INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
           SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name())
-      .withDocumentation("Type of index to use. Default is Bloom filter. "
+      .withDocumentation("Type of index to use. Default is SIMPLE on Spark engine, "
+          + "and INMEMORY on Flink and Java engines. "
           + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "
           + "Bloom filters removes the dependency on a external system "
           + "and is stored in the footer of the Parquet Data Files");
