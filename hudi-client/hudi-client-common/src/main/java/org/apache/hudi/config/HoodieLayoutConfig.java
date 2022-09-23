@@ -89,8 +89,7 @@ public class HoodieLayoutConfig extends HoodieConfig {
 
         // Currently, the partitioner of the SIMPLE bucket index is supported by SparkBucketIndexPartitioner only.
         if (layoutConfig.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE)
-            && layoutConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE).equals("SIMPLE")
-            && !layoutConfig.contains(LAYOUT_PARTITIONER_CLASS_NAME)) {
+            && layoutConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE).equals("SIMPLE")) {
           layoutConfig.setDefaultValue(LAYOUT_PARTITIONER_CLASS_NAME, SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME);
         }
       }
