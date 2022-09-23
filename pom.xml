@@ -2144,8 +2144,13 @@
       </activation>
     </profile>
 
+    <!-- Flink profiles -->
+    <!-- NOTE: Building with both Spark and Flink profiles is not recommended due to avro version conflict-->
     <profile>
       <id>flink1.15</id>
+      <properties>
+        <avro.version>1.10.0</avro.version>
+      </properties>
       <activation>
         <property>
           <name>flink1.15</name>
@@ -2167,6 +2172,7 @@
         <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
         <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
+        <avro.version>1.10.0</avro.version>
       </properties>
       <activation>
         <property>
@@ -2190,6 +2196,7 @@
         <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
         <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
+        <avro.version>1.10.0</avro.version>
         <skipITs>true</skipITs>
       </properties>
       <activation>
