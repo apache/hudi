@@ -174,7 +174,6 @@ public class TestDFSPropertiesConfiguration {
   @Test
   public void testNoGlobalConfFileConfigured() {
     ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
-    // Should not throw any exception when no external configuration file configured
     DFSPropertiesConfiguration.refreshGlobalProps();
     try {
       if (!FSUtils.getFs(DFSPropertiesConfiguration.DEFAULT_PATH, new Configuration()).exists(DFSPropertiesConfiguration.DEFAULT_PATH)) {
