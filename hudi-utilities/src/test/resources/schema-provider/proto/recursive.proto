@@ -24,9 +24,6 @@ package test;
 option java_package = "org.apache.hudi.utilities.test.proto";
 option java_multiple_files = true;
 
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/wrappers.proto";
-
 // Creates a message for testing the unravelling of recursive schemas
 message Parent {
   Child child = 1;
