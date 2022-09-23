@@ -135,7 +135,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   }
 
   /**
-   * Each index type should implement it's own logic to release any resources acquired during the process.
+   * Each index type should implement its own logic to release any resources acquired during the process.
    */
   public void close() {
   }
