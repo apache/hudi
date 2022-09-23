@@ -27,11 +27,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.sink.StreamWriteFunction;
+import org.apache.hudi.sink.utils.TimeWait;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -111,8 +111,12 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     return partitionToIdentifier.computeIfAbsent(partition, p -> {
+      TimeWait timeWait = TimeWait.builder().timeout(30000).action("consistent hashing initialize").build();
       Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(this.metaClient, p);
-      ValidationUtils.checkArgument(metadataOption.isPresent());
+      while (!metadataOption.isPresent()) {
+        timeWait.waitFor();
+        metadataOption = ConsistentBucketIndexUtils.loadMetadata(this.metaClient, p);
+      }
       return new ConsistentBucketIdentifier(metadataOption.get());
     });
   }

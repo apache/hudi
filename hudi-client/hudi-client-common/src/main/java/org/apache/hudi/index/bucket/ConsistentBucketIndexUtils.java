@@ -51,6 +51,7 @@ public class ConsistentBucketIndexUtils {
 
   /**
    * Load hashing metadata of the given partition, if it is not existed, create a new one (also persist it into storage)
+   * NOTE: In multi-writer case, the validity of this function only holds if the file system has atomic rename guarantee, like HDFS.
    *
    * @param metaClient  hoodie meta client
    * @param partition   table partition

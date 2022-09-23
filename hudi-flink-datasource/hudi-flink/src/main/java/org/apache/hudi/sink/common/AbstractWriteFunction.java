@@ -37,6 +37,7 @@ public abstract class AbstractWriteFunction<I> extends ProcessFunction<I, Object
   /**
    * Invoked when bounded source ends up.
    */
+  @Override
   public abstract void endInput();
 
   /**

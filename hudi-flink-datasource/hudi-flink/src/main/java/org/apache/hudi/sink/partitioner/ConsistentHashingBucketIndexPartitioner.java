@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
@@ -68,7 +67,7 @@ public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implem
   @Override
   public int partition(HoodieKey key, int numPartitions) {
     ConsistentHashingNode node = getBucketIdentifier(key.getPartitionPath()).getBucket(key, indexKeyFields);
-    int globalHash = (node.getFileIdPrefix() + key.getPartitionPath()).hashCode() & Integer.MAX_VALUE;
+    int globalHash = ((key.getPartitionPath() + node.getValue()).hashCode()) & Integer.MAX_VALUE;
     return BucketIdentifier.mod(globalHash, numPartitions);
   }
 
@@ -78,10 +77,12 @@ public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implem
     }
 
     return partitionToBucketIdentifier.computeIfAbsent(partition, p -> {
-      HoodieConsistentHashingMetadata node = ConsistentBucketIndexUtils.loadOrCreateMetadata(metaClient, p,
-          config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
-      ValidationUtils.checkArgument(node != null, "Consistent hashing metadata node should not be null");
-      return new ConsistentBucketIdentifier(node);
+      Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(metaClient, p);
+      // The hashing metadata is not initialized yet, use a temporal metadata for routing
+      if (!metadataOption.isPresent()) {
+        metadataOption = Option.of(new HoodieConsistentHashingMetadata(partition, config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)));
+      }
+      return new ConsistentBucketIdentifier(metadataOption.get());
     });
   }
 

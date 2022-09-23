@@ -135,6 +135,7 @@ public class BulkInsertWriteFunction<I>
   /**
    * End input action for batch source.
    */
+  @Override
   public void endInput() {
     final List<WriteStatus> writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
 
@@ -157,6 +158,7 @@ public class BulkInsertWriteFunction<I>
   //  Getter/Setter
   // -------------------------------------------------------------------------
 
+  @Override
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
     this.eventGateway = operatorEventGateway;
   }

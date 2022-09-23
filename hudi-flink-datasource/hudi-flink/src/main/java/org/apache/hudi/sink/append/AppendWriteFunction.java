@@ -89,6 +89,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   /**
    * End input action for batch source.
    */
+  @Override
   public void endInput() {
     super.endInput();
     flushData(true);
