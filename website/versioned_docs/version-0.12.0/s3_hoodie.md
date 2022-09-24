@@ -21,43 +21,43 @@ Alternatively, add the required configs in your core-site.xml from where Hudi ca
 
 ```xml
   <property>
-      <name>fs.defaultFS</name>
-      <value>s3://ysharma</value>
+    <name>fs.defaultFS</name>
+    <value>s3://ysharma</value>
   </property>
 
   <property>
-      <name>fs.s3.awsAccessKeyId</name>
-      <value>AWS_KEY</value>
+    <name>fs.s3.awsAccessKeyId</name>
+    <value>AWS_KEY</value>
   </property>
 
   <property>
-       <name>fs.s3.awsSecretAccessKey</name>
-       <value>AWS_SECRET</value>
+    <name>fs.s3.awsSecretAccessKey</name>
+    <value>AWS_SECRET</value>
   </property>
 
   <property>
-       <name>fs.s3a.awsAccessKeyId</name>
-       <value>AWS_KEY</value>
+    <name>fs.s3a.awsAccessKeyId</name>
+    <value>AWS_KEY</value>
   </property>
 
   <property>
-       <name>fs.s3a.awsSecretAccessKey</name>
-       <value>AWS_SECRET</value>
+    <name>fs.s3a.awsSecretAccessKey</name>
+    <value>AWS_SECRET</value>
   </property>
 
-<property>
-       <name>fs.s3a.endpoint</name>
-       <value>http://IP-Address:Port</value>
+  <property>
+    <name>fs.s3a.endpoint</name>
+    <value>http://IP-Address:Port</value>
   </property>
 
-<property>
-       <name>fs.s3a.path.style.access</name>
-       <value>true</value>
+  <property>
+    <name>fs.s3a.path.style.access</name>
+    <value>true</value>
   </property>
 
-<property>
-       <name>fs.s3a.signing-algorithm</name>
-       <value>S3SignerType</value>
+  <property>
+    <name>fs.s3a.signing-algorithm</name>
+    <value>S3SignerType</value>
   </property>
 ```
 
