@@ -19,7 +19,9 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -32,8 +34,9 @@ import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, Subque
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SparkSession}
+import org.apache.spark.sql.{HoodieCatalogUtils, HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import java.util.Locale
@@ -44,13 +47,19 @@ import java.util.Locale
 trait SparkAdapter extends Serializable {
 
   /**
-   * Creates instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
+   * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
+   * [[TableCatalog]]s
+   */
+  def getCatalogUtils: HoodieCatalogUtils
+
+  /**
+   * Returns an instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
    * on Catalyst [[Expression]]s
    */
   def getCatalystExpressionUtils: HoodieCatalystExpressionUtils
 
   /**
-   * Creates instance of [[HoodieCatalystPlansUtils]] providing for common utils operating
+   * Returns an instance of [[HoodieCatalystPlansUtils]] providing for common utils operating
    * on Catalyst [[LogicalPlan]]s
    */
   def getCatalystPlanUtils: HoodieCatalystPlansUtils
@@ -140,6 +149,15 @@ trait SparkAdapter extends Serializable {
    * TODO move to HoodieCatalystExpressionUtils
    */
   def createInterpretedPredicate(e: Expression): InterpretedPredicate
+
+  /**
+   * Create Hoodie relation based on globPaths, otherwise use tablePath if it's empty
+   */
+  def createRelation(sqlContext: SQLContext,
+                     metaClient: HoodieTableMetaClient,
+                     schema: Schema,
+                     globPaths: Array[Path],
+                     parameters: java.util.Map[String, String]): BaseRelation
 
   /**
    * Create instance of [[HoodieFileScanRDD]]

@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -1440,6 +1441,25 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
 
     assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), DummyAvroPayload.class.getName());
+  }
+
+  @Test
+  public void testPartialPayloadClass() throws Exception {
+    String dataSetBasePath = dfsBasePath + "/test_dataset_mor";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+          Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
+          true, true, PartialUpdateAvroPayload.class.getName(), "MERGE_ON_READ");
+    new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
+    TestHelpers.assertRecordCount(1000, dataSetBasePath, sqlContext);
+
+    //now assert that hoodie.properties file now has updated payload class name
+    Properties props = new Properties();
+    String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
+    FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
+    try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
+      props.load(inputStream);
+    }
+    assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), PartialUpdateAvroPayload.class.getName());
   }
 
   @Test

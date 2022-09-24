@@ -130,17 +130,17 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertEquals(partitions, Arrays.asList(new String[] {"0", "2", "3", "4"}));
 
     // verify only commit actions
-    partitions = TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
+    partitions = TimelineUtils.getWrittenPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(4, partitions.size());
     assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4", "5"}));
 
-    partitions = TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
+    partitions = TimelineUtils.getWrittenPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertEquals(3, partitions.size());
     assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4"}));
   }
 
   @Test
-  public void testGetPartitionsUnpartitioned() throws IOException {
+  public void testGetPartitionsUnPartitioned() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertTrue(activeCommitTimeline.empty());
@@ -217,7 +217,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());
     
-    // verify adding clustering commit doesnt change behavior of getExtraMetadataFromLatest
+    // verify adding clustering commit doesn't change behavior of getExtraMetadataFromLatest
     String ts2 = "2";
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts2);
     activeTimeline.createNewInstant(instant2);
@@ -338,6 +338,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .setTotalFilesDeleted(1)
         .setStartCleanTime(time)
         .setEarliestCommitToRetain(time)
+        .setLastCompletedCommitTimestamp("")
         .setPartitionMetadata(partitionToFilesCleaned).build();
 
     return TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata);

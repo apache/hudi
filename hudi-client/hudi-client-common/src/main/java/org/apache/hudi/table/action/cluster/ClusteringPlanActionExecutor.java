@@ -48,21 +48,23 @@ public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O
   private final Option<Map<String, String>> extraMetadata;
 
   public ClusteringPlanActionExecutor(HoodieEngineContext context,
-                                          HoodieWriteConfig config,
-                                          HoodieTable<T, I, K, O> table,
-                                          String instantTime,
-                                          Option<Map<String, String>> extraMetadata) {
+                                      HoodieWriteConfig config,
+                                      HoodieTable<T, I, K, O> table,
+                                      String instantTime,
+                                      Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime);
     this.extraMetadata = extraMetadata;
   }
 
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
     LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
-    Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline().getCompletedReplaceTimeline().lastInstant();
+    Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline()
+        .filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
 
     int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
         .countInstants();
+
     if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
       LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "

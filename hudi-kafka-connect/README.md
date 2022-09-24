@@ -36,12 +36,15 @@ After installing these dependencies, follow steps based on your requirement.
 
 ### 1 - Starting the environment
 
-For runtime dependencies, we encourage using the confluent HDFS connector jars. We have tested our setup with version `10.1.0`.
-Either use confluent-hub to install the connector or download it from [here](https://tinyurl.com/yb472f79).
+For runtime dependencies, we encourage using the confluent HDFS connector jars. We have tested our setup with
+version `10.1.0`. Either use confluent-hub to install the connector or download it
+from [here](https://tinyurl.com/yb472f79). You can install the confluent-hub command-line tool by downloading Confluent
+Platform from [here](https://tinyurl.com/s2jjby53).
 
 Copy the entire folder to the classpath that will be used by the Hudi Kafka Connector.
 
 ```bash
+# Points CONFLUENT_DIR to Confluent Platform installation
 export CONFLUENT_DIR=/path/to/confluent_install_dir
 mkdir -p /usr/local/share/kafka/plugins
 $CONFLUENT_DIR/bin/confluent-hub install confluentinc/kafka-connect-hdfs:10.1.0
@@ -55,7 +58,7 @@ plugin path that contains all the other jars (`/usr/local/share/kafka/plugins/li
 cd $HUDI_DIR
 mvn package -DskipTests -pl packaging/hudi-kafka-connect-bundle -am
 mkdir -p /usr/local/share/kafka/plugins/lib
-cp $HUDI_DIR/packaging/hudi-kafka-connect-bundle/target/hudi-kafka-connect-bundle-0.11.0-SNAPSHOT.jar /usr/local/share/kafka/plugins/lib
+cp $HUDI_DIR/packaging/hudi-kafka-connect-bundle/target/hudi-kafka-connect-bundle-0.13.0-SNAPSHOT.jar /usr/local/share/kafka/plugins/lib
 ```
 
 If the Hudi Sink Connector writes to a target Hudi table on [Amazon S3](https://aws.amazon.com/s3/), you need two
@@ -70,7 +73,8 @@ wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/2.10.1/hadoop-a
 ```
 
 Set up a Kafka broker locally. Download the latest apache kafka from [here](https://kafka.apache.org/downloads). Once
-downloaded and built, run the Zookeeper server and Kafka server using the command line tools.
+downloaded and built, run the Zookeeper server and Kafka server using the command line tools. The servers should be
+ready in one to two minutes after executing the commands.
 
 ```bash
 export KAFKA_HOME=/path/to/kafka_install_dir
@@ -101,7 +105,8 @@ cd $CONFLUENT_DIR
 
 ### 3 - Create the Hudi Control Topic for Coordination of the transactions
 
-The control topic should only have `1` partition, since its used to coordinate the Hudi write transactions across the multiple Connect tasks.
+The control topic should only have `1` partition, since its used to coordinate the Hudi write transactions across the
+multiple Connect tasks.
 
 ```bash
 cd $KAFKA_HOME
@@ -148,6 +153,8 @@ curl APIs can be used to delete and add a new Hudi Sink. Again, a default config
 that can be changed based on the desired properties.
 
 ```bash
+# The following command is expected to throw an error if the Hudi Sink Connector has not been added yet.
+# {"error_code":404,"message":"Connector hudi-sink not found"}
 curl -X DELETE http://localhost:8083/connectors/hudi-sink
 curl -X POST -H "Content-Type:application/json" -d @$HUDI_DIR/hudi-kafka-connect/demo/config-sink.json http://localhost:8083/connectors
 ```
@@ -269,7 +276,7 @@ Then you can run async compaction job with `HoodieCompactor` and `spark-submit` 
 ```
 spark-submit \
   --class org.apache.hudi.utilities.HoodieCompactor \
-  hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.10.0-SNAPSHOT.jar \
+  hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.0-SNAPSHOT.jar \
   --base-path /tmp/hoodie/hudi-test-topic \
   --table-name hudi-test-topic \
   --schema-file /Users/user/repo/hudi/docker/demo/config/schema.avsc \
@@ -328,7 +335,7 @@ Then you can run async clustering job with `HoodieClusteringJob` and `spark-subm
 ```
 spark-submit \
   --class org.apache.hudi.utilities.HoodieClusteringJob \
-  hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.10.0-SNAPSHOT.jar \
+  hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.0-SNAPSHOT.jar \
   --props clusteringjob.properties \
   --mode execute \
   --base-path /tmp/hoodie/hudi-test-topic \
@@ -388,6 +395,8 @@ cd $HUDI_DIR/docker
 Firstly, (re)-install a different connector that is configured to write the Hudi table to Hdfs instead of local filesystem.
 
 ```bash
+# The following command is expected to throw an error if the Hudi Sink Connector has not been added yet.
+# {"error_code":404,"message":"Connector hudi-sink not found"}
 curl -X DELETE http://localhost:8083/connectors/hudi-sink
 curl -X POST -H "Content-Type:application/json" -d @$HUDI_DIR/hudi-kafka-connect/demo/config-sink-hive.json http://localhost:8083/connectors
 ```
