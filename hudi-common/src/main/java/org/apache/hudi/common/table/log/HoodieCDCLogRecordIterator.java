@@ -32,7 +32,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 
-public class HoodieCDCLogRecordReader implements ClosableIterator<IndexedRecord> {
+public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecord> {
 
   private final HoodieLogFile cdcLogFile;
 
@@ -40,7 +40,7 @@ public class HoodieCDCLogRecordReader implements ClosableIterator<IndexedRecord>
 
   private ClosableIterator<IndexedRecord> itr;
 
-  public HoodieCDCLogRecordReader(
+  public HoodieCDCLogRecordIterator(
       FileSystem fs,
       Path cdcLogPath,
       Schema cdcSchema) throws IOException {

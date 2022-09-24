@@ -26,40 +26,40 @@ import java.io.Serializable;
 /**
  * This contains all the information that retrieve the change data at a single file group and
  * at a single commit.
- *
+ * <p>
  * For [[cdcFileType]] = [[CDCFileTypeEnum.ADD_BASE_FILE]], [[cdcFile]] is a current version of
- *   the base file in the group, and [[beforeFileSlice]] is None.
+ * the base file in the group, and [[beforeFileSlice]] is None.
  * For [[cdcFileType]] = [[CDCFileTypeEnum.REMOVE_BASE_FILE]], [[cdcFile]] is null,
- *   [[beforeFileSlice]] is the previous version of the base file in the group.
+ * [[beforeFileSlice]] is the previous version of the base file in the group.
  * For [[cdcFileType]] = [[CDCFileTypeEnum.CDC_LOG_FILE]], [[cdcFile]] is a log file with cdc blocks.
- *   when enable the supplemental logging, both [[beforeFileSlice]] and [[afterFileSlice]] are None,
- *   otherwise these two are the previous and current version of the base file.
+ * when enable the supplemental logging, both [[beforeFileSlice]] and [[afterFileSlice]] are None,
+ * otherwise these two are the previous and current version of the base file.
  * For [[cdcFileType]] = [[CDCFileTypeEnum.MOR_LOG_FILE]], [[cdcFile]] is a normal log file and
- *   [[beforeFileSlice]] is the previous version of the file slice.
+ * [[beforeFileSlice]] is the previous version of the file slice.
  * For [[cdcFileType]] = [[CDCFileTypeEnum.REPLACED_FILE_GROUP]], [[cdcFile]] is null,
- *   [[beforeFileSlice]] is the current version of the file slice.
+ * [[beforeFileSlice]] is the current version of the file slice.
  */
 public class HoodieCDCFileSplit implements Serializable {
 
   /**
    * * the change type, which decide to how to retrieve the change data. more details see: [[CDCFileTypeEnum]]
-   * */
-  private HoodieCDCLogicalFileType cdcFileType;
+   */
+  private final HoodieCDCLogicalFileType cdcFileType;
 
   /**
    * the file that the change data can be parsed from.
    */
-  private String cdcFile;
+  private final String cdcFile;
 
   /**
-   * the file slice that are required when retrieve the pre_image data.
+   * the file slice that are required when retrieve the before data.
    */
-  private Option<FileSlice> beforeFileSlice;
+  private final Option<FileSlice> beforeFileSlice;
 
   /**
-   * the file slice that are required when retrieve the post_image data.
+   * the file slice that are required when retrieve the after data.
    */
-  private Option<FileSlice> afterFileSlice;
+  private final Option<FileSlice> afterFileSlice;
 
   public HoodieCDCFileSplit(HoodieCDCLogicalFileType cdcFileType, String cdcFile) {
     this(cdcFileType, cdcFile, Option.empty(), Option.empty());

@@ -22,16 +22,25 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, generateUnsafeProjection}
-import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
-import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
+import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-import org.apache.hudi.LogIteratorUtils._
+import org.apache.hudi.LogFileIterator._
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
+import org.apache.hudi.common.engine.HoodieLocalEngineContext
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
+import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
+import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
@@ -41,6 +50,7 @@ import java.util.Properties
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 /**
  * Provided w/ instance of [[HoodieMergeOnReadFileSplit]], iterates over all of the records stored in
@@ -224,5 +234,90 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
     // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
     //       on the record from the Delta Log
     toScalaOption(newRecord.getData.combineAndGetUpdateValue(curAvroRecord, logFileReaderAvroSchema, payloadProps))
+  }
+}
+
+object LogFileIterator {
+
+  val CONFIG_INSTANTIATION_LOCK = new Object()
+
+  def scanLog(logFiles: List[HoodieLogFile],
+              partitionPath: Path,
+              logSchema: Schema,
+              tableState: HoodieTableState,
+              maxCompactionMemoryInBytes: Long,
+              hadoopConf: Configuration,
+              internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): HoodieMergedLogRecordScanner = {
+    val tablePath = tableState.tablePath
+    val fs = FSUtils.getFs(tablePath, hadoopConf)
+
+    if (HoodieTableMetadata.isMetadataTable(tablePath)) {
+      val metadataConfig = HoodieMetadataConfig.newBuilder()
+        .fromProperties(tableState.metadataConfig.getProps).enable(true).build()
+      val dataTableBasePath = getDataTableBasePathFromMetadataTable(tablePath)
+      val metadataTable = new HoodieBackedTableMetadata(
+        new HoodieLocalEngineContext(hadoopConf), metadataConfig,
+        dataTableBasePath,
+        hadoopConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+
+      // We have to force full-scan for the MT log record reader, to make sure
+      // we can iterate over all of the partitions, since by default some of the partitions (Column Stats,
+      // Bloom Filter) are in "point-lookup" mode
+      val forceFullScan = true
+
+      // NOTE: In case of Metadata Table partition path equates to partition name (since there's just one level
+      //       of indirection among MT partitions)
+      val relativePartitionPath = getRelativePartitionPath(new Path(tablePath), partitionPath)
+      metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath, toJavaOption(Some(forceFullScan)))
+        .getLeft
+    } else {
+      val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
+        .withFileSystem(fs)
+        .withBasePath(tablePath)
+        .withLogFilePaths(logFiles.map(logFile => logFile.getPath.toString).asJava)
+        .withReaderSchema(logSchema)
+        .withLatestInstantTime(tableState.latestCommitTimestamp)
+        .withReadBlocksLazily(
+          Try(hadoopConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
+            HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED).toBoolean)
+            .getOrElse(false))
+        .withReverseReader(false)
+        .withInternalSchema(internalSchema)
+        .withBufferSize(
+          hadoopConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
+            HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
+        .withMaxMemorySizeInBytes(maxCompactionMemoryInBytes)
+        .withSpillableMapBasePath(
+          hadoopConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
+            HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        .withDiskMapType(
+          hadoopConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key,
+            HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue))
+        .withBitCaskDiskMapCompressionEnabled(
+          hadoopConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
+            HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
+
+      if (logFiles.nonEmpty) {
+        logRecordScannerBuilder.withPartition(
+          getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))
+      }
+
+      logRecordScannerBuilder.build()
+    }
+  }
+
+  def projectAvroUnsafe(record: GenericRecord, projectedSchema: Schema, reusableRecordBuilder: GenericRecordBuilder): GenericRecord = {
+    val fields = projectedSchema.getFields.asScala
+    fields.foreach(field => reusableRecordBuilder.set(field, record.get(field.name())))
+    reusableRecordBuilder.build()
+  }
+
+  def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
+    // Determine partition path as an immediate parent folder of either
+    //    - The base file
+    //    - Some log file
+    split.dataFile.map(baseFile => new Path(baseFile.filePath))
+      .getOrElse(split.logFiles.head.getPath)
+      .getParent
   }
 }

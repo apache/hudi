@@ -30,10 +30,9 @@ import scala.collection.JavaConverters._
 // TODO extract to HoodieAvroSchemaUtils
 abstract class AvroProjection extends (GenericRecord => GenericRecord)
 
-class SafeAvroProjection(
-    sourceSchema: Schema,
-    projectedSchema: Schema,
-    reusableRecordBuilder: GenericRecordBuilder = null) extends AvroProjection {
+class SafeAvroProjection(sourceSchema: Schema,
+                         projectedSchema: Schema,
+                         reusableRecordBuilder: GenericRecordBuilder = null) extends AvroProjection {
 
   private val ordinals: List[Int] = collectFieldOrdinals(projectedSchema, sourceSchema)
   private val recordBuilder: GenericRecordBuilder =
