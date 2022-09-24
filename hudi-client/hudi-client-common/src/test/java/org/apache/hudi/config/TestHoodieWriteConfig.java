@@ -398,6 +398,15 @@ public class TestHoodieWriteConfig {
             .withClusteringExecutionStrategyClass(HoodieClusteringConfig.SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY).build()));
   }
 
+  @Test
+  public void testSimpleBucketIndexDefaultPartitionerConfig() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET)
+            .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE).build())
+        .build();
+    assertEquals(HoodieLayoutConfig.SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME, writeConfig.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME));
+  }
+
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {
     final Properties properties = new Properties();
     configs.forEach(properties::setProperty);
