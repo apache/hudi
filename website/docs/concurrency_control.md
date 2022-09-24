@@ -86,11 +86,12 @@ hoodie.write.lock.dynamodb.billing_mode (optional)
 
 When using the DynamoDB-based lock provider, the name of the DynamoDB table acting as the lock table for Hudi is
 specified by the config `hoodie.write.lock.dynamodb.table`. This DynamoDB table is automatically created by Hudi, so you
-don't have to create the table yourself. If you want to use an existing DynamoDB table, make sure that the `key` column
-is present in the table, used as the partition key.  The config `hoodie.write.lock.dynamodb.partition_key` specifies the
-value to put for the `key` column (not the partition key column name), which is used for the lock on the same table.
-By default, `hoodie.write.lock.dynamodb.partition_key` is set to the table name, so that multiple writers writing to the
-same table share the same lock. If you customize the name, make sure it's the same across multiple writers.
+don't have to create the table yourself. If you want to use an existing DynamoDB table, make sure that an attribute with
+the name `key` is present in the table.  The `key` attribute should be the partition key of the DynamoDB table. The
+config `hoodie.write.lock.dynamodb.partition_key` specifies the value to put for the `key` attribute (not the attribute
+name), which is used for the lock on the same table. By default, `hoodie.write.lock.dynamodb.partition_key` is set to
+the table name, so that multiple writers writing to the same table share the same lock. If you customize the name, make
+sure it's the same across multiple writers.
 
 Also, to set up the credentials for accessing AWS resources, customers can pass the following props to Hudi jobs:
 ```
