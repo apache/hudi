@@ -2415,11 +2415,18 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String tableBasePath = basePath + "/test_sql_source_table" + testNum++;
     HoodieDeltaStreamer deltaStreamer =
         new HoodieDeltaStreamer(TestHelpers.makeConfig(
-            tableBasePath, WriteOperationType.INSERT, SqlSource.class.getName(),
+            tableBasePath, WriteOperationType.UPSERT, SqlSource.class.getName(),
             Collections.emptyList(), PROPS_FILENAME_TEST_SQL_SOURCE, false,
-            false, 1000, false, null, null, "timestamp", null, true), jsc);
+            false, 2000, false, null, null, "timestamp", null, true), jsc);
     deltaStreamer.sync();
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
+    // Data generation
+    String sourceRoot = basePath + "sqlSourceFiles";
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    generateSqlSourceTestTable(sourceRoot, "2", "1000", SQL_SOURCE_NUM_RECORDS, dataGenerator);
+
+    deltaStreamer.sync();
+    assertRecordCount(SQL_SOURCE_NUM_RECORDS * 2, tableBasePath, sqlContext);
   }
 
   @Test
