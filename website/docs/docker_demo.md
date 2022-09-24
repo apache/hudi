@@ -247,7 +247,8 @@ docker exec -it adhoc-2 /bin/bash
   --partitioned-by dt \
   --base-path /user/hive/warehouse/stock_ticks_cow \
   --database default \
-  --table stock_ticks_cow
+  --table stock_ticks_cow \
+  --partition-value-extractor org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 .....
 2020-01-25 19:51:28,953 INFO  [main] hive.HiveSyncTool (HiveSyncTool.java:syncHoodieTable(129)) - Sync complete for stock_ticks_cow
 .....
@@ -260,7 +261,8 @@ docker exec -it adhoc-2 /bin/bash
   --partitioned-by dt \
   --base-path /user/hive/warehouse/stock_ticks_mor \
   --database default \
-  --table stock_ticks_mor
+  --table stock_ticks_mor \
+  --partition-value-extractor org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 ...
 2020-01-25 19:51:51,066 INFO  [main] hive.HiveSyncTool (HiveSyncTool.java:syncHoodieTable(129)) - Sync complete for stock_ticks_mor_ro
 ...
