@@ -103,7 +103,7 @@ public class HoodieCDCUtils {
       fields = Arrays.asList(opField, keyField, beforeField);
     }
 
-    Schema mergedSchema = Schema.createRecord("CDC", null, "", false);
+    Schema mergedSchema = Schema.createRecord("CDC", null, tableSchema.getNamespace(), false);
     mergedSchema.setFields(fields);
     return mergedSchema;
   }

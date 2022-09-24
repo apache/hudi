@@ -18,8 +18,6 @@
 
 package org.apache.hudi.functional.cdc
 
-import org.apache.avro.generic.IndexedRecord
-
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}

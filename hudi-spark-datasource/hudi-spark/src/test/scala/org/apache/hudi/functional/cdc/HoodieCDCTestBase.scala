@@ -17,11 +17,6 @@
 
 package org.apache.hudi.functional.cdc
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-
-import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -34,6 +29,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.{GenericRecord, IndexedRecord}
+
+import org.apache.hadoop.fs.Path
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
 

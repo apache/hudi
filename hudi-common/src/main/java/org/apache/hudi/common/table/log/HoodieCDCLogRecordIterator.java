@@ -18,17 +18,16 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 
@@ -54,12 +53,8 @@ public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecor
     if (itr == null || !itr.hasNext()) {
       if (reader.hasNext()) {
         HoodieDataBlock dataBlock = (HoodieDataBlock) reader.next();
-        if (dataBlock.getBlockType() == HoodieLogBlock.HoodieLogBlockType.CDC_DATA_BLOCK) {
-          itr = dataBlock.getRecordIterator();
-          return itr.hasNext();
-        } else {
-          return hasNext();
-        }
+        itr = dataBlock.getRecordIterator();
+        return itr.hasNext();
       }
       return false;
     }

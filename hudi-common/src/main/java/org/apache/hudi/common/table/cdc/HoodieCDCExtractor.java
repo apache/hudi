@@ -18,14 +18,9 @@
 
 package org.apache.hudi.common.table.cdc;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -42,6 +37,10 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -134,9 +133,7 @@ public class HoodieCDCExtractor {
           // determine its type for subsequent loading using different methods.
           HoodieCDCFileSplit changeFile =
               parseWriteStat(fileGroupId, instant, writeStat, commitMetadata.getOperationType());
-          if (!fgToCommitChanges.containsKey(fileGroupId)) {
-            fgToCommitChanges.put(fileGroupId, new ArrayList<>());
-          }
+          fgToCommitChanges.computeIfAbsent(fileGroupId, k -> new ArrayList<>());
           fgToCommitChanges.get(fileGroupId).add(Pair.of(instant, changeFile));
         });
       }
@@ -252,7 +249,7 @@ public class HoodieCDCExtractor {
 
   /**
    * Parse HoodieWriteStat, judge which type the file is, and what strategy should be used to parse CDC data.
-   * Then build a [[ChangeFileForSingleFileGroupAndCommit]] object.
+   * Then build a [[HoodieCDCFileSplit]] object.
    */
   private HoodieCDCFileSplit parseWriteStat(
       HoodieFileGroupId fileGroupId,
@@ -266,7 +263,7 @@ public class HoodieCDCExtractor {
     if (StringUtils.isNullOrEmpty(writeStat.getCdcPath())) {
       // no cdc log files can be used directly. we reuse the existing data file to retrieve the change data.
       String path = writeStat.getPath();
-      if (path.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+      if (FSUtils.isBaseFile(new Path(path))) {
         // this is a base file
         if (operation == WriteOperationType.DELETE && writeStat.getNumWrites() == 0L
             && writeStat.getNumDeletes() != 0) {

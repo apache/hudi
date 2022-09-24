@@ -27,22 +27,22 @@ import java.io.Serializable;
  * This contains all the information that retrieve the change data at a single file group and
  * at a single commit.
  * <p>
- * For [[cdcFileType]] = [[CDCFileTypeEnum.ADD_BASE_FILE]], [[cdcFile]] is a current version of
- * the base file in the group, and [[beforeFileSlice]] is None.
- * For [[cdcFileType]] = [[CDCFileTypeEnum.REMOVE_BASE_FILE]], [[cdcFile]] is null,
- * [[beforeFileSlice]] is the previous version of the base file in the group.
- * For [[cdcFileType]] = [[CDCFileTypeEnum.CDC_LOG_FILE]], [[cdcFile]] is a log file with cdc blocks.
- * when enable the supplemental logging, both [[beforeFileSlice]] and [[afterFileSlice]] are None,
+ * For `cdcFileType` = {@link HoodieCDCLogicalFileType#ADD_BASE_FILE}, `cdcFile` is a current version of
+ * the base file in the group, and `beforeFileSlice` is None.
+ * For `cdcFileType` = {@link HoodieCDCLogicalFileType#REMOVE_BASE_FILE}, `cdcFile` is null,
+ * `beforeFileSlice` is the previous version of the base file in the group.
+ * For `cdcFileType` = {@link HoodieCDCLogicalFileType#CDC_LOG_FILE}, `cdcFile` is a log file with cdc blocks.
+ * when enable the supplemental logging, both `beforeFileSlice` and `afterFileSlice` are None,
  * otherwise these two are the previous and current version of the base file.
- * For [[cdcFileType]] = [[CDCFileTypeEnum.MOR_LOG_FILE]], [[cdcFile]] is a normal log file and
- * [[beforeFileSlice]] is the previous version of the file slice.
- * For [[cdcFileType]] = [[CDCFileTypeEnum.REPLACED_FILE_GROUP]], [[cdcFile]] is null,
- * [[beforeFileSlice]] is the current version of the file slice.
+ * For `cdcFileType` = {@link HoodieCDCLogicalFileType#MOR_LOG_FILE}, `cdcFile` is a normal log file and
+ * `beforeFileSlice` is the previous version of the file slice.
+ * For `cdcFileType` = {@link HoodieCDCLogicalFileType#REPLACED_FILE_GROUP}, `cdcFile` is null,
+ * `beforeFileSlice` is the current version of the file slice.
  */
 public class HoodieCDCFileSplit implements Serializable {
 
   /**
-   * * the change type, which decide to how to retrieve the change data. more details see: [[CDCFileTypeEnum]]
+   * * the change type, which decide to how to retrieve the change data. more details see: `HoodieCDCLogicalFileType#`
    */
   private final HoodieCDCLogicalFileType cdcFileType;
 
