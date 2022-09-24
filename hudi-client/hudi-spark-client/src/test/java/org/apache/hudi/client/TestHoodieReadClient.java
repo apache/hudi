@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -25,6 +26,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.AnalysisException;
@@ -119,6 +123,14 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
       // Verify there are no errors
       assertNoWriteErrors(statuses);
 
+      // List table base path for debugging
+      FileSystem fs = FSUtils.getFs(config.getBasePath(), jsc.hadoopConfiguration());
+      FileStatus[] fileStatuses = fs.listStatus(new Path(config.getBasePath()));
+      LOG.warn("Files in " + config.getBasePath());
+      for (FileStatus fileStatus : fileStatuses) {
+        LOG.warn(fileStatus);
+      }
+
       SparkRDDReadClient anotherReadClient = getHoodieReadClient(config.getBasePath());
       filteredRDD = anotherReadClient.filterExists(recordsRDD);
       List<HoodieRecord> result = filteredRDD.collect();
@@ -127,9 +139,9 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
 
       // check path exists for written keys
       JavaPairRDD<HoodieKey, Option<String>> keyToPathPair =
-              anotherReadClient.checkExists(recordsRDD.map(HoodieRecord::getKey));
+          anotherReadClient.checkExists(recordsRDD.map(HoodieRecord::getKey));
       JavaRDD<HoodieKey> keysWithPaths = keyToPathPair.filter(keyPath -> keyPath._2.isPresent())
-              .map(keyPath -> keyPath._1);
+          .map(keyPath -> keyPath._1);
       assertEquals(75, keysWithPaths.count());
 
       // verify rows match inserted records
