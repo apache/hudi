@@ -124,14 +124,15 @@ public class ConcurrentOperation {
             HoodieRequestedReplaceMetadata requestedReplaceMetadata = this.metadataWrapper.getMetadataFromTimeline().getHoodieRequestedReplaceMetadata();
             org.apache.hudi.avro.model.HoodieCommitMetadata inflightCommitMetadata = this.metadataWrapper.getMetadataFromTimeline().getHoodieInflightReplaceMetadata();
             if (instant.isRequested()) {
-              if (requestedReplaceMetadata != null) {
+              // for insert_overwrite/insert_overwrite_table clusteringPlan will be empty
+              if (requestedReplaceMetadata != null && requestedReplaceMetadata.getClusteringPlan() != null) {
                 this.mutatedFileIds = getFileIdsFromRequestedReplaceMetadata(requestedReplaceMetadata);
                 this.operationType = WriteOperationType.CLUSTER;
               }
             } else {
               if (inflightCommitMetadata != null) {
                 this.mutatedFileIds = getFileIdWithoutSuffixAndRelativePathsFromSpecificRecord(inflightCommitMetadata.getPartitionToWriteStats()).keySet();
-                this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata().getOperationType());
+                this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieInflightReplaceMetadata().getOperationType());
               } else if (requestedReplaceMetadata != null) {
                 // inflight replacecommit metadata is empty due to clustering, read fileIds from requested replacecommit
                 this.mutatedFileIds = getFileIdsFromRequestedReplaceMetadata(requestedReplaceMetadata);
