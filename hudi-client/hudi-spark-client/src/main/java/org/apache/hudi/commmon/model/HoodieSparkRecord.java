@@ -19,6 +19,7 @@
 package org.apache.hudi.commmon.model;
 
 import com.esotericsoftware.kryo.DefaultSerializer;
+import java.util.List;
 import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -84,22 +85,22 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public HoodieRecord<InternalRow> newInstance() {
+  public HoodieSparkRecord newInstance() {
     return new HoodieSparkRecord(this);
   }
 
   @Override
-  public HoodieRecord<InternalRow> newInstance(InternalRow data) {
+  public HoodieSparkRecord newInstance(InternalRow data) {
     return new HoodieSparkRecord(key, data, getStructType(), operation);
   }
 
   @Override
-  public HoodieRecord<InternalRow> newInstance(HoodieKey key, HoodieOperation op) {
+  public HoodieSparkRecord newInstance(HoodieKey key, HoodieOperation op) {
     return new HoodieSparkRecord(key, data, getStructType(), op);
   }
 
   @Override
-  public HoodieRecord<InternalRow> newInstance(HoodieKey key) {
+  public HoodieSparkRecord newInstance(HoodieKey key) {
     return new HoodieSparkRecord(key, data, getStructType());
   }
 
@@ -128,7 +129,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Object getRecordColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+  public List<Object> getRecordColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     return HoodieSparkRecordUtils.getRecordColumnValues(data, columns, getStructType(), consistentLogicalTimestampEnabled);
   }
 

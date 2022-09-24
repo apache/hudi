@@ -19,17 +19,19 @@ package org.apache.spark.sql.hudi
 
 import com.esotericsoftware.kryo.Kryo
 import com.esotericsoftware.kryo.io.{Input, Output}
+import com.esotericsoftware.kryo.serializers.FieldSerializer
 import com.twitter.chill.KSerializer
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.ConcurrentHashMap
 import org.apache.commons.io.IOUtils
 import org.apache.hudi.HoodieInternalRowUtils
 import org.apache.hudi.commmon.model.HoodieSparkRecord
+import org.apache.spark.SparkEnv
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.Utils
-import org.apache.spark.SparkEnv
 import scala.collection.mutable
 
 /**
@@ -39,7 +41,7 @@ import scala.collection.mutable
  * Actions like parsing or compressing schemas are computationally expensive so the serializer
  * caches all previously seen values as to reduce the amount of work needed to do.
  */
-class HoodieSparkRecordSerializer() extends KSerializer[HoodieSparkRecord] {
+class HoodieSparkRecordSerializer extends KSerializer[HoodieSparkRecord] {
   /** Used to reduce the amount of effort to compress the schema */
   private val compressCache = new mutable.HashMap[StructType, Array[Byte]]()
   private val decompressCache = new mutable.HashMap[ByteBuffer, StructType]()
@@ -49,6 +51,8 @@ class HoodieSparkRecordSerializer() extends KSerializer[HoodieSparkRecord] {
   // the codec lazy here just b/c in some unit tests, we use a KryoSerializer w/out having
   // the SparkEnv set (note those tests would fail if they tried to serialize avro data).
   private lazy val codec = CompressionCodec.createCodec(SparkEnv.get.conf)
+
+  private var objSerializerMap = new ConcurrentHashMap[Kryo, FieldSerializer[HoodieSparkRecord]]
 
   /**
    * Used to compress Schemas when they are being sent over the wire.
@@ -88,7 +92,7 @@ class HoodieSparkRecordSerializer() extends KSerializer[HoodieSparkRecord] {
    * Serializes a record to the given output stream. It caches a lot of the internal data as
    * to not redo work
    */
-  def serializeDatum(datum: HoodieSparkRecord, output: Output): Unit = {
+  def serializeDatum(kryo: Kryo, datum: HoodieSparkRecord, output: Output): Unit = {
     val schema = datum.getStructType
     if (HoodieInternalRowUtils.containsCompressedSchema(schema)) {
       val fingerprint = HoodieInternalRowUtils.getCachedFingerPrintFromSchema(schema)
@@ -101,22 +105,16 @@ class HoodieSparkRecordSerializer() extends KSerializer[HoodieSparkRecord] {
       output.writeBytes(compressedSchema)
     }
 
-    val record = datum.newInstance().asInstanceOf[HoodieSparkRecord]
+    val record = datum.newInstance()
     record.setStructType(null)
-    val byteStream = new ByteArrayOutputStream()
-    val stream = new ObjectOutputStream(byteStream)
-    stream.writeObject(record)
-    output.writeBytes(byteStream.toByteArray)
-    stream.close()
-    byteStream.close()
-    // We do not need to close output. Because output is shared.
+    kryo.writeObject(output, record, getSerializer(kryo))
   }
 
   /**
    * Deserializes generic records into their in-memory form. There is internal
    * state to keep a cache of already seen schemas and datum readers.
    */
-  def deserializeDatum(input: Input): HoodieSparkRecord = {
+  def deserializeDatum(kryo: Kryo, input: Input): HoodieSparkRecord = {
     val schema = {
       if (input.readBoolean()) {
         val fingerprint = input.readLong()
@@ -126,17 +124,23 @@ class HoodieSparkRecordSerializer() extends KSerializer[HoodieSparkRecord] {
         decompress(ByteBuffer.wrap(input.readBytes(length)))
       }
     }
-    // We do not need to close input. Because input is shared.
-    val stream = new ObjectInputStream(input)
-    val record = stream.readObject().asInstanceOf[HoodieSparkRecord]
+    val record = kryo.readObject(input, classOf[HoodieSparkRecord], getSerializer(kryo))
     record.setStructType(schema)
 
     record
   }
 
   override def write(kryo: Kryo, output: Output, datum: HoodieSparkRecord): Unit =
-    serializeDatum(datum, output)
+    serializeDatum(kryo, datum, output)
 
   override def read(kryo: Kryo, input: Input, datumClass: Class[HoodieSparkRecord]): HoodieSparkRecord =
-    deserializeDatum(input)
+    deserializeDatum(kryo, input)
+
+  private def getSerializer(kryo: Kryo): FieldSerializer[HoodieSparkRecord] = {
+    if (!objSerializerMap.containsKey(kryo)) {
+      objSerializerMap.put(kryo, new FieldSerializer(kryo, classOf[HoodieSparkRecord]))
+    }
+
+    objSerializerMap.get(kryo)
+  }
 }

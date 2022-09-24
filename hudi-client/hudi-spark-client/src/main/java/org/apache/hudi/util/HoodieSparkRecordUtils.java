@@ -59,7 +59,7 @@ public class HoodieSparkRecordUtils {
    * @param structType  {@link StructType} instance.
    * @return Column value if a single column, or concatenated String values by comma.
    */
-  public static Object getRecordColumnValues(InternalRow row,
+  public static List<Object> getRecordColumnValues(InternalRow row,
       String[] columns,
       StructType structType, boolean consistentLogicalTimestampEnabled) {
     List<Object> result = new ArrayList<>();
