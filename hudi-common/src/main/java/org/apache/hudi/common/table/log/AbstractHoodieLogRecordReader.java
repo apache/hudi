@@ -758,6 +758,7 @@ public abstract class AbstractHoodieLogRecordReader {
    */
   protected interface KeySpec {
     List<String> getKeys();
+
     boolean isFullKey();
 
     static KeySpec fullKeySpec(List<String> keys) {
