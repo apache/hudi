@@ -124,6 +124,41 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   @Test
+  public void testConcurrentWritesWithReplaceInflightCommit() throws Exception {
+    createReplaceInflight(HoodieActiveTimeline.createNewInstantTime());
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
+
+    // writer 1 starts
+    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    createInflightCommit(currentWriterInstant);
+    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+
+    // writer 2 starts and finishes
+    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    createReplaceInflight(newInstantTime);
+
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
+    timeline = timeline.reload();
+
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
+        Collectors.toList());
+
+    // writer 1 conflicts with writer 2
+    Assertions.assertTrue(candidateInstants.size() == 1);
+    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+    try {
+      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
+      Assertions.fail("Cannot reach here, writer 1 and writer 2 should have thrown a conflict");
+    } catch (HoodieWriteConflictException e) {
+      // expected
+    }
+  }
+
+  @Test
   public void testConcurrentWritesWithInterleavingScheduledCompaction() throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
@@ -391,6 +426,20 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
     HoodieTestTable.of(metaClient)
         .addRequestedReplace(instantTime, Option.of(requestedReplaceMetadata))
+        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+  }
+
+  private void createReplaceInflight(String instantTime) throws Exception {
+    String fileId1 = "file-1";
+    String fileId2 = "file-2";
+
+    HoodieCommitMetadata inflightReplaceMetadata = new HoodieCommitMetadata();
+    inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setFileId("file-1");
+    inflightReplaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
+    HoodieTestTable.of(metaClient)
+        .addInflightReplace(instantTime, Option.of(inflightReplaceMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
