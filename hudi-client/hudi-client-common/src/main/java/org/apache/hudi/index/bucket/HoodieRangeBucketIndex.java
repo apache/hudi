@@ -41,6 +41,11 @@ public class HoodieRangeBucketIndex extends HoodieBucketIndex {
   }
 
   @Override
+  public boolean canIndexLogFiles() {
+    return false;
+  }
+
+  @Override
   protected BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath) {
     return new RangeBucketIndexLocationMapper(table, partitionPath);
   }

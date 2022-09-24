@@ -74,6 +74,10 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T extends HoodieRecordP
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
       Iterator<HoodieRecord<T>> recordItr) throws IOException {
     LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
+    // Pre-check: if the old file does not exist (which may happen in bucket index case), fallback to insert
+    if (checkBaseFileNonExists(partitionPath, fileId)) {
+      return handleInsert(fileId, recordItr);
+    }
     if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
         && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
       LOG.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);

@@ -356,14 +356,18 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
 
     // Pre-check: if the old file does not exist (which may happen in bucket index case), fallback to insert
-    if (!table.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).isPresent()
-        && HoodieIndex.IndexType.BUCKET.equals(config.getIndexType())) {
+    if (checkBaseFileNonExists(partitionPath, fileId)) {
       return handleInsert(fileId, recordItr);
     }
 
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
     return handleUpdateInternal(upsertHandle, fileId);
+  }
+
+  protected boolean checkBaseFileNonExists(String partitionPath, String fileId) {
+    return !table.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).isPresent()
+        && HoodieIndex.IndexType.BUCKET.equals(config.getIndexType());
   }
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String fileId)
