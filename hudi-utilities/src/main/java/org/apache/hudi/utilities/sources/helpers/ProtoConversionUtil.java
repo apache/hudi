@@ -162,7 +162,7 @@ public class ProtoConversionUtil {
      * @param descriptor the descriptor for the proto message
      * @param recursionDepths a map of the descriptor to the number of times it has been encountered in this depth first traversal of the schema.
      *                        This is used to cap the number of times we recurse on a schema.
-     * @param wrappedPrimitivesAsRecords if false, treat wrapped primitives as nullable primitives, if true, treat them as proto messages
+     * @param wrappedPrimitivesAsRecords if true, treat wrapped primitives like Int64Value as proto messages, if false treat them as nullable primitives,
      * @param path a string prefixed with the namespace of the original message being translated to avro and containing the current dot separated path tracking progress through the schema.
      *             This value is used for a namespace when creating Avro records to avoid an error when reusing the same class name when unraveling a recursive schema.
      * @param maxRecursionDepth the number of times to unravel a recursive proto schema before spilling the rest to bytes

@@ -44,14 +44,15 @@ public class TestProtoClassBasedSchemaProvider {
   }
 
   @Test
-  public void validateWrappedPrimitiveAsRecordSchemaGeneration() throws IOException {
+  public void validateWrappedPrimitiveAndTimestampsAsRecordSchemaGeneration() throws IOException {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
     properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key(), "true");
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
     Schema.Parser parser = new Schema.Parser();
-    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_as_record.avsc"));
+    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
     Assertions.assertEquals(expectedSchema, convertedSchema);
   }
 
@@ -79,25 +80,13 @@ public class TestProtoClassBasedSchemaProvider {
   }
 
   @Test
-  public void validateTimestampsAsRecordsSchemaGeneration() {
+  public void validateOneOfSchemaGeneration() throws IOException {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
-    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key(), "true");
+    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key(), WithOneOf.class.getName());
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     Schema protoSchema = protoToAvroSchemaProvider.getSourceSchema();
     Schema.Parser parser = new Schema.Parser();
-    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_timestamps_as_record.txt"));
-    Assertions.assertEquals(expectedSchema, protoSchema);
-  }
-
-  @Test
-  public void validateOneOfSchemaGeneration() {
-    TypedProperties properties = new TypedProperties();
-    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME, WithOneOf.class.getName());
-    ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
-    Schema protoSchema = protoToAvroSchemaProvider.getSourceSchema();
-    Schema.Parser parser = new Schema.Parser();
-    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/oneof_schema.txt"));
+    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/oneof_schema.avsc"));
     Assertions.assertEquals(expectedSchema, protoSchema);
   }
 }

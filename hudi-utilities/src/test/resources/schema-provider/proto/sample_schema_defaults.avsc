@@ -287,21 +287,8 @@
       "type": [
         "null",
         {
-          "type": "record",
-          "name": "Timestamp",
-          "namespace": "test.timestamp",
-          "fields": [
-            {
-              "name": "seconds",
-              "type": "long",
-              "default": 0
-            },
-            {
-              "name": "nanos",
-              "type": "int",
-              "default": 0
-            }
-          ]
+          "type": "long",
+          "logicalType": "time-micros"
         }
       ],
       "default": null

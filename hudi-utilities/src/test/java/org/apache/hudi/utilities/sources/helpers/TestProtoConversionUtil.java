@@ -70,11 +70,12 @@ import java.util.stream.Collectors;
 public class TestProtoConversionUtil {
   private static final Random RANDOM = new Random();
   private static final String MAX_UNSIGNED_LONG = "18446744073709551615";
+  private static final String LONG_ABOVE_SIGNED_MAX = "9446744073709551615";
 
   @Test
-  public void allFieldsSet_wellKnownTypesAreNested() throws IOException {
+  public void allFieldsSet_wellKnownTypesAndTimestampsAsRecords() throws IOException {
     Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_nested.avsc"));
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
     Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, true);
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
@@ -82,31 +83,40 @@ public class TestProtoConversionUtil {
     Schema unsignedLongSchema = convertedSchema.getField("primitive_unsigned_long").schema();
     BigDecimal actualUnsignedLong = new Conversions.DecimalConversion().fromFixed((GenericFixed) actual.get("primitive_unsigned_long"), unsignedLongSchema, unsignedLongSchema.getLogicalType());
     Assertions.assertEquals(MAX_UNSIGNED_LONG, actualUnsignedLong.toString());
+    Schema wrappedUnsignedLongSchema = convertedSchema.getField("wrapped_unsigned_long").schema().getTypes().get(1).getField("value").schema();
+    BigDecimal actualWrappedUnsignedLong = new Conversions.DecimalConversion().fromFixed((GenericFixed) ((GenericRecord) actual.get("wrapped_unsigned_long")).get("value"), wrappedUnsignedLongSchema,
+        wrappedUnsignedLongSchema.getLogicalType());
+    Assertions.assertEquals(LONG_ABOVE_SIGNED_MAX, actualWrappedUnsignedLong.toString());
   }
 
   @Test
-  public void noFieldsSet_wellKnownTypesAreNested() throws IOException {
+  public void noFieldsSet_wellKnownTypesAndTimestampsAsRecords() throws IOException {
     Sample sample = Sample.newBuilder().build();
     Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_nested.avsc"));
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema);
     Assertions.assertEquals(createDefaultOutput(convertedSchema), actual);
   }
 
   @Test
-  public void allFieldsSet_wellKnownTypesAreFlattened() throws IOException {
+  public void allFieldsSet_defaultOptions() throws IOException {
     Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_flattened.avsc"));
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
     Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, false);
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
+    // assert that unsigned long is interpreted correctly
+    Schema nullableUnsignedLongSchema = convertedSchema.getField("wrapped_unsigned_long").schema().getTypes().get(1);
+    BigDecimal actualUnsignedLong = new Conversions.DecimalConversion().fromFixed((GenericFixed) actual.get("wrapped_unsigned_long"), nullableUnsignedLongSchema,
+        nullableUnsignedLongSchema.getLogicalType());
+    Assertions.assertEquals(MAX_UNSIGNED_LONG, actualUnsignedLong.toString());
   }
 
   @Test
-  public void noFieldsSet_wellKnownTypesAreFlattened() throws IOException {
+  public void noFieldsSet_defaultOptions() throws IOException {
     Sample sample = Sample.newBuilder().build();
     Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_flattened.avsc"));
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema);
     Assertions.assertEquals(createDefaultOutput(convertedSchema), actual);
   }
