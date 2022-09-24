@@ -248,9 +248,9 @@ Hudi supports a few options for indexing as below
  - *HoodieBloomIndex * : Uses a bloom filter and ranges information placed in the footer of parquet/base files (and soon log files as well)
  - *HoodieGlobalBloomIndex* : The non global indexing only enforces uniqueness of a key inside a single partition i.e the user is expected to know the partition under which a given record key is stored. This helps the indexing scale very well for even [very large datasets](https://eng.uber.com/uber-big-data-platform/). However, in some cases, it might be necessary instead to do the de-duping/enforce uniqueness across all partitions and the global bloom index does exactly that. If this is used, incoming records are compared to files across the entire dataset and ensure a recordKey is only present in one partition.
  - *HBaseIndex* : Apache HBase is a key value store, typically found in close proximity to HDFS. You can also store the index inside HBase, which could be handy if you are already operating HBase.
- - *HoodieSimpleIndex (default)* : A simple index which reads interested fields(record key and partition path) from base files and joins with incoming records to find the tagged location.
+ - *HoodieSimpleIndex (default)* : A simple index which reads interested fields (record key and partition path) from base files and joins with incoming records to find the tagged location.
  - *HoodieGlobalSimpleIndex* : Global version of Simple Index, where in uniqueness is on record key across entire table. 
- - *HoodieBucketIndex* : Each partition has statically defined buckets to which records are tagged with. Since locations are tagged via hashing mechanism, this index look up will be very efficient. 
+ - *HoodieBucketIndex* : Each partition has statically defined buckets to which records are tagged with. Since locations are tagged via hashing mechanism, this index lookup will be very efficient. 
  - *HoodieSparkConsistentBucketIndex* : This is also similar to Bucket Index. Only difference is that, data skews can be tackled by dynamically changing the bucket number.  
 
 You can implement your own index if you'd like, by subclassing the `HoodieIndex` class and configuring the index class name in configs. 
