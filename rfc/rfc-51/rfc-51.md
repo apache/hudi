@@ -74,6 +74,7 @@ We follow the debezium output format: four columns as shown below
 2. Support both MOR and COW tables
 3. Support all the write operations
 4. Support incremental queries in CDC format across supported engines
+5. For CDC-enabled tables, non-CDC queries' performance should not be affected
 
 ## Configurations
 
@@ -114,11 +115,12 @@ Overall logic flows are illustrated below.
 Hudi writes data by `HoodieWriteHandle`. We notice that only `HoodieMergeHandle` and its subclasses will receive both
 the old record and the new-coming record at the same time, merge and write. So we will add a `LogFormatWriter` in these
 classes. If there is CDC data need to be written out, then call this writer to write out a log file which consist
-of `CDCBlock`. The CDC log file will be placed in the same position as the base files and other log files, so that the
-clean service can clean up them without extra work. The file structure is like:
+of `CDCBlock`. The CDC log files have `-cdc` suffix (to distinguish from data log files for read performance
+consideration) will be placed in the same paths as the base files and other log files. Clean service needs to be tweaked
+accordingly. An example of the file structure:
 
 ```
-hudi_cdc_table/
+cow_table/
     .hoodie/
         hoodie.properties
         00001.commit
@@ -126,14 +128,14 @@ hudi_cdc_table/
         ...
     year=2021/
         filegroup1-instant1.parquet
-        .filegroup1-instant1.log
+        .filegroup1-instant1-cdc
     year=2022/
         filegroup2-instant1.parquet
-        .filegroup2-instant1.log
+        .filegroup2-instant1-cdc
     ...
 ```
 
-Under a partition directory, the `.log` file with `CDCBlock` above will keep the changing data we have to materialize.
+Under partition directories, the `-cdc` files with `CDCBlock` as shown above contain the persisted changed data.
 
 #### Persisting CDC in MOR: Write-on-indexing vs Write-on-compaction
 
@@ -317,7 +319,8 @@ Spark support phase 2
 - For MOR: Spark CDC write (`OP=U/D` when compact updates/deletes to log files) and CDC read to combine on-the-fly
   inferred data and persisted CDC data.
   - Note: for CDC write via compaction, `HoodieMergedLogRecordScanner` needs to support producing CDC data for each
-    version of the changed records. `HoodieCompactor` and `HoodieMergeHandler` are to adapt the changes.
+    version of the changed records. `HoodieCompactor` and `HoodieMergeHandler` are to adapt the
+    changes. See [HUDI-4705](https://issues.apache.org/jira/browse/HUDI-4705).
 
 Flink support can be developed in parallel, and can use of the common logical changes of CDC write via compaction in
 Spark support phase 2.
