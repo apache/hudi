@@ -53,11 +53,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType.ADD_BASE_FILE;
-import static org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType.CDC_LOG_FILE;
-import static org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType.MOR_LOG_FILE;
-import static org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType.REMOVE_BASE_FILE;
-import static org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType.REPLACED_FILE_GROUP;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.BASE_FILE_INSERT;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.AS_IS;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.LOG_FILE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.BASE_FILE_DELETE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.REPLACE_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.isInRange;
@@ -148,7 +148,7 @@ public class HoodieCDCExtractor {
             if (latestFileSliceOpt.isPresent()) {
               HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partition, fileId);
               HoodieCDCFileSplit changeFile = new HoodieCDCFileSplit(
-                      REPLACED_FILE_GROUP, null, latestFileSliceOpt, Option.empty());
+                  REPLACE_COMMIT, null, latestFileSliceOpt, Option.empty());
               if (!fgToCommitChanges.containsKey(fileGroupId)) {
                 fgToCommitChanges.put(fileGroupId, new ArrayList<>());
               }
@@ -277,23 +277,23 @@ public class HoodieCDCExtractor {
               new HoodieIOException("Can not get the previous version of the base file")
           );
           FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
-          cdcFileSplit = new HoodieCDCFileSplit(REMOVE_BASE_FILE, null, Option.empty(), Option.of(beforeFileSlice));
+          cdcFileSplit = new HoodieCDCFileSplit(BASE_FILE_DELETE, null, Option.empty(), Option.of(beforeFileSlice));
         } else if (writeStat.getNumUpdateWrites() == 0L && writeStat.getNumDeletes() == 0
             && writeStat.getNumWrites() == writeStat.getNumInserts()) {
           // all the records in this file are new.
-          cdcFileSplit = new HoodieCDCFileSplit(ADD_BASE_FILE, path);
+          cdcFileSplit = new HoodieCDCFileSplit(BASE_FILE_INSERT, path);
         } else {
           throw new HoodieException("There should be a cdc log file.");
         }
       } else {
         // this is a log file
         Option<FileSlice> beforeFileSliceOpt = getDependentFileSliceForLogFile(fileGroupId, instant, path);
-        cdcFileSplit = new HoodieCDCFileSplit(MOR_LOG_FILE, path, beforeFileSliceOpt, Option.empty());
+        cdcFileSplit = new HoodieCDCFileSplit(LOG_FILE, path, beforeFileSliceOpt, Option.empty());
       }
     } else {
       // this is a cdc log
       if (supplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
-        cdcFileSplit = new HoodieCDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath());
+        cdcFileSplit = new HoodieCDCFileSplit(AS_IS, writeStat.getCdcPath());
       } else {
         try {
           HoodieBaseFile beforeBaseFile = fsView.getBaseFileOn(
@@ -307,7 +307,7 @@ public class HoodieCDCExtractor {
           if (supplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.OP_KEY)) {
             beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           }
-          cdcFileSplit = new HoodieCDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath(),
+          cdcFileSplit = new HoodieCDCFileSplit(AS_IS, writeStat.getCdcPath(),
               Option.ofNullable(beforeFileSlice), Option.ofNullable(currentFileSlice));
         } catch (Exception e) {
           throw new HoodieException("Fail to parse HoodieWriteStat", e);

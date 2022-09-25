@@ -27,16 +27,16 @@ import java.io.Serializable;
  * This contains all the information that retrieve the change data at a single file group and
  * at a single commit.
  * <p>
- * For `cdcFileType` = {@link HoodieCDCLogicalFileType#ADD_BASE_FILE}, `cdcFile` is a current version of
+ * For `cdcInferCase` = {@link HoodieCDCInferCase#BASE_FILE_INSERT}, `cdcFile` is a current version of
  * the base file in the group, and `beforeFileSlice` is None.
- * For `cdcFileType` = {@link HoodieCDCLogicalFileType#REMOVE_BASE_FILE}, `cdcFile` is null,
+ * For `cdcInferCase` = {@link HoodieCDCInferCase#BASE_FILE_DELETE}, `cdcFile` is null,
  * `beforeFileSlice` is the previous version of the base file in the group.
- * For `cdcFileType` = {@link HoodieCDCLogicalFileType#CDC_LOG_FILE}, `cdcFile` is a log file with cdc blocks.
+ * For `cdcInferCase` = {@link HoodieCDCInferCase#AS_IS}, `cdcFile` is a log file with cdc blocks.
  * when enable the supplemental logging, both `beforeFileSlice` and `afterFileSlice` are None,
  * otherwise these two are the previous and current version of the base file.
- * For `cdcFileType` = {@link HoodieCDCLogicalFileType#MOR_LOG_FILE}, `cdcFile` is a normal log file and
+ * For `cdcInferCase` = {@link HoodieCDCInferCase#LOG_FILE}, `cdcFile` is a normal log file and
  * `beforeFileSlice` is the previous version of the file slice.
- * For `cdcFileType` = {@link HoodieCDCLogicalFileType#REPLACED_FILE_GROUP}, `cdcFile` is null,
+ * For `cdcInferCase` = {@link HoodieCDCInferCase#REPLACE_COMMIT}, `cdcFile` is null,
  * `beforeFileSlice` is the current version of the file slice.
  */
 public class HoodieCDCFileSplit implements Serializable {
@@ -44,7 +44,7 @@ public class HoodieCDCFileSplit implements Serializable {
   /**
    * * the change type, which decide to how to retrieve the change data. more details see: `HoodieCDCLogicalFileType#`
    */
-  private final HoodieCDCLogicalFileType cdcFileType;
+  private final HoodieCDCInferCase cdcInferCase;
 
   /**
    * the file that the change data can be parsed from.
@@ -61,23 +61,23 @@ public class HoodieCDCFileSplit implements Serializable {
    */
   private final Option<FileSlice> afterFileSlice;
 
-  public HoodieCDCFileSplit(HoodieCDCLogicalFileType cdcFileType, String cdcFile) {
-    this(cdcFileType, cdcFile, Option.empty(), Option.empty());
+  public HoodieCDCFileSplit(HoodieCDCInferCase cdcInferCase, String cdcFile) {
+    this(cdcInferCase, cdcFile, Option.empty(), Option.empty());
   }
 
   public HoodieCDCFileSplit(
-      HoodieCDCLogicalFileType cdcFileType,
+      HoodieCDCInferCase cdcInferCase,
       String cdcFile,
       Option<FileSlice> beforeFileSlice,
       Option<FileSlice> afterFileSlice) {
-    this.cdcFileType = cdcFileType;
+    this.cdcInferCase = cdcInferCase;
     this.cdcFile = cdcFile;
     this.beforeFileSlice = beforeFileSlice;
     this.afterFileSlice = afterFileSlice;
   }
 
-  public HoodieCDCLogicalFileType getCdcFileType() {
-    return this.cdcFileType;
+  public HoodieCDCInferCase getCdcInferCase() {
+    return this.cdcInferCase;
   }
 
   public String getCdcFile() {

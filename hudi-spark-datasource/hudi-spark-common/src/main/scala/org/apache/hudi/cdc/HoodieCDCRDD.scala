@@ -26,7 +26,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType._
+import org.apache.hudi.common.table.cdc.HoodieCDCInferCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator
@@ -242,14 +242,14 @@ class HoodieCDCRDD(
 
     /**
      * Keep the before-image data. There cases will use this:
-     * 1) the cdc file type is [[MOR_LOG_FILE]];
-     * 2) the cdc file type is [[CDC_LOG_FILE]] and [[cdcSupplementalLoggingMode]] is 'op_key'.
+     * 1) the cdc infer case is [[LOG_FILE]];
+     * 2) the cdc infer case is [[AS_IS]] and [[cdcSupplementalLoggingMode]] is 'op_key'.
      */
     private var beforeImageRecords: mutable.Map[String, GenericRecord] = mutable.Map.empty
 
     /**
      * Keep the after-image data. Only one case will use this:
-     * the cdc file type is [[CDC_LOG_FILE]] and [[cdcSupplementalLoggingMode]] is 'op_key' or 'cdc_data_before'.
+     * the cdc infer case is [[AS_IS]] and [[cdcSupplementalLoggingMode]] is 'op_key' or 'cdc_data_before'.
      */
     private var afterImageRecords: mutable.Map[String, InternalRow] = mutable.Map.empty
 
@@ -266,20 +266,20 @@ class HoodieCDCRDD(
       if (currentChangeFile == null) {
         false
       } else {
-        currentChangeFile.getCdcFileType match {
-          case ADD_BASE_FILE | REMOVE_BASE_FILE | REPLACED_FILE_GROUP =>
+        currentChangeFile.getCdcInferCase match {
+          case BASE_FILE_INSERT | BASE_FILE_DELETE | REPLACE_COMMIT =>
             if (recordIter.hasNext && loadNext()) {
               true
             } else {
               hasNextInternal
             }
-          case MOR_LOG_FILE =>
+          case LOG_FILE =>
             if (logRecordIter.hasNext && loadNext()) {
               true
             } else {
               hasNextInternal
             }
-          case CDC_LOG_FILE =>
+          case AS_IS =>
             if (cdcLogRecordIterator.hasNext && loadNext()) {
               true
             } else {
@@ -297,18 +297,18 @@ class HoodieCDCRDD(
 
     def loadNext(): Boolean = {
       var loaded = false
-      currentChangeFile.getCdcFileType match {
-        case ADD_BASE_FILE =>
+      currentChangeFile.getCdcInferCase match {
+        case BASE_FILE_INSERT =>
           val originRecord = recordIter.next()
           recordToLoad.update(3, convertRowToJsonString(originRecord))
           loaded = true
-        case REMOVE_BASE_FILE =>
+        case BASE_FILE_DELETE =>
           val originRecord = recordIter.next()
           recordToLoad.update(2, convertRowToJsonString(originRecord))
           loaded = true
-        case MOR_LOG_FILE =>
+        case LOG_FILE =>
           loaded = loadNextLogRecord()
-        case CDC_LOG_FILE =>
+        case AS_IS =>
           val record = cdcLogRecordIterator.next().asInstanceOf[GenericRecord]
           cdcSupplementalLoggingMode match {
             case HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER =>
@@ -350,7 +350,7 @@ class HoodieCDCRDD(
               }
           }
           loaded = true
-        case REPLACED_FILE_GROUP =>
+        case REPLACE_COMMIT =>
           val originRecord = recordIter.next()
           recordToLoad.update(2, convertRowToJsonString(originRecord))
           loaded = true
@@ -423,24 +423,24 @@ class HoodieCDCRDD(
         val pair = cdcFileIter.next()
         currentInstant = pair._1
         currentChangeFile = pair._2
-        currentChangeFile.getCdcFileType match {
-          case ADD_BASE_FILE =>
+        currentChangeFile.getCdcInferCase match {
+          case BASE_FILE_INSERT =>
             assert(currentChangeFile.getCdcFile != null)
             val absCDCPath = new Path(basePath, currentChangeFile.getCdcFile)
             val fileStatus = fs.getFileStatus(absCDCPath)
             val pf = PartitionedFile(InternalRow.empty, absCDCPath.toUri.toString, 0, fileStatus.getLen)
             recordIter = parquetReader(pf)
-          case REMOVE_BASE_FILE =>
+          case BASE_FILE_DELETE =>
             assert(currentChangeFile.getBeforeFileSlice.isPresent)
             recordIter = loadFileSlice(currentChangeFile.getBeforeFileSlice.get)
-          case MOR_LOG_FILE =>
+          case LOG_FILE =>
             assert(currentChangeFile.getCdcFile != null && currentChangeFile.getBeforeFileSlice.isPresent)
             loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
             val absLogPath = new Path(basePath, currentChangeFile.getCdcFile)
             val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(fs.getFileStatus(absLogPath))))
             val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
             logRecordIter = logFileIterator.logRecordsIterator()
-          case CDC_LOG_FILE =>
+          case AS_IS =>
             assert(currentChangeFile.getCdcFile != null)
             // load beforeFileSlice to beforeImageRecords
             if (currentChangeFile.getBeforeFileSlice.isPresent) {
@@ -457,7 +457,7 @@ class HoodieCDCRDD(
             }
             val absCDCPath = new Path(basePath, currentChangeFile.getCdcFile)
             cdcLogRecordIterator = new HoodieCDCLogRecordIterator(fs, absCDCPath, cdcAvroSchema)
-          case REPLACED_FILE_GROUP =>
+          case REPLACE_COMMIT =>
             if (currentChangeFile.getBeforeFileSlice.isPresent) {
               loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
             }
@@ -477,24 +477,24 @@ class HoodieCDCRDD(
      * Initialize the partial fields of the data to be returned in advance to speed up.
      */
     private def resetRecordFormat(): Unit = {
-      recordToLoad = currentChangeFile.getCdcFileType match {
-        case ADD_BASE_FILE =>
+      recordToLoad = currentChangeFile.getCdcInferCase match {
+        case BASE_FILE_INSERT =>
           InternalRow.fromSeq(Array(
             CDCRelation.CDC_OPERATION_INSERT, convertToUTF8String(currentInstant.getTimestamp),
             null, null))
-        case REMOVE_BASE_FILE =>
+        case BASE_FILE_DELETE =>
           InternalRow.fromSeq(Array(
             CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant.getTimestamp),
             null, null))
-        case MOR_LOG_FILE =>
+        case LOG_FILE =>
           InternalRow.fromSeq(Array(
             null, convertToUTF8String(currentInstant.getTimestamp),
             null, null))
-        case CDC_LOG_FILE =>
+        case AS_IS =>
           InternalRow.fromSeq(Array(
             null, convertToUTF8String(currentInstant.getTimestamp),
             null, null))
-        case REPLACED_FILE_GROUP =>
+        case REPLACE_COMMIT =>
           InternalRow.fromSeq(Array(
             CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant.getTimestamp),
             null, null))

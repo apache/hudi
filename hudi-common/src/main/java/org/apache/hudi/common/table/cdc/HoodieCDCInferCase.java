@@ -19,7 +19,7 @@
 package org.apache.hudi.common.table.cdc;
 
 /**
- * Here define four cdc file types. The different cdc file type will decide which file will be
+ * Here define five cdc infer cases. The different cdc infer case will decide which file will be
  * used to extract the change data, and how to do this.
  *
  * CDC_LOG_FILE:
@@ -67,12 +67,12 @@ package org.apache.hudi.common.table.cdc;
  *   a whole file group. First we find this file group. Then load this, mark all the records with
  *   `d`, and treat them as the value of `before`. The value of `after` for each record is null.
  */
-public enum HoodieCDCLogicalFileType {
+public enum HoodieCDCInferCase {
 
-  CDC_LOG_FILE,
-  ADD_BASE_FILE,
-  REMOVE_BASE_FILE,
-  MOR_LOG_FILE,
-  REPLACED_FILE_GROUP;
+  AS_IS,
+  BASE_FILE_INSERT,
+  BASE_FILE_DELETE,
+  LOG_FILE,
+  REPLACE_COMMIT;
 
 }
