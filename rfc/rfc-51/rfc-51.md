@@ -52,7 +52,7 @@ The diagram below illustrates a typical CDC scenario.
 We follow the debezium output format: four columns as shown below
 
 - op: the operation of this record;
-- ts_ms: the timestamp;
+- ts: the timestamp;
 - source: source information such as the name of database and table. **Maybe we don't need this column in Hudi**;
 - before: the previous image before this operation;
 - after: the current image after this operation;
@@ -90,26 +90,6 @@ To perform CDC queries, users need to set `hoodie.datasource.query.incremental.f
 | hoodie.datasource.query.incremental.format | `latest_state` | `latest_state` (current incremental query behavior) returns the latest records' values. Set to `cdc` to return the full CDC results. |
 | hoodie.datasource.read.begin.instanttime   | -              | requried.                                                                                                                            |
 | hoodie.datasource.read.end.instanttime     | -              | optional.                                                                                                                            |
-
-### Logical File Types
-
-We define 4 logical file types for the CDC scenario.
-
-- CDC_LOG_File: a file consists of CDC Blocks with the changing data related to one commit.
-  - For COW tables, this file type refers to newly written log files alongside base files. The log files in this case only contain CDC info.
-  - For MOR tables, this file type refers to the typical log files in MOR tables. CDC info will be persisted as log blocks in the log files.
-- ADD_BASE_File: a normal base file for a specified instant and a specified file group. All the data in this file are new-incoming. For example, we first write data to a new file group. So we can load this file, treat each record in this as the value of `after`, and the value of `op` of each record is `i`.
-- REMOVE_BASE_FILE: a normal base file for a specified instant and a specified file group, but this file is empty. A file like this will be generated when we delete all the data in a file group. So we need to find the previous version of the file group, load it, treat each record in this as the value of `before`, and the value of `op` of each record is `d`.
-- MOR_LOG_FILE: a normal log file. For this type, we need to load the previous version of file slice, and merge each record in the log file with this data loaded separately to determine how the record has changed, and get the value of `before` and `after`.
-- REPLACED_FILE_GROUP: a file group that be replaced totally, like `DELETE_PARTITION` and `INSERT_OVERWRITE` operations. We load this file group, treat all the records as the value of `before`, and the value of `op` of each record is `d`.
-
-Note:
-
-**`CDC_LOG_File` is a new file type and written out for CDC**. `ADD_BASE_File`, `REMOVE_BASE_FILE`, and `REPLACED_FILE_GROUP` represent the existing data files in the CDC scenario. 
-
-For examples:
-- `INSERT` operation will maybe create a list of new data files. These files will be treated as ADD_BASE_FILE;
-- `DELETE_PARTITION` operation will replace a list of file slice. For each of these, we get the cdc data in the `REPLACED_FILE_GROUP` way.
 
 ## When `supplemental.logging.mode=KEY_OP`
 
@@ -175,12 +155,14 @@ The semantics we propose to establish are: when base files are written, the corr
   - inserts/updates/deletes that written to log files are compacted into base files: the CDC data `op=I|U|D` will be
     persisted
 
-In summary, we propose CDC data to be persisted synchronously upon base files generation. It is therefore
+In summary, we propose that CDC data should be persisted synchronously upon base files generation. It is therefore
 write-on-indexing for Spark inserts (non-bucket index) and write-on-compaction for everything else.
 
-Note that it may also be necessary to provide capabilities for asynchronously persisting CDC data, in terms of a
-separate table service like `ChangeTrackingService`, which can be scheduled to fine-tune the CDC Availability SLA,
-effectively decoupling it with Compaction frequency.
+- Note 1: CDC results can still be returned upon CDC-type query by doing on-the-fly inference, before compaction is
+  performed. Details are illustrated in the [Read](#cdcread) section below.
+- Note 2: it may also be necessary to provide capabilities for asynchronously persisting CDC data, in terms of a
+  separate table service like `ChangeTrackingService`, which can be scheduled to fine-tune the CDC Availability SLA,
+  effectively decoupling it with Compaction frequency.
 
 #### Examples
 
@@ -214,7 +196,22 @@ tblproperties (
 )
 ```
 
-### Read
+### <a name="cdcread"></a>Read
+
+### How to infer CDC results
+
+| `HoodieCDCInferCase` | Infer case details                                                                                                        | Infer logic                                                                                                                                                               | Note                               |
+|----------------------|---------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------|
+| `AS_IS`              | CDC file written (suffix contains `-cdc`) alongside base files (COW) or log files (MOR)                                   | CDC info will be extracted as is                                                                                                                                          | the read-optimized way to read CDC |
+| `BASE_FILE_INSERT`   | Base files were written to a new file group                                                                               | All records (in the current commit): `op=I`, `before=null`, `after=<current value>`                                                                                       | on-the-fly inference               |
+| `BASE_FILE_DELETE`   | Records are not found from the current commit's base file but found in the previous commit's within the same file group   | All records (in the previous commit): `op=D`, `before=<previous value>`, `after=null`                                                                                     | on-the-fly inference               |
+| `LOG_FILE`           | For MOR, log files to be read and records to be looked up in the previous file slice.                                     | Current record read from delete block, found in previous file slice => `op=D`, `before=<previous value>`, `after=null`                                                    | on-the-fly inference               |
+| `LOG_FILE`           | ditto                                                                                                                     | Current record read from delete block, not found in previous file slice => skip due to the delete log block should be discarded (trying to delete non-existing records)   | on-the-fly inference               |
+| `LOG_FILE`           | ditto                                                                                                                     | Current record not read from delete block, found in previous file slice => `op=U`, `before=<previous value>`, `after=<current value>`                                     | on-the-fly inference               |
+| `LOG_FILE`           | ditto                                                                                                                     | Current record not read from delete block, not found in previous file slice => `op=I`, `before=null`, `after=<current value>`                                             | on-the-fly inference               |
+| `REPLACE_COMMIT`     | File group corresponds to a replace commit                                                                                | All records `op=D`, `before=<value from the file group>`, `after=null`                                                                                                    | on-the-fly inference               |
+
+### Illustrations
 
 This section uses Spark (incl. Spark DataFrame, SQL, Streaming) as an example to perform CDC-format incremental queries.
 
@@ -232,7 +229,7 @@ class CDCReader(
 ) extends BaseRelation with PrunedFilteredScan {
 
   override def schema: StructType = {
-  // 'op', 'source', 'ts_ms', 'before', 'after'
+  // 'op', 'source', 'ts', 'before', 'after'
   }
   
   override def buildScan(
@@ -240,7 +237,6 @@ class CDCReader(
     filters: Array[Filter]): RDD[Row] = {
   // ...
   }
-
 }
 ```
 
@@ -254,25 +250,18 @@ Note:
 
 #### COW table
 
-Reading COW tables in CDC query mode is equivalent to reading MOR tables in RO mode.
+CDC queries always extract and return the persisted CDC data.
 
 #### MOR table
 
-According to the section "Persisting CDC in MOR", CDC data is available upon base files' generation.
+According to the section "Persisting CDC in MOR", persisted CDC data is available upon base files' generation. The CDC-type query results 
+should be consisted of on-the-fly read results and as-is read results. See the [Read](#cdcread) section.
 
-When users want to get fresher real-time CDC results:
+The implementation should
 
-- users are to set `hoodie.datasource.query.incremental.type=snapshot`
-- the implementation logic is to compute the results in-flight by reading log files and the corresponding base files (
-  current and previous file slices).
-- this is equivalent to running incremental-query on MOR RT tables
-
-When users want to optimize compute-cost and are tolerant with latency of CDC results,
-
-- users are to set `hoodie.datasource.query.incremental.type=read_optimized`
-- the implementation logic is to extract the results by reading persisted CDC data and the corresponding base files (
-  current and previous file slices).
-- this is equivalent to running incremental-query on MOR RO tables
+- compute the results on-the-fly by reading log files and the corresponding base files (current and previous file slices).
+- extract the results by reading persisted CDC data and the corresponding base files (current and previous file slices).
+- stitch the results from previous 2 steps and return the complete freshest results
 
 Here use an illustration to explain how we can query the CDC on MOR table in kinds of cases.
 
@@ -321,13 +310,12 @@ val stream = df.writeStream.format("console").start
 Spark support phase 1
 
 - For COW: support Spark CDC write/read fully
-- For MOR: support Spark CDC write (only `OP=I` when write inserts to base files) and CDC read
-  when `hoodie.datasource.query.incremental.type=snapshot`
+- For MOR: support Spark CDC write (only `OP=I` when write inserts to base files) and CDC on-the-fly inferring read.
 
 Spark support phase 2
 
-- For MOR: Spark CDC write (`OP=U/D` when compact updates/deletes to log files) and CDC read
-  when `hoodie.datasource.query.incremental.type=read_optimized`
+- For MOR: Spark CDC write (`OP=U/D` when compact updates/deletes to log files) and CDC read to combine on-the-fly
+  inferred data and persisted CDC data.
   - Note: for CDC write via compaction, `HoodieMergedLogRecordScanner` needs to support producing CDC data for each
     version of the changed records. `HoodieCompactor` and `HoodieMergeHandler` are to adapt the changes.
 
