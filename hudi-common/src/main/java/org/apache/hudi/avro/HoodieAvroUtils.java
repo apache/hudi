@@ -75,6 +75,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Deque;
 import java.util.LinkedList;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 
@@ -169,12 +170,7 @@ public class HoodieAvroUtils {
   }
 
   public static boolean isMetadataField(String fieldName) {
-    return HoodieRecord.COMMIT_TIME_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.RECORD_KEY_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.PARTITION_PATH_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.OPERATION_METADATA_FIELD.equals(fieldName);
+    return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
@@ -245,7 +241,7 @@ public class HoodieAvroUtils {
     return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
   }
 
-  public static Schema removeFields(Schema schema, List<String> fieldsToRemove) {
+  public static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {
     List<Schema.Field> filteredFields = schema.getFields()
         .stream()
         .filter(field -> !fieldsToRemove.contains(field.name()))
@@ -422,7 +418,7 @@ public class HoodieAvroUtils {
    * <p>
    * To better understand how it removes please check {@link #rewriteRecord(GenericRecord, Schema)}
    */
-  public static GenericRecord removeFields(GenericRecord record, List<String> fieldsToRemove) {
+  public static GenericRecord removeFields(GenericRecord record, Set<String> fieldsToRemove) {
     Schema newSchema = removeFields(record.getSchema(), fieldsToRemove);
     return rewriteRecord(record, newSchema);
   }

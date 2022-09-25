@@ -27,10 +27,13 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
+import org.apache.avro.Schema;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -88,16 +91,18 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
 
   @Override
   public List<HoodieRecord<T>> deduplicateRecords(
-      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
+      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr) {
     // If index used is global, then records are expected to differ in their partitionPath
     Map<Object, List<HoodieRecord<T>>> keyedRecords = records.stream()
         .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
 
+    // caution that the avro schema is not serializable
+    final Schema schema = new Schema.Parser().parse(schemaStr);
     return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
       final T data1 = rec1.getData();
       final T data2 = rec2.getData();
 
-      @SuppressWarnings("unchecked") final T reducedData = (T) data2.preCombine(data1);
+      @SuppressWarnings("unchecked") final T reducedData = (T) data2.preCombine(data1, schema, CollectionUtils.emptyProps());
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.

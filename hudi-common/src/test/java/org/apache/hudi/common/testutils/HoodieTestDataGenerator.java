@@ -89,6 +89,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   // with default bloom filter with 60,000 entries and 0.000000001 FPRate
   public static final int BLOOM_FILTER_BYTES = 323495;
   private static Logger logger = LogManager.getLogger(HoodieTestDataGenerator.class);
+  public static final String NO_PARTITION_PATH = "";
   public static final String DEFAULT_FIRST_PARTITION_PATH = "2016/03/15";
   public static final String DEFAULT_SECOND_PARTITION_PATH = "2015/03/16";
   public static final String DEFAULT_THIRD_PARTITION_PATH = "2015/03/17";

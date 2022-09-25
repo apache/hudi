@@ -105,7 +105,7 @@ public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
 
   static <T extends HoodieRecordPayload> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
       Schema schema) {
-    return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, CollectionUtils.EMPTY_PROPERTIES);
+    return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, CollectionUtils.emptyProps());
   }
 
   @Override

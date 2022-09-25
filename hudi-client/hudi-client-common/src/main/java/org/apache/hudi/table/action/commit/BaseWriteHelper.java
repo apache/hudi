@@ -82,9 +82,9 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
    */
   public I deduplicateRecords(
       I records, HoodieTable<T, I, K, O> table, int parallelism) {
-    return deduplicateRecords(records, table.getIndex(), parallelism);
+    return deduplicateRecords(records, table.getIndex(), parallelism, table.getConfig().getSchema());
   }
 
   public abstract I deduplicateRecords(
-      I records, HoodieIndex<?, ?> index, int parallelism);
+      I records, HoodieIndex<?, ?> index, int parallelism, String schema);
 }

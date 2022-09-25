@@ -487,7 +487,7 @@ public class DeltaSync implements Serializable, Closeable {
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
-    List<String> partitionColumns = getPartitionColumns(keyGenerator, props);
+    Set<String> partitionColumns = getPartitionColumns(keyGenerator, props);
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(record -> {
       GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(record, partitionColumns) : record;
@@ -952,14 +952,14 @@ public class DeltaSync implements Serializable, Closeable {
   }
 
   /**
-   * Get the list of partition columns as a list of strings.
+   * Get the partition columns as a set of strings.
    *
    * @param keyGenerator KeyGenerator
    * @param props TypedProperties
-   * @return List of partition columns.
+   * @return Set of partition columns.
    */
-  private List<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
+  private Set<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
     String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
-    return Arrays.asList(partitionColumns.split(","));
+    return Arrays.stream(partitionColumns.split(",")).collect(Collectors.toSet());
   }
 }

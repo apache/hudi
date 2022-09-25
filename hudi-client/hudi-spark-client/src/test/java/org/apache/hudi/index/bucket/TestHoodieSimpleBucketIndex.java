@@ -42,6 +42,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Properties;
@@ -89,8 +91,9 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
         .withBucketNum("8").build();
   }
 
-  @Test
-  public void testTagLocation() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testTagLocation(boolean isInsert) throws Exception {
     String rowKey1 = UUID.randomUUID().toString();
     String rowKey2 = UUID.randomUUID().toString();
     String rowKey3 = UUID.randomUUID().toString();
@@ -108,7 +111,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
     HoodieRecord record3 = new HoodieAvroRecord(
         new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieRecord record4 = new HoodieAvroRecord(
+    HoodieAvroRecord record4 = new HoodieAvroRecord(
         new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
     JavaRDD<HoodieRecord<HoodieAvroRecord>> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 
@@ -119,16 +122,26 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
     assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(r -> r.isCurrentLocationKnown()));
 
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(table, SCHEMA);
-    testTable.addCommit("001").withInserts("2016/01/31", getRecordFileId(record1), record1);
-    testTable.addCommit("002").withInserts("2016/01/31", getRecordFileId(record2), record2);
-    testTable.addCommit("003").withInserts("2016/01/31", getRecordFileId(record3), record3);
+
+    if (isInsert) {
+      testTable.addCommit("001").withInserts("2016/01/31", getRecordFileId(record1), record1);
+      testTable.addCommit("002").withInserts("2016/01/31", getRecordFileId(record2), record2);
+      testTable.addCommit("003").withInserts("2016/01/31", getRecordFileId(record3), record3);
+    } else {
+      testTable.addCommit("001").withLogAppends("2016/01/31", getRecordFileId(record1), record1);
+      testTable.addCommit("002").withLogAppends("2016/01/31", getRecordFileId(record2), record2);
+      testTable.addCommit("003").withLogAppends("2016/01/31", getRecordFileId(record3), record3);
+    }
+
     taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context,
         HoodieSparkTable.create(config, context, metaClient));
     assertFalse(taggedRecordRDD.collectAsList().stream().filter(r -> r.isCurrentLocationKnown())
         .filter(r -> BucketIdentifier.bucketIdFromFileId(r.getCurrentLocation().getFileId())
             != getRecordBucketId(r)).findAny().isPresent());
     assertTrue(taggedRecordRDD.collectAsList().stream().filter(r -> r.getPartitionPath().equals("2015/01/31")
-        && !r.isCurrentLocationKnown()).count() == 1L);
+            && !r.isCurrentLocationKnown()).count() == 1L);
+    assertTrue(taggedRecordRDD.collectAsList().stream().filter(r -> r.getPartitionPath().equals("2016/01/31")
+            && r.isCurrentLocationKnown()).count() == 3L);
   }
 
   private HoodieWriteConfig makeConfig() {

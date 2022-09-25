@@ -22,25 +22,24 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-
 import org.apache.spark.launcher.SparkLauncher;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 /**
  * CLI command for marker options.
  */
-@Component
-public class MarkersCommand implements CommandMarker {
+@ShellComponent
+public class MarkersCommand {
 
-  @CliCommand(value = "marker delete", help = "Delete the marker")
+  @ShellMethod(key = "marker delete", value = "Delete the marker")
   public String deleteMarker(
-      @CliOption(key = {"commit"}, help = "Delete a marker") final String instantTime,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1G",
+      @ShellOption(value = {"--commit"}, help = "Delete a marker") final String instantTime,
+      @ShellOption(value = {"--sparkProperties"}, help = "Spark Properties File Path",
+          defaultValue = "") final String sparkPropertiesPath,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
+      @ShellOption(value = "--sparkMemory", defaultValue = "1G",
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();

@@ -322,7 +322,9 @@ public class FileCreateUtils {
     if (Files.notExists(baseFilePath)) {
       Files.createFile(baseFilePath);
     }
-    new RandomAccessFile(baseFilePath.toFile(), "rw").setLength(length);
+    RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw");
+    raf.setLength(length);
+    raf.close();
     Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
   }
 
@@ -344,7 +346,9 @@ public class FileCreateUtils {
     if (Files.notExists(logFilePath)) {
       Files.createFile(logFilePath);
     }
-    new RandomAccessFile(logFilePath.toFile(), "rw").setLength(length);
+    RandomAccessFile raf = new RandomAccessFile(logFilePath.toFile(), "rw");
+    raf.setLength(length);
+    raf.close();
   }
 
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)
@@ -390,13 +394,13 @@ public class FileCreateUtils {
     removeMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION);
   }
 
-  public static java.nio.file.Path renameFileToTemp(java.nio.file.Path sourcePath, String instantTime) throws IOException {
-    java.nio.file.Path dummyFilePath = sourcePath.getParent().resolve(instantTime + ".temp");
+  public static Path renameFileToTemp(Path sourcePath, String instantTime) throws IOException {
+    Path dummyFilePath = sourcePath.getParent().resolve(instantTime + ".temp");
     Files.move(sourcePath, dummyFilePath);
     return dummyFilePath;
   }
 
-  public static void renameTempToMetaFile(java.nio.file.Path tempFilePath, java.nio.file.Path destPath) throws IOException {
+  public static void renameTempToMetaFile(Path tempFilePath, Path destPath) throws IOException {
     Files.move(tempFilePath, destPath);
   }
 
