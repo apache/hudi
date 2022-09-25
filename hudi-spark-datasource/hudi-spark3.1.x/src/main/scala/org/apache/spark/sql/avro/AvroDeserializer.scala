@@ -23,7 +23,6 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.util.Utf8
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
-
 import org.apache.spark.sql.avro.AvroDeserializer.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
 import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
@@ -37,7 +36,6 @@ import org.apache.spark.unsafe.types.UTF8String
 
 import java.math.BigDecimal
 import java.nio.ByteBuffer
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
