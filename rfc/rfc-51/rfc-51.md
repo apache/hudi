@@ -189,7 +189,7 @@ create table hudi_cdc_table
 ) using hudi
 tblproperties (
     'primaryKey' = 'id',
-    'preCombineField' = 'ts',
+    'preCombineField' = 'ts_ms',
     'hoodie.table.cdc.enabled' = 'true',
     'hoodie.table.cdc.supplemental.logging.mode' = 'DATA_AFTER',
     'type' = 'cow'
@@ -229,7 +229,7 @@ class CDCReader(
 ) extends BaseRelation with PrunedFilteredScan {
 
   override def schema: StructType = {
-  // 'op', 'source', 'ts', 'before', 'after'
+  // 'op', 'source', 'ts_ms', 'before', 'after'
   }
   
   override def buildScan(
