@@ -22,7 +22,7 @@ package org.apache.hudi.common.table.cdc;
  * Here define five cdc infer cases. The different cdc infer case will decide which file will be
  * used to extract the change data, and how to do this.
  *
- * CDC_LOG_FILE:
+ * AS_IS:
  *   For this type, there must be a real cdc log file from which we get the whole/part change data.
  *   when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before_after', it keeps all the fields about the
  *   change data, including `op`, `ts_ms`, `before` and `after`. So read it and return directly,
@@ -37,18 +37,18 @@ package org.apache.hudi.common.table.cdc;
  *   current base/log file as `after`. When `op` is equal to 'd', get the previous record from
  *   the previous file slice as `before`, and `after` is null.
  *
- * ADD_BASE_FILE:
+ * BASE_FILE_INSERT:
  *   For this type, there must be a base file at the current instant. All the records from this
  *   file is new-coming, so we can load this, mark all the records with `i`, and treat them as
  *   the value of `after`. The value of `before` for each record is null.
  *
- * REMOVE_BASE_FILE:
+ * BASE_FILE_INSERT:
  *   For this type, there must be an empty file at the current instant, but a non-empty base file
  *   at the previous instant. First we find this base file that has the same file group and belongs
  *   to the previous instant. Then load this, mark all the records with `d`, and treat them as
  *   the value of `before`. The value of `after` for each record is null.
  *
- * MOR_LOG_FILE:
+ * LOG_FILE:
  *   For this type, a normal log file of mor table will be used. First we need to load the previous
  *   file slice(including the base file and other log files in the same file group). Then for each
  *   record from the log file, get the key of this, and execute the following steps:
@@ -62,7 +62,7 @@ package org.apache.hudi.common.table.cdc;
  *       b) if there is not a record with the same key in the data loaded, `op` is 'i', 'before' is
  *          null, `after` is the current record;
  *
- * REPLACED_FILE_GROUP:
+ * REPLACE_COMMIT:
  *   For this type, it must be a replacecommit, like INSERT_OVERWRITE and DROP_PARTITION. It drops
  *   a whole file group. First we find this file group. Then load this, mark all the records with
  *   `d`, and treat them as the value of `before`. The value of `after` for each record is null.
