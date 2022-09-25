@@ -144,7 +144,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.engineContext = engineContext;
     this.fileStatusCache = fileStatusCache;
 
-    doRefresh(!shouldRefresh);
+    if (shouldRefresh) {
+      doRefresh();
+    } else {
+      initMetadataTable();
+    }
   }
 
   protected abstract Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath);
@@ -189,6 +193,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       return this.cachedAllPartitionPaths;
     }
 
+    loadAllQueryPartitionPaths();
+    return this.cachedAllPartitionPaths;
+  }
+
+  private void loadAllQueryPartitionPaths() {
     List<String> queryRelativePartitionPaths = queryPaths.stream()
         .map(path -> FSUtils.getRelativePartitionPath(basePath, path))
         .collect(Collectors.toList());
@@ -197,7 +206,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
     this.queryAsNonePartitionedTable = this.cachedAllPartitionPaths.stream().anyMatch(p -> p.values.length == 0);
-    return this.cachedAllPartitionPaths;
   }
 
   protected Map<PartitionPath, List<FileSlice>> getAllInputFileSlices() {
@@ -211,35 +219,37 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * Get input file slice for the given partition. Will use cache directly if it is computed before.
    */
   protected List<FileSlice> getCachedInputFileSlices(PartitionPath partition) {
-    return cachedAllInputFileSlices.computeIfAbsent(partition, (p) -> {
-      FileStatus[] files = loadPartitionPathFiles(p);
-      HoodieTimeline activeTimeline = getActiveTimeline();
-      Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
+    return cachedAllInputFileSlices.computeIfAbsent(partition, this::loadInputFileSlicesOfPartition);
+  }
 
-      HoodieTableFileSystemView fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, files);
+  private List<FileSlice> loadInputFileSlicesOfPartition(PartitionPath p) {
+    FileStatus[] files = loadPartitionPathFiles(p);
+    HoodieTimeline activeTimeline = getActiveTimeline();
+    Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
 
-      Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
+    HoodieTableFileSystemView fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, files);
 
-      validate(activeTimeline, queryInstant);
+    Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
 
-      List<FileSlice> ret;
-      if (tableType.equals(HoodieTableType.MERGE_ON_READ) && queryType.equals(HoodieTableQueryType.SNAPSHOT)) {
-        ret = queryInstant.map(instant ->
-                fileSystemView.getLatestMergedFileSlicesBeforeOrOn(p.path, queryInstant.get())
-                    .collect(Collectors.toList())
-            )
-            .orElse(Collections.emptyList());
-      } else {
-        ret = queryInstant.map(instant ->
-                fileSystemView.getLatestFileSlicesBeforeOrOn(p.path, instant, true)
-            )
-            .orElse(fileSystemView.getLatestFileSlices(p.path))
-            .collect(Collectors.toList());
-      }
+    validate(activeTimeline, queryInstant);
 
-      cachedFileSize += ret.stream().mapToLong(BaseHoodieTableFileIndex::fileSliceSize).sum();
-      return ret;
-    });
+    List<FileSlice> ret;
+    if (tableType.equals(HoodieTableType.MERGE_ON_READ) && queryType.equals(HoodieTableQueryType.SNAPSHOT)) {
+      ret = queryInstant.map(instant ->
+              fileSystemView.getLatestMergedFileSlicesBeforeOrOn(p.path, queryInstant.get())
+                  .collect(Collectors.toList())
+          )
+          .orElse(Collections.emptyList());
+    } else {
+      ret = queryInstant.map(instant ->
+              fileSystemView.getLatestFileSlicesBeforeOrOn(p.path, instant, true)
+          )
+          .orElse(fileSystemView.getLatestFileSlices(p.path))
+          .collect(Collectors.toList());
+    }
+
+    cachedFileSize += ret.stream().mapToLong(BaseHoodieTableFileIndex::fileSliceSize).sum();
+    return ret;
   }
 
   /**
@@ -261,15 +271,15 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     boolean hiveStylePartitioning = Boolean.parseBoolean(metaClient.getTableConfig().getHiveStylePartitioningEnable());
     boolean urlEncodePartitioning = Boolean.parseBoolean(this.metaClient.getTableConfig().getUrlEncodePartitioning());
-    Map<String, Integer> partitionNamesToIdx = IntStream.range(0, partitionNames.length)
+    Map<String, Integer> partitionNameToIdx = IntStream.range(0, partitionNames.length)
         .mapToObj(i -> Pair.of(i, partitionNames[i]))
         .collect(Collectors.toMap(Pair::getValue, Pair::getKey));
     StringBuilder queryPartitionPath = new StringBuilder();
     int idx = 0;
     for (; idx < partitionNames.length; ++idx) {
       String columnNames = this.partitionColumns[idx];
-      if (partitionNamesToIdx.containsKey(columnNames)) {
-        int k = partitionNamesToIdx.get(columnNames);
+      if (partitionNameToIdx.containsKey(columnNames)) {
+        int k = partitionNameToIdx.get(columnNames);
         String value =  urlEncodePartitioning ? PartitionPathEncodeUtils.escapePathName(values[k]) : values[k];
         queryPartitionPath.append(hiveStylePartitioning ? columnNames + "=" : "").append(value).append("/");
       } else {
@@ -281,6 +291,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     if (idx == this.partitionColumns.length) {
       return Collections.singletonList(new PartitionPath(queryPartitionPath.toString(), parsePartitionColumnValues(partitionColumns, queryPartitionPath.toString())));
     }
+    // The predicate forms a prefix of partition path, do listing to the path only.
     return getQueryPartitionPaths(Collections.singletonList(queryPartitionPath.toString()));
   }
 
@@ -350,20 +361,16 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
-  private void doRefresh() {
-    doRefresh(false);
-  }
-  
-  private void doRefresh(boolean initMetadataOnly) {
-    long startTime = System.currentTimeMillis();
-
+  private void initMetadataTable() {
     HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
         FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
     resetTableMetadata(newTableMetadata);
+  }
 
-    if (initMetadataOnly) {
-      return;
-    }
+  private void doRefresh() {
+    long startTime = System.currentTimeMillis();
+
+    initMetadataTable();
 
     // Reset it to null to trigger re-loading of all partition path
     cachedAllPartitionPaths = null;
