@@ -69,7 +69,7 @@ public class RepairsCommand {
   @ShellMethod(key = "repair deduplicate",
       value = "De-duplicate a partition path contains duplicates & produce repaired files to replace with")
   public String deduplicate(
-      @ShellOption(value = {"--duplicatedPartitionPath"}, help = "Partition Path containing the duplicates")
+      @ShellOption(value = {"--duplicatedPartitionPath"}, defaultValue = "", help = "Partition Path containing the duplicates")
       final String duplicatedPartitionPath,
       @ShellOption(value = {"--repairedOutputPath"}, help = "Location to place the repaired files")
       final String repairedOutputPath,

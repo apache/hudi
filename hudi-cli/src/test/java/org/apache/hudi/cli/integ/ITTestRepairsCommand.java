@@ -69,6 +69,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
   private String duplicatedPartitionPath;
   private String duplicatedPartitionPathWithUpdates;
   private String duplicatedPartitionPathWithUpserts;
+  private String duplicatedNoPartitionPath;
   private String repairedOutputPath;
 
   private HoodieFileFormat fileFormat;
@@ -78,6 +79,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     duplicatedPartitionPath = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
     duplicatedPartitionPathWithUpdates = HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     duplicatedPartitionPathWithUpserts = HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
+    duplicatedNoPartitionPath = HoodieTestDataGenerator.NO_PARTITION_PATH;
     repairedOutputPath = Paths.get(basePath, "tmp").toString();
 
     HoodieCLI.conf = jsc.hadoopConfiguration();
@@ -134,6 +136,23 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     morTable.withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "3", dupRecords)
         .withInserts(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, "7", dupRecords)
         .withInserts(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, "8", dupRecords);
+
+    // init cow table for non-partitioned table tests
+    String cowNonPartitionedTablePath = Paths.get(basePath, "cow_table_non_partitioned").toString();
+
+    // Create cow table and connect
+    new TableCommand().createTable(
+        cowNonPartitionedTablePath, "cow_table_non_partitioned", HoodieTableType.COPY_ON_WRITE.name(),
+        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+
+    HoodieSparkWriteableTestTable cowNonPartitionedTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
+
+    cowNonPartitionedTable.addCommit("20160401010101")
+        .withInserts(HoodieTestDataGenerator.NO_PARTITION_PATH, "1", hoodieRecords1)
+        .getFileIdWithLogFile(HoodieTestDataGenerator.NO_PARTITION_PATH);
+
+    cowNonPartitionedTable.addCommit("20160401010202")
+        .withInserts(HoodieTestDataGenerator.NO_PARTITION_PATH, "2", dupRecords);
 
     fileFormat = metaClient.getTableConfig().getBaseFileFormat();
   }
@@ -221,6 +240,39 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     String partitionPath = HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
     String cmdStr = String.format("repair deduplicate --duplicatedPartitionPath %s --repairedOutputPath %s --sparkMaster %s --dedupeType %s",
         partitionPath, repairedOutputPath, "local", "upsert_type");
+    Object resultForCmd = shell.evaluate(() -> cmdStr);
+    assertTrue(ShellEvaluationResultUtil.isSuccess(resultForCmd));
+    assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, resultForCmd.toString());
+
+    // After deduplicate, there are 100 records
+    FileStatus[] fileStatus = fs.listStatus(new Path(repairedOutputPath));
+    files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
+    Dataset result = readFiles(files);
+    assertEquals(100, result.count());
+  }
+
+  /**
+   * Test case dry run deduplicate for non-partitioned dataset.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  public void testDeduplicateNoPartitionWithInserts(HoodieTableType tableType) throws IOException {
+    String tablePath = Paths.get(basePath, "cow_table_non_partitioned").toString();
+    connectTableAndReloadMetaClient(tablePath);
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
+        fs.listStatus(new Path(Paths.get(tablePath, duplicatedNoPartitionPath).toString())));
+    List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
+    assertEquals(2, filteredStatuses.size(), "There should be 2 files.");
+
+    // Before deduplicate, all files contain 110 records
+    String[] files = filteredStatuses.toArray(new String[0]);
+    Dataset df = readFiles(files);
+    assertEquals(110, df.count());
+
+    // use default value without specifying duplicatedPartitionPath
+    String cmdStr = String.format("repair deduplicate --repairedOutputPath %s --sparkMaster %s",
+        repairedOutputPath, "local");
     Object resultForCmd = shell.evaluate(() -> cmdStr);
     assertTrue(ShellEvaluationResultUtil.isSuccess(resultForCmd));
     assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, resultForCmd.toString());
