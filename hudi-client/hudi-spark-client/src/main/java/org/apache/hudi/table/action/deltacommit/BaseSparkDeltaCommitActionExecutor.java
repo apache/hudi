@@ -76,7 +76,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T extends HoodieRecordP
     LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
     // Pre-check: if the old file does not exist (which may happen in bucket index case), fallback to insert
     if (checkBaseFileNonExists(partitionPath, fileId)) {
-      return handleInsert(fileId, recordItr);
+      return super.handleInsert(fileId, recordItr);
     }
     if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
         && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {

@@ -47,7 +47,7 @@ public class HoodieRangeBucketIndex extends HoodieBucketIndex {
 
   @Override
   public boolean canIndexLogFiles() {
-    return false;
+    return true;
   }
 
   @Override
