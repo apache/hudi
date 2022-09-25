@@ -677,7 +677,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   test ("Test Merge into with String cast to Double") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      // Create a mor partitioned table.
+      // Create a cow partitioned table.
       spark.sql(
         s"""
            | create table $tableName (
@@ -696,7 +696,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | location '${tmp.getCanonicalPath}'
          """.stripMargin)
       // Insert data
-      spark.sql(s"insert into $tableName select 1, 'a1', 10.0, 999, '2021-03-21'")
+      spark.sql(s"insert into $tableName select 1, 'a1', cast(10.0 as double), 999, '2021-03-21'")
       spark.sql(
         s"""
            | merge into $tableName as t0
