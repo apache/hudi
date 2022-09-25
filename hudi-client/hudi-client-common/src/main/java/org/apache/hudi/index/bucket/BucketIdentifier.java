@@ -59,7 +59,7 @@ public class BucketIdentifier implements Serializable {
       int bucketNum = (int) (Long.parseLong(recordKey) / bucketRangeStepSize);
       return bucketNum;
     } catch (Exception e) {
-      LOG.error("RANGE_BUCKET index need a primary key like Interger.", e);
+      LOG.error("RANGE_BUCKET index needs integer type primary key.", e);
       throw e;
     }
   }

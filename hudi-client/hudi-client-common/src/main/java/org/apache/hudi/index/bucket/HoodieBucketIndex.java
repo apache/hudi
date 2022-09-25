@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -53,11 +54,11 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
   public HoodieBucketIndex(HoodieWriteConfig config) {
     super(config);
-    if (config.getBucketIndexEngineType() == BucketIndexEngineType.RANGE_BUCKET) {
-      return;
-    }
     this.numBuckets = config.getBucketIndexNumBuckets();
-    this.indexKeyFields = Arrays.asList(config.getBucketIndexHashField().split(","));
+    String bucketIndexHashField = config.getBucketIndexHashField();
+    if (!StringUtils.isNullOrEmpty(bucketIndexHashField)) {
+      this.indexKeyFields = Arrays.asList(bucketIndexHashField.split(","));
+    }
     LOG.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
   }
 

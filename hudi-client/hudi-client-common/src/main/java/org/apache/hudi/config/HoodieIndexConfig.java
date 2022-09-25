@@ -687,7 +687,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       if (hoodieIndexConfig.getString(INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.toString())) {
         if (HoodieIndex.BucketIndexEngineType.RANGE_BUCKET.toString().equalsIgnoreCase(hoodieIndexConfig.getString(BUCKET_INDEX_ENGINE_TYPE))) {
           if (hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).contains(",")) {
-            throw new HoodieIndexException("Range Bucket index only support single-record-key. Best auto-increment key.");
+            throw new HoodieIndexException("Range Bucket index only support single record key. Best auto-increment key.");
           }
           return;
         }

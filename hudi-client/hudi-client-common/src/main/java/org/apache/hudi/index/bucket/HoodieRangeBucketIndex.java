@@ -23,6 +23,8 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
@@ -33,11 +35,14 @@ import java.util.stream.Collectors;
  */
 public class HoodieRangeBucketIndex extends HoodieBucketIndex {
 
-  private final int bucketRangeStepSize;
+  private static final Logger LOG = LogManager.getLogger(HoodieRangeBucketIndex.class);
+
+  private final int rangeBucketStepSize;
 
   public HoodieRangeBucketIndex(HoodieWriteConfig config) {
     super(config);
-    bucketRangeStepSize = config.getBucketRangeStepSize();
+    rangeBucketStepSize = config.getRangeBucketStepSize();
+    LOG.info("Use range bucket index, rangeBucketStepSize = " + rangeBucketStepSize);
   }
 
   @Override
@@ -63,7 +68,7 @@ public class HoodieRangeBucketIndex extends HoodieBucketIndex {
 
     @Override
     public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key) {
-      int bucketId = BucketIdentifier.getRangeBucketId(key, bucketRangeStepSize);
+      int bucketId = BucketIdentifier.getRangeBucketId(key, rangeBucketStepSize);
       Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(key.getPartitionPath());
       if (bucketIdToFileIdMapping.containsKey(bucketId)) {
         return Option.ofNullable(bucketIdToFileIdMapping.get(bucketId));
