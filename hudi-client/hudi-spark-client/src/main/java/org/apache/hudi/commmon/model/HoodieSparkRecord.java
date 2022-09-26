@@ -138,7 +138,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType otherStructType = ((HoodieSparkRecord) other).getStructType();
     StructType writerStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
     InternalRow mergeRow = HoodieInternalRowUtils.stitchRecords(data, getStructType(), (InternalRow) other.getData(), otherStructType, writerStructType);
-    HoodieInternalRowUtils.addCompressedSchema(writerStructType);
     return new HoodieSparkRecord(getKey(), mergeRow, writerStructType, getOperation());
   }
 
@@ -157,7 +156,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       resultRow = new HoodieInternalRow(metaFields, data, true);
     }
 
-    HoodieInternalRowUtils.addCompressedSchema(targetStructType);
     return new HoodieSparkRecord(getKey(), resultRow, targetStructType, getOperation());
   }
 
@@ -172,7 +170,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       resultRow = new HoodieInternalRow(metaFields, data, true);
     }
 
-    HoodieInternalRowUtils.addCompressedSchema(newStructType);
     return new HoodieSparkRecord(getKey(), resultRow, newStructType, getOperation());
   }
 

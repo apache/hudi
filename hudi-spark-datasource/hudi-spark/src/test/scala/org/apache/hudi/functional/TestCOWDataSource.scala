@@ -36,7 +36,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, HoodieSparkRecordMerger}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieInternalRowUtils, HoodieSparkRecordMerger, QuickstartUtils}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, concat, lit, udf}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -96,6 +96,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     cleanupTestDataGenerator()
     cleanupFileSystem()
     FileSystem.closeAll()
+    HoodieInternalRowUtils.clearBroadcastFingerPint()
     System.gc()
   }
 

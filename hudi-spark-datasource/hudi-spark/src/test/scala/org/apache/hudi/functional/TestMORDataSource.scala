@@ -36,8 +36,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, SparkDatasetMixin}
-import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, SparkDatasetMixin}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieInternalRowUtils, HoodieSparkRecordMerger, SparkDatasetMixin}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
@@ -89,6 +88,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
+    HoodieInternalRowUtils.clearBroadcastFingerPint()
   }
 
   override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =

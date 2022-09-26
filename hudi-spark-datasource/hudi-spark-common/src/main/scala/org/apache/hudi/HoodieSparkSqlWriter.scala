@@ -300,7 +300,7 @@ object HoodieSparkSqlWriter {
               throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
             }
             // Create a HoodieWriteClient & issue the write.
-            val hoodieAllIncomingRecords = createHoodieRecordRdd(df, writeConfig, parameters, writerSchema)
+            val hoodieAllIncomingRecords = createHoodieRecordRdd(sparkContext, df, writeConfig, parameters, writerSchema)
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)
@@ -837,7 +837,7 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  private def createHoodieRecordRdd(df: DataFrame, config: HoodieWriteConfig, parameters: Map[String, String], schema: Schema): JavaRDD[HoodieRecord[_]] = {
+  private def createHoodieRecordRdd(sparkContext: SparkContext, df: DataFrame, config: HoodieWriteConfig, parameters: Map[String, String], schema: Schema): JavaRDD[HoodieRecord[_]] = {
     val reconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
     val tblName = config.getString(HoodieWriteConfig.TBL_NAME)
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
@@ -873,16 +873,17 @@ object HoodieSparkSqlWriter {
         log.info("Use spark record")
         // ut will use AvroKeyGenerator, so we need to cast it in spark record
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
+        val schemaWithMetaField = HoodieAvroUtils.addMetadataFields(schema, config.allowOperationMetadataField)
         val structType = HoodieInternalRowUtils.getCachedSchema(schema)
-        val structTypeBC = SparkContext.getOrCreate().broadcast(structType)
-        HoodieInternalRowUtils.addCompressedSchema(structType)
+        val structTypeWithMetaField = HoodieInternalRowUtils.getCachedSchema(schemaWithMetaField)
+        val structTypeBC = sparkContext.broadcast(structType)
+        HoodieInternalRowUtils.broadcastCompressedSchema(List(structType, structTypeWithMetaField), sparkContext)
         df.queryExecution.toRdd.map(row => {
           val internalRow = row.copy()
           val (processedRow, writeSchema) = getSparkProcessedRecord(partitionCols, internalRow, dropPartitionColumns, structTypeBC.value)
           val recordKey = sparkKeyGenerator.getRecordKey(internalRow, structTypeBC.value)
           val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structTypeBC.value)
           val key = new HoodieKey(recordKey.toString, partitionPath.toString)
-          HoodieInternalRowUtils.addCompressedSchema(structTypeBC.value)
 
           new HoodieSparkRecord(key, processedRow, writeSchema)
         }).toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]
