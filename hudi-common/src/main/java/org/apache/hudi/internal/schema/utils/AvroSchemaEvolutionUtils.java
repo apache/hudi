@@ -130,9 +130,7 @@ public class AvroSchemaEvolutionUtils {
     // try to correct all changes
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(writeInternalSchema);
     candidateUpdateCols.stream().forEach(f -> updateChange.updateColumnNullability(f, true));
-    Schema result = AvroInternalSchemaConverter.convert(
-        SchemaChangeUtils.applyTableChanges2Schema(writeInternalSchema, updateChange),
-        writeSchema.getName(), writeSchema.getNamespace());
+    Schema result = AvroInternalSchemaConverter.convert(SchemaChangeUtils.applyTableChanges2Schema(writeInternalSchema, updateChange), writeSchema.getName());
     return result;
   }
 }
