@@ -41,6 +41,50 @@ Once these are set, you are good to launch hudi-cli and access S3 dataset.
 ./hudi-cli/hudi-cli.sh
 ```
 
+
+## Connect to a Kerberized cluster
+
+Before connecting to a Kerberized cluster, you can use **kerberos kinit** command. Following is the usage of this command.
+
+```shell
+hudi->help kerberos kinit
+NAME
+       kerberos kinit - Perform Kerberos authentication
+
+SYNOPSIS
+       kerberos kinit --krb5conf String [--principal String] [--keytab String]
+
+OPTIONS
+       --krb5conf String
+       Path to krb5.conf
+       [Optional, default = /etc/krb5.conf]
+
+       --principal String
+       Kerberos principal
+       [Mandatory]
+
+       --keytab String
+       Path to keytab
+       [Mandatory]
+```
+
+For example:
+
+```shell
+hudi->kerberos kinit --principal user/host@DOMAIN --keytab /etc/security/keytabs/user.keytab
+Perform Kerberos authentication
+Parameters:
+--krb5conf: /etc/krb5.conf
+--principal: user/host@DOMAIN
+--keytab: /etc/security/keytabs/user.keytab
+Kerberos current user: user/host@DOMAIN (auth:KERBEROS)
+Kerberos login user: user/host@DOMAIN (auth:KERBEROS)
+Kerberos authentication success
+```
+
+If you see "Kerberos authentication success" in the command output, it means Kerberos authentication has been successful.
+
+
 ## Using hudi-cli
 
 To initialize a hudi table, use the following command.
