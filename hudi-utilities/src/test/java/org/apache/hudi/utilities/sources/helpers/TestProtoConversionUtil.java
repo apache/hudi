@@ -105,7 +105,7 @@ public class TestProtoConversionUtil {
   @Test
   public void recursiveSchema_noOverflow() throws IOException {
     Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive.avsc"));
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
     Pair<Parent, GenericRecord> inputAndOutput = createInputOutputForRecursiveSchemaNoOverflow(convertedSchema);
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
@@ -114,7 +114,7 @@ public class TestProtoConversionUtil {
   @Test
   public void recursiveSchema_withOverflow() throws Exception {
     Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive.avsc"));
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
     Pair<Parent, GenericRecord> inputAndOutput = createInputOutputForRecursiveSchemaWithOverflow(convertedSchema);
     Parent input = inputAndOutput.getLeft();
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);

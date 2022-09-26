@@ -46,6 +46,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
@@ -91,7 +92,7 @@ public class ProtoConversionUtil {
             new Schema.Field(OVERFLOW_BYTES_FIELD_NAME, Schema.create(Schema.Type.BYTES), null, "".getBytes())));
     private static final AvroSupport INSTANCE = new AvroSupport();
     // A cache of the proto class name paired with whether wrapped primitives should be flattened as the key and the generated avro schema as the value
-    private static final Map<Pair<Class, Boolean>, Schema> SCHEMA_CACHE = new ConcurrentHashMap<>();
+    private static final Map<SchemaCacheKey, Schema> SCHEMA_CACHE = new ConcurrentHashMap<>();
     // A cache with a key as the pair target avro schema and the proto descriptor for the source and the value as an array of proto field descriptors where the order matches the avro ordering.
     // When converting from proto to avro, we want to be able to iterate over the fields in the proto in the same order as they appear in the avro schema.
     private static final Map<Pair<Schema, Descriptors.Descriptor>, Descriptors.FieldDescriptor[]> FIELD_CACHE = new ConcurrentHashMap<>();
@@ -123,7 +124,7 @@ public class ProtoConversionUtil {
     }
 
     public Schema getSchema(Class c, boolean flattenWrappedPrimitives, int maxRecursionDepth) {
-      return SCHEMA_CACHE.computeIfAbsent(Pair.of(c, flattenWrappedPrimitives), key -> {
+      return SCHEMA_CACHE.computeIfAbsent(new SchemaCacheKey(c, flattenWrappedPrimitives, maxRecursionDepth), key -> {
         try {
           Object descriptor = c.getMethod("getDescriptor").invoke(null);
           if (c.isEnum()) {
@@ -389,6 +390,35 @@ public class ProtoConversionUtil {
 
     private String appendFieldNameToPath(String existingPath, String fieldName) {
       return existingPath + "." + fieldName;
+    }
+
+    private static class SchemaCacheKey {
+      private final String className;
+      private final boolean flattenWrappedPrimitives;
+      private final int maxRecursionDepth;
+
+      SchemaCacheKey(Class clazz, boolean flattenWrappedPrimitives, int maxRecursionDepth) {
+        this.className = clazz.getName();
+        this.flattenWrappedPrimitives = flattenWrappedPrimitives;
+        this.maxRecursionDepth = maxRecursionDepth;
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        if (this == o) {
+          return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+          return false;
+        }
+        SchemaCacheKey that = (SchemaCacheKey) o;
+        return flattenWrappedPrimitives == that.flattenWrappedPrimitives && maxRecursionDepth == that.maxRecursionDepth && className.equals(that.className);
+      }
+
+      @Override
+      public int hashCode() {
+        return Objects.hash(className, flattenWrappedPrimitives, maxRecursionDepth);
+      }
     }
   }
 }

@@ -55,14 +55,25 @@ public class TestProtoClassBasedSchemaProvider {
   }
 
   @Test
-  public void validateRecursiveSchemaGeneration() throws IOException {
+  public void validateRecursiveSchemaGeneration_depth2() throws IOException {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
     properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key(), String.valueOf(2));
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
     Schema.Parser parser = new Schema.Parser();
-    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive.avsc"));
+    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
+    Assertions.assertEquals(expectedSchema, convertedSchema);
+  }
+
+  @Test
+  public void validateRecursiveSchemaGeneration_defaultDepth() throws IOException {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
+    ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
+    Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
+    Schema.Parser parser = new Schema.Parser();
+    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_default_limit.avsc"));
     Assertions.assertEquals(expectedSchema, convertedSchema);
   }
 }
