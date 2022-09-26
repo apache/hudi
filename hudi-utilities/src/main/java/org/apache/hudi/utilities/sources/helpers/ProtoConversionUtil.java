@@ -82,12 +82,12 @@ public class ProtoConversionUtil {
    * 2. Convert directly from a protobuf {@link Message} to a {@link GenericRecord} while properly handling enums and wrapped primitives mentioned above.
    */
   private static class AvroSupport {
-    private static final Schema STRINGS = Schema.create(Schema.Type.STRING);
-    private static final Schema NULL = Schema.create(Schema.Type.NULL);
+    private static final Schema STRING_SCHEMA = Schema.create(Schema.Type.STRING);
+    private static final Schema NULL_SCHEMA = Schema.create(Schema.Type.NULL);
     private static final String OVERFLOW_DESCRIPTOR_FIELD_NAME = "descriptor_full_name";
     private static final String OVERFLOW_BYTES_FIELD_NAME = "proto_bytes";
     private static final Schema RECURSION_OVERFLOW_SCHEMA = Schema.createRecord("recursion_overflow", null, "org.apache.hudi.proto", false,
-        Arrays.asList(new Schema.Field(OVERFLOW_DESCRIPTOR_FIELD_NAME, STRINGS, null, ""),
+        Arrays.asList(new Schema.Field(OVERFLOW_DESCRIPTOR_FIELD_NAME, STRING_SCHEMA, null, ""),
             new Schema.Field(OVERFLOW_BYTES_FIELD_NAME, Schema.create(Schema.Type.BYTES), null, "".getBytes())));
     private static final AvroSupport INSTANCE = new AvroSupport();
     // A cache of the proto class name paired with whether wrapped primitives should be flattened as the key and the generated avro schema as the value
@@ -212,7 +212,7 @@ public class ProtoConversionUtil {
           String updatedPath = appendFieldNameToPath(path, f.getName());
           if (flattenWrappedPrimitives && WRAPPER_DESCRIPTORS_TO_TYPE.containsKey(f.getMessageType())) {
             // all wrapper types have a single field, so we can get the first field in the message's schema
-            return schemaFinalizer.apply(Schema.createUnion(Arrays.asList(NULL, getFieldSchema(f.getMessageType().getFields().get(0), recursionDepths, flattenWrappedPrimitives, updatedPath,
+            return schemaFinalizer.apply(Schema.createUnion(Arrays.asList(NULL_SCHEMA, getFieldSchema(f.getMessageType().getFields().get(0), recursionDepths, flattenWrappedPrimitives, updatedPath,
                 maxRecursionDepth))));
           }
           // if message field is repeated (like a list), elements are non-null
@@ -220,7 +220,7 @@ public class ProtoConversionUtil {
             return schemaFinalizer.apply(getMessageSchema(f.getMessageType(), recursionDepths, flattenWrappedPrimitives, updatedPath, maxRecursionDepth));
           }
           // otherwise we create a nullable field schema
-          return schemaFinalizer.apply(Schema.createUnion(Arrays.asList(NULL, getMessageSchema(f.getMessageType(), recursionDepths, flattenWrappedPrimitives, updatedPath, maxRecursionDepth))));
+          return schemaFinalizer.apply(Schema.createUnion(Arrays.asList(NULL_SCHEMA, getMessageSchema(f.getMessageType(), recursionDepths, flattenWrappedPrimitives, updatedPath, maxRecursionDepth))));
         case GROUP: // groups are deprecated
         default:
           throw new RuntimeException("Unexpected type: " + f.getType());
@@ -336,7 +336,7 @@ public class ProtoConversionUtil {
           Map<Object, Object> mapValue = (Map) value;
           Map<Object, Object> mapCopy = new HashMap<>(mapValue.size());
           for (Map.Entry<Object, Object> entry : mapValue.entrySet()) {
-            mapCopy.put(convertObject(STRINGS, entry.getKey()), convertObject(schema.getValueType(), entry.getValue()));
+            mapCopy.put(convertObject(STRING_SCHEMA, entry.getKey()), convertObject(schema.getValueType(), entry.getValue()));
           }
           return mapCopy;
         case NULL:

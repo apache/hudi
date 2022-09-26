@@ -39,17 +39,18 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
-    private static final String PREFIX = "hoodie.deltastreamer.schemaprovider.proto";
-    public static final ConfigProperty<String> PROTO_SCHEMA_CLASS_NAME = ConfigProperty.key(PREFIX + ".className")
+    private static final String PROTO_SCHEMA_PROVIDER_PREFIX = "hoodie.deltastreamer.schemaprovider.proto";
+    public static final ConfigProperty<String> PROTO_SCHEMA_CLASS_NAME = ConfigProperty.key(PROTO_SCHEMA_PROVIDER_PREFIX + ".class.name")
         .noDefaultValue()
         .sinceVersion("0.13.0")
         .withDocumentation("The Protobuf Message class used as the source for the schema.");
 
-    public static final ConfigProperty<Boolean> PROTO_SCHEMA_FLATTEN_WRAPPED_PRIMITIVES = ConfigProperty.key(PREFIX + ".flattenWrappers")
+    public static final ConfigProperty<Boolean> PROTO_SCHEMA_FLATTEN_WRAPPED_PRIMITIVES = ConfigProperty.key(PROTO_SCHEMA_PROVIDER_PREFIX + ".flatten.wrappers")
         .defaultValue(false)
         .sinceVersion("0.13.0")
         .withDocumentation("When set to false wrapped primitives like Int64Value are translated to a record with a single 'value' field instead of simply a nullable value");
-    public static final ConfigProperty<Integer> PROTO_SCHEMA_MAX_RECURSION_DEPTH = ConfigProperty.key(PREFIX + ".maxRecursionDepth")
+
+    public static final ConfigProperty<Integer> PROTO_SCHEMA_MAX_RECURSION_DEPTH = ConfigProperty.key(PROTO_SCHEMA_PROVIDER_PREFIX + ".max.recursion.depth")
         .defaultValue(5)
         .sinceVersion("0.13.0")
         .withDocumentation("The max depth to unravel the Proto schema when translating into an Avro schema. Setting this depth allows the user to convert a schema that is recursive in proto into "
