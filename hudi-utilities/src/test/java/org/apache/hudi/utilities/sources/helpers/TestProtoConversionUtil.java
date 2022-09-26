@@ -53,20 +53,24 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class TestProtoConversionUtil {
+  private static final Random RANDOM = new Random();
+
   @Test
   public void allFieldsSet_wellKnownTypesAreNested() throws IOException {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_nested.avsc"));
-    Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithWellKnownTypesNested(convertedSchema);
+    Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, true);
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
   }
@@ -77,14 +81,14 @@ public class TestProtoConversionUtil {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_nested.avsc"));
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema);
-    Assertions.assertEquals(createDefaultOutputWithWellKnownTypesNested(convertedSchema), actual);
+    Assertions.assertEquals(createDefaultOutput(convertedSchema), actual);
   }
 
   @Test
   public void allFieldsSet_wellKnownTypesAreFlattened() throws IOException {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_flattened.avsc"));
-    Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithWellKnownTypesFlattened(convertedSchema);
+    Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, false);
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
   }
@@ -95,7 +99,7 @@ public class TestProtoConversionUtil {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_flattened.avsc"));
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema);
-    Assertions.assertEquals(createDefaultOutputWithWellKnownTypesFlattened(convertedSchema), actual);
+    Assertions.assertEquals(createDefaultOutput(convertedSchema), actual);
   }
 
   @Test
@@ -126,228 +130,152 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals(input.getChildren(1).getRecurseField().getRecurseField(), parsedChildren2Overflow);
   }
 
-  private Pair<Sample, GenericRecord> createInputOutputSampleWithWellKnownTypesNested(Schema schema) {
+  private Pair<Sample, GenericRecord> createInputOutputSampleWithRandomValues(Schema schema, boolean wellKnownTypesAsRecords) {
     Schema nestedMessageSchema = schema.getField("nested_message").schema().getTypes().get(1);
     Schema listMessageSchema = schema.getField("repeated_message").schema().getElementType();
     Schema mapMessageSchema = schema.getField("map_message").schema().getElementType().getField("value").schema().getTypes().get(1);
 
-    List<Integer> primitiveList = Arrays.asList(1, 2, 3);
-    Map<String, Integer> primitiveMap = new HashMap<>();
-    primitiveMap.put("key1", 1);
-    primitiveMap.put("key2", 2);
+    double primitiveDouble = RANDOM.nextDouble();
+    float primitiveFloat = RANDOM.nextFloat();
+    int primitiveInt = RANDOM.nextInt();
+    long primitiveLong = RANDOM.nextLong();
+    int primitiveUnsignedInt = RANDOM.nextInt();
+    long primitiveUnsignedLong = RANDOM.nextLong();
+    int primitiveSignedInt = RANDOM.nextInt();
+    long primitiveSignedLong = RANDOM.nextLong();
+    int primitiveFixedInt = RANDOM.nextInt();
+    long primitiveFixedLong = RANDOM.nextLong();
+    int primitiveFixedSignedInt = RANDOM.nextInt();
+    long primitiveFixedSignedLong = RANDOM.nextLong();
+    boolean primitiveBoolean = RANDOM.nextBoolean();
+    String primitiveString = randomString(10);
+    byte[] primitiveBytes = randomString(10).getBytes();
 
-    Nested nestedMessage = Nested.newBuilder().setNestedInt(1).build();
-    List<Nested> nestedList = Arrays.asList(Nested.newBuilder().setNestedInt(2).build(), Nested.newBuilder().setNestedInt(3).build());
+    double wrappedDouble = RANDOM.nextDouble();
+    float wrappedFloat = RANDOM.nextFloat();
+    int wrappedInt = RANDOM.nextInt();
+    long wrappedLong = RANDOM.nextLong();
+    int wrappedUnsignedInt = RANDOM.nextInt();
+    long wrappedUnsignedLong = RANDOM.nextLong();
+    boolean wrappedBoolean = RANDOM.nextBoolean();
+    String wrappedString = randomString(10);
+    byte[] wrappedBytes = randomString(10).getBytes();
+    SampleEnum enumValue = SampleEnum.forNumber(RANDOM.nextInt(1));
+
+    List<Integer> primitiveList = Arrays.asList(RANDOM.nextInt(), RANDOM.nextInt(), RANDOM.nextInt());
+    Map<String, Integer> primitiveMap = new HashMap<>();
+    primitiveMap.put(randomString(5), RANDOM.nextInt());
+    primitiveMap.put(randomString(5), RANDOM.nextInt());
+
+    Nested nestedMessage = Nested.newBuilder().setNestedInt(RANDOM.nextInt()).build();
+    List<Nested> nestedList = Arrays.asList(Nested.newBuilder().setNestedInt(RANDOM.nextInt()).build(), Nested.newBuilder().setNestedInt(RANDOM.nextInt()).build());
     Map<String, Nested> nestedMap = new HashMap<>();
-    nestedMap.put("1Key", Nested.newBuilder().setNestedInt(123).build());
-    nestedMap.put("2Key", Nested.newBuilder().setNestedInt(321).build());
+    nestedMap.put(randomString(5), Nested.newBuilder().setNestedInt(RANDOM.nextInt()).build());
+    nestedMap.put(randomString(5), Nested.newBuilder().setNestedInt(RANDOM.nextInt()).build());
     Timestamp time = Timestamps.fromMillis(System.currentTimeMillis());
 
     Sample input = Sample.newBuilder()
-        .setPrimitiveDouble(1.1)
-        .setPrimitiveFloat(2.1f)
-        .setPrimitiveInt(1)
-        .setPrimitiveLong(2L)
-        .setPrimitiveUnsignedInt(3)
-        .setPrimitiveUnsignedLong(4L)
-        .setPrimitiveSignedInt(5)
-        .setPrimitiveSignedLong(6L)
-        .setPrimitiveFixedInt(7)
-        .setPrimitiveFixedLong(8L)
-        .setPrimitiveFixedSignedInt(9)
-        .setPrimitiveFixedSignedLong(10L)
-        .setPrimitiveBoolean(true)
-        .setPrimitiveString("I am a string!")
-        .setPrimitiveBytes(ByteString.copyFrom("I am just bytes".getBytes()))
+        .setPrimitiveDouble(primitiveDouble)
+        .setPrimitiveFloat(primitiveFloat)
+        .setPrimitiveInt(primitiveInt)
+        .setPrimitiveLong(primitiveLong)
+        .setPrimitiveUnsignedInt(primitiveUnsignedInt)
+        .setPrimitiveUnsignedLong(primitiveUnsignedLong)
+        .setPrimitiveSignedInt(primitiveSignedInt)
+        .setPrimitiveSignedLong(primitiveSignedLong)
+        .setPrimitiveFixedInt(primitiveFixedInt)
+        .setPrimitiveFixedLong(primitiveFixedLong)
+        .setPrimitiveFixedSignedInt(primitiveFixedSignedInt)
+        .setPrimitiveFixedSignedLong(primitiveFixedSignedLong)
+        .setPrimitiveBoolean(primitiveBoolean)
+        .setPrimitiveString(primitiveString)
+        .setPrimitiveBytes(ByteString.copyFrom(primitiveBytes))
         .addAllRepeatedPrimitive(primitiveList)
         .putAllMapPrimitive(primitiveMap)
         .setNestedMessage(nestedMessage)
         .addAllRepeatedMessage(nestedList)
         .putAllMapMessage(nestedMap)
-        .setWrappedString(StringValue.of("I am a wrapped string"))
-        .setWrappedInt(Int32Value.of(11))
-        .setWrappedLong(Int64Value.of(12L))
-        .setWrappedUnsignedInt(UInt32Value.of(13))
-        .setWrappedUnsignedLong(UInt64Value.of(14L))
-        .setWrappedDouble(DoubleValue.of(15.5))
-        .setWrappedFloat(FloatValue.of(16.6f))
-        .setWrappedBoolean(BoolValue.of(true))
-        .setWrappedBytes(BytesValue.of(ByteString.copyFrom("I am wrapped bytes".getBytes())))
-        .setEnum(SampleEnum.SECOND)
+        .setWrappedString(StringValue.of(wrappedString))
+        .setWrappedInt(Int32Value.of(wrappedInt))
+        .setWrappedLong(Int64Value.of(wrappedLong))
+        .setWrappedUnsignedInt(UInt32Value.of(wrappedUnsignedInt))
+        .setWrappedUnsignedLong(UInt64Value.of(wrappedUnsignedLong))
+        .setWrappedDouble(DoubleValue.of(wrappedDouble))
+        .setWrappedFloat(FloatValue.of(wrappedFloat))
+        .setWrappedBoolean(BoolValue.of(wrappedBoolean))
+        .setWrappedBytes(BytesValue.of(ByteString.copyFrom(wrappedBytes)))
+        .setEnum(enumValue)
         .setTimestamp(time)
         .build();
 
-    GenericData.Record wrappedStringRecord = getWrappedRecord(schema, "wrapped_string", "I am a wrapped string");
-    GenericData.Record wrappedIntRecord = getWrappedRecord(schema, "wrapped_int", 11);
-    GenericData.Record wrappedLongRecord = getWrappedRecord(schema, "wrapped_long", 12L);
-    GenericData.Record wrappedUIntRecord = getWrappedRecord(schema, "wrapped_unsigned_int", 13L);
-    GenericData.Record wrappedULongRecord = getWrappedRecord(schema, "wrapped_unsigned_long", 14L);
-    GenericData.Record wrappedDoubleRecord = getWrappedRecord(schema, "wrapped_double", 15.5);
-    GenericData.Record wrappedFloatRecord = getWrappedRecord(schema, "wrapped_float", 16.6f);
-    GenericData.Record wrappedBooleanRecord = getWrappedRecord(schema, "wrapped_boolean", true);
-    GenericData.Record wrappedBytesRecord = getWrappedRecord(schema, "wrapped_bytes", ByteBuffer.wrap("I am wrapped bytes".getBytes()));
+    Object wrappedStringOutput;
+    Object wrappedIntOutput;
+    Object wrappedLongOutput;
+    Object wrappedUIntOutput;
+    Object wrappedULongOutput;
+    Object wrappedDoubleOutput;
+    Object wrappedFloatOutput;
+    Object wrappedBooleanOutput;
+    Object wrappedBytesOutput;
+    if (wellKnownTypesAsRecords) {
+      wrappedStringOutput = getWrappedRecord(schema, "wrapped_string", wrappedString);
+      wrappedIntOutput = getWrappedRecord(schema, "wrapped_int", wrappedInt);
+      wrappedLongOutput = getWrappedRecord(schema, "wrapped_long", wrappedLong);
+      wrappedUIntOutput = getWrappedRecord(schema, "wrapped_unsigned_int", (long) wrappedUnsignedInt);
+      wrappedULongOutput = getWrappedRecord(schema, "wrapped_unsigned_long", wrappedUnsignedLong);
+      wrappedDoubleOutput = getWrappedRecord(schema, "wrapped_double", wrappedDouble);
+      wrappedFloatOutput = getWrappedRecord(schema, "wrapped_float", wrappedFloat);
+      wrappedBooleanOutput = getWrappedRecord(schema, "wrapped_boolean", wrappedBoolean);
+      wrappedBytesOutput = getWrappedRecord(schema, "wrapped_bytes", ByteBuffer.wrap(wrappedBytes));
+    } else {
+      wrappedStringOutput = wrappedString;
+      wrappedIntOutput = wrappedInt;
+      wrappedLongOutput = wrappedLong;
+      wrappedUIntOutput = (long) wrappedUnsignedInt;
+      wrappedULongOutput = wrappedUnsignedLong;
+      wrappedDoubleOutput = wrappedDouble;
+      wrappedFloatOutput = wrappedFloat;
+      wrappedBooleanOutput = wrappedBoolean;
+      wrappedBytesOutput = ByteBuffer.wrap(wrappedBytes);
+    }
 
     GenericData.Record expectedRecord = new GenericData.Record(schema);
-    expectedRecord.put("primitive_double", 1.1);
-    expectedRecord.put("primitive_float", 2.1f);
-    expectedRecord.put("primitive_int", 1);
-    expectedRecord.put("primitive_long", 2L);
-    expectedRecord.put("primitive_unsigned_int", 3L);
-    expectedRecord.put("primitive_unsigned_long", 4L);
-    expectedRecord.put("primitive_signed_int", 5);
-    expectedRecord.put("primitive_signed_long", 6L);
-    expectedRecord.put("primitive_fixed_int", 7);
-    expectedRecord.put("primitive_fixed_long", 8L);
-    expectedRecord.put("primitive_fixed_signed_int", 9);
-    expectedRecord.put("primitive_fixed_signed_long", 10L);
-    expectedRecord.put("primitive_boolean", true);
-    expectedRecord.put("primitive_string", "I am a string!");
-    expectedRecord.put("primitive_bytes", ByteBuffer.wrap("I am just bytes".getBytes()));
+    expectedRecord.put("primitive_double", primitiveDouble);
+    expectedRecord.put("primitive_float", primitiveFloat);
+    expectedRecord.put("primitive_int", primitiveInt);
+    expectedRecord.put("primitive_long", primitiveLong);
+    expectedRecord.put("primitive_unsigned_int", (long) primitiveUnsignedInt);
+    expectedRecord.put("primitive_unsigned_long", primitiveUnsignedLong);
+    expectedRecord.put("primitive_signed_int", primitiveSignedInt);
+    expectedRecord.put("primitive_signed_long", primitiveSignedLong);
+    expectedRecord.put("primitive_fixed_int", primitiveFixedInt);
+    expectedRecord.put("primitive_fixed_long", primitiveFixedLong);
+    expectedRecord.put("primitive_fixed_signed_int", primitiveFixedSignedInt);
+    expectedRecord.put("primitive_fixed_signed_long", primitiveFixedSignedLong);
+    expectedRecord.put("primitive_boolean", primitiveBoolean);
+    expectedRecord.put("primitive_string", primitiveString);
+    expectedRecord.put("primitive_bytes", ByteBuffer.wrap(primitiveBytes));
     expectedRecord.put("repeated_primitive", primitiveList);
     expectedRecord.put("map_primitive", convertMapToList(schema, "map_primitive", primitiveMap));
     expectedRecord.put("nested_message", convertNestedMessage(nestedMessageSchema, nestedMessage));
     expectedRecord.put("repeated_message", nestedList.stream().map(m -> convertNestedMessage(listMessageSchema, m)).collect(Collectors.toList()));
     expectedRecord.put("map_message", convertMapToList(schema, "map_message", nestedMap, value -> convertNestedMessage(mapMessageSchema, value)));
-    expectedRecord.put("wrapped_string", wrappedStringRecord);
-    expectedRecord.put("wrapped_int", wrappedIntRecord);
-    expectedRecord.put("wrapped_long", wrappedLongRecord);
-    expectedRecord.put("wrapped_unsigned_int", wrappedUIntRecord);
-    expectedRecord.put("wrapped_unsigned_long", wrappedULongRecord);
-    expectedRecord.put("wrapped_double", wrappedDoubleRecord);
-    expectedRecord.put("wrapped_float", wrappedFloatRecord);
-    expectedRecord.put("wrapped_boolean", wrappedBooleanRecord);
-    expectedRecord.put("wrapped_bytes", wrappedBytesRecord);
-    expectedRecord.put("enum", SampleEnum.SECOND.name());
+    expectedRecord.put("wrapped_string", wrappedStringOutput);
+    expectedRecord.put("wrapped_int", wrappedIntOutput);
+    expectedRecord.put("wrapped_long", wrappedLongOutput);
+    expectedRecord.put("wrapped_unsigned_int", wrappedUIntOutput);
+    expectedRecord.put("wrapped_unsigned_long", wrappedULongOutput);
+    expectedRecord.put("wrapped_double", wrappedDoubleOutput);
+    expectedRecord.put("wrapped_float", wrappedFloatOutput);
+    expectedRecord.put("wrapped_boolean", wrappedBooleanOutput);
+    expectedRecord.put("wrapped_bytes", wrappedBytesOutput);
+    expectedRecord.put("enum", enumValue.name());
     expectedRecord.put("timestamp", getTimestampRecord(schema, time));
 
     return Pair.of(input, expectedRecord);
   }
 
-  private GenericRecord createDefaultOutputWithWellKnownTypesNested(Schema schema) {
-    // all fields will have default values
-    GenericData.Record expectedRecord = new GenericData.Record(schema);
-    expectedRecord.put("primitive_double", 0.0);
-    expectedRecord.put("primitive_float", 0.0f);
-    expectedRecord.put("primitive_int", 0);
-    expectedRecord.put("primitive_long", 0L);
-    expectedRecord.put("primitive_unsigned_int", 0L);
-    expectedRecord.put("primitive_unsigned_long", 0L);
-    expectedRecord.put("primitive_signed_int", 0);
-    expectedRecord.put("primitive_signed_long", 0L);
-    expectedRecord.put("primitive_fixed_int", 0);
-    expectedRecord.put("primitive_fixed_long", 0L);
-    expectedRecord.put("primitive_fixed_signed_int", 0);
-    expectedRecord.put("primitive_fixed_signed_long", 0L);
-    expectedRecord.put("primitive_boolean", false);
-    expectedRecord.put("primitive_string", "");
-    expectedRecord.put("primitive_bytes", ByteBuffer.wrap("".getBytes()));
-    expectedRecord.put("repeated_primitive", Collections.emptyList());
-    expectedRecord.put("map_primitive", Collections.emptyList());
-    expectedRecord.put("nested_message", null);
-    expectedRecord.put("repeated_message", Collections.emptyList());
-    expectedRecord.put("map_message", Collections.emptyList());
-    expectedRecord.put("wrapped_string", null);
-    expectedRecord.put("wrapped_int", null);
-    expectedRecord.put("wrapped_long", null);
-    expectedRecord.put("wrapped_unsigned_int", null);
-    expectedRecord.put("wrapped_unsigned_long", null);
-    expectedRecord.put("wrapped_double", null);
-    expectedRecord.put("wrapped_float", null);
-    expectedRecord.put("wrapped_boolean", null);
-    expectedRecord.put("wrapped_bytes", null);
-    expectedRecord.put("enum", SampleEnum.FIRST.name());
-    expectedRecord.put("timestamp", null);
-    return expectedRecord;
-  }
-
-  private Pair<Sample, GenericRecord> createInputOutputSampleWithWellKnownTypesFlattened(Schema schema) {
-    List<Integer> primitiveList = Arrays.asList(1, 2, 3);
-    Map<String, Integer> primitiveMap = new HashMap<>();
-    primitiveMap.put("key1", 1);
-    primitiveMap.put("key2", 2);
-
-    Nested nestedMessage = Nested.newBuilder().setNestedInt(1).build();
-    List<Nested> nestedList = Arrays.asList(Nested.newBuilder().setNestedInt(2).build(), Nested.newBuilder().setNestedInt(3).build());
-    Map<String, Nested> nestedMap = new HashMap<>();
-    nestedMap.put("1Key", Nested.newBuilder().setNestedInt(123).build());
-    nestedMap.put("2Key", Nested.newBuilder().setNestedInt(321).build());
-    Timestamp time = Timestamps.fromMillis(System.currentTimeMillis());
-
-    Sample input = Sample.newBuilder()
-        .setPrimitiveDouble(1.1)
-        .setPrimitiveFloat(2.1f)
-        .setPrimitiveInt(1)
-        .setPrimitiveLong(2L)
-        .setPrimitiveUnsignedInt(3)
-        .setPrimitiveUnsignedLong(4L)
-        .setPrimitiveSignedInt(5)
-        .setPrimitiveSignedLong(6L)
-        .setPrimitiveFixedInt(7)
-        .setPrimitiveFixedLong(8L)
-        .setPrimitiveFixedSignedInt(9)
-        .setPrimitiveFixedSignedLong(10L)
-        .setPrimitiveBoolean(true)
-        .setPrimitiveString("I am a string!")
-        .setPrimitiveBytes(ByteString.copyFrom("I am just bytes".getBytes()))
-        .addAllRepeatedPrimitive(primitiveList)
-        .putAllMapPrimitive(primitiveMap)
-        .setNestedMessage(nestedMessage)
-        .addAllRepeatedMessage(nestedList)
-        .putAllMapMessage(nestedMap)
-        .setWrappedString(StringValue.of("I am a wrapped string"))
-        .setWrappedInt(Int32Value.of(11))
-        .setWrappedLong(Int64Value.of(12L))
-        .setWrappedUnsignedInt(UInt32Value.of(13))
-        .setWrappedUnsignedLong(UInt64Value.of(14L))
-        .setWrappedDouble(DoubleValue.of(15.5))
-        .setWrappedFloat(FloatValue.of(16.6f))
-        .setWrappedBoolean(BoolValue.of(true))
-        .setWrappedBytes(BytesValue.of(ByteString.copyFrom("I am wrapped bytes".getBytes())))
-        .setEnum(SampleEnum.SECOND)
-        .setTimestamp(time)
-        .build();
-
-    Schema nestedMessageSchema = schema.getField("nested_message").schema().getTypes().get(1);
-    Schema listMessageSchema = schema.getField("repeated_message").schema().getElementType();
-    Schema mapMessageSchema = schema.getField("map_message").schema().getElementType().getField("value").schema().getTypes().get(1);
-
-    GenericData.Record expectedRecord = new GenericData.Record(schema);
-    expectedRecord.put("primitive_double", 1.1);
-    expectedRecord.put("primitive_float", 2.1f);
-    expectedRecord.put("primitive_int", 1);
-    expectedRecord.put("primitive_long", 2L);
-    expectedRecord.put("primitive_unsigned_int", 3L);
-    expectedRecord.put("primitive_unsigned_long", 4L);
-    expectedRecord.put("primitive_signed_int", 5);
-    expectedRecord.put("primitive_signed_long", 6L);
-    expectedRecord.put("primitive_fixed_int", 7);
-    expectedRecord.put("primitive_fixed_long", 8L);
-    expectedRecord.put("primitive_fixed_signed_int", 9);
-    expectedRecord.put("primitive_fixed_signed_long", 10L);
-    expectedRecord.put("primitive_boolean", true);
-    expectedRecord.put("primitive_string", "I am a string!");
-    expectedRecord.put("primitive_bytes", ByteBuffer.wrap("I am just bytes".getBytes()));
-    expectedRecord.put("repeated_primitive", primitiveList);
-    expectedRecord.put("map_primitive", convertMapToList(schema, "map_primitive", primitiveMap));
-    expectedRecord.put("nested_message", convertNestedMessage(nestedMessageSchema, nestedMessage));
-    expectedRecord.put("repeated_message", nestedList.stream().map(m -> convertNestedMessage(listMessageSchema, m)).collect(Collectors.toList()));
-    expectedRecord.put("map_message", convertMapToList(schema, "map_message", nestedMap, value -> convertNestedMessage(mapMessageSchema, value)));
-    expectedRecord.put("wrapped_string", "I am a wrapped string");
-    expectedRecord.put("wrapped_int", 11);
-    expectedRecord.put("wrapped_long", 12L);
-    expectedRecord.put("wrapped_unsigned_int", 13L);
-    expectedRecord.put("wrapped_unsigned_long", 14L);
-    expectedRecord.put("wrapped_double", 15.5);
-    expectedRecord.put("wrapped_float", 16.6f);
-    expectedRecord.put("wrapped_boolean", true);
-    expectedRecord.put("wrapped_bytes", ByteBuffer.wrap("I am wrapped bytes".getBytes()));
-    expectedRecord.put("enum", SampleEnum.SECOND.name());
-    expectedRecord.put("timestamp", getTimestampRecord(schema, time));
-
-    return Pair.of(input, expectedRecord);
-  }
-
-  private GenericRecord createDefaultOutputWithWellKnownTypesFlattened(Schema schema) {
+  private GenericRecord createDefaultOutput(Schema schema) {
     // all fields will have default values
     GenericData.Record expectedRecord = new GenericData.Record(schema);
     expectedRecord.put("primitive_double", 0.0);
@@ -578,5 +506,11 @@ public class TestProtoConversionUtil {
 
   private static <K, V> List<GenericRecord> convertMapToList(final Schema protoSchema, final String fieldName, final Map<K, V> originalMap) {
     return convertMapToList(protoSchema, fieldName, originalMap, Function.identity());
+  }
+
+  private static String randomString(int size) {
+    byte[] bytes = new byte[size];
+    RANDOM.nextBytes(bytes);
+    return new String(bytes, StandardCharsets.UTF_8);
   }
 }
