@@ -91,14 +91,10 @@ public class ProtoConversionUtil {
    * 2. Convert directly from a protobuf {@link Message} to a {@link GenericRecord} while properly handling enums and wrapped primitives mentioned above.
    */
   private static class AvroSupport {
-<<<<<<< HEAD
     private static final Schema STRING_SCHEMA = Schema.create(Schema.Type.STRING);
     private static final Schema NULL_SCHEMA = Schema.create(Schema.Type.NULL);
-=======
+    private static final Schema UNSIGNED_LONG_SCHEMA = LogicalTypes.decimal(21).addToSchema(Schema.createFixed("unsigned_long", null, "org.apache.hudi.protos", 9));
     private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
-    private static final Schema STRINGS = Schema.create(Schema.Type.STRING);
-    private static final Schema NULL = Schema.create(Schema.Type.NULL);
->>>>>>> b6c3bcc94c (get all tests working)
     private static final String OVERFLOW_DESCRIPTOR_FIELD_NAME = "descriptor_full_name";
     private static final String OVERFLOW_BYTES_FIELD_NAME = "proto_bytes";
     private static final Schema RECURSION_OVERFLOW_SCHEMA = Schema.createRecord("recursion_overflow", null, "org.apache.hudi.proto", false,
@@ -110,7 +106,6 @@ public class ProtoConversionUtil {
     // A cache with a key as the pair target avro schema and the proto descriptor for the source and the value as an array of proto field descriptors where the order matches the avro ordering.
     // When converting from proto to avro, we want to be able to iterate over the fields in the proto in the same order as they appear in the avro schema.
     private static final Map<Pair<Schema, Descriptors.Descriptor>, Descriptors.FieldDescriptor[]> FIELD_CACHE = new ConcurrentHashMap<>();
-    private static final Schema UNSIGNED_LONG_SCHEMA = LogicalTypes.decimal(21).addToSchema(Schema.createFixed("unsigned_long", null, "org.apache.hudi.protos", 9));
     private static final Set<Descriptors.Descriptor> WRAPPER_DESCRIPTORS_TO_TYPE = getWrapperDescriptorsToType();
 
     private static Set<Descriptors.Descriptor> getWrapperDescriptorsToType() {
@@ -139,7 +134,7 @@ public class ProtoConversionUtil {
     }
 
     public Schema getSchema(Class c, boolean wrappedPrimitivesAsRecords, int maxRecursionDepth, boolean timestampsAsRecords) {
-      return SCHEMA_CACHE.computeIfAbsent(Pair.of(c, wrappedPrimitivesAsRecords), key -> {
+      return SCHEMA_CACHE.computeIfAbsent(new SchemaCacheKey(c, wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords), key -> {
         try {
           Object descriptor = c.getMethod("getDescriptor").invoke(null);
           if (c.isEnum()) {
@@ -261,7 +256,7 @@ public class ProtoConversionUtil {
     }
 
     private static Schema makeSchemaNullable(Schema schema) {
-      return Schema.createUnion(Arrays.asList(NULL, schema));
+      return Schema.createUnion(Arrays.asList(NULL_SCHEMA, schema));
     }
 
     private Object getDefault(Descriptors.FieldDescriptor f) {
@@ -461,13 +456,15 @@ public class ProtoConversionUtil {
 
     private static class SchemaCacheKey {
       private final String className;
-      private final boolean flattenWrappedPrimitives;
+      private final boolean wrappedPrimitivesAsRecords;
       private final int maxRecursionDepth;
+      private final boolean timestampsAsRecords;
 
-      SchemaCacheKey(Class clazz, boolean flattenWrappedPrimitives, int maxRecursionDepth) {
+      SchemaCacheKey(Class<?> clazz, boolean wrappedPrimitivesAsRecords, int maxRecursionDepth, boolean timestampsAsRecords) {
         this.className = clazz.getName();
-        this.flattenWrappedPrimitives = flattenWrappedPrimitives;
+        this.wrappedPrimitivesAsRecords = wrappedPrimitivesAsRecords;
         this.maxRecursionDepth = maxRecursionDepth;
+        this.timestampsAsRecords = timestampsAsRecords;
       }
 
       @Override
@@ -479,12 +476,13 @@ public class ProtoConversionUtil {
           return false;
         }
         SchemaCacheKey that = (SchemaCacheKey) o;
-        return flattenWrappedPrimitives == that.flattenWrappedPrimitives && maxRecursionDepth == that.maxRecursionDepth && className.equals(that.className);
+        return wrappedPrimitivesAsRecords == that.wrappedPrimitivesAsRecords && maxRecursionDepth == that.maxRecursionDepth && timestampsAsRecords == that.timestampsAsRecords
+            && className.equals(that.className);
       }
 
       @Override
       public int hashCode() {
-        return Objects.hash(className, flattenWrappedPrimitives, maxRecursionDepth);
+        return Objects.hash(className, wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords);
       }
     }
   }

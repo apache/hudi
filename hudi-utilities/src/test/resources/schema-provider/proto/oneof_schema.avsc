@@ -26,6 +26,7 @@
         {
           "type": "record",
           "name": "Nested",
+          "namespace": "test.message",
           "fields": [
             {
               "name": "nested_int",
@@ -35,8 +36,7 @@
           ]
         }
       ],
-      "default": null,
-      "namespace": "test.message"
+      "default": null
     }
   ]
 }
