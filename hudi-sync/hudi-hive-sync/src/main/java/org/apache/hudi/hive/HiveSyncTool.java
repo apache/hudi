@@ -411,11 +411,18 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   protected String generateWrittenPartitionsFilter(String tableName,
                                                    List<String> partitionKeys,
                                                    List<List<String>> partitionVals) {
+    // Hive store columns to lowercase, so we need to map partitions to lowercase to avoid any mismatch.
+    Set<String> partitionKeySet = partitionKeys.stream().map(String::toLowerCase).collect(Collectors.toSet());
     List<String> partitionTypes = syncClient.getMetastoreFieldSchemas(tableName)
         .stream()
-        .filter(f -> partitionKeys.contains(f.getName()))
+        .filter(f -> partitionKeySet.contains(f.getName()))
         .map(FieldSchema::getType)
         .collect(Collectors.toList());
+
+    if (partitionTypes.size() == 0) {
+      throw new HoodieHiveSyncException("Cannot get partition types from SyncClient, maybe "
+          + "table schema is not synced");
+    }
 
     Map<String, String> keyWithTypes = CollectionUtils.zipToMap(partitionKeys, partitionTypes);
 
