@@ -44,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestPartialUpdateAvroPayload {
   private Schema schema;
+  private Schema schemaMultipleOrderFields;
 
   String jsonSchema = "{\n"
       + "  \"type\": \"record\",\n"
@@ -63,9 +64,25 @@ public class TestPartialUpdateAvroPayload {
       + "  ]\n"
       + "}";
 
+  String jsonSchemaMultipleOrderFields = "{\n"
+      + "  \"type\": \"record\",\n"
+      + "  \"name\": \"partialRecord\", \"namespace\":\"org.apache.hudi\",\n"
+      + "  \"fields\": [\n"
+      + "    {\"name\": \"id\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"name1\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"price1\", \"type\": [\"null\", \"double\"]},\n"
+      + "    {\"name\": \"_ts1\", \"type\": [\"null\", \"long\"]},\n"
+      + "    {\"name\": \"_hoodie_is_deleted\", \"type\": [\"null\", \"boolean\"], \"default\":false},\n"
+      + "    {\"name\": \"name2\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"price2\", \"type\": [\"null\", \"double\"]},\n"
+      + "    {\"name\": \"_ts2\", \"type\": [\"null\", \"long\"]}\n"
+      + "  ]\n"
+      + "}";
+
   @BeforeEach
   public void setUp() throws Exception {
     schema = new Schema.Parser().parse(jsonSchema);
+    schemaMultipleOrderFields = new Schema.Parser().parse(jsonSchemaMultipleOrderFields);
   }
 
   @Test
@@ -306,4 +323,97 @@ public class TestPartialUpdateAvroPayload {
     IndexedRecord finalOutputWithPreCombine = payloadAfterPreCombine.combineAndGetUpdateValue(record1, schema, properties).get();
     assertEquals(outputWithPreCombineUsed, finalOutputWithPreCombine);
   }
+
+  @Test
+  public void testActiveRecordsWithMultipleOrderingFields() throws IOException {
+    GenericRecord record1 = new GenericData.Record(schemaMultipleOrderFields);
+    record1.put("id", "1");
+    record1.put("name1", "a1_1");
+    record1.put("price1", 1.11);
+    record1.put("_ts1", 0L);
+    record1.put("name2", "a1_2");
+    record1.put("price2", 1.12);
+    record1.put("_ts2", 0L);
+
+    GenericRecord record2 = new GenericData.Record(schemaMultipleOrderFields);
+    record2.put("id", "1");
+    record2.put("name1", "a1_1_1");
+    record2.put("price1", 2.11);
+    record2.put("_ts1", 1L);
+    record2.put("name2", null);
+    record2.put("price2", 2.12);
+    record2.put("_ts2", 1L);
+
+    GenericRecord record3 = new GenericData.Record(schemaMultipleOrderFields);
+    record3.put("id", "1");
+    record3.put("name1", "a1_1_1");
+    record3.put("price1", 2.11);
+    record3.put("_ts1", 1L);
+    record3.put("name2", null);
+    record3.put("price2", 2.12);
+    record3.put("_ts2", 1L);
+
+    String preCombineFieldsForMultipleOrder = "_ts1:name1,price1;_ts2:name2,price2";
+    Properties properties = new Properties();
+    properties.put("schema", jsonSchemaMultipleOrderFields);
+    // Keep record with largest ordering fiel
+    PartialUpdateAvroPayload payload1 =
+        new PartialUpdateAvroPayload(record1, preCombineFieldsForMultipleOrder);
+    PartialUpdateAvroPayload payload2 =
+        new PartialUpdateAvroPayload(record2, preCombineFieldsForMultipleOrder);
+    assertArrayEquals(new PartialUpdateAvroPayload(record3, preCombineFieldsForMultipleOrder).recordBytes,
+        payload1.preCombine(payload2, schemaMultipleOrderFields, properties).recordBytes);
+    assertArrayEquals(new PartialUpdateAvroPayload(record3, preCombineFieldsForMultipleOrder).recordBytes,
+        payload2.preCombine(payload1, schemaMultipleOrderFields,  properties).recordBytes);
+
+    assertEquals(record1, payload1.getInsertValue(schemaMultipleOrderFields).get());
+    assertEquals(record2, payload2.getInsertValue(schemaMultipleOrderFields).get());
+
+    assertEquals(record3, payload1.combineAndGetUpdateValue(record2, schemaMultipleOrderFields).get());
+    assertEquals(record3, payload2.combineAndGetUpdateValue(record1, schemaMultipleOrderFields).get());
+
+    // regenerate
+    record1 = new GenericData.Record(schemaMultipleOrderFields);
+    record1.put("id", "1");
+    record1.put("name1", "a1_1");
+    record1.put("price1", 2.11);
+    record1.put("_ts1", 5L);
+    record1.put("name2", "a1_2");
+    record1.put("price2", 2.12);
+    record1.put("_ts2", 4L);
+
+    record2 = new GenericData.Record(schemaMultipleOrderFields);
+    record2.put("id", "1");
+    record2.put("name1", null);
+    record2.put("price1", null);
+    record2.put("_ts1", null);
+    record2.put("name2", "a1_1_2");
+    record2.put("price2", 2.22);
+    record2.put("_ts2", 5L);
+
+    GenericRecord record4 = new GenericData.Record(schemaMultipleOrderFields);
+    record4.put("id", "1");
+    record4.put("name1", "a1_1");
+    record4.put("price1", 2.11);
+    record4.put("_ts1", 5L);
+    record4.put("name2", "a1_1_2");
+    record4.put("price2", 2.22);
+    record4.put("_ts2", 5L);
+
+    // Update subtable columns if ordering field is larger
+    payload1 = new PartialUpdateAvroPayload(record1, preCombineFieldsForMultipleOrder);
+    payload2 = new PartialUpdateAvroPayload(record2, preCombineFieldsForMultipleOrder);
+
+    PartialUpdateAvroPayload preCombineRes1 = payload1.preCombine(payload2, schemaMultipleOrderFields, properties);
+    PartialUpdateAvroPayload preCombineRes2 = payload2.preCombine(payload1, schemaMultipleOrderFields, properties);
+
+    PartialUpdateAvroPayload expPrecombineRes =
+        new PartialUpdateAvroPayload(record4, preCombineFieldsForMultipleOrder);
+
+    assertArrayEquals(expPrecombineRes.recordBytes, preCombineRes1.recordBytes);
+    assertArrayEquals(expPrecombineRes.recordBytes, preCombineRes2.recordBytes);
+    assertEquals(preCombineFieldsForMultipleOrder, preCombineRes1.orderingVal.toString());
+    assertEquals(preCombineFieldsForMultipleOrder, preCombineRes2.orderingVal.toString());
+  }
+
 }

@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.jetbrains.annotations.Nullable;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -32,7 +33,9 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * Payload clazz that is used for partial update Hudi Table.
@@ -87,33 +90,6 @@ import java.util.Properties;
  *      id      ts      name    price
  *      1       2       name_1  price_1
  * </pre>
- *
- * <p>Gotchas:
- * <p>In cases where a batch of records is preCombine before combineAndGetUpdateValue with the underlying records to be updated located in parquet files, the end states of records might not be as how
- * one will expect when applying a straightforward partial update.
- *
- * <p>Gotchas-Example:
- * <pre>
- *  -- Insertion order of records:
- *  INSERT INTO t1 VALUES (1, 'a1', 10, 1000);                          -- (1)
- *  INSERT INTO t1 VALUES (1, 'a1', 11, 999), (1, 'a1_0', null, 1001);  -- (2)
- *
- *  SELECT id, name, price, _ts FROM t1;
- *  -- One would the results to return:
- *  -- 1    a1_0    10.0    1001
-
- *  -- However, the results returned are:
- *  -- 1    a1_0    11.0    1001
- *
- *  -- This occurs as preCombine is applied on (2) first to return:
- *  -- 1    a1_0    11.0    1001
- *
- *  -- And this then combineAndGetUpdateValue with the existing oldValue:
- *  -- 1    a1_0    10.0    1000
- *
- *  -- To return:
- *  -- 1    a1_0    11.0    1001
- * </pre>
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
 
@@ -132,13 +108,15 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       return this;
     }
     // pick the payload with greater ordering value as insert record
-    final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0 ? true : false;
     try {
-      GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
-      Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);
-      if (mergedRecord.isPresent()) {
-        return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
-            shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
+      PartialUpdateAvroPayload mergedRecord;
+      if (isMultipleOrderFields(this.orderingVal.toString())) {
+        mergedRecord = getPayloadWithMultipleOrderFields(oldValue, schema);
+      } else {
+        mergedRecord = getPayloadWithSingleOrderFields(oldValue, schema);
+      }
+      if (mergedRecord != null) {
+        return mergedRecord;
       }
     } catch (Exception ex) {
       return this;
@@ -146,14 +124,96 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     return this;
   }
 
+  @Nullable
+  private PartialUpdateAvroPayload getPayloadWithSingleOrderFields(OverwriteWithLatestAvroPayload oldValue, Schema schema) throws IOException {
+    final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0;
+    GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
+    Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord);
+    if (mergedRecord.isPresent()) {
+      return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
+          shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
+    }
+    return null;
+  }
+
+  @Nullable
+  private PartialUpdateAvroPayload getPayloadWithMultipleOrderFields(OverwriteWithLatestAvroPayload oldValue, Schema schema) throws IOException {
+    GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
+    GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(this.recordBytes, schema);
+    MultipleOrderingInfo multipleOrderingInfo = MultipleOrderingInfo.newBuilder().withMultipleOrderingConfig(this.orderingVal.toString()).withGenericRecord(incomingRecord).build();
+    Option<IndexedRecord> mergedRecord = overwritePartialOldRecord(oldRecord, incomingRecord, schema, multipleOrderingInfo);
+    if (mergedRecord.isPresent()) {
+      return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(), this.orderingVal);
+    }
+    return null;
+  }
+
+  private Option<IndexedRecord> overwritePartialOldRecord(GenericRecord oldRecord,
+                                                          GenericRecord incomingRecord,
+                                                          Schema schema,
+                                                          MultipleOrderingInfo multipleOrderingInfo) {
+    GenericRecord resultRecord = incomingRecord;
+
+    Map<String, Schema.Field> name2Field = schema.getFields().stream().collect(Collectors.toMap(Schema.Field::name, item -> item));
+
+    multipleOrderingInfo.getOrderingVal2ColsInfoList().stream().forEach(orderingVal2ColsInfo -> {
+      Comparable persistOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal(
+          oldRecord, orderingVal2ColsInfo.getOrderingField(), true, false);
+
+      // No update required
+      if (persistOrderingVal == null && orderingVal2ColsInfo.getOrderingField().isEmpty()) {
+        return;
+      }
+
+      // Pick the payload with greatest ordering value as insert record
+      boolean useIncomingFieldValue = false;
+      if (persistOrderingVal == null || (orderingVal2ColsInfo.getOrderingValue() != null && persistOrderingVal.compareTo(orderingVal2ColsInfo.getOrderingValue()) <= 0)) {
+        useIncomingFieldValue = true;
+      }
+
+      // Initialise the fields of the sub-tables
+      GenericRecord insertRecordForSubTable;
+      if (!useIncomingFieldValue) {
+        insertRecordForSubTable = oldRecord;
+        orderingVal2ColsInfo.getColumnNames().stream()
+            .filter(fieldName -> name2Field.containsKey(fieldName))
+            .forEach(fieldName -> resultRecord.put(fieldName, insertRecordForSubTable.get(fieldName)));
+        resultRecord.put(orderingVal2ColsInfo.getOrderingField(), persistOrderingVal);
+      }
+    });
+
+    return Option.of(resultRecord);
+  }
+
+  public static boolean isMultipleOrderFields(String preCombineField) {
+    if (preCombineField.split(":").length > 1) {
+      return true;
+    }
+    return false;
+  }
+
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
-    return this.mergeOldRecord(currentValue, schema, false, false);
+    if (!isMultipleOrderFields(this.orderingVal.toString())) {
+      return this.mergeOldRecord(currentValue, schema, false);
+    } else {
+      GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(this.recordBytes, schema);
+      MultipleOrderingInfo multipleOrderingInfo = MultipleOrderingInfo.newBuilder().withMultipleOrderingConfig(this.orderingVal.toString())
+          .withGenericRecord(incomingRecord).build();
+      return this.overwritePartialOldRecord((GenericRecord) currentValue, incomingRecord, schema, multipleOrderingInfo);
+    }
   }
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties prop) throws IOException {
-    return mergeOldRecord(currentValue, schema, isRecordNewer(orderingVal, currentValue, prop), false);
+    if (!isMultipleOrderFields(this.orderingVal.toString())) {
+      return mergeOldRecord(currentValue, schema, isRecordNewer(orderingVal, currentValue, prop));
+    } else {
+      GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(this.recordBytes, schema);
+      MultipleOrderingInfo multipleOrderingInfo = MultipleOrderingInfo.newBuilder().withMultipleOrderingConfig(this.orderingVal.toString())
+          .withGenericRecord(incomingRecord).build();
+      return this.overwritePartialOldRecord((GenericRecord) currentValue, incomingRecord, schema, multipleOrderingInfo);
+    }
   }
 
   /**
@@ -180,6 +240,9 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * @throws IOException
    */
   private Option<IndexedRecord> mergeOldRecord(IndexedRecord oldRecord,
+                                               Schema schema,
+                                               boolean isOldRecordNewer) throws IOException {
+    Option<IndexedRecord> recordOption = getInsertValue(schema);
                                                Schema schema,
                                                boolean isOldRecordNewer, boolean isPreCombining) throws IOException {
     Option<IndexedRecord> recordOption = getInsertValue(schema, isPreCombining);
