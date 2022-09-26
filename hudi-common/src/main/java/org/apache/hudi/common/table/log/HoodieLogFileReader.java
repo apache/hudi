@@ -163,7 +163,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // We may have had a crash which could have written this block partially
     // Skip blockSize in the stream and we should either find a sync marker (start of the next
     // block) or EOF. If we did not find either of it, then this block is a corrupted block.
-    boolean isCorrupted = isBlockCorrupt(blockSize);
+    boolean isCorrupted = isBlockCorrupted(blockSize);
     if (isCorrupted) {
       return createCorruptBlock(blockStartPos);
     }
@@ -269,7 +269,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     return new HoodieCorruptBlock(corruptedBytes, inputStream, readBlockLazily, Option.of(logBlockContentLoc), new HashMap<>(), new HashMap<>());
   }
 
-  private boolean isBlockCorrupt(int blocksize) throws IOException {
+  private boolean isBlockCorrupted(int blocksize) throws IOException {
     long currentPos = inputStream.getPos();
     long blockSizeFromFooter;
     
@@ -288,6 +288,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       // This seek is required because contract of seek() is different for naked DFSInputStream vs BufferedFSInputStream
       // release-3.1.0-RC1/DFSInputStream.java#L1455
       // release-3.1.0-RC1/BufferedFSInputStream.java#L73
+      inputStream.seek(currentPos);
       return true;
     }
 
