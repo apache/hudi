@@ -166,7 +166,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     }
     throw new HoodieIOException("Precommit validation not implemented for all engines yet");
   }
-  
+
   protected void commitOnAutoCommit(HoodieWriteMetadata result) {
     // validate commit action before committing result
     runPrecommitValidators(result);
@@ -249,7 +249,6 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collectAsList());
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
-    validateWriteResult(clusteringPlan, writeMetadata);
     commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
