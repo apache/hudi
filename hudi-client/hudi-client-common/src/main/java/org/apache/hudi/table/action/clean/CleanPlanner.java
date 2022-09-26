@@ -136,19 +136,26 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       case KEEP_LATEST_COMMITS:
       case KEEP_LATEST_BY_HOURS:
       case KEEP_LATEST_FILE_VERSIONS:
-        return getPartitionPathsForCleanByCommits(earliestRetainedInstant, config.getCleanerPolicy());
+        return getPartitionPathsForClean(earliestRetainedInstant, config.getCleanerPolicy());
       default:
         throw new IllegalStateException("Unknown Cleaner Policy");
     }
   }
 
   /**
-   * Return partition paths for cleaning by commits mode.
-   * @param instantToRetain Earliest Instant to retain
-   * @return list of partitions
+   * Return partition paths for cleaning.
+   * If incremental cleaning mode is enabled:
+   * Incase of cleaning based on LATEST_COMMITS and LATEST_HOURS, cleaner looks at the range of commit between commit retained during last clean
+   * and earliest commit to retain for current clean.
+   * Incase of cleaning based on LATEST_FILE_VERSIONS, cleaner looks at range of commits between lastCompletedCommit during last clean upto latest
+   * completed in timeline.
+   * If incremental cleaning is not enabled, all partitions paths are listed based on file listing.
+   * @param instantToRetain Earliest Instant to retain.
+   * @param cleaningPolicy cleaning policy used.
+   * @return list of partitions to be used for cleaning.
    * @throws IOException
    */
-  private List<String> getPartitionPathsForCleanByCommits(Option<HoodieInstant> instantToRetain, HoodieCleaningPolicy cleaningPolicy) throws IOException {
+  private List<String> getPartitionPathsForClean(Option<HoodieInstant> instantToRetain, HoodieCleaningPolicy cleaningPolicy) throws IOException {
     if (cleaningPolicy != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
       if (!instantToRetain.isPresent()) {
         LOG.info("No earliest commit to retain. No need to scan partitions !!");
@@ -173,20 +180,21 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     } else {
       // FILE_VERSIONS_RETAINED
       if (config.incrementalCleanerModeEnabled()) {
-        // find the last completed commit from last clean and mark that as earliest commit to retain.
+        // find the last completed commit from last clean and mark that as starting commit to clean
         Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
         if (lastClean.isPresent()) {
           if (hoodieTable.getActiveTimeline().isEmpty(lastClean.get())) {
             hoodieTable.getActiveTimeline().deleteEmptyInstantIfExists(lastClean.get());
           } else {
-            HoodieCleanMetadata cleanMetadata = null;
             try {
-              cleanMetadata = TimelineMetadataUtils
+              HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
                   .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
               if (!StringUtils.isNullOrEmpty(cleanMetadata.getLastCompletedCommitTimestamp())) {
                 HoodieCleanMetadata finalCleanMetadata = cleanMetadata;
-                Option<HoodieInstant> lastCompletedInstantDuringLastClean = hoodieTable.getActiveTimeline().filterCompletedInstants()
-                    .filter(entry -> entry.getTimestamp().equals(finalCleanMetadata.getLastCompletedCommitTimestamp())).firstInstant();
+                Option<HoodieInstant> lastCompletedInstantDuringLastClean = hoodieTable.getActiveTimeline()
+                    .filterCompletedInstants()
+                    .filter(entry -> entry.getTimestamp().equals(finalCleanMetadata.getLastCompletedCommitTimestamp()))
+                    .firstInstant();
                 if (lastCompletedInstantDuringLastClean.isPresent()) {
                   return getPartitionPathsForIncrementalCleaning(lastCompletedInstantDuringLastClean.get().getTimestamp(), Option.empty());
                 }
@@ -244,6 +252,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
+    LOG.info("Getting partition paths for full cleaning");
     try {
       // Because the partition of BaseTableMetadata has been deleted,
       // all partition information can only be obtained from FileSystemBackedTableMetadata.

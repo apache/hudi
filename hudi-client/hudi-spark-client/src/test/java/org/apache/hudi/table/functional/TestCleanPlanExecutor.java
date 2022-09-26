@@ -47,6 +47,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -263,11 +264,9 @@ public class TestCleanPlanExecutor extends TestCleaner {
     assertTrue(testTable.baseFileExists(p0, "00000000000007", file4P0C3));
   }
 
-  /**
-   * Test Hudi COW Table Cleaner - Keep the latest file versions policy.
-   */
-  @Test
-  public void testKeepLatestFileVersions() throws Exception {
+  @ParameterizedTest
+  @ValueSource(Boolean.class)
+  public void testKeepLatestFileVersions(boolean ) throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
