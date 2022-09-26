@@ -23,8 +23,10 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.AnalysisException;
@@ -32,6 +34,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -47,6 +50,36 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Test-cases for covering HoodieReadClient APIs
  */
 public class TestHoodieReadClient extends HoodieClientTestBase {
+
+  private String basePathWithoutScheme = null;
+  private static final String LOCAL_FS_SCHEME = "file://";
+
+  /**
+   * Initializes basePath to use local FS.
+   */
+  protected void initPath() {
+    try {
+      java.nio.file.Path basePath = tempDir.resolve("dataset");
+      java.nio.file.Files.createDirectories(basePath);
+      basePathWithoutScheme = basePath.toString().contains("//") ? basePath.toString().substring(basePath.toString().indexOf("//") + 2) : basePath.toString();
+      this.basePath = LOCAL_FS_SCHEME + basePathWithoutScheme;
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
+
+  /**
+   * Initializes a file system with the hadoop configuration of Spark context.
+   */
+  protected void initFileSystem() {
+    super.initFileSystem();
+    try {
+      fs.mkdirs(new Path(basePath));
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create base path " + basePath);
+    }
+    basePath = basePathWithoutScheme;
+  }
 
   /**
    * Test ReadFilter API after writing new records using HoodieWriteClient.insert.
