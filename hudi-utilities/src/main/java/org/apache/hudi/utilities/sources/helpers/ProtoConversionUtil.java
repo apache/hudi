@@ -38,7 +38,6 @@ import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
@@ -92,8 +91,14 @@ public class ProtoConversionUtil {
    * 2. Convert directly from a protobuf {@link Message} to a {@link GenericRecord} while properly handling enums and wrapped primitives mentioned above.
    */
   private static class AvroSupport {
+<<<<<<< HEAD
     private static final Schema STRING_SCHEMA = Schema.create(Schema.Type.STRING);
     private static final Schema NULL_SCHEMA = Schema.create(Schema.Type.NULL);
+=======
+    private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
+    private static final Schema STRINGS = Schema.create(Schema.Type.STRING);
+    private static final Schema NULL = Schema.create(Schema.Type.NULL);
+>>>>>>> b6c3bcc94c (get all tests working)
     private static final String OVERFLOW_DESCRIPTOR_FIELD_NAME = "descriptor_full_name";
     private static final String OVERFLOW_BYTES_FIELD_NAME = "proto_bytes";
     private static final Schema RECURSION_OVERFLOW_SCHEMA = Schema.createRecord("recursion_overflow", null, "org.apache.hudi.proto", false,
@@ -265,7 +270,7 @@ public class ProtoConversionUtil {
       }
       if (f.getContainingOneof() != null) {
         // fields inside oneof are nullable
-        return null;
+        return Schema.Field.NULL_VALUE;
       }
 
       switch (f.getType()) { // generate default for type
@@ -350,12 +355,16 @@ public class ProtoConversionUtil {
         case ENUM:
           return GenericData.get().createEnum(value.toString(), schema);
         case FIXED:
-          if (value instanceof Long) {
-            // convert the long to its unsigned value
-            Conversions.DecimalConversion converter = new Conversions.DecimalConversion();
-            return converter.toFixed(new BigDecimal(toUnsignedBigInteger((Long) value)), schema, schema.getLogicalType());
+          if (value instanceof byte[]) {
+            return GenericData.get().createFixed(null, (byte[]) value, schema);
           }
-          return GenericData.get().createFixed(null, ((GenericFixed) value).bytes(), schema);
+          Object unsignedLongValue = value;
+          if (unsignedLongValue instanceof Message) {
+            // Unwrap UInt64Value
+            unsignedLongValue = getWrappedValue(unsignedLongValue);
+          }
+          // convert the long to its unsigned value
+          return DECIMAL_CONVERSION.toFixed(new BigDecimal(toUnsignedBigInteger((Long) unsignedLongValue)), schema, schema.getLogicalType());
         case BOOLEAN:
         case DOUBLE:
         case FLOAT:
@@ -368,7 +377,7 @@ public class ProtoConversionUtil {
           Object tmpValue = value;
           if (value instanceof Message) {
             // check if this is a Timestamp
-            if (schema.getLogicalType().equals(LogicalTypes.timestampMicros())) {
+            if (LogicalTypes.timestampMicros().equals(schema.getLogicalType())) {
               return Timestamps.toMicros((Timestamp) value);
             } else {
               tmpValue = getWrappedValue(value);
@@ -391,14 +400,15 @@ public class ProtoConversionUtil {
         case RECORD:
           GenericData.Record newRecord = new GenericData.Record(schema);
           Message messageValue = (Message) value;
-          for (Schema.Field f : schema.getFields()) {
-            int position = f.pos();
+          for (Schema.Field field : schema.getFields()) {
+            int position = field.pos();
             Descriptors.FieldDescriptor fieldDescriptor = getOrderedFields(schema, messageValue)[position];
             Object convertedValue;
-            if (fieldDescriptor.getType() == Descriptors.FieldDescriptor.Type.MESSAGE && !fieldDescriptor.isRepeated() && !messageValue.hasField(fieldDescriptor)) {
+            // if the field schema is a union, it is nullable
+            if (field.schema().getType() == Schema.Type.UNION && !fieldDescriptor.isRepeated() && !messageValue.hasField(fieldDescriptor)) {
               convertedValue = null;
             } else {
-              convertedValue = convertObject(f.schema(), messageValue.getField(fieldDescriptor));
+              convertedValue = convertObject(field.schema(), messageValue.getField(fieldDescriptor));
             }
             newRecord.put(position, convertedValue);
           }

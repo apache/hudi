@@ -30,8 +30,16 @@
     },
     {
       "name": "primitive_unsigned_long",
-      "type": "long",
-      "default": 0
+      "type": {
+        "type": "fixed",
+        "name": "unsigned_long",
+        "namespace": "org.apache.hudi.protos",
+        "size": 9,
+        "logicalType": "decimal",
+        "precision": 21,
+        "scale": 0
+      },
+      "default": "\u0000"
     },
     {
       "name": "primitive_signed_int",
@@ -234,7 +242,7 @@
       "name": "wrapped_unsigned_long",
       "type": [
         "null",
-        "long"
+        "org.apache.hudi.protos.unsigned_long"
       ],
       "default": null
     },
@@ -288,7 +296,7 @@
         "null",
         {
           "type": "long",
-          "logicalType": "time-micros"
+          "logicalType": "timestamp-micros"
         }
       ],
       "default": null

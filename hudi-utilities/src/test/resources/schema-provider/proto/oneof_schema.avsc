@@ -35,7 +35,8 @@
           ]
         }
       ],
-      "default": null
+      "default": null,
+      "namespace": "test.message"
     }
   ]
 }
