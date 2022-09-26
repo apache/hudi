@@ -341,7 +341,7 @@ public class StreamWriteOperatorCoordinator
 
   private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient) throws IOException {
     CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient.getFs(), metaClient.getBasePath());
-    ckpMetadata.bootstrap(metaClient);
+    ckpMetadata.bootstrap();
     return ckpMetadata;
   }
 
