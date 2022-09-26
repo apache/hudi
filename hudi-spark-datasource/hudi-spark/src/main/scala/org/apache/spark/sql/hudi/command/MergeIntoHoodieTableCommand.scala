@@ -495,7 +495,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         PRECOMBINE_FIELD.key -> preCombineField,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
-        PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
@@ -514,6 +513,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
       )
         .filter { case (_, v) => v != null }
-    }
+    } + (PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName)
   }
 }
