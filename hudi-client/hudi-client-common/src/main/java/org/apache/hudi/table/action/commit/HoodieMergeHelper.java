@@ -91,9 +91,6 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
       readSchema = mergeHandle.getWriterSchemaWithMetaFields();
     }
 
-    HoodieExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
-
     Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(table.getConfig().getInternalSchema());
     boolean needToReWriteRecord = false;
     Map<String, String> renameCols = new HashMap<>();
@@ -123,6 +120,9 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
       }
     }
 
+    HoodieExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
+    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
+
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
@@ -144,7 +144,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
         }
         return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, record);
       }, table.getPreExecuteRunnable());
-      
+
       wrapper.execute();
     } catch (Exception e) {
       throw new HoodieException(e);
