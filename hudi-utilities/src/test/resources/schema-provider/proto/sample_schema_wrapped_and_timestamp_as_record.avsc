@@ -36,7 +36,7 @@
         "namespace": "org.apache.hudi.protos",
         "size": 9,
         "logicalType": "decimal",
-        "precision": 21,
+        "precision": 20,
         "scale": 0
       },
       "default": "\u0000"

@@ -48,12 +48,14 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
     public static final ConfigProperty<Boolean> PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS = ConfigProperty.key(PROTO_SCHEMA_PROVIDER_PREFIX + ".flatten.wrappers")
         .defaultValue(false)
         .sinceVersion("0.13.0")
-        .withDocumentation("When set to true wrapped primitives like Int64Value are translated to a record with a single 'value' field instead of simply a nullable value");
+        .withDocumentation("When set to true wrapped primitives like Int64Value are translated to a record with a single 'value' field. By default, the value is false and the wrapped primitives are "
+            + "treated as a nullable value");
 
     public static final ConfigProperty<Boolean> PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS = ConfigProperty.key(PROTO_SCHEMA_PROVIDER_PREFIX + ".timestamps.as.records")
         .defaultValue(false)
         .sinceVersion("0.13.0")
-        .withDocumentation("When set to true Timestamp fields are translated to a record with a seconds and nanos field, instead of a long with the timestamp-micros logical type");
+        .withDocumentation("When set to true Timestamp fields are translated to a record with a seconds and nanos field. By default, the value is false and the timestamp is converted to a long with "
+            + "the timestamp-micros logical type");
 
     public static final ConfigProperty<Integer> PROTO_SCHEMA_MAX_RECURSION_DEPTH = ConfigProperty.key(PROTO_SCHEMA_PROVIDER_PREFIX + ".max.recursion.depth")
         .defaultValue(5)
@@ -79,8 +81,9 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
         Config.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.defaultValue());
     int maxRecursionDepth = props.getInteger(Config.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key(), Config.PROTO_SCHEMA_MAX_RECURSION_DEPTH.defaultValue());
     boolean timestampsAsRecords = props.getBoolean(Config.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key(), false);
+    ProtoConversionUtil.SchemaConfig schemaConfig = new ProtoConversionUtil.SchemaConfig(wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords);
     try {
-      schemaString = ProtoConversionUtil.getAvroSchemaForMessageClass(ReflectionUtils.getClass(className), wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords).toString();
+      schemaString = ProtoConversionUtil.getAvroSchemaForMessageClass(ReflectionUtils.getClass(className), schemaConfig).toString();
     } catch (Exception e) {
       throw new HoodieSchemaException(String.format("Error reading proto source schema for class: %s", className), e);
     }

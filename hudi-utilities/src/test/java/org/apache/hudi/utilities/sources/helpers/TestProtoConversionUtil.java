@@ -71,6 +71,8 @@ import java.util.stream.Collectors;
 public class TestProtoConversionUtil {
   private static final Random RANDOM = new Random();
   private static final String MAX_UNSIGNED_LONG = "18446744073709551615";
+  private static final String PRIMITIVE_UNSIGNED_LONG_FIELD_NAME = "primitive_unsigned_long";
+  private static final String WRAPPED_UNSIGNED_LONG_FIELD_NAME = "wrapped_unsigned_long";
   private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   @Test
@@ -78,10 +80,14 @@ public class TestProtoConversionUtil {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
     Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, true);
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
+    Sample input = inputAndOutput.getLeft();
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema);
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
     // assert that unsigned long is interpreted correctly
-    assertUnsignedLongCorrectness(convertedSchema, inputAndOutput.getLeft(), actual, true);
+    Schema primitiveUnsignedLongSchema = convertedSchema.getField(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME).schema();
+    assertUnsignedLongCorrectness(primitiveUnsignedLongSchema, input.getPrimitiveUnsignedLong(), (GenericFixed) actual.get(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME));
+    Schema wrappedUnsignedLongSchema = convertedSchema.getField(WRAPPED_UNSIGNED_LONG_FIELD_NAME).schema().getTypes().get(1).getField("value").schema();
+    assertUnsignedLongCorrectness(wrappedUnsignedLongSchema, input.getWrappedUnsignedLong().getValue(), (GenericFixed) ((GenericRecord) actual.get(WRAPPED_UNSIGNED_LONG_FIELD_NAME)).get("value"));
   }
 
   @Test
@@ -98,10 +104,14 @@ public class TestProtoConversionUtil {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
     Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, false);
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
+    Sample input = inputAndOutput.getLeft();
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema);
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
     // assert that unsigned long is interpreted correctly
-    assertUnsignedLongCorrectness(convertedSchema, inputAndOutput.getLeft(), actual, false);
+    Schema primitiveUnsignedLongSchema = convertedSchema.getField(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME).schema();
+    assertUnsignedLongCorrectness(primitiveUnsignedLongSchema, input.getPrimitiveUnsignedLong(), (GenericFixed) actual.get(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME));
+    Schema wrappedUnsignedLongSchema = convertedSchema.getField(WRAPPED_UNSIGNED_LONG_FIELD_NAME).schema().getTypes().get(1);
+    assertUnsignedLongCorrectness(wrappedUnsignedLongSchema, input.getWrappedUnsignedLong().getValue(), (GenericFixed) actual.get(WRAPPED_UNSIGNED_LONG_FIELD_NAME));
   }
 
   @Test
@@ -155,19 +165,10 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals(expectedRecord, actual);
   }
 
-  private void assertUnsignedLongCorrectness(Schema convertedSchema, Sample input, GenericRecord actual, boolean wellKnownTypesAsRecords) {
-    Schema primitiveUnsignedLongSchema = convertedSchema.getField("primitive_unsigned_long").schema();
-    BigDecimal actualPrimitiveUnsignedLong = DECIMAL_CONVERSION.fromFixed((GenericFixed) actual.get("primitive_unsigned_long"), primitiveUnsignedLongSchema,
-        primitiveUnsignedLongSchema.getLogicalType());
-    Assertions.assertEquals(Long.toUnsignedString(input.getPrimitiveUnsignedLong()), actualPrimitiveUnsignedLong.toString());
-
-    Schema.Field wrappedUnsignedLongField = convertedSchema.getField("wrapped_unsigned_long");
-    Schema wrappedUnsignedLongSchema = wellKnownTypesAsRecords ? wrappedUnsignedLongField.schema().getTypes().get(1).getField("value").schema() :
-        wrappedUnsignedLongField.schema().getTypes().get(1);
-    GenericFixed wrappedValue = wellKnownTypesAsRecords ? (GenericFixed) ((GenericRecord) actual.get("wrapped_unsigned_long")).get("value") : (GenericFixed) actual.get("wrapped_unsigned_long");
-    BigDecimal actualWrappedUnsignedLong = DECIMAL_CONVERSION.fromFixed(wrappedValue, wrappedUnsignedLongSchema,
-        wrappedUnsignedLongSchema.getLogicalType());
-    Assertions.assertEquals(Long.toUnsignedString(input.getWrappedUnsignedLong().getValue()), actualWrappedUnsignedLong.toString());
+  private void assertUnsignedLongCorrectness(Schema fieldSchema, long expectedValue, GenericFixed actual) {
+    BigDecimal actualPrimitiveUnsignedLong = DECIMAL_CONVERSION.fromFixed(actual, fieldSchema,
+        fieldSchema.getLogicalType());
+    Assertions.assertEquals(Long.toUnsignedString(expectedValue), actualPrimitiveUnsignedLong.toString());
   }
 
   private Pair<Sample, GenericRecord> createInputOutputSampleWithRandomValues(Schema schema, boolean wellKnownTypesAsRecords) {
