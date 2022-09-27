@@ -20,10 +20,12 @@
 package org.apache.hudi.async;
 
 import org.apache.hudi.client.BaseClusterer;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -48,13 +50,14 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
   private static final Logger LOG = LogManager.getLogger(AsyncClusteringService.class);
   private final int maxConcurrentClustering;
   protected transient HoodieEngineContext context;
+  private BaseClusterer clusteringClient;
 
-  public AsyncClusteringService(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
-    this(context, writeConfig, false);
+  public AsyncClusteringService(HoodieEngineContext context, HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
+    this(context, writeConfig, embeddedTimelineService, false);
   }
 
-  public AsyncClusteringService(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean runInDaemonMode) {
-    super(writeConfig, runInDaemonMode);
+  public AsyncClusteringService(HoodieEngineContext context, HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService, boolean runInDaemonMode) {
+    super(writeConfig, embeddedTimelineService, runInDaemonMode);
     this.maxConcurrentClustering = 1;
     this.context = context;
   }
@@ -69,7 +72,6 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
     ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentClustering,
         new CustomizedThreadFactory("async_clustering_thread", isRunInDaemonMode()));
     return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentClustering).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
-      BaseClusterer clusteringClient = null;
       try {
         // Set Compactor Pool Name for allowing users to prioritize compaction
         LOG.info("Setting pool name for clustering to " + CLUSTERING_POOL_NAME);
@@ -79,7 +81,13 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
           if (null != instant) {
             LOG.info("Starting clustering for instant " + instant);
             synchronized (writeConfigUpdateLock) {
-              clusteringClient = createClusteringClient();
+              if (clusteringClient == null || isWriteConfigUpdated.get()) {
+                if (clusteringClient != null) {
+                  clusteringClient.close();
+                }
+                clusteringClient = createClusteringClient();
+                isWriteConfigUpdated.set(false);
+              }
             }
             clusteringClient.cluster(instant);
             LOG.info("Finished clustering for instant " + instant);
@@ -99,10 +107,6 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
         hasError = true;
         LOG.error("Clustering executor failed", e);
         throw e;
-      } finally {
-        if (clusteringClient != null) {
-          clusteringClient.close();
-        }
       }
       return true;
     }, executor)).toArray(CompletableFuture[]::new)), executor);

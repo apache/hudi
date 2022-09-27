@@ -19,6 +19,7 @@
 
 package org.apache.hudi.async;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -47,7 +48,7 @@ class TestHoodieAsyncTableService {
   private static class DummyAsyncTableService extends HoodieAsyncTableService {
 
     protected DummyAsyncTableService(HoodieWriteConfig writeConfig) {
-      super(writeConfig);
+      super(writeConfig, Option.empty());
     }
 
     @Override

@@ -18,10 +18,12 @@
 package org.apache.hudi.async;
 
 import org.apache.hudi.client.BaseCompactor;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -50,13 +52,14 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   private final Object writeConfigUpdateLock = new Object();
   protected transient HoodieEngineContext context;
   protected HoodieWriteConfig writeConfig;
+  private BaseCompactor compactor;
 
-  public AsyncCompactService(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
-    this(context, writeConfig, false);
+  public AsyncCompactService(HoodieEngineContext context, HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
+    this(context, writeConfig, embeddedTimelineService, false);
   }
 
-  public AsyncCompactService(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean runInDaemonMode) {
-    super(writeConfig, runInDaemonMode);
+  public AsyncCompactService(HoodieEngineContext context, HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService, boolean runInDaemonMode) {
+    super(writeConfig, embeddedTimelineService, runInDaemonMode);
     this.context = context;
     this.maxConcurrentCompaction = 1;
   }
@@ -71,7 +74,6 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
     ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentCompaction,
         new CustomizedThreadFactory("async_compact_thread", isRunInDaemonMode()));
     return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentCompaction).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
-      BaseCompactor compactor = null;
       try {
         // Set Compactor Pool Name for allowing users to prioritize compaction
         LOG.info("Setting pool name for compaction to " + COMPACT_POOL_NAME);
@@ -83,7 +85,13 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
           if (null != instant) {
             LOG.info("Starting Compaction for instant " + instant);
             synchronized (writeConfigUpdateLock) {
-              compactor = createCompactor();
+              if (compactor == null || isWriteConfigUpdated.get()) {
+                if (compactor != null) {
+                  compactor.close();
+                }
+                compactor = createCompactor();
+                isWriteConfigUpdated.set(false);
+              }
             }
             compactor.compact(instant);
             LOG.info("Finished Compaction for instant " + instant);
@@ -103,10 +111,6 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
         hasError = true;
         LOG.error("Compactor executor failed", e);
         throw e;
-      } finally {
-        if (compactor != null) {
-          compactor.close();
-        }
       }
       return true;
     }, executor)).toArray(CompletableFuture[]::new)), executor);

@@ -26,6 +26,7 @@ import org.apache.hudi.async.SparkAsyncClusteringService;
 import org.apache.hudi.async.SparkAsyncCompactService;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -777,13 +778,13 @@ public class HoodieDeltaStreamer implements Serializable {
      * @param writeConfig New write config.
      * @return
      */
-    protected Boolean onUpdatingWriteConfig(HoodieWriteConfig writeConfig) {
+    protected Boolean onUpdatingWriteConfig(HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
       if (cfg.isAsyncCompactionEnabled()) {
         if (asyncCompactService.isPresent()) {
           // Update the write client used by Async Compactor.
           asyncCompactService.get().updateWriteConfig(writeConfig);
         } else {
-          asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeConfig));
+          asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService));
           // Enqueue existing pending compactions first
           HoodieTableMetaClient meta =
               HoodieTableMetaClient.builder().setConf(new Configuration(jssc.hadoopConfiguration())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
@@ -805,7 +806,7 @@ public class HoodieDeltaStreamer implements Serializable {
         if (asyncClusteringService.isPresent()) {
           asyncClusteringService.get().updateWriteConfig(writeConfig);
         } else {
-          asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(new HoodieSparkEngineContext(jssc), writeConfig));
+          asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService));
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
               .setConf(new Configuration(jssc.hadoopConfiguration()))
               .setBasePath(cfg.targetBasePath)

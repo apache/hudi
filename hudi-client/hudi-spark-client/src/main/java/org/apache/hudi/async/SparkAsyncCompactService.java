@@ -21,17 +21,19 @@ package org.apache.hudi.async;
 import org.apache.hudi.client.BaseCompactor;
 import org.apache.hudi.client.HoodieSparkCompactor;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 public class SparkAsyncCompactService extends AsyncCompactService {
 
-  public SparkAsyncCompactService(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
-    super(context, writeConfig);
+  public SparkAsyncCompactService(HoodieEngineContext context, HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
+    super(context, writeConfig, embeddedTimelineService);
   }
 
   @Override
   protected BaseCompactor createCompactor() {
-    return new HoodieSparkCompactor(new SparkRDDWriteClient<>(context, writeConfig), this.context);
+    return new HoodieSparkCompactor(new SparkRDDWriteClient<>(context, writeConfig, embeddedTimelineService), this.context);
   }
 }

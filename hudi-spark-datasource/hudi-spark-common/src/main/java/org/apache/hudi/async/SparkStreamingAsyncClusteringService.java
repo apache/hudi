@@ -22,7 +22,9 @@ package org.apache.hudi.async;
 import org.apache.hudi.client.BaseClusterer;
 import org.apache.hudi.client.HoodieSparkClusteringClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
@@ -34,7 +36,11 @@ public class SparkStreamingAsyncClusteringService extends AsyncClusteringService
   private static final long serialVersionUID = 1L;
 
   public SparkStreamingAsyncClusteringService(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
-    super(context, writeConfig, true);
+    this(context, writeConfig, Option.empty());
+  }
+
+  public SparkStreamingAsyncClusteringService(HoodieEngineContext context, HoodieWriteConfig writeConfig,  Option<EmbeddedTimelineService> embeddedTimelineService) {
+    super(context, writeConfig, embeddedTimelineService, true);
   }
 
   @Override

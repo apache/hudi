@@ -21,7 +21,9 @@ package org.apache.hudi.async;
 import org.apache.hudi.client.BaseCompactor;
 import org.apache.hudi.client.HoodieSparkCompactor;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
@@ -33,7 +35,11 @@ public class SparkStreamingAsyncCompactService extends AsyncCompactService {
   private static final long serialVersionUID = 1L;
 
   public SparkStreamingAsyncCompactService(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
-    super(context, writeConfig, true);
+    this(context, writeConfig, Option.empty());
+  }
+
+  public SparkStreamingAsyncCompactService(HoodieEngineContext context, HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
+    super(context, writeConfig, embeddedTimelineService, true);
   }
 
   @Override

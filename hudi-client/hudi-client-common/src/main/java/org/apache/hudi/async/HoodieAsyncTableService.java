@@ -20,25 +20,32 @@
 package org.apache.hudi.async;
 
 import org.apache.hudi.client.RunsTableService;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 public abstract class HoodieAsyncTableService extends HoodieAsyncService implements RunsTableService {
 
   protected final Object writeConfigUpdateLock = new Object();
   protected HoodieWriteConfig writeConfig;
+  protected Option<EmbeddedTimelineService> embeddedTimelineService;
+  protected AtomicBoolean isWriteConfigUpdated = new AtomicBoolean(false);
 
   protected HoodieAsyncTableService() {
   }
 
-  protected HoodieAsyncTableService(HoodieWriteConfig writeConfig) {
+  protected HoodieAsyncTableService(HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
     this.writeConfig = writeConfig;
+    this.embeddedTimelineService = embeddedTimelineService;
   }
 
-  protected HoodieAsyncTableService(HoodieWriteConfig writeConfig, boolean runInDaemonMode) {
+  protected HoodieAsyncTableService(HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService, boolean runInDaemonMode) {
     super(runInDaemonMode);
     this.writeConfig = writeConfig;
+    this.embeddedTimelineService = embeddedTimelineService;
   }
 
   @Override
@@ -52,6 +59,7 @@ public abstract class HoodieAsyncTableService extends HoodieAsyncService impleme
   public void updateWriteConfig(HoodieWriteConfig writeConfig) {
     synchronized (writeConfigUpdateLock) {
       this.writeConfig = writeConfig;
+      isWriteConfigUpdated.set(true);
     }
   }
 }

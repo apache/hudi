@@ -42,6 +42,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -103,7 +104,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
@@ -189,9 +189,9 @@ public class DeltaSync implements Serializable, Closeable {
   private final TypedProperties props;
 
   /**
-   * Callback when a new write client is created.
+   * Callback when a new write client is created with regular writer.
    */
-  private transient Function<HoodieWriteConfig, Boolean> onUpdatingWriteConfig;
+  private transient Functions.Function2<HoodieWriteConfig, Option<EmbeddedTimelineService>, Boolean> onUpdatingWriteConfig;
 
   /**
    * Timeline with completed commits.
@@ -223,7 +223,7 @@ public class DeltaSync implements Serializable, Closeable {
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
-                   Function<HoodieWriteConfig, Boolean> onUpdatingWriteConfig) throws IOException {
+                   Functions.Function2<HoodieWriteConfig, Option<EmbeddedTimelineService>, Boolean> onUpdatingWriteConfig) throws IOException {
 
     this.cfg = cfg;
     this.jssc = jssc;
@@ -756,7 +756,7 @@ public class DeltaSync implements Serializable, Closeable {
       writeClient.close();
     }
     writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService);
-    onUpdatingWriteConfig.apply(writeConfig);
+    onUpdatingWriteConfig.apply(writeConfig, embeddedTimelineService);
   }
 
   /**

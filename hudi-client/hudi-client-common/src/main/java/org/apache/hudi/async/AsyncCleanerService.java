@@ -21,6 +21,7 @@ package org.apache.hudi.async;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -43,7 +44,7 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
   protected AsyncCleanerService(BaseHoodieWriteClient writeClient) {
-    super(writeClient.getConfig());
+    super(writeClient.getConfig(), Option.empty());
     this.writeClient = writeClient;
   }
 

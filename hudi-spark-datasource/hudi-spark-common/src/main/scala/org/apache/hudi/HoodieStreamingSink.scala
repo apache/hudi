@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.client.embedded.EmbeddedTimelineService
 import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
@@ -227,8 +228,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     if (null == asyncCompactorService) {
       log.info("Triggering Async compaction !!")
       asyncCompactorService = new SparkStreamingAsyncCompactService(
-        new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
-        client.getConfig)
+        new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)), client.getConfig)
       asyncCompactorService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {
           log.info(s"Async Compactor shutdown. Errored ? $errored")
