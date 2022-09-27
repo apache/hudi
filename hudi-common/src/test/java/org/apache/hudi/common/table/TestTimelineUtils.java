@@ -140,7 +140,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testGetPartitionsUnPartitioned() throws IOException {
+  public void testGetPartitionsUnpartitioned() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertTrue(activeCommitTimeline.empty());
@@ -217,7 +217,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());
     
-    // verify adding clustering commit doesn't change behavior of getExtraMetadataFromLatest
+    // verify adding clustering commit doesnt change behavior of getExtraMetadataFromLatest
     String ts2 = "2";
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts2);
     activeTimeline.createNewInstant(instant2);
@@ -338,7 +338,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .setTotalFilesDeleted(1)
         .setStartCleanTime(time)
         .setEarliestCommitToRetain(time)
-        .setLastCompletedCommitTimestamp("")
         .setPartitionMetadata(partitionToFilesCleaned).build();
 
     return TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata);

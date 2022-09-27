@@ -83,7 +83,6 @@ public class CleanMetadataV1MigrationHandler extends AbstractMigratorBase<Hoodie
 
     return HoodieCleanMetadata.newBuilder()
         .setEarliestCommitToRetain(input.getEarliestCommitToRetain())
-        .setLastCompletedCommitTimestamp(input.getLastCompletedCommitTimestamp())
         .setStartCleanTime(input.getStartCleanTime())
         .setTimeTakenInMillis(input.getTimeTakenInMillis())
         .setTotalFilesDeleted(input.getTotalFilesDeleted())

@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.clean;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
@@ -66,16 +65,11 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     Option<HoodieInstant> lastCleanInstant = table.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
     HoodieTimeline commitTimeline = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
 
-    int numCommits;
-    if (lastCleanInstant.isPresent() && !table.getActiveTimeline().isEmpty(lastCleanInstant.get())) {
-      try {
-        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-            .deserializeHoodieCleanMetadata(table.getActiveTimeline().getInstantDetails(lastCleanInstant.get()).get());
-        String lastCompletedCommitTimestamp = cleanMetadata.getLastCompletedCommitTimestamp();
-        numCommits = commitTimeline.findInstantsAfter(lastCompletedCommitTimestamp).countInstants();
-      } catch (IOException e) {
-        throw new HoodieIOException("Parsing of last clean instant " + lastCleanInstant.get() + " failed", e);
-      }
+    String latestCleanTs;
+    int numCommits = 0;
+    if (lastCleanInstant.isPresent()) {
+      latestCleanTs = lastCleanInstant.get().getTimestamp();
+      numCommits = commitTimeline.findInstantsAfter(latestCleanTs).countInstants();
     } else {
       numCommits = commitTimeline.countInstants();
     }
@@ -136,7 +130,6 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
       return new HoodieCleanerPlan(earliestInstant
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
-          planner.getLastCompletedCommitTimestamp(),
           config.getCleanerPolicy().name(), CollectionUtils.createImmutableMap(),
           CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete);
     } catch (IOException e) {

@@ -48,6 +48,12 @@ public class CleanMetadataV2MigrationHandler extends AbstractMigratorBase<Hoodie
   public HoodieCleanMetadata upgradeFrom(HoodieCleanMetadata input) {
     ValidationUtils.checkArgument(input.getVersion() == 1,
         "Input version is " + input.getVersion() + ". Must be 1");
+    HoodieCleanMetadata metadata = new HoodieCleanMetadata();
+    metadata.setEarliestCommitToRetain(input.getEarliestCommitToRetain());
+    metadata.setTimeTakenInMillis(input.getTimeTakenInMillis());
+    metadata.setStartCleanTime(input.getStartCleanTime());
+    metadata.setTotalFilesDeleted(input.getTotalFilesDeleted());
+    metadata.setVersion(getManagedVersion());
 
     Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = input.getPartitionMetadata()
         .entrySet()
@@ -74,7 +80,6 @@ public class CleanMetadataV2MigrationHandler extends AbstractMigratorBase<Hoodie
 
     return HoodieCleanMetadata.newBuilder()
         .setEarliestCommitToRetain(input.getEarliestCommitToRetain())
-        .setLastCompletedCommitTimestamp(input.getLastCompletedCommitTimestamp())
         .setStartCleanTime(input.getStartCleanTime())
         .setTimeTakenInMillis(input.getTimeTakenInMillis())
         .setTotalFilesDeleted(input.getTotalFilesDeleted())
