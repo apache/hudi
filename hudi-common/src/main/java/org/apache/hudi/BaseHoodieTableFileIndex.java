@@ -144,6 +144,15 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.engineContext = engineContext;
     this.fileStatusCache = fileStatusCache;
 
+    /**
+     * The `shouldRefresh` variable controls how we initialize the TableFileIndex:
+     *  - non-lazy/eager listing (shouldRefresh=true):  all partitions and file slices will be loaded eagerly during initialization.
+     *  - lazy listing (shouldRefresh=false): partitions listing will be done lazily with the knowledge from query predicate on partition
+     *        columns. And file slices fetching only happens for partitions satisfying the given filter.
+     *
+     * In SparkSQL, `shouldRefresh` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
+     * In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded
+     */
     if (shouldRefresh) {
       doRefresh();
     } else {
@@ -189,12 +198,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected List<PartitionPath> getAllQueryPartitionPaths() {
-    if (this.cachedAllPartitionPaths != null) {
-      return this.cachedAllPartitionPaths;
+    if (cachedAllPartitionPaths != null) {
+      return cachedAllPartitionPaths;
     }
 
     loadAllQueryPartitionPaths();
-    return this.cachedAllPartitionPaths;
+    return cachedAllPartitionPaths;
   }
 
   private void loadAllQueryPartitionPaths() {
@@ -202,7 +211,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         .map(path -> FSUtils.getRelativePartitionPath(basePath, path))
         .collect(Collectors.toList());
 
-    this.cachedAllPartitionPaths = getQueryPartitionPaths(queryRelativePartitionPaths);
+    this.cachedAllPartitionPaths = listQueryPartitionPaths(queryRelativePartitionPaths);
 
     // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
     this.queryAsNonePartitionedTable = this.cachedAllPartitionPaths.stream().anyMatch(p -> p.values.length == 0);
@@ -219,10 +228,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * Get input file slice for the given partition. Will use cache directly if it is computed before.
    */
   protected List<FileSlice> getCachedInputFileSlices(PartitionPath partition) {
-    return cachedAllInputFileSlices.computeIfAbsent(partition, this::loadInputFileSlicesOfPartition);
+    return cachedAllInputFileSlices.computeIfAbsent(partition, this::loadFileSlicesForPartition);
   }
 
-  private List<FileSlice> loadInputFileSlicesOfPartition(PartitionPath p) {
+  private List<FileSlice> loadFileSlicesForPartition(PartitionPath p) {
     FileStatus[] files = loadPartitionPathFiles(p);
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
@@ -292,10 +301,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       return Collections.singletonList(new PartitionPath(queryPartitionPath.toString(), parsePartitionColumnValues(partitionColumns, queryPartitionPath.toString())));
     }
     // The predicate forms a prefix of partition path, do listing to the path only.
-    return getQueryPartitionPaths(Collections.singletonList(queryPartitionPath.toString()));
+    return listQueryPartitionPaths(Collections.singletonList(queryPartitionPath.toString()));
   }
 
-  private List<PartitionPath> getQueryPartitionPaths(List<String> queryRelativePartitionPaths) {
+  private List<PartitionPath> listQueryPartitionPaths(List<String> queryRelativePartitionPaths) {
     List<String> matchedPartitionPaths = queryRelativePartitionPaths.stream()
         .flatMap(prefix -> {
           try {
@@ -429,6 +438,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         throw new HoodieIOException(String.format("Query instant (%s) not found in the timeline", queryInstant.get()));
       }
     }
+  }
+
+  private boolean isPartitionedTable() {
+    return partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath.toString());
   }
 
   private static long fileSliceSize(FileSlice fileSlice) {

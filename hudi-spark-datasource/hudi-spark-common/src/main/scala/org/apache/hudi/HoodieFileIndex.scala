@@ -128,7 +128,7 @@ case class HoodieFileIndex(spark: SparkSession,
     logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
     // Prune the partition path by the partition filters
-    val prunedPartitions = prunePartition(partitionFilters)
+    val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
     if (queryAsNonePartitionedTable) {
       // Read as Non-Partitioned table
       // Filter in candidate files based on the col-stats index lookup
@@ -164,7 +164,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
       logInfo(s"Total base files: $totalFileSize; " +
         s"candidate files after data skipping : $candidateFileSize; " +
-        s"skipping percent ${if (isAllInputFileSlicesCached && allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+        s"skipping percent ${if (!isAllInputFileSlicesCached) "is disable" else if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
 
       result
     }

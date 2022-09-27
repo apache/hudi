@@ -165,7 +165,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    */
   def listFileSlices(partitionFilters: Seq[Expression]): Map[String, Seq[FileSlice]] = {
     // Prune the partition path by the partition filters
-    val prunedPartitions = prunePartition(partitionFilters)
+    val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
     prunedPartitions.map(partition => {
       (partition.path, getCachedInputFileSlices(partition).asScala)
     }).toMap
@@ -178,7 +178,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @return The pruned partition paths
    */
   def getPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
-    prunePartition(predicates)
+    listMatchingPartitionPaths(predicates)
   }
 
   /**
@@ -189,7 +189,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @param predicates     The filter condition.
    * @return The pruned partition paths.
    */
-  protected def prunePartition(predicates: Seq[Expression]): Seq[PartitionPath] = {
+  protected def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
     val partitionColumnNames = partitionSchema.fields.map(_.name).toSet
     val partitionPruningPredicates = predicates.filter {
       _.references.map(_.name).toSet.subsetOf(partitionColumnNames)
