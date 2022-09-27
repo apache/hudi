@@ -278,7 +278,7 @@ public class ProtoConversionUtil {
         updatedSchema = Schema.createArray(updatedSchema);
       }
       // all fields in the oneof will be treated as nullable
-      if (fieldDescriptor.getContainingOneof() != null && !schema.isNullable()) {
+      if (fieldDescriptor.getContainingOneof() != null && !(schema.getType() == Schema.Type.UNION && schema.getTypes().get(0).getType() == Schema.Type.NULL)) {
         updatedSchema = makeSchemaNullable(updatedSchema);
       }
       return updatedSchema;
@@ -383,7 +383,7 @@ public class ProtoConversionUtil {
             return GenericData.get().createFixed(null, (byte[]) value, schema);
           }
           Object unsignedLongValue = value;
-          if (unsignedLongValue instanceof Message) {
+          if (unsignedLongValue instanceof UInt64Value) {
             // Unwrap UInt64Value
             unsignedLongValue = getWrappedValue(unsignedLongValue);
           }
