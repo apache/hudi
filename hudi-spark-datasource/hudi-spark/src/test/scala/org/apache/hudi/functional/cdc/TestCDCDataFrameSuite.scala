@@ -93,7 +93,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // part of data are updated, it will write out cdc log files
     assertTrue(hasCDCLogFile(instant2))
     // check cdc data
-    val cdcDataFromCDCLogFile2 = getCDCLogFIle(instant2).flatMap(readCDCLogFile(_, cdcSchema))
+    val cdcDataFromCDCLogFile2 = getCDCLogFile(instant2).flatMap(readCDCLogFile(_, cdcSchema))
     // check the num of cdc data
     assertEquals(cdcDataFromCDCLogFile2.size, 50)
     // check record key, before, after according to the supplemental logging mode
@@ -275,7 +275,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     // part of data are updated, it will write out cdc log files
     assertTrue(hasCDCLogFile(instant2))
-    val cdcDataFromCDCLogFile2 = getCDCLogFIle(instant2).flatMap(readCDCLogFile(_, cdcSchema))
+    val cdcDataFromCDCLogFile2 = getCDCLogFile(instant2).flatMap(readCDCLogFile(_, cdcSchema))
     assertEquals(cdcDataFromCDCLogFile2.size, 50)
     // check op
     assertEquals(cdcDataFromCDCLogFile2.count(r => r.get(0).toString == "u"), 30)
@@ -541,5 +541,75 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // check both starting and ending are provided
     val cdcDataFrom2To3 = cdcDataFrame((commitTime2.toLong - 1).toString, commitTime3)
     assertCDCOpCnt(cdcDataFrom2To3, insertedCnt2, 0, deletedCnt2 + deletedCnt3)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("cdc_op_key", "cdc_data_before", "cdc_data_before_after"))
+  def testCDCWithMultiBlocksAndLogFiles(cdcSupplementalLoggingMode: String): Unit = {
+    val (blockSize, logFileSize) = if (cdcSupplementalLoggingMode == "cdc_op_key") {
+      // only op and key will be stored in cdc log file, we set the smaller values for the two configs.
+      // so that it can also write out more than one cdc log file
+      // and each of cdc log file has more that one data block as we expect.
+      (256, 1024)
+    } else {
+      (2048, 5120)
+    }
+    val options = commonOpts ++ Map(
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> cdcSupplementalLoggingMode,
+      "hoodie.logfile.data.block.max.size" -> blockSize.toString,
+      "hoodie.logfile.max.size" -> logFileSize.toString
+    )
+
+    // Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val dataSchema = schemaResolver.getTableAvroSchema(false)
+    val cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
+      HoodieCDCSupplementalLoggingMode.parse(cdcSupplementalLoggingMode), dataSchema)
+
+    // Upsert Operation
+    val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
+    val records2 = recordsToStrings(hoodieRecords2).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val instant2 = metaClient.reloadActiveTimeline.lastInstant().get()
+
+    val cdcLogFiles2 = getCDCLogFile(instant2)
+    // with a small value for 'hoodie.logfile.data.max.size',
+    // it will write out >1 cdc log files due to rollover.
+    assert(cdcLogFiles2.size > 1)
+    // with a small value for 'hoodie.logfile.data.block.max.size',
+    // it will write out >1 cdc data blocks in one single cdc log file.
+    assert(getCDCBlocks(cdcLogFiles2.head, cdcSchema).size > 1)
+
+    // check cdc data
+    val cdcDataFromCDCLogFile2 = cdcLogFiles2.flatMap(readCDCLogFile(_, cdcSchema))
+    // check the num of cdc data
+    assertEquals(cdcDataFromCDCLogFile2.size, 50)
+    // check record key, before, after according to the supplemental logging mode
+    checkCDCDataForInsertOrUpdate(cdcSupplementalLoggingMode, cdcSchema, dataSchema,
+      cdcDataFromCDCLogFile2, hoodieRecords2, HoodieCDCOperation.UPDATE)
+
+    val commitTime2 = instant2.getTimestamp
+    var currentSnapshotData = spark.read.format("hudi").load(basePath)
+    // at the last commit, 100 records are inserted.
+    val insertedCnt2 = currentSnapshotData.count() - 100
+    val updatedCnt2 = 50 - insertedCnt2
+    val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
+    assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
   }
 }

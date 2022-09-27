@@ -18,7 +18,9 @@
 
 package org.apache.hudi.table.format.cdc;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -33,6 +35,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -152,9 +155,9 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       ImageManager imageManager) throws IOException {
     switch (fileSplit.getCdcInferCase()) {
       case BASE_FILE_INSERT:
-        ValidationUtils.checkState(fileSplit.getCdcFile() != null,
-            "CDC file path should exist");
-        String path = new Path(tablePath, fileSplit.getCdcFile()).toString();
+        ValidationUtils.checkState(fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
+            "CDC file path should exist and only one");
+        String path = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
         return new AddBaseFileIterator(getRequiredSchemaReader(path));
       case BASE_FILE_DELETE:
         ValidationUtils.checkState(fileSplit.getBeforeFileSlice().isPresent(),
@@ -319,13 +322,21 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         String tablePath,
         MergeOnReadTableState tableState,
         Schema cdcSchema,
-        HoodieCDCFileSplit fileSplit) throws IOException {
+        HoodieCDCFileSplit fileSplit) {
       this.requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
       this.requiredPos = getRequiredPos(tableState.getAvroSchema(), this.requiredSchema);
       this.recordBuilder = new GenericRecordBuilder(requiredSchema);
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
-      Path cdcFilePath = new Path(tablePath, fileSplit.getCdcFile());
-      this.cdcItr = new HoodieCDCLogRecordIterator(hadoopConf, cdcFilePath, cdcSchema);
+      Path hadoopTablePath = new Path(tablePath);
+      FileSystem fs = FSUtils.getFs(hadoopTablePath, hadoopConf);
+      HoodieLogFile[] cdcLogFiles = fileSplit.getCdcFiles().stream().map(cdcFile -> {
+        try {
+          return new HoodieLogFile(fs.getFileStatus(new Path(hadoopTablePath, cdcFile)));
+        } catch (IOException e) {
+          throw new HoodieIOException("Fail to call getFileStatus", e);
+        }
+      }).toArray(HoodieLogFile[]::new);
+      this.cdcItr = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcSchema);
     }
 
     private int[] getRequiredPos(String tableSchema, Schema required) {

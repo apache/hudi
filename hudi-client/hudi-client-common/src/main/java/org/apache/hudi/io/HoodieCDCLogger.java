@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -33,8 +32,10 @@ import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -49,10 +50,12 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
@@ -64,6 +67,10 @@ public class HoodieCDCLogger implements Closeable {
 
   private final String keyField;
 
+  private final String partitionPath;
+
+  private final FileSystem fs;
+
   private final Schema dataSchema;
 
   // writer for cdc data
@@ -73,35 +80,56 @@ public class HoodieCDCLogger implements Closeable {
 
   private final Schema cdcSchema;
 
-  private final String cdcSchemaString;
-
   // the cdc data
   private final Map<String, HoodieAvroPayload> cdcData;
 
+  private final Map<HoodieLogBlock.HeaderMetadataType, String> cdcDataBlockHeader;
+
   // the cdc record transformer
   private final CDCTransformer transformer;
+
+  // Max block size to limit to for a log block
+  private final int maxBlockSize;
+
+  // Average cdc record size. This size is updated at the end of every log block flushed to disk
+  private long averageCDCRecordSize = 0;
+
+  // Number of records that must be written to meet the max block size for a log block
+  private AtomicInteger numOfCDCRecordInMemory = new AtomicInteger();
+
+  private final SizeEstimator<HoodieAvroPayload> sizeEstimator;
+
+  private final List<Path> cdcAbsPaths;
 
   public HoodieCDCLogger(
       String commitTime,
       HoodieWriteConfig config,
       HoodieTableConfig tableConfig,
+      String partitionPath,
+      FileSystem fs,
       Schema schema,
       HoodieLogFormat.Writer cdcWriter,
       long maxInMemorySizeInBytes) {
     try {
       this.commitTime = commitTime;
-      this.dataSchema = HoodieAvroUtils.removeMetadataFields(schema);
       this.keyField = config.populateMetaFields()
           ? HoodieRecord.RECORD_KEY_METADATA_FIELD
           : tableConfig.getRecordKeyFieldProp();
+      this.partitionPath = partitionPath;
+      this.fs = fs;
+      this.dataSchema = HoodieAvroUtils.removeMetadataFields(schema);
       this.cdcWriter = cdcWriter;
       this.cdcSupplementalLoggingMode = tableConfig.cdcSupplementalLoggingMode();
       this.cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
           cdcSupplementalLoggingMode,
           dataSchema
       );
-      this.cdcSchemaString = this.cdcSchema.toString();
 
+      this.cdcDataBlockHeader = new HashMap<>();
+      this.cdcDataBlockHeader.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, commitTime);
+      this.cdcDataBlockHeader.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, cdcSchema.toString());
+
+      this.sizeEstimator = new DefaultSizeEstimator<>();
       this.cdcData = new ExternalSpillableMap<>(
           maxInMemorySizeInBytes,
           config.getSpillableMapBasePath(),
@@ -110,6 +138,9 @@ public class HoodieCDCLogger implements Closeable {
           config.getCommonConfig().getSpillableDiskMapType(),
           config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
       this.transformer = getTransformer();
+      this.maxBlockSize = config.getLogFileDataBlockMaxSize();
+
+      this.cdcAbsPaths = new ArrayList<>();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to initialize HoodieCDCLogger", e);
     }
@@ -136,49 +167,73 @@ public class HoodieCDCLogger implements Closeable {
       cdcRecord = this.transformer.transform(HoodieCDCOperation.DELETE, recordKey,
           oldRecord, null);
     }
-    cdcData.put(recordKey, new HoodieAvroPayload(Option.of(cdcRecord)));
+
+    flushIfNeeded(false);
+    HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(cdcRecord));
+    if (cdcData.isEmpty()) {
+      averageCDCRecordSize = sizeEstimator.sizeEstimate(payload);
+    }
+    cdcData.put(recordKey, payload);
+    numOfCDCRecordInMemory.incrementAndGet();
   }
 
-  public Option<AppendResult> writeCDCData() {
-    if (isEmpty()) {
-      return Option.empty();
-    }
+  private void flushIfNeeded(Boolean force) {
+    if (force || numOfCDCRecordInMemory.get() * averageCDCRecordSize >= maxBlockSize) {
+      try {
+        List<IndexedRecord> records = cdcData.values().stream()
+            .map(record -> {
+              try {
+                return record.getInsertValue(cdcSchema).get();
+              } catch (IOException e) {
+                throw new HoodieIOException("Failed to get cdc record", e);
+              }
+            }).collect(Collectors.toList());
 
+        HoodieLogBlock block = new HoodieCDCDataBlock(records, cdcDataBlockHeader, keyField);
+        AppendResult result = cdcWriter.appendBlocks(Collections.singletonList(block));
+
+        Path cdcAbsPath = result.logFile().getPath();
+        if (!cdcAbsPaths.contains(cdcAbsPath)) {
+          cdcAbsPaths.add(cdcAbsPath);
+        }
+
+        // reset stat
+        cdcData.clear();
+        numOfCDCRecordInMemory = new AtomicInteger();
+      } catch (Exception e) {
+        throw new HoodieException("Failed to write the cdc data to " + cdcWriter.getLogFile().getPath(), e);
+      }
+    }
+  }
+
+  public Pair<List<String>, List<Long>> getCDCWriteStats() {
+    List<String> cdcPaths = new ArrayList<>();
+    List<Long> cdcWriteSizeList = new ArrayList<>();
     try {
-      List<IndexedRecord> records = cdcData.values().stream()
-          .map(record -> {
-            try {
-              return record.getInsertValue(cdcSchema).get();
-            } catch (IOException e) {
-              throw new HoodieIOException("Failed to get cdc record", e);
-            }
-          }).collect(Collectors.toList());
+      for (Path cdcAbsPath : cdcAbsPaths) {
+        String cdcFileName = cdcAbsPath.getName();
+        String cdcPath = StringUtils.isNullOrEmpty(partitionPath) ? cdcFileName : partitionPath + "/" + cdcFileName;
 
-      Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, commitTime);
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, cdcSchemaString);
-
-      HoodieLogBlock block = new HoodieCDCDataBlock(records, header, keyField);
-      AppendResult result = cdcWriter.appendBlocks(Collections.singletonList(block));
-
-      // call close to trigger the data flush.
-      this.close();
-
-      return Option.of(result);
-    } catch (Exception e) {
-      throw new HoodieException("Failed to write the cdc data to " + cdcWriter.getLogFile().getPath(), e);
+        cdcPaths.add(cdcPath);
+        cdcWriteSizeList.add(FSUtils.getFileSize(fs, cdcAbsPath));
+      }
+    } catch (IOException e) {
+      throw new HoodieUpsertException("Failed to get cdc write stat", e);
     }
+    return Pair.of(cdcPaths, cdcWriteSizeList);
   }
 
   @Override
   public void close() {
     try {
+      flushIfNeeded(true);
       if (cdcWriter != null) {
         cdcWriter.close();
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to close HoodieCDCLogger", e);
     } finally {
+      // in case that crash when call `flushIfNeeded`, do the cleanup again.
       cdcData.clear();
     }
   }
@@ -206,36 +261,6 @@ public class HoodieCDCLogger implements Closeable {
 
   public boolean isEmpty() {
     return this.cdcData.isEmpty();
-  }
-
-  public static Option<AppendResult> writeCDCDataIfNeeded(HoodieCDCLogger cdcLogger,
-                                                          long recordsWritten,
-                                                          long insertRecordsWritten) {
-    if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
-      // the following cases where we do not need to write out the cdc file:
-      // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
-      // case 2: all the incoming data is INSERT.
-      return Option.empty();
-    }
-    return cdcLogger.writeCDCData();
-  }
-
-  public static void setCDCStatIfNeeded(HoodieWriteStat stat,
-                                        Option<AppendResult> cdcResult,
-                                        String partitionPath,
-                                        FileSystem fs) {
-    try {
-      if (cdcResult.isPresent()) {
-        Path cdcLogFile = cdcResult.get().logFile().getPath();
-        String cdcFileName = cdcLogFile.getName();
-        String cdcPath = StringUtils.isNullOrEmpty(partitionPath) ? cdcFileName : partitionPath + "/" + cdcFileName;
-        long cdcFileSizeInBytes = FSUtils.getFileSize(fs, cdcLogFile);
-        stat.setCdcPath(cdcPath);
-        stat.setCdcWriteBytes(cdcFileSizeInBytes);
-      }
-    } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to set cdc write stat", e);
-    }
   }
 
   // -------------------------------------------------------------------------

@@ -24,6 +24,8 @@ import org.apache.hudi.common.util.Option;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * This contains all the information that retrieve the change data at a single file group and
@@ -55,7 +57,7 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
   /**
    * The file that the change data can be parsed from.
    */
-  private final String cdcFile;
+  private final List<String> cdcFiles;
 
   /**
    * THe file slice that are required when retrieving the before data.
@@ -71,15 +73,28 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
     this(instant, cdcInferCase, cdcFile, Option.empty(), Option.empty());
   }
 
+  public HoodieCDCFileSplit(String instant, HoodieCDCInferCase cdcInferCase, List<String> cdcFiles) {
+    this(instant, cdcInferCase, cdcFiles, Option.empty(), Option.empty());
+  }
+
   public HoodieCDCFileSplit(
       String instant,
       HoodieCDCInferCase cdcInferCase,
       String cdcFile,
       Option<FileSlice> beforeFileSlice,
       Option<FileSlice> afterFileSlice) {
+    this(instant, cdcInferCase, Collections.singletonList(cdcFile), beforeFileSlice, afterFileSlice);
+  }
+
+  public HoodieCDCFileSplit(
+      String instant,
+      HoodieCDCInferCase cdcInferCase,
+      List<String> cdcFileS,
+      Option<FileSlice> beforeFileSlice,
+      Option<FileSlice> afterFileSlice) {
     this.instant = instant;
     this.cdcInferCase = cdcInferCase;
-    this.cdcFile = cdcFile;
+    this.cdcFiles = cdcFileS;
     this.beforeFileSlice = beforeFileSlice;
     this.afterFileSlice = afterFileSlice;
   }
@@ -92,8 +107,8 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
     return this.cdcInferCase;
   }
 
-  public String getCdcFile() {
-    return this.cdcFile;
+  public List<String> getCdcFiles() {
+    return this.cdcFiles;
   }
 
   public Option<FileSlice> getBeforeFileSlice() {

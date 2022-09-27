@@ -23,9 +23,10 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -57,6 +58,8 @@ public class FlinkMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K, 
         instantTime,
         config,
         hoodieTable.getMetaClient().getTableConfig(),
+        partitionPath,
+        getFileSystem(),
         tableSchema,
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
@@ -81,9 +84,11 @@ public class FlinkMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K, 
   @Override
   public List<WriteStatus> close() {
     List<WriteStatus> writeStatuses = super.close();
-    // if there are cdc data written, set the CDC-related information.
-    Option<AppendResult> cdcResult = cdcLogger.writeCDCData();
-    HoodieCDCLogger.setCDCStatIfNeeded(writeStatuses.get(0).getStat(), cdcResult, partitionPath, fs);
+    cdcLogger.close();
+    Pair<List<String>, List<Long>> cdcWriteStats = cdcLogger.getCDCWriteStats();
+    HoodieWriteStat stat = writeStatuses.get(0).getStat();
+    stat.setCdcPath(cdcWriteStats.getLeft());
+    stat.setCdcWriteBytes(cdcWriteStats.getRight());
     return writeStatuses;
   }
 }
