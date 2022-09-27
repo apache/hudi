@@ -44,6 +44,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -412,10 +413,12 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
                                                    List<String> partitionKeys,
                                                    List<List<String>> partitionVals) {
     // Hive store columns to lowercase, so we need to map partitions to lowercase to avoid any mismatch.
-    Set<String> partitionKeySet = partitionKeys.stream().map(String::toLowerCase).collect(Collectors.toSet());
+    List<String> normalizedPartitionKeys = partitionKeys.stream()
+        .map(String::toLowerCase)
+        .collect(Collectors.toList());
     List<String> partitionTypes = syncClient.getMetastoreFieldSchemas(tableName)
         .stream()
-        .filter(f -> partitionKeySet.contains(f.getName()))
+        .filter(f -> normalizedPartitionKeys.contains(f.getName()))
         .map(FieldSchema::getType)
         .collect(Collectors.toList());
 
@@ -424,12 +427,12 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           + "table schema is not synced");
     }
 
-    Map<String, String> keyWithTypes = CollectionUtils.zipToMap(partitionKeys, partitionTypes);
+    Map<String, String> keyWithTypes = CollectionUtils.zipToMap(normalizedPartitionKeys, partitionTypes);
 
     StringBuilder filterBuilder = new StringBuilder();
     for (int i = 0; i < partitionVals.size(); i++) {
       combineFilter(filterBuilder, "OR",
-          Option.of(visitPartition(partitionKeys, keyWithTypes, partitionVals.get(i))));
+          Option.of(visitPartition(normalizedPartitionKeys, keyWithTypes, partitionVals.get(i))));
     }
     return filterBuilder.toString();
   }
@@ -444,7 +447,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     List<String> partitionKeys = config.getSplitStrings(META_SYNC_PARTITION_FIELDS);
     List<List<String>> partitionVals = writtenPartitionsSince
         .stream().map(partitionValueExtractor::extractPartitionValuesInPath)
+        .filter(values -> !values.isEmpty())
         .collect(Collectors.toList());
+
+    if (partitionVals.isEmpty()) {
+      // No partition is written
+      return Collections.emptyList();
+    }
 
     int estimateSize = partitionKeys.size() * partitionVals.size();
     if (estimateSize > config.getIntOrDefault(META_SYNC_FILTER_PUSHDOWN_MAX_SIZE)) {
