@@ -35,6 +35,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
 import org.apache.orc.TypeDescription;
+import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -68,6 +69,8 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
   }
 
   private static Schema getBootstrapSourceSchemaParquet(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
+    ((HoodieSparkEngineContext) context).getSqlContext()
+        .setConf(SQLConf.PARTITION_COLUMN_TYPE_INFERENCE(), false);
     StructType parquetSchema = ((HoodieSparkEngineContext) context).getSqlContext().read()
         .option("basePath", writeConfig.getBootstrapSourceBasePath())
         .parquet(filePath.toString())
