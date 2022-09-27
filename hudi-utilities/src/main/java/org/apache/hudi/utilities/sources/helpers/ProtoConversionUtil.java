@@ -386,6 +386,9 @@ public class ProtoConversionUtil {
           if (unsignedLongValue instanceof UInt64Value) {
             // Unwrap UInt64Value
             unsignedLongValue = getWrappedValue(unsignedLongValue);
+          } else if (unsignedLongValue instanceof Message) {
+            // Unexpected message type
+            throw new HoodieException("Unexpected Message type when converting as an unsigned long: " + unsignedLongValue.getClass().getName());
           }
           // convert the long to its unsigned value
           return DECIMAL_CONVERSION.toFixed(new BigDecimal(toUnsignedBigInteger((Long) unsignedLongValue)), schema, schema.getLogicalType());
