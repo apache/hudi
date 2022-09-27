@@ -111,13 +111,13 @@ public abstract class HoodieIndex<I, O> implements Serializable {
    * implementation is able to obtain the same mapping, for two hoodie keys with same `recordKey` but different
    * `partitionPath`
    *
-   * @return whether or not, the index implementation is global in nature
+   * @return whether the index implementation is global in nature
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract boolean isGlobal();
 
   /**
-   * This is used by storage to determine, if its safe to send inserts, straight to the log, i.e having a
+   * This is used by storage to determine, if it is safe to send inserts, straight to the log, i.e. having a
    * {@link FileSlice}, with no data file.
    *
    * @return Returns true/false depending on whether the impl has this capability
@@ -133,7 +133,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public abstract boolean isImplicitWithStorage();
 
   /**
-   * To indicate if a operation type requires location tagging before writing
+   * To indicate if an operation type requires location tagging before writing
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public boolean requiresTagging(WriteOperationType operationType) {
@@ -147,7 +147,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   }
 
   /**
-   * Each index type should implement it's own logic to release any resources acquired during the process.
+   * Each index type should implement its own logic to release any resources acquired during the process.
    */
   public void close() {
   }

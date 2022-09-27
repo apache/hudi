@@ -18,9 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -32,6 +29,8 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.generic.GenericRecord;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -94,18 +93,13 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
         throw new HoodieUpsertException("Insert/Update not in sorted order");
       }
       try {
-        Option<IndexedRecord> insertRecord;
         if (useWriterSchemaForCompaction) {
-          insertRecord = hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, config.getProps());
+          writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, config.getProps()));
         } else {
-          insertRecord = hoodieRecord.getData().getInsertValue(tableSchema, config.getProps());
+          writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(tableSchema, config.getProps()));
         }
-        writeRecord(hoodieRecord, insertRecord);
         insertRecordsWritten++;
         writtenRecordKeys.add(keyToPreWrite);
-        if (cdcEnabled) {
-          cdcLogger.put(hoodieRecord, null, insertRecord);
-        }
       } catch (IOException e) {
         throw new HoodieUpsertException("Failed to write records", e);
       }
@@ -122,17 +116,12 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
         String key = newRecordKeysSorted.poll();
         HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
-          Option<IndexedRecord> insertRecord;
           if (useWriterSchemaForCompaction) {
-            insertRecord = hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, config.getProps());
+            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, config.getProps()));
           } else {
-            insertRecord = hoodieRecord.getData().getInsertValue(tableSchema, config.getProps());
+            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(tableSchema, config.getProps()));
           }
-          writeRecord(hoodieRecord, insertRecord);
           insertRecordsWritten++;
-          if (cdcEnabled) {
-            cdcLogger.put(hoodieRecord, null, insertRecord);
-          }
         }
       } catch (IOException e) {
         throw new HoodieUpsertException("Failed to close UpdateHandle", e);

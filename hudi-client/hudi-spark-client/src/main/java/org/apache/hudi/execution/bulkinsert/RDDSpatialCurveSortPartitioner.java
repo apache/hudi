@@ -29,8 +29,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.sort.SpaceCurveSortingHelper;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -38,32 +36,24 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
-import java.util.Arrays;
-import java.util.List;
-
 /**
  * A partitioner that does spatial curve optimization sorting based on specified column values for each RDD partition.
  * support z-curve optimization, hilbert will come soon.
  * @param <T> HoodieRecordPayload type
  */
 public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+    extends SpatialCurveSortPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
   private final transient HoodieSparkEngineContext sparkEngineContext;
-  private final String[] orderByColumns;
   private final SerializableSchema schema;
-  private final HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy;
-  private final HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType;
 
   public RDDSpatialCurveSortPartitioner(HoodieSparkEngineContext sparkEngineContext,
                                         String[] orderByColumns,
                                         HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType,
                                         Schema schema) {
+    super(orderByColumns, layoutOptStrategy, curveCompositionStrategyType);
     this.sparkEngineContext = sparkEngineContext;
-    this.orderByColumns = orderByColumns;
-    this.layoutOptStrategy = layoutOptStrategy;
-    this.curveCompositionStrategyType = curveCompositionStrategyType;
     this.schema = new SerializableSchema(schema);
   }
 
@@ -90,28 +80,5 @@ public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
           HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, new RewriteAvroPayload(record));
           return hoodieRecord;
         });
-  }
-
-  private Dataset<Row> reorder(Dataset<Row> dataset, int numOutputGroups) {
-    if (orderByColumns.length == 0) {
-      // No-op
-      return dataset;
-    }
-
-    List<String> orderedCols = Arrays.asList(orderByColumns);
-
-    switch (curveCompositionStrategyType) {
-      case DIRECT:
-        return SpaceCurveSortingHelper.orderDataFrameByMappingValues(dataset, layoutOptStrategy, orderedCols, numOutputGroups);
-      case SAMPLE:
-        return SpaceCurveSortingHelper.orderDataFrameBySamplingValues(dataset, layoutOptStrategy, orderedCols, numOutputGroups);
-      default:
-        throw new UnsupportedOperationException(String.format("Unsupported space-curve curve building strategy (%s)", curveCompositionStrategyType));
-    }
-  }
-
-  @Override
-  public boolean arePartitionRecordsSorted() {
-    return true;
   }
 }

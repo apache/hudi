@@ -35,6 +35,8 @@ import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 
 import java.util.List;
 import java.util.Map;
@@ -51,6 +53,18 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
   public SparkConsistentBucketClusteringExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext,
                                                           HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
+  }
+
+  @Override
+  public HoodieData<WriteStatus> performClusteringWithRecordsAsRow(Dataset<Row> inputRecords,
+                                                                   int numOutputGroups,
+                                                                   String instantTime,
+                                                                   Map<String, String> strategyParams,
+                                                                   Schema schema,
+                                                                   List<HoodieFileGroupId> fileGroupIdList,
+                                                                   boolean shouldPreserveHoodieMetadata,
+                                                                   Map<String, String> extraMetadata) {
+    throw new HoodieClusteringException("Not implement yet");
   }
 
   @Override

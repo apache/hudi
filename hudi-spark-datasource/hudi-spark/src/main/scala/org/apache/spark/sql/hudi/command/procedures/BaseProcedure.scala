@@ -24,16 +24,10 @@ import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.index.HoodieIndex.IndexType
-import org.apache.spark.SparkException
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
-
-import java.nio.charset.Charset
-import java.sql.{Date, Timestamp}
 
 abstract class BaseProcedure extends Procedure {
   val INVALID_ARG_INDEX: Int = -1
@@ -121,30 +115,4 @@ abstract class BaseProcedure extends Procedure {
       )
   }
 
-  protected def convertCatalystType(value: String, dataType: DataType): Any = {
-    try {
-      val valueWithType = dataType match {
-        case StringType => value
-        case BinaryType => value.getBytes(Charset.forName("utf-8"))
-        case BooleanType => value.toBoolean
-        case DoubleType => value.toDouble
-        case d: DecimalType => Decimal.apply(BigDecimal(value), d.precision, d.scale)
-        case FloatType => value.toFloat
-        case ByteType => value.toByte
-        case IntegerType => value.toInt
-        case LongType => value.toLong
-        case ShortType => value.toShort
-        case DateType => DateTimeUtils.fromJavaDate(Date.valueOf(value))
-        case TimestampType => DateTimeUtils.fromJavaTimestamp(Timestamp.valueOf(value))
-        case _ => throw new HoodieClusteringException("Data type not support:" + dataType)
-      }
-
-      valueWithType
-    } catch {
-      case e: HoodieClusteringException =>
-        throw e
-      case _ =>
-        throw new HoodieClusteringException("Data type not match, value:" + value + ", dataType:" + dataType)
-    }
-  }
 }

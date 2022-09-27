@@ -1,6 +1,7 @@
 # Directories #
 /build/
 target/
+.mvn/
  
 # OS Files #
 .DS_Store
