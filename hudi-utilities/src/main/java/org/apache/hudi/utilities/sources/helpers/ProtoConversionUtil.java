@@ -17,6 +17,7 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
@@ -49,7 +50,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -135,21 +135,16 @@ public class ProtoConversionUtil {
     // A cache with a key as the pair target avro schema and the proto descriptor for the source and the value as an array of proto field descriptors where the order matches the avro ordering.
     // When converting from proto to avro, we want to be able to iterate over the fields in the proto in the same order as they appear in the avro schema.
     private static final Map<Pair<Schema, Descriptors.Descriptor>, Descriptors.FieldDescriptor[]> FIELD_CACHE = new ConcurrentHashMap<>();
-    private static final Set<Descriptors.Descriptor> WRAPPER_DESCRIPTORS_TO_TYPE = getWrapperDescriptorsToType();
-
-    private static Set<Descriptors.Descriptor> getWrapperDescriptorsToType() {
-      Set<Descriptors.Descriptor> wrapperDescriptorsToType = new HashSet<>();
-      wrapperDescriptorsToType.add(StringValue.getDescriptor());
-      wrapperDescriptorsToType.add(Int32Value.getDescriptor());
-      wrapperDescriptorsToType.add(UInt32Value.getDescriptor());
-      wrapperDescriptorsToType.add(Int64Value.getDescriptor());
-      wrapperDescriptorsToType.add(UInt64Value.getDescriptor());
-      wrapperDescriptorsToType.add(BoolValue.getDescriptor());
-      wrapperDescriptorsToType.add(BytesValue.getDescriptor());
-      wrapperDescriptorsToType.add(DoubleValue.getDescriptor());
-      wrapperDescriptorsToType.add(FloatValue.getDescriptor());
-      return wrapperDescriptorsToType;
-    }
+    private static final Set<Descriptors.Descriptor> WRAPPER_DESCRIPTORS_TO_TYPE = CollectionUtils.createImmutableSet(
+        StringValue.getDescriptor(),
+        Int32Value.getDescriptor(),
+        UInt32Value.getDescriptor(),
+        Int64Value.getDescriptor(),
+        UInt64Value.getDescriptor(),
+        BoolValue.getDescriptor(),
+        BytesValue.getDescriptor(),
+        DoubleValue.getDescriptor(),
+        FloatValue.getDescriptor());
 
     private final boolean wrappedPrimitivesAsRecords;
     private final int maxRecursionDepth;
