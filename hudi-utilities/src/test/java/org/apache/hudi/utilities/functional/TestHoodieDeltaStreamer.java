@@ -657,7 +657,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testModifiedTableConfigs() throws Exception {
-    String tableBasePath = dfsBasePath + "/test_table";
+    String tableBasePath = dfsBasePath + "/test_table_modified_configs";
 
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
