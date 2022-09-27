@@ -390,7 +390,7 @@ public class TestJsonKafkaSource extends SparkClientFunctionalTestHarness {
     assertEquals(2, fetch1.getBatch().get().count());
 
     // wait for the checkpoint to expire
-    Thread.sleep(10001);
+    Thread.sleep(30000);
     Throwable t = assertThrows(HoodieDeltaStreamerException.class, () -> {
       kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     });
