@@ -191,20 +191,20 @@ public class ProtoConversionUtil {
       return result;
     }
 
-    private Schema getFieldSchema(Descriptors.FieldDescriptor f, CopyOnWriteMap<Descriptors.Descriptor, Integer> recursionDepths, boolean wrappedPrimitivesAsRecords, String path,
+    private Schema getFieldSchema(Descriptors.FieldDescriptor fieldDescriptor, CopyOnWriteMap<Descriptors.Descriptor, Integer> recursionDepths, boolean wrappedPrimitivesAsRecords, String path,
                                   int maxRecursionDepth, boolean timestampsAsRecords) {
       Function<Schema, Schema> schemaFinalizer = schema -> {
         Schema updatedSchema = schema;
         // all fields in the oneof will be treated as nullable
-        if (f.getContainingOneof() != null && !(schema.isUnion() && schema.getTypes().get(0).getType() == Schema.Type.NULL)) {
+        if (fieldDescriptor.getContainingOneof() != null && !(schema.getType() == Schema.Type.UNION && schema.getTypes().get(0).getType() == Schema.Type.NULL)) {
           updatedSchema = makeSchemaNullable(schema);
         }
-        if (f.isRepeated()) {
+        if (fieldDescriptor.isRepeated()) {
           updatedSchema = Schema.createArray(updatedSchema);
         }
         return updatedSchema;
       };
-      switch (f.getType()) {
+      switch (fieldDescriptor.getType()) {
         case BOOL:
           return schemaFinalizer.apply(Schema.create(Schema.Type.BOOLEAN));
         case FLOAT:
@@ -212,7 +212,7 @@ public class ProtoConversionUtil {
         case DOUBLE:
           return schemaFinalizer.apply(Schema.create(Schema.Type.DOUBLE));
         case ENUM:
-          return schemaFinalizer.apply(getEnumSchema(f.getEnumType()));
+          return schemaFinalizer.apply(getEnumSchema(fieldDescriptor.getEnumType()));
         case STRING:
           Schema s = Schema.create(Schema.Type.STRING);
           GenericData.setStringType(s, GenericData.StringType.String);
@@ -233,25 +233,26 @@ public class ProtoConversionUtil {
         case UINT64:
           return schemaFinalizer.apply(UNSIGNED_LONG_SCHEMA);
         case MESSAGE:
-          String updatedPath = appendFieldNameToPath(path, f.getName());
-          if (!wrappedPrimitivesAsRecords && WRAPPER_DESCRIPTORS_TO_TYPE.contains(f.getMessageType())) {
+          String updatedPath = appendFieldNameToPath(path, fieldDescriptor.getName());
+          if (!wrappedPrimitivesAsRecords && WRAPPER_DESCRIPTORS_TO_TYPE.contains(fieldDescriptor.getMessageType())) {
             // all wrapper types have a single field, so we can get the first field in the message's schema
-            return schemaFinalizer.apply(makeSchemaNullable(getFieldSchema(f.getMessageType().getFields().get(0), recursionDepths, wrappedPrimitivesAsRecords, updatedPath, maxRecursionDepth,
-                timestampsAsRecords)));
+            return schemaFinalizer.apply(makeSchemaNullable(getFieldSchema(fieldDescriptor.getMessageType().getFields().get(0), recursionDepths, wrappedPrimitivesAsRecords, updatedPath,
+                maxRecursionDepth, timestampsAsRecords)));
           }
-          if (!timestampsAsRecords && Timestamp.getDescriptor().equals(f.getMessageType())) {
+          if (!timestampsAsRecords && Timestamp.getDescriptor().equals(fieldDescriptor.getMessageType())) {
             // Handle timestamps as long with logical type
             return schemaFinalizer.apply(makeSchemaNullable(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
           }
           // if message field is repeated (like a list), elements are non-null
-          if (f.isRepeated()) {
-            return schemaFinalizer.apply(getMessageSchema(f.getMessageType(), recursionDepths, wrappedPrimitivesAsRecords, updatedPath, maxRecursionDepth, timestampsAsRecords));
+          if (fieldDescriptor.isRepeated()) {
+            return schemaFinalizer.apply(getMessageSchema(fieldDescriptor.getMessageType(), recursionDepths, wrappedPrimitivesAsRecords, updatedPath, maxRecursionDepth, timestampsAsRecords));
           }
           // otherwise we create a nullable field schema
-          return schemaFinalizer.apply(makeSchemaNullable(getMessageSchema(f.getMessageType(), recursionDepths, wrappedPrimitivesAsRecords, updatedPath, maxRecursionDepth, timestampsAsRecords)));
+          return schemaFinalizer.apply(makeSchemaNullable(getMessageSchema(fieldDescriptor.getMessageType(), recursionDepths, wrappedPrimitivesAsRecords, updatedPath, maxRecursionDepth,
+              timestampsAsRecords)));
         case GROUP: // groups are deprecated
         default:
-          throw new RuntimeException("Unexpected type: " + f.getType());
+          throw new RuntimeException("Unexpected type: " + fieldDescriptor.getType());
       }
     }
 
