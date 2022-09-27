@@ -314,7 +314,7 @@ class HoodieCDCRDD(
               val after = record.get(3).asInstanceOf[GenericRecord]
               recordToLoad.update(3, convertToUTF8String(HoodieCDCUtils.recordToJson(after)))
             case HoodieCDCSupplementalLoggingMode.WITH_BEFORE =>
-              val row = cdcRecordDeserialize(record)
+              val row = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
               val op = row.getString(0)
               val recordKey = row.getString(1)
               recordToLoad.update(0, convertToUTF8String(op))
@@ -329,7 +329,7 @@ class HoodieCDCRDD(
                   recordToLoad.update(3, null)
               }
             case _ =>
-              val row = cdcRecordDeserialize(record)
+              val row = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
               val op = row.getString(0)
               val recordKey = row.getString(1)
               recordToLoad.update(0, convertToUTF8String(op))
@@ -584,10 +584,6 @@ class HoodieCDCRDD(
 
     override def deserialize(avroRecord: GenericRecord): InternalRow = {
       super.deserialize(avroRecord).copy()
-    }
-
-    def cdcRecordDeserialize(cdcRecord: GenericRecord): InternalRow = {
-      cdcRecordDeserializer.deserialize(cdcRecord).get.asInstanceOf[InternalRow].copy()
     }
 
     private def getRecordKey(row: InternalRow): String = {
