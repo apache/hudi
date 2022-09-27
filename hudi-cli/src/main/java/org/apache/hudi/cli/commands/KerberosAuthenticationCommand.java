@@ -57,4 +57,27 @@ public class KerberosAuthenticationCommand {
 
     return "Kerberos authentication success";
   }
+
+  @ShellMethod(key = "kerberos kdestroy", value = "Destroy Kerberos authentication")
+  public String destroyKerberosAuthentication(
+      @ShellOption(value = "--krb5conf", help = "Path to krb5.conf", defaultValue = "/etc/krb5.conf") String krb5ConfPath) throws IOException {
+
+    System.out.println("Destroy Kerberos authentication");
+    System.out.println("Parameters:");
+    System.out.println("--krb5conf: " + krb5ConfPath);
+
+    System.setProperty("java.security.krb5.conf", krb5ConfPath);
+    UserGroupInformation loginUser = UserGroupInformation.getLoginUser();
+    if (loginUser.hasKerberosCredentials()) {
+      loginUser.logoutUserFromKeytab();
+      UserGroupInformation.reset();
+    } else {
+      System.out.println("Currently, no user login with kerberos, do nothing");
+    }
+
+    System.out.println("Current user: " + UserGroupInformation.getCurrentUser());
+    System.out.println("Login user: " + UserGroupInformation.getLoginUser());
+
+    return "Destroy Kerberos authentication success";
+  }
 }
