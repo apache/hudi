@@ -585,6 +585,48 @@ After the second write:
 |  20220622204044318|20220622204044318...|                 1|                      |890aafc0-d897-44d...|hudi.apache.com|  1|   1|
 |  20220622204208997|20220622204208997...|                 2|                      |890aafc0-d897-44d...|             null|  1|   2|
 
+### I see two different records for the same record key value, each record key with a different timestamp format. How is this possible?
+
+This is a known issue with enabling row-writer for bulk_insert operation. When you do a bulk_insert followed by another
+write operation such as upsert/insert this might be observed for timestamp fields specifically. For example, bulk_insert might produce
+timestamp `2016-12-29 09:54:00.0` for record key whereas non bulk_insert write operation might produce a long value like
+`1483023240000000` for the record key thus creating two different records. To fix this, starting 0.10.1 a new config [hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled](https://hudi.apache.org/docs/configurations/#hoodiedatasourcewritekeygeneratorconsistentlogicaltimestampenabled)
+is introduced to bring consistency irrespective of whether row writing is enabled on not. However, for the sake of
+backwards compatibility and not breaking existing pipelines, this config is set to false by default and will have to be enabled explicitly.
+
+
+### Can I switch from one index type to another without having to rewrite the entire table?
+
+It should be okay to switch between Bloom index and Simple index as long as they are not global.
+Moving from global to non-global and vice versa may not work. Also switching between Hbase (gloabl index) and regular bloom might not work.
+
+### How can I resolve the NoSuchMethodError from HBase when using Hudi with metadata table on HDFS?
+From 0.11.0 release, we have upgraded the HBase version to 2.4.9, which is released based on Hadoop 2.x.  Hudi's metadata
+table uses HFile as the base file format, relying on the HBase library.  When enabling metadata table in a Hudi table on
+HDFS using Hadoop 3.x, NoSuchMethodError can be thrown due to compatibility issues between Hadoop 2.x and 3.x.
+To address this, here's the workaround:
+
+(1) Download HBase source code from `https://github.com/apache/hbase`;
+
+(2) Switch to the source code of 2.4.9 release with the tag `rel/2.4.9`:
+```shell
+git checkout rel/2.4.9
+```
+
+(3) Package a new version of HBase 2.4.9 with Hadoop 3 version:
+```shell
+mvn clean install -Denforcer.skip -DskipTests -Dhadoop.profile=3.0 -Psite-install-step
+```
+
+(4) Package Hudi again.
+
+### How can I resolve the RuntimeException saying `hbase-default.xml file seems to be for an older version of HBase`?
+
+This usually happens when there are other HBase libs provided by the runtime environment in the classpath, such as
+Cloudera CDP stack, causing the conflict.  To get around the RuntimeException, you can set the
+`hbase.defaults.for.version.skip` to `true` in the `hbase-site.xml` configuration file, e.g., overwriting the config
+within the Cloudera manager.
+
 ## Contributing to FAQ
 
 A good and usable FAQ should be community-driven and crowd source questions/thoughts across everyone.
