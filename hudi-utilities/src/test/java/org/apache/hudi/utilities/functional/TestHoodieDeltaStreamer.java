@@ -1620,6 +1620,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       populateCommonProps(parquetProps, dfsBasePath);
     }
 
+    parquetProps.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
+
     parquetProps.setProperty("include", "base.properties");
     parquetProps.setProperty("hoodie.embed.timeline.server", "false");
     parquetProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
