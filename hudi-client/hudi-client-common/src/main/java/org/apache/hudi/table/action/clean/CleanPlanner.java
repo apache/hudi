@@ -351,23 +351,23 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
             }
           }
 
-            // Always keep the last commit
-            if (!isFileSliceNeededForPendingCompaction(aSlice) && HoodieTimeline
-                .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
-              // this is a commit, that should be cleaned.
-              aFile.ifPresent(hoodieDataFile -> {
-                deletePaths.add(new CleanFileInfo(hoodieDataFile.getPath(), false));
-                if (hoodieDataFile.getBootstrapBaseFile().isPresent() && config.shouldCleanBootstrapBaseFile()) {
-                  deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
-                }
-              });
-              if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
-                  || hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
-                // 1. If merge on read, then clean the log files for the commits as well;
-                // 2. If change log capture is enabled, clean the log files no matter the table type is mor or cow.
-                deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-                    .collect(Collectors.toList()));
+          // Always keep the last commit
+          if (!isFileSliceNeededForPendingCompaction(aSlice) && HoodieTimeline
+              .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
+            // this is a commit, that should be cleaned.
+            aFile.ifPresent(hoodieDataFile -> {
+              deletePaths.add(new CleanFileInfo(hoodieDataFile.getPath(), false));
+              if (hoodieDataFile.getBootstrapBaseFile().isPresent() && config.shouldCleanBootstrapBaseFile()) {
+                deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
               }
+            });
+            if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
+                || hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+              // 1. If merge on read, then clean the log files for the commits as well;
+              // 2. If change log capture is enabled, clean the log files no matter the table type is mor or cow.
+              deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+                  .collect(Collectors.toList()));
+            }
             if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
               // If merge on read, then clean the log files for the commits as well
               Predicate<HoodieLogFile> notCDCLogFile =
