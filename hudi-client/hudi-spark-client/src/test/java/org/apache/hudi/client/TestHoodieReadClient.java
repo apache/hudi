@@ -78,7 +78,6 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to create base path " + basePath);
     }
-    basePath = basePathWithoutScheme;
   }
 
   /**
