@@ -265,13 +265,13 @@ public class TestCleanPlanExecutor extends TestCleaner {
   }
 
   @ParameterizedTest
-  @ValueSource(Boolean.class)
-  public void testKeepLatestFileVersions(boolean ) throws Exception {
+  @ValueSource(booleans = {true, false})
+  public void testKeepLatestFileVersions(boolean incrementalCleaningEnabled) throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
+                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).withIncrementalCleaningMode(incrementalCleaningEnabled).build())
             .build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
