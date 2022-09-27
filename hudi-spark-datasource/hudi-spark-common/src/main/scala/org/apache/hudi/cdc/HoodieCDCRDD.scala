@@ -40,7 +40,7 @@ import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
 import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
+import org.apache.avro.generic.{GenericData, GenericRecord, GenericRecordBuilder, IndexedRecord}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -314,7 +314,7 @@ class HoodieCDCRDD(
               val after = record.get(3).asInstanceOf[GenericRecord]
               recordToLoad.update(3, convertToUTF8String(HoodieCDCUtils.recordToJson(after)))
             case HoodieCDCSupplementalLoggingMode.WITH_BEFORE =>
-              val row = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
+              val row = cdcRecordDeserialize(record)
               val op = row.getString(0)
               val recordKey = row.getString(1)
               recordToLoad.update(0, convertToUTF8String(op))
@@ -329,7 +329,7 @@ class HoodieCDCRDD(
                   recordToLoad.update(3, null)
               }
             case _ =>
-              val row = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
+              val row = cdcRecordDeserialize(record)
               val op = row.getString(0)
               val recordKey = row.getString(1)
               recordToLoad.update(0, convertToUTF8String(op))
@@ -578,7 +578,16 @@ class HoodieCDCRDD(
     }
 
     private def serialize(curRowRecord: InternalRow): GenericRecord = {
-      serializer.serialize(curRowRecord).asInstanceOf[GenericRecord]
+      val genericRecord = serializer.serialize(curRowRecord).asInstanceOf[GenericRecord]
+      GenericData.get().deepCopy(genericRecord.getSchema, genericRecord)
+    }
+
+    override def deserialize(avroRecord: GenericRecord): InternalRow = {
+      super.deserialize(avroRecord).copy()
+    }
+
+    def cdcRecordDeserialize(cdcRecord: GenericRecord): InternalRow = {
+      cdcRecordDeserializer.deserialize(cdcRecord).get.asInstanceOf[InternalRow].copy()
     }
 
     private def getRecordKey(row: InternalRow): String = {
