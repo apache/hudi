@@ -52,7 +52,7 @@ class HoodieSparkRecordSerializer extends KSerializer[HoodieSparkRecord] {
   // the SparkEnv set (note those tests would fail if they tried to serialize avro data).
   private lazy val codec = CompressionCodec.createCodec(SparkEnv.get.conf)
 
-  private var objSerializerMap = new ConcurrentHashMap[Kryo, FieldSerializer[HoodieSparkRecord]]
+  private val objSerializerMap = new ConcurrentHashMap[Kryo, FieldSerializer[HoodieSparkRecord]]
 
   /**
    * Used to compress Schemas when they are being sent over the wire.

@@ -201,9 +201,7 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
 
   private val baseFileIterator = baseFileReader(split.dataFile.get)
 
-  private val mergerList = tableState.mergerImpls.split(",")
-    .map(_.trim).distinct.toList.asJava
-  private val recordMerger = HoodieRecordUtils.generateRecordMerger(tableState.tablePath, EngineType.SPARK, mergerList, tableState.mergerStrategy)
+  private val recordMerger = HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.mergerImpls.asJava, tableState.mergerStrategy)
 
   override def hasNext: Boolean = hasNextInternal
 
@@ -240,18 +238,22 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
   private def merge(curRow: InternalRow, newRecord: HoodieRecord[_]): Option[InternalRow] = {
     // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
     //       on the record from the Delta Log
+    val curRecord = recordMerger.getRecordType match {
+      case HoodieRecordType.SPARK =>
+        new HoodieSparkRecord(curRow, baseFileReader.schema)
+      case _ =>
+        new HoodieAvroIndexedRecord(serialize(curRow))
+    }
     recordMerger.getRecordType match {
       case HoodieRecordType.SPARK =>
-        val curRecord = new HoodieSparkRecord(curRow, baseFileReader.schema)
         toScalaOption(recordMerger.merge(curRecord, newRecord, logFileReaderAvroSchema, payloadProps))
           .map(r => {
-            val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(r.asInstanceOf[HoodieSparkRecord].getStructType, structTypeSchema)
+            val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(r.asInstanceOf[HoodieSparkRecord].getStructType, requiredStructTypeSchema)
             projection.apply(r.getData.asInstanceOf[InternalRow])
           })
       case _ =>
-        val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
         toScalaOption(recordMerger.merge(curRecord, newRecord, logFileReaderAvroSchema, payloadProps))
-        .map(r => deserialize(projectAvroUnsafe(r.toIndexedRecord(logFileReaderAvroSchema, new Properties()).get().getData.asInstanceOf[GenericRecord], avroSchema, reusableRecordBuilder)))
+        .map(r => deserialize(projectAvroUnsafe(r.toIndexedRecord(logFileReaderAvroSchema, new Properties()).get().getData.asInstanceOf[GenericRecord], requiredAvroSchema, reusableRecordBuilder)))
     }
   }
 }
@@ -321,13 +323,11 @@ object LogFileIterator {
           getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))
       }
 
-      val mergerList = tableState.mergerImpls.split(",")
-        .map(_.trim).distinct.toList.asJava
-      val recordMerger = HoodieRecordUtils.generateRecordMerger(tableState.tablePath, EngineType.SPARK, mergerList, tableState.mergerStrategy)
+      val recordMerger = HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.mergerImpls.asJava, tableState.mergerStrategy)
       logRecordScannerBuilder.withRecordMerger(recordMerger)
 
       if (recordMerger.getRecordType == HoodieRecordType.SPARK) {
-        registerStructTypeSerializerIfNeed(List(HoodieInternalRowUtils.getCachedSchema(logSchema)))
+        HoodieInternalRowUtils.addCompressedSchema(HoodieInternalRowUtils.getCachedSchema(logSchema))
       }
 
       logRecordScannerBuilder.build()

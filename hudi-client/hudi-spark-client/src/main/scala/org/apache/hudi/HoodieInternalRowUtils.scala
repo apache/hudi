@@ -21,6 +21,7 @@ package org.apache.hudi
 import java.nio.charset.StandardCharsets
 import java.util.HashMap
 import java.util.concurrent.ConcurrentHashMap
+import com.google.common.annotations.VisibleForTesting
 import org.apache.avro.{Schema, SchemaNormalization}
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
@@ -288,9 +289,7 @@ object HoodieInternalRowUtils {
       && fingerPrintSchemaMapBC.value.containsKey(schema))
   }
 
-  /**
-   * For UT.
-   */
+  @VisibleForTesting
   def clearBroadcastFingerPint(): Unit = {
     fingerPrintSchemaMapBC = null
     schemaFingerPrintMapBC = null

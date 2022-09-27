@@ -155,10 +155,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
       HoodieRecord<T> oldRecord = records.get(key);
       T oldValue = oldRecord.getData();
-      T combinedValue = ((HoodieRecord<T>) recordMerger.merge(oldRecord, hoodieRecord, readerSchema, this.getPayloadProps()).get()).getData();
+      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(oldRecord, hoodieRecord, readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps()).get();
       // If combinedValue is oldValue, no need rePut oldRecord
-      if (combinedValue != oldValue) {
-        records.put(key, hoodieRecord.newInstance(combinedValue));
+      if (combinedRecord.getData() != oldValue) {
+        records.put(key, combinedRecord);
       }
     } else {
       // Put the record as is

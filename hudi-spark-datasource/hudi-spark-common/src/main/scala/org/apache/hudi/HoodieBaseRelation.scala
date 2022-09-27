@@ -79,7 +79,7 @@ case class HoodieTableState(tablePath: String,
                             usesVirtualKeys: Boolean,
                             recordPayloadClassName: String,
                             metadataConfig: HoodieMetadataConfig,
-                            mergerImpls: String,
+                            mergerImpls: List[String],
                             mergerStrategy: String)
 
 /**
@@ -461,11 +461,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   protected def getTableState: HoodieTableState = {
-    val mergerImpls = if (optParams.contains(HoodieWriteConfig.MERGER_IMPLS.key())) {
+    val mergerImpls = (if (optParams.contains(HoodieWriteConfig.MERGER_IMPLS.key())) {
       optParams(HoodieWriteConfig.MERGER_IMPLS.key())
     } else {
       sqlContext.getConf(HoodieWriteConfig.MERGER_IMPLS.key(), HoodieWriteConfig.MERGER_IMPLS.defaultValue())
-    }
+    }).split(",")
+      .map(_.trim).distinct.toList
     val mergerStrategy = if (optParams.contains(HoodieWriteConfig.MERGER_STRATEGY.key())) {
       optParams(HoodieWriteConfig.MERGER_STRATEGY.key())
     } else {

@@ -19,7 +19,6 @@
 package org.apache.hudi.commmon.model;
 
 import com.esotericsoftware.kryo.DefaultSerializer;
-import java.util.List;
 import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -129,7 +128,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public List<Object> getRecordColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+  public Object[] getRecordColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     return HoodieSparkRecordUtils.getRecordColumnValues(data, columns, getStructType(), consistentLogicalTimestampEnabled);
   }
 

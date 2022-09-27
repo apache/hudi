@@ -870,7 +870,7 @@ object HoodieSparkSqlWriter {
           hoodieRecord
         }).toJavaRDD()
       case HoodieRecord.HoodieRecordType.SPARK =>
-        log.info("Use spark record")
+        log.debug(s"Use ${HoodieRecord.HoodieRecordType.SPARK}")
         // ut will use AvroKeyGenerator, so we need to cast it in spark record
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
         val schemaWithMetaField = HoodieAvroUtils.addMetadataFields(schema, config.allowOperationMetadataField)

@@ -66,7 +66,7 @@ public class HoodieRecordUtils {
   /**
    * Instantiate a given class with a record merge.
    */
-  public static HoodieRecordMerger generateRecordMerger(String basePath, EngineType engineType,
+  public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
       List<String> mergerClassList, String mergerStrategy) {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName());

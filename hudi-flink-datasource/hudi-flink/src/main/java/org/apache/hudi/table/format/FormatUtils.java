@@ -178,7 +178,7 @@ public class FormatUtils {
         .map(String::trim)
         .distinct()
         .collect(Collectors.toList());
-    HoodieRecordMerger merger = HoodieRecordUtils.generateRecordMerger(
+    HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
         split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
     FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
     return HoodieUnMergedLogRecordScanner.newBuilder()

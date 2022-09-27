@@ -928,7 +928,7 @@ public class HoodieWriteConfig extends HoodieConfig {
         .distinct()
         .collect(Collectors.toList());
     String mergerStrategy = getString(MERGER_STRATEGY);
-    return HoodieRecordUtils.generateRecordMerger(getString(BASE_PATH), engineType, mergers, mergerStrategy);
+    return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH), engineType, mergers, mergerStrategy);
   }
 
   public String getSchema() {

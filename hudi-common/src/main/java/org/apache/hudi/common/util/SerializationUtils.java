@@ -19,11 +19,8 @@
 package org.apache.hudi.common.util;
 
 import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
 import java.io.ByteArrayOutputStream;
@@ -38,14 +35,6 @@ public class SerializationUtils {
   // Caching kryo serializer to avoid creating kryo instance for every serde operation
   private static final ThreadLocal<KryoSerializerInstance> SERIALIZER_REF =
       ThreadLocal.withInitial(KryoSerializerInstance::new);
-
-  private static Pair<String, Serializer<?>> SERIALIZER_REGISTER = null;
-
-  public static void setOverallRegister(String className, Serializer<?> serializer) {
-    if (SERIALIZER_REGISTER == null) {
-      SERIALIZER_REGISTER = Pair.of(className, serializer);
-    }
-  }
 
   // Serialize
   // -----------------------------------------------------------------------
@@ -132,13 +121,6 @@ public class SerializationUtils {
       // Handle cases where we may have an odd classloader setup like with libjars
       // for hadoop
       kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
-      if (SERIALIZER_REGISTER != null) {
-        try {
-          kryo.register(Class.forName(SERIALIZER_REGISTER.getLeft()), SERIALIZER_REGISTER.getRight());
-        } catch (ClassNotFoundException e) {
-          throw new HoodieException(e);
-        }
-      }
       return kryo;
     }
 
