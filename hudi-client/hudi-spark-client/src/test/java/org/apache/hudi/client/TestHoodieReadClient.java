@@ -26,7 +26,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.AnalysisException;
@@ -45,38 +44,20 @@ import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@SuppressWarnings("unchecked")
 /**
  * Test-cases for covering HoodieReadClient APIs
  */
+@SuppressWarnings("unchecked")
 public class TestHoodieReadClient extends HoodieClientTestBase {
 
-  private String basePathWithoutScheme = null;
-  private static final String LOCAL_FS_SCHEME = "file://";
-
-  /**
-   * Initializes basePath to use local FS.
-   */
+  @Override
   protected void initPath() {
     try {
       java.nio.file.Path basePath = tempDir.resolve("dataset");
       java.nio.file.Files.createDirectories(basePath);
-      basePathWithoutScheme = basePath.toString().contains("//") ? basePath.toString().substring(basePath.toString().indexOf("//") + 2) : basePath.toString();
-      this.basePath = LOCAL_FS_SCHEME + basePathWithoutScheme;
+      this.basePath = basePath.toUri().toString();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
-    }
-  }
-
-  /**
-   * Initializes a file system with the hadoop configuration of Spark context.
-   */
-  protected void initFileSystem() {
-    super.initFileSystem();
-    try {
-      fs.mkdirs(new Path(basePath));
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to create base path " + basePath);
     }
   }
 
