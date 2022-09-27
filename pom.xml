@@ -200,7 +200,7 @@
     <protoc.version>3.21.5</protoc.version>
     <dynamodb.lockclient.version>1.1.0</dynamodb.lockclient.version>
     <zookeeper.version>3.5.7</zookeeper.version>
-    <openjdk.jol.version>0.2</openjdk.jol.version>
+    <openjdk.jol.version>0.16</openjdk.jol.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
     <springboot.version>2.7.3</springboot.version>

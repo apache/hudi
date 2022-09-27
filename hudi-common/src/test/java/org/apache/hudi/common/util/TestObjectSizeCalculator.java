@@ -52,13 +52,15 @@ public class TestObjectSizeCalculator {
     double zeroDouble = 0.0;
     boolean booleanField = true;
     Object object = new Object();
+    String name = "Alice Bob";
+    Person person = new Person(name);
 
-    assertEquals(24, getObjectSize(emptyString));
-    assertEquals(24, getObjectSize(string));
-    assertEquals(16, getObjectSize(stringArray));
+    assertEquals(40, getObjectSize(emptyString));
+    assertEquals(56, getObjectSize(string));
+    assertEquals(184, getObjectSize(stringArray));
     assertEquals(416, getObjectSize(anotherStringArray));
-    assertEquals(24, getObjectSize(stringList));
-    assertEquals(24, getObjectSize(stringBuilder));
+    assertEquals(40, getObjectSize(stringList));
+    assertEquals(240, getObjectSize(stringBuilder));
     assertEquals(16, getObjectSize(maxIntPrimitive));
     assertEquals(16, getObjectSize(minIntPrimitive));
     assertEquals(16, getObjectSize(maxInteger));
@@ -66,12 +68,13 @@ public class TestObjectSizeCalculator {
     assertEquals(24, getObjectSize(zeroLong));
     assertEquals(24, getObjectSize(zeroDouble));
     assertEquals(16, getObjectSize(booleanField));
-    assertEquals(24, getObjectSize(DayOfWeek.TUESDAY));
+    assertEquals(80, getObjectSize(DayOfWeek.TUESDAY));
     assertEquals(16, getObjectSize(object));
     assertEquals(32, getObjectSize(emptyClass));
-    assertEquals(24, getObjectSize(stringClass));
-    assertEquals(24, getObjectSize(payloadClass));
-    assertEquals(32, getObjectSize(Schema.create(Schema.Type.STRING)));
+    assertEquals(40, getObjectSize(stringClass));
+    assertEquals(40, getObjectSize(payloadClass));
+    assertEquals(1240, getObjectSize(Schema.create(Schema.Type.STRING)));
+    assertEquals(104, getObjectSize(person));
   }
 
   class EmptyClass {
@@ -83,6 +86,14 @@ public class TestObjectSizeCalculator {
 
   class PayloadClass implements Serializable {
     private HoodieRecord record;
+  }
+
+  class Person {
+    private String name;
+
+    public Person(String name) {
+      this.name = name;
+    }
   }
 
   public enum DayOfWeek {
