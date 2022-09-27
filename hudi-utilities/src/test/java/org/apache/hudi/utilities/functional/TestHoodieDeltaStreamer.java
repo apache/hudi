@@ -1447,7 +1447,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testPayloadClassUpdate() throws Exception {
-    String dataSetBasePath = dfsBasePath + "/test_dataset_mor";
+    String dataSetBasePath = dfsBasePath + "/test_dataset_mor_payload_class_update";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
         true, false, null, "MERGE_ON_READ");
