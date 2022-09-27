@@ -351,16 +351,16 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
             }
           }
 
-            // Always keep the last commit
-            if (!isFileSliceNeededForPendingCompaction(aSlice) && HoodieTimeline
-                .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
-              // this is a commit, that should be cleaned.
-              aFile.ifPresent(hoodieDataFile -> {
-                deletePaths.add(new CleanFileInfo(hoodieDataFile.getPath(), false));
-                if (hoodieDataFile.getBootstrapBaseFile().isPresent() && config.shouldCleanBootstrapBaseFile()) {
-                  deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
-                }
-              });
+          // Always keep the last commit
+          if (!isFileSliceNeededForPendingCompaction(aSlice) && HoodieTimeline
+              .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
+            // this is a commit, that should be cleaned.
+            aFile.ifPresent(hoodieDataFile -> {
+              deletePaths.add(new CleanFileInfo(hoodieDataFile.getPath(), false));
+              if (hoodieDataFile.getBootstrapBaseFile().isPresent() && config.shouldCleanBootstrapBaseFile()) {
+                deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
+              }
+            });
             if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
               // If merge on read, then clean the log files for the commits as well
               Predicate<HoodieLogFile> notCDCLogFile =
