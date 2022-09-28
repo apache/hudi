@@ -103,8 +103,18 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     }
     val targetAttrs = mergeInto.targetTable.output
 
-    val target2Source = conditions.map(_.asInstanceOf[EqualTo])
-      .map {
+    val cleanedConditions = conditions.map(_.asInstanceOf[EqualTo]).map {
+      // Here we're unraveling superfluous casting of expressions on both sides of the matched-on condition,
+      // in case both of them are casted to the same type (which might be result of either explicit casting
+      // from the user, or auto-casting performed by Spark for type coercion), which has potential
+      // potential of rendering the whole operation as invalid (check out HUDI-4861 for more details)
+      case EqualTo(MatchCast(leftExpr, leftCastTargetType, _, _), MatchCast(rightExpr, rightCastTargetType, _, _))
+        if leftCastTargetType.sameType(rightCastTargetType) => EqualTo(leftExpr, rightExpr)
+
+      case c @ _ => c
+    }
+
+    val target2Source = cleanedConditions.map {
         // Expressions of the following forms are supported:
         //    `target.id = <expr>` (or `<expr> = target.id`)
         //    `cast(target.id, ...) = <expr>` (or `<expr> = cast(target.id, ...)`)
