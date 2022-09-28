@@ -68,9 +68,9 @@ class ParseSections:
             self.sections[x.name] = x
     
     def validateOthers(self, line: str, value: str):
-        for name, section in self.sections:
-            if section.name != value:
-                if section.identify(line):
+        for name in self.sections:
+            if name != value:
+                if self.sections[name].identify(line):
                     return True
         return False    
     
@@ -88,6 +88,9 @@ class ParseSection:
         if self.debug:
             print(f"ERROR:(state: {self.data.name}, found: {self.found}, message: {message}")
 
+    def nextSection(self):
+        return self.data.nextSection
+
     def validateAfter(self, line):
         return self.found and self.data.identifyAfter(line)
 
@@ -101,16 +104,28 @@ class ParseSection:
     def validateLine(self,line):
         # see if it matches template
         if self.data.identify(line):
-            o = self.processIdentify(line)
-            if o == Outcomes.NEXTSECTION and self.data.nextSection == "SUCCESS":
-                return Outcomes.SUCCESS
-            return o
+            return self.processIdentify(line)
         elif self.sections.validateOthers(line, self.data.name):
             self.error(f"Out of order section or missing description \"{line}\"")
             return Outcomes.ERROR
         elif self.validateAfter(line):
+            if self.nextSection() == "SUCCESS":
+                return Outcomes.SUCCESS
             return Outcomes.NEXTSECTION
         return Outcomes.CONTINUE
+
+class NoDataSection(ParseSection):
+    def __init__(self, data: ParseSectionData, sections: ParseSections, debug=False):
+        super().__init__(data, sections, debug)
+
+    def processIdentify(self, line):
+        o = super().processIdentify(line)
+        if o  == Outcomes.CONTINUE:
+            if self.nextSection() == "SUCCESS":
+                return Outcomes.SUCCESS
+            else:
+                return Outcomes.NEXTSECTION
+        return o
 
 class RiskLevelSection(ParseSection):
     def __init__(self, data: ParseSectionData, sections: ParseSections, debug=False):
@@ -148,9 +163,11 @@ class ValidateBody:
         if self.section is None:
             data = self.sections.get(self.firstSection)
         else:
-            data = self.sections.get(self.section.nextSection)
+            data = self.sections.get(self.section.nextSection())
         if data.name == "RISKLEVEL":
             self.section = RiskLevelSection(data=data, sections=self.sections, debug=self.debug)
+        elif data.name == "CHECKLIST":
+            self.section = NoDataSection(data=data, sections=self.sections, debug=self.debug)
         else:
             self.section = ParseSection(data=data, sections=self.sections, debug=self.debug)
 
@@ -574,7 +591,6 @@ if __name__ == '__main__':
         exit(-1)
 
     validator = make_default_validator(body,True)
-    
     if not validator.validate():
         exit(-2)
     exit(0)
