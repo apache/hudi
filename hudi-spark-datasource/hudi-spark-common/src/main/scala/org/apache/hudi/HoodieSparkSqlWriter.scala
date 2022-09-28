@@ -75,7 +75,8 @@ object HoodieSparkSqlWriter {
             hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty,
             asyncCompactionTriggerFn: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]] => Unit] = Option.empty,
             asyncClusteringTriggerFn: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]] => Unit] = Option.empty,
-            embeddedTimelineServiceHandler : org.apache.hudi.common.util.Option[EmbeddedTimelineServiceHandler] = org.apache.hudi.common.util.Option.empty)
+            embeddedTimelineServiceHandler : org.apache.hudi.common.util.Option[EmbeddedTimelineServiceHandler]
+            = org.apache.hudi.common.util.Option.empty().asInstanceOf[org.apache.hudi.common.util.Option[EmbeddedTimelineServiceHandler]])
   : (Boolean, common.util.Option[String], common.util.Option[String], common.util.Option[String],
     SparkRDDWriteClient[HoodieRecordPayload[Nothing]], HoodieTableConfig) = {
 
@@ -430,7 +431,8 @@ object HoodieSparkSqlWriter {
                 df: DataFrame,
                 hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
                 hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty,
-                embeddedTimelineServiceHandler : org.apache.hudi.common.util.Option[EmbeddedTimelineServiceHandler] = org.apache.hudi.common.util.Option.empty): Boolean = {
+                embeddedTimelineServiceHandler : org.apache.hudi.common.util.Option[EmbeddedTimelineServiceHandler]
+                = org.apache.hudi.common.util.Option.empty().asInstanceOf[org.apache.hudi.common.util.Option[EmbeddedTimelineServiceHandler]]): Boolean = {
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")

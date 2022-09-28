@@ -201,7 +201,8 @@ public class DataSourceUtils {
     if (embeddedTimelineServiceHandler.isPresent())  {
       embeddedTimelineServiceHandler.get().onInstantiation(writeConfig);
     }
-    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineServiceHandler.isPresent() ? embeddedTimelineServiceHandler.get().getEmbeddedTimelineService() : Option.empty());
+    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineServiceHandler.isPresent()
+        ? embeddedTimelineServiceHandler.get().getEmbeddedTimelineService() : Option.empty());
   }
 
   /**
@@ -218,14 +219,16 @@ public class DataSourceUtils {
     }
 
     public void onInstantiation(HoodieWriteConfig writeConfig) {
-      if (!embeddedTimelineService.isPresent() && writeConfig.isEmbeddedTimelineServerEnabled()) {
-        try {
-          embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), writeConfig);
-        } catch (IOException e) {
-          e.printStackTrace();
+      if (writeConfig.isEmbeddedTimelineServerEnabled()) {
+        if (!embeddedTimelineService.isPresent()) {
+          try {
+            embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), writeConfig);
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+        } else {
+          EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
         }
-      } else {
-        EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
       }
     }
 
