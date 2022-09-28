@@ -85,9 +85,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import scala.Predef;
-import scala.collection.JavaConverters;
-
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
  * table. Does not maintain any state, queries at runtime to see how far behind the target table is from the source
@@ -656,9 +653,9 @@ public class HoodieDeltaStreamer implements Serializable {
                 + cfg.baseFileFormat);
         cfg.baseFileFormat = baseFileFormat;
         this.cfg.baseFileFormat = baseFileFormat;
-        HashMap<String,String> propsToValidate = new HashMap<>();
+        Map<String,String> propsToValidate = new HashMap<>();
         properties.get().forEach((k,v) -> propsToValidate.put(k.toString(),v.toString()));
-        HoodieWriterUtils.validateTableConfig(this.sparkSession, JavaConverters.mapAsScalaMapConverter(propsToValidate).asScala().toMap(Predef.conforms()), meta.getTableConfig());
+        HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
         if (cfg.baseFileFormat == null) {
