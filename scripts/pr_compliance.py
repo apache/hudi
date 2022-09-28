@@ -68,7 +68,7 @@ class ParseSections:
             self.sections[x.name] = x
     
     def validateOthers(self, line: str, value: str):
-        for section in self.sections:
+        for name, section in self.sections:
             if section.name != value:
                 if section.identify(line):
                     return True
