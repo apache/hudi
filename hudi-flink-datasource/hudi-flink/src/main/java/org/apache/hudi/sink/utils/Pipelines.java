@@ -401,7 +401,7 @@ public class Pipelines {
    * @return the clustering pipeline
    */
   public static DataStreamSink<ClusteringCommitEvent> cluster(Configuration conf, RowType rowType, DataStream<Object> dataStream) {
-    return dataStream.transform("cluster_plan_generate",
+    DataStream<ClusteringCommitEvent> clusteringStream = dataStream.transform("cluster_plan_generate",
             TypeInformation.of(ClusteringPlanEvent.class),
             new ClusteringPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
@@ -413,8 +413,12 @@ public class Pipelines {
         .transform("clustering_task",
             TypeInformation.of(ClusteringCommitEvent.class),
             new ClusteringOperator(conf, rowType))
-        .setParallelism(conf.getInteger(FlinkOptions.CLUSTERING_TASKS))
-        .addSink(new ClusteringCommitSink(conf))
+        .setParallelism(conf.getInteger(FlinkOptions.CLUSTERING_TASKS));
+    if (OptionsResolver.sortClusteringEnabled(conf)) {
+      ExecNodeUtil.setManagedMemoryWeight(clusteringStream.getTransformation(),
+          conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+    }
+    return clusteringStream.addSink(new ClusteringCommitSink(conf))
         .name("clustering_commit")
         .setParallelism(1); // compaction commit should be singleton
   }

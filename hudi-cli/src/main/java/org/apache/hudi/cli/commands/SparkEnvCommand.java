@@ -60,7 +60,7 @@ public class SparkEnvCommand {
     if (key == null || key.isEmpty()) {
       return showAllEnv();
     } else {
-      return HoodiePrintHelper.print(new String[] {"key", "value"}, new String[][] {new String[] {key, env.get(key)}});
+      return HoodiePrintHelper.print(new String[] {"key", "value"}, new String[][] {new String[] {key, env.getOrDefault(key, "")}});
     }
   }
 }

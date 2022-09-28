@@ -150,13 +150,14 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   // for max of Integer size
   private HoodieLogBlock readBlock() throws IOException {
     int blockSize;
+    long blockStartPos = inputStream.getPos();
     try {
       // 1 Read the total size of the block
       blockSize = (int) inputStream.readLong();
     } catch (EOFException | CorruptedLogFileException e) {
       // An exception reading any of the above indicates a corrupt block
       // Create a corrupt block by finding the next MAGIC marker or EOF
-      return createCorruptBlock();
+      return createCorruptBlock(blockStartPos);
     }
 
     // We may have had a crash which could have written this block partially
@@ -164,7 +165,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // block) or EOF. If we did not find either of it, then this block is a corrupted block.
     boolean isCorrupted = isBlockCorrupted(blockSize);
     if (isCorrupted) {
-      return createCorruptBlock();
+      return createCorruptBlock(blockStartPos);
     }
 
     // 2. Read the version for this log format
@@ -253,14 +254,14 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     return HoodieLogBlockType.values()[type];
   }
 
-  private HoodieLogBlock createCorruptBlock() throws IOException {
-    LOG.info("Log " + logFile + " has a corrupted block at " + inputStream.getPos());
-    long currentPos = inputStream.getPos();
+  private HoodieLogBlock createCorruptBlock(long blockStartPos) throws IOException {
+    LOG.info("Log " + logFile + " has a corrupted block at " + blockStartPos);
+    inputStream.seek(blockStartPos);
     long nextBlockOffset = scanForNextAvailableBlockOffset();
     // Rewind to the initial start and read corrupted bytes till the nextBlockOffset
-    inputStream.seek(currentPos);
+    inputStream.seek(blockStartPos);
     LOG.info("Next available block in " + logFile + " starts at " + nextBlockOffset);
-    int corruptedBlockSize = (int) (nextBlockOffset - currentPos);
+    int corruptedBlockSize = (int) (nextBlockOffset - blockStartPos);
     long contentPosition = inputStream.getPos();
     Option<byte[]> corruptedBytes = HoodieLogBlock.tryReadContent(inputStream, corruptedBlockSize, readBlockLazily);
     HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc =

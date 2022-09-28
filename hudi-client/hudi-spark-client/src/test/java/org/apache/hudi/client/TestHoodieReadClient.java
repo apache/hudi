@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -32,6 +33,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -42,11 +44,22 @@ import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@SuppressWarnings("unchecked")
 /**
  * Test-cases for covering HoodieReadClient APIs
  */
+@SuppressWarnings("unchecked")
 public class TestHoodieReadClient extends HoodieClientTestBase {
+
+  @Override
+  protected void initPath() {
+    try {
+      java.nio.file.Path basePath = tempDir.resolve("dataset");
+      java.nio.file.Files.createDirectories(basePath);
+      this.basePath = basePath.toUri().toString();
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
 
   /**
    * Test ReadFilter API after writing new records using HoodieWriteClient.insert.
