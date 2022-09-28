@@ -1991,19 +1991,6 @@
         </property>
       </activation>
     </profile>
-    <profile>
-      <id>m1-mac</id>
-      <properties>
-        <spark2.version>2.4.8</spark2.version>
-        <rocksdbjni.version>6.29.4.1</rocksdbjni.version>
-      </properties>
-      <activation>
-        <os>
-          <family>mac</family>
-          <arch>aarch64</arch>
-        </os>
-      </activation>
-    </profile>
 
     <!-- "spark3" is an alias for "spark3.3" -->
     <!-- NOTE: This profile is deprecated and soon will be removed -->
