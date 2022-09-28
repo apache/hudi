@@ -1076,7 +1076,7 @@ class TestHoodieSparkSqlWriter {
    */
   @Test
   def testReadOptimizedAfterScheduleCompaction(): Unit = {
-    val (table_name, table_path) = ("hoodie_read_test_table", s"${tempBasePath}_hoodie_read_test_table_100")
+    val (table_name, table_path) = ("hoodie_mor_ro_read_test_table", s"${tempBasePath}_mor_test_table")
 
     val hudiOptions = Map[String, String](
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
@@ -1128,12 +1128,14 @@ class TestHoodieSparkSqlWriter {
       new JavaSparkContext(sc), "", table_path, hoodieFooTableName,
       mapAsJavaMap(compactionOperation)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
-    client.scheduleCompaction(org.apache.hudi.common.util.Option.empty())
-    client.close()
+    val compactionInstant = client.scheduleCompaction(org.apache.hudi.common.util.Option.empty()).get()
 
+    client.compact(compactionInstant)
+    client.close()
+    
     // optimized read
     val optimizedDf = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key,  DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(table_path)
       .where(col("age").===(1001))
 
