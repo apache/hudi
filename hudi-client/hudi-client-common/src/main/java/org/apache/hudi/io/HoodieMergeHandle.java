@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -64,6 +65,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 @SuppressWarnings("Duplicates")
 /**
@@ -448,6 +451,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   public void performMergeDataValidationCheck(WriteStatus writeStatus) {
     if (!config.isMergeDataValidationCheckEnabled()) {
       return;
+    }
+
+    // Verify the integrity of the parquet file
+    final String extension = FSUtils.getFileExtension(newFilePath.toString());
+    if (PARQUET.getFileExtension().equals(extension )) {
+      ParquetUtils.checkReadableOfParquet(hoodieTable.getHadoopConf(), newFilePath);
     }
 
     long oldNumWrites = 0;

@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -34,6 +35,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -41,6 +43,8 @@ import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.io.InputFile;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
@@ -53,6 +57,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -488,6 +493,31 @@ public class ParquetUtils extends BaseFileUtils {
     @Override
     public HoodieKey next() {
       return this.func.apply(this.nestedItr.next());
+    }
+  }
+
+  /**
+   * Check readable of parquet files.
+   *
+   *
+   * @param configuration   configuration to build fs object
+   * @param checkPath        The parquet file path.
+   */
+  public static void checkReadableOfParquet(Configuration configuration, Path checkPath) {
+    try {
+      List<InputFile> inputFiles = Collections.singletonList((InputFile) HadoopInputFile.fromPath(checkPath, configuration));
+      // check footer
+      new ParquetUtils().readMetadata(configuration, checkPath);
+      // check row group and page
+      ParquetFileReader parquetFileReader = new ParquetFileReader(inputFiles.get(0), HadoopReadOptions.builder(configuration, checkPath).build());
+      while (true) {
+        if (parquetFileReader.readNextFilteredRowGroup() == null) {
+          break;
+        }
+      }
+    } catch (Exception e) {
+      LOG.error(String.format("failed to verify the correctness of current parquet file: %s, this parquet is corrupted", checkPath));
+      throw new HoodieException(e);
     }
   }
 }
