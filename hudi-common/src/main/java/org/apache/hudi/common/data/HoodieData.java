@@ -67,14 +67,19 @@ public interface HoodieData<T> extends Serializable {
 
   /**
    * Returns number of objects held in the collection
-   *
+   * <p>
    * NOTE: This is a terminal operation
    */
   long count();
 
   /**
+   * @return the number of data partitions in the engine-specific representation.
+   */
+  int getNumPartitions();
+
+  /**
    * Maps every element in the collection using provided mapping {@code func}.
-   *
+   * <p>
    * This is an intermediate operation
    *
    * @param func serializable map function
