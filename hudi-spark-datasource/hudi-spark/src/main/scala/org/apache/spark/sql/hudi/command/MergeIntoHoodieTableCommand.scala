@@ -112,16 +112,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         // In the latter case, there are further restrictions: since cast will be dropped on the
         // target table side (since we're gonna be matching against primary-key column as is) expression
         // on the opposite side of the comparison should be cast-able to the primary-key column's data-type
-        // t/h either
-        //    - Up-cast (verified by [[Cast.canUpCast]]), or
-        //    - Lateral or down-cast (verified by [[Cast.canCoerce]])
+        // t/h "up-cast" (ie w/o any loss in precision)
         case EqualTo(CoercedAttributeReference(attr), expr)
-          if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) && canCoerce(expr.dataType, attr.dataType) =>
+          if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) && Cast.canUpCast(expr.dataType, attr.dataType) =>
             targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
               castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
 
         case EqualTo(expr, CoercedAttributeReference(attr))
-          if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) && canCoerce(expr.dataType, attr.dataType) =>
+          if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) && Cast.canUpCast(expr.dataType, attr.dataType) =>
             targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
               castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
 
@@ -480,16 +478,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         }
       })
     })
-  }
-
-  private def canCoerce(fromType: DataType, toType: DataType): Boolean = {
-    val canCast = if (sparkSession.sqlContext.conf.ansiEnabled) {
-      Cast.canCast(fromType, toType)
-    } else {
-      AnsiCast.canCast(fromType, toType)
-    }
-
-    canCast || Cast.canUpCast(fromType, toType)
   }
 
   /**
