@@ -16,28 +16,38 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.cli;
+package org.apache.hudi.common.table.cdc;
 
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
-import org.springframework.shell.plugin.support.DefaultHistoryFileNameProvider;
-import org.springframework.stereotype.Component;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
 /**
- * CLI history file provider.
+ * Enumeration of change log operation.
  */
-@Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
-public class HoodieHistoryFileNameProvider extends DefaultHistoryFileNameProvider {
+public enum HoodieCDCOperation {
+  INSERT("i"),
+  UPDATE("u"),
+  DELETE("d");
 
-  @Override
-  public String getHistoryFileName() {
-    return "hoodie-cmd.log";
+  private final String value;
+
+  HoodieCDCOperation(String value) {
+    this.value = value;
   }
 
-  @Override
-  public String getProviderName() {
-    return "Hoodie file name provider";
+  public String getValue() {
+    return this.value;
   }
 
+  public static HoodieCDCOperation parse(String value) {
+    switch (value) {
+      case "i":
+        return INSERT;
+      case "u":
+        return UPDATE;
+      case "d":
+        return DELETE;
+      default:
+        throw new HoodieNotSupportedException("Unsupported value: " + value);
+    }
+  }
 }

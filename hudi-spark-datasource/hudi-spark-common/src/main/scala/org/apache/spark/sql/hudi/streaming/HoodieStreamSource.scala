@@ -23,12 +23,13 @@ import java.util.Date
 
 import org.apache.hadoop.fs.Path
 
+import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{FileIOUtils, TablePathUtils}
-
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource.VERSION
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.internal.Logging
@@ -55,15 +56,24 @@ class HoodieStreamSource(
   extends Source with Logging with Serializable with SparkAdapterSupport {
 
   @transient private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+
   private lazy val tablePath: Path = {
     val path = new Path(parameters.getOrElse("path", "Missing 'path' option"))
     val fs = path.getFileSystem(hadoopConf)
     TablePathUtils.getTablePath(fs, path).get()
   }
-  private lazy val metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(tablePath.toString).build()
+
+  private lazy val metaClient = HoodieTableMetaClient.builder()
+    .setConf(hadoopConf).setBasePath(tablePath.toString).build()
+
   private lazy val tableType = metaClient.getTableType
 
+  private val isCDCQuery = CDCRelation.isCDCEnabled(metaClient) &&
+    parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
+    parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
+
   @transient private var lastOffset: HoodieSourceOffset = _
+
   @transient private lazy val initialOffsets = {
     val metadataLog =
       new HDFSMetadataLog[HoodieSourceOffset](sqlContext.sparkSession, metadataPath) {
@@ -117,9 +127,13 @@ class HoodieStreamSource(
   }
 
   override def schema: StructType = {
-    schemaOption.getOrElse {
-      val schemaUtil = new TableSchemaResolver(metaClient)
-      AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+    if (isCDCQuery) {
+      CDCRelation.FULL_CDC_SPARK_SCHEMA
+    } else {
+      schemaOption.getOrElse {
+        val schemaUtil = new TableSchemaResolver(metaClient)
+        AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+      }
     }
   }
 
@@ -152,27 +166,38 @@ class HoodieStreamSource(
       sqlContext.internalCreateDataFrame(
         sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema, isStreaming = true)
     } else {
-      // Consume the data between (startCommitTime, endCommitTime]
-      val incParams = parameters ++ Map(
-        DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-        DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
-        DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
-      )
+      if (isCDCQuery) {
+        val cdcOptions = Map(
+          DataSourceReadOptions.BEGIN_INSTANTTIME.key()-> startCommitTime(startOffset),
+          DataSourceReadOptions.END_INSTANTTIME.key() -> endOffset.commitTime
+        )
+        val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
+          .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
 
-      val rdd = tableType match {
-        case HoodieTableType.COPY_ON_WRITE =>
-          val serDe = sparkAdapter.createSparkRowSerDe(schema)
-          new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
-            .buildScan()
-            .map(serDe.serializeRow)
-        case HoodieTableType.MERGE_ON_READ =>
-          val requiredColumns = schema.fields.map(_.name)
-          new MergeOnReadIncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
-            .buildScan(requiredColumns, Array.empty[Filter])
-            .asInstanceOf[RDD[InternalRow]]
-        case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
+        sqlContext.sparkSession.internalCreateDataFrame(rdd, CDCRelation.FULL_CDC_SPARK_SCHEMA, isStreaming = true)
+      } else {
+        // Consume the data between (startCommitTime, endCommitTime]
+        val incParams = parameters ++ Map(
+          DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+          DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
+          DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
+        )
+
+        val rdd = tableType match {
+          case HoodieTableType.COPY_ON_WRITE =>
+            val serDe = sparkAdapter.createSparkRowSerDe(schema)
+            new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
+              .buildScan()
+              .map(serDe.serializeRow)
+          case HoodieTableType.MERGE_ON_READ =>
+            val requiredColumns = schema.fields.map(_.name)
+            new MergeOnReadIncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
+              .buildScan(requiredColumns, Array.empty[Filter])
+              .asInstanceOf[RDD[InternalRow]]
+          case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
+        }
+        sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
       }
-      sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
     }
   }
 

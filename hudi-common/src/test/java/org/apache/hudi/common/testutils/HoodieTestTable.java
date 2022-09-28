@@ -284,6 +284,12 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable addInflightReplace(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+    createInflightReplaceCommit(basePath, instantTime, inflightReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
   public HoodieTestTable addInflightClean(String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
     createRequestedCleanFile(basePath, instantTime, cleanerPlan);
     createInflightCleanFile(basePath, instantTime, cleanerPlan);

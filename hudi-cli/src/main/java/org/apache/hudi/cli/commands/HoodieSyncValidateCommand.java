@@ -24,11 +24,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
-
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
 import java.util.List;
@@ -39,22 +37,22 @@ import static org.apache.hudi.cli.utils.CommitUtil.countNewRecords;
 /**
  * CLI command to display sync options.
  */
-@Component
-public class HoodieSyncValidateCommand implements CommandMarker {
+@ShellComponent
+public class HoodieSyncValidateCommand {
 
-  @CliCommand(value = "sync validate", help = "Validate the sync by counting the number of records")
+  @ShellMethod(key = "sync validate", value = "Validate the sync by counting the number of records")
   public String validateSync(
-      @CliOption(key = {"mode"}, unspecifiedDefaultValue = "complete", help = "Check mode") final String mode,
-      @CliOption(key = {"sourceDb"}, unspecifiedDefaultValue = "rawdata", help = "source database") final String srcDb,
-      @CliOption(key = {"targetDb"}, unspecifiedDefaultValue = "dwh_hoodie",
+      @ShellOption(value = {"--mode"}, defaultValue = "complete", help = "Check mode") final String mode,
+      @ShellOption(value = {"--sourceDb"}, defaultValue = "rawdata", help = "source database") final String srcDb,
+      @ShellOption(value = {"--targetDb"}, defaultValue = "dwh_hoodie",
           help = "target database") final String tgtDb,
-      @CliOption(key = {"partitionCount"}, unspecifiedDefaultValue = "5",
+      @ShellOption(value = {"--partitionCount"}, defaultValue = "5",
           help = "total number of recent partitions to validate") final int partitionCount,
-      @CliOption(key = {"hiveServerUrl"}, mandatory = true,
+      @ShellOption(value = {"--hiveServerUrl"},
           help = "hiveServerURL to connect to") final String hiveServerUrl,
-      @CliOption(key = {"hiveUser"}, unspecifiedDefaultValue = "",
+      @ShellOption(value = {"--hiveUser"}, defaultValue = "",
           help = "hive username to connect to") final String hiveUser,
-      @CliOption(key = {"hivePass"}, mandatory = true, unspecifiedDefaultValue = "",
+      @ShellOption(value = {"--hivePass"}, defaultValue = "",
           help = "hive password to connect to") final String hivePass)
       throws Exception {
     if (HoodieCLI.syncTableMetadata == null) {

@@ -333,6 +333,10 @@ public class HoodieTableMetadataUtil {
                         // monotonically increasing (ie file-size never goes down, unless deleted)
                         map.merge(fileName, stat.getFileSizeInBytes(), Math::max);
 
+                        String cdcPath = stat.getCdcPath();
+                        if (cdcPath != null) {
+                          map.put(cdcPath, stat.getCdcWriteBytes());
+                        }
                         return map;
                       },
                       CollectionUtils::combine);
@@ -1356,23 +1360,5 @@ public class HoodieTableMetadataUtil {
     Set<String> inflightAndCompletedPartitions = getInflightMetadataPartitions(tableConfig);
     inflightAndCompletedPartitions.addAll(tableConfig.getMetadataPartitions());
     return inflightAndCompletedPartitions;
-  }
-
-  /**
-   * Get Last commit's Metadata.
-   */
-  public static Option<HoodieCommitMetadata> getLatestCommitMetadata(HoodieTableMetaClient metaClient) {
-    try {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      if (timeline.lastInstant().isPresent()) {
-        HoodieInstant instant = timeline.lastInstant().get();
-        byte[] data = timeline.getInstantDetails(instant).get();
-        return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
-      } else {
-        return Option.empty();
-      }
-    } catch (Exception e) {
-      throw new HoodieException("Failed to get commit metadata", e);
-    }
   }
 }

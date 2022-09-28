@@ -68,7 +68,6 @@ import static org.apache.hudi.hadoop.CachingPath.createPathUnsafe;
  * </ul>
  */
 public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
-
   private static final Logger LOG = LogManager.getLogger(BaseHoodieTableFileIndex.class);
 
   private final String[] partitionColumns;

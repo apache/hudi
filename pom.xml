@@ -146,7 +146,7 @@
     <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
     <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
     <spark31.version>3.1.3</spark31.version>
-    <spark32.version>3.2.1</spark32.version>
+    <spark32.version>3.2.2</spark32.version>
     <spark33.version>3.3.1</spark33.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <!-- NOTE: Different Spark versions might require different number of shared
@@ -202,6 +202,8 @@
     <zookeeper.version>3.5.7</zookeeper.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
+    <springboot.version>2.7.3</springboot.version>
+    <spring.shell.version>2.1.1</spring.shell.version>
   </properties>
 
   <scm>
@@ -523,9 +525,11 @@
               <exclude>**/test/resources/*.data</exclude>
               <exclude>**/test/resources/*.commit</exclude>
               <exclude>**/test/resources/**/*.txt</exclude>
+              <exclude>**/test/resources/**/*.avsc</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
               <exclude>.github/**</exclude>
+              <exclude>**/banner.txt</exclude>
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
               <exclude>.mvn/**</exclude>
@@ -625,12 +629,6 @@
   <dependencyManagement>
     <dependencies>
       <!-- Scala -->
-      <dependency>
-        <groupId>org.scala-lang</groupId>
-        <artifactId>scala-library</artifactId>
-        <version>${scala.version}</version>
-      </dependency>
-
       <dependency>
         <groupId>org.scala-lang.modules</groupId>
         <artifactId>scala-collection-compat_${scala.binary.version}</artifactId>
@@ -1493,6 +1491,31 @@
           </exclusion>
         </exclusions>
       </dependency>
+
+      <!--  Spring Boot  -->
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <version>${springboot.version}</version>
+        <scope>test</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-logging</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.shell</groupId>
+        <artifactId>spring-shell-starter</artifactId>
+        <version>${spring.shell.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
     </dependencies>
   </dependencyManagement>
   <repositories>
@@ -1983,7 +2006,9 @@
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
-        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
+        <!-- This glob has to include hudi-spark3-common, hudi-spark3.2plus-common -->
+        <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
+        <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>

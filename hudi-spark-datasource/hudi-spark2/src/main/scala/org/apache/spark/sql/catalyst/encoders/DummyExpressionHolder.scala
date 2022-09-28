@@ -17,15 +17,13 @@
  * under the License.
  */
 
-package org.apache.hudi.cli.functional;
+package org.apache.spark.sql.catalyst.encoders
 
-import org.junit.platform.runner.JUnitPlatform;
-import org.junit.platform.suite.api.IncludeTags;
-import org.junit.platform.suite.api.SelectPackages;
-import org.junit.runner.RunWith;
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
+import org.apache.spark.sql.catalyst.plans.logical.LeafNode
 
-@RunWith(JUnitPlatform.class)
-@SelectPackages("org.apache.hudi.cli.commands")
-@IncludeTags("functional")
-public class CLIFunctionalTestSuite {
+// A dummy logical plan that can hold expressions and go through optimizer rules.
+case class DummyExpressionHolder(exprs: Seq[Expression]) extends LeafNode {
+  override lazy val resolved = true
+  override def output: Seq[Attribute] = Nil
 }

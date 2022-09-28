@@ -45,12 +45,10 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.CreateHandleFactory;
-import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.io.HoodieSortedMergeHandle;
+import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -385,14 +383,8 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
-    if (table.requireSortedRecords()) {
-      return new HoodieSortedMergeHandle<>(config, instantTime, (HoodieSparkTable) table, recordItr, partitionPath, fileId, taskContextSupplier,
-          keyGeneratorOpt);
-    } else if (!WriteOperationType.isChangingRecords(operationType) && config.allowDuplicateInserts()) {
-      return new HoodieConcatHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
-    } else {
-      return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
-    }
+    return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
+        taskContextSupplier, keyGeneratorOpt);
   }
 
   @Override

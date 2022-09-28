@@ -18,8 +18,9 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
+import org.apache.spark.sql.types.StructType
 
 object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
@@ -35,4 +36,7 @@ object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
         None
     }
   }
+
+  override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema =
+    ProjectionOverSchema(schema, output)
 }

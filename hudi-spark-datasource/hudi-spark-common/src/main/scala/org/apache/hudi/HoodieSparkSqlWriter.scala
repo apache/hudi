@@ -140,7 +140,6 @@ object HoodieSparkSqlWriter {
       if (!tableExists) {
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
         val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
-        val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD)
         val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
         val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
 
@@ -148,7 +147,6 @@ object HoodieSparkSqlWriter {
           .setTableType(tableType)
           .setDatabaseName(databaseName)
           .setTableName(tblName)
-          .setRecordKeyFields(recordKeyFields)
           .setBaseFileFormat(baseFileFormat)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS_NAME))
@@ -158,6 +156,8 @@ object HoodieSparkSqlWriter {
           .setPartitionFields(partitionColumns)
           .setPopulateMetaFields(populateMetaFields)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
+          .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
+          .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
           .setKeyGeneratorClassProp(originKeyGeneratorClassName)
           .set(timestampKeyGeneratorConfigs)
           .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
@@ -344,9 +344,9 @@ object HoodieSparkSqlWriter {
   }
 
   def generateSchemaWithoutPartitionColumns(partitionParam: String, schema: Schema): Schema = {
-    val fieldsToRemove = new java.util.ArrayList[String]()
+    val fieldsToRemove = new java.util.HashSet[String]()
     partitionParam.split(",").map(partitionField => partitionField.trim)
-      .filter(s => !s.isEmpty).map(field => fieldsToRemove.add(field))
+      .filter(s => s.nonEmpty).map(field => fieldsToRemove.add(field))
     HoodieAvroUtils.removeFields(schema, fieldsToRemove)
   }
 
@@ -494,6 +494,8 @@ object HoodieSparkSqlWriter {
           .setBaseFileFormat(baseFileFormat)
           .setBootstrapBasePath(bootstrapBasePath)
           .setPartitionFields(partitionColumns)
+          .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
+          .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
           .setPopulateMetaFields(populateMetaFields)
           .setKeyGeneratorClassProp(keyGenProp)
           .set(timestampKeyGeneratorConfigs)
