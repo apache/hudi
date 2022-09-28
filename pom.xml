@@ -902,7 +902,7 @@
       <dependency>
         <groupId>org.rocksdb</groupId>
         <artifactId>rocksdbjni</artifactId>
-        <version>${rocksdbjni.version}</version>
+        <version>5.17.2</version>
       </dependency>
 
       <!-- Httpcomponents -->
