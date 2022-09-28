@@ -150,9 +150,9 @@ class ValidateBody:
         else:
             data = self.sections.get(self.section.nextSection)
         if data.name == "RISKLEVEL":
-            self.section = RiskLevelSection(name=data.name, identifier=data.identifier, lineAfter=data.lineAfter,nextSection=data.nextSection, sections=self.sections, debug=self.debug)
+            self.section = RiskLevelSection(data=data, sections=self.sections, debug=self.debug)
         else:
-            self.section = ParseSection(name=data.name, identifier=data.identifier, lineAfter=data.lineAfter,nextSection=data.nextSection, sections=self.sections, debug=self.debug)
+            self.section = ParseSection(data=data, sections=self.sections, debug=self.debug)
 
     def validate(self):
         self.nextSection()
