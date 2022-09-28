@@ -114,19 +114,29 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         // on the opposite side of the comparison should be cast-able to the primary-key column's data-type
         // t/h "up-cast" (ie w/o any loss in precision)
         case EqualTo(CoercedAttributeReference(attr), expr)
-          if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) && Cast.canUpCast(expr.dataType, attr.dataType) =>
-            targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
-              castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
+          if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) =>
+            if (Cast.canUpCast(expr.dataType, attr.dataType)) {
+              targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
+                castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
+            } else {
+              throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
+                + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
+            }
 
         case EqualTo(expr, CoercedAttributeReference(attr))
-          if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) && Cast.canUpCast(expr.dataType, attr.dataType) =>
-            targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
-              castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
+          if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) =>
+            if (Cast.canUpCast(expr.dataType, attr.dataType)) {
+              targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
+                castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
+            } else {
+              throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
+                + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
+            }
 
-        case eq =>
-          throw new AnalysisException(s"Invalidate Merge-On condition: ${eq.sql}." +
-            "The validate condition should be 'targetColumn = sourceColumnExpression', e.g." +
-            " t.id = s.id and t.dt = from_unixtime(s.ts)")
+        case expr =>
+          throw new AnalysisException(s"Invalid MERGE INTO matching condition: `${expr.sql}`: "
+            + "expected condition should be 'target.id = <source-column-expr>', e.g. "
+            + "`t.id = s.id` or `t.id = cast(s.id, ...)`")
       }.toMap
 
     target2Source
