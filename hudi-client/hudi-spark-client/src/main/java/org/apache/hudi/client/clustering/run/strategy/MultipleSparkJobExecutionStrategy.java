@@ -90,6 +90,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
 import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
@@ -375,7 +376,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
 
     HashMap<String, String> params = new HashMap<>();
     params.put("hoodie.datasource.query.type", "snapshot");
-    params.put("as.of.instant", instantTime);
+    params.put(TIMESTAMP_AS_OF.key(), instantTime);
 
     Path[] paths;
     if (hasLogFiles) {

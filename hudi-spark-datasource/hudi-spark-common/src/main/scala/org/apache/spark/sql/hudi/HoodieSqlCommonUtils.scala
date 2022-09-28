@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
-import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, DataSourceReadOptions, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -250,8 +250,16 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
                    (baseConfig: Map[String, String] = Map.empty): Map[String, String] = {
     baseConfig ++ DFSPropertiesConfiguration.getGlobalProps.asScala ++ // Table options has the highest priority
       (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mappingSqlOptionToHoodieParam(options))
-        .filterKeys(DataSourceOptionsHelper.isHoodieConfigKey)
+        .filterKeys(isHoodieConfigKey)
   }
+
+  /**
+   * Check if Sql options are Hoodie Config keys.
+   *
+   * TODO: standardize the key prefix so that we don't need this helper (HUDI-4935)
+   */
+  def isHoodieConfigKey(key: String): Boolean =
+    key.startsWith("hoodie.") || key == DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key
 
   /**
    * Checks whether Spark is using Hive as Session's Catalog
