@@ -88,10 +88,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadata.class);
 
-  private static final Schema METADATA_RECORD_SCHEMA = HoodieMetadataRecord.getClassSchema();
-
   private String metadataBasePath;
-  // Metadata table's timeline and metaclient
+
   private HoodieTableMetaClient metadataMetaClient;
   private HoodieTableConfig metadataTableConfig;
   private HoodieTableFileSystemView metadataFileSystemView;

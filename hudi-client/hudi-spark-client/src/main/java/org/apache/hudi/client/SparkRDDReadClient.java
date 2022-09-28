@@ -58,7 +58,7 @@ import scala.Tuple2;
 /**
  * Provides an RDD based API for accessing/filtering Hoodie tables, based on keys.
  */
-public class SparkRDDReadClient<T> implements Serializable {
+public class SparkRDDReadClient<T> implements Serializable, AutoCloseable {
 
   private static final long serialVersionUID = 1L;
 
@@ -67,7 +67,7 @@ public class SparkRDDReadClient<T> implements Serializable {
    * base path pointing to the table. Until, then just always assume a BloomIndex
    */
   private final transient HoodieIndex<?, ?> index;
-  private HoodieTable hoodieTable;
+  private final HoodieTable hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
   private final transient HoodieSparkEngineContext context;
   private final transient Configuration hadoopConf;
@@ -229,5 +229,10 @@ public class SparkRDDReadClient<T> implements Serializable {
         .map(
             instantWorkloadPair -> Pair.of(instantWorkloadPair.getKey().getTimestamp(), instantWorkloadPair.getValue()))
         .collect(Collectors.toList());
+  }
+
+  @Override
+  public void close() throws Exception {
+    hoodieTable.close();
   }
 }
