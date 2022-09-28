@@ -44,7 +44,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   protected transient TypedProperties props;
   protected transient JavaSparkContext sparkContext;
   protected transient SparkSession sparkSession;
-  private transient SchemaProvider overriddenSchemaProvider;
+  protected transient SchemaProvider overriddenSchemaProvider;
 
   private final SourceType sourceType;
 
