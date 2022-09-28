@@ -85,6 +85,7 @@ import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.util.TransientLazy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -114,19 +115,24 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class HoodieTable<T, I, K, O> implements Serializable {
+public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTable.class);
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieIndex<?, ?> index;
-  private SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
-  private final HoodieTableMetadata metadata;
+
+  private final SerializableConfiguration hadoopConfiguration;
   private final HoodieStorageLayout storageLayout;
 
-  private transient FileSystemViewManager viewManager;
+  // NOTE: These are managed by {@code TransientLazy} to implement transient semantic,
+  //       where corresponding values (if initialized) will be dropped when during serialization
+  //       and later re-initialized when accessed again
+  private final TransientLazy<HoodieTableMetadata> tableMetadata;
+  private final TransientLazy<FileSystemViewManager> viewManager;
+
   protected final transient HoodieEngineContext context;
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
@@ -134,12 +140,21 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.hadoopConfiguration = context.getHadoopConf();
     this.context = context;
 
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
-        .build();
-    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    this.tableMetadata = TransientLazy.lazily(() -> {
+      HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+          .fromProperties(config.getMetadataConfig().getProps())
+          .build();
+      // NOTE: It's critical we use {@code getContext()} here since {@code context} is
+      //       also a transient field
+      return HoodieTableMetadata.create(getContext(), metadataConfig, config.getBasePath(),
+          FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    });
+    this.viewManager = TransientLazy.lazily(() ->
+        // NOTE: It's critical we use {@code getContext()} here since {@code context} is
+        //       also a transient field
+        FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(),
+            config.getViewStorageConfig(), config.getCommonConfig(), this::getMetadataTable));
 
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.storageLayout = getStorageLayout(config);
@@ -150,17 +165,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   protected HoodieStorageLayout getStorageLayout(HoodieWriteConfig config) {
     return HoodieLayoutFactory.createLayout(config);
-  }
-
-  private synchronized FileSystemViewManager getViewManager() {
-    if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
-    }
-    return viewManager;
-  }
-
-  public HoodieTableMetadata getMetadata() {
-    return metadata;
   }
 
   /**
@@ -303,21 +307,21 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Get the base file only view of the file system for this table.
    */
   public BaseFileOnlyView getBaseFileOnlyView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return viewManager.get().getFileSystemView(metaClient);
   }
 
   /**
    * Get the full view of the file system for this table.
    */
   public SliceView getSliceView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return viewManager.get().getFileSystemView(metaClient);
   }
 
   /**
    * Get complete view of the file system for this table with ability to force sync.
    */
   public SyncableFileSystemView getHoodieView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return viewManager.get().getFileSystemView(metaClient);
   }
 
   /**
@@ -861,7 +865,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public HoodieEngineContext getContext() {
     // This is to handle scenarios where this is called at the executor tasks which do not have access
-    // to engine context, and it ends up being null (as its not serializable and marked transient here).
+    // to engine context, and it ends up being null (as it's not serializable and marked transient here).
     return context == null ? new HoodieLocalEngineContext(hadoopConfiguration.get()) : context;
   }
 
@@ -1004,10 +1008,15 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public HoodieTableMetadata getMetadataTable() {
-    return this.metadata;
+    return tableMetadata.get();
   }
 
   public Runnable getPreExecuteRunnable() {
     return Functions.noop();
+  }
+
+  @Override
+  public void close() throws Exception {
+    tableMetadata.get().close();
   }
 }
