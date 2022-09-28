@@ -95,7 +95,6 @@ public class RDDSpatialCurveSortPartitioner<T>
           });
     } else if (recordType == HoodieRecordType.SPARK) {
       StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.get());
-      Broadcast<StructType> structTypeBC = sparkEngineContext.getJavaSparkContext().broadcast(structType);
       Dataset<Row> sourceDataset = SparkConversionUtils.createDataFrame(records.rdd(), sparkEngineContext.getSqlContext().sparkSession(), structType);
 
       Dataset<Row> sortedDataset = reorder(sourceDataset, outputSparkPartitions);
@@ -107,7 +106,7 @@ public class RDDSpatialCurveSortPartitioner<T>
             String key = internalRow.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal());
             String partition = internalRow.getString(HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal());
             HoodieKey hoodieKey = new HoodieKey(key, partition);
-            HoodieRecord hoodieRecord = new HoodieSparkRecord(hoodieKey, internalRow, structTypeBC.value());
+            HoodieRecord hoodieRecord = new HoodieSparkRecord(hoodieKey, internalRow, structType);
             return hoodieRecord;
           });
     } else {

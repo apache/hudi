@@ -876,13 +876,12 @@ object HoodieSparkSqlWriter {
         val schemaWithMetaField = HoodieAvroUtils.addMetadataFields(schema, config.allowOperationMetadataField)
         val structType = HoodieInternalRowUtils.getCachedSchema(schema)
         val structTypeWithMetaField = HoodieInternalRowUtils.getCachedSchema(schemaWithMetaField)
-        val structTypeBC = sparkContext.broadcast(structType)
         HoodieInternalRowUtils.broadcastCompressedSchema(List(structType, structTypeWithMetaField), sparkContext)
         df.queryExecution.toRdd.map(row => {
           val internalRow = row.copy()
-          val (processedRow, writeSchema) = getSparkProcessedRecord(partitionCols, internalRow, dropPartitionColumns, structTypeBC.value)
-          val recordKey = sparkKeyGenerator.getRecordKey(internalRow, structTypeBC.value)
-          val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structTypeBC.value)
+          val (processedRow, writeSchema) = getSparkProcessedRecord(partitionCols, internalRow, dropPartitionColumns, structType)
+          val recordKey = sparkKeyGenerator.getRecordKey(internalRow, structType)
+          val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structType)
           val key = new HoodieKey(recordKey.toString, partitionPath.toString)
 
           new HoodieSparkRecord(key, processedRow, writeSchema)
