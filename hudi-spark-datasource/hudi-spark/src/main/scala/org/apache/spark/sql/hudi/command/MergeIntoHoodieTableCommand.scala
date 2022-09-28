@@ -153,7 +153,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     if (mergeInto.matchedActions.nonEmpty) { // Do the upsert
       executeUpsert(sourceDF, parameters)
     } else { // If there is no match actions in the statement, execute insert operation only.
-      executeInsertOnly(sourceDF, parameters)
       val targetDF = Dataset.ofRows(sparkSession, mergeInto.targetTable)
       val primaryKeys = hoodieCatalogTable.tableConfig.getRecordKeyFieldProp.split(",")
       // Only records that are not included in the target table can be inserted
