@@ -146,7 +146,7 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
     if (fullSchema == null) {
       logInfo("Inferring schema..")
       val schemaResolver = new TableSchemaResolver(metaClient)
-      val tableSchema = TableSchemaResolver.appendPartitionColumns(schemaResolver.getTableAvroSchemaWithoutMetadataFields, metaClient.getTableConfig.getPartitionFields)
+      val tableSchema = schemaResolver.getTableAvroSchema(false)
       dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
       fullSchema = StructType(skeletonSchema.fields ++ dataSchema.fields)
     }
