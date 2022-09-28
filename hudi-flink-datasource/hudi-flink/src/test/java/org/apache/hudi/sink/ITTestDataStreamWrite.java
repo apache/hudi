@@ -104,7 +104,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
     conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
-    conf.setBoolean(FlinkOptions.PRE_COMBINE,true);
+    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     testWriteToHoodie(conf, "cow_write", 2, EXPECTED);
   }
@@ -158,10 +158,22 @@ public class ITTestDataStreamWrite extends TestLogger {
 
   @Test
   public void testWriteCopyOnWriteWithClustering() throws Exception {
+    testWriteCopyOnWriteWithClustering(false);
+  }
+
+  @Test
+  public void testWriteCopyOnWriteWithSortClustering() throws Exception {
+    testWriteCopyOnWriteWithClustering(true);
+  }
+
+  private void testWriteCopyOnWriteWithClustering(boolean sortClusteringEnabled) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.OPERATION, "insert");
+    if (sortClusteringEnabled) {
+      conf.setString(FlinkOptions.CLUSTERING_SORT_COLUMNS, "uuid");
+    }
 
     testWriteToHoodieWithCluster(conf, "cow_write_with_cluster", 1, EXPECTED);
   }
@@ -372,7 +384,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     // Read from file source
     RowType rowType =
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
-        .getLogicalType();
+            .getLogicalType();
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,

@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.clean;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
@@ -41,6 +42,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -64,11 +66,16 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     Option<HoodieInstant> lastCleanInstant = table.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
     HoodieTimeline commitTimeline = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
 
-    String latestCleanTs;
-    int numCommits = 0;
-    if (lastCleanInstant.isPresent()) {
-      latestCleanTs = lastCleanInstant.get().getTimestamp();
-      numCommits = commitTimeline.findInstantsAfter(latestCleanTs).countInstants();
+    int numCommits;
+    if (lastCleanInstant.isPresent() && !table.getActiveTimeline().isEmpty(lastCleanInstant.get())) {
+      try {
+        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
+            .deserializeHoodieCleanMetadata(table.getActiveTimeline().getInstantDetails(lastCleanInstant.get()).get());
+        String lastCompletedCommitTimestamp = cleanMetadata.getLastCompletedCommitTimestamp();
+        numCommits = commitTimeline.findInstantsAfter(lastCompletedCommitTimestamp).countInstants();
+      } catch (IOException e) {
+        throw new HoodieIOException("Parsing of last clean instant " + lastCleanInstant.get() + " failed", e);
+      }
     } else {
       numCommits = commitTimeline.countInstants();
     }
@@ -110,9 +117,15 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
       context.setJobStatus(this.getClass().getSimpleName(), "Generating list of file slices to be cleaned: " + config.getTableName());
 
       Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
-          .map(partitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean)), cleanerParallelism)
+          .parallelize(partitionsToClean, cleanerParallelism)
+          .mapPartitions(partitionIterator -> {
+            List<String> partitionList = new ArrayList<>();
+            partitionIterator.forEachRemaining(partitionList::add);
+            Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanResult = planner.getDeletePaths(partitionList);
+            return cleanResult.entrySet().iterator();
+          }, false).collectAsList()
           .stream()
-          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
       Map<String, List<HoodieCleanFileInfo>> cleanOps = cleanOpsWithPartitionMeta.entrySet().stream()
           .collect(Collectors.toMap(Map.Entry::getKey,
@@ -123,6 +136,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
       return new HoodieCleanerPlan(earliestInstant
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
+          planner.getLastCompletedCommitTimestamp(),
           config.getCleanerPolicy().name(), CollectionUtils.createImmutableMap(),
           CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete);
     } catch (IOException e) {

@@ -122,7 +122,7 @@ public class CompactionUtil {
   /**
    * Sets up the preCombine field into the given configuration {@code conf}
    * through reading from the hoodie table metadata.
-   *
+   * <p>
    * This value is non-null as compaction can only be performed on MOR tables.
    * Of which, MOR tables will have non-null precombine fields.
    *

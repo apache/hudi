@@ -201,7 +201,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val conf = sparkSession.sessionState.newHadoopConf()
     uri.map(makePathQualified(_, conf))
       .map(removePlaceHolder)
-      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${identifier}"))
+      .getOrElse(throw new IllegalArgumentException(s"Missing location for $identifier"))
   }
 
   private def removePlaceHolder(path: String): String = {

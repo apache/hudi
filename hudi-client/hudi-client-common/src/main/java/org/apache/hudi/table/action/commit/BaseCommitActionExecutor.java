@@ -166,7 +166,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     }
     throw new HoodieIOException("Precommit validation not implemented for all engines yet");
   }
-  
+
   protected void commitOnAutoCommit(HoodieWriteMetadata result) {
     // validate commit action before committing result
     runPrecommitValidators(result);
@@ -249,7 +249,6 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collectAsList());
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
-    validateWriteResult(clusteringPlan, writeMetadata);
     commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
@@ -262,7 +261,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   private HoodieData<WriteStatus> updateIndex(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
-    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
+    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     return statuses;

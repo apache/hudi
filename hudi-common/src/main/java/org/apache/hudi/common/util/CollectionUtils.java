@@ -44,7 +44,15 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public class CollectionUtils {
 
-  public static final Properties EMPTY_PROPERTIES = new Properties();
+  private static final Properties EMPTY_PROPERTIES = new Properties();
+
+  /**
+   * Returns an empty {@code Properties} instance. The props instance is a singleton,
+   * it should not be modified in any case.
+   */
+  public static Properties emptyProps() {
+    return EMPTY_PROPERTIES;
+  }
 
   public static boolean isNullOrEmpty(Collection<?> c) {
     return Objects.isNull(c) || c.isEmpty();
@@ -52,6 +60,15 @@ public class CollectionUtils {
 
   public static boolean nonEmpty(Collection<?> c) {
     return !isNullOrEmpty(c);
+  }
+
+  /**
+   * Makes a copy of provided {@link Properties} object
+   */
+  public static Properties copy(Properties props) {
+    Properties copy = new Properties();
+    copy.putAll(props);
+    return copy;
   }
 
   /**

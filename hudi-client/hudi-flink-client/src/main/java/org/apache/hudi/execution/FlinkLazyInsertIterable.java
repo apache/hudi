@@ -36,6 +36,11 @@ import org.apache.avro.Schema;
 import java.util.Iterator;
 import java.util.List;
 
+/**
+ * Flink lazy iterable that supports explicit write handler.
+ *
+ * @param <T> type of the payload
+ */
 public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
 
   public FlinkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,

@@ -19,6 +19,9 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.cli.HoodieCLI;
@@ -32,16 +35,11 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -60,26 +58,26 @@ import java.util.stream.Stream;
 /**
  * CLI command to display timeline options.
  */
-@Component
-public class TimelineCommand implements CommandMarker {
+@ShellComponent
+public class TimelineCommand {
 
   private static final Logger LOG = LogManager.getLogger(TimelineCommand.class);
   private static final SimpleDateFormat DATE_FORMAT_DEFAULT = new SimpleDateFormat("MM-dd HH:mm");
   private static final SimpleDateFormat DATE_FORMAT_SECONDS = new SimpleDateFormat("MM-dd HH:mm:ss");
 
-  @CliCommand(value = "timeline show active", help = "List all instants in active timeline")
+  @ShellMethod(key = "timeline show active", value = "List all instants in active timeline")
   public String showActive(
-      @CliOption(key = {"limit"}, help = "Limit #rows to be displayed", unspecifiedDefaultValue = "10") Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"with-metadata-table"}, help = "Show metadata table timeline together with data table",
-          unspecifiedDefaultValue = "false") final boolean withMetadataTable,
-      @CliOption(key = {"show-rollback-info"}, help = "Show instant to rollback for rollbacks",
-          unspecifiedDefaultValue = "false") final boolean showRollbackInfo,
-      @CliOption(key = {"show-time-seconds"}, help = "Show seconds in instant file modification time",
-          unspecifiedDefaultValue = "false") final boolean showTimeSeconds) {
+      @ShellOption(value = {"--limit"}, help = "Limit #rows to be displayed", defaultValue = "10") Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"--with-metadata-table"}, help = "Show metadata table timeline together with data table",
+          defaultValue = "false") final boolean withMetadataTable,
+      @ShellOption(value = {"--show-rollback-info"}, help = "Show instant to rollback for rollbacks",
+          defaultValue = "false") final boolean showRollbackInfo,
+      @ShellOption(value = {"--show-time-seconds"}, help = "Show seconds in instant file modification time",
+          defaultValue = "false") final boolean showTimeSeconds) {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     try {
       if (withMetadataTable) {
@@ -100,17 +98,17 @@ public class TimelineCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "timeline show incomplete", help = "List all incomplete instants in active timeline")
+  @ShellMethod(key = "timeline show incomplete", value = "List all incomplete instants in active timeline")
   public String showIncomplete(
-      @CliOption(key = {"limit"}, help = "Limit #rows to be displayed", unspecifiedDefaultValue = "10") Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"show-rollback-info"}, help = "Show instant to rollback for rollbacks",
-          unspecifiedDefaultValue = "false") final boolean showRollbackInfo,
-      @CliOption(key = {"show-time-seconds"}, help = "Show seconds in instant file modification time",
-          unspecifiedDefaultValue = "false") final boolean showTimeSeconds) {
+      @ShellOption(value = {"--limit"}, help = "Limit #rows to be displayed", defaultValue = "10") Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"--show-rollback-info"}, help = "Show instant to rollback for rollbacks",
+          defaultValue = "false") final boolean showRollbackInfo,
+      @ShellOption(value = {"--show-time-seconds"}, help = "Show seconds in instant file modification time",
+          defaultValue = "false") final boolean showTimeSeconds) {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     try {
       return printTimelineInfo(
@@ -123,16 +121,16 @@ public class TimelineCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "metadata timeline show active",
-      help = "List all instants in active timeline of metadata table")
+  @ShellMethod(key = "metadata timeline show active",
+      value = "List all instants in active timeline of metadata table")
   public String metadataShowActive(
-      @CliOption(key = {"limit"}, help = "Limit #rows to be displayed", unspecifiedDefaultValue = "10") Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"show-time-seconds"}, help = "Show seconds in instant file modification time",
-          unspecifiedDefaultValue = "false") final boolean showTimeSeconds) {
+      @ShellOption(value = {"--limit"}, help = "Limit #rows to be displayed", defaultValue = "10") Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"--show-time-seconds"}, help = "Show seconds in instant file modification time",
+          defaultValue = "false") final boolean showTimeSeconds) {
     HoodieTableMetaClient metaClient = getMetadataTableMetaClient(HoodieCLI.getTableMetaClient());
     try {
       return printTimelineInfo(
@@ -145,16 +143,16 @@ public class TimelineCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "metadata timeline show incomplete",
-      help = "List all incomplete instants in active timeline of metadata table")
+  @ShellMethod(key = "metadata timeline show incomplete",
+      value = "List all incomplete instants in active timeline of metadata table")
   public String metadataShowIncomplete(
-      @CliOption(key = {"limit"}, help = "Limit #rows to be displayed", unspecifiedDefaultValue = "10") Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"show-time-seconds"}, help = "Show seconds in instant file modification time",
-          unspecifiedDefaultValue = "false") final boolean showTimeSeconds) {
+      @ShellOption(value = {"--limit"}, help = "Limit #rows to be displayed", defaultValue = "10") Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly,
+      @ShellOption(value = {"--show-time-seconds"}, help = "Show seconds in instant file modification time",
+          defaultValue = "false") final boolean showTimeSeconds) {
     HoodieTableMetaClient metaClient = getMetadataTableMetaClient(HoodieCLI.getTableMetaClient());
     try {
       return printTimelineInfo(

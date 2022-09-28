@@ -42,6 +42,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Flink hoodie backed table metadata writer.
+ */
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
 
   private static final Logger LOG = LogManager.getLogger(FlinkHoodieBackedTableMetadataWriter.class);

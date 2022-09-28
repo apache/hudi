@@ -95,7 +95,7 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
       sourceCount = countRecords(hiveServerUrl, srcMetaClient, srcDb, partitionCount, hiveUser, hivePass)
       targetCount = countRecords(hiveServerUrl, targetMetaClient, tgtDb, partitionCount, hiveUser, hivePass)
     } else {
-      logError(s"Unsupport mode ${mode}")
+      logError(s"Unsupport mode $mode")
     }
 
     val targetLatestCommit =

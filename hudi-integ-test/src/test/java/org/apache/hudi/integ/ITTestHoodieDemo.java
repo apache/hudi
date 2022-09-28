@@ -508,7 +508,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void scheduleAndRunCompaction() throws Exception {
-    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + COMPACTION_COMMANDS, true);
-    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + COMPACTION_BOOTSTRAP_COMMANDS, true);
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " script --file " + COMPACTION_COMMANDS, true);
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " script --file " + COMPACTION_BOOTSTRAP_COMMANDS, true);
   }
 }

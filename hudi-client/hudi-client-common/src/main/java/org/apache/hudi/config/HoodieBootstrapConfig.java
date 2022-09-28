@@ -34,6 +34,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
+import static org.apache.hudi.client.bootstrap.BootstrapMode.FULL_RECORD;
+import static org.apache.hudi.client.bootstrap.BootstrapMode.METADATA_ONLY;
+
 /**
  * Bootstrap specific configs.
  */
@@ -49,6 +52,15 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("0.6.0")
       .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
+
+  public static final ConfigProperty<String> PARTITION_SELECTOR_REGEX_MODE = ConfigProperty
+      .key("hoodie.bootstrap.mode.selector.regex.mode")
+      .defaultValue(METADATA_ONLY.name())
+      .sinceVersion("0.6.0")
+      .withValidValues(METADATA_ONLY.name(), FULL_RECORD.name())
+      .withDocumentation("Bootstrap mode to apply for partition paths, that match regex above. "
+          + "METADATA_ONLY will generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. "
+          + "FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table.");
 
   public static final ConfigProperty<String> MODE_SELECTOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.mode.selector")
@@ -91,14 +103,6 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .defaultValue(".*")
       .sinceVersion("0.6.0")
       .withDocumentation("Matches each bootstrap dataset partition against this regex and applies the mode below to it.");
-
-  public static final ConfigProperty<String> PARTITION_SELECTOR_REGEX_MODE = ConfigProperty
-      .key("hoodie.bootstrap.mode.selector.regex.mode")
-      .defaultValue(BootstrapMode.METADATA_ONLY.name())
-      .sinceVersion("0.6.0")
-      .withDocumentation("Bootstrap mode to apply for partition paths, that match regex above. "
-          + "METADATA_ONLY will generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. "
-          + "FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table.");
 
   public static final ConfigProperty<String> INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.index.class")

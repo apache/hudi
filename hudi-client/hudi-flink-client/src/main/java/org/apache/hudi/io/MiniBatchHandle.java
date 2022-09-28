@@ -30,7 +30,8 @@ public interface MiniBatchHandle {
    * come from one checkpoint interval. The file handle may roll over to new name
    * if the name conflicts, give a chance to clean the intermediate file.
    */
-  default void finalizeWrite() {}
+  default void finalizeWrite() {
+  }
 
   /**
    * Close the file handle gracefully, if any error happens during the file handle close,

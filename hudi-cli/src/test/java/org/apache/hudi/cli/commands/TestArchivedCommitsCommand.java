@@ -24,6 +24,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -39,7 +40,9 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,7 +55,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test Cases for {@link ArchivedCommitsCommand}.
  */
 @Tag("functional")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
+
+  @Autowired
+  private Shell shell;
 
   private String tablePath;
 
@@ -111,8 +118,8 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testShowArchivedCommits() {
-    CommandResult cr = shell().executeCommand("show archived commit stats");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "show archived commit stats");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     TableHeader header = new TableHeader().addTableHeaderField("action").addTableHeaderField("instant")
         .addTableHeaderField("partition").addTableHeaderField("file_id").addTableHeaderField("prev_instant")
@@ -153,7 +160,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     String expectedResult = HoodiePrintHelper.print(
         header, new HashMap<>(), "", false, -1, false, rows);
     expectedResult = removeNonWordAndStripSpace(expectedResult);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expectedResult, got);
   }
 
@@ -162,8 +169,8 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testShowCommits() throws Exception {
-    CommandResult cr = shell().executeCommand("show archived commits");
-    assertTrue(cr.isSuccess());
+    Object cmdResult = shell.evaluate(() -> "show archived commits");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
     final List<Comparable[]> rows = new ArrayList<>();
 
     // Test default skipMetadata and limit 10
@@ -178,12 +185,12 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     rows.add(new Comparable[] {"103", "commit"});
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 10, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(cmdResult.toString());
     assertEquals(expected, got);
 
     // Test with Metadata and no limit
-    cr = shell().executeCommand("show archived commits --skipMetadata false --limit -1");
-    assertTrue(cr.isSuccess());
+    cmdResult = shell.evaluate(() -> "show archived commits --skipMetadata false --limit 0");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
 
     rows.clear();
 
@@ -198,9 +205,9 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
       rows.add(result);
     }
     header = header.addTableHeaderField("CommitDetails");
-    expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
+    expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 0, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    got = removeNonWordAndStripSpace(cr.getResult().toString());
+    got = removeNonWordAndStripSpace(cmdResult.toString());
     assertEquals(expected, got);
   }
 }

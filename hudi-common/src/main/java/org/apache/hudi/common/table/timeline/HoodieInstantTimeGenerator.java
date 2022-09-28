@@ -134,4 +134,13 @@ public class HoodieInstantTimeGenerator {
   public static void setCommitTimeZone(HoodieTimelineTimeZone commitTimeZone) {
     HoodieInstantTimeGenerator.commitTimeZone = commitTimeZone;
   }
+
+  public static boolean isValidInstantTime(String instantTime) {
+    try {
+      Long.parseLong(instantTime);
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
+  }
 }

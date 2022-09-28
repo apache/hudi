@@ -82,7 +82,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
   public void testIncrementalReadsWithCompaction() throws Exception {
     final String partitionPath = "2020/02/20"; // use only one partition for this test
     final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] { partitionPath });
-    Properties props = new Properties();
+    Properties props = getPropertiesForKeyGen(true);
     props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.PARQUET.toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
     HoodieWriteConfig cfg = getConfigBuilder(true).build();

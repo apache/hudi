@@ -100,8 +100,6 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   private HoodieRollbackMetadata runRollback(HoodieTable<T, I, K, O> table, HoodieInstant rollbackInstant, HoodieRollbackPlan rollbackPlan) {
     ValidationUtils.checkArgument(rollbackInstant.getState().equals(HoodieInstant.State.REQUESTED)
         || rollbackInstant.getState().equals(HoodieInstant.State.INFLIGHT));
-    final HoodieTimer timer = new HoodieTimer();
-    timer.startTimer();
     final HoodieInstant inflightInstant = rollbackInstant.isRequested()
         ? table.getActiveTimeline().transitionRollbackRequestedToInflight(rollbackInstant)
         : rollbackInstant;
@@ -238,7 +236,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
     boolean enableLocking = (!skipLocking && !skipTimelinePublish);
     try {
       if (enableLocking) {
-        this.txnManager.beginTransaction(Option.empty(), Option.empty());
+        this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
 
       // If publish the rollback to the timeline, we first write the rollback metadata
@@ -261,7 +259,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     } finally {
       if (enableLocking) {
-        this.txnManager.endTransaction(Option.empty());
+        this.txnManager.endTransaction(Option.of(inflightInstant));
       }
     }
   }
