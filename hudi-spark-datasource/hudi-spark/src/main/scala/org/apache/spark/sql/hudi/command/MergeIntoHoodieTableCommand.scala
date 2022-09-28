@@ -30,7 +30,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, AnsiCast, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.HoodieSqlUtils.getMergeIntoTargetTableId
@@ -38,7 +38,7 @@ import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.CoercedAttr
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
-import org.apache.spark.sql.types.{BooleanType, DataType, StructType}
+import org.apache.spark.sql.types.{BooleanType, StructType}
 
 import java.util.Base64
 
@@ -114,6 +114,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       case c => c
     }
 
+    val exprUtils = sparkAdapter.getCatalystExpressionUtils
     // Expressions of the following forms are supported:
     //    `target.id = <expr>` (or `<expr> = target.id`)
     //    `cast(target.id, ...) = <expr>` (or `<expr> = cast(target.id, ...)`)
@@ -125,7 +126,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val target2Source = cleanedConditions.map {
       case EqualTo(CoercedAttributeReference(attr), expr)
         if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) =>
-          if (Cast.canUpCast(expr.dataType, attr.dataType)) {
+          if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
             targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
               castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
           } else {
@@ -135,7 +136,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
       case EqualTo(expr, CoercedAttributeReference(attr))
         if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) =>
-          if (Cast.canUpCast(expr.dataType, attr.dataType)) {
+          if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
             targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
               castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
           } else {

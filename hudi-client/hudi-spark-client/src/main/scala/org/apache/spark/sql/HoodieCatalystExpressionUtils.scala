@@ -42,6 +42,11 @@ trait HoodieCatalystExpressionUtils {
   def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference]
 
   /**
+   * Verifies whether [[fromType]] can be up-casted to [[toType]]
+   */
+  def canUpCast(fromType: DataType, toType: DataType): Boolean
+
+  /**
    * Un-applies [[Cast]] expression into
    * <ol>
    *   <li>Casted [[Expression]]</li>

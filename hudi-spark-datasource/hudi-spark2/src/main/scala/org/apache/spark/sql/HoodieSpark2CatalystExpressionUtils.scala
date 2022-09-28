@@ -30,6 +30,11 @@ object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils
     }
   }
 
+  def canUpCast(fromType: DataType, toType: DataType): Boolean =
+    // Spark 2.x does not support up-casting, hence we simply check whether types are
+    // actually the same
+    fromType.sameType(toType)
+
   override def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)] =
     expr match {
       case Cast(castedExpr, dataType, timeZoneId) => Some((castedExpr, dataType, timeZoneId, false))

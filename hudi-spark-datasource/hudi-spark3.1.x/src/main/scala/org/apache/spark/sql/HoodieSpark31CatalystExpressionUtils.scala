@@ -31,6 +31,9 @@ object HoodieSpark31CatalystExpressionUtils extends HoodieCatalystExpressionUtil
     }
   }
 
+  def canUpCast(fromType: DataType, toType: DataType): Boolean =
+    Cast.canUpCast(fromType, toType)
+
   override def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)] =
     expr match {
       case Cast(castedExpr, dataType, timeZoneId) => Some((castedExpr, dataType, timeZoneId, false))
