@@ -25,6 +25,8 @@ import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -190,7 +192,46 @@ public class DataSourceUtils {
 
   public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
                                                        String tblName, Map<String, String> parameters) {
-    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), createHoodieConfig(schemaStr, basePath, tblName, parameters));
+    return createHoodieClient(jssc, schemaStr, basePath, tblName, parameters, Option.empty());
+  }
+
+  public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
+                                                       String tblName, Map<String, String> parameters, Option<EmbeddedTimelineServiceHandler> embeddedTimelineServiceHandler) {
+    HoodieWriteConfig writeConfig = createHoodieConfig(schemaStr, basePath, tblName, parameters);
+    if (embeddedTimelineServiceHandler.isPresent())  {
+      embeddedTimelineServiceHandler.get().onInstantiation(writeConfig);
+    }
+    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineServiceHandler.isPresent() ? embeddedTimelineServiceHandler.get().getEmbeddedTimelineService() : Option.empty());
+  }
+
+  /**
+   * For spark structured streaming ingestion, embedded timeline service is instantiated externally and re-used across various write client instantiations (regular writer, table services).
+   * This class helps in coordinating the instantiation of embedded timeline service and exposes the singleton instance.
+   */
+  public static class EmbeddedTimelineServiceHandler {
+
+    private Option<EmbeddedTimelineService> embeddedTimelineService = Option.empty();
+    private final JavaSparkContext jssc;
+
+    public EmbeddedTimelineServiceHandler(JavaSparkContext jssc) {
+      this.jssc = jssc;
+    }
+
+    public void onInstantiation(HoodieWriteConfig writeConfig) {
+      if (!embeddedTimelineService.isPresent() && writeConfig.isEmbeddedTimelineServerEnabled()) {
+        try {
+          embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), writeConfig);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      } else {
+        EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
+      }
+    }
+
+    public Option<EmbeddedTimelineService> getEmbeddedTimelineService() {
+      return embeddedTimelineService;
+    }
   }
 
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,

@@ -52,6 +52,7 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   private final Object writeConfigUpdateLock = new Object();
   protected transient HoodieEngineContext context;
   protected HoodieWriteConfig writeConfig;
+  // will be reinstantiated if write config is updated by external caller.
   private BaseCompactor compactor;
 
   public AsyncCompactService(HoodieEngineContext context, HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
@@ -85,6 +86,7 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
           if (null != instant) {
             LOG.info("Starting Compaction for instant " + instant);
             synchronized (writeConfigUpdateLock) {
+              // re-instantiate only for first time or if write config is updated externally
               if (compactor == null || isWriteConfigUpdated.get()) {
                 if (compactor != null) {
                   compactor.close();

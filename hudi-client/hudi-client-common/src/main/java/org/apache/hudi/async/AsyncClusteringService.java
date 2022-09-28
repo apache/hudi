@@ -50,6 +50,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
   private static final Logger LOG = LogManager.getLogger(AsyncClusteringService.class);
   private final int maxConcurrentClustering;
   protected transient HoodieEngineContext context;
+  // will be reinstantiated if write config is updated by external caller.
   private BaseClusterer clusteringClient;
 
   public AsyncClusteringService(HoodieEngineContext context, HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
@@ -81,6 +82,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
           if (null != instant) {
             LOG.info("Starting clustering for instant " + instant);
             synchronized (writeConfigUpdateLock) {
+              // re-instantiate only for first time or if write config is updated externally
               if (clusteringClient == null || isWriteConfigUpdated.get()) {
                 if (clusteringClient != null) {
                   clusteringClient.close();

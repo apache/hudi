@@ -21,6 +21,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hudi.DataSourceUtils.EmbeddedTimelineServiceHandler
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
@@ -73,7 +74,8 @@ object HoodieSparkSqlWriter {
             hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty,
             asyncCompactionTriggerFn: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]] => Unit] = Option.empty,
-            asyncClusteringTriggerFn: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]] => Unit] = Option.empty)
+            asyncClusteringTriggerFn: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]] => Unit] = Option.empty,
+            embeddedTimelineServiceHandler : org.apache.hudi.common.util.Option[EmbeddedTimelineServiceHandler] = org.apache.hudi.common.util.Option.empty)
   : (Boolean, common.util.Option[String], common.util.Option[String], common.util.Option[String],
     SparkRDDWriteClient[HoodieRecordPayload[Nothing]], HoodieTableConfig) = {
 
@@ -197,8 +199,8 @@ object HoodieSparkSqlWriter {
             val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
-              mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
-              .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+              mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key),
+              embeddedTimelineServiceHandler)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)
@@ -228,7 +230,7 @@ object HoodieSparkSqlWriter {
             // Create a HoodieWriteClient & issue the delete.
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
-              mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
+              mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key), embeddedTimelineServiceHandler))
               .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
             // Issue delete partitions
             client.startCommitWithTime(instantTime, commitActionType)
@@ -309,8 +311,8 @@ object HoodieSparkSqlWriter {
             // Create a HoodieWriteClient & issue the write.
 
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, writerDataSchema.toString, path,
-              tblName, mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
-            )).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+              tblName, mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key),
+              embeddedTimelineServiceHandler)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)
@@ -427,7 +429,8 @@ object HoodieSparkSqlWriter {
                 optParams: Map[String, String],
                 df: DataFrame,
                 hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
-                hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty): Boolean = {
+                hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty,
+                embeddedTimelineServiceHandler : org.apache.hudi.common.util.Option[EmbeddedTimelineServiceHandler] = org.apache.hudi.common.util.Option.empty): Boolean = {
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
@@ -501,7 +504,7 @@ object HoodieSparkSqlWriter {
 
       val jsc = new JavaSparkContext(sqlContext.sparkContext)
       val writeClient = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
-        schema, path, tableName, mapAsJavaMap(parameters)))
+        schema, path, tableName, mapAsJavaMap(parameters), embeddedTimelineServiceHandler))
       try {
         writeClient.bootstrap(org.apache.hudi.common.util.Option.empty())
       } finally {
