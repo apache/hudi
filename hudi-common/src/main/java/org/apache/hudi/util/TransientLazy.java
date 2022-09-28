@@ -33,7 +33,7 @@ public class TransientLazy<T> implements Serializable {
 
   private transient volatile boolean initialized;
 
-  private SerializableSupplier<T> initializer;
+  private final SerializableSupplier<T> initializer;
   private transient T ref;
 
   private TransientLazy(SerializableSupplier<T> initializer) {
@@ -42,18 +42,11 @@ public class TransientLazy<T> implements Serializable {
     this.initialized = false;
   }
 
-  private TransientLazy(T ref) {
-    this.initializer = null;
-    this.ref = ref;
-    this.initialized = true;
-  }
-
   public T get() {
     if (!initialized) {
       synchronized (this) {
         if (!initialized) {
           this.ref = initializer.get();
-          this.initializer = null;
           initialized = true;
         }
       }
@@ -69,13 +62,5 @@ public class TransientLazy<T> implements Serializable {
    */
   public static <T> TransientLazy<T> lazily(SerializableSupplier<T> initializer) {
     return new TransientLazy<>(initializer);
-  }
-
-  /**
-   * Instantiates {@link TransientLazy} in an "eagerly" fashion setting it w/ the provided value of
-   * type {@link T} directly, bypassing lazy initialization sequence
-   */
-  public static <T> TransientLazy<T> eagerly(T ref) {
-    return new TransientLazy<>(ref);
   }
 }
