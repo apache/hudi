@@ -33,6 +33,7 @@ object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils
   override def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)] =
     expr match {
       case Cast(castedExpr, dataType, timeZoneId) => Some((castedExpr, dataType, timeZoneId, false))
+      case _ => None
     }
 
   private object OrderPreservingTransformation {

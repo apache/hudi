@@ -36,6 +36,7 @@ object HoodieSpark32CatalystExpressionUtils extends HoodieCatalystExpressionUtil
         Some((castedExpr, dataType, timeZoneId, ansiEnabled))
       case AnsiCast(castedExpr, dataType, timeZoneId) =>
         Some((castedExpr, dataType, timeZoneId, true))
+      case _ => None
     }
 
   private object OrderPreservingTransformation {
