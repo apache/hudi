@@ -108,7 +108,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
                                     String datasetBasePath,
                                     String spillableMapPath) {
     if (metadataConfig.enabled()) {
-      return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, true);
+      return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath);
     } else {
       return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
           datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());

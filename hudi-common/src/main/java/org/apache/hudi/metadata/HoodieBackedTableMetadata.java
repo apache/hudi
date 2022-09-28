@@ -95,8 +95,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieTableMetaClient metadataMetaClient;
   private HoodieTableConfig metadataTableConfig;
   private HoodieTableFileSystemView metadataFileSystemView;
-  // should we reuse the open file handles, across calls
-  private final boolean reuse;
 
   // Readers for the latest file slice corresponding to file groups in the metadata partition
   private final Map<Pair<String, String>, Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader>> partitionReaders =
@@ -104,13 +102,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                                    String datasetBasePath, String spillableMapDirectory) {
-    this(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory, false);
-  }
-
-  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
-                                   String datasetBasePath, String spillableMapDirectory, boolean reuse) {
     super(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory);
-    this.reuse = reuse;
     initIfNeeded();
   }
 
@@ -245,10 +237,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         fileSlicesKeysCount.addAndGet(fileSliceKeys.size());
       } catch (IOException ioe) {
         throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeys.size() + " key : ", ioe);
-      } finally {
-        if (!reuse) {
-          closeReader(readers);
-        }
       }
     });
 
@@ -413,12 +401,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @return File reader and the record scanner pair for the requested file slice
    */
   private Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> getOrCreateReaders(String partitionName, FileSlice slice) {
-    if (reuse) {
-      Pair<String, String> key = Pair.of(partitionName, slice.getFileId());
-      return partitionReaders.computeIfAbsent(key, ignored -> openReaders(partitionName, slice));
-    } else {
-      return openReaders(partitionName, slice);
-    }
+    return partitionReaders.computeIfAbsent(Pair.of(partitionName, slice.getFileId()),
+        ignored -> openReaders(partitionName, slice));
   }
 
   private Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> openReaders(String partitionName, FileSlice slice) {
