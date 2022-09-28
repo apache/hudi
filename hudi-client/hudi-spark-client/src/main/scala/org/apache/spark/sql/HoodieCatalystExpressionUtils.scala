@@ -17,12 +17,13 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Like, Literal, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DataType, StructType}
 
 trait HoodieCatalystExpressionUtils {
 
@@ -39,9 +40,28 @@ trait HoodieCatalystExpressionUtils {
    *     will keep the same ordering b1, b2, b3, ... with b1 = T(a1), b2 = T(a2), ...
    */
   def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference]
+
+  /**
+   * Un-applies [[Cast]] expression into
+   * <ol>
+   *   <li>Casted [[Expression]]</li>
+   *   <li>Target [[DataType]]</li>
+   *   <li>(Optional) Timezone spec</li>
+   *   <li>Flag whether it's an ANSI cast or not</li>
+   * </ol>
+   */
+  def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)]
 }
 
 object HoodieCatalystExpressionUtils {
+
+  /**
+   * Convenience extractor allowing to untuple [[Cast]] across Spark versions
+   */
+  object MatchCast {
+    def unapply(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)] =
+      sparkAdapter.getCatalystExpressionUtils.unapplyCastExpression(expr)
+  }
 
   /**
    * Generates instance of [[UnsafeProjection]] projecting row of one [[StructType]] into another [[StructType]]
