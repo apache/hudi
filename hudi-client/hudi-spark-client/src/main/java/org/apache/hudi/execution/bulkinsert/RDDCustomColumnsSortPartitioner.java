@@ -61,7 +61,7 @@ public class RDDCustomColumnsSortPartitioner<T>
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
     return records.sortBy(
         record -> {
-          Object recordValue = record.getRecordColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
+          Object recordValue = record.getComparableColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
           // null values are replaced with empty string for null_first order
           if (recordValue == null) {
             return StringUtils.EMPTY_STRING;

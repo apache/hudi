@@ -19,9 +19,12 @@
 
 package org.apache.hudi.common.model;
 
+import java.util.Arrays;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.common.util.collection.FlatLists.ComparableList;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
@@ -99,8 +102,8 @@ public class HoodieLegacyAvroRecord<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Object[] getRecordColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
-    return new Object[]{HoodieAvroUtils.getRecordColumnValues(this, columns, recordSchema, consistentLogicalTimestampEnabled)};
+  public ComparableList getComparableColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+    return FlatLists.ofComparable(Arrays.asList((Comparable)HoodieAvroUtils.getRecordColumnValues(this, columns, recordSchema, consistentLogicalTimestampEnabled)));
   }
 
   @Override

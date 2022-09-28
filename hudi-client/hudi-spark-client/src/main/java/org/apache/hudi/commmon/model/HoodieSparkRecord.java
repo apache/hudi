@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.FlatLists.ComparableList;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
@@ -133,7 +134,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Object[] getRecordColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+  public ComparableList getComparableColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     return HoodieSparkRecordUtils.getRecordColumnValues(data, columns, getStructType(), consistentLogicalTimestampEnabled);
   }
 
@@ -291,7 +292,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   private void force2UnsafeRow() {
-    if (!(this.data instanceof UnsafeRow || this.data instanceof HoodieInternalRow)) {
+    if (this.data != null && !(this.data instanceof UnsafeRow || this.data instanceof HoodieInternalRow)) {
       this.data = HoodieInternalRowUtils.getCachedUnsafeConvert(structType).apply(this.data);
     }
   }
