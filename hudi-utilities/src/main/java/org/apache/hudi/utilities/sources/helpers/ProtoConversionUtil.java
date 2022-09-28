@@ -451,17 +451,6 @@ public class ProtoConversionUtil {
       }
     }
 
-    private static BigInteger toUnsignedBigInteger(long input) {
-      // if the value is less than the max unsigned, avoid doing conversion to avoid performance impact
-      if (input >= 0L) {
-        return BigInteger.valueOf(input);
-      } else {
-        int upper = (int) (input >>> 32);
-        int lower = (int) input;
-        return BigInteger.valueOf(Integer.toUnsignedLong(upper)).shiftLeft(32).add(BigInteger.valueOf(Integer.toUnsignedLong(lower)));
-      }
-    }
-
     /**
      * Returns the wrapped field, assumes all wrapped fields have a single value
      * @param value wrapper message like {@link Int32Value} or {@link StringValue}
@@ -511,6 +500,17 @@ public class ProtoConversionUtil {
       public int hashCode() {
         return Objects.hash(className, wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords);
       }
+    }
+  }
+
+  static BigInteger toUnsignedBigInteger(long input) {
+    // if the value is less than the max unsigned, avoid doing conversion to avoid performance impact
+    if (input >= 0L) {
+      return BigInteger.valueOf(input);
+    } else {
+      int upper = (int) (input >>> 32);
+      int lower = (int) input;
+      return BigInteger.valueOf(Integer.toUnsignedLong(upper)).shiftLeft(32).add(BigInteger.valueOf(Integer.toUnsignedLong(lower)));
     }
   }
 }

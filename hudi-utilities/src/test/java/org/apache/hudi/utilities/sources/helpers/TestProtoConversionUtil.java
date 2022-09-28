@@ -56,7 +56,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -67,6 +66,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil.toUnsignedBigInteger;
 
 public class TestProtoConversionUtil {
   private static final Random RANDOM = new Random();
@@ -163,6 +164,16 @@ public class TestProtoConversionUtil {
     expectedRecord.put("long", 32L);
     expectedRecord.put("message", null);
     Assertions.assertEquals(expectedRecord, actual);
+  }
+
+  @Test
+  public void longToUnsignedBigIntegerConversion() {
+    Assertions.assertEquals("0", toUnsignedBigInteger(0).toString());
+    Assertions.assertEquals(MAX_UNSIGNED_LONG, toUnsignedBigInteger(-1).toString());
+    Assertions.assertEquals(String.valueOf(Long.MAX_VALUE), toUnsignedBigInteger(Long.MAX_VALUE).toString());
+    Assertions.assertEquals("10", toUnsignedBigInteger(10L).toString());
+    // equivalent of lower 32 bits all set to 0 and upper 32 bits alternating 10
+    Assertions.assertEquals("12297829379609722880", toUnsignedBigInteger(-6148914694099828736L).toString());
   }
 
   private void assertUnsignedLongCorrectness(Schema fieldSchema, long expectedValue, GenericFixed actual) {
@@ -561,17 +572,6 @@ public class TestProtoConversionUtil {
 
   private static <K, V> List<GenericRecord> convertMapToList(final Schema protoSchema, final String fieldName, final Map<K, V> originalMap) {
     return convertMapToList(protoSchema, fieldName, originalMap, Function.identity());
-  }
-
-  private static BigInteger toUnsignedBigInteger(long input) {
-    if (input >= 0L) {
-      return BigInteger.valueOf(input);
-    } else {
-      int upper = (int) (input >>> 32);
-      int lower = (int) input;
-      // return (upper << 32) + lower
-      return (BigInteger.valueOf(Integer.toUnsignedLong(upper))).shiftLeft(32).add(BigInteger.valueOf(Integer.toUnsignedLong(lower)));
-    }
   }
 
   private static String randomString(int size) {
