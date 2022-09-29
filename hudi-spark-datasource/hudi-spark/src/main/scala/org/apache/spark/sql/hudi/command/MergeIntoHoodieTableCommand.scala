@@ -488,7 +488,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
     val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
 
-    withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
+    withSparkConf(sparkSession, catalogProperties) {
       Map(
         "path" -> path,
         RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
