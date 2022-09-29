@@ -116,19 +116,27 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.datasource.write.drop.partition.columns,false,false]
           |[hoodie.datasource.write.hive_style_partitioning,true,null]
           |[hoodie.datasource.write.partitionpath.urlencode,false,null]
-          |[hoodie.table.checksum,1281977830,2702201862]
-          |[hoodie.table.create.schema,{"type":"record","name":"h0_record","namespace":"hoodie.h0","fields":[{"name":"_hoodie_commit_time","type":["string","null"]},{"name":"_hoodie_commit_seqno","type":["string","null"]},{"name":"_hoodie_record_key","type":["string","null"]},{"name":"_hoodie_partition_path","type":["string","null"]},{"name":"_hoodie_file_name","type":["string","null"]},{"name":"id","type":["int","null"]},{"name":"name","type":["string","null"]},{"name":"price","type":["double","null"]},{"name":"ts","type":["long","null"]}]},null]
+          |[hoodie.table.checksum,,]
+          |[hoodie.table.create.schema,,]
           |[hoodie.table.keygenerator.class,org.apache.hudi.keygen.NonpartitionedKeyGenerator,null]
-          |[hoodie.table.name,h0,test_table]
+          |[hoodie.table.name,,]
           |[hoodie.table.precombine.field,ts,null]
           |[hoodie.table.recordkey.fields,id,null]
           |[hoodie.table.type,COPY_ON_WRITE,COPY_ON_WRITE]
-          |[hoodie.table.version,5,null]
-          |[hoodie.timeline.layout.version,1,1]""".stripMargin.trim
+          |[hoodie.table.version,,]
+          |[hoodie.timeline.layout.version,,]""".stripMargin.trim
 
       val actual = spark.sql(s"""call repair_overwrite_hoodie_props(table => '$tableName', new_props_file_path => '${newProps.getPath}')""")
         .collect()
-        .map(_.toString())
+        .map {
+          // omit these properties with variant values
+          case row if row.getString(0).equals("hoodie.table.checksum") => "[hoodie.table.checksum,,]"
+          case row if row.getString(0).equals("hoodie.table.create.schema") => "[hoodie.table.create.schema,,]"
+          case row if row.getString(0).equals("hoodie.table.name") => "[hoodie.table.name,,]"
+          case row if row.getString(0).equals("hoodie.table.version") => "[hoodie.table.version,,]"
+          case row if row.getString(0).equals("hoodie.timeline.layout.version") => "[hoodie.timeline.layout.version,,]"
+          case o => o.toString()
+        }
         .mkString("\n")
 
       assertEquals(expectedOutput, actual)
