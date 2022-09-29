@@ -713,6 +713,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       )
     }
   }
+
   test("Test Merge into where manually set DefaultHoodieRecordPayload") {
     withTempDir { tmp =>
       val tableName = generateTableName
