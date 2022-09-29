@@ -626,8 +626,8 @@ public class TestData {
       Map<String, List<String>> expected) throws IOException {
 
     // 1. init flink table
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.getAbsolutePath());
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath.getAbsolutePath()).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toURI().toString());
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath.toURI().toString()).build();
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
 
     // 2. check each partition data
