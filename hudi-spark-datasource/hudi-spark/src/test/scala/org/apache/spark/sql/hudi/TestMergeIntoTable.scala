@@ -977,7 +977,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         "Invalid MERGE INTO matching condition: s0.`id`: can't cast s0.`id` (of LongType) to IntegerType"
       }
 
-      checkException(
+      checkExceptionContain(
         s"""
            |merge into $tableName h0
            |using (
@@ -988,7 +988,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            |""".stripMargin)(errorMsg)
 
       // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
-      checkException(
+      checkExceptionContain(
         s"""
            |merge into $tableName h0
            |using (
