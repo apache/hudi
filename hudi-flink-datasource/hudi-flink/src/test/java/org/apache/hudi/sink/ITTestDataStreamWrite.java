@@ -53,6 +53,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -157,11 +158,13 @@ public class ITTestDataStreamWrite extends TestLogger {
   }
 
   @Test
+  @Disabled
   public void testWriteCopyOnWriteWithClustering() throws Exception {
     testWriteCopyOnWriteWithClustering(false);
   }
 
   @Test
+  @Disabled
   public void testWriteCopyOnWriteWithSortClustering() throws Exception {
     testWriteCopyOnWriteWithClustering(true);
   }

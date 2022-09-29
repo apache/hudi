@@ -35,6 +35,7 @@ object HoodieConversionUtils {
     map.toMap
   }
 
+
   def toJavaOption[T](opt: Option[T]): org.apache.hudi.common.util.Option[T] =
     if (opt.isDefined) org.apache.hudi.common.util.Option.of(opt.get) else org.apache.hudi.common.util.Option.empty()
 
