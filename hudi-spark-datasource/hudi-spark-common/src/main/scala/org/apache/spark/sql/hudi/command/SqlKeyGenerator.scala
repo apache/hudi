@@ -18,8 +18,8 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.generic.GenericRecord
-import org.apache.hudi.DataSourceOptionsHelper
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.model.HoodieKey
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
@@ -116,6 +116,11 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
     }
 
     UTF8String.fromString(convertPartitionPathToSqlType(partitionPath.toString, rowType = true))
+  }
+
+  override def getRecordKeyFieldNames: util.List[String] = {
+    originalKeyGen.map(_.getRecordKeyFieldNames)
+      .getOrElse(complexKeyGen.getRecordKeyFieldNames)
   }
 
   override def getPartitionPathFields: util.List[String] = {
