@@ -111,24 +111,24 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
       // overwrite hoodie props
       val expectedOutput ="""
-          |{"property":"hoodie.archivelog.folder","old_value":"archived","new_value":"archive"}
-          |{"property":"hoodie.database.name","old_value":"default","new_value":"null"}
-          |{"property":"hoodie.datasource.write.drop.partition.columns","old_value":"false","new_value":"false"}
-          |{"property":"hoodie.datasource.write.hive_style_partitioning","old_value":"true","new_value":"null"}
-          |{"property":"hoodie.datasource.write.partitionpath.urlencode","old_value":"false","new_value":"null"}
-          |{"property":"hoodie.table.checksum","old_value":"1281977830","new_value":"2702201862"}
-          |{"property":"hoodie.table.create.schema","old_value":"{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\":[{\"name\":\"_hoodie_commit_time\",\"type\":[\"string\",\"null\"]},{\"name\":\"_hoodie_commit_seqno\",\"type\":[\"string\",\"null\"]},{\"name\":\"_hoodie_record_key\",\"type\":[\"string\",\"null\"]},{\"name\":\"_hoodie_partition_path\",\"type\":[\"string\",\"null\"]},{\"name\":\"_hoodie_file_name\",\"type\":[\"string\",\"null\"]},{\"name\":\"id\",\"type\":[\"int\",\"null\"]},{\"name\":\"name\",\"type\":[\"string\",\"null\"]},{\"name\":\"price\",\"type\":[\"double\",\"null\"]},{\"name\":\"ts\",\"type\":[\"long\",\"null\"]}]}","new_value":"null"}
-          |{"property":"hoodie.table.keygenerator.class","old_value":"org.apache.hudi.keygen.NonpartitionedKeyGenerator","new_value":"null"}
-          |{"property":"hoodie.table.name","old_value":"h0","new_value":"test_table"}
-          |{"property":"hoodie.table.precombine.field","old_value":"ts","new_value":"null"}
-          |{"property":"hoodie.table.recordkey.fields","old_value":"id","new_value":"null"}
-          |{"property":"hoodie.table.type","old_value":"COPY_ON_WRITE","new_value":"COPY_ON_WRITE"}
-          |{"property":"hoodie.table.version","old_value":"5","new_value":"null"}
-          |{"property":"hoodie.timeline.layout.version","old_value":"1","new_value":"1"}""".stripMargin.trim
+          |[hoodie.archivelog.folder,archived,archive]
+          |[hoodie.database.name,default,null]
+          |[hoodie.datasource.write.drop.partition.columns,false,false]
+          |[hoodie.datasource.write.hive_style_partitioning,true,null]
+          |[hoodie.datasource.write.partitionpath.urlencode,false,null]
+          |[hoodie.table.checksum,1281977830,2702201862]
+          |[hoodie.table.create.schema,{"type":"record","name":"h0_record","namespace":"hoodie.h0","fields":[{"name":"_hoodie_commit_time","type":["string","null"]},{"name":"_hoodie_commit_seqno","type":["string","null"]},{"name":"_hoodie_record_key","type":["string","null"]},{"name":"_hoodie_partition_path","type":["string","null"]},{"name":"_hoodie_file_name","type":["string","null"]},{"name":"id","type":["int","null"]},{"name":"name","type":["string","null"]},{"name":"price","type":["double","null"]},{"name":"ts","type":["long","null"]}]},null]
+          |[hoodie.table.keygenerator.class,org.apache.hudi.keygen.NonpartitionedKeyGenerator,null]
+          |[hoodie.table.name,h0,test_table]
+          |[hoodie.table.precombine.field,ts,null]
+          |[hoodie.table.recordkey.fields,id,null]
+          |[hoodie.table.type,COPY_ON_WRITE,COPY_ON_WRITE]
+          |[hoodie.table.version,5,null]
+          |[hoodie.timeline.layout.version,1,1]""".stripMargin.trim
 
       val actual = spark.sql(s"""call repair_overwrite_hoodie_props(table => '$tableName', new_props_file_path => '${newProps.getPath}')""")
         .collect()
-        .map(_.json)
+        .map(_.toString())
         .mkString("\n")
 
       assertEquals(expectedOutput, actual)
