@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[3194],{29213:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/streaming-ingestion","name":"streaming ingestion","count":6,"permalink":"/blog/tags/streaming-ingestion"}')}}]);

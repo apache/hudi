@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[9367],{14111:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/datalake-platform","name":"datalake-platform","count":3,"permalink":"/cn/blog/tags/datalake-platform"}')}}]);
