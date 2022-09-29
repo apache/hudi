@@ -24,16 +24,15 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
-import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
-import org.apache.spark.sql.functions.{col, expr, lit}
+import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.{SparkConf, SparkContext}
@@ -1069,86 +1068,6 @@ class TestHoodieSparkSqlWriter {
     )
     val kg2 = HoodieWriterUtils.getOriginKeyGenerator(m2)
     assertTrue(kg2 == classOf[SimpleKeyGenerator].getName)
-  }
-
-  /***
-   * test read after scheduler compaction
-   */
-  @Test
-  def testReadOptimizedAfterScheduleCompaction(): Unit = {
-    val (table_name, table_path) = ("hoodie_mor_ro_read_test_table", s"${tempBasePath}_mor_test_table")
-
-    val hudiOptions = Map[String, String](
-      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
-      DataSourceWriteOptions.OPERATION.key -> "upsert",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "col3",
-      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
-      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
-      HoodieWriteConfig.TBL_NAME.key -> table_name,
-      "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1")
-
-    val df = spark.range(0, 10).toDF("keyid")
-      .withColumn("col3", expr("keyid"))
-      .withColumn("age", expr("keyid + 1000"))
-
-    df.write.format("hudi")
-      .options(hudiOptions)
-      .mode(SaveMode.Overwrite)
-      .save(table_path)
-
-    // upsert same record again
-    val df_update = spark.range(0, 10).toDF("keyid")
-      .withColumn("col3", expr("keyid"))
-      .withColumn("age", expr("keyid + 2000"))
-
-    df_update.write.format("hudi")
-      .options(hudiOptions)
-      .mode(SaveMode.Append).save(table_path)
-
-    val compactionOperation = Map(
-      HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY.key -> CompactionTriggerStrategy.NUM_COMMITS.name,
-      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1",
-      DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key -> "false",
-      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
-      DataSourceWriteOptions.OPERATION.key -> "upsert",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "col3",
-      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
-      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
-      HoodieWriteConfig.TBL_NAME.key -> table_name,
-      "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1",
-      HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName
-    )
-
-    // schedule compaction
-    val client = DataSourceUtils.createHoodieClient(
-      new JavaSparkContext(sc), "", table_path, hoodieFooTableName,
-      mapAsJavaMap(compactionOperation)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
-
-    val compactionInstant = client.scheduleCompaction(org.apache.hudi.common.util.Option.empty()).get()
-
-    client.compact(compactionInstant)
-    client.close()
-
-    val df_update2 = spark.range(0, 10).toDF("keyid")
-      .withColumn("col3", expr("keyid"))
-      .withColumn("age", expr("keyid + 3000"))
-
-    df_update2.write.format("hudi")
-      .options(hudiOptions)
-      .mode(SaveMode.Append).save(table_path)
-
-    // optimized read
-    val optimizedDf = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .load(table_path)
-      .where(col("age").===(1001))
-
-    // Get the base file with before scheduled compaction
-    assertTrue(optimizedDf.count() == 1)
   }
 }
 
