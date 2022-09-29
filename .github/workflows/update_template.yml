@@ -13,6 +13,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
-      - name: run script
-        run: git diff --name-only origin/master...origin/${GITHUB_HEAD_REF##*/} | grep -c scripts/pr_compliance.py || exit 1
+      - name: ensure script is updated
+        run: git diff --name-only origin/master HEAD | grep -c scripts/pr_compliance.py || exit 1
