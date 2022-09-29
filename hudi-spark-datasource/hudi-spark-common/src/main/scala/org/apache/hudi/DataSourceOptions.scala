@@ -116,11 +116,7 @@ object DataSourceReadOptions {
     .withDocumentation("For the use-cases like users only want to incremental pull from certain partitions "
       + "instead of the full table. This option allows using glob pattern to directly filter on path.")
 
-  val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = ConfigProperty
-    .key("as.of.instant")
-    .noDefaultValue()
-    .withDocumentation("The query instant for time travel. Without specified this option," +
-      " we query the latest snapshot.")
+  val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = HoodieCommonConfig.TIMESTAMP_AS_OF
 
   val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.enable.data.skipping")
