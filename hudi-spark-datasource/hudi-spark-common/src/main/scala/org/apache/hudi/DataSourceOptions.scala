@@ -31,6 +31,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.ConfigUtils
+import org.apache.hudi.util.JFunction
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
@@ -321,14 +322,14 @@ object DataSourceWriteOptions {
   /**
     * Key generator class, that implements will extract the key out of incoming record.
     */
-  val keyGeneraterInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {
-    Option.of(DataSourceOptionsHelper.inferKeyGenClazz(p.getProps))
+  val keyGeneratorInferFunc = JFunction.toJavaFunction((config: HoodieConfig) => {
+    Option.of(DataSourceOptionsHelper.inferKeyGenClazz(config.getProps))
   })
 
   val KEYGENERATOR_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.keygenerator.class")
     .defaultValue(classOf[SimpleKeyGenerator].getName)
-    .withInferFunction(keyGeneraterInferFunc)
+    .withInferFunction(keyGeneratorInferFunc)
     .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
 
   val KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED: ConfigProperty[String] = KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED
@@ -798,12 +799,6 @@ object DataSourceOptionsHelper {
       }
     } else {
       classOf[NonpartitionedKeyGenerator].getName
-    }
-  }
-
-  implicit def scalaFunctionToJavaFunction[From, To](function: (From) => To): JavaFunction[From, To] = {
-    new JavaFunction[From, To] {
-      override def apply (input: From): To = function (input)
     }
   }
 
