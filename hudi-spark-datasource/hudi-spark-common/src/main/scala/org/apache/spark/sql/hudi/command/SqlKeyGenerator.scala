@@ -32,6 +32,8 @@ import org.apache.spark.unsafe.types.UTF8String
 import org.joda.time.format.DateTimeFormat
 
 import java.sql.Timestamp
+import java.util
+import java.util.Collections
 import java.util.concurrent.TimeUnit.{MICROSECONDS, MILLISECONDS}
 
 /**
@@ -114,6 +116,16 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
     }
 
     UTF8String.fromString(convertPartitionPathToSqlType(partitionPath.toString, rowType = true))
+  }
+
+  override def getPartitionPathFields: util.List[String] = {
+    originalKeyGen.map {
+      case bkg: BaseKeyGenerator => bkg.getPartitionPathFields
+      case _ =>
+        Option(super.partitionPathFields).getOrElse(Collections.emptyList)
+    } getOrElse {
+      complexKeyGen.getPartitionPathFields
+    }
   }
 
   // TODO clean up
