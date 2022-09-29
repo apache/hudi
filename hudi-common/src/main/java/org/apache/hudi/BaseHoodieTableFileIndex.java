@@ -18,8 +18,6 @@
 
 package org.apache.hudi;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -40,6 +38,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -291,31 +292,23 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     validate(activeTimeline, queryInstant);
 
-    if (tableType.equals(HoodieTableType.MERGE_ON_READ) && queryType.equals(HoodieTableQueryType.SNAPSHOT)) {
-      cachedAllInputFileSlices = partitionFiles.keySet().stream()
-          .collect(Collectors.toMap(
-              Function.identity(),
-              partitionPath ->
-                  queryInstant.map(instant ->
-                    fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+    // NOTE: For MOR table, when the compaction is inflight, we need to not only fetch the
+    // latest slices, but also include the base and log files of the second-last version of
+    // the file slice in the same file group as the latest file slice that is under compaction.
+    // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
+    // API.  Note that for COW table, the merging logic of two slices does not happen as there
+    // is no compaction, thus there is no performance impact.
+    cachedAllInputFileSlices = partitionFiles.keySet().stream()
+        .collect(Collectors.toMap(
+                Function.identity(),
+                partitionPath ->
+                    queryInstant.map(instant ->
+                            fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+                        )
+                        .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
                         .collect(Collectors.toList())
-                  )
-                  .orElse(Collections.emptyList())
-              )
-          );
-    } else {
-      cachedAllInputFileSlices = partitionFiles.keySet().stream()
-         .collect(Collectors.toMap(
-             Function.identity(),
-             partitionPath ->
-                 queryInstant.map(instant ->
-                     fileSystemView.getLatestFileSlicesBeforeOrOn(partitionPath.path, instant, true)
-                 )
-                   .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
-                   .collect(Collectors.toList())
-             )
-         );
-    }
+            )
+        );
 
     cachedFileSize = cachedAllInputFileSlices.values().stream()
         .flatMap(Collection::stream)
