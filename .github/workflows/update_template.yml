@@ -16,4 +16,4 @@ jobs:
         with:
           fetch-depth: 0
       - name: ensure script is updated
-        run: git diff --name-only remotes/origin/master HEAD | grep -c scripts/pr_compliance.py || exit 1
+        run: git diff --name-only remotes/origin/master HEAD | grep -c scripts/pr_compliance.py || { echo "::error::PULL_REQUEST_TEMPLATE.md scripts/pr_compliance.py not updated" && exit 1; }
