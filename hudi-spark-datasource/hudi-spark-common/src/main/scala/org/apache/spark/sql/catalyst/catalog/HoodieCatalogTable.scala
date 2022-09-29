@@ -190,7 +190,11 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(finalSchema, false, recordName, namespace)
-      val partitionColumns = if (table.partitionColumnNames.isEmpty) null else table.partitionColumnNames.mkString(",")
+      val partitionColumns = if (table.partitionColumnNames.isEmpty) {
+        null
+      } else {
+        table.partitionColumnNames.mkString(",")
+      }
 
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
