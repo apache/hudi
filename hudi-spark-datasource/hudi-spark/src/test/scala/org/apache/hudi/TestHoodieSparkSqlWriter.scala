@@ -1132,7 +1132,15 @@ class TestHoodieSparkSqlWriter {
 
     client.compact(compactionInstant)
     client.close()
-    
+
+    val df_update2 = spark.range(0, 10).toDF("keyid")
+      .withColumn("col3", expr("keyid"))
+      .withColumn("age", expr("keyid + 3000"))
+
+    df_update2.write.format("hudi")
+      .options(hudiOptions)
+      .mode(SaveMode.Append).save(table_path)
+
     // optimized read
     val optimizedDf = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
