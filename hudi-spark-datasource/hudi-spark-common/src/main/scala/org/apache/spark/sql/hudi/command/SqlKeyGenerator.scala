@@ -122,7 +122,7 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
     originalKeyGen.map {
       case bkg: BaseKeyGenerator => bkg.getPartitionPathFields
       case _ =>
-        Option(super.partitionPathFields).getOrElse(Collections.emptyList)
+        Option(super.getPartitionPathFields).getOrElse(Collections.emptyList[String])
     } getOrElse {
       complexKeyGen.getPartitionPathFields
     }
