@@ -206,6 +206,7 @@
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
+    <snappy.version>1.1.8.3</snappy.version>
   </properties>
 
   <scm>
@@ -390,12 +391,16 @@
                     <exclude>org.apache.hbase:hbase-common:*</exclude>
                     <exclude>org.apache.hbase:hbase-client:*</exclude>
                     <exclude>org.apache.hbase:hbase-server:*</exclude>
+                    <!--To upgrade snappy because pre 1.1.8.2 does not work on m1 mac-->
+                    <exclude>org.xerial.snappy:snappy-java:*</exclude>
                   </excludes>
                   <includes>
                     <include>org.slf4j:slf4j-simple:*:*:test</include>
                     <include>org.apache.hbase:hbase-common:${hbase.version}</include>
                     <include>org.apache.hbase:hbase-client:${hbase.version}</include>
                     <include>org.apache.hbase:hbase-server:${hbase.version}</include>
+                    <!--To upgrade snappy because pre 1.1.8.2 does not work on m1 mac-->
+                    <include>org.xerial.snappy:snappy-java:${snappy.version}</include>
                   </includes>
                 </bannedDependencies>
               </rules>
@@ -740,7 +745,20 @@
         <groupId>org.apache.avro</groupId>
         <artifactId>avro</artifactId>
         <version>${avro.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+          </exclusion>
+        </exclusions>
         <scope>provided</scope>
+      </dependency>
+
+      <!-- Snappy -->
+      <dependency>
+        <groupId>org.xerial.snappy</groupId>
+        <artifactId>snappy-java</artifactId>
+        <version>${snappy.version}</version>
       </dependency>
 
       <!-- caffeine -->

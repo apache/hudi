@@ -151,6 +151,7 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      "hoodie.parquet.compression.codec" -> "snappy",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
   }
 
