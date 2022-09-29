@@ -18,7 +18,7 @@ _Describe any necessary documentation update if there is any new feature, config
 - _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the
   ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make
   changes to the website._
-  
+
 ### Contributor's checklist
 
 - [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)
