@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.hudi.common.fs.FSUtils
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase {
@@ -971,14 +971,21 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
 
       // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
-      checkException(s"""
+      val errorMsg = if (HoodieSparkUtils.gteqSpark3_2) {
+        "Invalid MERGE INTO matching condition: s0.id: can't cast s0.id (of LongType) to IntegerType"
+      } else {
+        "Invalid MERGE INTO matching condition: s0.`id`: can't cast s0.`id` (of LongType) to IntegerType"
+      }
+
+      checkException(
+        s"""
            |merge into $tableName h0
            |using (
            |  select cast(1 as long) as id, 1001 as ts
            | ) s0
            | on cast(h0.id as long) = s0.id
            | when matched then update set h0.ts = s0.ts
-           |""".stripMargin)("Invalid MERGE INTO matching condition: s0.`id`: can't cast s0.`id` (of LongType) to IntegerType")
+           |""".stripMargin)(errorMsg)
 
       // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
       checkException(
@@ -989,7 +996,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            | ) s0
            | on h0.id = s0.id
            | when matched then update set h0.ts = s0.ts
-           |""".stripMargin)("Invalid MERGE INTO matching condition: s0.`id`: can't cast s0.`id` (of LongType) to IntegerType")
+           |""".stripMargin)(errorMsg)
 
       // Can up-cast incoming dataset's primary-key w/o loss of precision (should succeed)
       spark.sql(
