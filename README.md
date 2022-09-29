@@ -186,6 +186,7 @@ Take a look at this blog for reference - (Apache Hudi vs Delta Lake vs Apache Ic
       - use-case (some community users talking about their use-case)
       - design (technical articles talking about Hudi internal design/impl)
       - performance (involves performance related blogs)
+      - blog (anything else such as announcements/release updates/insights/guides/tutorials/concepts overview etc)
    2. tag 2
        - Represent individual features - clustering, compaction, ingestion, meta-sync etc.
    3. tag 3
