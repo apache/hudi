@@ -716,7 +716,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   test("Test Merge into where manually set DefaultHoodieRecordPayload") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      // Create a cow partitioned table.
+      // Create a cow table with default payload class, check whether it will be overwritten by ExpressionPayload.
+      // if not, this ut cannot pass since DefaultHoodieRecordPayload can not promotion int to long when insert a ts with Integer value
       spark.sql(
         s"""
            | create table $tableName (
