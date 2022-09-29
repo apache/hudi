@@ -163,8 +163,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       return createCorruptBlock(blockStartPos);
     }
 
-    // Block is possibly corrupted only when write is not atomic
-    // the corrupted check could take 100's msec for larger file sizes, skipping the check for fs with atomic write
+    // Block is possibly corrupted only when write is not transactional
+    // the corrupted check could take 100's msec for larger file sizes, skipping the check for fs with transactional write
     // see https://issues.apache.org/jira/browse/HUDI-2118
     if (!StorageSchemes.isWriteTransactional(fs.getScheme())) {
       // We may have had a crash which could have written this block partially
