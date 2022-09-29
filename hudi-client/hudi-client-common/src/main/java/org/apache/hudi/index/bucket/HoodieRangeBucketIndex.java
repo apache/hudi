@@ -73,7 +73,7 @@ public class HoodieRangeBucketIndex extends HoodieBucketIndex {
       if (bucketIdToFileIdMapping.containsKey(bucketId)) {
         return Option.ofNullable(bucketIdToFileIdMapping.get(bucketId));
       } else {
-        return Option.ofNullable(new HoodieRecordLocation(null, BucketIdentifier.bucketIdStr(bucketId)));
+        return Option.ofNullable(new HoodieRecordLocation(null, BucketIdentifier.newRangeBucketFileIdPrefix(bucketId)));
       }
     }
   }

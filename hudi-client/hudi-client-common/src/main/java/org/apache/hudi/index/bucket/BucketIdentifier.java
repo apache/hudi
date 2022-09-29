@@ -41,6 +41,7 @@ public class BucketIdentifier implements Serializable {
   // Compatible with the spark bucket name
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
   private static final Logger LOG = LogManager.getLogger(BucketIdentifier.class);
+  private static final String RANGE_BUCKET_FIXED_FILE_ID_PREFIX_TEMPLATE = "00000000-0000-0000-0000-000000000000";
 
   public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets) {
     return getBucketId(record.getKey(), indexKeyFields, numBuckets);
@@ -108,6 +109,13 @@ public class BucketIdentifier implements Serializable {
 
   public static String bucketIdStr(int n) {
     return String.format("%08d", n);
+  }
+
+  /**
+   *  Follow the UUID naming convention of the file group, in case of potential compatibility problems
+   */
+  public static String newRangeBucketFileIdPrefix(int bucketId) {
+    return RANGE_BUCKET_FIXED_FILE_ID_PREFIX_TEMPLATE.replaceFirst(".{8}", bucketIdStr(bucketId));
   }
 
   public static String newBucketFileIdPrefix(int bucketId) {
