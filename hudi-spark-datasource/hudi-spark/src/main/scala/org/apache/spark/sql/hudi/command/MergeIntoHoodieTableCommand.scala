@@ -25,6 +25,7 @@ import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.MatchCast
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -33,6 +34,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeRef
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.HoodieSqlUtils.getMergeIntoTargetTableId
+import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.CoercedAttributeReference
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
@@ -101,19 +103,53 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     }
     val targetAttrs = mergeInto.targetTable.output
 
-    val target2Source = conditions.map(_.asInstanceOf[EqualTo])
-      .map {
-        case EqualTo(left: AttributeReference, right)
-          if targetAttrs.exists(f => attributeEqual(f, left, resolver)) => // left is the target field
-            targetAttrs.find(f => resolver(f.name, left.name)).get.name -> right
-        case EqualTo(left, right: AttributeReference)
-          if targetAttrs.exists(f => attributeEqual(f, right, resolver)) => // right is the target field
-            targetAttrs.find(f => resolver(f.name, right.name)).get.name -> left
-        case eq =>
-          throw new AnalysisException(s"Invalidate Merge-On condition: ${eq.sql}." +
-            "The validate condition should be 'targetColumn = sourceColumnExpression', e.g." +
-            " t.id = s.id and t.dt = from_unixtime(s.ts)")
-      }.toMap
+    val cleanedConditions = conditions.map(_.asInstanceOf[EqualTo]).map {
+      // Here we're unraveling superfluous casting of expressions on both sides of the matched-on condition,
+      // in case both of them are casted to the same type (which might be result of either explicit casting
+      // from the user, or auto-casting performed by Spark for type coercion), which has potential
+      // potential of rendering the whole operation as invalid (check out HUDI-4861 for more details)
+      case EqualTo(MatchCast(leftExpr, leftCastTargetType, _, _), MatchCast(rightExpr, rightCastTargetType, _, _))
+        if leftCastTargetType.sameType(rightCastTargetType) => EqualTo(leftExpr, rightExpr)
+
+      case c => c
+    }
+
+    val exprUtils = sparkAdapter.getCatalystExpressionUtils
+    // Expressions of the following forms are supported:
+    //    `target.id = <expr>` (or `<expr> = target.id`)
+    //    `cast(target.id, ...) = <expr>` (or `<expr> = cast(target.id, ...)`)
+    //
+    // In the latter case, there are further restrictions: since cast will be dropped on the
+    // target table side (since we're gonna be matching against primary-key column as is) expression
+    // on the opposite side of the comparison should be cast-able to the primary-key column's data-type
+    // t/h "up-cast" (ie w/o any loss in precision)
+    val target2Source = cleanedConditions.map {
+      case EqualTo(CoercedAttributeReference(attr), expr)
+        if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) =>
+          if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
+            targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
+              castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
+          } else {
+            throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
+              + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
+          }
+
+      case EqualTo(expr, CoercedAttributeReference(attr))
+        if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) =>
+          if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
+            targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
+              castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
+          } else {
+            throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
+              + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
+          }
+
+      case expr =>
+        throw new AnalysisException(s"Invalid MERGE INTO matching condition: `${expr.sql}`: "
+          + "expected condition should be 'target.id = <source-column-expr>', e.g. "
+          + "`t.id = s.id` or `t.id = cast(s.id, ...)`")
+    }.toMap
+
     target2Source
   }
 
@@ -487,8 +523,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
     val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
 
-    // Enable the hive sync by default if spark have enable the hive metastore.
-    val enableHive = isUsingHiveCatalog(sparkSession)
     withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
       Map(
         "path" -> path,
@@ -500,10 +534,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
-        SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
-        HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
+        SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
+        HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
+        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
         HiveSyncConfigHolder.HIVE_SYNC_MODE.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE),
-        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> enableHive.toString,
         HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> targetTableDb,
         HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> targetTableName,
         HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
@@ -517,4 +551,19 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         .filter { case (_, v) => v != null }
     }
   }
+}
+
+object MergeIntoHoodieTableCommand {
+
+  object CoercedAttributeReference {
+    def unapply(expr: Expression): Option[AttributeReference] = {
+      expr match {
+        case attr: AttributeReference => Some(attr)
+        case MatchCast(attr: AttributeReference, _, _, _) => Some(attr)
+
+        case _ => None
+      }
+    }
+  }
+
 }

@@ -56,6 +56,9 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
       HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr) {
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
+    // Auto-tunes the parallelism for reduce transformation based on the number of data partitions
+    // in engine-specific representation
+    int reduceParallelism = Math.max(1, Math.min(records.getNumPartitions(), parallelism));
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
@@ -67,7 +70,7 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
       HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
 
       return new HoodieAvroRecord<>(reducedKey, reducedData);
-    }, parallelism).map(Pair::getRight);
+    }, reduceParallelism).map(Pair::getRight);
   }
 
 }

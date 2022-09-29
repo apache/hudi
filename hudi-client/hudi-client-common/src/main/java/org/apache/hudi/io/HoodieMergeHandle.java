@@ -18,8 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -33,9 +31,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -55,7 +50,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -66,8 +61,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 @SuppressWarnings("Duplicates")
@@ -107,8 +102,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter<IndexedRecord> fileWriter;
-  protected boolean cdcEnabled = false;
-  protected HoodieCDCLogger cdcLogger;
   private boolean preserveMetadata = false;
 
   protected Path newFilePath;
@@ -210,18 +203,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       // Create the writer for writing the new version file
       fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config,
         writeSchemaWithMetaFields, taskContextSupplier);
-
-      // init the cdc logger
-      this.cdcEnabled = config.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED);
-      if (cdcEnabled) {
-        this.cdcLogger = new HoodieCDCLogger(
-            instantTime,
-            config,
-            hoodieTable.getMetaClient().getTableConfig(),
-            tableSchema,
-            createLogWriter(Option.empty(), instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
-            IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
-      }
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -287,7 +268,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
   }
 
-  private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
+  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
     boolean isDelete = false;
     if (indexedRecord.isPresent()) {
       updatedRecordsWritten++;
@@ -300,11 +281,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         return false;
       }
     }
-    boolean result = writeRecord(hoodieRecord, indexedRecord, isDelete);
-    if (result && cdcEnabled) {
-      cdcLogger.put(hoodieRecord, oldRecord, indexedRecord);
-    }
-    return result;
+    return writeRecord(hoodieRecord, indexedRecord, isDelete);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord) throws IOException {
@@ -314,10 +291,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (insertRecord.isPresent() && insertRecord.get().equals(IGNORE_RECORD)) {
       return;
     }
+    writeInsertRecord(hoodieRecord, insertRecord);
+  }
+
+  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> insertRecord) {
     if (writeRecord(hoodieRecord, insertRecord, HoodieOperation.isDelete(hoodieRecord.getOperation()))) {
-      if (cdcEnabled) {
-        cdcLogger.put(hoodieRecord, null, insertRecord);
-      }
       insertRecordsWritten++;
     }
   }
@@ -425,21 +403,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
   }
 
-  private Option<AppendResult> writeCDCDataIfNeeded() {
-    if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
-      // the following cases where we do not need to write out the cdc file:
-      // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
-      // case 2: all the data are new-coming,
-      return Option.empty();
-    }
-    return cdcLogger.writeCDCData();
-  }
-
   @Override
   public List<WriteStatus> close() {
     try {
-      HoodieWriteStat stat = writeStatus.getStat();
-
       writeIncomingRecords();
 
       if (keyToNewRecords instanceof ExternalSpillableMap) {
@@ -454,11 +420,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         fileWriter = null;
       }
 
-      // if there are cdc data written, set the CDC-related information.
-      Option<AppendResult> cdcResult = writeCDCDataIfNeeded();
-      HoodieCDCLogger.setCDCStatIfNeeded(stat, cdcResult, partitionPath, fs);
-
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
+      HoodieWriteStat stat = writeStatus.getStat();
+
       stat.setTotalWriteBytes(fileSizeInBytes);
       stat.setFileSizeInBytes(fileSizeInBytes);
       stat.setNumWrites(recordsWritten);

@@ -105,9 +105,6 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private transient int[] requiredPos;
   private transient AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
   private transient HoodieFlinkWriteClient writeClient;
-  private transient BulkInsertWriterHelper writerHelper;
-
-  private transient BinaryExternalSorter sorter;
   private transient StreamRecordCollector<ClusteringCommitEvent> collector;
   private transient BinaryRowDataSerializer binarySerializer;
 
@@ -153,10 +150,6 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType);
     this.binarySerializer = new BinaryRowDataSerializer(rowType.getFieldCount());
 
-    if (this.sortClusteringEnabled) {
-      initSorter();
-    }
-
     if (this.asyncClustering) {
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
@@ -186,6 +179,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     if (this.writeClient != null) {
       this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
+      this.writeClient = null;
     }
   }
 
@@ -203,7 +197,9 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private void doClustering(String instantTime, ClusteringPlanEvent event) throws Exception {
     final ClusteringGroupInfo clusteringGroupInfo = event.getClusteringGroupInfo();
 
-    initWriterHelper(instantTime);
+    BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
+        instantTime, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
+        this.rowType);
 
     List<ClusteringOperation> clusteringOps = clusteringGroupInfo.getOperations();
     boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
@@ -220,33 +216,27 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     RowDataSerializer rowDataSerializer = new RowDataSerializer(rowType);
 
     if (this.sortClusteringEnabled) {
+      BinaryExternalSorter sorter = initSorter();
       while (iterator.hasNext()) {
         RowData rowData = iterator.next();
         BinaryRowData binaryRowData = rowDataSerializer.toBinaryRow(rowData).copy();
-        this.sorter.write(binaryRowData);
+        sorter.write(binaryRowData);
       }
 
       BinaryRowData row = binarySerializer.createInstance();
       while ((row = sorter.getIterator().next(row)) != null) {
-        this.writerHelper.write(row);
+        writerHelper.write(row);
       }
+      sorter.close();
     } else {
       while (iterator.hasNext()) {
-        this.writerHelper.write(iterator.next());
+        writerHelper.write(iterator.next());
       }
     }
 
-    List<WriteStatus> writeStatuses = this.writerHelper.getWriteStatuses(this.taskID);
+    List<WriteStatus> writeStatuses = writerHelper.getWriteStatuses(this.taskID);
     collector.collect(new ClusteringCommitEvent(instantTime, writeStatuses, this.taskID));
-    this.writerHelper = null;
-  }
-
-  private void initWriterHelper(String clusteringInstantTime) {
-    if (this.writerHelper == null) {
-      this.writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
-          clusteringInstantTime, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-          this.rowType);
-    }
+    writerHelper.close();
   }
 
   /**
@@ -338,13 +328,13 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
         .toArray();
   }
 
-  private void initSorter() {
+  private BinaryExternalSorter initSorter() {
     ClassLoader cl = getContainingTask().getUserCodeClassLoader();
     NormalizedKeyComputer computer = createSortCodeGenerator().generateNormalizedKeyComputer("SortComputer").newInstance(cl);
     RecordComparator comparator = createSortCodeGenerator().generateRecordComparator("SortComparator").newInstance(cl);
 
     MemoryManager memManager = getContainingTask().getEnvironment().getMemoryManager();
-    this.sorter =
+    BinaryExternalSorter sorter =
         new BinaryExternalSorter(
             this.getContainingTask(),
             memManager,
@@ -355,12 +345,13 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             computer,
             comparator,
             getContainingTask().getJobConfiguration());
-    this.sorter.startThreads();
+    sorter.startThreads();
 
     // register the metrics.
     getMetricGroup().gauge("memoryUsedSizeInBytes", (Gauge<Long>) sorter::getUsedMemoryInBytes);
     getMetricGroup().gauge("numSpillFiles", (Gauge<Long>) sorter::getNumSpillFiles);
     getMetricGroup().gauge("spillInBytes", (Gauge<Long>) sorter::getSpillInBytes);
+    return sorter;
   }
 
   private SortCodeGenerator createSortCodeGenerator() {

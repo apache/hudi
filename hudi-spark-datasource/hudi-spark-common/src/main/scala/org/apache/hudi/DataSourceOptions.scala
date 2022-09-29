@@ -31,6 +31,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.ConfigUtils
+import org.apache.hudi.util.JFunction
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
@@ -60,6 +61,16 @@ object DataSourceReadOptions {
     .withDocumentation("Whether data needs to be read, in incremental mode (new data since an instantTime) " +
       "(or) Read Optimized mode (obtain latest view, based on base files) (or) Snapshot mode " +
       "(obtain latest view, by merging base and (if any) log files)")
+
+  val INCREMENTAL_FORMAT_LATEST_STATE_VAL = "latest_state"
+  val INCREMENTAL_FORMAT_CDC_VAL = "cdc"
+  val INCREMENTAL_FORMAT: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.query.incremental.format")
+    .defaultValue(INCREMENTAL_FORMAT_LATEST_STATE_VAL)
+    .withValidValues(INCREMENTAL_FORMAT_LATEST_STATE_VAL, INCREMENTAL_FORMAT_CDC_VAL)
+    .withDocumentation("This config is used alone with the 'incremental' query type." +
+      "When set to 'latest_state', it returns the latest records' values." +
+      "When set to 'cdc', it returns the cdc data.")
 
   val REALTIME_SKIP_MERGE_OPT_VAL = "skip_merge"
   val REALTIME_PAYLOAD_COMBINE_OPT_VAL = "payload_combine"
@@ -116,11 +127,7 @@ object DataSourceReadOptions {
     .withDocumentation("For the use-cases like users only want to incremental pull from certain partitions "
       + "instead of the full table. This option allows using glob pattern to directly filter on path.")
 
-  val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = ConfigProperty
-    .key("as.of.instant")
-    .noDefaultValue()
-    .withDocumentation("The query instant for time travel. Without specified this option," +
-      " we query the latest snapshot.")
+  val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = HoodieCommonConfig.TIMESTAMP_AS_OF
 
   val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.enable.data.skipping")
@@ -325,14 +332,14 @@ object DataSourceWriteOptions {
   /**
     * Key generator class, that implements will extract the key out of incoming record.
     */
-  val keyGeneraterInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {
-    Option.of(DataSourceOptionsHelper.inferKeyGenClazz(p.getProps))
+  val keyGeneratorInferFunc = JFunction.toJavaFunction((config: HoodieConfig) => {
+    Option.of(DataSourceOptionsHelper.inferKeyGenClazz(config.getProps))
   })
 
   val KEYGENERATOR_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.keygenerator.class")
     .defaultValue(classOf[SimpleKeyGenerator].getName)
-    .withInferFunction(keyGeneraterInferFunc)
+    .withInferFunction(keyGeneratorInferFunc)
     .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
 
   val KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED: ConfigProperty[String] = KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED
@@ -802,12 +809,6 @@ object DataSourceOptionsHelper {
       }
     } else {
       classOf[NonpartitionedKeyGenerator].getName
-    }
-  }
-
-  implicit def scalaFunctionToJavaFunction[From, To](function: (From) => To): JavaFunction[From, To] = {
-    new JavaFunction[From, To] {
-      override def apply (input: From): To = function (input)
     }
   }
 
