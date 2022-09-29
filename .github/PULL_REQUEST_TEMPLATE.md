@@ -19,7 +19,6 @@ _Describe any necessary documentation update if there is any new feature, config
   ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make
   changes to the website._
   
-
 ### Contributor's checklist
 
 - [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)
