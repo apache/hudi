@@ -2015,7 +2015,7 @@
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>
-        <avro.version>1.11.0</avro.version>
+        <avro.version>1.11.1</avro.version>
         <orc.version>1.7.4</orc.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
@@ -2124,7 +2124,7 @@
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>
-        <avro.version>1.11.0</avro.version>
+        <avro.version>1.11.1</avro.version>
         <orc.version>1.7.4</orc.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
