@@ -5,10 +5,14 @@ on:
     branches:
       - master
       - 'release-*'
-  # pull_request:
-  #   branches:
-  #     - master
-  #     - 'release-*'
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+    paths-ignore:
+      - '.github/**'
+      - '**.md'
+      - '**.py'
 env:
   MVN_ARGS: -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
 
