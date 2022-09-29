@@ -2,11 +2,22 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2022-08-25T00:00:00.000Z</updated>
+    <updated>2022-09-20T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Building Streaming Data Lakes with Hudi and MinIO]]></title>
+        <id>/2022/09/20/Data-Lake-Lakehouse-Guide-Powered-by-Data-Lake-Table-Formats-Delta-Lake-Iceberg-Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2022/09/20/Data-Lake-Lakehouse-Guide-Powered-by-Data-Lake-Table-Formats-Delta-Lake-Iceberg-Hudi"/>
+        <updated>2022-09-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blog.min.io/streaming-data-lakes-hudi-minio/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Matt Sarrel</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Data Lake / Lakehouse Guide: Powered by Data Lake Table Formats (Delta Lake, Iceberg, Hudi)]]></title>
         <id>/2022/08/25/Data-Lake-Lakehouse-Guide-Powered-by-Data-Lake-Table-Formats-Delta-Lake-Iceberg-Hudi</id>
@@ -16,6 +27,23 @@
         <content type="html"><![CDATA[<div url="https://airbyte.com/blog/data-lake-lakehouse-guide-powered-by-table-formats-delta-lake-iceberg-hudi">Redirecting... please wait!! </div>]]></content>
         <author>
             <name>Simon Späti</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Implementation of SCD-2 (Slowly Changing Dimension) with Apache Hudi & Spark]]></title>
+        <id>/2022/08/24/Implementation-of-SCD-2-with-Apache-Hudi-and-Spark</id>
+        <link href="https://hudi.apache.org/cn/blog/2022/08/24/Implementation-of-SCD-2-with-Apache-Hudi-and-Spark"/>
+        <updated>2022-08-24T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/walmartglobaltech/implementation-of-scd-2-slowly-changing-dimension-with-apache-hudi-465e0eb94a5">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Jayasheel Kalgal</name>
+        </author>
+        <author>
+            <name>Esha Dhing</name>
+        </author>
+        <author>
+            <name>Prashant Mishra</name>
         </author>
     </entry>
     <entry>
