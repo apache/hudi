@@ -1,0 +1,18 @@
+name: Update Template
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches:
+      - master
+    paths:
+      - .github/PULL_REQUEST_TEMPLATE.md
+
+jobs:
+  check-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+      - name: run script
+        run: git diff --name-only origin/master...${GITHUB_REF##*/} | grep -c scripts/pr_compliance.py || exit 1
