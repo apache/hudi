@@ -76,7 +76,7 @@ public enum StorageSchemes {
   CFS("cfs", true, null);
 
   private String scheme;
-  private boolean supportsAppend = false;
+  private boolean supportsAppend;
   // null for uncertain if write is transactional, please update this for each FS
   private Boolean isWriteTransactional;
 
@@ -94,7 +94,7 @@ public enum StorageSchemes {
     return supportsAppend;
   }
 
-  public boolean isWriteTransactional(){
+  public boolean isWriteTransactional() {
     return isWriteTransactional != null && isWriteTransactional;
   }
 
@@ -115,15 +115,5 @@ public enum StorageSchemes {
     }
 
     return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.isWriteTransactional() && s.scheme.equals(scheme));
-//
-//    if (scheme == "gs"){
-//      return true;
-//    }
-
-    //    if (scheme == "file") {
-    //      return true;
-    //    }
-//    return false;
   }
-
 }

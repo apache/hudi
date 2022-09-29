@@ -74,7 +74,6 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private static final Logger LOG = LogManager.getLogger(HoodieLogFileReader.class);
 
   private final FileSystem fs;
-  private final FileSystem fs;
   private final Configuration hadoopConf;
   private final FSDataInputStream inputStream;
   private final HoodieLogFile logFile;
@@ -173,7 +172,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       // block) or EOF. If we did not find either of it, then this block is a corrupted block.
       boolean isCorrupted = isBlockCorrupted(blockSize);
       if (isCorrupted) {
-        return createCorruptBlock();
+        return createCorruptBlock(blockStartPos);
       }
     }
 
