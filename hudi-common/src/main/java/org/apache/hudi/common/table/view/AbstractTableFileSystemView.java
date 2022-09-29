@@ -116,7 +116,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Refresh commits timeline.
-   *
+   * 
    * @param visibleActiveTimeline Visible Active Timeline
    */
   protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
@@ -750,20 +750,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     return getAllFileGroupsIncludingReplaced(partitionStr).filter(fg -> !isFileGroupReplaced(fg));
   }
 
-  @Override
-  public final Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPaths) {
-    return getAllFileGroupsIncludingReplaced(partitionPaths)
-        .map(pair -> Pair.of(pair.getLeft(), pair.getRight().stream().filter(fg -> !isFileGroupReplaced(fg)).collect(Collectors.toList())));
-  }
-
-  private Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroupsIncludingReplaced(final List<String> partitionStrList) {
-    List<Pair<String, List<HoodieFileGroup>>> fileGroupPerPartitionList = new ArrayList<>();
-    for (String partitionStr : partitionStrList) {
-      fileGroupPerPartitionList.add(Pair.of(partitionStr, getAllFileGroupsIncludingReplaced(partitionStr).collect(Collectors.toList())));
-    }
-    return fileGroupPerPartitionList.stream();
-  }
-
   private Stream<HoodieFileGroup> getAllFileGroupsIncludingReplaced(final String partitionStr) {
     try {
       readLock.lock();
@@ -1109,7 +1095,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param fileId File Id
    * @return File Slice if present
    */
-  protected Option<FileSlice> fetchLatestFileSlice(String partitionPath, String fileId) {
+  public Option<FileSlice> fetchLatestFileSlice(String partitionPath, String fileId) {
     return Option
         .fromJavaOptional(fetchLatestFileSlices(partitionPath).filter(fs -> fs.getFileId().equals(fileId)).findFirst());
   }

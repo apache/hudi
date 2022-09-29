@@ -45,6 +45,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -106,6 +107,7 @@ import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -459,14 +461,17 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieData<HoodieRecord<RawTripTestPayload>> records = HoodieJavaRDD.of(
         jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1));
     HoodieWriteConfig.Builder configBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
-            .combineInput(true, true);
+        .combineInput(true, true);
     addConfigsForPopulateMetaFields(configBuilder, populateMetaFields);
     HoodieWriteConfig writeConfig = configBuilder.build();
 
     // Global dedup should be done based on recordKey only
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(true);
-    List<HoodieRecord<RawTripTestPayload>> dedupedRecs = HoodieWriteHelper.newInstance().deduplicateRecords(records, index, 1, writeConfig.getSchema()).collectAsList();
+    int dedupParallelism = records.getNumPartitions() + 100;
+    HoodieData<HoodieRecord<RawTripTestPayload>> dedupedRecsRdd = HoodieWriteHelper.newInstance().deduplicateRecords(records, index, dedupParallelism, writeConfig.getSchema());
+    List<HoodieRecord<RawTripTestPayload>> dedupedRecs = dedupedRecsRdd.collectAsList();
+    assertEquals(records.getNumPartitions(), dedupedRecsRdd.getNumPartitions());
     assertEquals(1, dedupedRecs.size());
     assertEquals(dedupedRecs.get(0).getPartitionPath(), recordThree.getPartitionPath());
     assertNodupesWithinPartition(dedupedRecs);
@@ -474,7 +479,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // non-Global dedup should be done based on both recordKey and partitionPath
     index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(false);
-    dedupedRecs = HoodieWriteHelper.newInstance().deduplicateRecords(records, index, 1, writeConfig.getSchema()).collectAsList();
+    dedupedRecsRdd = HoodieWriteHelper.newInstance().deduplicateRecords(records, index, dedupParallelism, writeConfig.getSchema());
+    dedupedRecs = dedupedRecsRdd.collectAsList();
+    assertEquals(records.getNumPartitions(), dedupedRecsRdd.getNumPartitions());
     assertEquals(2, dedupedRecs.size());
     assertNodupesWithinPartition(dedupedRecs);
 
@@ -590,6 +597,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     client.restoreToInstant("004", config.isMetadataTableEnabled());
 
     assertFalse(metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().isPresent());
+
+    client.deleteSavepoint("004");
+    assertFalse(metaClient.reloadActiveTimeline().getSavePointTimeline().containsInstant("004"));
 
     // Check the entire dataset has all records still
     String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
@@ -1458,6 +1468,42 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @Test
+  public void testAndValidateClusteringOutputFiles() throws IOException {
+    String partitionPath = "2015/03/16";
+    testInsertTwoBatches(true, partitionPath);
+
+    // Trigger clustering
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withEmbeddedTimelineServerEnabled(false).withAutoCommit(false)
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClustering(true).withInlineClusteringNumCommits(2).build());
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
+      int numRecords = 200;
+      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> records1 = dataGen.generateInserts(newCommitTime, numRecords);
+      client.startCommitWithTime(newCommitTime);
+      JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(records1, 2);
+      JavaRDD<WriteStatus> statuses = client.insert(insertRecordsRDD1, newCommitTime);
+      client.commit(newCommitTime, statuses);
+      List<WriteStatus> statusList = statuses.collect();
+      assertNoWriteErrors(statusList);
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieInstant replaceCommitInstant = metaClient.getActiveTimeline().getCompletedReplaceTimeline().firstInstant().get();
+      HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
+          .fromBytes(metaClient.getActiveTimeline().getInstantDetails(replaceCommitInstant).get(), HoodieReplaceCommitMetadata.class);
+
+      List<String> filesFromReplaceCommit = new ArrayList<>();
+      replaceCommitMetadata.getPartitionToWriteStats()
+              .forEach((k,v) -> v.forEach(entry -> filesFromReplaceCommit.add(entry.getPath())));
+
+      // find all parquet files created as part of clustering. Verify it matces w/ whats found in replace commit metadata.
+      FileStatus[] fileStatuses = fs.listStatus(new Path(basePath + "/" + partitionPath));
+      List<String> clusteredFiles = Arrays.stream(fileStatuses).filter(entry -> entry.getPath().getName().contains(replaceCommitInstant.getTimestamp()))
+          .map(fileStatus -> partitionPath + "/" + fileStatus.getPath().getName()).collect(Collectors.toList());
+      assertEquals(clusteredFiles, filesFromReplaceCommit);
+    }
+  }
+
+  @Test
   public void testRolblackOfRegularCommitWithPendingReplaceCommitInTimeline() throws Exception {
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
@@ -1708,18 +1754,22 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     return allRecords.getLeft().getLeft();
   }
 
+  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields) throws IOException {
+    return testInsertTwoBatches(populateMetaFields, "2015/03/16");
+  }
+
   /**
    * This method returns following three items:
    * 1. List of all HoodieRecord written in the two batches of insert.
    * 2. Commit instants of the two batches.
    * 3. List of new file group ids that were written in the two batches.
    */
-  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields) throws IOException {
+  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields, String partitionPath) throws IOException {
     // create config to not update small files.
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false, populateMetaFields,
         populateMetaFields ? new Properties() : getPropertiesForKeyGen());
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    dataGen = new HoodieTestDataGenerator(new String[] {"2015/03/16"});
+    dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
     String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
     List<WriteStatus> statuses1 = writeAndVerifyBatch(client, records1, commitTime1, populateMetaFields);

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.TransactionUtils;
@@ -37,10 +39,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -356,6 +361,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     LOG.info("Starting clustering at " + clusteringInstant);
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = table.cluster(context, clusteringInstant);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusteringMetadata = writeMetadata.clone(HoodieJavaRDD.getJavaRDD(writeMetadata.getWriteStatuses()));
+    // Validation has to be done after cloning. if not, it could result in dereferencing the write status twice which means clustering could get executed twice.
+    validateClusteringCommit(clusteringMetadata, clusteringInstant, table);
     // TODO : Where is shouldComplete used ?
     if (shouldComplete && clusteringMetadata.getCommitMetadata().isPresent()) {
       completeTableService(TableServiceType.CLUSTER, clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant);
@@ -401,6 +408,19 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       );
     }
     LOG.info("Clustering successfully on commit " + clusteringCommitTime);
+  }
+
+  private void validateClusteringCommit(HoodieWriteMetadata<JavaRDD<WriteStatus>> clusteringMetadata, String clusteringCommitTime, HoodieTable table) {
+    if (clusteringMetadata.getWriteStatuses().isEmpty()) {
+      HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
+              table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(clusteringCommitTime))
+          .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
+              "Unable to read clustering plan for instant: " + clusteringCommitTime));
+      throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + clusteringCommitTime
+          + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
+          + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()
+          + " write statuses");
+    }
   }
 
   private void updateTableMetadata(HoodieTable table, HoodieCommitMetadata commitMetadata,
@@ -460,8 +480,19 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
     // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
     HoodieTable table = createTable(config, hadoopConf);
-    TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-        Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), false, this.pendingInflightAndRequestedInstants);
+    Timer.Context conflictResolutionTimer = metrics.getConflictResolutionCtx();
+    try {
+      TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
+          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), false, this.pendingInflightAndRequestedInstants);
+      metrics.emitConflictResolutionSuccessful();
+    } catch (HoodieWriteConflictException e) {
+      metrics.emitConflictResolutionFailed();
+      throw e;
+    } finally {
+      if (conflictResolutionTimer != null) {
+        conflictResolutionTimer.stop();
+      }
+    }
   }
 
   @Override

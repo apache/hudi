@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieWriterUtils;
 import org.apache.hudi.async.AsyncClusteringService;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.async.HoodieAsyncService;
@@ -76,6 +77,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -651,6 +653,9 @@ public class HoodieDeltaStreamer implements Serializable {
                 + cfg.baseFileFormat);
         cfg.baseFileFormat = baseFileFormat;
         this.cfg.baseFileFormat = baseFileFormat;
+        Map<String,String> propsToValidate = new HashMap<>();
+        properties.get().forEach((k,v) -> propsToValidate.put(k.toString(),v.toString()));
+        HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
         if (cfg.baseFileFormat == null) {

@@ -18,17 +18,20 @@
 
 package org.apache.hudi.common.table.cdc;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.exception.HoodieException;
-
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Utilities for change log capture.
+ */
 public class HoodieCDCUtils {
 
   public static final String CDC_LOGFILE_SUFFIX = "-cdc";

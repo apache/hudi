@@ -20,6 +20,9 @@ package org.apache.hudi.common.table.cdc;
 
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
+/**
+ * Enumeration of change log operation.
+ */
 public enum HoodieCDCOperation {
   INSERT("i"),
   UPDATE("u"),
