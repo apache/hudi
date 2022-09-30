@@ -886,7 +886,7 @@ Hudi cannot guarantee uniqueness of key, since older writes could have had dupli
 support virtual keys for all built-in key generators on Copy-On-Write tables. Supporting all key generators on Merge-On-Read table
 would entail reading all fields out of base and delta logs, sacrificing core columnar query performance, which will be prohibitively expensive
 for users. Thus, we support only simple key generators (the default key generator, where both record key and partition path refer
-to an existing field ) for now.</p><h4>Supported Key Generators with CopyOnWrite(COW) table:</h4><p>SimpleKeyGenerator, ComplexKeyGenerator, CustomKeyGenerator, TimestampBasedKeyGenerator and NonPartitionedKeyGenerator. </p><h4>Supported Key Generators with MergeOnRead(MOR) table:</h4><p>SimpleKeyGenerator</p><h4>Supported Index types:</h4><p>Only &quot;SIMPLE&quot; and &quot;GLOBAL_SIMPLE&quot; index types are supported in the first cut. We plan to add support for other index
+to an existing field ) for now.</p><h4>Supported Key Generators with CopyOnWrite(COW) table:</h4><p>SimpleKeyGenerator, ComplexKeyGenerator, CustomKeyGenerator, TimestampBasedKeyGenerator and NonpartitionedKeyGenerator. </p><h4>Supported Key Generators with MergeOnRead(MOR) table:</h4><p>SimpleKeyGenerator</p><h4>Supported Index types:</h4><p>Only &quot;SIMPLE&quot; and &quot;GLOBAL_SIMPLE&quot; index types are supported in the first cut. We plan to add support for other index
 (BLOOM, etc) in future releases. </p><h3>Supported Operations</h3><p>All existing features are supported for a hudi table with virtual keys, except the incremental
 queries. Which means, cleaning, archiving, metadata table, clustering, etc can be enabled for a hudi table with
 virtual keys enabled. So, you are able to merely use Hudi as a transactional table format with all the awesome
@@ -1172,7 +1172,7 @@ complex partition paths involving regular fields and timestamp based fields. It 
 in a specific format. The format should be &quot;field1:PartitionKeyType1,field2:PartitionKeyType2...&quot;</p><p>The complete partition path is created as
 <code>&lt;value for field1 basis PartitionKeyType1&gt;/&lt;value for field2 basis PartitionKeyType2&gt; </code>
 and so on. Each partition key type could either be SIMPLE or TIMESTAMP.</p><p>Example config value: <code>“field_3:simple,field_5:timestamp”</code></p><p>RecordKey config value is either single field incase of SimpleKeyGenerator or a comma separate field names if referring to ComplexKeyGenerator.
-Eg: “col1” or “col3,col4”.</p><h3><a href="https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java">NonPartitionedKeyGenerator</a></h3><p>If your hudi dataset is not partitioned, you could use this “NonPartitionedKeyGenerator” which will return an empty
+Eg: “col1” or “col3,col4”.</p><h3><a href="https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java">NonpartitionedKeyGenerator</a></h3><p>If your hudi dataset is not partitioned, you could use this “NonpartitionedKeyGenerator” which will return an empty
 partition for all records. In other words, all records go to the same partition (which is empty “”) </p><p>Hope this blog gave you a good understanding of different types of Key Generators available in Apache Hudi. Thanks for your continued support for Hudi&#x27;s community.</p>]]></content:encoded>
         </item>
         <item>
