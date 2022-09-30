@@ -263,14 +263,14 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-	final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new Server() : new Server(new QueuedThreadPool(timelineServerConf.numThreads));
+    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new Server() : new Server(new QueuedThreadPool(timelineServerConf.numThreads));
 
-	app = Javalin.create(c -> {
-	  c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
-	  c.server(() -> server);
-	});
+    app = Javalin.create(c -> {
+      c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
+      c.server(() -> server);
+    });
 
-	requestHandler = new RequestHandler(
+    requestHandler = new RequestHandler(
         app, conf, timelineServerConf, context, fs, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
