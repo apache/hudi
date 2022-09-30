@@ -443,6 +443,23 @@
       <artifactId>aws-java-sdk-sqs</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
+
+    <!-- start: GCS Incremental Ingestion -->
+    <dependency>
+      <groupId>com.google.cloud</groupId>
+      <artifactId>google-cloud-pubsub</artifactId>
+      <version>${google.cloud.pubsub.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.cloud.bigdataoss</groupId>
+      <artifactId>gcs-connector</artifactId>
+      <version>${gcs.connector.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- end: GCS Incremental Ingestion -->
     
     <!-- Hive - Test -->
     <dependency>
