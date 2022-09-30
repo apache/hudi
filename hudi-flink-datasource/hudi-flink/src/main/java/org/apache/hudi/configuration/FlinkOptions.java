@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -122,6 +123,10 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 
+  // ------------------------------------------------------------------------
+  //  Changelog Capture Options
+  // ------------------------------------------------------------------------
+
   public static final ConfigOption<Boolean> CHANGELOG_ENABLED = ConfigOptions
       .key("changelog.enabled")
       .booleanType()
@@ -132,6 +137,23 @@ public class FlinkOptions extends HoodieConfig {
           + "2). The source try to emit every changes of a record.\n"
           + "The semantics is best effort because the compaction job would finally merge all changes of a record into one.\n"
           + " default false to have UPSERT semantics");
+
+  public static final ConfigOption<Boolean> CDC_ENABLED = ConfigOptions
+      .key("cdc.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withFallbackKeys(HoodieTableConfig.CDC_ENABLED.key())
+      .withDescription("When enable, persist the change data if necessary, and can be queried as a CDC query mode");
+
+  public static final ConfigOption<String> SUPPLEMENTAL_LOGGING_MODE = ConfigOptions
+      .key("cdc.supplemental.logging.mode")
+      .stringType()
+      .defaultValue("cdc_data_before_after") // default record all the change log images
+      .withFallbackKeys(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key())
+      .withDescription("The supplemental logging mode:"
+          + "1) 'cdc_op_key': persist the 'op' and the record key only,"
+          + "2) 'cdc_data_before': persist the additional 'before' image,"
+          + "3) 'cdc_data_before_after': persist the 'before' and 'after' images at the same time");
 
   // ------------------------------------------------------------------------
   //  Metadata table Options
