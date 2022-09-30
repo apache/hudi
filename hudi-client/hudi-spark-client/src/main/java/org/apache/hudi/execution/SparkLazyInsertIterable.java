@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -29,11 +30,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
-import org.apache.hudi.util.QueueBasedExecutorFactory;
-
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
 
@@ -78,26 +77,26 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
   @Override
   protected List<WriteStatus> computeNext() {
     // Executor service used for launching writer thread.
-    HoodieExecutor<?, ?, List<WriteStatus>> bufferedIteratorExecutor = null;
     try {
       Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
       if (useWriterSchema) {
         schema = HoodieAvroUtils.addMetadataFields(schema);
       }
 
-      bufferedIteratorExecutor = QueueBasedExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(),
-          getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
+      CopyOnWriteInsertHandler insertHandler = getInsertHandler();
+      Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> transformer = getTransformFunction(schema, hoodieConfig);
 
-      final List<WriteStatus> result = bufferedIteratorExecutor.execute();
-      assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
-      return result;
+      // TODO elaborate
+      while (inputItr.hasNext()) {
+        HoodieRecord<T> record = inputItr.next();
+        HoodieInsertValueGenResult<HoodieRecord> transformed = transformer.apply(record);
+
+        insertHandler.consumeOneRecord(transformed);
+      }
+
+      return insertHandler.getResult();
     } catch (Exception e) {
       throw new HoodieException(e);
-    } finally {
-      if (null != bufferedIteratorExecutor) {
-        bufferedIteratorExecutor.shutdownNow();
-        bufferedIteratorExecutor.awaitTermination();
-      }
     }
   }
 }
