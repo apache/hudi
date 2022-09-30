@@ -47,8 +47,8 @@ are expected to be comma separated in the config value. For example ```"Hoodie.d
 ### [GlobalDeleteKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/GlobalDeleteKeyGenerator.java)
 Global index deletes do not require partition value. So this key generator avoids using partition value for generating HoodieKey.
 
-### [NonPartitionedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java)
-If your hudi dataset is not partitioned, you could use this “NonPartitionedKeyGenerator” which will return an empty
+### [NonpartitionedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java)
+If your hudi dataset is not partitioned, you could use this “NonpartitionedKeyGenerator” which will return an empty
 partition for all records. In other words, all records go to the same partition (which is empty “”)
 
 ### [CustomKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/CustomKeyGenerator.java)
