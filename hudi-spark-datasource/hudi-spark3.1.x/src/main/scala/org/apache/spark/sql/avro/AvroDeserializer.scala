@@ -69,27 +69,33 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
   private val timestampRebaseFunc = createTimestampRebaseFuncInRead(
     datetimeRebaseMode, "Avro")
 
-  def deserialize(data: Any): Option[Any] = rootCatalystType match {
+  private val converter: Any => Option[Any] = rootCatalystType match {
     // A shortcut for empty schema.
     case st: StructType if st.isEmpty =>
-      Some(InternalRow.empty)
+      (data: Any) => Some(InternalRow.empty)
 
     case st: StructType =>
       val resultRow = new SpecificInternalRow(st.map(_.dataType))
       val fieldUpdater = new RowUpdater(resultRow)
       val applyFilters = filters.skipRow(resultRow, _)
       val writer = getRecordWriter(rootAvroType, st, Nil, applyFilters)
-      val record = data.asInstanceOf[GenericRecord]
-      val skipRow = writer(fieldUpdater, record)
-      if (skipRow) None else Some(resultRow)
+      (data: Any) => {
+        val record = data.asInstanceOf[GenericRecord]
+        val skipRow = writer(fieldUpdater, record)
+        if (skipRow) None else Some(resultRow)
+      }
 
     case _ =>
       val tmpRow = new SpecificInternalRow(Seq(rootCatalystType))
       val fieldUpdater = new RowUpdater(tmpRow)
       val writer = newWriter(rootAvroType, rootCatalystType, Nil)
-      writer(fieldUpdater, 0, data)
-      Some(tmpRow.get(0, rootCatalystType))
+      (data: Any) => {
+        writer(fieldUpdater, 0, data)
+        Some(tmpRow.get(0, rootCatalystType))
+      }
   }
+
+  def deserialize(data: Any): Option[Any] = converter(data)
 
   /**
    * Creates a writer to write avro values to Catalyst values at the given ordinal with the given
