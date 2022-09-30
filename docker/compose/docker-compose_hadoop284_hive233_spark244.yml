@@ -205,81 +205,83 @@ services:
       - ALLOW_PLAINTEXT_LISTENER=yes
       - KAFKA_ADVERTISED_HOST_NAME=kafkabroker
 
-  #  presto-coordinator-1:
-  #    container_name: presto-coordinator-1
-  #    hostname: presto-coordinator-1
-  #    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.217:linux-arm64-0.10.1
-  #    platform: linux/arm64
-  #    ports:
-  #      - "8090:8090"
-  #      # JVM debugging port (will be mapped to a random port on host)
-  #      - "5005"
-  #    environment:
-  #      - PRESTO_JVM_MAX_HEAP=512M
-  #      - PRESTO_QUERY_MAX_MEMORY=1GB
-  #      - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
-  #      - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
-  #      - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
-  #      - TERM=xterm
-  #    links:
-  #      - "hivemetastore"
-  #    volumes:
-  #      - ${HUDI_WS}:/var/hoodie/ws
-  #    command: coordinator
+  presto-coordinator-1:
+    container_name: presto-coordinator-1
+    hostname: presto-coordinator-1
+#    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
+    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.217:linux-arm64-0.10.1
+    platform: linux/arm64
+    ports:
+      - "8090:8090"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
+    environment:
+      - PRESTO_JVM_MAX_HEAP=512M
+      - PRESTO_QUERY_MAX_MEMORY=1GB
+      - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
+      - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
+      - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
+      - TERM=xterm
+    links:
+      - "hivemetastore"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: coordinator
 
-  #  presto-worker-1:
-  #    container_name: presto-worker-1
-  #    hostname: presto-worker-1
-  #    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.217:linux-arm64-0.10.1
-  #    platform: linux/arm64
-  #    depends_on: [ "presto-coordinator-1" ]
-  #    environment:
-  #      - PRESTO_JVM_MAX_HEAP=512M
-  #      - PRESTO_QUERY_MAX_MEMORY=1GB
-  #      - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
-  #      - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
-  #      - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
-  #      - TERM=xterm
-  #    links:
-  #      - "hivemetastore"
-  #      - "hiveserver"
-  #      - "hive-metastore-postgresql"
-  #      - "namenode"
-  #    volumes:
-  #      - ${HUDI_WS}:/var/hoodie/ws
-  #    command: worker
-  #
-  #  trino-coordinator-1:
-  #    container_name: trino-coordinator-1
-  #    hostname: trino-coordinator-1
-  #    image: apachehudi/hudi-hadoop_2.8.4-trinocoordinator_368:latest
-  #    ports:
-  #      - "8091:8091"
-  #      # JVM debugging port (will be mapped to a random port on host)
-  #      - "5005"
-  #    links:
-  #      - "hivemetastore"
-  #    volumes:
-  #      - ${HUDI_WS}:/var/hoodie/ws
-  #    command: http://trino-coordinator-1:8091 trino-coordinator-1
+  presto-worker-1:
+    container_name: presto-worker-1
+    hostname: presto-worker-1
+    #image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
+    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.217:linux-arm64-0.10.1
+    platform: linux/arm64
+    depends_on: [ "presto-coordinator-1" ]
+    environment:
+      - PRESTO_JVM_MAX_HEAP=512M
+      - PRESTO_QUERY_MAX_MEMORY=1GB
+      - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
+      - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
+      - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
+      - TERM=xterm
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: worker
 
-  #  trino-worker-1:
-  #    container_name: trino-worker-1
-  #    hostname: trino-worker-1
-  #    image: apachehudi/hudi-hadoop_2.8.4-trinoworker_368:latest
-  #    depends_on: [ "trino-coordinator-1" ]
-  #    ports:
-  #      - "8092:8092"
-  #      # JVM debugging port (will be mapped to a random port on host)
-  #      - "5005"
-  #    links:
-  #      - "hivemetastore"
-  #      - "hiveserver"
-  #      - "hive-metastore-postgresql"
-  #      - "namenode"
-  #    volumes:
-  #      - ${HUDI_WS}:/var/hoodie/ws
-  #    command: http://trino-coordinator-1:8091 trino-worker-1
+  trino-coordinator-1:
+    container_name: trino-coordinator-1
+    hostname: trino-coordinator-1
+    image: apachehudi/hudi-hadoop_2.8.4-trinocoordinator_368:latest
+    ports:
+      - "8091:8091"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
+    links:
+      - "hivemetastore"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: http://trino-coordinator-1:8091 trino-coordinator-1
+
+  trino-worker-1:
+    container_name: trino-worker-1
+    hostname: trino-worker-1
+    image: apachehudi/hudi-hadoop_2.8.4-trinoworker_368:latest
+    depends_on: [ "trino-coordinator-1" ]
+    ports:
+      - "8092:8092"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: http://trino-coordinator-1:8091 trino-worker-1
 
 
   adhoc-1:
@@ -302,8 +304,8 @@ services:
       - "hiveserver"
       - "hive-metastore-postgresql"
       - "namenode"
-      #- "presto-coordinator-1"
-      #- "trino-coordinator-1"
+      - "presto-coordinator-1"
+      - "trino-coordinator-1"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
 
@@ -326,8 +328,8 @@ services:
       - "hiveserver"
       - "hive-metastore-postgresql"
       - "namenode"
-      #- "presto-coordinator-1"
-      #- "trino-coordinator-1"
+      - "presto-coordinator-1"
+      - "trino-coordinator-1"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
 
