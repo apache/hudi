@@ -43,6 +43,7 @@ import org.apache.hadoop.conf.Configuration;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>> {
@@ -91,13 +92,16 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
       ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-      wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
-          Option.of(new UpdateHandler(mergeHandle)), record -> {
+
+      Function<GenericRecord, GenericRecord> transformer = record -> {
         if (!externalSchemaTransformation) {
           return record;
         }
         return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) record);
-      });
+      };
+
+      wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), readerIterator,
+          new UpdateHandler(mergeHandle), transformer, null);
       wrapper.execute();
     } catch (Exception e) {
       throw new HoodieException(e);

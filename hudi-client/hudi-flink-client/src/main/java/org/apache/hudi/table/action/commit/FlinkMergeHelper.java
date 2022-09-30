@@ -42,6 +42,7 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.function.Function;
 import java.util.List;
 
 /**
@@ -93,13 +94,16 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
       ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-      wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
-          Option.of(new UpdateHandler(mergeHandle)), record -> {
+
+      Function<GenericRecord, GenericRecord> transformer = record -> {
         if (!externalSchemaTransformation) {
           return record;
         }
         return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) record);
-      });
+      };
+
+      wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), readerIterator,
+          new UpdateHandler(mergeHandle), transformer, null);
       wrapper.execute();
     } catch (Exception e) {
       throw new HoodieException(e);
