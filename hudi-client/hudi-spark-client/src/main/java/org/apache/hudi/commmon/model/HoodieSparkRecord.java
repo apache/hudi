@@ -41,7 +41,6 @@ import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
 import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
-import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.hudi.HoodieSparkRecordSerializer;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
@@ -68,25 +67,24 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieSparkRecord(InternalRow data, StructType schema) {
     super(null, data);
     this.structType = schema;
-    force2UnsafeRow();
+    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema);
   }
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema) {
     super(key, data);
     this.structType = schema;
-    force2UnsafeRow();
+    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema);
   }
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation) {
     super(key, data, operation);
     this.structType = schema;
-    force2UnsafeRow();
+    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema);
   }
 
   public HoodieSparkRecord(HoodieSparkRecord record) {
     super(record);
     this.structType = record.structType;
-    force2UnsafeRow();
   }
 
   @Override
@@ -169,7 +167,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
     InternalRow rewriteRow = HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, getStructType(), newStructType, renameCols);
     UnsafeProjection unsafeConvert = HoodieInternalRowUtils.getCachedUnsafeConvert(newStructType);
-    InternalRow resultRow = unsafeConvert.apply(rewriteRow);
+    InternalRow resultRow = unsafeConvert.apply(rewriteRow).copy();
     UTF8String[] metaFields = extractMetaField(newStructType);
     if (metaFields.length > 0) {
       resultRow = new HoodieInternalRow(metaFields, data, true);
@@ -289,12 +287,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
         .filter(f -> HoodieCatalystExpressionUtils$.MODULE$.existField(structType, f))
         .map(UTF8String::fromString)
         .toArray(UTF8String[]::new);
-  }
-
-  private void force2UnsafeRow() {
-    if (this.data != null && !(this.data instanceof UnsafeRow || this.data instanceof HoodieInternalRow)) {
-      this.data = HoodieInternalRowUtils.getCachedUnsafeConvert(structType).apply(this.data);
-    }
   }
 
   /**

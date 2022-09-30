@@ -32,6 +32,7 @@ import org.apache.parquet.hadoop.api.ReadSupport;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.InputFile;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.StructType;
@@ -86,13 +87,20 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     conf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(), (Boolean) SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()));
     conf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), (Boolean) SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()));
     InputFile inputFile = HadoopInputFile.fromPath(path, conf);
-    ParquetReader reader = new ParquetReader.Builder<InternalRow>(inputFile) {
+    ParquetReader<InternalRow> reader = new ParquetReader.Builder<InternalRow>(inputFile) {
       @Override
       protected ReadSupport getReadSupport() {
         return new ParquetReadSupport();
       }
     }.withConf(conf).build();
-    ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader, InternalRow::copy);
+    ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader,
+        row -> {
+          if (row instanceof UnsafeRow) {
+            return row.copy();
+          } else {
+            return HoodieInternalRowUtils.getCachedUnsafeConvert(requestedStructType).apply(row).copy();
+          }
+        });
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
   }
