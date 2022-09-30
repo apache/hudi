@@ -23,7 +23,8 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -32,12 +33,15 @@ import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * InProcess level lock. This {@link LockProvider} implementation is to
+ * This {@link LockProvider} implementation is to
  * guard table from concurrent operations happening in the local JVM process.
+ * A separate lock is maintained per "table basepath".
  * <p>
  * Note: This Lock provider implementation doesn't allow lock reentrancy.
  * Attempting to reacquire the lock from the same thread will throw
@@ -47,11 +51,16 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
 
   private static final Logger LOG = LogManager.getLogger(InProcessLockProvider.class);
-  private static final ReentrantReadWriteLock LOCK = new ReentrantReadWriteLock();
+  public static final Map<String, ReentrantReadWriteLock> LOCK_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
+  private final ReentrantReadWriteLock lock;
+  private final String basePath;
   private final long maxWaitTimeMillis;
 
   public InProcessLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     TypedProperties typedProperties = lockConfiguration.getConfig();
+    basePath = lockConfiguration.getConfig().getProperty(HoodieWriteConfig.BASE_PATH.key());
+    ValidationUtils.checkArgument(basePath != null);
+    lock = LOCK_INSTANCE_PER_BASEPATH.computeIfAbsent(basePath, (ignore) -> new ReentrantReadWriteLock());
     maxWaitTimeMillis = typedProperties.getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
         LockConfiguration.DEFAULT_ACQUIRE_LOCK_WAIT_TIMEOUT_MS);
   }
@@ -59,10 +68,10 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   @Override
   public void lock() {
     LOG.info(getLogMessage(LockState.ACQUIRING));
-    if (LOCK.isWriteLockedByCurrentThread()) {
+    if (lock.isWriteLockedByCurrentThread()) {
       throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
     }
-    LOCK.writeLock().lock();
+    lock.writeLock().lock();
     LOG.info(getLogMessage(LockState.ACQUIRED));
   }
 
@@ -74,13 +83,13 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   @Override
   public boolean tryLock(long time, @NotNull TimeUnit unit) {
     LOG.info(getLogMessage(LockState.ACQUIRING));
-    if (LOCK.isWriteLockedByCurrentThread()) {
+    if (lock.isWriteLockedByCurrentThread()) {
       throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
     }
 
     boolean isLockAcquired;
     try {
-      isLockAcquired = LOCK.writeLock().tryLock(time, unit);
+      isLockAcquired = lock.writeLock().tryLock(time, unit);
     } catch (InterruptedException e) {
       throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_ACQUIRE));
     }
@@ -93,8 +102,8 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   public void unlock() {
     LOG.info(getLogMessage(LockState.RELEASING));
     try {
-      if (LOCK.isWriteLockedByCurrentThread()) {
-        LOCK.writeLock().unlock();
+      if (lock.isWriteLockedByCurrentThread()) {
+        lock.writeLock().unlock();
         LOG.info(getLogMessage(LockState.RELEASED));
       } else {
         LOG.warn("Cannot unlock because the current thread does not hold the lock.");
@@ -106,18 +115,19 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
 
   @Override
   public ReentrantReadWriteLock getLock() {
-    return LOCK;
+    return lock;
   }
 
   @Override
   public void close() {
-    if (LOCK.isWriteLockedByCurrentThread()) {
-      LOCK.writeLock().unlock();
+    if (lock.isWriteLockedByCurrentThread()) {
+      lock.writeLock().unlock();
     }
+    LOG.info(getLogMessage(LockState.ALREADY_RELEASED));
+    LOCK_INSTANCE_PER_BASEPATH.remove(basePath);
   }
 
   private String getLogMessage(LockState state) {
-    return StringUtils.join("Thread ", String.valueOf(Thread.currentThread().getName()), " ",
-        state.name(), " in-process lock.");
+    return String.format("Base Path %s, Lock Instance %s, Thread %s, In-process lock state %s", basePath, getLock().toString(), Thread.currentThread().getName(), state.name());
   }
 }
