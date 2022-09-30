@@ -136,6 +136,7 @@ public class MergeOnReadInputFormat
    * Flag saying whether the input format has been closed.
    */
   private boolean closed = true;
+  private boolean opened = false;
 
   private MergeOnReadInputFormat(
       Configuration conf,
@@ -212,6 +213,7 @@ public class MergeOnReadInputFormat
           + "merge type: " + split.getMergeType());
     }
     mayShiftInputSplit(split);
+    this.opened = true;
   }
 
   @Override
@@ -259,10 +261,19 @@ public class MergeOnReadInputFormat
     }
     this.iterator = null;
     this.closed = true;
+    this.opened = false;
   }
 
   public boolean isClosed() {
     return this.closed;
+  }
+
+  public void setOpening() {
+    this.closed = false;
+  }
+
+  public boolean isOpened() {
+    return this.opened;
   }
 
   // -------------------------------------------------------------------------
