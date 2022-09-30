@@ -322,7 +322,7 @@ For those on hudi versions < 0.6.0, you can use the following key generator clas
  - Simple record key and custom timestamp based partition path (with optional hive style partitioning) - `TimestampBasedKeyGenerator.java`
  - Composite record keys (combination of multiple fields) and composite partition paths - `ComplexKeyGenerator.java`
  - Composite record keys and timestamp based partition paths (composite also supported) - You might need to move to 0.6.0 and use `CustomKeyGenerator.java` class
- - Non partitioned table - `NonPartitionedKeyGenerator.java`. Non-partitioned tables can currently only have a single key column, [HUDI-1053](https://issues.apache.org/jira/browse/HUDI-1053)
+ - Non partitioned table - `NonpartitionedKeyGenerator.java`. Non-partitioned tables can currently only have a single key column, [HUDI-1053](https://issues.apache.org/jira/browse/HUDI-1053)
  
  
 ## Syncing to Hive

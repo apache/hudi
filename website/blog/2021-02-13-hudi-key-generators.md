@@ -188,8 +188,8 @@ Example config value: ```“field_3:simple,field_5:timestamp”```
 RecordKey config value is either single field incase of SimpleKeyGenerator or a comma separate field names if referring to ComplexKeyGenerator.
 Eg: “col1” or “col3,col4”.
 
-### [NonPartitionedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java)
-If your hudi dataset is not partitioned, you could use this “NonPartitionedKeyGenerator” which will return an empty 
+### [NonpartitionedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java)
+If your hudi dataset is not partitioned, you could use this “NonpartitionedKeyGenerator” which will return an empty 
 partition for all records. In other words, all records go to the same partition (which is empty “”) 
 
 Hope this blog gave you a good understanding of different types of Key Generators available in Apache Hudi. Thanks for your continued support for Hudi's community. 

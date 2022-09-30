@@ -41,7 +41,7 @@ for users. Thus, we support only simple key generators (the default key generato
 to an existing field ) for now.
 
 #### Supported Key Generators with CopyOnWrite(COW) table:
-SimpleKeyGenerator, ComplexKeyGenerator, CustomKeyGenerator, TimestampBasedKeyGenerator and NonPartitionedKeyGenerator. 
+SimpleKeyGenerator, ComplexKeyGenerator, CustomKeyGenerator, TimestampBasedKeyGenerator and NonpartitionedKeyGenerator. 
 
 #### Supported Key Generators with MergeOnRead(MOR) table:
 SimpleKeyGenerator
