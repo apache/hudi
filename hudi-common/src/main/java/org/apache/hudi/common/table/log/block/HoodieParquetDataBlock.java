@@ -143,7 +143,6 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     //       is appropriately carried over
     Configuration inlineConf = new Configuration(blockContentLoc.getHadoopConf());
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-    inlineConf.set("spark.sql.parquet.writeLegacyFormat", "true");
 
     Path inlineLogFilePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),

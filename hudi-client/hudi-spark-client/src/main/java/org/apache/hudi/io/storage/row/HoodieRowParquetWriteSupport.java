@@ -77,10 +77,6 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
     return new WriteSupport.FinalizedWriteContext(extraMetaData);
   }
 
-  public void enableLegacyFormat() {
-    hadoopConf.set("spark.sql.parquet.writeLegacyFormat", "true");
-  }
-
   public void add(UTF8String recordKey) {
     if (this.bloomFilter == null) {
       return;
