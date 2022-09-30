@@ -100,6 +100,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   public static final String ALL_REPLACED_FILEGROUPS_PARTITION =
       String.format("%s/%s", BASE_URL, "filegroups/replaced/partition/");
+  
   public static final String PENDING_CLUSTERING_FILEGROUPS = String.format("%s/%s", BASE_URL, "clustering/pending/");
 
 
