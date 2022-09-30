@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
@@ -57,6 +58,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+// TODO unify w/ Flink, Java impls
 public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     BaseMergeHelper<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
@@ -74,24 +76,31 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
   @Override
   public void runMerge(HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
                        HoodieMergeHandle<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> mergeHandle) throws IOException {
-    final boolean externalSchemaTransformation = table.getConfig().shouldUseExternalSchemaTransformation();
-    Configuration cfgForHoodieFile = new Configuration(table.getHadoopConf());
+    HoodieWriteConfig tableConfig = table.getConfig();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
+
+    Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
+    Schema readSchema;
 
     final GenericDatumWriter<GenericRecord> gWriter;
     final GenericDatumReader<GenericRecord> gReader;
-    Schema readSchema;
+
+    Configuration hadoopConf = new Configuration(table.getHadoopConf());
+    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.getFileReader(hadoopConf, mergeHandle.getOldFilePath());
+
+    boolean externalSchemaTransformation = tableConfig.shouldUseExternalSchemaTransformation();
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
-      readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
+      readSchema = reader.getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
-      gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetaFields());
+      gReader = new GenericDatumReader<>(readSchema, writerSchema);
     } else {
       gReader = null;
       gWriter = null;
-      readSchema = mergeHandle.getWriterSchemaWithMetaFields();
+      readSchema = writerSchema;
     }
 
-    Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(table.getConfig().getInternalSchema());
+    Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(tableConfig.getInternalSchema());
+
     boolean needToReWriteRecord = false;
     Map<String, String> renameCols = new HashMap<>();
     // TODO support bootstrap
@@ -99,7 +108,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
       // check implicitly add columns, and position reorder(spark sql may change cols order)
       InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(readSchema, querySchemaOpt.get());
       long commitInstantTime = Long.valueOf(FSUtils.getCommitTime(mergeHandle.getOldFilePath().getName()));
-      InternalSchema writeInternalSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, table.getMetaClient(), table.getConfig().getInternalSchemaCacheEnable());
+      InternalSchema writeInternalSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, table.getMetaClient(), tableConfig.getInternalSchemaCacheEnable());
       if (writeInternalSchema.isEmptySchema()) {
         throw new HoodieException(String.format("cannot find file schema for current commit %s", commitInstantTime));
       }
@@ -121,8 +130,6 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     }
 
     HoodieExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
-
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
@@ -138,7 +145,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
       ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
 
-      wrapper = QueueBasedExecutorFactory.create(table.getConfig(), readerIterator, new UpdateHandler(mergeHandle), record -> {
+      wrapper = QueueBasedExecutorFactory.create(tableConfig, readerIterator, new UpdateHandler(mergeHandle), record -> {
         if (!externalSchemaTransformation) {
           return record;
         }
