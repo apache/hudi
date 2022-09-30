@@ -511,6 +511,8 @@ class HoodieCDCRDD(
         val iter = loadFileSlice(fileSlice)
         iter.foreach { row =>
           val key = getRecordKey(row)
+          // Due to the reuse buffer mechanism of Spark serialization,
+          // we have to copy the serialized result if we need to retain its reference
           beforeImageRecords.put(key, serialize(row, copy = true))
         }
         // reset beforeImageFiles
