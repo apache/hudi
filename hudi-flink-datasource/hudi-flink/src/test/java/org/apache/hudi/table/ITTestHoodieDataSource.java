@@ -204,6 +204,73 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_MERGED);
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testHoodieSourceStreamRead(HoodieTableType tableType) throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    streamTableEnv.executeSql(createSource);
+
+    String createHoodieTable = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .end();
+    streamTableEnv.executeSql(createHoodieTable);
+    String insertInto = "insert into t1 select * from source";
+    // execute 2 times
+    execInsertSql(streamTableEnv, insertInto);
+    // remember the commit
+    String specifiedCommit = TestUtils.getFirstCompleteInstant(tempFile.getAbsolutePath());
+    // now we consume starting from the oldest commit
+    String createHoodieTable2 = sql("t2")
+         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+         .option(FlinkOptions.READ_AS_STREAMING, true)
+         .option(FlinkOptions.TABLE_TYPE, tableType)
+         .option(FlinkOptions.READ_START_COMMIT, specifiedCommit)
+         .option("watermark.expression", "WATERMARK FOR `ts` AS ts - INTERVAL '5' SECOND")
+         .end();
+    streamTableEnv.executeSql(createHoodieTable2);
+    List<Row> rows = execSelectSql(streamTableEnv, "select * from t2", 10);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testHoodieSourceWithWaterMark(HoodieTableType tableType) throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source", "test_source_wm.data");
+    streamTableEnv.executeSql(createSource);
+
+    String createHoodieTable = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .end();
+    streamTableEnv.executeSql(createHoodieTable);
+    String insertInto = "insert into t1 select * from source";
+    // execute 2 times
+    execInsertSql(streamTableEnv, insertInto);
+    // remember the commit
+    String specifiedCommit = TestUtils.getFirstCompleteInstant(tempFile.getAbsolutePath());
+    // now we consume starting from the oldest commit
+    String createHoodieTable2 = sql("t2")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.READ_START_COMMIT, specifiedCommit)
+        .option("watermark.expression", "WATERMARK FOR ts AS ts - INTERVAL '1' HOUR")
+        .end();
+    streamTableEnv.executeSql(createHoodieTable2);
+    streamTableEnv.getConfig().getConfiguration().setString("execution.checkpointing.interval", "30s");
+    String aggSql = "select name, count(*) as cnt  from t2 group by name, tumble(`ts`, INTERVAL '30' second)";
+    //streamTableEnv.executeSql(aggSql).print();
+    //List<Row> rows = execSelectSql(streamTableEnv, aggSql, 10);
+    // all the data with same keys are appended within one data bucket and one log file,
+    // so when consume, the same keys are merged
+    //assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
   @Test
   void testStreamWriteBatchRead() {
     // create filesystem table named source

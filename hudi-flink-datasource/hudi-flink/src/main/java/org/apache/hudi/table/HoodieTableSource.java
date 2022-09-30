@@ -41,6 +41,8 @@ import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
+import org.apache.hudi.source.flip27.HoodieSource;
+import org.apache.hudi.source.flip27.HoodieSourceBuilder;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -54,8 +56,10 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
@@ -72,6 +76,7 @@ import org.apache.flink.table.connector.source.abilities.SupportsFilterPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsPartitionPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
+import org.apache.flink.table.connector.source.abilities.SupportsWatermarkPushDown;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter;
@@ -106,7 +111,8 @@ public class HoodieTableSource implements
     SupportsPartitionPushDown,
     SupportsProjectionPushDown,
     SupportsLimitPushDown,
-    SupportsFilterPushDown {
+    SupportsFilterPushDown,
+    SupportsWatermarkPushDown {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
 
   private static final int NO_LIMIT_CONSTANT = -1;
@@ -128,6 +134,8 @@ public class HoodieTableSource implements
   private List<ResolvedExpression> filters;
 
   private List<Map<String, String>> requiredPartitions;
+
+  protected @Nullable WatermarkStrategy<RowData> watermarkStrategy;
 
   public HoodieTableSource(
       ResolvedSchema schema,
@@ -164,6 +172,7 @@ public class HoodieTableSource implements
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
     this.fileIndex = FileIndex.instance(this.path, this.conf, this.tableRowType);
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
+    this.watermarkStrategy = null;
   }
 
   @Override
@@ -177,6 +186,9 @@ public class HoodieTableSource implements
 
       @Override
       public DataStream<RowData> produceDataStream(StreamExecutionEnvironment execEnv) {
+        if (watermarkStrategy != null) {
+          return hoodieSource(execEnv);
+        }
         @SuppressWarnings("unchecked")
         TypeInformation<RowData> typeInfo =
             (TypeInformation<RowData>) TypeInfoDataTypeConverter.fromDataTypeToTypeInfo(getProducedDataType());
@@ -199,6 +211,23 @@ public class HoodieTableSource implements
         }
       }
     };
+  }
+
+  public DataStream<RowData> hoodieSource(StreamExecutionEnvironment execEnv) {
+    InputFormat<RowData, ?> inputFormat = getInputFormat(conf.getBoolean(FlinkOptions.READ_AS_STREAMING));
+    HoodieSource hoodieSource = HoodieSourceBuilder.builder()
+        .boundedness(conf.getBoolean(FlinkOptions.READ_AS_STREAMING) ? Boundedness.CONTINUOUS_UNBOUNDED : Boundedness.BOUNDED)
+        .conf(conf)
+        .path(FilePathUtils.toFlinkPath(path))
+        .rowType(this.tableRowType)
+        .requiredPartitionPaths(getRequiredPartitionPaths())
+        .maxParallism(execEnv.getMaxParallelism())
+        .mergeOnReadInputFormat((MergeOnReadInputFormat) inputFormat)
+        .build();
+    if (watermarkStrategy == null) {
+      watermarkStrategy = WatermarkStrategy.noWatermarks();
+    }
+    return execEnv.fromSource(hoodieSource, watermarkStrategy, "hoodie_source");
   }
 
   @Override
@@ -509,5 +538,10 @@ public class HoodieTableSource implements
       return new FileStatus[0];
     }
     return fileIndex.getFilesInPartitions();
+  }
+
+  @Override
+  public void applyWatermark(WatermarkStrategy<RowData> watermarkStrategy) {
+    this.watermarkStrategy = watermarkStrategy;
   }
 }

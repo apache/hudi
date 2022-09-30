@@ -59,6 +59,7 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -132,6 +133,8 @@ public class MergeOnReadInputFormat
    */
   private boolean emitDelete;
 
+  private final int numRecordsPerBatch;
+
   /**
    * Flag saying whether the input format has been closed.
    */
@@ -153,6 +156,7 @@ public class MergeOnReadInputFormat
     // because we need to
     this.requiredPos = tableState.getRequiredPositions();
     this.limit = limit;
+    this.numRecordsPerBatch = conf.get(FlinkOptions.NUM_RECORDS_PER_BATCH);
     this.emitDelete = emitDelete;
   }
 
@@ -455,6 +459,31 @@ public class MergeOnReadInputFormat
         records.close();
       }
     };
+  }
+
+  public Iterator<RowData> readBatch() throws IOException {
+    List<RowData> result = new ArrayList<>(this.numRecordsPerBatch);
+    int remaining = this.numRecordsPerBatch;
+    RowData next = null;
+    while (!this.isClosed() && remaining-- > 0) {
+      if (!this.reachedEnd()) {
+        next = nextRecord(null);
+        result.add(next);
+      } else {
+        close();
+        break;
+      }
+    }
+
+    if (result.isEmpty()) {
+      return null;
+    }
+    return result.iterator();
+  }
+
+  public MergeOnReadInputFormat copy() {
+    return new MergeOnReadInputFormat(this.conf, this.tableState, this.fieldTypes,
+        this.defaultPartName, this.limit, this.emitDelete);
   }
 
   // -------------------------------------------------------------------------
