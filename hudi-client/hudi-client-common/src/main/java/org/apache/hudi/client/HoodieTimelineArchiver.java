@@ -72,7 +72,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -386,15 +385,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private Stream<HoodieInstant> getCleanInstantsToArchive() {
     HoodieTimeline cleanAndRollbackTimeline = table.getActiveTimeline()
         .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION, HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants();
-    return cleanAndRollbackTimeline.getInstants()
-        .collect(Collectors.groupingBy(HoodieInstant::getAction)).values().stream()
-        .map(hoodieInstants -> {
-          if (hoodieInstants.size() > this.maxInstantsToKeep) {
-            return hoodieInstants.subList(0, hoodieInstants.size() - this.minInstantsToKeep);
-          } else {
-            return new ArrayList<HoodieInstant>();
-          }
-        }).flatMap(Collection::stream);
+    List<HoodieInstant> cleanAdnRollbackInstants = cleanAndRollbackTimeline.getInstants().collect(Collectors.toList());
+    return cleanAdnRollbackInstants.subList(0, cleanAdnRollbackInstants.size() - this.minInstantsToKeep).stream();
   }
 
   private Stream<HoodieInstant> getCommitInstantsToArchive() {
