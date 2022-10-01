@@ -42,6 +42,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
+import org.mortbay.log.Log;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -203,6 +204,13 @@ public class RepairsCommand {
         }
       }
     });
+  }
+
+  @ShellMethod(key = "repair cleanup empty commit metadata", value = "remove failed compaction from metadata")
+  public void removeFailedCompaction() {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
+    activeTimeline.filterCompletedInstants().getInstants().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> Log.warn("Empty Commit: " + hoodieInstant.toString()));
   }
 
   @ShellMethod(key = "repair migrate-partition-meta", value = "Migrate all partition meta file currently stored in text format "

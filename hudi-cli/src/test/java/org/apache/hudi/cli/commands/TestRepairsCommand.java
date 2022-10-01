@@ -45,6 +45,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SQLContext;
 import org.junit.jupiter.api.AfterEach;
@@ -54,6 +57,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+
+
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -65,6 +73,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
@@ -259,6 +268,51 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     assertEquals(0, metaClient.getActiveTimeline().filterInflightsAndRequested().getInstants().count());
   }
 
+  /**
+   * Testcase for "repair cleanup empty commit metadata"
+   *
+   */
+  @Test
+  public void testRemoveFailedCompactionAction() throws IOException {
+    HoodieCLI.conf = hadoopConf();
+
+    Configuration conf = HoodieCLI.conf;
+
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+
+    for (int i = 1; i < 20; i++) {
+      String timestamp = String.valueOf(i);
+      // Write corrupted requested Clean File
+      HoodieTestCommitMetadataGenerator.createCommitFile(tablePath, timestamp, conf);
+    }
+
+    metaClient.getActiveTimeline().getInstants().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.getTimestamp()) % 4 == 0).forEach(hoodieInstant ->{
+      System.out.println("Making this instant empty: " + hoodieInstant.getFileName());
+      metaClient.getActiveTimeline().deleteInstantFileIfExists(hoodieInstant);
+      metaClient.getActiveTimeline().createNewInstant(hoodieInstant);
+    });
+
+    final TestLogAppender appender = new TestLogAppender();
+    final Logger logger = (Logger) LogManager.getLogger(RepairsCommand.class);
+    try {
+      appender.start();
+      logger.addAppender(appender);
+      Object result = shell.evaluate(() -> "repair cleanup empty commit metadata");
+      assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+      final List<LogEvent> log = appender.getLog();
+      log.forEach(LoggingEvent -> {
+        System.out.println("VEXLER LOG:");
+        System.out.println(LoggingEvent.getMessage().toString());
+      });
+    } finally {
+      logger.removeAppender(appender);
+    }
+
+
+  }
+
+
+
   @Test
   public void testRepairDeprecatedPartition() throws IOException {
     tablePath = tablePath + "/repair_test/";
@@ -374,4 +428,23 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       assertEquals(totalRecs, totalRecsInOldPartition);
     }
   }
+
+  class TestLogAppender extends AbstractAppender {
+    private final List<LogEvent> log = new ArrayList<>();
+
+    protected TestLogAppender() {
+      super(UUID.randomUUID().toString(), null, null, false, null);
+    }
+
+    @Override
+    public void append(LogEvent event) {
+      log.add(event);
+    }
+
+    public List<LogEvent> getLog() {
+      return new ArrayList<LogEvent>(log);
+    }
+  }
 }
+
+
