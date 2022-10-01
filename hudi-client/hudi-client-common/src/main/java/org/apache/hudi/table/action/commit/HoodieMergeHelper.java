@@ -101,7 +101,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readerSchema, shouldRewriteInWriterSchema);
+        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader.getRecordIterator(readerSchema));
       } else if (existingRecordsTransformer.isPresent()) {
         readerIterator = new MappingIterator<>(reader.getRecordIterator(), existingRecordsTransformer.get());
       } else {

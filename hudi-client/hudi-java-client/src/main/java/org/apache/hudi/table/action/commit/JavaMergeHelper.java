@@ -44,6 +44,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
+// TODO remove
 public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>> {
 
@@ -84,7 +85,7 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
+        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader.getRecordIterator(readSchema));
       } else {
         readerIterator = reader.getRecordIterator(readSchema);
       }

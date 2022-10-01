@@ -47,6 +47,7 @@ import java.util.List;
 /**
  * Flink merge helper.
  */
+// TODO remove
 public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>> {
 
@@ -86,7 +87,7 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
+        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader.getRecordIterator(readSchema));
       } else {
         readerIterator = reader.getRecordIterator(readSchema);
       }
