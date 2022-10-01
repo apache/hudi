@@ -149,7 +149,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     }
   }
 
-  private Option<Pair<Schema, Map<String, String>>> tryEvolveSchema(Schema readerSchema,
+  private Option<Pair<Schema, Map<String, String>>> tryEvolveSchema(Schema writerSchema,
                                                                     HoodieBaseFile baseFile,
                                                                     HoodieWriteConfig writeConfig,
                                                                     HoodieTableMetaClient metaClient) {
@@ -157,7 +157,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
-      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(readerSchema, querySchemaOpt.get());
+      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema, querySchemaOpt.get());
       long commitInstantTime = Long.parseLong(baseFile.getCommitTime());
       InternalSchema writeInternalSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient, writeConfig.getInternalSchemaCacheEnable());
       if (writeInternalSchema.isEmptySchema()) {
@@ -176,14 +176,15 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
                 && Objects.equals(writeInternalSchema.findType(writerSchemaFieldId), querySchema.findType(querySchemaFieldId));
           })
           .collect(Collectors.toList());
-      Schema newReaderSchema = AvroInternalSchemaConverter
-          .convert(new InternalSchemaMerger(writeInternalSchema, querySchema, true, false, false).mergeSchema(), readerSchema.getName());
-      Schema writeSchemaFromFile = AvroInternalSchemaConverter.convert(writeInternalSchema, newReaderSchema.getName());
+      InternalSchema mergedSchema = new InternalSchemaMerger(writeInternalSchema, querySchema,
+          true, false, false).mergeSchema();
+      Schema newWriterSchema = AvroInternalSchemaConverter.convert(mergedSchema, writerSchema.getName());
+      Schema writeSchemaFromFile = AvroInternalSchemaConverter.convert(writeInternalSchema, newWriterSchema.getName());
       boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size()
-          || SchemaCompatibility.checkReaderWriterCompatibility(newReaderSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+          || SchemaCompatibility.checkReaderWriterCompatibility(newWriterSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
       if (needToReWriteRecord) {
         Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
-        return Option.of(Pair.of(newReaderSchema, renameCols));
+        return Option.of(Pair.of(newWriterSchema, renameCols));
       } else {
         return Option.empty();
       }
