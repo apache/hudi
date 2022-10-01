@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * This {@link LockProvider} implementation is to
+ * InProcess level lock. This {@link LockProvider} implementation is to
  * guard table from concurrent operations happening in the local JVM process.
  * A separate lock is maintained per "table basepath".
  * <p>
@@ -51,7 +51,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
 
   private static final Logger LOG = LogManager.getLogger(InProcessLockProvider.class);
-  public static final Map<String, ReentrantReadWriteLock> LOCK_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
+  private static final Map<String, ReentrantReadWriteLock> LOCK_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
   private final ReentrantReadWriteLock lock;
   private final String basePath;
   private final long maxWaitTimeMillis;
