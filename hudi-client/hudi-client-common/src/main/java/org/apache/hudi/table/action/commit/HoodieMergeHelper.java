@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -58,7 +59,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
 
 // TODO unify w/ Flink, Java impls
 public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
@@ -100,27 +104,15 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
       gWriter = null;
     }
 
-    Option<Pair<Schema, Map<String, String>>> r = tryEvolveSchema(writerSchema, baseFile, writeConfig, table.getMetaClient());
-
-    boolean needToReWriteRecord;
-    Map<String, String> renameCols;
-
-    if (r.isPresent()) {
-      needToReWriteRecord = true;
-      renameCols = r.get().getRight();
-      writerSchema = r.get().getKey();
-    } else {
-      needToReWriteRecord = false;
-      renameCols = Collections.emptyMap();
-    }
+    Option<Function<GenericRecord, GenericRecord>> recordTransformer = tryEvolveSchema(writerSchema, baseFile, writeConfig, table.getMetaClient());
 
     HoodieExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readerSchema, shouldRewriteInWriterSchema);
-      } else if (needToReWriteRecord) {
-        readerIterator = HoodieAvroUtils.rewriteRecordWithNewSchema(reader.getRecordIterator(), writerSchema, renameCols);
+      } else if (recordTransformer.isPresent()) {
+        readerIterator = new MappingIterator<>(reader.getRecordIterator(), recordTransformer.get());
       } else {
         readerIterator = reader.getRecordIterator(readerSchema);
       }
@@ -141,9 +133,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     } finally {
       // HUDI-2875: mergeHandle is not thread safe, we should totally terminate record inputting
       // and executor firstly and then close mergeHandle.
-      if (reader != null) {
-        reader.close();
-      }
+      reader.close();
       if (null != wrapper) {
         wrapper.shutdownNow();
         wrapper.awaitTermination();
@@ -152,10 +142,10 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     }
   }
 
-  private Option<Pair<Schema, Map<String, String>>> tryEvolveSchema(Schema writerSchema,
-                                                                    HoodieBaseFile baseFile,
-                                                                    HoodieWriteConfig writeConfig,
-                                                                    HoodieTableMetaClient metaClient) {
+  private Option<Function<GenericRecord, GenericRecord>> tryEvolveSchema(Schema writerSchema,
+                                                                         HoodieBaseFile baseFile,
+                                                                         HoodieWriteConfig writeConfig,
+                                                                         HoodieTableMetaClient metaClient) {
     Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(writeConfig.getInternalSchema());
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
@@ -187,7 +177,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
           || SchemaCompatibility.checkReaderWriterCompatibility(newWriterSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
       if (needToReWriteRecord) {
         Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
-        return Option.of(Pair.of(newWriterSchema, renameCols));
+        return Option.of(record -> rewriteRecordWithNewSchema(record, newWriterSchema, renameCols));
       } else {
         return Option.empty();
       }
