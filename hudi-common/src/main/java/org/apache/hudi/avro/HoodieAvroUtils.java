@@ -1005,31 +1005,6 @@ public class HoodieAvroUtils {
     return actualSchema;
   }
 
-  /**
-   * Given avro records, rewrites them with new schema.
-   *
-   * @param oldRecords oldRecords to be rewrite
-   * @param newSchema newSchema used to rewrite oldRecord
-   * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
-   * @return a iterator of rewrote GeneriRcords
-   */
-  public static Iterator<GenericRecord> rewriteRecordWithNewSchema(Iterator<GenericRecord> oldRecords, Schema newSchema, Map<String, String> renameCols) {
-    if (oldRecords == null || newSchema == null) {
-      return Collections.emptyIterator();
-    }
-    return new Iterator<GenericRecord>() {
-      @Override
-      public boolean hasNext() {
-        return oldRecords.hasNext();
-      }
-
-      @Override
-      public GenericRecord next() {
-        return rewriteRecordWithNewSchema(oldRecords.next(), newSchema, renameCols);
-      }
-    };
-  }
-
   public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema) {
     return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP);
   }
