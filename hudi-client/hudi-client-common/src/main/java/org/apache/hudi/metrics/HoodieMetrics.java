@@ -149,7 +149,8 @@ public class HoodieMetrics {
   }
 
   public void updateMetricsForEmptyData(String actionType) {
-    if (!(boolean) config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) || !MetricsReporterType.valueOf(config.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE)).equals(MetricsReporterType.PROMETHEUS_PUSHGATEWAY)) {
+    if (!(boolean) config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)
+        || !MetricsReporterType.valueOf(config.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE)).equals(MetricsReporterType.PROMETHEUS_PUSHGATEWAY)) {
       // No-op if metrics are not of type PROMETHEUS_PUSHGATEWAY.
       return;
     }

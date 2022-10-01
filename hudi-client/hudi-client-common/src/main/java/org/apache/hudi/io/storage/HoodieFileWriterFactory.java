@@ -95,7 +95,8 @@ public class HoodieFileWriterFactory {
 
     BloomFilter filter = createBloomFilter(config);
     HoodieHFileConfig hfileConfig = new HoodieHFileConfig(conf,
-        Compression.Algorithm.valueOf(config.getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME)), config.getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE), config.getLong(HoodieStorageConfig.HFILE_MAX_FILE_SIZE),
+        Compression.Algorithm.valueOf(config.getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME)),
+        config.getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE), config.getLong(HoodieStorageConfig.HFILE_MAX_FILE_SIZE),
         HoodieHFileReader.KEY_FIELD_NAME, PREFETCH_ON_OPEN, CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION,
         filter, HFILE_COMPARATOR);
 

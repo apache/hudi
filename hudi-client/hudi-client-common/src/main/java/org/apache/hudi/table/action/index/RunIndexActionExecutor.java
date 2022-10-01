@@ -236,7 +236,8 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
 
   private HoodieInstant validateAndGetIndexInstant() {
     // ensure lock provider configured
-    if (!WriteConcurrencyMode.fromValue(config.getString(WRITE_CONCURRENCY_MODE)).supportsOptimisticConcurrencyControl() || StringUtils.isNullOrEmpty(config.getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME))) {
+    if (!WriteConcurrencyMode.fromValue(config.getString(WRITE_CONCURRENCY_MODE)).supportsOptimisticConcurrencyControl()
+        || StringUtils.isNullOrEmpty(config.getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME))) {
       throw new HoodieIndexException(String.format("Need to set %s as %s and configure lock provider class",
           WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name()));
     }

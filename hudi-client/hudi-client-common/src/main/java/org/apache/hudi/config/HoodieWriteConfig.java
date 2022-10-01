@@ -1104,7 +1104,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   public Boolean areAnyTableServicesExecutedInline() {
     return getBooleanOrDefault(TABLE_SERVICES_ENABLED)
         && (getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING) || getBoolean(HoodieCompactionConfig.INLINE_COMPACT)
-        || (getBoolean(HoodieCleanConfig.AUTO_CLEAN) && !(boolean) getBoolean(HoodieCleanConfig.ASYNC_CLEAN)) || (getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE) && !(boolean) getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE)));
+        || (getBoolean(HoodieCleanConfig.AUTO_CLEAN) && !(boolean) getBoolean(HoodieCleanConfig.ASYNC_CLEAN))
+        || (getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE) && !(boolean) getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE)));
   }
 
   /**
@@ -1116,7 +1117,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(TABLE_SERVICES_ENABLED)
         && (getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE)
         || (getTableType() == HoodieTableType.MERGE_ON_READ && !(boolean) getBoolean(HoodieCompactionConfig.INLINE_COMPACT))
-        || (getBoolean(HoodieCleanConfig.AUTO_CLEAN) && (boolean) getBoolean(HoodieCleanConfig.ASYNC_CLEAN)) || (getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE) && (boolean) getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE)));
+        || (getBoolean(HoodieCleanConfig.AUTO_CLEAN) && (boolean) getBoolean(HoodieCleanConfig.ASYNC_CLEAN))
+        || (getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE) && (boolean) getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE)));
   }
 
   public Boolean areAnyTableServicesScheduledInline() {
