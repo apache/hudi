@@ -29,12 +29,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
@@ -56,12 +54,10 @@ import org.apache.hudi.util.QueueBasedExecutorFactory;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 // TODO unify w/ Flink, Java impls
@@ -85,29 +81,26 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     HoodieWriteConfig writeConfig = table.getConfig();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
+    Configuration hadoopConf = new Configuration(table.getHadoopConf());
+    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.getFileReader(hadoopConf, mergeHandle.getOldFilePath());
+
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
-    Schema readSchema;
+    Schema readerSchema = reader.getSchema();
 
     final GenericDatumWriter<GenericRecord> gWriter;
     final GenericDatumReader<GenericRecord> gReader;
 
-    Configuration hadoopConf = new Configuration(table.getHadoopConf());
-    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.getFileReader(hadoopConf, mergeHandle.getOldFilePath());
-
     boolean shouldRewriteInWriterSchema =
         writeConfig.shouldUseExternalSchemaTransformation() || baseFile.getBootstrapBaseFile().isPresent();
     if (shouldRewriteInWriterSchema) {
-      readSchema = reader.getSchema();
-      gWriter = new GenericDatumWriter<>(readSchema);
-      gReader = new GenericDatumReader<>(readSchema, writerSchema);
+      gWriter = new GenericDatumWriter<>(readerSchema);
+      gReader = new GenericDatumReader<>(readerSchema, writerSchema);
     } else {
       gReader = null;
       gWriter = null;
-      readSchema = writerSchema;
     }
 
-
-    Option<Pair<Schema, Map<String, String>>> r = tryEvolveSchema(readSchema, baseFile, writeConfig, table.getMetaClient());
+    Option<Pair<Schema, Map<String, String>>> r = tryEvolveSchema(writerSchema, baseFile, writeConfig, table.getMetaClient());
 
     boolean needToReWriteRecord;
     Map<String, String> renameCols;
@@ -115,7 +108,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     if (r.isPresent()) {
       needToReWriteRecord = true;
       renameCols = r.get().getRight();
-      readSchema = r.get().getKey();
+      writerSchema = r.get().getKey();
     } else {
       needToReWriteRecord = false;
       renameCols = Collections.emptyMap();
@@ -125,11 +118,11 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, shouldRewriteInWriterSchema);
+        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readerSchema, shouldRewriteInWriterSchema);
       } else if (needToReWriteRecord) {
-        readerIterator = HoodieAvroUtils.rewriteRecordWithNewSchema(reader.getRecordIterator(), readSchema, renameCols);
+        readerIterator = HoodieAvroUtils.rewriteRecordWithNewSchema(reader.getRecordIterator(), writerSchema, renameCols);
       } else {
-        readerIterator = reader.getRecordIterator(readSchema);
+        readerIterator = reader.getRecordIterator(readerSchema);
       }
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
