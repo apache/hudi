@@ -17,6 +17,7 @@ Next major release : [0.13.0](https://issues.apache.org/jira/projects/HUDI/versi
 | [0.12.1](https://issues.apache.org/jira/projects/HUDI/versions/12352182) | Early Q4 2022  |
 | [0.13.0](https://issues.apache.org/jira/projects/HUDI/versions/12352101) | Mid Q4 2022    |
 | [0.13.1](https://issues.apache.org/jira/projects/HUDI/versions/12352250) | TBD            |
+| [1.0.0](https://issues.apache.org/jira/projects/HUDI/versions/12351210)  | TBD            |
 
 ## Transactional Database Layer
 
