@@ -20,13 +20,8 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.BinaryDecoder;
-import org.apache.avro.io.BinaryEncoder;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -37,7 +32,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.MappingIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -54,7 +48,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.QueueBasedExecutorFactory;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +55,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord;
 import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
 
 // TODO unify w/ Flink, Java impls
@@ -91,40 +85,29 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
     Schema readerSchema = reader.getSchema();
 
-    final GenericDatumWriter<GenericRecord> gWriter;
-    final GenericDatumReader<GenericRecord> gReader;
-
     boolean shouldRewriteInWriterSchema =
         writeConfig.shouldUseExternalSchemaTransformation() || baseFile.getBootstrapBaseFile().isPresent();
-    if (shouldRewriteInWriterSchema) {
-      gWriter = new GenericDatumWriter<>(readerSchema);
-      gReader = new GenericDatumReader<>(readerSchema, writerSchema);
-    } else {
-      gReader = null;
-      gWriter = null;
-    }
 
-    Option<Function<GenericRecord, GenericRecord>> recordTransformer = tryEvolveSchema(writerSchema, baseFile, writeConfig, table.getMetaClient());
+    Option<Function<GenericRecord, GenericRecord>> existingRecordsTransformer =
+        tryEvolveSchema(writerSchema, baseFile, writeConfig, table.getMetaClient());
 
     HoodieExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readerSchema, shouldRewriteInWriterSchema);
-      } else if (recordTransformer.isPresent()) {
-        readerIterator = new MappingIterator<>(reader.getRecordIterator(), recordTransformer.get());
+      } else if (existingRecordsTransformer.isPresent()) {
+        readerIterator = new MappingIterator<>(reader.getRecordIterator(), existingRecordsTransformer.get());
       } else {
         readerIterator = reader.getRecordIterator(readerSchema);
       }
 
-      ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
-      ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-
       wrapper = QueueBasedExecutorFactory.create(writeConfig, readerIterator, new UpdateHandler(mergeHandle), record -> {
         if (shouldRewriteInWriterSchema) {
-          return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, record);
+          return rewriteRecord(record, writerSchema);
+        } else {
+          return record;
         }
-        return record;
       }, table.getPreExecuteRunnable());
 
       wrapper.execute();
