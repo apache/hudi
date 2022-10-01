@@ -20,13 +20,8 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.BinaryDecoder;
-import org.apache.avro.io.BinaryEncoder;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -37,7 +32,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.MappingIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -53,7 +47,6 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +54,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.isProjectionOf;
 import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord;
 import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
 
@@ -91,24 +85,31 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
     Schema readerSchema = reader.getSchema();
 
-    boolean shouldRewriteInWriterSchema =
-        writeConfig.shouldUseExternalSchemaTransformation() || baseFile.getBootstrapBaseFile().isPresent();
+    // NOTE: Here we check whether the writer schema is simply a projection of the reader one
+    boolean isProjection = isProjectionOf(readerSchema, writerSchema);
 
-    Option<Function<GenericRecord, GenericRecord>> existingRecordsTransformer =
+    boolean shouldRewriteInWriterSchema = writeConfig.shouldUseExternalSchemaTransformation()
+        || !isProjection
+        || baseFile.getBootstrapBaseFile().isPresent();
+
+    // TODO elaborate
+    Option<Function<GenericRecord, GenericRecord>> schemaEvolutionTransformerOpt =
         tryEvolveSchema(writerSchema, baseFile, writeConfig, table.getMetaClient());
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
+
     try {
-      final Iterator<GenericRecord> readerIterator;
+      Iterator<GenericRecord> sourceRecordIterator = reader.getRecordIterator(readerSchema);
+      Iterator<GenericRecord> transformedRecordIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader.getRecordIterator(readerSchema));
-      } else if (existingRecordsTransformer.isPresent()) {
-        readerIterator = new MappingIterator<>(reader.getRecordIterator(), existingRecordsTransformer.get());
+        transformedRecordIterator = getMergingIterator(table, mergeHandle, baseFile, sourceRecordIterator);
+      } else if (schemaEvolutionTransformerOpt.isPresent()) {
+        transformedRecordIterator = new MappingIterator<>(sourceRecordIterator, schemaEvolutionTransformerOpt.get());
       } else {
-        readerIterator = reader.getRecordIterator(readerSchema);
+        transformedRecordIterator = sourceRecordIterator;
       }
 
-      wrapper = new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), readerIterator,
+      wrapper = new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), transformedRecordIterator,
           new UpdateHandler(mergeHandle), record -> {
         if (shouldRewriteInWriterSchema) {
           return rewriteRecord((GenericRecord) record, writerSchema);

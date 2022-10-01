@@ -31,6 +31,18 @@ public class AvroSchemaUtils {
 
   private AvroSchemaUtils() {}
 
+  // TODO java-doc, test
+  public static boolean isProjectionOf(Schema sourceSchema, Schema targetSchema) {
+    for (Schema.Field targetField : targetSchema.getFields()) {
+      Schema.Field sourceField = sourceSchema.getField(targetField.name());
+      if (sourceField == null || !Objects.equals(sourceField.schema(), targetField.schema())) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   /**
    * Appends provided new fields at the end of the given schema
    *
