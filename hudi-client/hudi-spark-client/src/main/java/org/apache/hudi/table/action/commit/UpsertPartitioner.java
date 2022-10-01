@@ -364,7 +364,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
    */
   protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, HoodieWriteConfig hoodieWriteConfig) {
     long avgSize = hoodieWriteConfig.getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
-    long fileSizeThreshold = (long) ((double) hoodieWriteConfig.getDouble(HoodieCompactionConfig.RECORD_SIZE_ESTIMATION_THRESHOLD) * hoodieWriteConfig.getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT));
+    long fileSizeThreshold = (long) ((double) hoodieWriteConfig.getDouble(HoodieCompactionConfig.RECORD_SIZE_ESTIMATION_THRESHOLD)
+        * hoodieWriteConfig.getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT));
     try {
       if (!commitTimeline.empty()) {
         // Go over the reverse ordered commits to get a more recent estimate of average record size.

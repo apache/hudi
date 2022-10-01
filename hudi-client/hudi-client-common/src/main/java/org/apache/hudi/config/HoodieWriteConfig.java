@@ -951,6 +951,22 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieTableConfig.TYPE, HoodieTableConfig.TYPE.defaultValue().name()).toUpperCase());
   }
 
+  public boolean populateMetaFields() {
+    return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+  }
+
+  public String getPreCombineField() {
+    return getString(PRECOMBINE_FIELD_NAME);
+  }
+
+  public boolean shouldCombineBeforeInsert() {
+    return getBoolean(COMBINE_BEFORE_INSERT);
+  }
+
+  public int getBulkInsertShuffleParallelism() {
+    return getInt(BULKINSERT_PARALLELISM_VALUE);
+  }
+
   public Boolean shouldAssumeDatePartitioning() {
     return metadataConfig.shouldAssumeDatePartitioning();
   }
