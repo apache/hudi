@@ -55,6 +55,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.isProjectionOf;
 import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord;
 import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
 
@@ -85,24 +86,30 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
     Schema readerSchema = reader.getSchema();
 
-    boolean shouldRewriteInWriterSchema =
-        writeConfig.shouldUseExternalSchemaTransformation() || baseFile.getBootstrapBaseFile().isPresent();
+    // NOTE: Here we check whether the writer schema is simply a projection of the reader one
+    boolean isProjection = isProjectionOf(readerSchema, writerSchema);
 
-    Option<Function<GenericRecord, GenericRecord>> existingRecordsTransformer =
+    boolean shouldRewriteInWriterSchema = writeConfig.shouldUseExternalSchemaTransformation()
+        || !isProjection
+        || baseFile.getBootstrapBaseFile().isPresent();
+
+    // TODO elaborate
+    Option<Function<GenericRecord, GenericRecord>> schemaEvolutionTransformerOpt =
         tryEvolveSchema(writerSchema, baseFile, writeConfig, table.getMetaClient());
 
     HoodieExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
     try {
-      final Iterator<GenericRecord> readerIterator;
+      Iterator<GenericRecord> sourceRecordIterator = reader.getRecordIterator(readerSchema);
+      Iterator<GenericRecord> transformedRecordIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader.getRecordIterator(readerSchema));
-      } else if (existingRecordsTransformer.isPresent()) {
-        readerIterator = new MappingIterator<>(reader.getRecordIterator(), existingRecordsTransformer.get());
+        transformedRecordIterator = getMergingIterator(table, mergeHandle, baseFile, sourceRecordIterator);
+      } else if (schemaEvolutionTransformerOpt.isPresent()) {
+        transformedRecordIterator = new MappingIterator<>(sourceRecordIterator, schemaEvolutionTransformerOpt.get());
       } else {
-        readerIterator = reader.getRecordIterator(readerSchema);
+        transformedRecordIterator = sourceRecordIterator;
       }
 
-      wrapper = QueueBasedExecutorFactory.create(writeConfig, readerIterator, new UpdateHandler(mergeHandle), record -> {
+      wrapper = QueueBasedExecutorFactory.create(writeConfig, transformedRecordIterator, new UpdateHandler(mergeHandle), record -> {
         if (shouldRewriteInWriterSchema) {
           return rewriteRecord(record, writerSchema);
         } else {
