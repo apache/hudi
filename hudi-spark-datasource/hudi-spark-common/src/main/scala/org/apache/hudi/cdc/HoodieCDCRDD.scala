@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator
-import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -67,10 +66,9 @@ import scala.collection.mutable
 
 /**
  * The split that will be processed by spark task.
+ * The [[changes]] should be sorted first.
  */
-case class HoodieCDCFileGroupSplit(
-    commitToChanges: Array[(HoodieInstant, HoodieCDCFileSplit)]
-)
+case class HoodieCDCFileGroupSplit(changes: Array[HoodieCDCFileSplit])
 
 /**
  * The Spark [[Partition]]'s implementation.
@@ -94,9 +92,7 @@ class HoodieCDCRDD(
 
   private val confBroadcast = spark.sparkContext.broadcast(new SerializableWritable(hadoopConf))
 
-  private val cdcSupplementalLoggingMode = HoodieCDCSupplementalLoggingMode.parse(
-    metaClient.getTableConfig.cdcSupplementalLoggingMode
-  )
+  private val cdcSupplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
 
   private val props = HoodieFileIndex.getConfigProperties(spark, Map.empty)
 
@@ -158,7 +154,7 @@ class HoodieCDCRDD(
         .build();
       HoodieTableState(
         pathToString(basePath),
-        split.commitToChanges.map(_._1.getTimestamp).max,
+        split.changes.last.getInstant,
         recordKeyField,
         preCombineFieldOpt,
         usesVirtualKeys = false,
@@ -201,10 +197,10 @@ class HoodieCDCRDD(
     private lazy val projection: UnsafeProjection = generateUnsafeProjection(cdcSchema, requiredCdcSchema)
 
     // Iterator on cdc file
-    private val cdcFileIter = split.commitToChanges.sortBy(_._1).iterator
+    private val cdcFileIter = split.changes.iterator
 
     // The instant that is currently being processed
-    private var currentInstant: HoodieInstant = _
+    private var currentInstant: String = _
 
     // The change file that is currently being processed
     private var currentChangeFile: HoodieCDCFileSplit = _
@@ -420,9 +416,9 @@ class HoodieCDCRDD(
       }
 
       if (cdcFileIter.hasNext) {
-        val pair = cdcFileIter.next()
-        currentInstant = pair._1
-        currentChangeFile = pair._2
+        val split = cdcFileIter.next()
+        currentInstant = split.getInstant
+        currentChangeFile = split
         currentChangeFile.getCdcInferCase match {
           case BASE_FILE_INSERT =>
             assert(currentChangeFile.getCdcFile != null)
@@ -480,23 +476,23 @@ class HoodieCDCRDD(
       recordToLoad = currentChangeFile.getCdcInferCase match {
         case BASE_FILE_INSERT =>
           InternalRow.fromSeq(Array(
-            CDCRelation.CDC_OPERATION_INSERT, convertToUTF8String(currentInstant.getTimestamp),
+            CDCRelation.CDC_OPERATION_INSERT, convertToUTF8String(currentInstant),
             null, null))
         case BASE_FILE_DELETE =>
           InternalRow.fromSeq(Array(
-            CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant.getTimestamp),
+            CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
             null, null))
         case LOG_FILE =>
           InternalRow.fromSeq(Array(
-            null, convertToUTF8String(currentInstant.getTimestamp),
+            null, convertToUTF8String(currentInstant),
             null, null))
         case AS_IS =>
           InternalRow.fromSeq(Array(
-            null, convertToUTF8String(currentInstant.getTimestamp),
+            null, convertToUTF8String(currentInstant),
             null, null))
         case REPLACE_COMMIT =>
           InternalRow.fromSeq(Array(
-            CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant.getTimestamp),
+            CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
             null, null))
       }
     }

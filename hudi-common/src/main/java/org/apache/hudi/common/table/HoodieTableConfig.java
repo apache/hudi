@@ -614,8 +614,8 @@ public class HoodieTableConfig extends HoodieConfig {
     return getBooleanOrDefault(CDC_ENABLED);
   }
 
-  public String cdcSupplementalLoggingMode() {
-    return getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE);
+  public HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode() {
+    return HoodieCDCSupplementalLoggingMode.parse(getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE));
   }
 
   public String getKeyGeneratorClassName() {

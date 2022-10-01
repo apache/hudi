@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.ClosableIterator;
@@ -26,6 +27,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
@@ -33,18 +35,22 @@ import java.io.IOException;
 
 public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecord> {
 
-  private final HoodieLogFile cdcLogFile;
-
   private final HoodieLogFormat.Reader reader;
 
   private ClosableIterator<IndexedRecord> itr;
 
   public HoodieCDCLogRecordIterator(
+      Configuration hadoopConf,
+      Path cdcLogPath,
+      Schema cdcSchema) throws IOException {
+    this(FSUtils.getFs(cdcLogPath, hadoopConf), cdcLogPath, cdcSchema);
+  }
+
+  public HoodieCDCLogRecordIterator(
       FileSystem fs,
       Path cdcLogPath,
       Schema cdcSchema) throws IOException {
-    this.cdcLogFile = new HoodieLogFile(fs.getFileStatus(cdcLogPath));
-    this.reader = new HoodieLogFileReader(fs, cdcLogFile, cdcSchema,
+    this.reader = new HoodieLogFileReader(fs, new HoodieLogFile(fs.getFileStatus(cdcLogPath)), cdcSchema,
         HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
   }
 

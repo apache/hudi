@@ -23,12 +23,16 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.table.HoodieTableSource;
+import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
+import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -48,8 +52,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -306,6 +312,89 @@ public class TestInputFormat {
     final String expected = "["
         + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
         + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1]]";
+    assertThat(actual, is(expected));
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieCDCSupplementalLoggingMode.class)
+  void testReadWithChangeLogCOW(HoodieCDCSupplementalLoggingMode mode) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CDC_ENABLED.key(), "true");
+    options.put(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE.key(), mode.getValue());
+    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
+
+    // write the insert data sets
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    // write another commit to read again
+    TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
+    assertThat(inputFormat, instanceOf(CdcInputFormat.class));
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
+        .rowType(TestConfigurations.ROW_TYPE)
+        .conf(conf)
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .requiredPartitions(Collections.emptySet())
+        .skipCompaction(false)
+        .build();
+
+    // default read the latest commit
+    IncrementalInputSplits.Result splits = incrementalInputSplits.inputSplitsCDC(metaClient, null);
+
+    List<RowData> result = readData(inputFormat, splits.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+
+    final String actual = TestData.rowDataToString(result);
+    final String expected = "["
+        + "-U[id1, Danny, 23, 1970-01-01T00:00:00.001, par1], "
+        + "+U[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "-U[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1], "
+        + "+U[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "-D[id3, Julian, 53, 1970-01-01T00:00:00.003, par2], "
+        + "-D[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3]]";
+    assertThat(actual, is(expected));
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieCDCSupplementalLoggingMode.class)
+  void testReadFromEarliestWithChangeLogCOW(HoodieCDCSupplementalLoggingMode mode) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CDC_ENABLED.key(), "true");
+    options.put(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE.key(), mode.getValue());
+    options.put(FlinkOptions.READ_START_COMMIT.key(), "earliest");
+    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
+
+    // write the insert data sets
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    // write another commit to read again
+    TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
+    assertThat(inputFormat, instanceOf(CdcInputFormat.class));
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
+        .rowType(TestConfigurations.ROW_TYPE)
+        .conf(conf)
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .requiredPartitions(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4")))
+        .skipCompaction(false)
+        .build();
+
+    // default read the latest commit
+    IncrementalInputSplits.Result splits = incrementalInputSplits.inputSplitsCDC(metaClient, null);
+
+    List<RowData> result = readData(inputFormat, splits.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+
+    final String actual = TestData.rowDataToString(result);
+    final String expected = "["
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id4, Fabian, 31, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]";
     assertThat(actual, is(expected));
   }
 
@@ -631,10 +720,14 @@ public class TestInputFormat {
         conf);
   }
 
-  @SuppressWarnings("unchecked, rawtypes")
+  @SuppressWarnings("rawtypes")
   private static List<RowData> readData(InputFormat inputFormat) throws IOException {
     InputSplit[] inputSplits = inputFormat.createInputSplits(1);
+    return readData(inputFormat, inputSplits);
+  }
 
+  @SuppressWarnings("unchecked, rawtypes")
+  private static List<RowData> readData(InputFormat inputFormat, InputSplit[] inputSplits) throws IOException {
     List<RowData> result = new ArrayList<>();
 
     for (InputSplit inputSplit : inputSplits) {

@@ -20,6 +20,7 @@ package org.apache.hudi.configuration;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -188,5 +189,13 @@ public class OptionsResolver {
   public static boolean isSpecificStartCommit(Configuration conf) {
     return conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent()
         && !conf.get(FlinkOptions.READ_START_COMMIT).equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST);
+  }
+
+  /**
+   * Returns the supplemental logging mode.
+   */
+  public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
+    String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE);
+    return HoodieCDCSupplementalLoggingMode.parse(mode);
   }
 }
