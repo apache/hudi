@@ -88,8 +88,9 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     Configuration hadoopConf = new Configuration(table.getHadoopConf());
     HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.getFileReader(hadoopConf, mergeHandle.getOldFilePath());
 
-    boolean externalSchemaTransformation = tableConfig.shouldUseExternalSchemaTransformation();
-    if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
+    boolean shouldRewriteInWriterSchema =
+        tableConfig.shouldUseExternalSchemaTransformation() || baseFile.getBootstrapBaseFile().isPresent();
+    if (shouldRewriteInWriterSchema) {
       readSchema = reader.getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
       gReader = new GenericDatumReader<>(readSchema, writerSchema);
@@ -132,7 +133,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
+        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, shouldRewriteInWriterSchema);
       } else {
         if (needToReWriteRecord) {
           readerIterator = HoodieAvroUtils.rewriteRecordWithNewSchema(reader.getRecordIterator(), readSchema, renameCols);
@@ -145,10 +146,10 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
       ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
       wrapper = new BoundedInMemoryExecutor(tableConfig.getWriteBufferLimitBytes(), readerIterator,
           new UpdateHandler(mergeHandle), record -> {
-        if (!externalSchemaTransformation) {
-          return record;
+        if (shouldRewriteInWriterSchema) {
+          return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) record);
         }
-        return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) record);
+        return record;
       }, table.getPreExecuteRunnable());
       wrapper.execute();
     } catch (Exception e) {
