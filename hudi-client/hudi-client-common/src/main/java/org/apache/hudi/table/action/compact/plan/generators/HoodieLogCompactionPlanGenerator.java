@@ -32,7 +32,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.compact.LogCompactionExecutionStrategy;
+import org.apache.hudi.table.action.compact.LogCompactionExecutionHelper;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -52,7 +52,7 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
   protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations) {
     HoodieCompactionStrategy compactionStrategy = HoodieCompactionStrategy.newBuilder()
         .setStrategyParams(getStrategyParams())
-        .setCompactorClassName(LogCompactionExecutionStrategy.class.getName())
+        .setCompactorClassName(LogCompactionExecutionHelper.class.getName())
         .build();
     return HoodieCompactionPlan.newBuilder()
         .setOperations(operations)

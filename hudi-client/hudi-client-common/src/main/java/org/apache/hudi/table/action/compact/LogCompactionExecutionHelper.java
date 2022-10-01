@@ -44,10 +44,10 @@ import java.util.Map;
 /**
  * Strategy class to execute log compaction operations.
  */
-public class LogCompactionExecutionStrategy<T extends HoodieRecordPayload, I, K, O>
-    extends CompactionExecutionStrategy<T, I, K, O> {
+public class LogCompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O>
+    extends CompactionExecutionHelper<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(LogCompactionExecutionStrategy.class);
+  private static final Logger LOG = LogManager.getLogger(LogCompactionExecutionHelper.class);
 
   @Override
   protected void transitionRequestedToInflight(HoodieTable table, String logCompactionInstantTime) {
@@ -55,7 +55,6 @@ public class LogCompactionExecutionStrategy<T extends HoodieRecordPayload, I, K,
     HoodieInstant instant = HoodieTimeline.getLogCompactionRequestedInstant(logCompactionInstantTime);
     // Mark instant as compaction inflight
     timeline.transitionLogCompactionRequestedToInflight(instant);
-    table.getMetaClient().reloadActiveTimeline();
   }
 
   protected String instantTimeToUseForScanning(String logCompactionInstantTime, String maxInstantTime) {

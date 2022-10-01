@@ -251,7 +251,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
           fileGroup.getAllFileSlices()
               .filter(fs -> !isFileSliceNeededForPendingMajorOrMinorCompaction(fs))
               .iterator();
-      if (isFileGroupInPendingCompaction(fileGroup)) {
+      if (isFileGroupInPendingMajorOrMinorCompaction(fileGroup)) {
         // We have already saved the last version of file-groups for pending compaction Id
         keepVersions--;
       }
@@ -551,11 +551,8 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     return false;
   }
 
-  private boolean isFileGroupInPendingCompaction(HoodieFileGroup fg) {
-    return fgIdToPendingCompactionOperations.containsKey(fg.getFileGroupId());
-  }
-
-  private boolean isFileGroupInPendingLogCompaction(HoodieFileGroup fg) {
-    return fgIdToPendingLogCompactionOperations.containsKey(fg.getFileGroupId());
+  private boolean isFileGroupInPendingMajorOrMinorCompaction(HoodieFileGroup fg) {
+    return fgIdToPendingCompactionOperations.containsKey(fg.getFileGroupId())
+        || fgIdToPendingLogCompactionOperations.containsKey(fg.getFileGroupId());
   }
 }

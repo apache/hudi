@@ -97,10 +97,11 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         || (compactionPlan.getOperations().isEmpty())) {
       return context.emptyHoodieData();
     }
-    CompactionExecutionStrategy executionStrategy = getCompactionExecutionStrategy(compactionPlan);
+    CompactionExecutionHelper executionHelper = getCompactionExecutionStrategy(compactionPlan);
 
     // Transition requested to inflight file.
-    executionStrategy.transitionRequestedToInflight(table, compactionInstantTime);
+    executionHelper.transitionRequestedToInflight(table, compactionInstantTime);
+    table.getMetaClient().reloadActiveTimeline();
 
     HoodieTableMetaClient metaClient = table.getMetaClient();
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
@@ -127,7 +128,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
     return context.parallelize(operations).map(operation -> compact(
-        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, taskContextSupplier, executionStrategy))
+        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, taskContextSupplier, executionHelper))
         .flatMap(List::iterator);
   }
 
@@ -142,7 +143,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
                                    String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
     return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime,
-        taskContextSupplier, new CompactionExecutionStrategy());
+        taskContextSupplier, new CompactionExecutionHelper());
   }
 
   /**
@@ -155,7 +156,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
                                    String instantTime,
                                    String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier,
-                                   CompactionExecutionStrategy executionStrategy) throws IOException {
+                                   CompactionExecutionHelper executionHelper) throws IOException {
     FileSystem fs = metaClient.getFs();
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
@@ -188,7 +189,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withBasePath(metaClient.getBasePath())
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
-        .withLatestInstantTime(executionStrategy.instantTimeToUseForScanning(instantTime, maxInstantTime))
+        .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
         .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
         .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
@@ -199,8 +200,8 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
-        .withUseScanV2(executionStrategy.useScanV2(config))
-        .withPreserveCommitMetadata(executionStrategy.shouldPreserveCommitMetadata())
+        .withUseScanV2(executionHelper.useScanV2(config))
+        .withPreserveCommitMetadata(executionHelper.shouldPreserveCommitMetadata())
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =
@@ -228,7 +229,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;
-    result = executionStrategy.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
+    result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
     scanner.close();
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
@@ -255,11 +256,11 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     return maxInstantTime;
   }
 
-  public CompactionExecutionStrategy getCompactionExecutionStrategy(HoodieCompactionPlan compactionPlan) {
+  public CompactionExecutionHelper getCompactionExecutionStrategy(HoodieCompactionPlan compactionPlan) {
     if (compactionPlan.getStrategy() == null || StringUtils.isNullOrEmpty(compactionPlan.getStrategy().getCompactorClassName())) {
-      return new CompactionExecutionStrategy();
+      return new CompactionExecutionHelper();
     } else {
-      CompactionExecutionStrategy executionStrategy = ReflectionUtils.loadClass(compactionPlan.getStrategy().getCompactorClassName());
+      CompactionExecutionHelper executionStrategy = ReflectionUtils.loadClass(compactionPlan.getStrategy().getCompactorClassName());
       return executionStrategy;
     }
   }

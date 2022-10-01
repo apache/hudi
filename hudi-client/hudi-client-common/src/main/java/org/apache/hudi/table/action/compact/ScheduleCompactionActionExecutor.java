@@ -50,6 +50,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+
 public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
 
   private static final Logger LOG = LogManager.getLogger(ScheduleCompactionActionExecutor.class);
@@ -66,6 +68,8 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     super(context, config, table, instantTime);
     this.extraMetadata = extraMetadata;
     this.operationType = operationType;
+    checkArgument(operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.LOG_COMPACT,
+        "Only COMPACT and LOG_COMPACT is supported");
     initPlanGenerator(context, config, table);
   }
 

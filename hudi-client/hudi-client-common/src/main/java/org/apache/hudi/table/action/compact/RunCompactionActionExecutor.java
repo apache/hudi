@@ -43,6 +43,8 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+
 @SuppressWarnings("checkstyle:LineLength")
 public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
     BaseActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieWriteMetadata<HoodieData<WriteStatus>>> {
@@ -62,6 +64,8 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
     this.compactor = compactor;
     this.compactionHandler = compactionHandler;
     this.operationType = operationType;
+    checkArgument(operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.LOG_COMPACT,
+        "Only COMPACT and LOG_COMPACT is supported");
   }
 
   @Override

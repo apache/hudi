@@ -150,15 +150,15 @@ public class CompactionUtils {
   /**
    * Util method to get compaction plans by action_type(COMPACT or LOG_COMPACT)
    * @param metaClient HoodieTable's metaclient
-   * @param timelineSupplier gives a timeline object, this can be either filtered to return pending compactions or log compaction instants.
+   * @param filteredTimelineSupplier gives a timeline object, this can be either filtered to return pending compactions or log compaction instants.
    * @param requestedInstantWrapper function that gives a requested Hoodie instant.
    * @return List of pair of HoodieInstant and it's corresponding compaction plan.
    * Note here the compaction plan can be related to a compaction instant or log compaction instant.
    */
   private static List<Pair<HoodieInstant, HoodieCompactionPlan>> getCompactionPlansByTimeline(
-      HoodieTableMetaClient metaClient, Function<HoodieTableMetaClient, HoodieTimeline> timelineSupplier,
+      HoodieTableMetaClient metaClient, Function<HoodieTableMetaClient, HoodieTimeline> filteredTimelineSupplier,
       Function<String, HoodieInstant> requestedInstantWrapper) {
-    List<HoodieInstant> filteredInstants = timelineSupplier.apply(metaClient).getInstants().collect(Collectors.toList());
+    List<HoodieInstant> filteredInstants = filteredTimelineSupplier.apply(metaClient).getInstants().collect(Collectors.toList());
     return filteredInstants.stream()
         .map(instant -> Pair.of(instant, getCompactionPlan(metaClient, requestedInstantWrapper.apply(instant.getTimestamp()))))
         .collect(Collectors.toList());

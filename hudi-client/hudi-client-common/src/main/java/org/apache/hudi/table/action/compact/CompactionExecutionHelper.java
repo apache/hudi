@@ -36,14 +36,13 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
 
-public class CompactionExecutionStrategy<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public class CompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
   protected void transitionRequestedToInflight(HoodieTable table, String compactionInstantTime) {
     HoodieActiveTimeline timeline = table.getActiveTimeline();
     HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
     // Mark instant as compaction inflight
     timeline.transitionCompactionRequestedToInflight(instant);
-    table.getMetaClient().reloadActiveTimeline();
   }
 
   protected String instantTimeToUseForScanning(String compactionInstantTime, String maxInstantTime) {
