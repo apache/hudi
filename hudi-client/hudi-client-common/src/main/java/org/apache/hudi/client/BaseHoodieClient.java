@@ -73,7 +73,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.timelineServer = timelineServer;
     shouldStopTimelineServer = !timelineServer.isPresent();
     this.heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
-        clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
+        clientConfig.getLong(HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS), clientConfig.getInt(HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES));
     startEmbeddedServerView();
     initWrapperFSMetrics();
   }
@@ -102,7 +102,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   private synchronized void startEmbeddedServerView() {
-    if (config.isEmbeddedTimelineServerEnabled()) {
+    if (config.getBoolean(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE)) {
       if (!timelineServer.isPresent()) {
         // Run Embedded Timeline Server
         try {
@@ -134,7 +134,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
     return HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(config.getBasePath())
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-        .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM))))
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
         .setProperties(config.getProps()).build();
   }

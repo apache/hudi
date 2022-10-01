@@ -574,7 +574,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                        Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
+    scheduleRollback(context, commitTime, inflightInstant, false, config.getBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE));
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
@@ -609,14 +609,14 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       });
 
       return true;
-    }, config.getFinalizeWriteParallelism());
+    }, config.getInt(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE));
   }
 
   /**
    * Returns the possible invalid data file name with given marker files.
    */
   protected Set<String> getInvalidDataPaths(WriteMarkers markers) throws IOException {
-    return markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism());
+    return markers.createdAndMergedDataPaths(context, config.getInt(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE));
   }
 
   /**
@@ -694,7 +694,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     context.setJobStatus(this.getClass().getSimpleName(), "Wait for all files to appear/disappear: " + config.getTableName());
     boolean checkPassed =
         context.map(new ArrayList<>(groupByPartition.entrySet()), partitionWithFileList -> waitForCondition(partitionWithFileList.getKey(),
-            partitionWithFileList.getValue().stream(), visibility), config.getFinalizeWriteParallelism())
+            partitionWithFileList.getValue().stream(), visibility), config.getInt(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE))
             .stream().allMatch(x -> x);
     if (!checkPassed) {
       throw new HoodieIOException("Consistency check failed to ensure all files " + visibility);
@@ -892,7 +892,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
         metadataIndexDisabled = !config.isMetadataColumnStatsIndexEnabled();
         break;
       case BLOOM_FILTERS:
-        metadataIndexDisabled = !config.isMetadataBloomFilterIndexEnabled();
+        metadataIndexDisabled = !(config.isMetadataTableEnabled() && config.getMetadataConfig().isBloomFilterIndexEnabled());
         break;
       default:
         LOG.debug("Not a valid metadata partition type: " + partitionType.name());

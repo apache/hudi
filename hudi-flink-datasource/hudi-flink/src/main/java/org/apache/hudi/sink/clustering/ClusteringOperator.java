@@ -31,6 +31,8 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -261,10 +263,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .withReaderSchema(readerSchema)
             .withLatestInstantTime(instantTime)
             .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-            .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
-            .withReverseReader(writeConfig.getCompactionReverseLogReadEnabled())
-            .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
-            .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
+            .withReadBlocksLazily(writeConfig.getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
+            .withReverseReader(writeConfig.getBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE))
+            .withBufferSize(writeConfig.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
+            .withSpillableMapBasePath(writeConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH))
             .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
             .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
             .build();

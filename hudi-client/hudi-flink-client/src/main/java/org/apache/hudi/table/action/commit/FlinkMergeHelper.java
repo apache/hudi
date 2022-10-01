@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -68,7 +69,7 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
     final GenericDatumReader<GenericRecord> gReader;
     Schema readSchema;
 
-    final boolean externalSchemaTransformation = table.getConfig().shouldUseExternalSchemaTransformation();
+    final boolean externalSchemaTransformation = table.getConfig().getBoolean(HoodieWriteConfig.AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE);
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
       readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
@@ -93,7 +94,7 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
       ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-      wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
+      wrapper = new BoundedInMemoryExecutor<>(Integer.parseInt(table.getConfig().getStringOrDefault(HoodieWriteConfig.WRITE_BUFFER_LIMIT_BYTES_VALUE)), new IteratorBasedQueueProducer<>(readerIterator),
           Option.of(new UpdateHandler(mergeHandle)), record -> {
         if (!externalSchemaTransformation) {
           return record;

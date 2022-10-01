@@ -130,7 +130,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
       assertTrue(HoodieTimeline.compareTimestamps("000", HoodieTimeline.LESSER_THAN, latestCompactionCommitTime));
 
-      if (cfg.populateMetaFields()) {
+      if (cfg.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
         assertEquals(200, HoodieClientTestUtils.countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline, Option.of("000")),
             "Must contain 200 records");
       } else {

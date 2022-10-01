@@ -85,7 +85,7 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
         schema = HoodieAvroUtils.addMetadataFields(schema);
       }
       bufferedIteratorExecutor =
-          new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getInsertHandler(),
+          new BoundedInMemoryExecutor<>(Integer.parseInt(hoodieConfig.getStringOrDefault(HoodieWriteConfig.WRITE_BUFFER_LIMIT_BYTES_VALUE)), inputItr, getInsertHandler(),
               getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();

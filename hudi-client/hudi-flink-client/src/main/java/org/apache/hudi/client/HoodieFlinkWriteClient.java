@@ -371,7 +371,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     try {
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), createTable(config, hadoopConf), instantTime)
-          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+          .quietDeleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
       autoArchiveOnCommit(table, acquireLockForArchival);
     } finally {
       this.heartbeatClient.stop(instantTime);
@@ -410,7 +410,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     }
     WriteMarkersFactory
         .get(config.getMarkersType(), table, compactionCommitTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+        .quietDeleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
       try {
@@ -469,7 +469,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     }
 
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+        .quietDeleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
     if (clusteringTimer != null) {
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       try {

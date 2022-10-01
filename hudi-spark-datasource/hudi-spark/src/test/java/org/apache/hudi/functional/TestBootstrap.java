@@ -305,7 +305,7 @@ public class TestBootstrap extends HoodieClientTestBase {
       client.compact(compactionInstant.get());
       checkBootstrapResults(totalRecords, schema, compactionInstant.get(), checkNumRawFiles,
           numInstantsAfterBootstrap + 2, 2, updateTimestamp, updateTimestamp, !deltaCommit,
-          Arrays.asList(compactionInstant.get()), !config.isPreserveHoodieCommitMetadataForCompaction());
+          Arrays.asList(compactionInstant.get()), !(boolean) config.getBoolean(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA));
     }
   }
 

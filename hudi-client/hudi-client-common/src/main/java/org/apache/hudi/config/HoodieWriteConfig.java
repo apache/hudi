@@ -19,8 +19,6 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.bootstrap.BootstrapMode;
-import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -49,31 +47,21 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.metrics.HoodieMetricsCloudWatchConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.metrics.MetricsReporterType;
-import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
-import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
-import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import javax.annotation.concurrent.Immutable;
@@ -963,105 +951,12 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieTableConfig.TYPE, HoodieTableConfig.TYPE.defaultValue().name()).toUpperCase());
   }
 
-  public String getPreCombineField() {
-    return getString(PRECOMBINE_FIELD_NAME);
-  }
-
-  public String getWritePayloadClass() {
-    return getString(WRITE_PAYLOAD_CLASS_NAME);
-  }
-
-  public String getKeyGeneratorClass() {
-    return getString(KEYGENERATOR_CLASS_NAME);
-  }
-
-  public boolean isCDCEnabled() {
-    return getBooleanOrDefault(
-        HoodieTableConfig.CDC_ENABLED, HoodieTableConfig.CDC_ENABLED.defaultValue());
-  }
-
-  public boolean isConsistentLogicalTimestampEnabled() {
-    return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
-  }
-
-  public Boolean shouldAutoCommit() {
-    return getBoolean(AUTO_COMMIT_ENABLE);
-  }
-
   public Boolean shouldAssumeDatePartitioning() {
     return metadataConfig.shouldAssumeDatePartitioning();
   }
 
-  public boolean shouldUseExternalSchemaTransformation() {
-    return getBoolean(AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE);
-  }
-
-  public Integer getTimelineLayoutVersion() {
-    return getInt(TIMELINE_LAYOUT_VERSION_NUM);
-  }
-
-  public int getBulkInsertShuffleParallelism() {
-    return getInt(BULKINSERT_PARALLELISM_VALUE);
-  }
-
-  public String getUserDefinedBulkInsertPartitionerClass() {
-    return getString(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME);
-  }
-
-  public String getUserDefinedBulkInsertPartitionerSortColumns() {
-    return getString(BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS);
-  }
-
-  public int getInsertShuffleParallelism() {
-    return getInt(INSERT_PARALLELISM_VALUE);
-  }
-
-  public int getUpsertShuffleParallelism() {
-    return getInt(UPSERT_PARALLELISM_VALUE);
-  }
-
-  public int getDeleteShuffleParallelism() {
-    return Math.max(getInt(DELETE_PARALLELISM_VALUE), 1);
-  }
-
-  public int getRollbackParallelism() {
-    return getInt(ROLLBACK_PARALLELISM_VALUE);
-  }
-
   public int getFileListingParallelism() {
     return metadataConfig.getFileListingParallelism();
-  }
-
-  public boolean shouldRollbackUsingMarkers() {
-    return getBoolean(ROLLBACK_USING_MARKERS_ENABLE);
-  }
-
-  public int getWriteBufferLimitBytes() {
-    return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_LIMIT_BYTES_VALUE));
-  }
-
-  public boolean shouldCombineBeforeInsert() {
-    return getBoolean(COMBINE_BEFORE_INSERT);
-  }
-
-  public boolean shouldCombineBeforeUpsert() {
-    return getBoolean(COMBINE_BEFORE_UPSERT);
-  }
-
-  public boolean shouldCombineBeforeDelete() {
-    return getBoolean(COMBINE_BEFORE_DELETE);
-  }
-
-  public boolean shouldAllowMultiWriteOnSameInstant() {
-    return getBoolean(ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE);
-  }
-
-  public String getWriteStatusClassName() {
-    return getString(WRITE_STATUS_CLASS_NAME);
-  }
-
-  public int getFinalizeWriteParallelism() {
-    return getInt(FINALIZE_WRITE_PARALLELISM_VALUE);
   }
 
   public MarkerType getMarkersType() {
@@ -1069,85 +964,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     return MarkerType.valueOf(markerType.toUpperCase());
   }
 
-  public boolean isHiveStylePartitioningEnabled() {
-    return getBooleanOrDefault(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE);
-  }
-
-  public int getMarkersTimelineServerBasedBatchNumThreads() {
-    return getInt(MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS);
-  }
-
-  public long getMarkersTimelineServerBasedBatchIntervalMs() {
-    return getLong(MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS);
-  }
-
-  public int getMarkersDeleteParallelism() {
-    return getInt(MARKERS_DELETE_PARALLELISM_VALUE);
-  }
-
-  public boolean isEmbeddedTimelineServerEnabled() {
-    return getBoolean(EMBEDDED_TIMELINE_SERVER_ENABLE);
-  }
-
-  public boolean isEmbeddedTimelineServerReuseEnabled() {
-    return getBoolean(EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED);
-  }
-
-  public int getEmbeddedTimelineServerPort() {
-    return Integer.parseInt(getStringOrDefault(EMBEDDED_TIMELINE_SERVER_PORT_NUM));
-  }
-
-  public int getEmbeddedTimelineServerThreads() {
-    return Integer.parseInt(getStringOrDefault(EMBEDDED_TIMELINE_NUM_SERVER_THREADS));
-  }
-
-  public boolean getEmbeddedTimelineServerCompressOutput() {
-    return Boolean.parseBoolean(getStringOrDefault(EMBEDDED_TIMELINE_SERVER_COMPRESS_ENABLE));
-  }
-
-  public boolean getEmbeddedTimelineServerUseAsync() {
-    return Boolean.parseBoolean(getStringOrDefault(EMBEDDED_TIMELINE_SERVER_USE_ASYNC_ENABLE));
-  }
-
-  public boolean isFailOnTimelineArchivingEnabled() {
-    return getBoolean(FAIL_ON_TIMELINE_ARCHIVING_ENABLE);
-  }
-
-  public int getMaxConsistencyChecks() {
-    return getInt(MAX_CONSISTENCY_CHECKS);
-  }
-
-  public int getInitialConsistencyCheckIntervalMs() {
-    return getInt(INITIAL_CONSISTENCY_CHECK_INTERVAL_MS);
-  }
-
-  public int getMaxConsistencyCheckIntervalMs() {
-    return getInt(MAX_CONSISTENCY_CHECK_INTERVAL_MS);
-  }
-
   public BulkInsertSortMode getBulkInsertSortMode() {
     String sortMode = getStringOrDefault(BULK_INSERT_SORT_MODE);
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
   }
 
-  public boolean isMergeDataValidationCheckEnabled() {
-    return getBoolean(MERGE_DATA_VALIDATION_CHECK_ENABLE);
-  }
-
-  public boolean allowDuplicateInserts() {
-    return getBoolean(MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE);
-  }
-
-  public int getSmallFileGroupCandidatesLimit() {
-    return getInt(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT);
-  }
-
   public EngineType getEngineType() {
     return engineType;
-  }
-
-  public boolean populateMetaFields() {
-    return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
   }
 
   /**
@@ -1157,213 +980,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieCleaningPolicy.valueOf(getString(CLEANER_POLICY));
   }
 
-  public int getCleanerFileVersionsRetained() {
-    return getInt(HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED);
-  }
-
-  public int getCleanerCommitsRetained() {
-    return getInt(HoodieCleanConfig.CLEANER_COMMITS_RETAINED);
-  }
-
-  public int getCleanerHoursRetained() {
-    return getInt(HoodieCleanConfig.CLEANER_HOURS_RETAINED);
-  }
-
-  public int getMaxCommitsToKeep() {
-    return getInt(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP);
-  }
-
-  public int getMinCommitsToKeep() {
-    return getInt(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP);
-  }
-
-  public int getArchiveMergeFilesBatchSize() {
-    return getInt(HoodieArchivalConfig.ARCHIVE_MERGE_FILES_BATCH_SIZE);
-  }
-
-  public int getParquetSmallFileLimit() {
-    return getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT);
-  }
-
-  public double getRecordSizeEstimationThreshold() {
-    return getDouble(HoodieCompactionConfig.RECORD_SIZE_ESTIMATION_THRESHOLD);
-  }
-
-  public int getCopyOnWriteInsertSplitSize() {
-    return getInt(HoodieCompactionConfig.COPY_ON_WRITE_INSERT_SPLIT_SIZE);
-  }
-
-  public int getCopyOnWriteRecordSizeEstimate() {
-    return getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
-  }
-
-  public boolean allowMultipleCleans() {
-    return getBoolean(HoodieCleanConfig.ALLOW_MULTIPLE_CLEANS);
-  }
-
-  public boolean shouldAutoTuneInsertSplits() {
-    return getBoolean(HoodieCompactionConfig.COPY_ON_WRITE_AUTO_SPLIT_INSERTS);
-  }
-
-  public int getCleanerParallelism() {
-    return getInt(HoodieCleanConfig.CLEANER_PARALLELISM_VALUE);
-  }
-
-  public int getCleaningMaxCommits() {
-    return getInt(HoodieCleanConfig.CLEAN_MAX_COMMITS);
-  }
-
   public CleaningTriggerStrategy getCleaningTriggerStrategy() {
     return CleaningTriggerStrategy.valueOf(getString(HoodieCleanConfig.CLEAN_TRIGGER_STRATEGY));
   }
 
-  public boolean isAutoClean() {
-    return getBoolean(HoodieCleanConfig.AUTO_CLEAN);
-  }
-
-  public boolean getArchiveMergeEnable() {
-    return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_MERGE_ENABLE);
-  }
-
-  public boolean shouldArchiveBeyondSavepoint() {
-    return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT);
-  }
-
-  public long getArchiveMergeSmallFileLimitBytes() {
-    return getLong(HoodieArchivalConfig.ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES);
-  }
-
-  public boolean isAutoArchive() {
-    return getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE);
-  }
-
-  public boolean isAsyncArchive() {
-    return getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE);
-  }
-
-  public boolean isAsyncClean() {
-    return getBoolean(HoodieCleanConfig.ASYNC_CLEAN);
-  }
-
-  public boolean incrementalCleanerModeEnabled() {
-    return getBoolean(HoodieCleanConfig.CLEANER_INCREMENTAL_MODE_ENABLE);
-  }
-
-  public boolean inlineCompactionEnabled() {
-    return getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
-  }
-
-  public boolean scheduleInlineCompaction() {
-    return getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
-  }
-
-  public CompactionTriggerStrategy getInlineCompactTriggerStrategy() {
-    return CompactionTriggerStrategy.valueOf(getString(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY));
-  }
-
-  public int getInlineCompactDeltaCommitMax() {
-    return getInt(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS);
-  }
-
-  public int getInlineCompactDeltaSecondsMax() {
-    return getInt(HoodieCompactionConfig.INLINE_COMPACT_TIME_DELTA_SECONDS);
-  }
-
-  public CompactionStrategy getCompactionStrategy() {
-    return ReflectionUtils.loadClass(getString(HoodieCompactionConfig.COMPACTION_STRATEGY));
-  }
-
-  public Long getTargetIOPerCompactionInMB() {
-    return getLong(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB);
-  }
-
-  public Long getCompactionLogFileSizeThreshold() {
-    return getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_SIZE_THRESHOLD);
-  }
-
-  public Long getCompactionLogFileNumThreshold() {
-    return getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_NUM_THRESHOLD);
-  }
-
-  public Boolean getCompactionLazyBlockReadEnabled() {
-    return getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE);
-  }
-
-  public Boolean getCompactionReverseLogReadEnabled() {
-    return getBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE);
-  }
-
-  public int getArchiveDeleteParallelism() {
-    return getInt(HoodieArchivalConfig.DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE);
-  }
-
-  public boolean inlineClusteringEnabled() {
-    return getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING);
-  }
-
-  public boolean scheduleInlineClustering() {
-    return getBoolean(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING);
-  }
-
-  public boolean isAsyncClusteringEnabled() {
-    return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
-  }
-
-  public boolean isPreserveHoodieCommitMetadataForClustering() {
-    return getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA);
-  }
-
-  public boolean isPreserveHoodieCommitMetadataForCompaction() {
-    return getBoolean(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA);
-  }
-
   public boolean isClusteringEnabled() {
     // TODO: future support async clustering
-    return inlineClusteringEnabled() || isAsyncClusteringEnabled();
-  }
-
-  public boolean isRollbackPendingClustering() {
-    return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
-  }
-
-  public int getInlineClusterMaxCommits() {
-    return getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS);
-  }
-
-  public int getAsyncClusterMaxCommits() {
-    return getInt(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS);
-  }
-
-  public String getPayloadClass() {
-    return getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME);
-  }
-
-  public int getTargetPartitionsPerDayBasedCompaction() {
-    return getInt(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION);
-  }
-
-  public int getCommitArchivalBatchSize() {
-    return getInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE);
-  }
-
-  public Boolean shouldCleanBootstrapBaseFile() {
-    return getBoolean(HoodieCleanConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLE);
-  }
-
-  public String getClusteringUpdatesStrategyClass() {
-    return getString(HoodieClusteringConfig.UPDATES_STRATEGY);
-  }
-
-  public HoodieFailedWritesCleaningPolicy getFailedWritesCleanPolicy() {
-    return HoodieFailedWritesCleaningPolicy
-        .valueOf(getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY));
-  }
-
-  /**
-   * Clustering properties.
-   */
-  public String getClusteringPlanStrategyClass() {
-    return getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME);
+    return getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING) || (boolean) getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
   }
 
   public ClusteringPlanPartitionFilterMode getClusteringPlanPartitionFilterMode() {
@@ -1371,251 +994,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ClusteringPlanPartitionFilterMode.valueOf(mode);
   }
 
-  public String getBeginPartitionForClustering() {
-    return getString(HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION);
-  }
-
-  public String getEndPartitionForClustering() {
-    return getString(HoodieClusteringConfig.PARTITION_FILTER_END_PARTITION);
-  }
-
-  public String getClusteringExecutionStrategyClass() {
-    return getString(HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME);
-  }
-
-  public long getClusteringMaxBytesInGroup() {
-    return getLong(HoodieClusteringConfig.PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP);
-  }
-
-  public long getClusteringSmallFileLimit() {
-    return getLong(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT);
-  }
-
-  public String getClusteringPartitionSelected() {
-    return getString(HoodieClusteringConfig.PARTITION_SELECTED);
-  }
-
-  public String getClusteringPartitionFilterRegexPattern() {
-    return getString(HoodieClusteringConfig.PARTITION_REGEX_PATTERN);
-  }
-
-  public int getClusteringMaxNumGroups() {
-    return getInt(HoodieClusteringConfig.PLAN_STRATEGY_MAX_GROUPS);
-  }
-
-  public long getClusteringTargetFileMaxBytes() {
-    return getLong(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES);
-  }
-
-  public int getTargetPartitionsForClustering() {
-    return getInt(HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS);
-  }
-
-  public int getSkipPartitionsFromLatestForClustering() {
-    return getInt(HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST);
-  }
-
-  public String getClusteringSortColumns() {
-    return getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS);
-  }
-
-  public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
-    return HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(
-        getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY)
-    );
-  }
-
-  public HoodieClusteringConfig.SpatialCurveCompositionStrategyType getLayoutOptimizationCurveBuildMethod() {
-    return HoodieClusteringConfig.SpatialCurveCompositionStrategyType.fromValue(
-        getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD));
-  }
-
-  public int getLayoutOptimizationSampleSize() {
-    return getInt(HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE);
-  }
-
-  /**
-   * index properties.
-   */
-  public HoodieIndex.IndexType getIndexType() {
-    return HoodieIndex.IndexType.valueOf(getString(HoodieIndexConfig.INDEX_TYPE));
-  }
-
-  public String getIndexClass() {
-    return getString(HoodieIndexConfig.INDEX_CLASS_NAME);
-  }
-
-  public HoodieIndex.BucketIndexEngineType getBucketIndexEngineType() {
-    return HoodieIndex.BucketIndexEngineType.valueOf(getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE));
-  }
-
-  public int getBloomFilterNumEntries() {
-    return getInt(HoodieIndexConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE);
-  }
-
-  public double getBloomFilterFPP() {
-    return getDouble(HoodieIndexConfig.BLOOM_FILTER_FPP_VALUE);
-  }
-
-  public String getHbaseZkQuorum() {
-    return getString(HoodieHBaseIndexConfig.ZKQUORUM);
-  }
-
-  public int getHbaseZkPort() {
-    return getInt(HoodieHBaseIndexConfig.ZKPORT);
-  }
-
-  public String getHBaseZkZnodeParent() {
-    return getString(HoodieHBaseIndexConfig.ZK_NODE_PATH);
-  }
-
-  public String getHbaseTableName() {
-    return getString(HoodieHBaseIndexConfig.TABLENAME);
-  }
-
-  public int getHbaseIndexGetBatchSize() {
-    return getInt(HoodieHBaseIndexConfig.GET_BATCH_SIZE);
-  }
-
-  public Boolean getHBaseIndexRollbackSync() {
-    return getBoolean(HoodieHBaseIndexConfig.ROLLBACK_SYNC_ENABLE);
-  }
-
-  public int getHbaseIndexPutBatchSize() {
-    return getInt(HoodieHBaseIndexConfig.PUT_BATCH_SIZE);
-  }
-
-  public boolean getHbaseIndexPutBatchSizeAutoCompute() {
-    return getBooleanOrDefault(HoodieHBaseIndexConfig.PUT_BATCH_SIZE_AUTO_COMPUTE);
-  }
-
-  public String getHBaseQPSResourceAllocatorClass() {
-    return getString(HoodieHBaseIndexConfig.QPS_ALLOCATOR_CLASS_NAME);
-  }
-
-  public String getHBaseQPSZKnodePath() {
-    return getString(HoodieHBaseIndexConfig.ZKPATH_QPS_ROOT);
-  }
-
-  public String getHBaseZkZnodeSessionTimeout() {
-    return getString(HoodieHBaseIndexConfig.ZK_SESSION_TIMEOUT_MS);
-  }
-
-  public String getHBaseZkZnodeConnectionTimeout() {
-    return getString(HoodieHBaseIndexConfig.ZK_CONNECTION_TIMEOUT_MS);
-  }
-
-  public boolean getHBaseIndexShouldComputeQPSDynamically() {
-    return getBoolean(HoodieHBaseIndexConfig.COMPUTE_QPS_DYNAMICALLY);
-  }
-
-  public String getHBaseIndexSecurityAuthentication() {
-    return getString(HoodieHBaseIndexConfig.SECURITY_AUTHENTICATION);
-  }
-
-  public String getHBaseIndexKerberosUserKeytab() {
-    return getString(HoodieHBaseIndexConfig.KERBEROS_USER_KEYTAB);
-  }
-
-  public String getHBaseIndexKerberosUserPrincipal() {
-    return getString(HoodieHBaseIndexConfig.KERBEROS_USER_PRINCIPAL);
-  }
-
-  public String getHBaseIndexRegionserverPrincipal() {
-    return getString(HoodieHBaseIndexConfig.REGIONSERVER_PRINCIPAL);
-  }
-
-  public String getHBaseIndexMasterPrincipal() {
-    return getString(HoodieHBaseIndexConfig.MASTER_PRINCIPAL);
-  }
-
-  public int getHBaseIndexDesiredPutsTime() {
-    return getInt(HoodieHBaseIndexConfig.DESIRED_PUTS_TIME_IN_SECONDS);
-  }
-
-  public String getBloomFilterType() {
-    return getString(HoodieIndexConfig.BLOOM_FILTER_TYPE);
-  }
-
-  public int getDynamicBloomFilterMaxNumEntries() {
-    return getInt(HoodieIndexConfig.BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES);
-  }
-
-  /**
-   * Fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have
-   * input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for
-   * the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
-   */
-  public float getHbaseIndexQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.QPS_FRACTION);
-  }
-
-  public float getHBaseIndexMinQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.MIN_QPS_FRACTION);
-  }
-
-  public float getHBaseIndexMaxQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.MAX_QPS_FRACTION);
-  }
-
-  /**
-   * This should be same across various jobs. This is intended to limit the aggregate QPS generated across various
-   * Hoodie jobs to an Hbase Region Server
-   */
-  public int getHbaseIndexMaxQPSPerRegionServer() {
-    return getInt(HoodieHBaseIndexConfig.MAX_QPS_PER_REGION_SERVER);
-  }
-
-  public boolean getHbaseIndexUpdatePartitionPath() {
-    return getBooleanOrDefault(HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE);
-  }
-
-  public int getHBaseIndexRegionCount() {
-    return getInt(HoodieHBaseIndexConfig.BUCKET_NUMBER);
-  }
-
-  public int getBloomIndexParallelism() {
-    return getInt(HoodieIndexConfig.BLOOM_INDEX_PARALLELISM);
-  }
-
-  public boolean getBloomIndexPruneByRanges() {
-    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_PRUNE_BY_RANGES);
-  }
-
-  public boolean getBloomIndexUseCaching() {
-    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_USE_CACHING);
-  }
-
-  public boolean getBloomIndexUseMetadata() {
-    return getBooleanOrDefault(HoodieIndexConfig.BLOOM_INDEX_USE_METADATA);
-  }
-
-  public boolean useBloomIndexTreebasedFilter() {
-    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_TREE_BASED_FILTER);
-  }
-
-  public boolean useBloomIndexBucketizedChecking() {
-    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING);
-  }
-
-  public boolean isMetadataBloomFilterIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
-  }
-
   public boolean isMetadataColumnStatsIndexEnabled() {
     return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
-  }
-
-  public List<String> getColumnsEnabledForColumnStatsIndex() {
-    return getMetadataConfig().getColumnsEnabledForColumnStatsIndex();
-  }
-
-  public List<String> getColumnsEnabledForBloomFilterIndex() {
-    return getMetadataConfig().getColumnsEnabledForBloomFilterIndex();
-  }
-
-  public int getIndexingCheckTimeoutSeconds() {
-    return getMetadataConfig().getIndexingCheckTimeoutSeconds();
   }
 
   public int getMetadataBloomFilterIndexParallelism() {
@@ -1626,88 +1006,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getColumnStatsIndexParallelism();
   }
 
-  public int getBloomIndexKeysPerBucket() {
-    return getInt(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET);
-  }
-
-  public boolean getBloomIndexUpdatePartitionPath() {
-    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE);
-  }
-
-  public int getSimpleIndexParallelism() {
-    return getInt(HoodieIndexConfig.SIMPLE_INDEX_PARALLELISM);
-  }
-
-  public boolean getSimpleIndexUseCaching() {
-    return getBoolean(HoodieIndexConfig.SIMPLE_INDEX_USE_CACHING);
-  }
-
-  public int getGlobalSimpleIndexParallelism() {
-    return getInt(HoodieIndexConfig.GLOBAL_SIMPLE_INDEX_PARALLELISM);
-  }
-
-  public boolean getGlobalSimpleIndexUpdatePartitionPath() {
-    return getBoolean(HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE);
-  }
-
-  public int getBucketIndexNumBuckets() {
-    return getIntOrDefault(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
-  }
-
-  public int getBucketIndexMaxNumBuckets() {
-    return getInt(HoodieIndexConfig.BUCKET_INDEX_MAX_NUM_BUCKETS);
-  }
-
-  public int getBucketIndexMinNumBuckets() {
-    return getInt(HoodieIndexConfig.BUCKET_INDEX_MIN_NUM_BUCKETS);
-  }
-
-  public double getBucketSplitThreshold() {
-    return getDouble(HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD);
-  }
-
-  public double getBucketMergeThreshold() {
-    return getDouble(HoodieIndexConfig.BUCKET_MERGE_THRESHOLD);
-  }
-
-  public String getBucketIndexHashField() {
-    return getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
-  }
-
   /**
    * storage properties.
    */
   public long getMaxFileSize(HoodieFileFormat format) {
     switch (format) {
       case PARQUET:
-        return getParquetMaxFileSize();
+        return getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
       case HFILE:
-        return getHFileMaxFileSize();
+        return getLong(HoodieStorageConfig.HFILE_MAX_FILE_SIZE);
       case ORC:
-        return getOrcMaxFileSize();
+        return getLong(HoodieStorageConfig.ORC_FILE_MAX_SIZE);
       default:
         throw new HoodieNotSupportedException("Unknown file format: " + format);
     }
-  }
-
-  public long getParquetMaxFileSize() {
-    return getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
-  }
-
-  public int getParquetBlockSize() {
-    return getInt(HoodieStorageConfig.PARQUET_BLOCK_SIZE);
-  }
-
-  public int getParquetPageSize() {
-    return getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE);
-  }
-
-  public int getLogFileDataBlockMaxSize() {
-    return getInt(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE);
-  }
-
-  public double getParquetCompressionRatio() {
-    return getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION);
   }
 
   public CompressionCodecName getParquetCompressionCodec() {
@@ -1715,113 +1027,9 @@ public class HoodieWriteConfig extends HoodieConfig {
     return CompressionCodecName.fromConf(StringUtils.isNullOrEmpty(codecName) ? null : codecName);
   }
 
-  public boolean parquetDictionaryEnabled() {
-    return getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED);
-  }
-
-  public String parquetWriteLegacyFormatEnabled() {
-    return getString(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED);
-  }
-
-  public String parquetOutputTimestampType() {
-    return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
-  }
-
-  public String parquetFieldIdWriteEnabled() {
-    return getString(HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED);
-  }
-
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
     return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
         .map(HoodieLogBlock.HoodieLogBlockType::fromId);
-  }
-
-  public long getLogFileMaxSize() {
-    return getLong(HoodieStorageConfig.LOGFILE_MAX_SIZE);
-  }
-
-  public double getLogFileToParquetCompressionRatio() {
-    return getDouble(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION);
-  }
-
-  public long getHFileMaxFileSize() {
-    return getLong(HoodieStorageConfig.HFILE_MAX_FILE_SIZE);
-  }
-
-  public int getHFileBlockSize() {
-    return getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE);
-  }
-
-  public Compression.Algorithm getHFileCompressionAlgorithm() {
-    return Compression.Algorithm.valueOf(getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME));
-  }
-
-  public long getOrcMaxFileSize() {
-    return getLong(HoodieStorageConfig.ORC_FILE_MAX_SIZE);
-  }
-
-  public int getOrcStripeSize() {
-    return getInt(HoodieStorageConfig.ORC_STRIPE_SIZE);
-  }
-
-  public int getOrcBlockSize() {
-    return getInt(HoodieStorageConfig.ORC_BLOCK_SIZE);
-  }
-
-  public CompressionKind getOrcCompressionCodec() {
-    return CompressionKind.valueOf(getString(HoodieStorageConfig.ORC_COMPRESSION_CODEC_NAME));
-  }
-
-  /**
-   * metrics properties.
-   */
-  public boolean isMetricsOn() {
-    return getBoolean(HoodieMetricsConfig.TURN_METRICS_ON);
-  }
-
-  public boolean isExecutorMetricsEnabled() {
-    return Boolean.parseBoolean(
-        getStringOrDefault(HoodieMetricsConfig.EXECUTOR_METRICS_ENABLE, "false"));
-  }
-
-  public boolean isLockingMetricsEnabled() {
-    return getBoolean(HoodieMetricsConfig.LOCK_METRICS_ENABLE);
-  }
-
-  public MetricsReporterType getMetricsReporterType() {
-    return MetricsReporterType.valueOf(getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE));
-  }
-
-  public String getGraphiteServerHost() {
-    return getString(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_HOST_NAME);
-  }
-
-  public int getGraphiteServerPort() {
-    return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_PORT_NUM);
-  }
-
-  public String getGraphiteMetricPrefix() {
-    return getString(HoodieMetricsGraphiteConfig.GRAPHITE_METRIC_PREFIX_VALUE);
-  }
-
-  public int getGraphiteReportPeriodSeconds() {
-    return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS);
-  }
-
-  public String getJmxHost() {
-    return getString(HoodieMetricsJmxConfig.JMX_HOST_NAME);
-  }
-
-  public String getJmxPort() {
-    return getString(HoodieMetricsJmxConfig.JMX_PORT_NUM);
-  }
-
-  public int getDatadogReportPeriodSeconds() {
-    return getInt(HoodieMetricsDatadogConfig.REPORT_PERIOD_IN_SECONDS);
-  }
-
-  public ApiSite getDatadogApiSite() {
-    return ApiSite.valueOf(getString(HoodieMetricsDatadogConfig.API_SITE_VALUE));
   }
 
   public String getDatadogApiKey() {
@@ -1834,92 +1042,9 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
   }
 
-  public boolean getDatadogApiKeySkipValidation() {
-    return getBoolean(HoodieMetricsDatadogConfig.API_KEY_SKIP_VALIDATION);
-  }
-
-  public int getDatadogApiTimeoutSeconds() {
-    return getInt(HoodieMetricsDatadogConfig.API_TIMEOUT_IN_SECONDS);
-  }
-
-  public String getDatadogMetricPrefix() {
-    return getString(HoodieMetricsDatadogConfig.METRIC_PREFIX_VALUE);
-  }
-
-  public String getDatadogMetricHost() {
-    return getString(HoodieMetricsDatadogConfig.METRIC_HOST_NAME);
-  }
-
   public List<String> getDatadogMetricTags() {
     return Arrays.stream(getStringOrDefault(
         HoodieMetricsDatadogConfig.METRIC_TAG_VALUES, ",").split("\\s*,\\s*")).collect(Collectors.toList());
-  }
-
-  public int getCloudWatchReportPeriodSeconds() {
-    return getInt(HoodieMetricsCloudWatchConfig.REPORT_PERIOD_SECONDS);
-  }
-
-  public String getCloudWatchMetricPrefix() {
-    return getString(HoodieMetricsCloudWatchConfig.METRIC_PREFIX);
-  }
-
-  public String getCloudWatchMetricNamespace() {
-    return getString(HoodieMetricsCloudWatchConfig.METRIC_NAMESPACE);
-  }
-
-  public int getCloudWatchMaxDatumsPerRequest() {
-    return getInt(HoodieMetricsCloudWatchConfig.MAX_DATUMS_PER_REQUEST);
-  }
-
-  public String getMetricReporterClassName() {
-    return getString(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME);
-  }
-
-  public int getPrometheusPort() {
-    return getInt(HoodieMetricsPrometheusConfig.PROMETHEUS_PORT_NUM);
-  }
-
-  public String getPushGatewayHost() {
-    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_HOST_NAME);
-  }
-
-  public int getPushGatewayPort() {
-    return getInt(HoodieMetricsPrometheusConfig.PUSHGATEWAY_PORT_NUM);
-  }
-
-  public int getPushGatewayReportPeriodSeconds() {
-    return getInt(HoodieMetricsPrometheusConfig.PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS);
-  }
-
-  public boolean getPushGatewayDeleteOnShutdown() {
-    return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE);
-  }
-
-  public String getPushGatewayJobName() {
-    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOBNAME);
-  }
-
-  public boolean getPushGatewayRandomJobNameSuffix() {
-    return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX);
-  }
-
-  public String getMetricReporterMetricsNamePrefix() {
-    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
-  }
-
-  /**
-   * memory configs.
-   */
-  public int getMaxDFSStreamBufferSize() {
-    return getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE);
-  }
-
-  public String getSpillableMapBasePath() {
-    return getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH);
-  }
-
-  public double getWriteStatusFailureFraction() {
-    return getDouble(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION);
   }
 
   public ConsistencyGuardConfig getConsistencyGuardConfig() {
@@ -1963,135 +1088,13 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Commit call back configs.
-   */
-  public boolean writeCommitCallbackOn() {
-    return getBoolean(HoodieWriteCommitCallbackConfig.TURN_CALLBACK_ON);
-  }
-
-  public String getCallbackClass() {
-    return getString(HoodieWriteCommitCallbackConfig.CALLBACK_CLASS_NAME);
-  }
-
-  public String getBootstrapSourceBasePath() {
-    return getString(HoodieBootstrapConfig.BASE_PATH);
-  }
-
-  public String getBootstrapModeSelectorClass() {
-    return getString(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME);
-  }
-
-  public String getFullBootstrapInputProvider() {
-    return getString(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME);
-  }
-
-  public String getBootstrapKeyGeneratorClass() {
-    return getString(HoodieBootstrapConfig.KEYGEN_CLASS_NAME);
-  }
-
-  public String getBootstrapKeyGeneratorType() {
-    return getString(HoodieBootstrapConfig.KEYGEN_TYPE);
-  }
-
-  public String getBootstrapModeSelectorRegex() {
-    return getString(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_PATTERN);
-  }
-
-  public BootstrapMode getBootstrapModeForRegexMatch() {
-    return BootstrapMode.valueOf(getString(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE));
-  }
-
-  public String getBootstrapPartitionPathTranslatorClass() {
-    return getString(HoodieBootstrapConfig.PARTITION_PATH_TRANSLATOR_CLASS_NAME);
-  }
-
-  public int getBootstrapParallelism() {
-    return getInt(HoodieBootstrapConfig.PARALLELISM_VALUE);
-  }
-
-  public Long getMaxMemoryPerPartitionMerge() {
-    return getLong(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE);
-  }
-
-  public Long getHoodieClientHeartbeatIntervalInMs() {
-    return getLong(CLIENT_HEARTBEAT_INTERVAL_IN_MS);
-  }
-
-  public Integer getHoodieClientHeartbeatTolerableMisses() {
-    return getInt(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES);
-  }
-
-  /**
    * File listing metadata configs.
    */
   public boolean isMetadataTableEnabled() {
     return metadataConfig.enabled();
   }
 
-  public int getMetadataInsertParallelism() {
-    return getInt(HoodieMetadataConfig.INSERT_PARALLELISM_VALUE);
-  }
-
-  public int getMetadataCompactDeltaCommitMax() {
-    return getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS);
-  }
-
-  public boolean isMetadataAsyncClean() {
-    return getBoolean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE);
-  }
-
-  public boolean isMetadataAsyncIndex() {
-    return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
-  }
-
-  public int getMetadataMaxCommitsToKeep() {
-    return getInt(HoodieMetadataConfig.MAX_COMMITS_TO_KEEP);
-  }
-
-  public int getMetadataMinCommitsToKeep() {
-    return getInt(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP);
-  }
-
-  public int getMetadataCleanerCommitsRetained() {
-    return getInt(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED);
-  }
-
-  /**
-   * Hoodie Client Lock Configs.
-   * @return
-   */
-  public boolean isAutoAdjustLockConfigs() {
-    return getBooleanOrDefault(AUTO_ADJUST_LOCK_CONFIGS);
-  }
-
-  public String getLockProviderClass() {
-    return getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME);
-  }
-
-  public String getLockHiveDatabaseName() {
-    return getString(HoodieLockConfig.HIVE_DATABASE_NAME);
-  }
-
-  public String getLockHiveTableName() {
-    return getString(HoodieLockConfig.HIVE_TABLE_NAME);
-  }
-
-  public ConflictResolutionStrategy getWriteConflictResolutionStrategy() {
-    return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
-  }
-
-  public Long getLockAcquireWaitTimeoutInMs() {
-    return getLong(HoodieLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS);
-  }
-
-  public WriteConcurrencyMode getWriteConcurrencyMode() {
-    return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
-  }
-
   // misc configs
-  public Boolean doSkipDefaultPartitionValidation() {
-    return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
-  }
 
   /**
    * Are any table services configured to run inline for both scheduling and execution?
@@ -2099,9 +1102,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run inline, false otherwise.
    */
   public Boolean areAnyTableServicesExecutedInline() {
-    return areTableServicesEnabled()
-        && (inlineClusteringEnabled() || inlineCompactionEnabled()
-        || (isAutoClean() && !isAsyncClean()) || (isAutoArchive() && !isAsyncArchive()));
+    return getBooleanOrDefault(TABLE_SERVICES_ENABLED)
+        && (getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING) || getBoolean(HoodieCompactionConfig.INLINE_COMPACT)
+        || (getBoolean(HoodieCleanConfig.AUTO_CLEAN) && !(boolean) getBoolean(HoodieCleanConfig.ASYNC_CLEAN)) || (getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE) && !(boolean) getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE)));
   }
 
   /**
@@ -2110,50 +1113,14 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run async, false otherwise.
    */
   public Boolean areAnyTableServicesAsync() {
-    return areTableServicesEnabled()
-        && (isAsyncClusteringEnabled()
-        || (getTableType() == HoodieTableType.MERGE_ON_READ && !inlineCompactionEnabled())
-        || (isAutoClean() && isAsyncClean()) || (isAutoArchive() && isAsyncArchive()));
+    return getBooleanOrDefault(TABLE_SERVICES_ENABLED)
+        && (getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE)
+        || (getTableType() == HoodieTableType.MERGE_ON_READ && !(boolean) getBoolean(HoodieCompactionConfig.INLINE_COMPACT))
+        || (getBoolean(HoodieCleanConfig.AUTO_CLEAN) && (boolean) getBoolean(HoodieCleanConfig.ASYNC_CLEAN)) || (getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE) && (boolean) getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE)));
   }
 
   public Boolean areAnyTableServicesScheduledInline() {
-    return scheduleInlineCompaction() || scheduleInlineClustering();
-  }
-
-  public String getPreCommitValidators() {
-    return getString(HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES);
-  }
-
-  public String getPreCommitValidatorEqualitySqlQueries() {
-    return getString(HoodiePreCommitValidatorConfig.EQUALITY_SQL_QUERIES);
-  }
-
-  public String getPreCommitValidatorSingleResultSqlQueries() {
-    return getString(HoodiePreCommitValidatorConfig.SINGLE_VALUE_SQL_QUERIES);
-  }
-
-  public String getPreCommitValidatorInequalitySqlQueries() {
-    return getString(HoodiePreCommitValidatorConfig.INEQUALITY_SQL_QUERIES);
-  }
-
-  public boolean allowEmptyCommit() {
-    return getBooleanOrDefault(ALLOW_EMPTY_COMMIT);
-  }
-
-  public boolean allowOperationMetadataField() {
-    return getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD);
-  }
-
-  public String getFileIdPrefixProviderClassName() {
-    return getString(FILEID_PREFIX_PROVIDER_CLASS);
-  }
-
-  public boolean areTableServicesEnabled() {
-    return getBooleanOrDefault(TABLE_SERVICES_ENABLED);
-  }
-
-  public boolean areReleaseResourceEnabled() {
-    return getBooleanOrDefault(RELEASE_RESOURCE_ENABLE);
+    return getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT) || (boolean) getBoolean(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING);
   }
 
   /**
@@ -2639,7 +1606,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
-      if (writeConfig.isAutoAdjustLockConfigs()) {
+      if (writeConfig.getBooleanOrDefault(AUTO_ADJUST_LOCK_CONFIGS)) {
         // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
         boolean isMetadataTableEnabled = writeConfig.getBoolean(HoodieMetadataConfig.ENABLE);
 
@@ -2649,7 +1616,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           // Async table services can update the metadata table and a lock provider is
           // needed to guard against any concurrent table write operations. If user has
           // not configured any lock provider, let's use the InProcess lock provider.
-          boolean areTableServicesEnabled = writeConfig.areTableServicesEnabled();
+          boolean areTableServicesEnabled = writeConfig.getBooleanOrDefault(TABLE_SERVICES_ENABLED);
           boolean areAsyncTableServicesEnabled = writeConfig.areAnyTableServicesAsync();
           if (!isLockProviderPropertySet && areTableServicesEnabled && areAsyncTableServicesEnabled) {
             // This is targeted at Single writer with async table services

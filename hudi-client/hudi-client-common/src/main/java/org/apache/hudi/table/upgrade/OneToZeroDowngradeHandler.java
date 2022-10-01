@@ -48,7 +48,7 @@ public class OneToZeroDowngradeHandler implements DowngradeHandler {
     for (HoodieInstant inflightInstant : commits) {
       // delete existing markers
       WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, inflightInstant.getTimestamp());
-      writeMarkers.quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      writeMarkers.quietDeleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
     }
     return Collections.EMPTY_MAP;
   }

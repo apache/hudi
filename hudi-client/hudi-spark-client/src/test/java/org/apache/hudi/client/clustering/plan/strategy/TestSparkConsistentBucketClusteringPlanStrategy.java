@@ -82,7 +82,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     SparkConsistentBucketClusteringPlanStrategy planStrategy = new SparkConsistentBucketClusteringPlanStrategy(hoodieTable, context, config);
 
-    HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata("partition", config.getBucketIndexNumBuckets());
+    HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata("partition", config.getIntOrDefault(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS));
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
 
     int[] fsSize = {maxFileSize * 5, (int) (maxFileSize * BUCKET_SPLIT_THRESHOLD.defaultValue() + 1), maxFileSize, maxFileSize * 5};

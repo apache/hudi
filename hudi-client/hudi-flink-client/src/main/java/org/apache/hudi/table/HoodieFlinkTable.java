@@ -55,7 +55,7 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM))))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
     return HoodieFlinkTable.create(config, context, metaClient);
   }

@@ -56,7 +56,7 @@ public class HoodieMergeHandleFactory {
         return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier,
             keyGeneratorOpt);
       }
-    } else if (!WriteOperationType.isChangingRecords(operationType) && writeConfig.allowDuplicateInserts()) {
+    } else if (!WriteOperationType.isChangingRecords(operationType) && writeConfig.getBoolean(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE)) {
       return new HoodieConcatHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     } else {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {

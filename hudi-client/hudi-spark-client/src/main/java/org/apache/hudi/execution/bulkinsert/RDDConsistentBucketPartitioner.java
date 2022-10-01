@@ -29,11 +29,13 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.io.SingleFileHandleCreateFactory;
 import org.apache.hudi.io.WriteHandleFactory;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -75,9 +77,9 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
 
   public RDDConsistentBucketPartitioner(HoodieTable table, Map<String, String> strategyParams, boolean preserveHoodieMetadata) {
     this.table = table;
-    this.indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
+    this.indexKeyFields = Arrays.asList(table.getConfig().getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD).split(","));
     this.hashingChildrenNodes = new HashMap<>();
-    this.consistentLogicalTimestampEnabled = table.getConfig().isConsistentLogicalTimestampEnabled();
+    this.consistentLogicalTimestampEnabled = table.getConfig().getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
 
     if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {

@@ -100,7 +100,7 @@ public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
       Class<?> expectedWriteMarkersClass) {
     String instantTime = "001";
     Mockito.when(table.getConfig()).thenReturn(writeConfig);
-    Mockito.when(writeConfig.isEmbeddedTimelineServerEnabled())
+    Mockito.when(writeConfig.getBoolean(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE))
         .thenReturn(isTimelineServerEnabled);
     Mockito.when(table.getMetaClient()).thenReturn(metaClient);
     Mockito.when(metaClient.getFs()).thenReturn(fileSystem);

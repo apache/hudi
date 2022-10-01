@@ -22,6 +22,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
@@ -76,8 +77,8 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
       HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf, parquetWriteLegacyFormatEnabled);
       HoodieWriteConfig cfg = writeConfigBuilder.build();
       HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
-          CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
-          writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
+          CompressionCodecName.SNAPPY, cfg.getInt(HoodieStorageConfig.PARQUET_BLOCK_SIZE), cfg.getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE), cfg.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
+          writeSupport.getHadoopConf(), cfg.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION), cfg.getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
 
       // prepare path
       String fileId = UUID.randomUUID().toString();
@@ -112,10 +113,10 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
     writeConfigBuilder.withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat(String.valueOf(parquetWriteLegacyFormatEnabled)).build());
     HoodieWriteConfig writeConfig = writeConfigBuilder.build();
     BloomFilter filter = BloomFilterFactory.createBloomFilter(
-        writeConfig.getBloomFilterNumEntries(),
-        writeConfig.getBloomFilterFPP(),
-        writeConfig.getDynamicBloomFilterMaxNumEntries(),
-        writeConfig.getBloomFilterType());
+        writeConfig.getInt(HoodieIndexConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE),
+        writeConfig.getDouble(HoodieIndexConfig.BLOOM_FILTER_FPP_VALUE),
+        writeConfig.getInt(HoodieIndexConfig.BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES),
+        writeConfig.getString(HoodieIndexConfig.BLOOM_FILTER_TYPE));
     return new HoodieRowParquetWriteSupport(hadoopConf, SparkDatasetTestUtils.STRUCT_TYPE, Option.of(filter), writeConfig);
   }
 }

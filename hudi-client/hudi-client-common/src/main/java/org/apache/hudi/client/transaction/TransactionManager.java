@@ -20,6 +20,7 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.client.transaction.lock.LockManager;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -42,7 +43,7 @@ public class TransactionManager implements Serializable {
 
   public TransactionManager(HoodieWriteConfig config, FileSystem fs) {
     this.lockManager = new LockManager(config, fs);
-    this.isOptimisticConcurrencyControlEnabled = config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+    this.isOptimisticConcurrencyControlEnabled = WriteConcurrencyMode.fromValue(config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE)).supportsOptimisticConcurrencyControl();
   }
 
   public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,

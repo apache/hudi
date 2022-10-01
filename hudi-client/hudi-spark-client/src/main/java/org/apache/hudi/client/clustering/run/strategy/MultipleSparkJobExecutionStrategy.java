@@ -44,6 +44,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -59,6 +61,7 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -196,19 +199,22 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
             .map(listStr -> listStr.split(","));
 
     return orderByColumnsOpt.map(orderByColumns -> {
-      HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
+      HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(
+          getWriteConfig().getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY)
+      );
       switch (layoutOptStrategy) {
         case ZORDER:
         case HILBERT:
           return isRowPartitioner
               ? new RowSpatialCurveSortPartitioner(getWriteConfig())
               : new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns, layoutOptStrategy,
-                  getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema));
+              HoodieClusteringConfig.SpatialCurveCompositionStrategyType.fromValue(
+                  getWriteConfig().getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD)), HoodieAvroUtils.addMetadataFields(schema));
         case LINEAR:
           return isRowPartitioner
               ? new RowCustomColumnsSortPartitioner(orderByColumns)
               : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
-                  getWriteConfig().isConsistentLogicalTimestampEnabled());
+              getWriteConfig().getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED));
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
@@ -289,10 +295,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
               .withReaderSchema(readerSchema)
               .withLatestInstantTime(instantTime)
               .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-              .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
-              .withReverseReader(config.getCompactionReverseLogReadEnabled())
-              .withBufferSize(config.getMaxDFSStreamBufferSize())
-              .withSpillableMapBasePath(config.getSpillableMapBasePath())
+              .withReadBlocksLazily(config.getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
+              .withReverseReader(config.getBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE))
+              .withBufferSize(config.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
+              .withSpillableMapBasePath(config.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH))
               .withPartition(clusteringOp.getPartitionPath())
               .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
               .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
@@ -425,7 +431,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
   private static <T> HoodieRecord<T> transform(IndexedRecord indexedRecord, HoodieWriteConfig writeConfig) {
     GenericRecord record = (GenericRecord) indexedRecord;
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (!writeConfig.populateMetaFields()) {
+    if (!writeConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
       try {
         keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
       } catch (IOException e) {

@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
@@ -70,7 +71,7 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
     // limit
     return operations.stream()
         .collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet().stream()
-        .sorted(Map.Entry.comparingByKey(comparator)).limit(writeConfig.getTargetPartitionsPerDayBasedCompaction())
+        .sorted(Map.Entry.comparingByKey(comparator)).limit(writeConfig.getInt(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION))
         .flatMap(e -> e.getValue().stream()).collect(Collectors.toList());
   }
 
@@ -78,7 +79,7 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
   public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
     return allPartitionPaths.stream().map(partition -> partition.replace("/", "-"))
         .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
-        .collect(Collectors.toList()).subList(0, writeConfig.getTargetPartitionsPerDayBasedCompaction());
+        .collect(Collectors.toList()).subList(0, writeConfig.getInt(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION));
   }
 
   /**

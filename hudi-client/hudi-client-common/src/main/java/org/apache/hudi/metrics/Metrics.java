@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.MetricRegistry;
@@ -45,7 +46,7 @@ public class Metrics {
 
   private Metrics(HoodieWriteConfig metricConfig) {
     registry = new MetricRegistry();
-    commonMetricPrefix = metricConfig.getMetricReporterMetricsNamePrefix();
+    commonMetricPrefix = metricConfig.getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
     reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
     if (reporter == null) {
       throw new RuntimeException("Cannot initialize Reporter.");

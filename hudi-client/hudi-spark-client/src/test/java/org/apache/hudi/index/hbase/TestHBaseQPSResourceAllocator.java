@@ -40,8 +40,8 @@ public class TestHBaseQPSResourceAllocator {
     HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = index.createQPSResourceAllocator(config);
     assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),
         DefaultHBaseQPSResourceAllocator.class.getName());
-    assertEquals(config.getHbaseIndexQPSFraction(),
-        hBaseIndexQPSResourceAllocator.acquireQPSResources(config.getHbaseIndexQPSFraction(), 100), 0.0f);
+    assertEquals(config.getFloat(HoodieHBaseIndexConfig.QPS_FRACTION),
+        hBaseIndexQPSResourceAllocator.acquireQPSResources(config.getFloat(HoodieHBaseIndexConfig.QPS_FRACTION), 100), 0.0f);
   }
 
   @Test
@@ -51,8 +51,8 @@ public class TestHBaseQPSResourceAllocator {
     HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = index.createQPSResourceAllocator(config);
     assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),
         DefaultHBaseQPSResourceAllocator.class.getName());
-    assertEquals(config.getHbaseIndexQPSFraction(),
-        hBaseIndexQPSResourceAllocator.acquireQPSResources(config.getHbaseIndexQPSFraction(), 100), 0.0f);
+    assertEquals(config.getFloat(HoodieHBaseIndexConfig.QPS_FRACTION),
+        hBaseIndexQPSResourceAllocator.acquireQPSResources(config.getFloat(HoodieHBaseIndexConfig.QPS_FRACTION), 100), 0.0f);
   }
 
   @Test
@@ -62,8 +62,8 @@ public class TestHBaseQPSResourceAllocator {
     HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = index.createQPSResourceAllocator(config);
     assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),
         DefaultHBaseQPSResourceAllocator.class.getName());
-    assertEquals(config.getHbaseIndexQPSFraction(),
-        hBaseIndexQPSResourceAllocator.acquireQPSResources(config.getHbaseIndexQPSFraction(), 100), 0.0f);
+    assertEquals(config.getFloat(HoodieHBaseIndexConfig.QPS_FRACTION),
+        hBaseIndexQPSResourceAllocator.acquireQPSResources(config.getFloat(HoodieHBaseIndexConfig.QPS_FRACTION), 100), 0.0f);
   }
 
   private HoodieWriteConfig getConfig(Option<String> resourceAllocatorClass) {

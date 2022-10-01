@@ -30,12 +30,15 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -103,7 +106,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
                                        Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
     try {
-      keyGeneratorOpt = config.populateMetaFields()
+      keyGeneratorOpt = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
           ? Option.empty()
           : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(this.config.getProps()));
     } catch (IOException e) {
@@ -121,7 +124,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
 
     UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy = (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils
-        .loadClass(config.getClusteringUpdatesStrategyClass(), new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
+        .loadClass(config.getString(HoodieClusteringConfig.UPDATES_STRATEGY), new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
             this.context, table, fileGroupsInPendingClustering);
     Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
         updateStrategy.handleUpdate(inputRecords);
@@ -131,14 +134,14 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
     // there are file groups pending clustering and receiving updates, so rollback the pending clustering instants
     // there could be race condition, for example, if the clustering completes after instants are fetched but before rollback completed
-    if (config.isRollbackPendingClustering()) {
+    if (config.getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT)) {
       Set<HoodieInstant> pendingClusteringInstantsToRollback = getAllFileGroupsInPendingClusteringPlans(table.getMetaClient()).entrySet().stream()
           .filter(e -> fileGroupsWithUpdatesAndPendingClustering.contains(e.getKey()))
           .map(Map.Entry::getValue)
           .collect(Collectors.toSet());
       pendingClusteringInstantsToRollback.forEach(instant -> {
         String commitTime = HoodieActiveTimeline.createNewInstantTime();
-        table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers());
+        table.scheduleRollback(context, commitTime, instant, false, config.getBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE));
         table.rollback(context, commitTime, instant, true, true);
       });
       table.getMetaClient().reloadActiveTimeline();
@@ -355,7 +358,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
     // Pre-check: if the old file does not exist (which may happen in bucket index case), fallback to insert
     if (!table.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).isPresent()
-        && HoodieIndex.IndexType.BUCKET.equals(config.getIndexType())) {
+        && HoodieIndex.IndexType.BUCKET.equals(HoodieIndex.IndexType.valueOf(config.getString(HoodieIndexConfig.INDEX_TYPE)))) {
       return handleInsert(fileId, recordItr);
     }
 

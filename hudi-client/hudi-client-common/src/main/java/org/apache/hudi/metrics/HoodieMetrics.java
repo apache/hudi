@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
@@ -64,7 +65,7 @@ public class HoodieMetrics {
   public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
     this.tableName = config.getTableName();
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       Metrics.init(config);
       this.rollbackTimerName = getMetricsName("timer", HoodieTimeline.ROLLBACK_ACTION);
       this.cleanTimerName = getMetricsName("timer", HoodieTimeline.CLEAN_ACTION);
@@ -81,74 +82,74 @@ public class HoodieMetrics {
   }
 
   private Timer createTimer(String name) {
-    return config.isMetricsOn() ? Metrics.getInstance().getRegistry().timer(name) : null;
+    return config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) ? Metrics.getInstance().getRegistry().timer(name) : null;
   }
 
   public Timer.Context getRollbackCtx() {
-    if (config.isMetricsOn() && rollbackTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && rollbackTimer == null) {
       rollbackTimer = createTimer(rollbackTimerName);
     }
     return rollbackTimer == null ? null : rollbackTimer.time();
   }
 
   public Timer.Context getCompactionCtx() {
-    if (config.isMetricsOn() && compactionTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && compactionTimer == null) {
       compactionTimer = createTimer(commitTimerName);
     }
     return compactionTimer == null ? null : compactionTimer.time();
   }
 
   public Timer.Context getClusteringCtx() {
-    if (config.isMetricsOn() && clusteringTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && clusteringTimer == null) {
       clusteringTimer = createTimer(replaceCommitTimerName);
     }
     return clusteringTimer == null ? null : clusteringTimer.time();
   }
 
   public Timer.Context getCleanCtx() {
-    if (config.isMetricsOn() && cleanTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && cleanTimer == null) {
       cleanTimer = createTimer(cleanTimerName);
     }
     return cleanTimer == null ? null : cleanTimer.time();
   }
 
   public Timer.Context getCommitCtx() {
-    if (config.isMetricsOn() && commitTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && commitTimer == null) {
       commitTimer = createTimer(commitTimerName);
     }
     return commitTimer == null ? null : commitTimer.time();
   }
 
   public Timer.Context getFinalizeCtx() {
-    if (config.isMetricsOn() && finalizeTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && finalizeTimer == null) {
       finalizeTimer = createTimer(finalizeTimerName);
     }
     return finalizeTimer == null ? null : finalizeTimer.time();
   }
 
   public Timer.Context getDeltaCommitCtx() {
-    if (config.isMetricsOn() && deltaCommitTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && deltaCommitTimer == null) {
       deltaCommitTimer = createTimer(deltaCommitTimerName);
     }
     return deltaCommitTimer == null ? null : deltaCommitTimer.time();
   }
 
   public Timer.Context getIndexCtx() {
-    if (config.isMetricsOn() && indexTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && indexTimer == null) {
       indexTimer = createTimer(indexTimerName);
     }
     return indexTimer == null ? null : indexTimer.time();
   }
 
   public Timer.Context getConflictResolutionCtx() {
-    if (config.isLockingMetricsEnabled() && conflictResolutionTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.LOCK_METRICS_ENABLE) && conflictResolutionTimer == null) {
       conflictResolutionTimer = createTimer(conflictResolutionTimerName);
     }
     return conflictResolutionTimer == null ? null : conflictResolutionTimer.time();
   }
 
   public void updateMetricsForEmptyData(String actionType) {
-    if (!config.isMetricsOn() || !config.getMetricsReporterType().equals(MetricsReporterType.PROMETHEUS_PUSHGATEWAY)) {
+    if (!(boolean) config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) || !MetricsReporterType.valueOf(config.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE)).equals(MetricsReporterType.PROMETHEUS_PUSHGATEWAY)) {
       // No-op if metrics are not of type PROMETHEUS_PUSHGATEWAY.
       return;
     }
@@ -170,7 +171,7 @@ public class HoodieMetrics {
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
       String actionType) {
     updateCommitTimingMetrics(commitEpochTimeInMs, durationInMs, metadata, actionType);
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       long totalPartitionsWritten = metadata.fetchTotalPartitionsWritten();
       long totalFilesInsert = metadata.fetchTotalFilesInsert();
       long totalFilesUpdate = metadata.fetchTotalFilesUpdated();
@@ -202,7 +203,7 @@ public class HoodieMetrics {
 
   private void updateCommitTimingMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
       String actionType) {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       Pair<Option<Long>, Option<Long>> eventTimePairMinMax = metadata.getMinAndMaxEventTime();
       if (eventTimePairMinMax.getLeft().isPresent()) {
         long commitLatencyInMs = commitEpochTimeInMs + durationInMs - eventTimePairMinMax.getLeft().get();
@@ -218,7 +219,7 @@ public class HoodieMetrics {
   }
 
   public void updateRollbackMetrics(long durationInMs, long numFilesDeleted) {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       LOG.info(
           String.format("Sending rollback metrics (duration=%d, numFilesDeleted=%d)", durationInMs, numFilesDeleted));
       Metrics.registerGauge(getMetricsName("rollback", "duration"), durationInMs);
@@ -227,7 +228,7 @@ public class HoodieMetrics {
   }
 
   public void updateCleanMetrics(long durationInMs, int numFilesDeleted) {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       LOG.info(
           String.format("Sending clean metrics (duration=%d, numFilesDeleted=%d)", durationInMs, numFilesDeleted));
       Metrics.registerGauge(getMetricsName("clean", "duration"), durationInMs);
@@ -236,7 +237,7 @@ public class HoodieMetrics {
   }
 
   public void updateFinalizeWriteMetrics(long durationInMs, long numFilesFinalized) {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       LOG.info(String.format("Sending finalize write metrics (duration=%d, numFilesFinalized=%d)", durationInMs,
           numFilesFinalized));
       Metrics.registerGauge(getMetricsName("finalize", "duration"), durationInMs);
@@ -245,14 +246,14 @@ public class HoodieMetrics {
   }
 
   public void updateIndexMetrics(final String action, final long durationInMs) {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       LOG.info(String.format("Sending index metrics (%s.duration, %d)", action, durationInMs));
       Metrics.registerGauge(getMetricsName("index", String.format("%s.duration", action)), durationInMs);
     }
   }
 
   String getMetricsName(String action, String metric) {
-    return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
+    return config == null ? null : String.format("%s.%s.%s", config.getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX), action, metric);
   }
 
   /**
@@ -263,7 +264,7 @@ public class HoodieMetrics {
   }
 
   public void emitConflictResolutionSuccessful() {
-    if (config.isLockingMetricsEnabled()) {
+    if (config.getBoolean(HoodieMetricsConfig.LOCK_METRICS_ENABLE)) {
       LOG.info("Sending conflict resolution success metric");
       conflictResolutionSuccessCounter = getCounter(conflictResolutionSuccessCounter, conflictResolutionSuccessCounterName);
       conflictResolutionSuccessCounter.inc();
@@ -271,7 +272,7 @@ public class HoodieMetrics {
   }
 
   public void emitConflictResolutionFailed() {
-    if (config.isLockingMetricsEnabled()) {
+    if (config.getBoolean(HoodieMetricsConfig.LOCK_METRICS_ENABLE)) {
       LOG.info("Sending conflict resolution failure metric");
       conflictResolutionFailureCounter = getCounter(conflictResolutionFailureCounter, conflictResolutionFailureCounterName);
       conflictResolutionFailureCounter.inc();

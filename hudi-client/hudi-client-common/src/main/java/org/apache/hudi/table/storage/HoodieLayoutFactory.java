@@ -18,8 +18,10 @@
 
 package org.apache.hudi.table.storage;
 
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.index.HoodieIndex;
 
 /**
  * A factory to generate layout.
@@ -30,13 +32,13 @@ public final class HoodieLayoutFactory {
       case DEFAULT:
         return new HoodieDefaultLayout(config);
       case BUCKET:
-        switch (config.getBucketIndexEngineType()) {
+        switch (HoodieIndex.BucketIndexEngineType.valueOf(config.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE))) {
           case SIMPLE:
             return new HoodieSimpleBucketLayout(config);
           case CONSISTENT_HASHING:
             return new HoodieConsistentBucketLayout(config);
           default:
-            throw new HoodieNotSupportedException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
+            throw new HoodieNotSupportedException("Unknown bucket index engine type: " + HoodieIndex.BucketIndexEngineType.valueOf(config.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE)));
         }
       default:
         throw new HoodieNotSupportedException("Unknown layout type, set " + config.getLayoutType());

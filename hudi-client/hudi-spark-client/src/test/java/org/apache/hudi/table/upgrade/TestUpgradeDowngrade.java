@@ -200,7 +200,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     // verify hoodie.table.version got upgraded
     metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
-        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM)))).build();
     assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.ONE.versionCode());
     assertTableVersionFromPropertyFile(HoodieTableVersion.ONE);
 
@@ -239,7 +239,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     // verify hoodie.table.version got upgraded
     metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
-        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM)))).build();
     assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.TWO.versionCode());
     assertTableVersionFromPropertyFile(HoodieTableVersion.TWO);
 
@@ -277,7 +277,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     // verify hoodie.table.version got upgraded
     metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
-        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM)))).build();
     assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.THREE.versionCode());
     assertTableVersionFromPropertyFile(HoodieTableVersion.THREE);
 
@@ -322,7 +322,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     // verify upgrade and TABLE_CHECKSUM
     metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
-        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM)))).build();
     assertEquals(HoodieTableVersion.current().versionCode(), metaClient.getTableConfig().getTableVersion().versionCode());
     assertTableVersionFromPropertyFile(HoodieTableVersion.current());
     assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
@@ -530,7 +530,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     
     // verify hoodie.table.version got downgraded
     metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
-        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM)))).build();
     assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), toVersion.versionCode());
     assertTableVersionFromPropertyFile(toVersion);
 

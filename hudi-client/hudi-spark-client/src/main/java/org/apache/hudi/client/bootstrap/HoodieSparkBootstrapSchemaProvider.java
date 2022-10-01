@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
@@ -77,7 +78,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     ((HoodieSparkEngineContext) context).getSqlContext()
         .setConf(SQLConf.PARTITION_COLUMN_TYPE_INFERENCE(), false);
     StructType parquetSchema = ((HoodieSparkEngineContext) context).getSqlContext().read()
-        .option("basePath", writeConfig.getBootstrapSourceBasePath())
+        .option("basePath", writeConfig.getString(HoodieBootstrapConfig.BASE_PATH))
         .parquet(filePath.toString())
         .schema();
     String tableName = HoodieAvroUtils.sanitizeName(writeConfig.getTableName());

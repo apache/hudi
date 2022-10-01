@@ -19,6 +19,8 @@
 package org.apache.hudi.metrics.prometheus;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -47,15 +49,15 @@ public class TestPushGateWayReporter {
 
   @Test
   public void testRegisterGauge() {
-    when(config.isMetricsOn()).thenReturn(true);
+    when(config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)).thenReturn(true);
     when(config.getTableName()).thenReturn("foo");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
-    when(config.getPushGatewayHost()).thenReturn("localhost");
-    when(config.getPushGatewayPort()).thenReturn(9091);
-    when(config.getPushGatewayReportPeriodSeconds()).thenReturn(30);
-    when(config.getPushGatewayDeleteOnShutdown()).thenReturn(true);
-    when(config.getPushGatewayJobName()).thenReturn("foo");
-    when(config.getPushGatewayRandomJobNameSuffix()).thenReturn(false);
+    when(MetricsReporterType.valueOf(config.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE))).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
+    when(config.getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_HOST_NAME)).thenReturn("localhost");
+    when(config.getInt(HoodieMetricsPrometheusConfig.PUSHGATEWAY_PORT_NUM)).thenReturn(9091);
+    when(config.getInt(HoodieMetricsPrometheusConfig.PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS)).thenReturn(30);
+    when(config.getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE)).thenReturn(true);
+    when(config.getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOBNAME)).thenReturn("foo");
+    when(config.getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX)).thenReturn(false);
 
     assertDoesNotThrow(() -> {
       new HoodieMetrics(config);

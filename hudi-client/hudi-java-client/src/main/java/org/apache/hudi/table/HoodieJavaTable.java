@@ -46,7 +46,7 @@ public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
+            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM)))).build();
     return HoodieJavaTable.create(config, (HoodieJavaEngineContext) context, metaClient);
   }
 

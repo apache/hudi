@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
@@ -92,11 +93,11 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
             partitionPaths,
             partitionPath -> {
               List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-              return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
+              return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getInt(HoodieClusteringConfig.PLAN_STRATEGY_MAX_GROUPS));
             },
             partitionPaths.size())
         .stream()
-        .limit(getWriteConfig().getClusteringMaxNumGroups())
+        .limit(getWriteConfig().getInt(HoodieClusteringConfig.PLAN_STRATEGY_MAX_GROUPS))
         .collect(Collectors.toList());
 
     if (clusteringGroups.isEmpty()) {
@@ -105,7 +106,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
     }
 
     HoodieClusteringStrategy strategy = HoodieClusteringStrategy.newBuilder()
-        .setStrategyClassName(getWriteConfig().getClusteringExecutionStrategyClass())
+        .setStrategyClassName(getWriteConfig().getString(HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME))
         .setStrategyParams(getStrategyParams())
         .build();
 
@@ -114,12 +115,12 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(getExtraMetadata())
         .setVersion(getPlanVersion())
-        .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadataForClustering())
+        .setPreserveHoodieMetadata(getWriteConfig().getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA))
         .build());
   }
 
   public List<String> getMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
-    String partitionSelected = config.getClusteringPartitionSelected();
+    String partitionSelected = config.getString(HoodieClusteringConfig.PARTITION_SELECTED);
     if (!StringUtils.isNullOrEmpty(partitionSelected)) {
       return Arrays.asList(partitionSelected.split(","));
     } else {
@@ -128,7 +129,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
   }
 
   public List<String> getRegexPatternMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
-    String pattern = config.getClusteringPartitionFilterRegexPattern();
+    String pattern = config.getString(HoodieClusteringConfig.PARTITION_REGEX_PATTERN);
     if (!StringUtils.isNullOrEmpty(pattern)) {
       partitionPaths = partitionPaths.stream()
           .filter(partition -> Pattern.matches(pattern, partition))

@@ -64,7 +64,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     }
     for (String commit : commits) {
       // for every pending commit, delete old markers and re-create markers in new format
-      recreateMarkers(commit, table, context, config.getMarkersDeleteParallelism());
+      recreateMarkers(commit, table, context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
     }
     return Collections.EMPTY_MAP;
   }

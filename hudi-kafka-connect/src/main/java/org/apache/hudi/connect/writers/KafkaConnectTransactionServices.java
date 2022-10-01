@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
@@ -99,7 +100,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
           .setPayloadClassName(HoodieAvroPayload.class.getName())
           .setRecordKeyFields(recordKeyFields)
           .setPartitionFields(partitionColumns)
-          .setKeyGeneratorClassProp(writeConfig.getKeyGeneratorClass())
+          .setKeyGeneratorClassProp(writeConfig.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME))
           .fromProperties(connectConfigs.getProps())
           .initTable(hadoopConf, tableBasePath));
 
@@ -124,7 +125,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
       LOG.info("Ending Hudi commit " + commitTime);
 
       // Schedule clustering and compaction as needed.
-      if (writeConfig.isAsyncClusteringEnabled()) {
+      if (writeConfig.getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE)) {
         javaClient.scheduleClustering(Option.empty()).ifPresent(
             instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
       }

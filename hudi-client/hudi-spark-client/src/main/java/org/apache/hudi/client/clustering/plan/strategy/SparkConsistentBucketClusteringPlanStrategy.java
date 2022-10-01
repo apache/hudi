@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
@@ -114,8 +115,8 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
   @Override
   protected Map<String, String> getStrategyParams() {
     Map<String, String> params = new HashMap<>();
-    if (!StringUtils.isNullOrEmpty(getWriteConfig().getClusteringSortColumns())) {
-      params.put(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), getWriteConfig().getClusteringSortColumns());
+    if (!StringUtils.isNullOrEmpty(getWriteConfig().getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS))) {
+      params.put(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), getWriteConfig().getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS));
     }
     return params;
   }
@@ -132,13 +133,13 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata.get());
 
     // Apply split rule
-    int splitSlot = getWriteConfig().getBucketIndexMaxNumBuckets() - identifier.getNumBuckets();
+    int splitSlot = getWriteConfig().getInt(HoodieIndexConfig.BUCKET_INDEX_MAX_NUM_BUCKETS) - identifier.getNumBuckets();
     Triple<List<HoodieClusteringGroup>, Integer, List<FileSlice>> splitResult =
         buildSplitClusteringGroups(identifier, fileSlices, splitSlot);
     List<HoodieClusteringGroup> ret = new ArrayList<>(splitResult.getLeft());
 
     // Apply merge rule
-    int mergeSlot = identifier.getNumBuckets() - getWriteConfig().getBucketIndexMinNumBuckets() + splitResult.getMiddle();
+    int mergeSlot = identifier.getNumBuckets() - getWriteConfig().getInt(HoodieIndexConfig.BUCKET_INDEX_MIN_NUM_BUCKETS) + splitResult.getMiddle();
     Triple<List<HoodieClusteringGroup>, Integer, List<FileSlice>> mergeResult =
         buildMergeClusteringGroup(identifier, splitResult.getRight(), mergeSlot);
     ret.addAll(mergeResult.getLeft());
@@ -307,12 +308,12 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
 
   private long getSplitSize() {
     HoodieFileFormat format = getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat();
-    return (long) (getWriteConfig().getMaxFileSize(format) * getWriteConfig().getBucketSplitThreshold());
+    return (long) (getWriteConfig().getMaxFileSize(format) * getWriteConfig().getDouble(HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD));
   }
 
   private long getMergeSize() {
     HoodieFileFormat format = getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat();
-    return (long) (getWriteConfig().getMaxFileSize(format) * getWriteConfig().getBucketMergeThreshold());
+    return (long) (getWriteConfig().getMaxFileSize(format) * getWriteConfig().getDouble(HoodieIndexConfig.BUCKET_MERGE_THRESHOLD));
   }
 
   private void validate() {

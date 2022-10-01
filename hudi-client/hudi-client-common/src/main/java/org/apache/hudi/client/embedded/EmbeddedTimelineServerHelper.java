@@ -46,7 +46,7 @@ public class EmbeddedTimelineServerHelper {
    */
   public static synchronized Option<EmbeddedTimelineService> createEmbeddedTimelineService(
       HoodieEngineContext context, HoodieWriteConfig config) throws IOException {
-    if (config.isEmbeddedTimelineServerReuseEnabled()) {
+    if (config.getBoolean(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED)) {
       if (!TIMELINE_SERVER.isPresent() || !TIMELINE_SERVER.get().canReuseFor(config.getBasePath())) {
         TIMELINE_SERVER = Option.of(startTimelineService(context, config));
       } else {
@@ -54,7 +54,7 @@ public class EmbeddedTimelineServerHelper {
       }
       return TIMELINE_SERVER;
     }
-    if (config.isEmbeddedTimelineServerEnabled()) {
+    if (config.getBoolean(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE)) {
       return Option.of(startTimelineService(context, config));
     } else {
       return Option.empty();
@@ -81,7 +81,7 @@ public class EmbeddedTimelineServerHelper {
   public static void updateWriteConfigWithTimelineServer(EmbeddedTimelineService timelineServer,
       HoodieWriteConfig config) {
     // Allow executor to find this newly instantiated timeline service
-    if (config.isEmbeddedTimelineServerEnabled()) {
+    if (config.getBoolean(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE)) {
       config.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig());
     }
   }

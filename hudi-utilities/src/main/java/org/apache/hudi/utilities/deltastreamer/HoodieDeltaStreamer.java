@@ -47,6 +47,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringUpdateException;
@@ -183,7 +184,7 @@ public class HoodieDeltaStreamer implements Serializable {
    */
   public void sync() throws Exception {
     if (bootstrapExecutor.isPresent()) {
-      LOG.info("Performing bootstrap. Source=" + bootstrapExecutor.get().getBootstrapConfig().getBootstrapSourceBasePath());
+      LOG.info("Performing bootstrap. Source=" + bootstrapExecutor.get().getBootstrapConfig().getString(HoodieBootstrapConfig.BASE_PATH));
       bootstrapExecutor.get().execute();
     } else {
       if (cfg.continuousMode) {

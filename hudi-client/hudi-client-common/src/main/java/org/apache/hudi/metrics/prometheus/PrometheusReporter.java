@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics.prometheus;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.MetricsReporter;
 
@@ -44,7 +45,7 @@ public class PrometheusReporter extends MetricsReporter {
   private final CollectorRegistry collectorRegistry;
 
   public PrometheusReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    int serverPort = config.getPrometheusPort();
+    int serverPort = config.getInt(HoodieMetricsPrometheusConfig.PROMETHEUS_PORT_NUM);
     collectorRegistry = new CollectorRegistry();
     metricExports = new DropwizardExports(registry);
     metricExports.register(collectorRegistry);

@@ -32,6 +32,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -187,7 +189,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
         // first try packing this into one of the smallFiles
         for (SmallFile smallFile : smallFiles) {
-          long recordsToAppend = Math.min((config.getParquetMaxFileSize() - smallFile.sizeBytes) / averageRecordSize,
+          long recordsToAppend = Math.min((config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE) - smallFile.sizeBytes) / averageRecordSize,
               totalUnassignedInserts);
           if (recordsToAppend > 0) {
             // create a new bucket or re-use an existing bucket
@@ -214,9 +216,9 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
         // if we have anything more, create new insert buckets, like normal
         if (totalUnassignedInserts > 0) {
-          long insertRecordsPerBucket = config.getCopyOnWriteInsertSplitSize();
-          if (config.shouldAutoTuneInsertSplits()) {
-            insertRecordsPerBucket = config.getParquetMaxFileSize() / averageRecordSize;
+          long insertRecordsPerBucket = config.getInt(HoodieCompactionConfig.COPY_ON_WRITE_INSERT_SPLIT_SIZE);
+          if (config.getBoolean(HoodieCompactionConfig.COPY_ON_WRITE_AUTO_SPLIT_INSERTS)) {
+            insertRecordsPerBucket = config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE) / averageRecordSize;
           }
 
           int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
@@ -261,7 +263,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
 
-    if (config.getParquetSmallFileLimit() <= 0) {
+    if (config.getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT) <= 0) {
       return partitionSmallFilesMap;
     }
 
@@ -291,7 +293,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
           .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
 
       for (HoodieBaseFile file : allFiles) {
-        if (file.getFileSize() < config.getParquetSmallFileLimit()) {
+        if (file.getFileSize() < config.getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT)) {
           String filename = file.getFileName();
           SmallFile sf = new SmallFile();
           sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
@@ -361,8 +363,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
    * records pack into one file.
    */
   protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, HoodieWriteConfig hoodieWriteConfig) {
-    long avgSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
-    long fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
+    long avgSize = hoodieWriteConfig.getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
+    long fileSizeThreshold = (long) ((double) hoodieWriteConfig.getDouble(HoodieCompactionConfig.RECORD_SIZE_ESTIMATION_THRESHOLD) * hoodieWriteConfig.getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT));
     try {
       if (!commitTimeline.empty()) {
         // Go over the reverse ordered commits to get a more recent estimate of average record size.

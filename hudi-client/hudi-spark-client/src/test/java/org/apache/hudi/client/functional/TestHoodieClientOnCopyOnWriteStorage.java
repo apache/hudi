@@ -49,6 +49,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -557,7 +558,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieTableMetaClient.withPropertyBuilder()
       .fromMetaClient(metaClient)
       .setTimelineLayoutVersion(VERSION_0)
-        .setPopulateMetaFields(config.populateMetaFields())
+        .setPopulateMetaFields(config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS))
         .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
 
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
@@ -567,7 +568,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String initCommitTime = "000";
     int numRecords = 200;
     insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, SparkRDDWriteClient::insert,
-        isPrepped, true, numRecords, config.populateMetaFields());
+        isPrepped, true, numRecords, config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
 
     // Write 2 (updates)
     String prevCommitTime = newCommitTime;
@@ -576,7 +577,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTimeBetweenPrevAndNew = "002";
     updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, writeFn, isPrepped, true,
-        numRecords, 200, 2, config.populateMetaFields());
+        numRecords, 200, 2, config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
 
     // Delete 1
     prevCommitTime = newCommitTime;
@@ -585,7 +586,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
         initCommitTime, numRecords, SparkRDDWriteClient::delete, isPrepped, true,
-        0, 150, config.populateMetaFields());
+        0, 150, config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
 
     // Now simulate an upgrade and perform a restore operation
     HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
@@ -656,7 +657,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       try {
         HoodieMergeHandle handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
-            config.populateMetaFields() ? Option.empty() :
+            config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS) ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
         writeStatus.setStat(new HoodieWriteStat());
@@ -672,7 +673,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(cfg.getProps()).build();
         HoodieMergeHandle handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
-            config.populateMetaFields() ? Option.empty() :
+            config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS) ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
         writeStatus.setStat(new HoodieWriteStat());
@@ -698,7 +699,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieTableMetaClient.withPropertyBuilder()
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
-        .setPopulateMetaFields(config.populateMetaFields())
+        .setPopulateMetaFields(config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS))
         .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
 
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
@@ -708,7 +709,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String initCommitTime = "000";
     int numRecords = 200;
     insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, SparkRDDWriteClient::insert,
-        false, true, numRecords, config.populateMetaFields());
+        false, true, numRecords, config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
 
     // Write 2 (updates)
     String prevCommitTime = newCommitTime;
@@ -717,7 +718,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTimeBetweenPrevAndNew = "002";
     updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, SparkRDDWriteClient::upsert, false, true,
-        numRecords, 200, 2, config.populateMetaFields());
+        numRecords, 200, 2, config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
 
     // Delete 1
     prevCommitTime = newCommitTime;
@@ -726,7 +727,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
         initCommitTime, numRecords, SparkRDDWriteClient::delete, false, true,
-        0, 150, config.populateMetaFields());
+        0, 150, config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
 
     HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
         TimelineLayoutVersion.CURR_VERSION)
@@ -788,7 +789,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String initCommitTime = "000";
     int numRecords = 200;
     insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, SparkRDDWriteClient::insert,
-        isPrepped, true, numRecords, config.populateMetaFields());
+        isPrepped, true, numRecords, config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
 
     // Write 2 (updates)
     String prevCommitTime = newCommitTime;
@@ -801,7 +802,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     writeBatch(client, newCommitTime, prevCommitTime, Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime,
         numRecords, recordGenFunction, SparkRDDWriteClient::insert, true, numRecords, 300,
-        2, false, config.populateMetaFields());
+        2, false, config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 
   /**
@@ -835,7 +836,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String newCommitTime = "001";
     int firstInsertRecords = 50;
     insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, firstInsertRecords, SparkRDDWriteClient::insert,
-        isPrepped, true, firstInsertRecords, config.populateMetaFields());
+        isPrepped, true, firstInsertRecords, config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
 
     // Write 2 (updates with duplicates)
     String prevCommitTime = newCommitTime;
@@ -848,7 +849,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     writeBatch(client, newCommitTime, prevCommitTime, Option.of(commitTimesBetweenPrevAndNew), initCommitTime,
         secondInsertRecords, recordGenFunction, SparkRDDWriteClient::insert, true, secondInsertRecords,
-        firstInsertRecords + secondInsertRecords, 2, false, config.populateMetaFields());
+        firstInsertRecords + secondInsertRecords, 2, false, config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 
   @Test
@@ -1687,7 +1688,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // verify inflight clustering was rolled back
     metaClient.reloadActiveTimeline();
     pendingClusteringPlans = ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
-    assertEquals(config.isRollbackPendingClustering() ? 0 : 1, pendingClusteringPlans.size());
+    assertEquals(config.getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT) ? 0 : 1, pendingClusteringPlans.size());
   }
 
   @Test
@@ -1831,7 +1832,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusterMetadata = client.cluster(clusteringCommitTime, completeClustering);
-    if (config.isPreserveHoodieCommitMetadataForClustering() && config.populateMetaFields()) {
+    if (config.getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA) && config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
       verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(), clusterMetadata.getWriteStatuses().collect());
     } else {
       verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(), clusterMetadata.getWriteStatuses().collect(), config);
@@ -2029,7 +2030,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
                                     List<HoodieRecord> expectedRecords, List<WriteStatus> allStatus, HoodieWriteConfig config) throws IOException {
     List<GenericRecord> records = new ArrayList<>();
     Set<String> expectedKeys = verifyRecordKeys(expectedRecords, allStatus, records);
-    if (config.populateMetaFields()) {
+    if (config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
       for (GenericRecord record : records) {
         String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
         assertEquals(commitTime,

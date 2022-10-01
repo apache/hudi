@@ -119,23 +119,23 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
 
   public SparkHoodieHBaseIndex(HoodieWriteConfig config) {
     super(config);
-    this.tableName = config.getHbaseTableName();
+    this.tableName = config.getString(HoodieHBaseIndexConfig.TABLENAME);
     addShutDownHook();
     init(config);
   }
 
   private void init(HoodieWriteConfig config) {
-    this.multiPutBatchSize = config.getHbaseIndexGetBatchSize();
-    this.maxQpsPerRegionServer = config.getHbaseIndexMaxQPSPerRegionServer();
+    this.multiPutBatchSize = config.getInt(HoodieHBaseIndexConfig.GET_BATCH_SIZE);
+    this.maxQpsPerRegionServer = config.getInt(HoodieHBaseIndexConfig.MAX_QPS_PER_REGION_SERVER);
     this.putBatchSizeCalculator = new HBasePutBatchSizeCalculator();
     this.hBaseIndexQPSResourceAllocator = createQPSResourceAllocator(this.config);
   }
 
   public HBaseIndexQPSResourceAllocator createQPSResourceAllocator(HoodieWriteConfig config) {
     try {
-      LOG.info("createQPSResourceAllocator :" + config.getHBaseQPSResourceAllocatorClass());
+      LOG.info("createQPSResourceAllocator :" + config.getString(HoodieHBaseIndexConfig.QPS_ALLOCATOR_CLASS_NAME));
       return (HBaseIndexQPSResourceAllocator) ReflectionUtils
-              .loadClass(config.getHBaseQPSResourceAllocatorClass(), config);
+              .loadClass(config.getString(HoodieHBaseIndexConfig.QPS_ALLOCATOR_CLASS_NAME), config);
     } catch (Exception e) {
       LOG.warn("error while instantiating HBaseIndexQPSResourceAllocator", e);
     }
@@ -144,26 +144,26 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
 
   private Connection getHBaseConnection() {
     Configuration hbaseConfig = HBaseConfiguration.create();
-    String quorum = config.getHbaseZkQuorum();
+    String quorum = config.getString(HoodieHBaseIndexConfig.ZKQUORUM);
     hbaseConfig.set("hbase.zookeeper.quorum", quorum);
-    String zkZnodeParent = config.getHBaseZkZnodeParent();
+    String zkZnodeParent = config.getString(HoodieHBaseIndexConfig.ZK_NODE_PATH);
     if (zkZnodeParent != null) {
       hbaseConfig.set("zookeeper.znode.parent", zkZnodeParent);
     }
-    String port = String.valueOf(config.getHbaseZkPort());
+    String port = String.valueOf((int) config.getInt(HoodieHBaseIndexConfig.ZKPORT));
     hbaseConfig.set("hbase.zookeeper.property.clientPort", port);
 
     try {
-      String authentication = config.getHBaseIndexSecurityAuthentication();
+      String authentication = config.getString(HoodieHBaseIndexConfig.SECURITY_AUTHENTICATION);
       if (authentication.equals("kerberos")) {
         hbaseConfig.set("hbase.security.authentication", "kerberos");
         hbaseConfig.set("hadoop.security.authentication", "kerberos");
         hbaseConfig.set("hbase.security.authorization", "true");
-        hbaseConfig.set("hbase.regionserver.kerberos.principal", config.getHBaseIndexRegionserverPrincipal());
-        hbaseConfig.set("hbase.master.kerberos.principal", config.getHBaseIndexMasterPrincipal());
+        hbaseConfig.set("hbase.regionserver.kerberos.principal", config.getString(HoodieHBaseIndexConfig.REGIONSERVER_PRINCIPAL));
+        hbaseConfig.set("hbase.master.kerberos.principal", config.getString(HoodieHBaseIndexConfig.MASTER_PRINCIPAL));
 
-        String principal = config.getHBaseIndexKerberosUserPrincipal();
-        String keytab = SparkFiles.get(config.getHBaseIndexKerberosUserKeytab());
+        String principal = config.getString(HoodieHBaseIndexConfig.KERBEROS_USER_PRINCIPAL);
+        String keytab = SparkFiles.get(config.getString(HoodieHBaseIndexConfig.KERBEROS_USER_KEYTAB));
 
         UserGroupInformation.setConfiguration(hbaseConfig);
         UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(principal, keytab);
@@ -233,9 +233,9 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
 
     // `multiGetBatchSize` is intended to be a batch per 100ms. To create a rate limiter that measures
     // operations per second, we need to multiply `multiGetBatchSize` by 10.
-    Integer multiGetBatchSize = config.getHbaseIndexGetBatchSize();
+    Integer multiGetBatchSize = config.getInt(HoodieHBaseIndexConfig.GET_BATCH_SIZE);
     return (partitionNum, hoodieRecordIterator) -> {
-      boolean updatePartitionPath = config.getHbaseIndexUpdatePartitionPath();
+      boolean updatePartitionPath = config.getBooleanOrDefault(HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE);
       RateLimiter limiter = RateLimiter.create(multiGetBatchSize * 10, TimeUnit.SECONDS);
       // Grab the global HBase connection
       synchronized (SparkHoodieHBaseIndex.class) {
@@ -450,7 +450,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   }
 
   private Option<Float> calculateQPSFraction(JavaRDD<WriteStatus> writeStatusRDD) {
-    if (config.getHbaseIndexPutBatchSizeAutoCompute()) {
+    if (config.getBooleanOrDefault(HoodieHBaseIndexConfig.PUT_BATCH_SIZE_AUTO_COMPUTE)) {
       /*
         Each writeStatus represents status information from a write done in one of the IOHandles.
         If a writeStatus has any insert, it implies that the corresponding task contacts HBase for
@@ -472,7 +472,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
 
   private void acquireQPSResourcesAndSetBatchSize(final Option<Float> desiredQPSFraction,
                                                   final JavaSparkContext jsc) {
-    if (config.getHbaseIndexPutBatchSizeAutoCompute()) {
+    if (config.getBooleanOrDefault(HoodieHBaseIndexConfig.PUT_BATCH_SIZE_AUTO_COMPUTE)) {
       SparkConf conf = jsc.getConf();
       int maxExecutors = conf.getInt(DEFAULT_SPARK_EXECUTOR_INSTANCES_CONFIG_NAME, 1);
       if (conf.getBoolean(DEFAULT_SPARK_DYNAMIC_ALLOCATION_ENABLED_CONFIG_NAME, false)) {
@@ -577,10 +577,10 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
 
   @Override
   public boolean rollbackCommit(String instantTime) {
-    int multiGetBatchSize = config.getHbaseIndexGetBatchSize();
-    boolean rollbackSync = config.getHBaseIndexRollbackSync();
+    int multiGetBatchSize = config.getInt(HoodieHBaseIndexConfig.GET_BATCH_SIZE);
+    boolean rollbackSync = config.getBoolean(HoodieHBaseIndexConfig.ROLLBACK_SYNC_ENABLE);
 
-    if (!config.getHBaseIndexRollbackSync()) {
+    if (!config.getBoolean(HoodieHBaseIndexConfig.ROLLBACK_SYNC_ENABLE)) {
       // Default Rollback in HbaseIndex is managed via method {@link #checkIfValidCommit()}
       return true;
     }

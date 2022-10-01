@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 
@@ -48,14 +49,14 @@ public class TestMetricsReporterFactory {
 
   @Test
   public void metricsReporterFactoryShouldReturnReporter() {
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
+    when(MetricsReporterType.valueOf(config.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE))).thenReturn(MetricsReporterType.INMEMORY);
     MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry);
     assertTrue(reporter instanceof InMemoryMetricsReporter);
   }
 
   @Test
   public void metricsReporterFactoryShouldReturnUserDefinedReporter() {
-    when(config.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
+    when(config.getString(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME)).thenReturn(DummyMetricsReporter.class.getName());
 
     TypedProperties props = new TypedProperties();
     props.setProperty("testKey", "testValue");
@@ -69,7 +70,7 @@ public class TestMetricsReporterFactory {
 
   @Test
   public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
-    when(config.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
+    when(config.getString(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME)).thenReturn(IllegalTestMetricsReporter.class.getName());
     when(config.getProps()).thenReturn(new TypedProperties());
     assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry));
   }

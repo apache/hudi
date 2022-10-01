@@ -24,11 +24,13 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -136,7 +138,7 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
       throw new HoodieIndexException("Not all index types are valid: " + partitionIndexTypes);
     }
     // ensure lock provider configured
-    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
+    if (!WriteConcurrencyMode.fromValue(config.getString(WRITE_CONCURRENCY_MODE)).supportsOptimisticConcurrencyControl() || StringUtils.isNullOrEmpty(config.getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME))) {
       throw new HoodieIndexException(String.format("Need to set %s as %s and configure lock provider class",
           WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name()));
     }

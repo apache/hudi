@@ -30,6 +30,8 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
@@ -151,13 +153,13 @@ public class FormatUtils {
         .withLogFilePaths(split.getLogPaths().get())
         .withReaderSchema(logSchema)
         .withLatestInstantTime(split.getLatestCommit())
-        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
+        .withReadBlocksLazily(writeConfig.getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
         .withReverseReader(false)
-        .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
+        .withBufferSize(writeConfig.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
         .withMaxMemorySizeInBytes(split.getMaxCompactionMemoryInBytes())
         .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
+        .withSpillableMapBasePath(writeConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH))
         .withInstantRange(split.getInstantRange())
         .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
         .build();
@@ -256,11 +258,11 @@ public class FormatUtils {
         .withLogFilePaths(logPaths)
         .withReaderSchema(logSchema)
         .withLatestInstantTime(latestInstantTime)
-        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
+        .withReadBlocksLazily(writeConfig.getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
         .withReverseReader(false)
-        .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
-        .withMaxMemorySizeInBytes(writeConfig.getMaxMemoryPerPartitionMerge())
-        .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
+        .withBufferSize(writeConfig.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
+        .withMaxMemorySizeInBytes(writeConfig.getLong(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE))
+        .withSpillableMapBasePath(writeConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH))
         .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .build();

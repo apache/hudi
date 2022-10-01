@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
@@ -42,19 +43,19 @@ public class MetricsReporterFactory {
   private static final Logger LOG = LogManager.getLogger(MetricsReporterFactory.class);
 
   public static MetricsReporter createReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    String reporterClassName = config.getMetricReporterClassName();
+    String reporterClassName = config.getString(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME);
 
     if (!StringUtils.isNullOrEmpty(reporterClassName)) {
       Object instance = ReflectionUtils.loadClass(
           reporterClassName, new Class<?>[] {Properties.class, MetricRegistry.class}, config.getProps(), registry);
       if (!(instance instanceof CustomizableMetricsReporter)) {
-        throw new HoodieException(config.getMetricReporterClassName()
+        throw new HoodieException(config.getString(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME)
             + " is not a subclass of CustomizableMetricsReporter");
       }
       return (MetricsReporter) instance;
     }
 
-    MetricsReporterType type = config.getMetricsReporterType();
+    MetricsReporterType type = MetricsReporterType.valueOf(config.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE));
     MetricsReporter reporter = null;
     switch (type) {
       case GRAPHITE:

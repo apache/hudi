@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.cluster;
 
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 
@@ -49,8 +50,8 @@ public class ClusteringPlanPartitionFilter {
   }
 
   private static List<String> recentDaysFilter(List<String> partitions, HoodieWriteConfig config) {
-    int targetPartitionsForClustering = config.getTargetPartitionsForClustering();
-    int skipPartitionsFromLatestForClustering = config.getSkipPartitionsFromLatestForClustering();
+    int targetPartitionsForClustering = config.getInt(HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS);
+    int skipPartitionsFromLatestForClustering = config.getInt(HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST);
     return partitions.stream()
         .sorted(Comparator.reverseOrder())
         .skip(Math.max(skipPartitionsFromLatestForClustering, 0))
@@ -61,12 +62,12 @@ public class ClusteringPlanPartitionFilter {
   private static List<String> selectedPartitionsFilter(List<String> partitions, HoodieWriteConfig config) {
     Stream<String> filteredPartitions = partitions.stream();
 
-    String beginPartition = config.getBeginPartitionForClustering();
+    String beginPartition = config.getString(HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION);
     if (beginPartition != null) {
       filteredPartitions = filteredPartitions.filter(path -> path.compareTo(beginPartition) >= 0);
     }
 
-    String endPartition = config.getEndPartitionForClustering();
+    String endPartition = config.getString(HoodieClusteringConfig.PARTITION_FILTER_END_PARTITION);
     if (endPartition != null) {
       filteredPartitions = filteredPartitions.filter(path -> path.compareTo(endPartition) <= 0);
     }

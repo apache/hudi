@@ -22,6 +22,7 @@ package org.apache.hudi.async;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
@@ -59,7 +60,7 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
 
   public static AsyncCleanerService startAsyncCleaningIfEnabled(BaseHoodieWriteClient writeClient) {
     HoodieWriteConfig config = writeClient.getConfig();
-    if (!config.isAutoClean() || !config.isAsyncClean()) {
+    if (!(boolean) config.getBoolean(HoodieCleanConfig.AUTO_CLEAN) || !(boolean) config.getBoolean(HoodieCleanConfig.ASYNC_CLEAN)) {
       LOG.info("The HoodieWriteClient is not configured to auto & async clean. Async clean service will not start.");
       return null;
     }

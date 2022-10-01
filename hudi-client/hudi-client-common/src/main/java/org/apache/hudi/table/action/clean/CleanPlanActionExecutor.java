@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -85,7 +86,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
   private boolean needsCleaning(CleaningTriggerStrategy strategy) {
     if (strategy == CleaningTriggerStrategy.NUM_COMMITS) {
       int numberOfCommits = getCommitsSinceLastCleaning();
-      int maxInlineCommitsForNextClean = config.getCleaningMaxCommits();
+      int maxInlineCommitsForNextClean = config.getInt(HoodieCleanConfig.CLEAN_MAX_COMMITS);
       return numberOfCommits >= maxInlineCommitsForNextClean;
     } else {
       throw new HoodieException("Unsupported cleaning trigger strategy: " + config.getCleaningTriggerStrategy());
@@ -110,7 +111,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
         return HoodieCleanerPlan.newBuilder().setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name()).build();
       }
       LOG.info("Total Partitions to clean : " + partitionsToClean.size() + ", with policy " + config.getCleanerPolicy());
-      int cleanerParallelism = Math.min(partitionsToClean.size(), config.getCleanerParallelism());
+      int cleanerParallelism = Math.min(partitionsToClean.size(), config.getInt(HoodieCleanConfig.CLEANER_PARALLELISM_VALUE));
       LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Generating list of file slices to be cleaned: " + config.getTableName());

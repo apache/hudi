@@ -20,6 +20,7 @@ package org.apache.hudi.client.transaction.lock.metrics;
 
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.Metrics;
 
 import com.codahale.metrics.Counter;
@@ -48,7 +49,7 @@ public class HoodieLockMetrics {
   private transient Timer lockApiRequestDuration;
 
   public HoodieLockMetrics(HoodieWriteConfig writeConfig) {
-    this.isMetricsEnabled = writeConfig.isLockingMetricsEnabled();
+    this.isMetricsEnabled = writeConfig.getBoolean(HoodieMetricsConfig.LOCK_METRICS_ENABLE);
     this.writeConfig = writeConfig;
 
     if (isMetricsEnabled) {
@@ -64,7 +65,7 @@ public class HoodieLockMetrics {
   }
 
   private String getMetricsName(String metric) {
-    return writeConfig == null ? null : String.format("%s.%s", writeConfig.getMetricReporterMetricsNamePrefix(), metric);
+    return writeConfig == null ? null : String.format("%s.%s", writeConfig.getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX), metric);
   }
 
   private Timer createTimerForMetrics(MetricRegistry registry, String metric) {

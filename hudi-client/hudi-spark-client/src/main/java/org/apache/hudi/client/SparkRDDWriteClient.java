@@ -43,6 +43,7 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
@@ -318,7 +319,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       this.txnManager.endTransaction(Option.of(compactionInstant));
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+        .quietDeleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
       HoodieActiveTimeline.parseDateFromInstantTimeSafely(compactionCommitTime).ifPresent(parsedInstant ->
@@ -400,7 +401,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       this.txnManager.endTransaction(Option.of(clusteringInstant));
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+        .quietDeleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
     if (clusteringTimer != null) {
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       HoodieActiveTimeline.parseDateFromInstantTimeSafely(clusteringCommitTime).ifPresent(parsedInstant ->
@@ -497,12 +498,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected void initWrapperFSMetrics() {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       Registry registry;
       Registry registryMeta;
       JavaSparkContext jsc = ((HoodieSparkEngineContext) context).getJavaSparkContext();
 
-      if (config.isExecutorMetricsEnabled()) {
+      if (Boolean.parseBoolean(
+          config.getStringOrDefault(HoodieMetricsConfig.EXECUTOR_METRICS_ENABLE, "false"))) {
         // Create a distributed registry for HoodieWrapperFileSystem
         registry = Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName(),
             DistributedRegistry.class.getName());
@@ -523,7 +525,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   protected void releaseResources() {
     // If we do not explicitly release the resource, spark will automatically manage the resource and clean it up automatically
     // see: https://spark.apache.org/docs/latest/rdd-programming-guide.html#removing-data
-    if (config.areReleaseResourceEnabled()) {
+    if (config.getBooleanOrDefault(HoodieWriteConfig.RELEASE_RESOURCE_ENABLE)) {
       ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
           .forEach(JavaRDD::unpersist);
     }

@@ -21,6 +21,7 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -46,7 +47,7 @@ public class WriteMarkersFactory {
       case DIRECT:
         return new DirectWriteMarkers(table, instantTime);
       case TIMELINE_SERVER_BASED:
-        if (!table.getConfig().isEmbeddedTimelineServerEnabled()) {
+        if (!(boolean) table.getConfig().getBoolean(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE)) {
           Log.warn("Timeline-server-based markers are configured as the marker type "
               + "but embedded timeline server is not enabled.  Falling back to direct markers.");
           return new DirectWriteMarkers(table, instantTime);

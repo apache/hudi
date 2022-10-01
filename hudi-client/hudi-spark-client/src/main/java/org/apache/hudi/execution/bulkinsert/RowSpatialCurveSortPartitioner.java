@@ -26,7 +26,10 @@ import org.apache.spark.sql.Row;
 public class RowSpatialCurveSortPartitioner extends SpatialCurveSortPartitionerBase<Dataset<Row>> {
 
   public RowSpatialCurveSortPartitioner(HoodieWriteConfig config) {
-    super(config.getClusteringSortColumns(), config.getLayoutOptimizationStrategy(), config.getLayoutOptimizationCurveBuildMethod());
+    super(config.getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS), HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(
+        config.getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY)
+    ), HoodieClusteringConfig.SpatialCurveCompositionStrategyType.fromValue(
+        config.getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD)));
   }
 
   public RowSpatialCurveSortPartitioner(String[] orderByColumns,

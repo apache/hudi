@@ -61,6 +61,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
@@ -68,6 +71,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metrics.MetricsReporterType;
 
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
@@ -154,12 +158,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       enabled = true;
 
       // Inline compaction and auto clean is required as we dont expose this table outside
-      ValidationUtils.checkArgument(!this.metadataWriteConfig.isAutoClean(),
+      ValidationUtils.checkArgument(!(boolean) this.metadataWriteConfig.getBoolean(HoodieCleanConfig.AUTO_CLEAN),
           "Cleaning is controlled internally for Metadata table.");
-      ValidationUtils.checkArgument(!this.metadataWriteConfig.inlineCompactionEnabled(),
+      ValidationUtils.checkArgument(!(boolean) this.metadataWriteConfig.getBoolean(HoodieCompactionConfig.INLINE_COMPACT),
           "Compaction is controlled internally for metadata table.");
       // Metadata Table cannot have metadata listing turned on. (infinite loop, much?)
-      ValidationUtils.checkArgument(this.metadataWriteConfig.shouldAutoCommit(),
+      ValidationUtils.checkArgument(this.metadataWriteConfig.getBoolean(HoodieWriteConfig.AUTO_COMMIT_ENABLE),
           "Auto commit is required for Metadata Table");
       ValidationUtils.checkArgument(!this.metadataWriteConfig.isMetadataTableEnabled(),
           "File listing cannot be used for Metadata Table");
@@ -233,10 +237,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param writeConfig {@code HoodieWriteConfig} of the main dataset writer
    */
   private HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig) {
-    int parallelism = writeConfig.getMetadataInsertParallelism();
+    int parallelism = writeConfig.getInt(HoodieMetadataConfig.INSERT_PARALLELISM_VALUE);
 
-    int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
-    int maxCommitsToKeep = Math.max(writeConfig.getMetadataMaxCommitsToKeep(), writeConfig.getMaxCommitsToKeep());
+    int minCommitsToKeep = Math.max(writeConfig.getInt(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP), writeConfig.getInt(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP));
+    int maxCommitsToKeep = Math.max(writeConfig.getInt(HoodieMetadataConfig.MAX_COMMITS_TO_KEEP), writeConfig.getInt(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP));
 
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
@@ -259,12 +263,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .forTable(tableName)
         // we will trigger cleaning manually, to control the instant times
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(writeConfig.isMetadataAsyncClean())
+            .withAsyncClean(writeConfig.getBoolean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE))
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-            .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
+            .retainCommits(writeConfig.getInt(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED))
             .build())
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
@@ -274,7 +278,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         // we will trigger compaction manually, to control the instant times
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
+            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS))
             // by default, the HFile does not keep the metadata fields, set up as false
             // to always use the metadata of the new record.
             .withPreserveCommitMetadata(false)
@@ -293,27 +297,28 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD_NAME);
     builder.withProperties(properties);
 
-    if (writeConfig.isMetricsOn()) {
+    if (writeConfig.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       // Table Name is needed for metric reporters prefix
       Properties commonProperties = new Properties();
       commonProperties.put(HoodieWriteConfig.TBL_NAME.key(), tableName);
 
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
           .fromProperties(commonProperties)
-          .withReporterType(writeConfig.getMetricsReporterType().toString())
-          .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
+          .withReporterType(MetricsReporterType.valueOf(writeConfig.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE)).toString())
+          .withExecutorMetrics(Boolean.parseBoolean(
+              writeConfig.getStringOrDefault(HoodieMetricsConfig.EXECUTOR_METRICS_ENABLE, "false")))
           .on(true).build());
-      switch (writeConfig.getMetricsReporterType()) {
+      switch (MetricsReporterType.valueOf(writeConfig.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE))) {
         case GRAPHITE:
           builder.withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
-              .onGraphitePort(writeConfig.getGraphiteServerPort())
-              .toGraphiteHost(writeConfig.getGraphiteServerHost())
-              .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
+              .onGraphitePort(writeConfig.getInt(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_PORT_NUM))
+              .toGraphiteHost(writeConfig.getString(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_HOST_NAME))
+              .usePrefix(writeConfig.getString(HoodieMetricsGraphiteConfig.GRAPHITE_METRIC_PREFIX_VALUE)).build());
           break;
         case JMX:
           builder.withMetricsJmxConfig(HoodieMetricsJmxConfig.newBuilder()
-              .onJmxPort(writeConfig.getJmxPort())
-              .toJmxHost(writeConfig.getJmxHost())
+              .onJmxPort(writeConfig.getString(HoodieMetricsJmxConfig.JMX_PORT_NUM))
+              .toJmxHost(writeConfig.getString(HoodieMetricsJmxConfig.JMX_HOST_NAME))
               .build());
           break;
         case DATADOG:
@@ -324,7 +329,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         case CLOUDWATCH:
           break;
         default:
-          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
+          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + MetricsReporterType.valueOf(writeConfig.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE)));
       }
     }
     return builder.build();
@@ -362,7 +367,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         this.metadata.close();
       }
       this.metadata = new HoodieBackedTableMetadata(engineContext, dataWriteConfig.getMetadataConfig(),
-          dataWriteConfig.getBasePath(), dataWriteConfig.getSpillableMapBasePath());
+          dataWriteConfig.getBasePath(), dataWriteConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH));
       this.metadataMetaClient = metadata.getMetadataMetaClient();
     } catch (Exception e) {
       throw new HoodieException("Error initializing metadata table for reads", e);
@@ -395,7 +400,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // if metadata table exists, then check if any of the enabled partition types needs to be initialized
     // NOTE: It needs to be guarded by async index config because if that is enabled then initialization happens through the index scheduler.
-    if (!dataWriteConfig.isMetadataAsyncIndex()) {
+    if (!dataWriteConfig.getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE)) {
       Set<String> inflightAndCompletedPartitions = getInflightAndCompletedMetadataPartitions(dataMetaClient.getTableConfig());
       LOG.info("Async metadata indexing enabled and following partitions already initialized: " + inflightAndCompletedPartitions);
       List<MetadataPartitionType> partitionsToInit = this.enabledPartitionTypes.stream()
@@ -547,7 +552,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // if async metadata indexing is enabled,
     // then only initialize files partition as other partitions will be built using HoodieIndexer
     List<MetadataPartitionType> enabledPartitionTypes =  new ArrayList<>();
-    if (dataWriteConfig.isMetadataAsyncIndex()) {
+    if (dataWriteConfig.getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE)) {
       enabledPartitionTypes.add(MetadataPartitionType.FILES);
     } else {
       // all enabled ones should be initialized
@@ -712,7 +717,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withFileId(fileGroupFileId).overBaseCommit(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
-            .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
+            .withSizeThreshold(metadataWriteConfig.getLong(HoodieStorageConfig.LOGFILE_MAX_SIZE))
             .withFs(dataMetaClient.getFs())
             .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
@@ -773,12 +778,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     return new MetadataRecordsGenerationParams(
         dataMetaClient,
         enabledPartitionTypes,
-        dataWriteConfig.getBloomFilterType(),
+        dataWriteConfig.getString(HoodieIndexConfig.BLOOM_FILTER_TYPE),
         dataWriteConfig.getMetadataBloomFilterIndexParallelism(),
         dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
         dataWriteConfig.getColumnStatsIndexParallelism(),
-        dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
-        dataWriteConfig.getColumnsEnabledForBloomFilterIndex());
+        dataWriteConfig.getMetadataConfig().getColumnsEnabledForColumnStatsIndex(),
+        dataWriteConfig.getMetadataConfig().getColumnsEnabledForBloomFilterIndex());
   }
 
   /**

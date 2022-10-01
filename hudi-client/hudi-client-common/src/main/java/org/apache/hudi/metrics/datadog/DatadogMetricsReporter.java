@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.metrics.MetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 
@@ -44,17 +45,17 @@ public class DatadogMetricsReporter extends MetricsReporter {
   private final int reportPeriodSeconds;
 
   public DatadogMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    reportPeriodSeconds = config.getDatadogReportPeriodSeconds();
-    ApiSite apiSite = config.getDatadogApiSite();
+    reportPeriodSeconds = config.getInt(HoodieMetricsDatadogConfig.REPORT_PERIOD_IN_SECONDS);
+    ApiSite apiSite = ApiSite.valueOf(config.getString(HoodieMetricsDatadogConfig.API_SITE_VALUE));
     String apiKey = config.getDatadogApiKey();
     ValidationUtils.checkState(!StringUtils.isNullOrEmpty(apiKey),
         "Datadog cannot be initialized: API key is null or empty.");
-    boolean skipValidation = config.getDatadogApiKeySkipValidation();
-    int timeoutSeconds = config.getDatadogApiTimeoutSeconds();
-    String prefix = config.getDatadogMetricPrefix();
+    boolean skipValidation = config.getBoolean(HoodieMetricsDatadogConfig.API_KEY_SKIP_VALIDATION);
+    int timeoutSeconds = config.getInt(HoodieMetricsDatadogConfig.API_TIMEOUT_IN_SECONDS);
+    String prefix = config.getString(HoodieMetricsDatadogConfig.METRIC_PREFIX_VALUE);
     ValidationUtils.checkState(!StringUtils.isNullOrEmpty(prefix),
         "Datadog cannot be initialized: Metric prefix is null or empty.");
-    Option<String> host = Option.ofNullable(config.getDatadogMetricHost());
+    Option<String> host = Option.ofNullable(config.getString(HoodieMetricsDatadogConfig.METRIC_HOST_NAME));
     List<String> tagList = config.getDatadogMetricTags();
     Option<List<String>> tags = tagList.isEmpty() ? Option.empty() : Option.of(tagList);
 

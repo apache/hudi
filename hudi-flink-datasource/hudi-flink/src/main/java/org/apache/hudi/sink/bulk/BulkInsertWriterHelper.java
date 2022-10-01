@@ -74,7 +74,7 @@ public class BulkInsertWriterHelper {
     this.taskPartitionId = taskPartitionId;
     this.taskId = taskId;
     this.taskEpochId = taskEpochId;
-    this.rowType = addMetadataFields(rowType, writeConfig.allowOperationMetadataField()); // patch up with metadata fields
+    this.rowType = addMetadataFields(rowType, writeConfig.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD)); // patch up with metadata fields
     this.isInputSorted = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
     this.fileIdPrefix = UUID.randomUUID().toString();
     this.keyGen = RowDataKeyGen.instance(conf, rowType);

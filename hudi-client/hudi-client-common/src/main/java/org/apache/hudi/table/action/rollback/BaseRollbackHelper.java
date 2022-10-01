@@ -71,7 +71,7 @@ public class BaseRollbackHelper implements Serializable {
    */
   public List<HoodieRollbackStat> performRollback(HoodieEngineContext context, HoodieInstant instantToRollback,
                                                   List<HoodieRollbackRequest> rollbackRequests) {
-    int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
+    int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getInt(HoodieWriteConfig.ROLLBACK_PARALLELISM_VALUE)), 1);
     context.setJobStatus(this.getClass().getSimpleName(), "Perform rollback actions: " + config.getTableName());
     // If not for conversion to HoodieRollbackInternalRequests, code fails. Using avro model (HoodieRollbackRequest) within spark.parallelize
     // is failing with com.esotericsoftware.kryo.KryoException
@@ -87,7 +87,7 @@ public class BaseRollbackHelper implements Serializable {
    */
   public List<HoodieRollbackStat> collectRollbackStats(HoodieEngineContext context, HoodieInstant instantToRollback,
                                                        List<HoodieRollbackRequest> rollbackRequests) {
-    int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
+    int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getInt(HoodieWriteConfig.ROLLBACK_PARALLELISM_VALUE)), 1);
     context.setJobStatus(this.getClass().getSimpleName(), "Collect rollback stats for upgrade/downgrade: " + config.getTableName());
     // If not for conversion to HoodieRollbackInternalRequests, code fails. Using avro model (HoodieRollbackRequest) within spark.parallelize
     // is failing with com.esotericsoftware.kryo.KryoException

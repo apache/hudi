@@ -25,7 +25,9 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -113,13 +115,13 @@ public class HoodieRowCreateHandle implements Serializable {
     String fileName = FSUtils.makeBaseFileName(instantTime, writeToken, this.fileId, table.getBaseFileExtension());
     this.path = makeNewPath(fs, partitionPath, fileName, writeConfig);
 
-    this.populateMetaFields = writeConfig.populateMetaFields();
+    this.populateMetaFields = writeConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     this.fileName = UTF8String.fromString(path.getName());
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
 
     this.writeStatus = new HoodieInternalWriteStatus(!table.getIndex().isImplicitWithStorage(),
-        writeConfig.getWriteStatusFailureFraction());
+        writeConfig.getDouble(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION));
     this.shouldPreserveHoodieMetadata = shouldPreserveHoodieMetadata;
 
     writeStatus.setPartitionPath(partitionPath);

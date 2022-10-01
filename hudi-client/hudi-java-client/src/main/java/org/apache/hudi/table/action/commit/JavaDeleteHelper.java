@@ -89,8 +89,8 @@ public class JavaDeleteHelper<R> extends
     try {
       HoodieWriteMetadata<List<WriteStatus>> result = null;
       List<HoodieKey> dedupedKeys = keys;
-      final int parallelism = config.getDeleteShuffleParallelism();
-      if (config.shouldCombineBeforeDelete()) {
+      final int parallelism = Math.max(config.getInt(HoodieWriteConfig.DELETE_PARALLELISM_VALUE), 1);
+      if (config.getBoolean(HoodieWriteConfig.COMBINE_BEFORE_DELETE)) {
         // De-dupe/merge if needed
         dedupedKeys = deduplicateKeys(keys, table, parallelism);
       }

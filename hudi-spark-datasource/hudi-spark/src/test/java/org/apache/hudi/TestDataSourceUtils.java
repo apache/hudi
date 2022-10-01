@@ -238,7 +238,7 @@ public class TestDataSourceUtils {
       params.put(pair.left, pair.right.toString());
       HoodieWriteConfig hoodieConfig = DataSourceUtils
               .createHoodieConfig(avroSchemaString, config.getBasePath(), "test", params);
-      assertEquals(pair.right, hoodieConfig.isAsyncClusteringEnabled());
+      assertEquals(pair.right, hoodieConfig.getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE));
 
       TypedProperties prop = new TypedProperties();
       prop.putAll(params);
@@ -252,7 +252,7 @@ public class TestDataSourceUtils {
         .build();
     when(hoodieWriteClient.getConfig()).thenReturn(config);
 
-    assertThat(config.getUserDefinedBulkInsertPartitionerClass(), is(equalTo(partitionerClassName)));
+    assertThat(config.getString(HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME), is(equalTo(partitionerClassName)));
   }
 
   public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>

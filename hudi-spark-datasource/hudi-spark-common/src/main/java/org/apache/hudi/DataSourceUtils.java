@@ -85,11 +85,10 @@ public class DataSourceUtils {
    * <br>
    * if the class name of UserDefinedBulkInsertPartitioner is configured through the HoodieWriteConfig.
    *
-   * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
    */
   private static Option<BulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
       throws HoodieException {
-    String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
+    String bulkInsertPartitionerClass = config.getString(HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME);
     try {
       return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
           ? Option.empty() :
@@ -104,11 +103,10 @@ public class DataSourceUtils {
    * <br>
    * if the class name of UserDefinedBulkInsertPartitioner is configured through the HoodieWriteConfig.
    *
-   * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
    */
   public static Option<BulkInsertPartitioner<Dataset<Row>>> createUserDefinedBulkInsertPartitionerWithRows(HoodieWriteConfig config)
       throws HoodieException {
-    String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
+    String bulkInsertPartitionerClass = config.getString(HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME);
     try {
       return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
           ? Option.empty() :

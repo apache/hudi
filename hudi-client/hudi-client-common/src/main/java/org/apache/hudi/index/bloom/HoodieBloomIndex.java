@@ -75,7 +75,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     // Step 0: cache the input records if needed
-    if (config.getBloomIndexUseCaching()) {
+    if (config.getBoolean(HoodieIndexConfig.BLOOM_INDEX_USE_CACHING)) {
       records.persist(new HoodieConfig(config.getProps())
           .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
@@ -89,7 +89,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         lookupIndex(partitionRecordKeyPairs, context, hoodieTable);
 
     // Cache the result, for subsequent stages.
-    if (config.getBloomIndexUseCaching()) {
+    if (config.getBoolean(HoodieIndexConfig.BLOOM_INDEX_USE_CACHING)) {
       keyFilenamePairs.persist("MEMORY_AND_DISK_SER");
     }
     if (LOG.isDebugEnabled()) {
@@ -100,7 +100,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     // Step 3: Tag the incoming records, as inserts or updates, by joining with existing record keys
     HoodieData<HoodieRecord<R>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records);
 
-    if (config.getBloomIndexUseCaching()) {
+    if (config.getBoolean(HoodieIndexConfig.BLOOM_INDEX_USE_CACHING)) {
       records.unpersist();
       keyFilenamePairs.unpersist();
     }
@@ -138,9 +138,9 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
                                                                                     List<String> affectedPartitionPathList) {
     List<Pair<String, BloomIndexFileInfo>> fileInfoList = new ArrayList<>();
 
-    if (config.getBloomIndexPruneByRanges()) {
+    if (config.getBoolean(HoodieIndexConfig.BLOOM_INDEX_PRUNE_BY_RANGES)) {
       // load column ranges from metadata index if column stats index is enabled and column_stats metadata partition is available
-      if (config.getBloomIndexUseMetadata()
+      if (config.getBooleanOrDefault(HoodieIndexConfig.BLOOM_INDEX_USE_METADATA)
           && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath())) {
         fileInfoList = loadColumnRangesFromMetaIndex(affectedPartitionPathList, context, hoodieTable);
       }
@@ -281,7 +281,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       HoodiePairData<String, String> partitionRecordKeyPairs) {
     IndexFileFilter indexFileFilter =
-        config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedIndexFileFilter(partitionToFileIndexInfo)
+        config.getBoolean(HoodieIndexConfig.BLOOM_INDEX_TREE_BASED_FILTER) ? new IntervalTreeBasedIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedIndexFileFilter(partitionToFileIndexInfo);
 
     return partitionRecordKeyPairs.map(partitionRecordKeyPair -> {

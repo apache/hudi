@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
@@ -116,7 +117,8 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     testTable.doWriteOperation("000001", INSERT, emptyList(), asList("p1"), 1);
-    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), reuse);
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(),
+        writeConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH), reuse);
     assertTrue(tableMetadata.enabled());
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
     String partition = metadataPartitions.get(0);
@@ -160,7 +162,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   private void verifyBaseMetadataTable(boolean reuseMetadataReaders) throws IOException {
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
         context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(),
-        writeConfig.getSpillableMapBasePath(), reuseMetadataReaders);
+        writeConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH), reuseMetadataReaders);
     assertTrue(tableMetadata.enabled());
     List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
@@ -199,7 +201,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     init(tableType);
 
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
-        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH), false);
 
     assertEquals(HoodieTableMetadataKeyGenerator.class.getCanonicalName(),
         tableMetadata.getMetadataMetaClient().getTableConfig().getKeyGeneratorClassName());
@@ -213,7 +215,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   public void testNotExistPartition(final HoodieTableType tableType) throws Exception {
     init(tableType);
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
-        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH), false);
     FileStatus[] allFilesInPartition =
         tableMetadata.getAllFilesInPartition(new Path(writeConfig.getBasePath() + "dummy"));
     assertEquals(allFilesInPartition.length, 0);

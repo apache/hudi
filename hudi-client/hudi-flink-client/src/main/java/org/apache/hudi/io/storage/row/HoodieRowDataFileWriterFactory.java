@@ -21,6 +21,8 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -61,20 +63,20 @@ public class HoodieRowDataFileWriterFactory {
       Path path, HoodieWriteConfig writeConfig, RowType rowType, HoodieTable table)
       throws IOException {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(
-        writeConfig.getBloomFilterNumEntries(),
-        writeConfig.getBloomFilterFPP(),
-        writeConfig.getDynamicBloomFilterMaxNumEntries(),
-        writeConfig.getBloomFilterType());
+        writeConfig.getInt(HoodieIndexConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE),
+        writeConfig.getDouble(HoodieIndexConfig.BLOOM_FILTER_FPP_VALUE),
+        writeConfig.getInt(HoodieIndexConfig.BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES),
+        writeConfig.getString(HoodieIndexConfig.BLOOM_FILTER_TYPE));
     HoodieRowDataParquetWriteSupport writeSupport =
         new HoodieRowDataParquetWriteSupport(table.getHadoopConf(), rowType, filter);
     return new HoodieRowDataParquetWriter(
         path, new HoodieParquetConfig<>(
         writeSupport,
         writeConfig.getParquetCompressionCodec(),
-        writeConfig.getParquetBlockSize(),
-        writeConfig.getParquetPageSize(),
-        writeConfig.getParquetMaxFileSize(),
+        writeConfig.getInt(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
+        writeConfig.getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE),
+        writeConfig.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         writeSupport.getHadoopConf(),
-        writeConfig.getParquetCompressionRatio()));
+        writeConfig.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION)));
   }
 }

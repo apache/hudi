@@ -29,6 +29,7 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -234,7 +236,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
 
   private HoodieInstant validateAndGetIndexInstant() {
     // ensure lock provider configured
-    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
+    if (!WriteConcurrencyMode.fromValue(config.getString(WRITE_CONCURRENCY_MODE)).supportsOptimisticConcurrencyControl() || StringUtils.isNullOrEmpty(config.getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME))) {
       throw new HoodieIndexException(String.format("Need to set %s as %s and configure lock provider class",
           WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name()));
     }
@@ -269,7 +271,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
         new IndexingCatchupTask(metadataWriter, instantsToIndex, metadataCompletedTimestamps, table.getMetaClient(), metadataMetaClient));
     try {
       LOG.info("Starting index catchup task");
-      indexingCatchupTaskFuture.get(config.getIndexingCheckTimeoutSeconds(), TimeUnit.SECONDS);
+      indexingCatchupTaskFuture.get(config.getMetadataConfig().getIndexingCheckTimeoutSeconds(), TimeUnit.SECONDS);
     } catch (Exception e) {
       indexingCatchupTaskFuture.cancel(true);
       throw new HoodieIndexException(String.format("Index catchup failed. Current indexed instant = %s. Aborting!", currentCaughtupInstant), e);

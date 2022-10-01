@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
@@ -79,7 +80,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void initRegistry() {
-    if (metadataWriteConfig.isMetricsOn()) {
+    if (metadataWriteConfig.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       // should support executor metrics
       Registry registry = Registry.getRegistry("HoodieMetadata");
       this.metrics = Option.of(new HoodieMetadataMetrics(registry));

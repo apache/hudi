@@ -20,6 +20,7 @@ package org.apache.hudi.metrics.cloudwatch;
 
 import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsCloudWatchConfig;
 import org.apache.hudi.metrics.MetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
@@ -54,16 +55,16 @@ public class CloudWatchMetricsReporter extends MetricsReporter {
 
   private CloudWatchReporter createCloudWatchReporter() {
     return CloudWatchReporter.forRegistry(registry)
-        .prefixedWith(config.getCloudWatchMetricPrefix())
-        .namespace(config.getCloudWatchMetricNamespace())
-        .maxDatumsPerRequest(config.getCloudWatchMaxDatumsPerRequest())
+        .prefixedWith(config.getString(HoodieMetricsCloudWatchConfig.METRIC_PREFIX))
+        .namespace(config.getString(HoodieMetricsCloudWatchConfig.METRIC_NAMESPACE))
+        .maxDatumsPerRequest(config.getInt(HoodieMetricsCloudWatchConfig.MAX_DATUMS_PER_REQUEST))
         .build(config.getProps());
   }
 
   @Override
   public void start() {
     LOG.info("Starting CloudWatch Metrics Reporter.");
-    reporter.start(config.getCloudWatchReportPeriodSeconds(), TimeUnit.SECONDS);
+    reporter.start(config.getInt(HoodieMetricsCloudWatchConfig.REPORT_PERIOD_SECONDS), TimeUnit.SECONDS);
   }
 
   @Override

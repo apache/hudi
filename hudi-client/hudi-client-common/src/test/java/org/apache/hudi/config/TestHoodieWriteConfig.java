@@ -82,14 +82,14 @@ public class TestHoodieWriteConfig {
       inputStream.close();
     }
     HoodieWriteConfig config = builder.build();
-    assertEquals(5, config.getMaxCommitsToKeep());
-    assertEquals(2, config.getMinCommitsToKeep());
-    assertTrue(config.shouldUseExternalSchemaTransformation());
+    assertEquals(5, (int) config.getInt(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP));
+    assertEquals(2, (int) config.getInt(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP));
+    assertTrue(config.getBoolean(HoodieWriteConfig.AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE));
   }
 
   @Test
   public void testDefaultIndexAccordingToEngineType() {
-    testEngineSpecificConfig(HoodieWriteConfig::getIndexType,
+    testEngineSpecificConfig(hoodieWriteConfig -> HoodieIndex.IndexType.valueOf(hoodieWriteConfig.getString(HoodieIndexConfig.INDEX_TYPE)),
         constructConfigMap(
             EngineType.SPARK, HoodieIndex.IndexType.SIMPLE,
             EngineType.FLINK, HoodieIndex.IndexType.INMEMORY,
@@ -98,7 +98,7 @@ public class TestHoodieWriteConfig {
 
   @Test
   public void testDefaultClusteringPlanStrategyClassAccordingToEngineType() {
-    testEngineSpecificConfig(HoodieWriteConfig::getClusteringPlanStrategyClass,
+    testEngineSpecificConfig(hoodieWriteConfig -> hoodieWriteConfig.getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME),
         constructConfigMap(
             EngineType.SPARK, HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
             EngineType.FLINK, HoodieClusteringConfig.JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
@@ -107,7 +107,7 @@ public class TestHoodieWriteConfig {
 
   @Test
   public void testDefaultClusteringExecutionStrategyClassAccordingToEngineType() {
-    testEngineSpecificConfig(HoodieWriteConfig::getClusteringExecutionStrategyClass,
+    testEngineSpecificConfig(hoodieWriteConfig -> hoodieWriteConfig.getString(HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME),
         constructConfigMap(
             EngineType.SPARK, HoodieClusteringConfig.SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY,
             EngineType.FLINK, HoodieClusteringConfig.JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY,
@@ -378,8 +378,8 @@ public class TestHoodieWriteConfig {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET)
             .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING).build())
         .build();
-    assertEquals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY, writeConfig.getClusteringPlanStrategyClass());
-    assertEquals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY, writeConfig.getClusteringExecutionStrategyClass());
+    assertEquals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY, writeConfig.getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME));
+    assertEquals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY, writeConfig.getString(HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME));
   }
 
   @Test
@@ -479,12 +479,13 @@ public class TestHoodieWriteConfig {
       WriteConcurrencyMode expectedConcurrencyMode,
       HoodieFailedWritesCleaningPolicy expectedCleanPolicy,
       String expectedLockProviderName) {
-    assertEquals(expectedTableServicesEnabled, writeConfig.areTableServicesEnabled());
+    assertEquals(expectedTableServicesEnabled, writeConfig.getBooleanOrDefault(TABLE_SERVICES_ENABLED));
     assertEquals(expectedAnyTableServicesAsync, writeConfig.areAnyTableServicesAsync());
     assertEquals(
         expectedAnyTableServicesExecutedInline, writeConfig.areAnyTableServicesExecutedInline());
-    assertEquals(expectedConcurrencyMode, writeConfig.getWriteConcurrencyMode());
-    assertEquals(expectedCleanPolicy, writeConfig.getFailedWritesCleanPolicy());
-    assertEquals(expectedLockProviderName, writeConfig.getLockProviderClass());
+    assertEquals(expectedConcurrencyMode, WriteConcurrencyMode.fromValue(writeConfig.getString(WRITE_CONCURRENCY_MODE)));
+    assertEquals(expectedCleanPolicy, HoodieFailedWritesCleaningPolicy
+        .valueOf(writeConfig.getString(FAILED_WRITES_CLEANER_POLICY)));
+    assertEquals(expectedLockProviderName, writeConfig.getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME));
   }
 }

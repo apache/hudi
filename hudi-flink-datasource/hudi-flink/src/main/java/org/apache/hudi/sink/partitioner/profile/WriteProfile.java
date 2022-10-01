@@ -27,6 +27,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.BucketAssigner;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -113,7 +115,7 @@ public class WriteProfile {
     this.context = context;
     this.basePath = new Path(config.getBasePath());
     this.smallFilesMap = new HashMap<>();
-    this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
+    this.recordsPerBucket = config.getInt(HoodieCompactionConfig.COPY_ON_WRITE_INSERT_SPLIT_SIZE);
     this.metaClient = StreamerUtil.createMetaClient(config.getBasePath(), context.getHadoopConf().get());
     this.metadataCache = new HashMap<>();
     this.fsView = getFileSystemView();
@@ -142,8 +144,8 @@ public class WriteProfile {
    * records pack into one file.
    */
   private long averageBytesPerRecord() {
-    long avgSize = config.getCopyOnWriteRecordSizeEstimate();
-    long fileSizeThreshold = (long) (config.getRecordSizeEstimationThreshold() * config.getParquetSmallFileLimit());
+    long avgSize = config.getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
+    long fileSizeThreshold = (long) ((double) config.getDouble(HoodieCompactionConfig.RECORD_SIZE_ESTIMATION_THRESHOLD) * config.getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT));
     HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
     if (!commitTimeline.empty()) {
       // Go over the reverse ordered commits to get a more recent estimate of average record size.
@@ -182,7 +184,7 @@ public class WriteProfile {
     }
 
     List<SmallFile> smallFiles = new ArrayList<>();
-    if (config.getParquetSmallFileLimit() <= 0) {
+    if (config.getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT) <= 0) {
       this.smallFilesMap.put(partitionPath, smallFiles);
       return smallFiles;
     }
@@ -208,7 +210,7 @@ public class WriteProfile {
 
       for (HoodieBaseFile file : allFiles) {
         // filter out the corrupted files.
-        if (file.getFileSize() < config.getParquetSmallFileLimit() && file.getFileSize() > 0) {
+        if (file.getFileSize() < config.getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT) && file.getFileSize() > 0) {
           String filename = file.getFileName();
           SmallFile sf = new SmallFile();
           sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
@@ -236,8 +238,8 @@ public class WriteProfile {
 
   private void recordProfile() {
     this.avgSize = averageBytesPerRecord();
-    if (config.shouldAllowMultiWriteOnSameInstant()) {
-      this.recordsPerBucket = config.getParquetMaxFileSize() / avgSize;
+    if (config.getBoolean(HoodieWriteConfig.ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE)) {
+      this.recordsPerBucket = config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE) / avgSize;
       LOG.info("Refresh insert records per bucket => " + recordsPerBucket);
     }
   }

@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CompactionUtil;
@@ -131,7 +132,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       LOG.info("Execute compaction plan for instant {} as {} file groups", compactionInstantTime, operations.size());
       WriteMarkersFactory
           .get(table.getConfig().getMarkersType(), table, compactionInstantTime)
-          .deleteMarkerDir(table.getContext(), table.getConfig().getMarkersDeleteParallelism());
+          .deleteMarkerDir(table.getContext(), table.getConfig().getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
       for (CompactionOperation operation : operations) {
         output.collect(new StreamRecord<>(new CompactionPlanEvent(compactionInstantTime, operation)));
       }

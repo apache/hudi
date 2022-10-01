@@ -165,13 +165,13 @@ public class TestCleaner extends HoodieClientTestBase {
     // Should have 100 records in table (check using Index), all in locations marked at commit
     HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
 
-    if (client.getConfig().shouldAutoCommit()) {
+    if (client.getConfig().getBoolean(HoodieWriteConfig.AUTO_COMMIT_ENABLE)) {
       assertFalse(table.getCompletedCommitsTimeline().empty());
     }
     // We no longer write empty cleaner plans when there is nothing to be cleaned.
     assertTrue(table.getCompletedCleanTimeline().empty());
 
-    if (client.getConfig().shouldAutoCommit()) {
+    if (client.getConfig().getBoolean(HoodieWriteConfig.AUTO_COMMIT_ENABLE)) {
       HoodieIndex index = SparkHoodieIndexFactory.createIndex(cfg);
       List<HoodieRecord> taggedRecords = tagLocation(index, jsc.parallelize(records, 1), table).collect();
       checkTaggedRecords(taggedRecords, newCommitTime);
@@ -546,7 +546,7 @@ public class TestCleaner extends HoodieClientTestBase {
         HoodieTable table1 = HoodieSparkTable.create(cfg, context, metaClient);
         HoodieTimeline activeTimeline = table1.getCompletedCommitsTimeline();
         HoodieInstant lastInstant = activeTimeline.lastInstant().get();
-        if (cfg.isAsyncClean()) {
+        if (cfg.getBoolean(HoodieCleanConfig.ASYNC_CLEAN)) {
           activeTimeline = activeTimeline.findInstantsBefore(lastInstant.getTimestamp());
         }
         // NOTE: See CleanPlanner#getFilesToCleanKeepingLatestCommits. We explicitly keep one commit before earliest
@@ -570,7 +570,7 @@ public class TestCleaner extends HoodieClientTestBase {
               LOG.debug("Data File - " + value);
               commitTimes.add(value.getCommitTime());
             });
-            if (cfg.isAsyncClean()) {
+            if (cfg.getBoolean(HoodieCleanConfig.ASYNC_CLEAN)) {
               commitTimes.remove(lastInstant.getTimestamp());
             }
             assertEquals(acceptableCommits.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet()), commitTimes,
@@ -1147,7 +1147,7 @@ public class TestCleaner extends HoodieClientTestBase {
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "001"), Option.empty());
     metaClient.reloadActiveTimeline();
     HoodieInstant rollbackInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001");
-    table.scheduleRollback(context, "002", rollbackInstant, false, config.shouldRollbackUsingMarkers());
+    table.scheduleRollback(context, "002", rollbackInstant, false, config.getBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE));
     table.rollback(context, "002", rollbackInstant, true, false);
     final int numTempFilesAfter = testTable.listAllFilesInTempFolder().length;
     assertEquals(0, numTempFilesAfter, "All temp files are deleted.");
