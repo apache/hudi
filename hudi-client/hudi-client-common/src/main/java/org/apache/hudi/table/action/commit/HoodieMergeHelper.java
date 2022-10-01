@@ -55,7 +55,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.isProjectionOf;
-import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord;
 import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
 
 // TODO unify w/ Flink, Java impls
@@ -112,7 +111,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
       wrapper = new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), transformedRecordIterator,
           new UpdateHandler(mergeHandle), record -> {
         if (shouldRewriteInWriterSchema) {
-          return rewriteRecord((GenericRecord) record, writerSchema);
+          return rewriteRecordWithNewSchema((GenericRecord) record, writerSchema);
         } else {
           return record;
         }
