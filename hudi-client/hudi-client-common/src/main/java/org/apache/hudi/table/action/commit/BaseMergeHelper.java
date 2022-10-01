@@ -89,20 +89,14 @@ public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
    * for indexing, writing and other functionality.
    *
    */
-  protected Iterator<GenericRecord> getMergingIterator(HoodieTable<T, I, K, O> table, HoodieMergeHandle<T, I, K, O> mergeHandle,
-                                                                                               HoodieBaseFile baseFile, HoodieFileReader<GenericRecord> reader,
-                                                                                               Schema readSchema, boolean externalSchemaTransformation) throws IOException {
+  protected Iterator<GenericRecord> getMergingIterator(HoodieTable<T, I, K, O> table,
+                                                       HoodieMergeHandle<T, I, K, O> mergeHandle,
+                                                       HoodieBaseFile baseFile,
+                                                       Iterator<GenericRecord> recordIterator) throws IOException {
     Path externalFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
     Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
     HoodieFileReader<GenericRecord> bootstrapReader = HoodieFileReaderFactory.<GenericRecord>getFileReader(bootstrapFileConfig, externalFilePath);
-    Schema bootstrapReadSchema;
-    if (externalSchemaTransformation) {
-      bootstrapReadSchema = bootstrapReader.getSchema();
-    } else {
-      bootstrapReadSchema = mergeHandle.getWriterSchema();
-    }
-
-    return new MergingIterator<>(reader.getRecordIterator(readSchema), bootstrapReader.getRecordIterator(bootstrapReadSchema),
+    return new MergingIterator<>(recordIterator, bootstrapReader.getRecordIterator(),
         (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));
   }
 
