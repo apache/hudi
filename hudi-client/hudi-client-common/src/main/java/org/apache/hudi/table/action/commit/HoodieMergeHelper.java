@@ -22,11 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -58,8 +54,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.isProjectionOf;
 import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
 
 // TODO unify w/ Flink, Java impls
-public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
-    BaseMergeHelper<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
+public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper {
 
   private HoodieMergeHelper() {
   }
@@ -73,8 +68,8 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public void runMerge(HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
-                       HoodieMergeHandle<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> mergeHandle) throws IOException {
+  public void runMerge(HoodieTable<?, ?, ?, ?> table,
+                       HoodieMergeHandle<?, ?, ?, ?> mergeHandle) throws IOException {
     HoodieWriteConfig writeConfig = table.getConfig();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
