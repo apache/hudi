@@ -201,9 +201,8 @@ public class StreamReadMonitoringFunction
       // table does not exist
       return;
     }
-    IncrementalInputSplits.Result result = cdcEnabled
-        ? incrementalInputSplits.inputSplitsCDC(metaClient, this.issuedInstant)
-        : incrementalInputSplits.inputSplits(metaClient, this.hadoopConf, this.issuedInstant);
+    IncrementalInputSplits.Result result =
+        incrementalInputSplits.inputSplits(metaClient, this.hadoopConf, this.issuedInstant, this.cdcEnabled);
     if (result.isEmpty()) {
       // no new instants, returns early
       return;
