@@ -21,7 +21,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hudi.AutoRecordKeyGenerationUtils.{isAutoGenerateRecordKeys, mayBeValidateParamsForAutoGenerationOfRecordKeys}
+import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
 import org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty
@@ -47,18 +47,16 @@ import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieInternalConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieInternalConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.{HoodieException, HoodieWriteConflictException, SchemaCompatibilityException}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
-import org.apache.hudi.index.HoodieIndex
-import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileNullability
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName
-import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{BaseKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
@@ -123,7 +121,40 @@ object HoodieSparkSqlWriter {
             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
+    var succeeded = false
+    var counter = 0
+    val isRetryEnabled: Boolean = java.lang.Boolean.parseBoolean(optParams.getOrDefault(HoodieLockConfig.RETRY_ON_CONFLICT_FAILURES.key(), String.valueOf(HoodieLockConfig.RETRY_ON_CONFLICT_FAILURES.defaultValue())))
+    val maxRetry: Integer = Integer.parseInt(optParams.getOrDefault(HoodieLockConfig.NUM_RETRIES_ON_CONFLICT_FAILURES.key(), String.valueOf(HoodieLockConfig.NUM_RETRIES_ON_CONFLICT_FAILURES.defaultValue())))
+    var toReturn: (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = null
+    // if retries are enabled on conflict failures, enable retries
+    while (counter < maxRetry && !succeeded) {
+      try {
+        counter += 1
+        toReturn = writeInternal(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
+        log.warn("Succeeded with attempt no " + counter)
+        succeeded = true
+        toReturn
+      } catch {
+        case e: HoodieWriteConflictException => {
+          val writeConcurrencyMode = optParams.getOrDefault(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
+          if (writeConcurrencyMode.equals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()) && isRetryEnabled) {
+            log.warn("Conflict found. Retrying again for attempt no " + counter)
+          } else {
+            throw e
+          }
+        }
+      }
+    }
+    toReturn
+  }
 
+  def writeInternal(sqlContext: SQLContext,
+                    mode: SaveMode,
+                    optParams: Map[String, String],
+                    sourceDf: DataFrame,
+                    streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
+                    hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
+  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
     val basePath = new Path(path)
