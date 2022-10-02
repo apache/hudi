@@ -21,6 +21,7 @@ package org.apache.hudi.source;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -216,7 +217,7 @@ public class IncrementalInputSplits implements Serializable {
         : instants.get(instants.size() - 1).getTimestamp();
 
     List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, endInstant, instantRange);
+        fileStatuses, readPartitions, endInstant, instantRange, false);
 
     return Result.instance(inputSplits, endInstant);
   }
@@ -311,7 +312,7 @@ public class IncrementalInputSplits implements Serializable {
 
     final String endInstant = instantToIssue.getTimestamp();
     List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, endInstant, instantRange);
+        fileStatuses, readPartitions, endInstant, instantRange, skipCompaction);
 
     return Result.instance(inputSplits, endInstant);
   }
@@ -322,12 +323,13 @@ public class IncrementalInputSplits implements Serializable {
       FileStatus[] fileStatuses,
       Set<String> readPartitions,
       String endInstant,
-      InstantRange instantRange) {
+      InstantRange instantRange,
+      boolean skipBaseFiles) {
     final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     return readPartitions.stream()
-        .map(relPartitionPath -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, endInstant)
+        .map(relPartitionPath -> getFileSlices(fsView, relPartitionPath, endInstant, skipBaseFiles)
             .map(fileSlice -> {
               Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
                   .sorted(HoodieLogFile.getLogFileComparator())
@@ -340,6 +342,15 @@ public class IncrementalInputSplits implements Serializable {
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
+  }
+
+  private static Stream<FileSlice> getFileSlices(
+      HoodieTableFileSystemView fsView,
+      String relPartitionPath,
+      String endInstant,
+      boolean skipBaseFiles) {
+    return skipBaseFiles ? fsView.getAllLogsMergedFileSliceBeforeOrOn(relPartitionPath, endInstant)
+        : fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, endInstant);
   }
 
   private FileIndex getFileIndex() {
