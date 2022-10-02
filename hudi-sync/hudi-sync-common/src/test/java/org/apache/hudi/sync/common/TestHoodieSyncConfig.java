@@ -104,7 +104,7 @@ class TestHoodieSyncConfig {
   }
 
   @Test
-  void testInferPartitonExtractorClass() {
+  void testInferPartitionExtractorClass() {
     Properties props0 = new Properties();
     HoodieSyncConfig config0 = new HoodieSyncConfig(props0, new Configuration());
     assertEquals("org.apache.hudi.hive.MultiPartKeysValueExtractor",
@@ -140,6 +140,13 @@ class TestHoodieSyncConfig {
     HoodieSyncConfig config4 = new HoodieSyncConfig(props4, new Configuration());
     assertEquals("org.apache.hudi.hive.HiveStylePartitionValueExtractor",
         config4.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+
+    Properties props5 = new Properties();
+    props5.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo");
+    props5.setProperty(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
+    HoodieSyncConfig config5 = new HoodieSyncConfig(props5, new Configuration());
+    assertEquals("org.apache.hudi.hive.SinglePartPartitionValueExtractor",
+        config5.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
   }
 
   @Test
