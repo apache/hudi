@@ -1,37 +1,113 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 import re
 import os
+import sys
 
-def title_is_ok(title):
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #  
+#  _____ _ _   _       __     __    _ _     _       _   _                 #
+# |_   _(_) |_| | ___  \ \   / /_ _| (_) __| | __ _| |_(_) ___  _ __      #  
+#   | | | | __| |/ _ \  \ \ / / _` | | |/ _` |/ _` | __| |/ _ \| '_ \     #
+#   | | | | |_| |  __/   \ V / (_| | | | (_| | (_| | |_| | (_) | | | |    #
+#   |_| |_|\__|_|\___|    \_/ \__,_|_|_|\__,_|\__,_|\__|_|\___/|_| |_|    #
+#                                                                         # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #                                                                 
+
+
+#validator for titles
+def validate_title(title: str):
     return len(re.findall('(\[HUDI\-[0-9]{1,}\]|\[MINOR\])',title)) == 1
 
+#runs an individual title test
+#
+#   PARAMS
+# name: str - the name of the test
+# title: str - the title to test
+# isTrue: bool - is the title valid
+#
+#   RETURN
+# bool - True if the test passed, False if it failed
+def run_title_test(name: str, title: str, isTrue: bool):
+    if isTrue != validate_title(title):
+        print(f"{name} - FAILED")
+        return False
+    print(f"{name} - PASSED")
+    return True
+
+#tests for title validation
+#
+#   RETURN
+# bool - True if all tests passed, False if any tests fail
 def test_title():
-    #test that position doesn't matter
-    assert title_is_ok("[HUDI-1324] my fake pr")
-    assert title_is_ok(" my [HUDI-1324] fake pr")
-    assert title_is_ok(" my fake pr [HUDI-1324]")
+    test_return = True
+    #test that position doesn't matter for issue
+    test_return = run_title_test("issue at front", "[HUDI-1324] my fake pr", True) and test_return
+    test_return =  run_title_test("issue in middle", " my [HUDI-1324] fake pr", True) and test_return
+    test_return =  run_title_test("issue at end", " my fake pr [HUDI-1324]", True)  and test_return
+
     #test position doesn't matter for minor
-    assert title_is_ok("[MINOR] my fake pr")
-    assert title_is_ok(" my [MINOR] fake pr")
-    assert title_is_ok(" my fake pr [MINOR]")
+    test_return = run_title_test("minor at front", "[MINOR] my fake pr", True) and test_return
+    test_return = run_title_test("minor in middle", " my [MINOR] fake pr", True) and test_return
+    test_return = run_title_test("minor at end", " my fake pr [MINOR]", True) and test_return
+
     #test that more than 4 nums is also ok
-    assert title_is_ok("[HUDI-12345] my fake pr")
+    test_return = run_title_test("more than 4 nums in issue", "[HUDI-12345] my fake pr", True) and test_return
+
     #test that 1 nums is also ok
-    assert title_is_ok("[HUDI-1] my fake pr")
+    test_return = run_title_test("1 num in issue", "[HUDI-1] my fake pr", True) and test_return
 
     #no nums not ok
-    assert not title_is_ok("[HUDI-] my fake pr")
+    test_return = run_title_test("no nums in issue", "[HUDI-] my fake pr", False) and test_return
+
     #no brackets not ok
-    assert not title_is_ok("HUDI-1234 my fake pr")
-    assert not title_is_ok("MINOR my fake pr")
+    test_return = run_title_test("no brackets around issue", "HUDI-1234 my fake pr", False) and test_return
+    test_return = run_title_test("no brackets around minor", "MINOR my fake pr", False) and test_return
+    
     #lowercase not ok
-    assert not title_is_ok("[hudi-1234] my fake pr")
-    assert not title_is_ok("[minor] my fake pr")
+    test_return = run_title_test("lowercase hudi", "[hudi-1234] my fake pr", False) and test_return
+    test_return = run_title_test("lowercase minor", "[minor] my fake pr", False) and test_return
+    
     #duplicate not ok
-    assert not title_is_ok("[HUDI-1324][HUDI-1324] my fake pr")
+    test_return = run_title_test("duplicate issue", "[HUDI-1324][HUDI-1324] my fake pr", False) and test_return
+    test_return = run_title_test("duplicate minor", "[MINOR] my fake pr [MINOR]", False) and test_return
+    
     #hudi and minor not ok
-    assert not title_is_ok("[HUDI-1324] my [MINOR]fake pr")
+    test_return = run_title_test("issue and minor", "[HUDI-1324] my [MINOR]fake pr", False) and test_return
+    print("*****")
+    if test_return:
+        print("All title tests passed")
+    else:
+        print("Some title tests failed")
+    print("*****")
+
+    return test_return
 
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#  ____            _        __     __    _ _     _       _   _                #
+# | __ )  ___   __| |_   _  \ \   / /_ _| (_) __| | __ _| |_(_) ___  _ __     #
+# |  _ \ / _ \ / _` | | | |  \ \ / / _` | | |/ _` |/ _` | __| |/ _ \| '_ \    #
+# | |_) | (_) | (_| | |_| |   \ V / (_| | | | (_| | (_| | |_| | (_) | | | |   #
+# |____/ \___/ \__,_|\__, |    \_/ \__,_|_|_|\__,_|\__,_|\__|_|\___/|_| |_|   #
+#                    |___/                                                    #
+#                                                                             #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #                                            
+    
 #Enums for the the outcome of parsing a single line
 class Outcomes:
     #error was found so we should stop parsing and exit with error
@@ -49,19 +125,18 @@ class Outcomes:
 
 
 #Holds the data for a section
+#   PARAMS
+# name: str - name of the parse section
+# identifier: str - line that signifies the start of a section
+# linesAfter: set of str - default lines in the template that we ignore when 
+#                          verifying that the user filled out the section
+# nextSection: str - The name of the next section or "SUCCESS" if this is the 
+#                    last section
 class ParseSectionData:
     def __init__(self, name: str, identifier: str, linesAfter, nextSection: str):
-        #name of the parse section
         self.name = name
-
-        #line that signifies the start of a section
         self.identifier = identifier
-
-        #default line in the template that we ignore when verifying that the
-        #user filled out the section
         self.linesAfter = linesAfter
-
-        #The name of the next section or "SUCCESS" if this is the last section
         self.nextSection = nextSection
     
     #returns true if line matches the identifier
@@ -85,6 +160,8 @@ class RiskLevelData(ParseSectionData):
         return line.startswith(self.identifier)
 
 #Holds all the parse section data in a map
+#   PARAMS
+# psd: list of ParseSectionData - a list of the data for all the parse sections
 class ParseSections:
     def __init__(self, psd):
         self.sections = {}
@@ -92,6 +169,9 @@ class ParseSections:
             self.sections[x.name] = x
     
     #returns true if line is an identifier for a section that is not value
+    #   PARAMS
+    # line: str - the line that we are parsing
+    # value: str - the name of the parse section that we are parsing
     def validateOthers(self, line: str, value: str):
         for name in self.sections:
             if name != value:
@@ -308,380 +388,198 @@ def make_default_validator(body, debug=False):
     return ValidateBody(body, "CHANGELOGS", parseSections, debug)
 
 
-# def joinLines(lines):
-#     return "\n".join(lines)
+#takes a list of strings and returns a string of those lines separated by \n
+def joinLines(lines):
+    return "\n".join(lines)
 
-# def run_test(name, body, isTrue, debug):
-#     print(name)
-#     validator = make_default_validator(body, debug)
-#     if isTrue:
-#         assert validator.validate()
-#     else:
-#         assert not validator.validate()
+#runs a test for parsing the body
+#   PARAMS
+# name: str - the name of the test
+# body: str - the body to parse
+# isTrue: bool - True if the body complies with our validation rules
+# debug: bool - True if we want to print debug information
+def run_test(name: str, body: str, isTrue: bool, debug: bool):
+    validator = make_default_validator(body, debug)
+    if isTrue != validator.validate():
+        print(f"{name} - FAILED")
+        return False
+    print(f"{name} - PASSED")
+    return True
 
+# Given a list of sections which are lists of strings, it combines them into one
+# giant string that is the body to be parsed
+def build_body(sections):
+    res = ""
+    for s in sections:
+        res += joinLines(s) + "\n"
+    return res
 
-# def test_body():
-#     template_changelogs = [
-#          "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         ""
-#     ]
+# Tests for validating the body of a pr. Returns true if all tests pass
+def test_body():
+    DEBUG_MESSAGES = False
+    #Create sections that we will combine to create bodies to test validation on
+    template_changelogs = [
+         "### Change Logs",
+        "",
+        "_Describe context and summary for this change. Highlight if any code was copied._",
+        ""
+    ]
 
-#     template_impact = [
-#         "### Impact",
-#         "",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         ""
-#     ]
+    good_changelogs = template_changelogs.copy()
+    good_changelogs[1] = "changelogs description"
 
-#     template_risklevel = [
-#         "**Risk level: none | low | medium | high**",
-#         "",
-#         "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         ""
-#     ]
+    template_impact = [
+        "### Impact",
+        "",
+        "_Describe any public API or user-facing feature change or any performance impact._",
+        ""
+    ]
 
-#     template_checklist = [
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#     ]
+    good_impact = template_impact.copy()
+    good_impact[1] = "impact description"
 
+    template_risklevel = [
+        "**Risk level: none | low | medium | high**",
+        "",
+        "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
+        ""
+    ]
 
-#     duplicate_change_logs = [
-#         "### Change Logs",
-#         "",
-#         "### Change Logs",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "",
-#         "### Impact",
-#         "",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: none | low | medium | high**",
-#         "",
-#         "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
+    good_risklevel_none = template_risklevel.copy()
+    good_risklevel_none[0] = "**Risk level: none**"
 
-#     print("duplicate_change_logs")
-#     assert not body_is_ok("\n".join(duplicate_change_logs),debug_messages)
+    good_risklevel_medium = template_risklevel.copy()
+    good_risklevel_medium[0] = "**Risk level: medium**"
+    good_risklevel_medium[1] = "risklevel description" 
 
-#     describe_context = [
-#         "### Change Logs",
-#         "",
-#         "describing context",
-#         "",
-#         "### Impact",
-#         "",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: none | low | medium | high**",
-#         "",
-#         "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("describe_context")
-#     assert not body_is_ok("\n".join(describe_context),debug_messages)
+    template_documentation = [
+        "### Documentation Update",
+        "",
+        "_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
+        "- _The config description must be updated if new configs are added or the default value of the configs are changed_",
+        "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
+        "ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
+        "changes to the website._",
+        ""
+    ]
 
-#     describe_impact = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "describing the context",
-#         "",
-#         "### Impact",
-#         "",
-#         "describing impact",
-#         "",
-#         "**Risk level: none | low | medium | high**",
-#         "",
-#         "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("describe_impact")
-#     assert not body_is_ok("\n".join(describe_impact),debug_messages)
+    good_documentation = template_documentation.copy()
+    good_documentation[1] = "documentation description"
 
-#     duplicate_impact = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "describing the context",
-#         "",
-#         "### Impact",
-#         "### Impact",
-#         "",
-#         "describing impact",
-#         "",
-#         "**Risk level: none | low | medium | high**",
-#         "",
-#         "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("duplicate_impact")
-#     assert not body_is_ok("\n".join(duplicate_impact),debug_messages)
+    template_checklist = [
+        "### Contributor's checklist",
+        "",
+        "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
+        "- [ ] Change Logs and Impact were stated clearly",
+        "- [ ] Adequate tests were added if applicable",
+        "- [ ] CI passed"
+    ]
 
-#     choose_risk_level_none = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "describing context",
-#         "",
-#         "### Impact",
-#         "describing impact",
-#         "",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: none**",
-#         "",
-#         "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("choose_risk_level_none")
-#     assert body_is_ok("\n".join(choose_risk_level_none),debug_messages)
+    #list of sections that when combined form a valid body
+    good_sections = [good_changelogs, good_impact, good_risklevel_none, good_documentation, template_checklist]
 
-#     duplicate_risk_level = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "describing context",
-#         "",
-#         "### Impact",
-#         "describing impact",
-#         "",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: none**",
-#         "",
-#         "**Risk level: none | low | medium | high**",
-#         "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("duplicate_risk_level")
-#     assert not body_is_ok("\n".join(duplicate_risk_level),debug_messages)
+    #list of sections that when combined form the template
+    template_sections = [template_changelogs, template_impact, template_risklevel, template_documentation ,template_checklist]
+
+    tests_passed = True
+    #Test section not filled out
+    for i in range(len(good_sections)-1):
+        test_sections = []
+        for j in range(len(good_sections)):
+            if j != i:
+                test_sections.append(good_sections[j].copy())
+            else:
+                test_sections.append(template_sections[j].copy())
+        tests_passed = run_test(f"template section not filled out: {i}", build_body(test_sections), False, DEBUG_MESSAGES) and tests_passed
+
+    #Test duplicate section
+    for i in range(len(good_sections)-1):
+        test_sections = []
+        for j in range(len(good_sections)):
+            test_sections.append(good_sections[j].copy())
+            if j == i:
+                test_sections.append(good_sections[j].copy())
+        tests_passed = run_test(f"duplicate section: {i}", build_body(test_sections), False, DEBUG_MESSAGES) and tests_passed
+    
+    #Test out of order section
+    for i in range(len(good_sections)):
+        test_sections = []
+        for j in range(len(good_sections)):
+            test_sections.append(good_sections[j].copy())
+        k = (i + 2) % len(good_sections)
+        test_sections[i], test_sections[k] = test_sections[k],test_sections[i]
+        tests_passed = run_test(f"Swapped sections: {i}, {k}", build_body(test_sections), False, DEBUG_MESSAGES) and tests_passed
+
+    #Test missing section
+    for i in range(len(good_sections)):
+        test_sections = []
+        for j in range(len(good_sections)):
+            if i != j:
+                test_sections.append(good_sections[j].copy())
+        tests_passed = run_test(f"Missing Section: {i}", build_body(test_sections), False, DEBUG_MESSAGES) and tests_passed
+    
+    #Test good body with risk level of none:
+    tests_passed = run_test("good documentation. risk level none", build_body(good_sections), True, DEBUG_MESSAGES) and tests_passed
+
+    #Test good body with risk level of medium:
+    risk_level_index = 2
+    good_medium_risk_level = good_sections.copy()
+    good_medium_risk_level[risk_level_index] = good_risklevel_medium
+    tests_passed = run_test("good documentation. risk level medium", build_body(good_medium_risk_level), True, DEBUG_MESSAGES) and tests_passed
+
+    #Test good body except medium risk level and there is no description
+    bad_medium_risk_level = good_sections.copy()
+    bad_risklevel_medium = good_risklevel_medium.copy()
+    bad_risklevel_medium[1] = ""
+    bad_medium_risk_level[risk_level_index] = bad_risklevel_medium
+    tests_passed = run_test("medium risk level but no description", build_body(bad_medium_risk_level), False, DEBUG_MESSAGES) and tests_passed
+
+    #Test unknown risk level:
+    unknow_risk_level = good_sections.copy()
+    unknow_risk_level_section = template_risklevel.copy()
+    unknow_risk_level_section[0] = "**Risk level: unknown**"
+    unknow_risk_level[risk_level_index] = unknow_risk_level_section
+    tests_passed = run_test("unknown risk level", build_body(unknow_risk_level), False, DEBUG_MESSAGES) and tests_passed
+
+    print("*****")
+    if tests_passed:
+        print("All body tests passed")
+    else:
+        print("Some body tests failed")
+    print("*****")
+    
+    return tests_passed
 
 
-#     choose_risk_level_high = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "describing context",
-#         "",
-#         "### Impact",
-#         "",
-#         "describing impact",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: high**",
-#         "",
-#          "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("choose_risk_level_high")
-#     assert not body_is_ok("\n".join(choose_risk_level_high),debug_messages)
-
-#     no_risk_level = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "describing context",
-#         "",
-#         "### Impact",
-#         "",
-#         "describing impact",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: **",
-#         "",
-#          "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("no_risk_level")
-#     assert not body_is_ok("\n".join(no_risk_level),debug_messages)
-
-#     weird_risk_level = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "describing context",
-#         "",
-#         "### Impact",
-#         "",
-#         "describing impact",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: onehouse**",
-#         "",
-#          "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("weird_risk_level")
-#     assert not body_is_ok("\n".join(weird_risk_level),debug_messages)
-
-#     choose_risk_level_high_explained = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "describing context",
-#         "",
-#         "### Impact",
-#         "",
-#         "describing impact",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: high**",
-#         "",
-#          "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#          "explaining my impact",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("choose_risk_level_high_explained")
-#     assert body_is_ok("\n".join(choose_risk_level_high_explained),debug_messages)
-
-#     good_documentation = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "actually describe context",
-#         "",
-#         "### Impact",
-#         "",
-#         "actually describe impact",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: medium **",
-#         "",
-#         "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "Risk is medium so we need to describe it",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("good_documentation")
-#     assert body_is_ok("\n".join(good_documentation),debug_messages)
-
-#     good_documentation_no_describe_risk = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "actually describe context",
-#         "",
-#         "### Impact",
-#         "",
-#         "actually describe impact",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: low **",
-#         "",
-#         "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "### Contributor's checklist",
-#         "",
-#         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-#         "- [ ] Change Logs and Impact were stated clearly",
-#         "- [ ] Adequate tests were added if applicable",
-#         "- [ ] CI passed"
-#         ]
-#     print("good_documentation_no_describe_risk")
-#     assert body_is_ok("\n".join(good_documentation_no_describe_risk),debug_messages)
-
-#     no_checklist = [
-#         "### Change Logs",
-#         "",
-#         "_Describe context and summary for this change. Highlight if any code was copied._",
-#         "actually describe context",
-#         "",
-#         "### Impact",
-#         "",
-#         "actually describe impact",
-#         "_Describe any public API or user-facing feature change or any performance impact._",
-#         "",
-#         "**Risk level: medium **",
-#         "",
-#         "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
-#         "",
-#         "Risk is medium so we need to describe it",
-#         ]
-#     print("no_checklist")
-#     assert not body_is_ok("\n".join(no_checklist),debug_messages)
 
 
 
 if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        title_tests = test_title()
+        body_tests = test_body()
+        if title_tests and body_tests:
+            exit(0)
+        else:
+            exit(-1)
+
+
     title = os.getenv("REQUEST_TITLE")
     body = os.getenv("REQUEST_BODY")
-    if not title_is_ok(title):
+
+    if title is None:
+        print("no title")
+        exit(-1)
+
+    if not validate_title(title):
+        print("invalid title")
+        exit(-1)
+
+    if body is None:
+        print("no pr body")
         exit(-1)
 
     validator = make_default_validator(body,True)
     if not validator.validate():
-        exit(-2)
+        exit(-1)
     exit(0)
