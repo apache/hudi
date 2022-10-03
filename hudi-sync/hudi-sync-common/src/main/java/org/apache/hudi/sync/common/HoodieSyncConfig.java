@@ -104,10 +104,13 @@ public class HoodieSyncConfig extends HoodieConfig {
         String partitionFields = partitionFieldsOpt.get();
         if (StringUtils.nonEmpty(partitionFields)) {
           int numOfPartFields = partitionFields.split(",").length;
-          if (numOfPartFields == 1
-              && cfg.contains(HIVE_STYLE_PARTITIONING_ENABLE)
-              && cfg.getString(HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
-            return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+          if (numOfPartFields == 1) {
+            if (cfg.contains(HIVE_STYLE_PARTITIONING_ENABLE)
+                && cfg.getString(HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
+              return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+            } else {
+              return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
+            }
           } else {
             return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
           }
