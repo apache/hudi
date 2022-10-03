@@ -18,8 +18,7 @@ version: "3.3"
 services:
 
   namenode:
-    image: apachehudi/hudi-hadoop_2.8.4-namenode:linux-arm64-0.10.1
-    platform: linux/arm64
+    image: apachehudi/hudi-hadoop_2.8.4-namenode:latest
     hostname: namenode
     container_name: namenode
     environment:
@@ -32,14 +31,13 @@ services:
     env_file:
       - ./hadoop.env
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://namenode:50070" ]
+      test: ["CMD", "curl", "-f", "http://namenode:50070"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   datanode1:
-    image: apachehudi/hudi-hadoop_2.8.4-datanode:linux-arm64-0.10.1
-    platform: linux/arm64
+    image: apachehudi/hudi-hadoop_2.8.4-datanode:latest
     container_name: datanode1
     hostname: datanode1
     environment:
@@ -55,7 +53,7 @@ services:
       - "namenode"
       - "historyserver"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://datanode1:50075" ]
+      test: ["CMD", "curl", "-f", "http://datanode1:50075"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -75,7 +73,7 @@ services:
     ports:
       - "58188:8188"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://historyserver:8188" ]
+      test: ["CMD", "curl", "-f", "http://historyserver:8188"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -85,18 +83,14 @@ services:
       - historyserver:/hadoop/yarn/timeline
 
   hive-metastore-postgresql:
-    image: menorah84/hive-metastore-postgresql:2.3.0
-    platform: linux/arm64
-    environment:
-      - POSTGRES_HOST_AUTH_METHOD=trust
+    image: bde2020/hive-metastore-postgresql:2.3.0
     volumes:
       - hive-metastore-postgresql:/var/lib/postgresql
     hostname: hive-metastore-postgresql
     container_name: hive-metastore-postgresql
 
   hivemetastore:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:linux-arm64-0.10.1
-    platform: linux/arm64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
     hostname: hivemetastore
     container_name: hivemetastore
     links:
@@ -112,7 +106,7 @@ services:
       # JVM debugging port (will be mapped to a random port on host)
       - "5005"
     healthcheck:
-      test: [ "CMD", "nc", "-z", "hivemetastore", "9083" ]
+      test: ["CMD", "nc", "-z", "hivemetastore", "9083"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -121,8 +115,7 @@ services:
       - "namenode"
 
   hiveserver:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:linux-arm64-0.10.1
-    platform: linux/arm64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
     hostname: hiveserver
     container_name: hiveserver
     env_file:
@@ -143,8 +136,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   sparkmaster:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_2.4.4:linux-arm64-0.10.1
-    platform: linux/arm64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_2.4.4:latest
     hostname: sparkmaster
     container_name: sparkmaster
     env_file:
@@ -163,8 +155,7 @@ services:
       - "namenode"
 
   spark-worker-1:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkworker_2.4.4:linux-arm64-0.10.1
-    platform: linux/arm64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkworker_2.4.4:latest
     hostname: spark-worker-1
     container_name: spark-worker-1
     env_file:
@@ -184,8 +175,7 @@ services:
       - "namenode"
 
   zookeeper:
-    image: 'arm64v8/zookeeper:3.4.12'
-    platform: linux/arm64
+    image: 'bitnami/zookeeper:3.4.12-r68'
     hostname: zookeeper
     container_name: zookeeper
     ports:
@@ -194,8 +184,7 @@ services:
       - ALLOW_ANONYMOUS_LOGIN=yes
 
   kafka:
-    image: 'wurstmeister/kafka:2.12-2.0.1'
-    platform: linux/arm64
+    image: 'bitnami/kafka:2.0.0'
     hostname: kafkabroker
     container_name: kafkabroker
     ports:
@@ -203,14 +192,11 @@ services:
     environment:
       - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
       - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_ADVERTISED_HOST_NAME=kafkabroker
 
   presto-coordinator-1:
     container_name: presto-coordinator-1
     hostname: presto-coordinator-1
-#    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
-    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.217:linux-arm64-0.10.1
-    platform: linux/arm64
+    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
     ports:
       - "8090:8090"
       # JVM debugging port (will be mapped to a random port on host)
@@ -231,9 +217,7 @@ services:
   presto-worker-1:
     container_name: presto-worker-1
     hostname: presto-worker-1
-    #image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
-    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.217:linux-arm64-0.10.1
-    platform: linux/arm64
+    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
     depends_on: [ "presto-coordinator-1" ]
     environment:
       - PRESTO_JVM_MAX_HEAP=512M
@@ -283,10 +267,17 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
     command: http://trino-coordinator-1:8091 trino-worker-1
 
+  graphite:
+    container_name: graphite
+    hostname: graphite
+    image: graphiteapp/graphite-statsd
+    ports:
+      - 80:80
+      - 2003-2004:2003-2004
+      - 8126:8126
 
   adhoc-1:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:linux-arm64-0.10.1
-    platform: linux/arm64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:latest
     hostname: adhoc-1
     container_name: adhoc-1
     env_file:
@@ -310,8 +301,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   adhoc-2:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:linux-arm64-0.10.1
-    platform: linux/arm64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:latest
     hostname: adhoc-2
     container_name: adhoc-2
     env_file:
