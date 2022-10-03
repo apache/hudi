@@ -310,7 +310,7 @@ WITH (
 select * from t1;
 ``` 
 
-This will give all changes that happened after the `read.streaming.start-commit` commit. The unique thing about this
+This will give all changes that happened after the `read.start-commit` commit. The unique thing about this
 feature is that it now lets you author streaming pipelines on streaming or batch data source.
 
 ### Delete Data {#deletes}

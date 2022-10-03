@@ -125,7 +125,7 @@ in the filter. Filters push down is not supported yet (already on the roadmap).
 
 For MERGE_ON_READ table, in order to query hudi table as a streaming, you need to add option `'read.streaming.enabled' = 'true'`,
 when querying the table, a Flink streaming pipeline starts and never ends until the user cancel the job manually.
-You can specify the start commit with option `read.streaming.start-commit` and source monitoring interval with option
+You can specify the start commit with option `read.start-commit` and source monitoring interval with option
 `read.streaming.check-interval`.
 
 ## Hive
