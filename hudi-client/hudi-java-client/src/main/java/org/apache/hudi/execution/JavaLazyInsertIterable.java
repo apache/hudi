@@ -65,7 +65,8 @@ public class JavaLazyInsertIterable<T extends HoodieRecordPayload> extends Hoodi
     try {
       final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
       bufferedIteratorExecutor =
-          new BoundedInMemoryExecutor<>(Integer.parseInt(hoodieConfig.getStringOrDefault(HoodieWriteConfig.WRITE_BUFFER_LIMIT_BYTES_VALUE)), new IteratorBasedQueueProducer<>(inputItr), Option.of(getInsertHandler()), getTransformFunction(schema));
+          new BoundedInMemoryExecutor<>(Integer.parseInt(hoodieConfig.getStringOrDefault(HoodieWriteConfig.WRITE_BUFFER_LIMIT_BYTES_VALUE)),
+              new IteratorBasedQueueProducer<>(inputItr), Option.of(getInsertHandler()), getTransformFunction(schema));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
       return result;

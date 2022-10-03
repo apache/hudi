@@ -967,6 +967,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(BULKINSERT_PARALLELISM_VALUE);
   }
 
+  public boolean isAsyncClusteringEnabled() {
+    return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
+  }
+
+  public boolean inlineCompactionEnabled() {
+    return getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
+  }
+
   public Boolean shouldAssumeDatePartitioning() {
     return metadataConfig.shouldAssumeDatePartitioning();
   }

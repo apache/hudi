@@ -129,14 +129,14 @@ public class FormatUtils {
     try {
       return new ExternalSpillableMap<>(
           maxCompactionMemoryInBytes,
-          writeConfig.getSpillableMapBasePath(),
+          writeConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH),
           new DefaultSizeEstimator<>(),
           new DefaultSizeEstimator<>(),
           writeConfig.getCommonConfig().getSpillableDiskMapType(),
           writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
     } catch (IOException e) {
       throw new HoodieIOException(
-          "IOException when creating ExternalSpillableMap at " + writeConfig.getSpillableMapBasePath(), e);
+          "IOException when creating ExternalSpillableMap at " + writeConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH), e);
     }
   }
 
