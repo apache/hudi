@@ -57,7 +57,7 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
             executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath);
         String basePath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath;
 
-        int maxCommitsRetained = executionContext.getHoodieTestSuiteWriter().getWriteConfig().getCleanerCommitsRetained() + 1;
+        int maxCommitsRetained = executionContext.getHoodieTestSuiteWriter().getWriteConfig().getInt(HoodieCleanConfig.CLEANER_COMMITS_RETAINED) + 1;
         FileSystem fs = FSUtils.getFs(basePath, executionContext.getHoodieTestSuiteWriter().getConfiguration());
         
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
