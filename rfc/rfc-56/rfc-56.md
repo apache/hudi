@@ -201,11 +201,11 @@ be found in the stage of marker conflict detection until starting to commit. In 
 conflict detection, it is necessary to add the steps of checking commit conflict during the detection.
 
 ```
-1. Get and cache all instants before init write handler as set1.
-2. Create and reload a new active timeline after finishing marker conflict checking as set2.
-3. Get the diff instants between set1 and set2 as set3.
-4. Read all the changed fileIds contained in set3 as fileId set1
-5. Check if current writing fileID set2 is overlapped with fileId set1
+1. Get and cache all instants before init write handler as committed_instants_before.
+2. Create and reload a new active timeline after finishing marker conflict checking as committed_instants_after.
+3. Get the diff instants between committed_instants_before and committed_instants_after as committed_instants_during.
+4. Read all the changed fileIds contained in committed_instants_during as fileId_set_during
+5. Check if current writing fileID is overlapped with fileId_set_during
 ```
 
 ### [3] Try to resolve conflict
