@@ -68,6 +68,18 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
     </dependency>
 
     <dependency>
+      <groupId>com.google.cloud</groupId>
+      <artifactId>google-cloud-pubsub</artifactId>
+      <version>${google.cloud.pubsub.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.cloud.bigdataoss</groupId>
+      <artifactId>gcs-connector</artifactId>
+      <version>${gcs.connector.version}</version>
+    </dependency>
+
+    <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
     </dependency>

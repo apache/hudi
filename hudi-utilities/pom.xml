@@ -105,6 +105,19 @@
       </exclusions>
     </dependency>
 
+    <!-- Hoodie - cloud providers -->
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-aws</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-gcp</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <!-- Hoodie - Other -->
 
     <!-- NOTE: This dependency is kept around even though it's not necessary, due to the fact

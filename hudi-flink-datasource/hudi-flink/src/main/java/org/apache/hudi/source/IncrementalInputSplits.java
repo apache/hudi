@@ -276,41 +276,41 @@ public class IncrementalInputSplits implements Serializable {
 
       return Result.instance(inputSplits, endInstant);
     } else {
-        // case2: normal streaming read
-        String tableName = conf.getString(FlinkOptions.TABLE_NAME);
-        List<HoodieCommitMetadata> activeMetadataList = instants.stream()
-            .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
-        List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
-        if (archivedMetadataList.size() > 0) {
-          LOG.warn("\n"
-              + "--------------------------------------------------------------------------------\n"
-              + "---------- caution: the reader has fall behind too much from the writer,\n"
-              + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
-              + "--------------------------------------------------------------------------------");
-        }
-        List<HoodieCommitMetadata> metadataList = archivedMetadataList.size() > 0
-            // IMPORTANT: the merged metadata list must be in ascending order by instant time
-            ? mergeList(archivedMetadataList, activeMetadataList)
-            : activeMetadataList;
-
-        readPartitions = getReadPartitions(metadataList);
-        if (readPartitions.size() == 0) {
-          LOG.warn("No partitions found for reading under path: " + path);
-          return Result.EMPTY;
-        }
-        fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
-
-        if (fileStatuses.length == 0) {
-          LOG.warn("No files found for reading under path: " + path);
-          return Result.EMPTY;
-        }
-
-        final String endInstant = instantToIssue.getTimestamp();
-        List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-            fileStatuses, readPartitions, endInstant, instantRange, skipCompaction);
-
-        return Result.instance(inputSplits, endInstant);
+      // case2: normal streaming read
+      String tableName = conf.getString(FlinkOptions.TABLE_NAME);
+      List<HoodieCommitMetadata> activeMetadataList = instants.stream()
+              .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
+      List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
+      if (archivedMetadataList.size() > 0) {
+        LOG.warn("\n"
+                + "--------------------------------------------------------------------------------\n"
+                + "---------- caution: the reader has fall behind too much from the writer,\n"
+                + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
+                + "--------------------------------------------------------------------------------");
       }
+      List<HoodieCommitMetadata> metadataList = archivedMetadataList.size() > 0
+              // IMPORTANT: the merged metadata list must be in ascending order by instant time
+              ? mergeList(archivedMetadataList, activeMetadataList)
+              : activeMetadataList;
+
+      readPartitions = getReadPartitions(metadataList);
+      if (readPartitions.size() == 0) {
+        LOG.warn("No partitions found for reading under path: " + path);
+        return Result.EMPTY;
+      }
+      fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
+
+      if (fileStatuses.length == 0) {
+        LOG.warn("No files found for reading under path: " + path);
+        return Result.EMPTY;
+      }
+
+      final String endInstant = instantToIssue.getTimestamp();
+      List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
+              fileStatuses, readPartitions, endInstant, instantRange, skipCompaction);
+
+      return Result.instance(inputSplits, endInstant);
+    }
   }
 
   @Nullable
