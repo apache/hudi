@@ -26,7 +26,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
@@ -36,7 +38,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Hash indexing mechanism.
@@ -45,14 +49,16 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBucketIndex.class);
 
-  protected final int numBuckets;
-  protected final List<String> indexKeyFields;
+  protected int numBuckets;
+  protected List<String> indexKeyFields;
 
   public HoodieBucketIndex(HoodieWriteConfig config) {
     super(config);
-
     this.numBuckets = config.getBucketIndexNumBuckets();
-    this.indexKeyFields = Arrays.asList(config.getBucketIndexHashField().split(","));
+    String bucketIndexHashField = config.getBucketIndexHashField();
+    if (!StringUtils.isNullOrEmpty(bucketIndexHashField)) {
+      this.indexKeyFields = Arrays.asList(bucketIndexHashField.split(","));
+    }
     LOG.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
   }
 
@@ -62,6 +68,32 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
                                                 HoodieTable hoodieTable)
       throws HoodieIndexException {
     return writeStatuses;
+  }
+
+  /**
+   * Find exists bucketId -> location in one partition，used by HoodieSimpleBucketIndex & HoodieRangeBucketIndex
+   */
+  protected Map<Integer, HoodieRecordLocation> loadPartitionBucketIdFileIdMapping(
+      HoodieTable hoodieTable,
+      String partition) {
+    // bucketId -> fileIds
+    Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = new HashMap<>();
+    hoodieTable.getMetaClient().reloadActiveTimeline();
+    HoodieIndexUtils
+        .getLatestBaseFilesForPartition(partition, hoodieTable)
+        .forEach(file -> {
+          String fileId = file.getFileId();
+          String commitTime = file.getCommitTime();
+          int bucketId = BucketIdentifier.bucketIdFromFileId(fileId);
+          if (!bucketIdToFileIdMapping.containsKey(bucketId)) {
+            bucketIdToFileIdMapping.put(bucketId, new HoodieRecordLocation(commitTime, fileId));
+          } else {
+            // Check if bucket data is valid
+            throw new HoodieIOException("Find multiple files at partition path="
+              + partition + " belongs to the same bucket id = " + bucketId);
+          }
+        });
+    return bucketIdToFileIdMapping;
   }
 
   @Override

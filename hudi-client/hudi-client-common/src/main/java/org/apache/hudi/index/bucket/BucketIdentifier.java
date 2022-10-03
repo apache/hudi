@@ -21,6 +21,8 @@ package org.apache.hudi.index.bucket;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -31,8 +33,15 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class BucketIdentifier implements Serializable {
+
+  public static int getRangeBucketId(HoodieKey key, int bucketRangeStepSize) {
+    return getRangeBucketNum(key.getRecordKey(), bucketRangeStepSize);
+  }
+
   // Compatible with the spark bucket name
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
+  private static final Logger LOG = LogManager.getLogger(BucketIdentifier.class);
+  private static final String RANGE_BUCKET_FIXED_FILE_ID_PREFIX_TEMPLATE = "00000000-0000-0000-0000-000000000000";
 
   public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets) {
     return getBucketId(record.getKey(), indexKeyFields, numBuckets);
@@ -40,6 +49,20 @@ public class BucketIdentifier implements Serializable {
 
   public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
     return (getHashKeys(hoodieKey, indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+  }
+
+  public static int getRangeBucketNum(String recordKey, int bucketRangeStepSize) {
+    int index = recordKey.indexOf(":");
+    if (index >= 0) {
+      recordKey = recordKey.substring(index + 1);
+    }
+    try {
+      int bucketNum = (int) (Long.parseLong(recordKey) / bucketRangeStepSize);
+      return bucketNum;
+    } catch (Exception e) {
+      LOG.error("RANGE_BUCKET index needs integer type primary key.", e);
+      throw e;
+    }
   }
 
   public static int getBucketId(HoodieKey hoodieKey, List<String> indexKeyFields, int numBuckets) {
@@ -86,6 +109,13 @@ public class BucketIdentifier implements Serializable {
 
   public static String bucketIdStr(int n) {
     return String.format("%08d", n);
+  }
+
+  /**
+   *  Follow the UUID naming convention of the file group, in case of potential compatibility problems
+   */
+  public static String newRangeBucketFileIdPrefix(int bucketId) {
+    return RANGE_BUCKET_FIXED_FILE_ID_PREFIX_TEMPLATE.replaceFirst(".{8}", bucketIdStr(bucketId));
   }
 
   public static String newBucketFileIdPrefix(int bucketId) {

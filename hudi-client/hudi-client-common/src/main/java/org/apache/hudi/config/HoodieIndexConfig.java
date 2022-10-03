@@ -269,6 +269,12 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
           + "and each partition is divided to N buckets.");
 
+  public static final ConfigProperty<Integer> RANGE_BUCKET_STEP_SIZE = ConfigProperty
+      .key("hoodie.range.bucket.index.step.size")
+      .defaultValue(1_000_000)
+      .withDocumentation("Only applies if index type is RANGE_BUCKET. Determine the number of buckets in the hudi table, "
+          + "and each partition is divided by step size");
+
   public static final ConfigProperty<String> BUCKET_INDEX_MAX_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.max.num.buckets")
       .noDefaultValue()
@@ -526,6 +532,11 @@ public class HoodieIndexConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withRangeBucketStepSize(Integer size) {
+      hoodieIndexConfig.setValue(RANGE_BUCKET_STEP_SIZE, size.toString());
+      return this;
+    }
+
     public Builder withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType bucketType) {
       hoodieIndexConfig.setValue(BUCKET_INDEX_ENGINE_TYPE, bucketType.name());
       return this;
@@ -674,6 +685,12 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     private void validateBucketIndexConfig() {
       if (hoodieIndexConfig.getString(INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.toString())) {
+        if (HoodieIndex.BucketIndexEngineType.RANGE_BUCKET.toString().equalsIgnoreCase(hoodieIndexConfig.getString(BUCKET_INDEX_ENGINE_TYPE))) {
+          if (hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).contains(",")) {
+            throw new HoodieIndexException("Range Bucket index only support single record key. Best auto-increment key.");
+          }
+          return;
+        }
         // check the bucket index hash field
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD))) {
           hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD,

@@ -28,6 +28,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
+import org.apache.hudi.index.bucket.HoodieRangeBucketIndex;
 import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
@@ -69,6 +70,8 @@ public final class SparkHoodieIndexFactory {
         switch (config.getBucketIndexEngineType()) {
           case SIMPLE:
             return new HoodieSimpleBucketIndex(config);
+          case RANGE_BUCKET:
+            return new HoodieRangeBucketIndex(config);
           case CONSISTENT_HASHING:
             return new HoodieSparkConsistentBucketIndex(config);
           default:
