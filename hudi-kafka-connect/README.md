@@ -36,10 +36,10 @@ After installing these dependencies, follow steps based on your requirement.
 
 ### 1 - Starting the environment
 
-For runtime dependencies, we encourage using the confluent HDFS connector jars. We have tested our setup with
-version `10.1.0`. Either use confluent-hub to install the connector or download it
-from [here](https://tinyurl.com/yb472f79). You can install the confluent-hub command-line tool by downloading Confluent
-Platform from [here](https://tinyurl.com/s2jjby53).
+For runtime dependencies, we encourage using the confluent HDFS connector jars. We have tested our setup with version `10.1.0` 
+(essentially, `hadoop-common` dependency version 2.10.1 is required which comes as part of confluent HDFS connector). 
+Either use confluent-hub to install the connector or download it from [here](https://tinyurl.com/yb472f79). 
+You can install the confluent-hub command-line tool by downloading Confluent Platform from [here](https://tinyurl.com/s2jjby53).
 
 Copy the entire folder to the classpath that will be used by the Hudi Kafka Connector.
 
@@ -145,6 +145,9 @@ successful running of the workers.
 cd $KAFKA_HOME
 ./bin/connect-distributed.sh $HUDI_DIR/hudi-kafka-connect/demo/connect-distributed.properties
 ```
+Ensure that the `plugin.path` property points to the location where all connect plugins are installed.
+For this doc, it is `/usr/local/share/kafka/plugins`. If your plugins are installed at a different location,
+then please change the above property in `$HUDI_DIR/hudi-kafka-connect/demo/connect-distributed.properties`.
 
 ### 6 - To add the Hudi Sink to the Connector (delete it if you want to re-configure)
 
