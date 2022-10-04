@@ -25,6 +25,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
@@ -81,7 +82,8 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader.getRecordIterator(readSchema));
+        Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
+        readerIterator = getMergingIterator(table, mergeHandle, bootstrapFilePath, reader.getRecordIterator(readSchema));
       } else {
         readerIterator = reader.getRecordIterator(readSchema);
       }
