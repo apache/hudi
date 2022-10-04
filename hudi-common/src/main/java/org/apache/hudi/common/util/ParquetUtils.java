@@ -224,9 +224,10 @@ public class ParquetUtils extends BaseFileUtils {
   }
 
   @Override
-  public Schema readAvroSchema(Configuration configuration, Path parquetFilePath) {
-    MessageType parquetSchema = readSchema(configuration, parquetFilePath);
-    return new AvroSchemaConverter(configuration).convert(parquetSchema);
+  public Schema readAvroSchema(Configuration conf, Path parquetFilePath) {
+    MessageType parquetSchema = readSchema(conf, parquetFilePath);
+    tryOverridingListElementRecordsHandlingDefault(conf);
+    return new AvroSchemaConverter(conf).convert(parquetSchema);
   }
 
   @Override
@@ -276,6 +277,38 @@ public class ParquetUtils extends BaseFileUtils {
       rowCount += b.getRowCount();
     }
     return rowCount;
+  }
+
+  private static void tryOverridingListElementRecordsHandlingDefault(Configuration conf) {
+    // NOTE: Parquet uses elaborate encoding of the arrays/lists with optional types,
+    //       following structure will be representing such list in Parquet:
+    //
+    //       optional group tip_history (LIST) {
+    //         repeated group list {
+    //           optional group element {
+    //             optional double amount;
+    //             optional binary currency (STRING);
+    //           }
+    //         }
+    //       }
+    //
+    //       To designate list, special logical-type annotation (`LIST`) is used,
+    //       as well additional [[GroupType]] with the name "list" is wrapping
+    //       the "element" type (representing record stored inside the list itself).
+    //
+    //       By default [[AvroSchemaConverter]] would be interpreting any {@code REPEATED}
+    //       Parquet [[GroupType]] as list, skipping the checks whether additional [[GroupType]]
+    //       (named "list") is actually wrapping the "element" type therefore incorrectly
+    //       converting it into an additional record-wrapper (instead of simply omitting it).
+    //       To work this around we're
+    //          - Checking whether [[AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS]] has been
+    //          explicitly set in the Hadoop Config
+    //          - In case it's not, we override the default value from "true" to "false"
+    //
+    if (conf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS) == null) {
+      conf.set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS,
+          "false", "Overriding default treatment of repeated groups in Parquet");
+    }
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {
