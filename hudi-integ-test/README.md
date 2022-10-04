@@ -525,7 +525,44 @@ Spark submit with the flag:
 ### Multi-writer tests
 Integ test framework also supports multi-writer tests. 
 
-#### Multi-writer tests with deltastreamer and a spark data source writer. 
+#### Multi-writer tests with deltastreamer and a spark data source writer.
+
+Props of interest
+Top level configs:
+- --target-base-path refers to target hudi table base path
+- --input-base-paths comma separated input paths. If you plan to spin up two writers, this should contain input dir for two. 
+- --props-paths comma separated property file paths. Again, if you plan to spin up two writers, this should contain the property file for each writer. 
+- --workload-yaml-paths comma separated workload yaml files for each writer. 
+
+Configs in property file:
+- hoodie.deltastreamer.source.dfs.root : This property should refer to input dir for each writer in their corresponding property file. 
+In other words, this should match w/ --input-base-paths. 
+- hoodie.deltastreamer.schemaprovider.target.schema.file : refers to target schema. If you are running in docker, do copy the source avsc file to docker as well. 
+- hoodie.deltastreamer.schemaprovider.source.schema.file : refer to source schema. Same as above (copy to docker if needed)
+
+We have sample properties file to use based on whether InProcessLockProvider is used or ZookeeperBasedLockProvider is used. 
+
+multi-writer-local-1.properties
+multi-writer-local-2.properties
+multi-writer-local-3.properties
+multi-writer-local-4.properties
+
+These have configs that uses InProcessLockProvider. Configs specifc to InProcessLockProvider is:
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.InProcessLockProvider
+
+multi-writer-1.properties
+multi-writer-2.properties
+
+These have configs that uses ZookeeperBasedLockProvider. Setting up zookeeper is outside of the scope of this README. Ensure 
+zookeeper is up before running these. Configs specific to ZookeeperBasedLockProvider: 
+
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
+hoodie.write.lock.zookeeper.url=zookeeper:2181
+hoodie.write.lock.zookeeper.port=2181
+hoodie.write.lock.zookeeper.lock_key=locks
+hoodie.write.lock.zookeeper.base_path=/tmp/.locks
+
+If you are running locally, ensure you update the schema file accordingly. 
 
 Sample spark-submit command to test one delta streamer and a spark data source writer. 
 ```shell
@@ -592,6 +629,19 @@ Sample spark-submit command to test one delta streamer and a spark data source w
 --props "dummyValue" \
 --use-hudi-data-to-generate-updates
 ```
+
+Properties that differ from previous scenario and this one are:
+--input-base-paths refers to 4 paths instead of 2
+--props-paths again, refers to 4 paths intead of 2.
+  -- Each property file will contain properties for one spark datasource writer. 
+--workload-yaml-paths refers to 4 paths instead of 2.
+  -- Each yaml file used different range of partitions so that there won't be any conflicts while doing concurrent writes.
+
+MOR Table: 
+Running multi-writer tests for COW woks for entire iteration. but w/ MOR table, sometimes one of the writer could fail stating that 
+there is already a scheduled delta commit. In general, while scheduling compaction, there should not be inflight delta commits. 
+But w/ multiple threads trying to ingest in their own frequency, this is unavoidable. After few iterations, one of your thread could 
+die because there is an inflight delta commit from another writer.
 
 =======
 ### Testing async table services
