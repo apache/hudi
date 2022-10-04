@@ -22,9 +22,11 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.MappingIterator;
@@ -93,17 +95,20 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
 
     try {
-      Iterator<GenericRecord> sourceRecordIterator = reader.getRecordIterator(readerSchema);
-      Iterator<GenericRecord> transformedRecordIterator;
+      Iterator<GenericRecord> recordIterator;
+
+      ClosableIterator<GenericRecord> baseFileRecordIterator = reader.getRecordIterator(readerSchema);
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        transformedRecordIterator = getMergingIterator(table, mergeHandle, baseFile, sourceRecordIterator);
+        Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
+        recordIterator = getMergingIterator(table, mergeHandle, bootstrapFilePath, baseFileRecordIterator);
       } else if (schemaEvolutionTransformerOpt.isPresent()) {
-        transformedRecordIterator = new MappingIterator<>(sourceRecordIterator, schemaEvolutionTransformerOpt.get());
+        recordIterator = new MappingIterator<>(baseFileRecordIterator,
+            schemaEvolutionTransformerOpt.get());
       } else {
-        transformedRecordIterator = sourceRecordIterator;
+        recordIterator = baseFileRecordIterator;
       }
 
-      wrapper = new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), transformedRecordIterator,
+      wrapper = new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), recordIterator,
           new UpdateHandler(mergeHandle), record -> {
         if (shouldRewriteInWriterSchema) {
           return rewriteRecordWithNewSchema((GenericRecord) record, writerSchema);
