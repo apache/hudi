@@ -79,7 +79,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
-  private final boolean preserveCommitMetadata;
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -90,11 +89,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean forceFullScan,
                                          Option<String> partitionName, InternalSchema internalSchema,
-                                         boolean preserveCommitMetadata, boolean useScanV2) {
+                                         boolean useScanV2) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField,
         forceFullScan, partitionName, internalSchema, useScanV2);
-    this.preserveCommitMetadata = preserveCommitMetadata;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -160,12 +158,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       if (combinedValue != oldValue) {
         HoodieOperation operation = hoodieRecord.getOperation();
         HoodieRecord latestHoodieRecord = new HoodieAvroRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation);
-        // If preserveMetadata is true. Use the same location.
-        if (this.preserveCommitMetadata) {
-          latestHoodieRecord.unseal();
-          latestHoodieRecord.setCurrentLocation(hoodieRecord.getCurrentLocation());
-          latestHoodieRecord.seal();
-        }
+        latestHoodieRecord.unseal();
+        latestHoodieRecord.setCurrentLocation(hoodieRecord.getCurrentLocation());
+        latestHoodieRecord.seal();
         records.put(key, latestHoodieRecord);
       }
     } else {
@@ -233,8 +228,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected String partitionName;
     // auto scan default true
     private boolean autoScan = true;
-    // To preserve commit metadata and file location.
-    protected boolean preserveCommitMetadata = false;
     // operation field default false
     private boolean withOperationField = false;
     // Use scanV2 method.
@@ -326,11 +319,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
-    public Builder withPreserveCommitMetadata(boolean preserveCommitMetadata) {
-      this.preserveCommitMetadata = preserveCommitMetadata;
-      return this;
-    }
-
     @Override
     public Builder withPartition(String partitionName) {
       this.partitionName = partitionName;
@@ -352,7 +340,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName), internalSchema, preserveCommitMetadata, useScanV2);
+          Option.ofNullable(partitionName), internalSchema, useScanV2);
     }
   }
 }

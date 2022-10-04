@@ -62,7 +62,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               Option<InstantRange> instantRange, boolean allowFullScan, boolean useScanV2) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, true, false, bufferSize,
         spillableMapBasePath, instantRange, diskMapType, isBitCaskDiskMapCompressionEnabled, false, allowFullScan,
-            Option.of(partitionName), InternalSchema.getEmptyInternalSchema(), false, useScanV2);
+            Option.of(partitionName), InternalSchema.getEmptyInternalSchema(), useScanV2);
   }
 
   @Override

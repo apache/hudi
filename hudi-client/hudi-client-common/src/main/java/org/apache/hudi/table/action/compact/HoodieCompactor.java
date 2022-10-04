@@ -201,7 +201,6 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
         .withUseScanV2(executionHelper.useScanV2(config))
-        .withPreserveCommitMetadata(executionHelper.shouldPreserveCommitMetadata())
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =

@@ -563,7 +563,9 @@ public abstract class AbstractHoodieLogRecordReader {
           String compactedFinalInstantTime = blockTimeToCompactionBlockTimeMap.get(instantTime);
           if (compactedFinalInstantTime == null) {
             // If it is not compacted then add the blocks related to the instant time at the end of the queue and continue.
-            instantToBlocksMap.get(instantTime).forEach(block -> currentInstantLogBlocks.addLast(block));
+            List<HoodieLogBlock> logBlocks = instantToBlocksMap.get(instantTime);
+            Collections.reverse(logBlocks);
+            logBlocks.forEach(block -> currentInstantLogBlocks.addLast(block));
             instantTimesIncluded.add(instantTime);
             validBlockInstants.add(instantTime);
             continue;
@@ -573,7 +575,9 @@ public abstract class AbstractHoodieLogRecordReader {
             continue;
           }
           // If the compacted block exists and it is not already added then add all the blocks related to that instant time.
-          instantToBlocksMap.get(compactedFinalInstantTime).forEach(block -> currentInstantLogBlocks.addLast(block));
+          List<HoodieLogBlock> logBlocks = instantToBlocksMap.get(compactedFinalInstantTime);
+          Collections.reverse(logBlocks);
+          logBlocks.forEach(block -> currentInstantLogBlocks.addLast(block));
           instantTimesIncluded.add(compactedFinalInstantTime);
           validBlockInstants.add(compactedFinalInstantTime);
         }

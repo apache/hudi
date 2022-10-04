@@ -101,5 +101,4 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
     // Log compaction can be scheduled.
     return totalBlocks >= writeConfig.getLogCompactionBlocksThreshold();
   }
-
 }
