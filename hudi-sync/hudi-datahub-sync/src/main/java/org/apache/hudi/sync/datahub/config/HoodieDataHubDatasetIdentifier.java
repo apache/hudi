@@ -22,7 +22,6 @@ package org.apache.hudi.sync.datahub.config;
 import com.linkedin.common.FabricType;
 import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.urn.DatasetUrn;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.Properties;
 
@@ -49,12 +48,12 @@ public class HoodieDataHubDatasetIdentifier {
     DataHubSyncConfig config = new DataHubSyncConfig(props);
 
     return new DatasetUrn(
-            createDataPlatformUrn(config),
-            createDatasetName(config.getString(META_SYNC_DATABASE_NAME), config.getString(META_SYNC_TABLE_NAME)),
-            FabricType.DEV);
+      createDataPlatformUrn(config),
+      createDatasetName(config.getString(META_SYNC_DATABASE_NAME), config.getString(META_SYNC_TABLE_NAME)),
+      FabricType.DEV
+    );
   }
 
-  @NotNull
   private static DataPlatformUrn createDataPlatformUrn(DataHubSyncConfig config) {
     return new DataPlatformUrn(config.getStringOrDefault(META_SYNC_DATAHUB_DATAPLATFORM_NAME));
   }
