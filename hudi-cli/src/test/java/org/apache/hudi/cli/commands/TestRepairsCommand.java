@@ -273,7 +273,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
    *
    */
   @Test
-  public void testRemoveFailedCompactionAction() throws IOException {
+  public void testRemoveFailedCompactionAction() {
     HoodieCLI.conf = hadoopConf();
 
     Configuration conf = HoodieCLI.conf;
@@ -287,7 +287,6 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     }
 
     metaClient.getActiveTimeline().getInstants().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.getTimestamp()) % 4 == 0).forEach(hoodieInstant ->{
-      System.out.println("Making this instant empty: " + hoodieInstant.getFileName());
       metaClient.getActiveTimeline().deleteInstantFileIfExists(hoodieInstant);
       metaClient.getActiveTimeline().createNewInstant(hoodieInstant);
     });
@@ -300,9 +299,11 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       Object result = shell.evaluate(() -> "repair cleanup empty commit metadata");
       assertTrue(ShellEvaluationResultUtil.isSuccess(result));
       final List<LogEvent> log = appender.getLog();
+      assertEquals(log.size(),4);
       log.forEach(LoggingEvent -> {
-        System.out.println("VEXLER LOG:");
-        System.out.println(LoggingEvent.getMessage().toString());
+        assertEquals(LoggingEvent.getLevel(), Level.WARN);
+        assertTrue(LoggingEvent.getMessage().getFormattedMessage().contains("Empty Commit: "));
+        assertTrue(LoggingEvent.getMessage().getFormattedMessage().contains("COMPLETED]"));
       });
     } finally {
       logger.removeAppender(appender);
