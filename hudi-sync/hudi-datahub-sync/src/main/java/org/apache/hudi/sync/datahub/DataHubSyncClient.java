@@ -19,6 +19,7 @@
 
 package org.apache.hudi.sync.datahub;
 
+import com.linkedin.common.Status;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -118,8 +119,18 @@ public class DataHubSyncClient extends HoodieSyncClient {
             .setFields(new SchemaFieldArray(fields)))
         .build();
 
+    MetadataChangeProposalWrapper mcpw = MetadataChangeProposalWrapper.builder()
+            .entityType("dataset")
+            .entityUrn(datasetUrn)
+            .upsert()
+            .aspect(new Status().setRemoved(false))
+//            .aspect(new Aspect(aspectMap))
+            .aspectName("status")
+            .build();
+
     try (RestEmitter emitter = config.getRestEmitter()) {
       emitter.emit(schemaChangeProposal, null).get();
+      emitter.emit(mcpw, null).get();
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change schema for Dataset " + datasetUrn, e);
     }
