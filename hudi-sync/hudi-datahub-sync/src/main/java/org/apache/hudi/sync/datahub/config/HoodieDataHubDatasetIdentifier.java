@@ -22,11 +22,13 @@ package org.apache.hudi.sync.datahub.config;
 import com.linkedin.common.FabricType;
 import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.urn.DatasetUrn;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.Properties;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_NAME;
 
 /**
  * Construct and provide the default {@link DatasetUrn} to identify the Dataset on DataHub.
@@ -44,8 +46,20 @@ public class HoodieDataHubDatasetIdentifier {
   }
 
   public DatasetUrn getDatasetUrn() {
-    DataPlatformUrn dataPlatformUrn = new DataPlatformUrn(DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME);
     DataHubSyncConfig config = new DataHubSyncConfig(props);
-    return new DatasetUrn(dataPlatformUrn, String.format("%s.%s", config.getString(META_SYNC_DATABASE_NAME), config.getString(META_SYNC_TABLE_NAME)), FabricType.DEV);
+
+    return new DatasetUrn(
+            createDataPlatformUrn(config),
+            createDatasetName(config.getString(META_SYNC_DATABASE_NAME), config.getString(META_SYNC_TABLE_NAME)),
+            FabricType.DEV);
+  }
+
+  @NotNull
+  private static DataPlatformUrn createDataPlatformUrn(DataHubSyncConfig config) {
+    return new DataPlatformUrn(config.getStringOrDefault(META_SYNC_DATAHUB_DATAPLATFORM_NAME));
+  }
+
+  private static String createDatasetName(String databaseName, String tableName) {
+    return String.format("%s.%s", databaseName, tableName);
   }
 }

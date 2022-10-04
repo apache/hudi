@@ -56,6 +56,7 @@ import org.apache.parquet.schema.MessageType;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 public class DataHubSyncClient extends HoodieSyncClient {
@@ -106,31 +107,12 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
     final SchemaMetadata.PlatformSchema platformSchema = new SchemaMetadata.PlatformSchema();
     platformSchema.setOtherSchema(new OtherSchema().setRawSchema(avroSchema.toString()));
-    MetadataChangeProposalWrapper schemaChangeProposal = MetadataChangeProposalWrapper.builder()
-        .entityType("dataset")
-        .entityUrn(datasetUrn)
-        .upsert()
-        .aspect(new SchemaMetadata()
-            .setSchemaName(tableName)
-            .setVersion(0)
-            .setHash("")
-            .setPlatform(datasetUrn.getPlatformEntity())
-            .setPlatformSchema(platformSchema)
-            .setFields(new SchemaFieldArray(fields)))
-        .build();
-
-    MetadataChangeProposalWrapper mcpw = MetadataChangeProposalWrapper.builder()
-            .entityType("dataset")
-            .entityUrn(datasetUrn)
-            .upsert()
-            .aspect(new Status().setRemoved(false))
-//            .aspect(new Aspect(aspectMap))
-            .aspectName("status")
-            .build();
+    MetadataChangeProposalWrapper schemaChange = createSchemaMetadataUpdate(tableName, fields, platformSchema);
+    MetadataChangeProposalWrapper statusUnDelete = createStatusUnDelete();
 
     try (RestEmitter emitter = config.getRestEmitter()) {
-      emitter.emit(schemaChangeProposal, null).get();
-      emitter.emit(mcpw, null).get();
+      emitter.emit(schemaChange, null).get();
+      emitter.emit(statusUnDelete, null).get();
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change schema for Dataset " + datasetUrn, e);
     }
@@ -144,6 +126,32 @@ public class DataHubSyncClient extends HoodieSyncClient {
   @Override
   public void close() {
     // no op;
+  }
+
+  private MetadataChangeProposalWrapper createStatusUnDelete() {
+    return MetadataChangeProposalWrapper.builder()
+            .entityType("dataset")
+            .entityUrn(datasetUrn)
+            .upsert()
+            .aspect(new Status().setRemoved(false))
+            .aspectName("status")
+            .build();
+  }
+
+  private MetadataChangeProposalWrapper createSchemaMetadataUpdate(String tableName, List<SchemaField> fields,
+                                                                   SchemaMetadata.PlatformSchema platformSchema) {
+    return MetadataChangeProposalWrapper.builder()
+            .entityType("dataset")
+            .entityUrn(datasetUrn)
+            .upsert()
+            .aspect(new SchemaMetadata()
+                    .setSchemaName(tableName)
+                    .setVersion(0)
+                    .setHash("")
+                    .setPlatform(datasetUrn.getPlatformEntity())
+                    .setPlatformSchema(platformSchema)
+                    .setFields(new SchemaFieldArray(fields)))
+            .build();
   }
 
   static Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
