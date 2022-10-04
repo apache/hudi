@@ -59,7 +59,7 @@ public class FlinkMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K, 
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
         getFileSystem(),
-        tableSchema,
+        getWriterSchema(),
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }

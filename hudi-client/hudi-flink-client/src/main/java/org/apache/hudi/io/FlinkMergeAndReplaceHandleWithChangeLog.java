@@ -56,7 +56,7 @@ public class FlinkMergeAndReplaceHandleWithChangeLog<T extends HoodieRecordPaylo
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
         getFileSystem(),
-        tableSchema,
+        getWriterSchema(),
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
