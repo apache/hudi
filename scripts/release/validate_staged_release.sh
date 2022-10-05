@@ -118,10 +118,10 @@ curl https://dist.apache.org/repos/dist/release/hudi/KEYS > ../KEYS
 
 # GPG Check
 echo "Checking Signature"
-(bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${ARTIFACT_SUFFIX}.src.tgz.asc hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [FAILED] - Run with --verbose to get details\n" && exit -1)
+(bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${ARTIFACT_SUFFIX}.src.tgz.asc hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [ERROR]\n\t\t Run with --verbose to get details\n" && exit 1)
 
 # Untar 
-(bash -c "tar -zxf hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT") || (echo -e "\t\t Unable to untar hudi-${ARTIFACT_SUFFIX}.src.tgz . Please run with --verbose to get details\n" && exit -1)
+(bash -c "tar -zxf hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT") || (echo -e "\t\t Unable to untar hudi-${ARTIFACT_SUFFIX}.src.tgz - [ERROR]\n\t\t Please run with --verbose to get details\n" && exit 1)
 cd hudi-${ARTIFACT_SUFFIX}
 
 ### BEGIN: Binary Files Check
@@ -129,7 +129,7 @@ echo "Checking for binary files in source release"
 numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
 
 if [ "$numBinaryFiles" -gt "0" ]; then
-  echo -e "There were non-text files in source release. Please check below\n"
+  echo -e "There were non-text files in source release. [ERROR]\n Please check below\n"
   find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
   exit 1
 fi
@@ -140,7 +140,7 @@ echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
 echo "Checking for DISCLAIMER"
 disclaimerFile="./DISCLAIMER"
 if [ -f "$disclaimerFile" ]; then
-  echo "DISCLAIMER file should not be present "
+  echo "DISCLAIMER file should not be present [ERROR]"
   exit 1
 fi
 echo -e "\t\tDISCLAIMER file exists ? [OK]\n"
@@ -150,30 +150,30 @@ echo "Checking for LICENSE and NOTICE"
 licenseFile="./LICENSE"
 noticeFile="./NOTICE"
 if [ ! -f "$licenseFile" ]; then
-  echo "License file missing"
+  echo "License file missing [ERROR]"
   exit 1
 fi
 echo -e "\t\tLicense file exists ? [OK]"
 
 if [ ! -f "$noticeFile" ]; then
-  echo "Notice file missing"
+  echo "Notice file missing [ERROR]"
   exit 1
 fi
 echo -e "\t\tNotice file exists ? [OK]\n"
 
 ### Licensing Check
 echo "Performing custom Licensing Check "
-numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
+numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'banner.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
 if [ "$numfilesWithNoLicense" -gt  "0" ]; then
-  echo "There were some source files that did not have Apache License"
-  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
+  echo "There were some source files that did not have Apache License [ERROR]"
+  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
   exit 1
 fi
 echo -e "\t\tLicensing Check Passed [OK]\n"
 
 ### Checking for RAT
 echo "Running RAT Check"
-(bash -c "mvn apache-rat:check $REDIRECT") || (echo -e "\t\t Rat Check Failed. Please run with --verbose to get details\n" && exit -1)
+(bash -c "mvn apache-rat:check $REDIRECT") || (echo -e "\t\t Rat Check Failed. [ERROR]\n\t\t Please run with --verbose to get details\n" && exit 1)
 echo -e "\t\tRAT Check Passed [OK]\n"
 
 popd

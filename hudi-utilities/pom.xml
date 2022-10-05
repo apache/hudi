@@ -126,6 +126,19 @@
       </exclusions>
     </dependency>
 
+    <!-- Hoodie - cloud providers -->
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-aws</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-gcp</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <!-- Hoodie - Other -->
 
     <!-- NOTE: This dependency is kept around even though it's not necessary, due to the fact
@@ -436,31 +449,6 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- AWS Services -->
-    <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sqs -->
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-sqs</artifactId>
-      <version>${aws.sdk.version}</version>
-    </dependency>
-
-    <!-- start: GCS Incremental Ingestion -->
-    <dependency>
-      <groupId>com.google.cloud</groupId>
-      <artifactId>google-cloud-pubsub</artifactId>
-      <version>${google.cloud.pubsub.version}</version>
-      <scope>provided</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>com.google.cloud.bigdataoss</groupId>
-      <artifactId>gcs-connector</artifactId>
-      <version>${gcs.connector.version}</version>
-      <scope>provided</scope>
-    </dependency>
-
-    <!-- end: GCS Incremental Ingestion -->
-    
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
