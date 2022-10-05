@@ -69,33 +69,27 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
   private val timestampRebaseFunc = createTimestampRebaseFuncInRead(
     datetimeRebaseMode, "Avro")
 
-  private val converter: Any => Option[Any] = rootCatalystType match {
+  def deserialize(data: Any): Option[Any] = rootCatalystType match {
     // A shortcut for empty schema.
     case st: StructType if st.isEmpty =>
-      (data: Any) => Some(InternalRow.empty)
+      Some(InternalRow.empty)
 
     case st: StructType =>
       val resultRow = new SpecificInternalRow(st.map(_.dataType))
       val fieldUpdater = new RowUpdater(resultRow)
       val applyFilters = filters.skipRow(resultRow, _)
       val writer = getRecordWriter(rootAvroType, st, Nil, applyFilters)
-      (data: Any) => {
-        val record = data.asInstanceOf[GenericRecord]
-        val skipRow = writer(fieldUpdater, record)
-        if (skipRow) None else Some(resultRow)
-      }
+      val record = data.asInstanceOf[GenericRecord]
+      val skipRow = writer(fieldUpdater, record)
+      if (skipRow) None else Some(resultRow)
 
     case _ =>
       val tmpRow = new SpecificInternalRow(Seq(rootCatalystType))
       val fieldUpdater = new RowUpdater(tmpRow)
       val writer = newWriter(rootAvroType, rootCatalystType, Nil)
-      (data: Any) => {
-        writer(fieldUpdater, 0, data)
-        Some(tmpRow.get(0, rootCatalystType))
-      }
+      writer(fieldUpdater, 0, data)
+      Some(tmpRow.get(0, rootCatalystType))
   }
-
-  def deserialize(data: Any): Option[Any] = converter(data)
 
   /**
    * Creates a writer to write avro values to Catalyst values at the given ordinal with the given
@@ -167,6 +161,8 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
           case b: ByteBuffer =>
             val bytes = new Array[Byte](b.remaining)
             b.get(bytes)
+            // Do not forget to reset the position
+            b.rewind()
             bytes
           case b: Array[Byte] => b
           case other => throw new RuntimeException(s"$other is not a valid avro binary.")

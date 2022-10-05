@@ -36,6 +36,7 @@ import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,6 +81,11 @@ public class StreamReadMonitoringFunction
    */
   private final long interval;
 
+  /**
+   * Flag saying whether the change log capture is enabled.
+   */
+  private final boolean cdcEnabled;
+
   private transient Object checkpointLock;
 
   private volatile boolean isRunning = true;
@@ -99,14 +105,17 @@ public class StreamReadMonitoringFunction
   public StreamReadMonitoringFunction(
       Configuration conf,
       Path path,
+      RowType rowType,
       long maxCompactionMemoryInBytes,
       @Nullable Set<String> requiredPartitionPaths) {
     this.conf = conf;
     this.path = path;
     this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
+    this.cdcEnabled = conf.getBoolean(FlinkOptions.CDC_ENABLED);
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(conf)
         .path(path)
+        .rowType(rowType)
         .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
         .requiredPartitions(requiredPartitionPaths)
         .skipCompaction(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
@@ -193,7 +202,7 @@ public class StreamReadMonitoringFunction
       return;
     }
     IncrementalInputSplits.Result result =
-        incrementalInputSplits.inputSplits(metaClient, this.hadoopConf, this.issuedInstant);
+        incrementalInputSplits.inputSplits(metaClient, this.hadoopConf, this.issuedInstant, this.cdcEnabled);
     if (result.isEmpty()) {
       // no new instants, returns early
       return;

@@ -26,10 +26,10 @@ import org.apache.spark.sql.types.DataType
 
 trait SparkParsePartitionUtil extends Serializable {
 
-  def parsePartition(
-    path: Path,
-    typeInference: Boolean,
-    basePaths: Set[Path],
-    userSpecifiedDataTypes: Map[String, DataType],
-    timeZone: TimeZone): InternalRow
+  def parsePartition(path: Path,
+                     typeInference: Boolean,
+                     basePaths: Set[Path],
+                     userSpecifiedDataTypes: Map[String, DataType],
+                     timeZone: TimeZone,
+                     validatePartitionValues: Boolean = false): InternalRow
 }

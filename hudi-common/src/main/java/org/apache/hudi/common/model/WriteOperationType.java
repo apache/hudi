@@ -118,4 +118,18 @@ public enum WriteOperationType {
   public static boolean isOverwrite(WriteOperationType operationType) {
     return operationType == INSERT_OVERWRITE || operationType == INSERT_OVERWRITE_TABLE;
   }
+
+  /**
+   * Whether the operation changes the dataset.
+   */
+  public static boolean isDataChange(WriteOperationType operation) {
+    return operation == WriteOperationType.INSERT
+        || operation == WriteOperationType.UPSERT
+        || operation == WriteOperationType.DELETE
+        || operation == WriteOperationType.BULK_INSERT
+        || operation == WriteOperationType.DELETE_PARTITION
+        || operation == WriteOperationType.INSERT_OVERWRITE
+        || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
+        || operation == WriteOperationType.BOOTSTRAP;
+  }
 }

@@ -49,32 +49,26 @@ import scala.collection.mutable.ArrayBuffer
 class AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
   private lazy val decimalConversions = new DecimalConversion()
 
-  private val converter: Any => Any = rootCatalystType match {
+  def deserialize(data: Any): Any = rootCatalystType match {
     // A shortcut for empty schema.
     case st: StructType if st.isEmpty =>
-      (data: Any) => InternalRow.empty
+      InternalRow.empty
 
     case st: StructType =>
       val resultRow = new SpecificInternalRow(st.map(_.dataType))
       val fieldUpdater = new RowUpdater(resultRow)
       val writer = getRecordWriter(rootAvroType, st, Nil)
-      (data: Any) => {
-        val record = data.asInstanceOf[GenericRecord]
-        writer(fieldUpdater, record)
-        resultRow
-      }
+      val record = data.asInstanceOf[GenericRecord]
+      writer(fieldUpdater, record)
+      resultRow
 
     case _ =>
       val tmpRow = new SpecificInternalRow(Seq(rootCatalystType))
       val fieldUpdater = new RowUpdater(tmpRow)
       val writer = newWriter(rootAvroType, rootCatalystType, Nil)
-      (data: Any) => {
-        writer(fieldUpdater, 0, data)
-        tmpRow.get(0, rootCatalystType)
-      }
+      writer(fieldUpdater, 0, data)
+      tmpRow.get(0, rootCatalystType)
   }
-
-  def deserialize(data: Any): Any = converter(data)
 
   /**
    * Creates a writer to write avro values to Catalyst values at the given ordinal with the given
@@ -111,7 +105,7 @@ class AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
           // the value is processed as timestamp type with millisecond precision.
           updater.setLong(ordinal, value.asInstanceOf[Long] * 1000)
         case other => throw new IncompatibleSchemaException(
-          s"Cannot convert Avro logical type ${other} to Catalyst Timestamp type.")
+          s"Cannot convert Avro logical type $other to Catalyst Timestamp type.")
       }
 
       // Before we upgrade Avro to 1.8 for logical type support, spark-avro converts Long to Date.
@@ -146,6 +140,8 @@ class AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
           case b: ByteBuffer =>
             val bytes = new Array[Byte](b.remaining)
             b.get(bytes)
+            // Do not forget to reset the position
+            b.rewind()
             bytes
           case b: Array[Byte] => b
           case other => throw new RuntimeException(s"$other is not a valid avro binary.")

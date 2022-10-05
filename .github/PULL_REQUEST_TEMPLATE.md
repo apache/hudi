@@ -1,44 +1,27 @@
-## *Tips*
-- *Thank you very much for contributing to Apache Hudi.*
-- *Please review https://hudi.apache.org/contribute/how-to-contribute before opening a pull request.*
+### Change Logs
 
-## What is the purpose of the pull request
+_Describe context and summary for this change. Highlight if any code was copied._
 
-*(For example: This pull request adds quick-start document.)*
+### Impact
 
-## Brief change log
+_Describe any public API or user-facing feature change or any performance impact._
 
-*(for example:)*
-  - *Modify AnnotationLocation checkstyle rule in checkstyle.xml*
+**Risk level: none | low | medium | high**
 
-## Verify this pull request
+_Choose one. If medium or high, explain what verification was done to mitigate the risks._
 
-*(Please pick either of the following options)*
+### Documentation Update
 
-This pull request is a trivial rework / code cleanup without any test coverage.
+_Describe any necessary documentation update if there is any new feature, config, or user-facing change_
 
-*(or)*
+- _The config description must be updated if new configs are added or the default value of the configs are changed_
+- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the
+  ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make
+  changes to the website._
 
-This pull request is already covered by existing tests, such as *(please describe tests)*.
+### Contributor's checklist
 
-(or)
-
-This change added tests and can be verified as follows:
-
-*(example:)*
-
-  - *Added integration tests for end-to-end.*
-  - *Added HoodieClientWriteTest to verify the change.*
-  - *Manually verified the change by running a job locally.*
-
-## Committer checklist
-
- - [ ] Has a corresponding JIRA in PR title & commit
- 
- - [ ] Commit message is descriptive of the change
- 
- - [ ] CI is green
-
- - [ ] Necessary doc changes done or have another open PR
-       
- - [ ] For large changes, please consider breaking it into sub-tasks under an umbrella JIRA.
+- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)
+- [ ] Change Logs and Impact were stated clearly
+- [ ] Adequate tests were added if applicable
+- [ ] CI passed

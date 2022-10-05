@@ -19,13 +19,16 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
@@ -39,9 +42,8 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "version",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
@@ -72,8 +74,6 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
     df1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
-      .option(RECORDKEY_FIELD.key, "id")
-      .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "")
       .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Overwrite)
@@ -86,8 +86,6 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
     df2.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
-      .option(RECORDKEY_FIELD.key, "id")
-      .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "")
       .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
@@ -100,8 +98,6 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
     df3.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
-      .option(RECORDKEY_FIELD.key, "id")
-      .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "")
       .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
@@ -227,5 +223,85 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
     val date = HoodieActiveTimeline.parseDateFromInstantTime(queryInstant)
     val format = new SimpleDateFormat("yyyy-MM-dd")
     format.format(date)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testTimeTravelQueryWithSchemaEvolution(tableType: HoodieTableType): Unit = {
+    initMetaClient(tableType)
+    val _spark = spark
+    import _spark.implicits._
+
+    // First write
+    val df1 = Seq((1, "a1", 10, 1000)).toDF("id", "name", "value", "version")
+    df1.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
+      .option(PARTITIONPATH_FIELD.key, "name")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+    val firstCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+
+    // Second write
+    val df2 = Seq((1, "a1", 12, 1001, "2022")).toDF("id", "name", "value", "version", "year")
+    df2.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
+      .option(PARTITIONPATH_FIELD.key, "name")
+      .mode(SaveMode.Append)
+      .save(basePath)
+    metaClient.reloadActiveTimeline()
+    val secondCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+
+    // Third write
+    val df3 = Seq((1, "a1", 13, 1002, "2022", "08")).toDF("id", "name", "value", "version", "year", "month")
+    df3.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
+      .option(PARTITIONPATH_FIELD.key, "name")
+      .mode(SaveMode.Append)
+      .save(basePath)
+    metaClient.reloadActiveTimeline()
+    val thirdCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+
+    val tableSchemaResolver = new TableSchemaResolver(metaClient)
+
+    // Query as of firstCommitTime
+    val result1 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, firstCommit)
+      .load(basePath)
+      .select("id", "name", "value", "version")
+      .take(1)(0)
+    assertEquals(Row(1, "a1", 10, 1000), result1)
+    val schema1 = tableSchemaResolver.getTableAvroSchema(firstCommit)
+    assertNull(schema1.getField("year"))
+    assertNull(schema1.getField("month"))
+
+    // Query as of secondCommitTime
+    val result2 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, secondCommit)
+      .load(basePath)
+      .select("id", "name", "value", "version", "year")
+      .take(1)(0)
+    assertEquals(Row(1, "a1", 12, 1001, "2022"), result2)
+    val schema2 = tableSchemaResolver.getTableAvroSchema(secondCommit)
+    assertNotNull(schema2.getField("year"))
+    assertNull(schema2.getField("month"))
+
+    // Query as of thirdCommitTime
+    val result3 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, thirdCommit)
+      .load(basePath)
+      .select("id", "name", "value", "version", "year", "month")
+      .take(1)(0)
+    assertEquals(Row(1, "a1", 13, 1002, "2022", "08"), result3)
+    val schema3 = tableSchemaResolver.getTableAvroSchema(thirdCommit)
+    assertNotNull(schema3.getField("year"))
+    assertNotNull(schema3.getField("month"))
   }
 }

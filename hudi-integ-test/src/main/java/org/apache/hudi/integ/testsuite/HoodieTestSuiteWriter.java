@@ -25,7 +25,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -95,8 +94,9 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
             .withAutoCommit(false)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName).build())
-            .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(cfg.sourceOrderingField)
+            .withPayloadConfig(HoodiePayloadConfig.newBuilder()
+                .withPayloadOrderingField(cfg.sourceOrderingField)
+                .withPayloadClass(cfg.payloadClassName)
                 .build())
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
@@ -116,7 +116,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
 
   public abstract RDD<GenericRecord> getNextBatch() throws Exception;
 
-  public abstract Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception ;
+  public abstract Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception;
 
   public abstract Option<String> startCommit();
 
@@ -132,7 +132,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
 
   public abstract JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception;
 
-  public abstract void inlineClustering() throws Exception ;
+  public abstract void inlineClustering() throws Exception;
 
   public abstract Option<String> scheduleCompaction(Option<Map<String, String>> previousCommitExtraMetadata) throws Exception;
 

@@ -18,14 +18,14 @@
 package org.apache.hudi.cli
 
 import java.util.stream.Collectors
-
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
-import org.apache.log4j.Logger
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
 import scala.collection.JavaConversions._
@@ -42,7 +42,7 @@ class DedupeSparkJob(basePath: String,
                      dedupeType: DeDupeType.Value) {
 
   val sparkHelper = new SparkHelper(sqlContext, fs)
-  val LOG = Logger.getLogger(this.getClass)
+  val LOG = LogManager.getLogger(this.getClass)
 
 
   /**
@@ -55,7 +55,7 @@ class DedupeSparkJob(basePath: String,
       s"""
       select  `${HoodieRecord.RECORD_KEY_METADATA_FIELD}` as dupe_key,
       count(*) as dupe_cnt
-      from ${tblName}
+      from $tblName
       group by `${HoodieRecord.RECORD_KEY_METADATA_FIELD}`
       having dupe_cnt > 1
       """
@@ -78,7 +78,7 @@ class DedupeSparkJob(basePath: String,
     val metadata = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(basePath).build()
 
     val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"$basePath/$duplicatedPartitionPath"))
-    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
+    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(), allFiles)
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
     val filteredStatuses = latestFiles.map(f => f.getPath)
     LOG.info(s" List of files under partition: ${} =>  ${filteredStatuses.mkString(" ")}")
@@ -187,7 +187,7 @@ class DedupeSparkJob(basePath: String,
     val metadata = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(basePath).build()
 
     val allFiles = fs.listStatus(new Path(s"$basePath/$duplicatedPartitionPath"))
-    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
+    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(), allFiles)
 
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
 

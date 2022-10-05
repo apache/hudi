@@ -21,7 +21,6 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -43,6 +42,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Flink hoodie backed table metadata writer.
+ */
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
 
   private static final Logger LOG = LogManager.getLogger(FlinkHoodieBackedTableMetadataWriter.class);
@@ -106,7 +108,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
-    List<HoodieRecord> preppedRecordList = HoodieList.getList(preppedRecords);
+    List<HoodieRecord> preppedRecordList = preppedRecords.collectAsList();
 
     try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig)) {
       if (canTriggerTableService) {

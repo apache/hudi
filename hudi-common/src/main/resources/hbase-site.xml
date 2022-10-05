@@ -37,6 +37,13 @@ HBaseConfiguration::addHbaseResources().  To get around this issue,
 since HBase loads "hbase-site.xml" after "hbase-default.xml", we
 provide hbase-site.xml from the bundle so that HBaseConfiguration
 can pick it up and ensure the right defaults.
+
+The HBase version check is skipped (setting "hbase.defaults.for.version.skip"
+to true instead of false as default) to avoid any inconvenience caused
+by the RuntimeException due to version mismatch if multiple versions
+of HBase library are present in the class path.  In such a case, the
+user needs to make sure there is no config conflict between different
+versions.
 -->
 
 <!--
@@ -1427,7 +1434,7 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property>
     <name>hbase.defaults.for.version.skip</name>
-    <value>false</value>
+    <value>true</value>
     <description>Set to true to skip the 'hbase.defaults.for.version' check.
       Setting this to true can be useful in contexts other than
       the other side of a maven generation; i.e. running in an
@@ -1690,13 +1697,6 @@ possible configurations would overwhelm and obscure the important.
     <value>org.apache.hadoop.hbase.master.ClusterStatusPublisher$MulticastPublisher</value>
     <description>
       Implementation of the status publication with a multicast message.
-    </description>
-  </property>
-  <property>
-    <name>hbase.status.listener.class</name>
-    <value>org.apache.hadoop.hbase.client.ClusterStatusListener$MulticastListener</value>
-    <description>
-      Implementation of the status listener with a multicast message.
     </description>
   </property>
   <property>

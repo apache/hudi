@@ -21,12 +21,14 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * A scanner used to scan hoodie unmerged log records.
@@ -96,7 +98,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     public Builder withLogFilePaths(List<String> logFilePaths) {
-      this.logFilePaths = logFilePaths;
+      this.logFilePaths = logFilePaths.stream()
+          .filter(p -> !p.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+          .collect(Collectors.toList());
       return this;
     }
 

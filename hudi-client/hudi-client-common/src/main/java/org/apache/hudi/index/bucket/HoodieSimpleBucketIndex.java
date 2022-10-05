@@ -25,7 +25,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -52,10 +51,11 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = new HashMap<>();
     hoodieTable.getMetaClient().reloadActiveTimeline();
     HoodieIndexUtils
-        .getLatestBaseFilesForPartition(partition, hoodieTable)
-        .forEach(file -> {
-          String fileId = file.getFileId();
-          String commitTime = file.getCommitTime();
+        .getLatestFileSlicesForPartition(partition, hoodieTable)
+        .forEach(fileSlice -> {
+          String fileId = fileSlice.getFileId();
+          String commitTime = fileSlice.getBaseInstantTime();
+
           int bucketId = BucketIdentifier.bucketIdFromFileId(fileId);
           if (!bucketIdToFileIdMapping.containsKey(bucketId)) {
             bucketIdToFileIdMapping.put(bucketId, new HoodieRecordLocation(commitTime, fileId));
@@ -90,9 +90,9 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     }
 
     @Override
-    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key, String partitionPath) {
+    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key) {
       int bucketId = BucketIdentifier.getBucketId(key, indexKeyFields, numBuckets);
-      Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(partitionPath);
+      Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(key.getPartitionPath());
       return Option.ofNullable(bucketIdToFileIdMapping.getOrDefault(bucketId, null));
     }
   }

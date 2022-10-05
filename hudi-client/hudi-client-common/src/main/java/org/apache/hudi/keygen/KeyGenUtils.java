@@ -42,6 +42,7 @@ public class KeyGenUtils {
 
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
 
   /**
    * Fetches record key from the GenericRecord.
@@ -72,21 +73,18 @@ public class KeyGenUtils {
    */
   public static String[] extractRecordKeys(String recordKey) {
     String[] fieldKV = recordKey.split(",");
-    if (fieldKV.length == 1) {
-      return fieldKV;
-    } else {
-      // a complex key
-      return Arrays.stream(fieldKV).map(kv -> {
-        final String[] kvArray = kv.split(":");
-        if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
-          return null;
-        } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
-          return "";
-        } else {
-          return kvArray[1];
-        }
-      }).toArray(String[]::new);
-    }
+    return Arrays.stream(fieldKV).map(kv -> {
+      final String[] kvArray = kv.split(":", 2);
+      if (kvArray.length == 1) {
+        return kvArray[0];
+      } else if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
+        return null;
+      } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
+        return "";
+      } else {
+        return kvArray[1];
+      }
+    }).toArray(String[]::new);
   }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {

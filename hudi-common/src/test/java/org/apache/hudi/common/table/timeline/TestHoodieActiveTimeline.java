@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,6 +48,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -200,6 +204,25 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testAllowTempCommit() {
+    shouldAllowTempCommit(true, hoodieMetaClient -> {
+      timeline = new HoodieActiveTimeline(hoodieMetaClient);
+
+      HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
+      timeline.createNewInstant(instant1);
+
+      byte[] data = "commit".getBytes(StandardCharsets.UTF_8);
+      timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(),
+          instant1.getTimestamp()), Option.of(data));
+
+      timeline = timeline.reload();
+
+      assertTrue(timeline.getContiguousCompletedWriteTimeline().lastInstant().isPresent());
+      assertEquals(instant1.getTimestamp(), timeline.getContiguousCompletedWriteTimeline().lastInstant().get().getTimestamp());
+    });
+  }
+
+  @Test
   public void testGetContiguousCompletedWriteTimeline() {
     // a mock timeline with holes
     timeline = new MockHoodieTimeline(Stream.of("01", "03", "05", "07", "13", "15", "17"),
@@ -237,6 +260,57 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // instant8 in not considered in write timeline, so last completed instant in timeline should be instant7
     assertTrue(timeline.getContiguousCompletedWriteTimeline().lastInstant().isPresent());
     assertEquals(instant7.getTimestamp(), timeline.getContiguousCompletedWriteTimeline().lastInstant().get().getTimestamp());
+  }
+
+  @Test
+  public void testTimelineWithSavepointAndHoles() {
+    timeline = new MockHoodieTimeline(Stream.of(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
+    ).collect(Collectors.toList()));
+    assertTrue(timeline.isBeforeTimelineStarts("00"));
+    assertTrue(timeline.isBeforeTimelineStarts("01"));
+    assertTrue(timeline.isBeforeTimelineStarts("02"));
+    assertTrue(timeline.isBeforeTimelineStarts("03"));
+    assertTrue(timeline.isBeforeTimelineStarts("04"));
+    assertFalse(timeline.isBeforeTimelineStarts("05"));
+    assertFalse(timeline.isBeforeTimelineStarts("06"));
+
+    // with an inflight savepoint in between
+    timeline = new MockHoodieTimeline(Stream.of(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05")
+    ).collect(Collectors.toList()));
+    assertTrue(timeline.isBeforeTimelineStarts("00"));
+    assertTrue(timeline.isBeforeTimelineStarts("01"));
+    assertTrue(timeline.isBeforeTimelineStarts("02"));
+    assertTrue(timeline.isBeforeTimelineStarts("03"));
+    assertTrue(timeline.isBeforeTimelineStarts("04"));
+    assertFalse(timeline.isBeforeTimelineStarts("05"));
+    assertFalse(timeline.isBeforeTimelineStarts("06"));
+
+    // with a pending replacecommit after savepoints
+    timeline = new MockHoodieTimeline(Stream.of(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "06")
+    ).collect(Collectors.toList()));
+    assertTrue(timeline.isBeforeTimelineStarts("00"));
+    assertTrue(timeline.isBeforeTimelineStarts("01"));
+    assertTrue(timeline.isBeforeTimelineStarts("02"));
+    assertTrue(timeline.isBeforeTimelineStarts("03"));
+    assertTrue(timeline.isBeforeTimelineStarts("04"));
+    assertFalse(timeline.isBeforeTimelineStarts("05"));
+    assertFalse(timeline.isBeforeTimelineStarts("06"));
   }
 
   @Test
@@ -493,9 +567,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       lastInstantTime = newInstantTime;
     }
 
-    // All zero timestamp can be parsed
-    HoodieActiveTimeline.parseDateFromInstantTime("00000000000000");
-
     // Multiple thread test
     final int numChecks = 100000;
     final int numThreads = 100;
@@ -516,7 +587,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     }
 
     executorService.shutdown();
-    assertTrue(executorService.awaitTermination(10, TimeUnit.SECONDS));
+    assertTrue(executorService.awaitTermination(60, TimeUnit.SECONDS));
     // required to catch exceptions
     for (Future f : futures) {
       f.get();
@@ -557,6 +628,26 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     );
   }
 
+  @Test
+  public void testInvalidInstantDateParsing() throws ParseException {
+    // Test all invalid timestamp in HoodieTimeline, shouldn't throw any error and should return a correct value
+    assertEquals(Long.parseLong(HoodieTimeline.INIT_INSTANT_TS),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.INIT_INSTANT_TS).get().getTime());
+    assertEquals(Long.parseLong(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS).get().getTime());
+    assertEquals(Long.parseLong(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS).get().getTime());
+
+    // Test metadata table compaction instant date parsing with INIT_INSTANT_TS, should return Option.empty
+    assertEquals(Option.empty(),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.INIT_INSTANT_TS + "001"));
+
+    // Test a valid instant timestamp, should equal the same result as HoodieActiveTimeline.parseDateFromInstantTime
+    String testInstant = "20210101120101";
+    assertEquals(HoodieActiveTimeline.parseDateFromInstantTime(testInstant).getTime(),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(testInstant).get().getTime());
+  }
+
   /**
    * Returns an exhaustive list of all possible HoodieInstant.
    * @return list of HoodieInstant
@@ -594,4 +685,25 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     }
     return allInstants;
   }
+
+  private void shouldAllowTempCommit(boolean allowTempCommit, Consumer<HoodieTableMetaClient> fun) {
+    if (allowTempCommit) {
+      HoodieWrapperFileSystem fs = metaClient.getFs();
+      HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs.getFileSystem(), new NoOpConsistencyGuard()) {
+        @Override
+        protected boolean needCreateTempFile() {
+          return true;
+        }
+      };
+      metaClient.setFs(newFs);
+      try {
+        fun.accept(metaClient);
+      } finally {
+        metaClient.setFs(fs);
+      }
+      return;
+    }
+    fun.accept(metaClient);
+  }
+
 }

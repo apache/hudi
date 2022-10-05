@@ -17,20 +17,20 @@
 
 package org.apache.hudi
 
-import java.util.Properties
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hive.HiveSyncConfig
+import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
+import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 
+import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
@@ -67,21 +67,21 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(STREAMING_RETRY_INTERVAL_MS)
     hoodieConfig.setDefaultValue(STREAMING_IGNORE_FAILED_BATCH)
     hoodieConfig.setDefaultValue(META_SYNC_CLIENT_TOOL_CLASS_NAME)
-    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_SYNC_ENABLED)
+    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SYNC_ENABLED)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_ENABLED)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT)
-    hoodieConfig.setDefaultValue(HiveSyncConfig.METASTORE_URIS)
-    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_USER)
-    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_PASS)
-    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_URL)
+    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.METASTORE_URIS)
+    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_USER)
+    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_PASS)
+    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_URL)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     hoodieConfig.setDefaultValue(HIVE_STYLE_PARTITIONING)
-    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_USE_JDBC)
-    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE)
-    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_SYNC_AS_DATA_SOURCE_TABLE)
+    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_USE_JDBC)
+    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE)
+    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE)
     hoodieConfig.setDefaultValue(ASYNC_COMPACT_ENABLE)
     hoodieConfig.setDefaultValue(INLINE_CLUSTERING_ENABLE)
     hoodieConfig.setDefaultValue(ASYNC_CLUSTERING_ENABLE)
@@ -100,7 +100,7 @@ object HoodieWriterUtils {
   def getPartitionColumns(parameters: Map[String, String]): String = {
     val props = new Properties()
     props.putAll(parameters.asJava)
-    HoodieSparkUtils.getPartitionColumns(props)
+    SparkKeyGenUtils.getPartitionColumns(props)
   }
 
   def convertMapToHoodieConfig(parameters: Map[String, String]): HoodieConfig = {
@@ -112,7 +112,7 @@ object HoodieWriterUtils {
   def getOriginKeyGenerator(parameters: Map[String, String]): String = {
     val kg = parameters.getOrElse(KEYGENERATOR_CLASS_NAME.key(), null)
     if (classOf[SqlKeyGenerator].getCanonicalName == kg) {
-      parameters.getOrElse(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
+      parameters.getOrElse(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null)
     } else {
       kg
     }

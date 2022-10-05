@@ -19,31 +19,13 @@
 package org.apache.hudi.cli.testutils;
 
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.springframework.shell.Bootstrap;
-import org.springframework.shell.core.JLineShellComponent;
 
 /**
  * Class to start Bootstrap and JLineShellComponent.
  */
 public class HoodieCLIIntegrationTestHarness extends HoodieClientTestHarness {
-
-  private static JLineShellComponent shell;
-
-  @BeforeAll
-  public static void startup() {
-    Bootstrap bootstrap = new Bootstrap();
-    shell = bootstrap.getJLineShellComponent();
-  }
-
-  @AfterAll
-  public static void shutdown() {
-    shell.stop();
-  }
 
   @BeforeEach
   public void setup() throws Exception {
@@ -53,10 +35,6 @@ public class HoodieCLIIntegrationTestHarness extends HoodieClientTestHarness {
   @AfterEach
   public void teardown() throws Exception {
     System.gc();
-  }
-
-  protected static JLineShellComponent getShell() {
-    return shell;
   }
 
   /**

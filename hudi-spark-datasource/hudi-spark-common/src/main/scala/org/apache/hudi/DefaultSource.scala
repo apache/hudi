@@ -18,15 +18,20 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
+
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
+import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.util.PathUtils
+
 import org.apache.log4j.LogManager
+
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
@@ -56,6 +61,8 @@ class DefaultSource extends RelationProvider
       // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
       spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
     }
+    // Revisit EMRFS incompatibilities, for now disable
+    spark.sparkContext.hadoopConfiguration.set("fs.s3.metadata.cache.expiration.seconds", "0")
   }
 
   private val log = LogManager.getLogger(classOf[DefaultSource])
@@ -68,11 +75,9 @@ class DefaultSource extends RelationProvider
   override def createRelation(sqlContext: SQLContext,
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
-    // Add default options for unspecified read options keys.
-    val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+    val path = optParams.get("path")
+    val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
 
-    val path = parameters.get("path")
-    val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS.key)
     if (path.isEmpty && readPathsStr.isEmpty) {
       throw new HoodieException(s"'path' or '$READ_PATHS' or both must be specified.")
     }
@@ -83,10 +88,20 @@ class DefaultSource extends RelationProvider
     val fs = FSUtils.getFs(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
 
     val globPaths = if (path.exists(_.contains("*")) || readPaths.nonEmpty) {
-      HoodieSparkUtils.checkAndGlobPathIfNecessary(allPaths, fs)
+      PathUtils.checkAndGlobPathIfNecessary(allPaths, fs)
     } else {
       Seq.empty
     }
+
+    // Add default options for unspecified read options keys.
+    val parameters = (if (globPaths.nonEmpty) {
+      Map(
+        "glob.paths" -> globPaths.mkString(",")
+      )
+    } else {
+      Map()
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
       DataSourceUtils.getTablePath(fs, globPaths.toArray)
@@ -96,46 +111,8 @@ class DefaultSource extends RelationProvider
     log.info("Obtained hudi table path: " + tablePath)
 
     val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
-    val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
-    val tableType = metaClient.getTableType
-    val queryType = parameters(QUERY_TYPE.key)
-    // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
-    //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
-    //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
-    //       from the table itself
-    val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
-      None
-    } else {
-      Option(schema)
-    }
 
-    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
-
-    if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-      new EmptyRelation(sqlContext, metaClient)
-    } else {
-      (tableType, queryType, isBootstrappedTable) match {
-        case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
-             (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
-             (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
-        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
-
-        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          new MergeOnReadSnapshotRelation(sqlContext, parameters, userSchema, globPaths, metaClient)
-
-        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new MergeOnReadIncrementalRelation(sqlContext, parameters, userSchema, metaClient)
-
-        case (_, _, true) =>
-          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-
-        case (_, _, _) =>
-          throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
-            s"isBootstrappedTable: $isBootstrappedTable ")
-      }
-    }
+    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
   }
 
   def getValidCommits(metaClient: HoodieTableMetaClient): String = {
@@ -170,6 +147,8 @@ class DefaultSource extends RelationProvider
     } else {
       HoodieSparkSqlWriter.write(sqlContext, mode, optParams, dfWithoutMetaCols)
     }
+
+    HoodieSparkSqlWriter.cleanup()
     new HoodieEmptyRelation(sqlContext, dfWithoutMetaCols.schema)
   }
 
@@ -196,16 +175,8 @@ class DefaultSource extends RelationProvider
     }
     val metaClient = HoodieTableMetaClient.builder().setConf(
       sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
-    val schemaResolver = new TableSchemaResolver(metaClient)
-    val sqlSchema =
-      try {
-        val avroSchema = schemaResolver.getTableAvroSchema
-        AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
-      } catch {
-        case _: Exception =>
-          require(schema.isDefined, "Fail to resolve source schema")
-          schema.get
-      }
+
+    val sqlSchema = DefaultSource.resolveSchema(metaClient, parameters, schema)
     (shortName(), sqlSchema)
   }
 
@@ -215,6 +186,64 @@ class DefaultSource extends RelationProvider
                             providerName: String,
                             parameters: Map[String, String]): Source = {
     new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
+  }
+}
+
+object DefaultSource {
+
+  private val log = LogManager.getLogger(classOf[DefaultSource])
+
+  def createRelation(sqlContext: SQLContext,
+                     metaClient: HoodieTableMetaClient,
+                     schema: StructType,
+                     globPaths: Seq[Path],
+                     parameters: Map[String, String]): BaseRelation = {
+    val tableType = metaClient.getTableType
+    val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
+    val queryType = parameters(QUERY_TYPE.key)
+    val isCdcQuery = queryType == QUERY_TYPE_INCREMENTAL_OPT_VAL &&
+      parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
+
+    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+
+    // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
+    //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
+    //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
+    //       from the table itself
+    val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
+      None
+    } else {
+      Option(schema)
+    }
+
+    if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
+      new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
+    } else if (isCdcQuery) {
+      CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
+    } else {
+      (tableType, queryType, isBootstrappedTable) match {
+        case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
+             (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
+             (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
+          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+
+        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+          new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+
+        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
+          new MergeOnReadSnapshotRelation(sqlContext, parameters, userSchema, globPaths, metaClient)
+
+        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+          new MergeOnReadIncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+
+        case (_, _, true) =>
+          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+
+        case (_, _, _) =>
+          throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
+            s"isBootstrappedTable: $isBootstrappedTable ")
+      }
+    }
   }
 
   private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
@@ -233,6 +262,27 @@ class DefaultSource extends RelationProvider
       baseRelation
     } else {
       baseRelation.toHadoopFsRelation
+    }
+  }
+
+  private def resolveSchema(metaClient: HoodieTableMetaClient,
+                            parameters: Map[String, String],
+                            schema: Option[StructType]): StructType = {
+    val isCdcQuery = CDCRelation.isCDCEnabled(metaClient) &&
+      parameters.get(QUERY_TYPE.key).contains(QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
+      parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
+    if (isCdcQuery) {
+      CDCRelation.FULL_CDC_SPARK_SCHEMA
+    } else {
+      val schemaResolver = new TableSchemaResolver(metaClient)
+      try {
+        val avroSchema = schemaResolver.getTableAvroSchema
+        AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+      } catch {
+        case _: Exception =>
+          require(schema.isDefined, "Fail to resolve source schema")
+          schema.get
+      }
     }
   }
 }

@@ -21,7 +21,8 @@ package org.apache.hudi.testutils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.data.HoodieList;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -34,18 +35,16 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
-
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
@@ -133,7 +132,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
 
   protected List<HoodieRecord> tagLocation(
       HoodieIndex index, List<HoodieRecord> records, HoodieTable table) {
-    return HoodieList.getList(index.tagLocation(HoodieList.of(records), context, table));
+    return ((HoodieData<HoodieRecord>) index.tagLocation(HoodieListData.eager(records), context, table)).collectAsList();
   }
 
   /**
@@ -169,6 +168,9 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
     }
   }
 
+  /**
+   * Simple test sink function.
+   */
   public static class SimpleTestSinkFunction implements SinkFunction<HoodieRecord> {
 
     // must be static
@@ -205,7 +207,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   protected void cleanupDFS() throws java.io.IOException {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
-      dfsCluster.shutdown();
+      dfsCluster.shutdown(true, true);
       hdfsTestService = null;
       dfsCluster = null;
       dfs = null;

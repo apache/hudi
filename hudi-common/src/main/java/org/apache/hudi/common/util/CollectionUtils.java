@@ -34,14 +34,25 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+
 public class CollectionUtils {
 
-  public static final Properties EMPTY_PROPERTIES = new Properties();
+  private static final Properties EMPTY_PROPERTIES = new Properties();
+
+  /**
+   * Returns an empty {@code Properties} instance. The props instance is a singleton,
+   * it should not be modified in any case.
+   */
+  public static Properties emptyProps() {
+    return EMPTY_PROPERTIES;
+  }
 
   public static boolean isNullOrEmpty(Collection<?> c) {
     return Objects.isNull(c) || c.isEmpty();
@@ -49,6 +60,23 @@ public class CollectionUtils {
 
   public static boolean nonEmpty(Collection<?> c) {
     return !isNullOrEmpty(c);
+  }
+
+  /**
+   * Makes a copy of provided {@link Properties} object
+   */
+  public static Properties copy(Properties props) {
+    Properties copy = new Properties();
+    copy.putAll(props);
+    return copy;
+  }
+
+  /**
+   * Returns last element of the array of {@code T}
+   */
+  public static <T> T tail(T[] ts) {
+    checkArgument(ts.length > 0);
+    return ts[ts.length - 1];
   }
 
   /**
@@ -108,6 +136,19 @@ public class CollectionUtils {
   }
 
   /**
+   * Combines provided {@link Map}s into one, returning new instance of {@link HashMap}.
+   *
+   * NOTE: That values associated with overlapping keys from the second map, will override
+   *       values from the first one
+   */
+  public static <K, V> HashMap<K, V> combine(Map<K, V> one, Map<K, V> another, BiFunction<V, V, V> merge) {
+    HashMap<K, V> combined = new HashMap<>(one.size() + another.size());
+    combined.putAll(one);
+    another.forEach((k, v) -> combined.merge(k, v, merge));
+    return combined;
+  }
+
+  /**
    * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
    */
   public static <E> Set<E> diff(Set<E> one, Set<E> another) {
@@ -129,7 +170,7 @@ public class CollectionUtils {
   }
 
   public static <E> Stream<List<E>> batchesAsStream(List<E> list, int batchSize) {
-    ValidationUtils.checkArgument(batchSize > 0, "batch size must be positive.");
+    checkArgument(batchSize > 0, "batch size must be positive.");
     int total = list.size();
     if (total <= 0) {
       return Stream.empty();

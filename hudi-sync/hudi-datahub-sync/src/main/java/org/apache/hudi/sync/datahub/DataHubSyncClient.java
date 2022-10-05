@@ -21,9 +21,8 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
@@ -51,8 +50,6 @@ import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.Collections;
@@ -60,40 +57,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class DataHubSyncClient extends AbstractSyncHoodieClient {
+public class DataHubSyncClient extends HoodieSyncClient {
 
-  private final HoodieTimeline activeTimeline;
-  private final DataHubSyncConfig syncConfig;
-  private final Configuration hadoopConf;
+  protected final DataHubSyncConfig config;
   private final DatasetUrn datasetUrn;
 
-  public DataHubSyncClient(DataHubSyncConfig syncConfig, Configuration hadoopConf, FileSystem fs) {
-    super(syncConfig.basePath, syncConfig.assumeDatePartitioning, syncConfig.useFileListingFromMetadata, false, fs);
-    this.syncConfig = syncConfig;
-    this.hadoopConf = hadoopConf;
-    this.datasetUrn = syncConfig.datasetIdentifier.getDatasetUrn();
-    this.activeTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-  }
-
-  @Override
-  public void createTable(String tableName,
-      MessageType storageSchema,
-      String inputFormatClass,
-      String outputFormatClass,
-      String serdeClass,
-      Map<String, String> serdeProperties,
-      Map<String, String> tableProperties) {
-    throw new UnsupportedOperationException("Not supported: `createTable`");
-  }
-
-  @Override
-  public boolean doesTableExist(String tableName) {
-    return tableExists(tableName);
-  }
-
-  @Override
-  public boolean tableExists(String tableName) {
-    throw new UnsupportedOperationException("Not supported: `tableExists`");
+  public DataHubSyncClient(DataHubSyncConfig config) {
+    super(config);
+    this.config = config;
+    this.datasetUrn = config.datasetIdentifier.getDatasetUrn();
   }
 
   @Override
@@ -103,37 +75,7 @@ public class DataHubSyncClient extends AbstractSyncHoodieClient {
 
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
-    updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, activeTimeline.lastInstant().get().getTimestamp()));
-  }
-
-  @Override
-  public Option<String> getLastReplicatedTime(String tableName) {
-    throw new UnsupportedOperationException("Not supported: `getLastReplicatedTime`");
-  }
-
-  @Override
-  public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
-    throw new UnsupportedOperationException("Not supported: `updateLastReplicatedTimeStamp`");
-  }
-
-  @Override
-  public void deleteLastReplicatedTimeStamp(String tableName) {
-    throw new UnsupportedOperationException("Not supported: `deleteLastReplicatedTimeStamp`");
-  }
-
-  @Override
-  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
-    throw new UnsupportedOperationException("Not supported: `addPartitionsToTable`");
-  }
-
-  @Override
-  public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
-    throw new UnsupportedOperationException("Not supported: `updatePartitionsToTable`");
-  }
-
-  @Override
-  public void dropPartitions(String tableName, List<String> partitionsToDrop) {
-    throw new UnsupportedOperationException("Not supported: `dropPartitions`");
+    updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, getActiveTimeline().lastInstant().get().getTimestamp()));
   }
 
   @Override
@@ -145,14 +87,15 @@ public class DataHubSyncClient extends AbstractSyncHoodieClient {
         .aspect(new DatasetProperties().setCustomProperties(new StringMap(tableProperties)))
         .build();
 
-    try (RestEmitter emitter = syncConfig.getRestEmitter()) {
+    try (RestEmitter emitter = config.getRestEmitter()) {
       emitter.emit(propertiesChangeProposal, null).get();
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": " + tableProperties, e);
     }
   }
 
-  public void updateTableDefinition(String tableName) {
+  @Override
+  public void updateTableSchema(String tableName, MessageType schema) {
     Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
     List<SchemaField> fields = avroSchema.getFields().stream().map(f -> new SchemaField()
         .setFieldPath(f.name())
@@ -175,7 +118,7 @@ public class DataHubSyncClient extends AbstractSyncHoodieClient {
             .setFields(new SchemaFieldArray(fields)))
         .build();
 
-    try (RestEmitter emitter = syncConfig.getRestEmitter()) {
+    try (RestEmitter emitter = config.getRestEmitter()) {
       emitter.emit(schemaChangeProposal, null).get();
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change schema for Dataset " + datasetUrn, e);
@@ -183,7 +126,7 @@ public class DataHubSyncClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public Map<String, String> getTableSchema(String tableName) {
+  public Map<String, String> getMetastoreSchema(String tableName) {
     throw new UnsupportedOperationException("Not supported: `getTableSchema`");
   }
 

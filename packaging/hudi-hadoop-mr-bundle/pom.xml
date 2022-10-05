@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.12.0-SNAPSHOT</version>
+    <version>0.13.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -89,8 +89,8 @@
                   <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
                   <include>org.apache.htrace:htrace-core4</include>
                   <include>com.yammer.metrics:metrics-core</include>
-                  <include>com.google.guava:guava</include>
                   <include>commons-io:commons-io</include>
+                  <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -144,6 +144,10 @@
                 <relocation>
                   <pattern>com.google.common.</pattern>
                   <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.openjdk.jol.</pattern>
+                  <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,

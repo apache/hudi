@@ -57,9 +57,9 @@ public class NonpartitionedAvroKeyGenerator extends BaseKeyGenerator {
     // 1. if there is only one record key field, the format of record key is just "<value>"
     // 2. if there are multiple record key fields, the format is "<field1>:<value1>,<field2>:<value2>,..."
     if (getRecordKeyFieldNames().size() == 1) {
-      return KeyGenUtils.getRecordKey(record, getRecordKeyFields().get(0), isConsistentLogicalTimestampEnabled());
+      return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames().get(0), isConsistentLogicalTimestampEnabled());
     }
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFields(), isConsistentLogicalTimestampEnabled());
+    return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
   }
 
   public String getEmptyPartition() {

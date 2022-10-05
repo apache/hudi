@@ -64,6 +64,8 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -73,6 +75,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Deque;
 import java.util.LinkedList;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 
@@ -167,12 +170,7 @@ public class HoodieAvroUtils {
   }
 
   public static boolean isMetadataField(String fieldName) {
-    return HoodieRecord.COMMIT_TIME_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.RECORD_KEY_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.PARTITION_PATH_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.OPERATION_METADATA_FIELD.equals(fieldName);
+    return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
@@ -243,7 +241,7 @@ public class HoodieAvroUtils {
     return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
   }
 
-  public static Schema removeFields(Schema schema, List<String> fieldsToRemove) {
+  public static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {
     List<Schema.Field> filteredFields = schema.getFields()
         .stream()
         .filter(field -> !fieldsToRemove.contains(field.name()))
@@ -388,7 +386,7 @@ public class HoodieAvroUtils {
       copyOldValueOrSetDefault(genericRecord, newRecord, f);
     }
     // do not preserve FILENAME_METADATA_FIELD
-    newRecord.put(HoodieRecord.FILENAME_META_FIELD_POS, fileName);
+    newRecord.put(HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
     if (!GenericData.get().validate(newSchema, newRecord)) {
       throw new SchemaCompatibilityException(
           "Unable to validate the rewritten record " + genericRecord + " against schema " + newSchema);
@@ -400,7 +398,7 @@ public class HoodieAvroUtils {
   public static GenericRecord rewriteEvolutionRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
     GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(genericRecord, newSchema, new HashMap<>());
     // do not preserve FILENAME_METADATA_FIELD
-    newRecord.put(HoodieRecord.FILENAME_META_FIELD_POS, fileName);
+    newRecord.put(HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
     return newRecord;
   }
 
@@ -420,7 +418,7 @@ public class HoodieAvroUtils {
    * <p>
    * To better understand how it removes please check {@link #rewriteRecord(GenericRecord, Schema)}
    */
-  public static GenericRecord removeFields(GenericRecord record, List<String> fieldsToRemove) {
+  public static GenericRecord removeFields(GenericRecord record, Set<String> fieldsToRemove) {
     Schema newSchema = removeFields(record.getSchema(), fieldsToRemove);
     return rewriteRecord(record, newSchema);
   }
@@ -745,15 +743,18 @@ public class HoodieAvroUtils {
    * b) For GenericRecord, copy over the data from the old schema to the new schema or set default values for all fields of this transformed schema
    *
    * @param oldRecord oldRecord to be rewritten
+   * @param oldAvroSchema old avro schema.
    * @param newSchema newSchema used to rewrite oldRecord
    * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
    * @param fieldNames track the full name of visited field when we travel new schema.
    * @return newRecord for new Schema
    */
-  private static Object rewriteRecordWithNewSchema(Object oldRecord, Schema oldSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
+  private static Object rewriteRecordWithNewSchema(Object oldRecord, Schema oldAvroSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
     if (oldRecord == null) {
       return null;
     }
+    // try to get real schema for union type
+    Schema oldSchema = getActualSchemaFromUnion(oldAvroSchema, oldRecord);
     switch (newSchema.getType()) {
       case RECORD:
         if (!(oldRecord instanceof IndexedRecord)) {
@@ -761,39 +762,32 @@ public class HoodieAvroUtils {
         }
         IndexedRecord indexedRecord = (IndexedRecord) oldRecord;
         List<Schema.Field> fields = newSchema.getFields();
-        Map<Integer, Object> helper = new HashMap<>();
-
+        GenericData.Record newRecord = new GenericData.Record(newSchema);
         for (int i = 0; i < fields.size(); i++) {
           Schema.Field field = fields.get(i);
           String fieldName = field.name();
           fieldNames.push(fieldName);
           if (oldSchema.getField(field.name()) != null) {
             Schema.Field oldField = oldSchema.getField(field.name());
-            helper.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
+            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
           } else {
             String fieldFullName = createFullName(fieldNames);
-            String[] colNamePartsFromOldSchema = renameCols.getOrDefault(fieldFullName, "").split("\\.");
-            String lastColNameFromOldSchema = colNamePartsFromOldSchema[colNamePartsFromOldSchema.length - 1];
+            String fieldNameFromOldSchema = renameCols.getOrDefault(fieldFullName, "");
             // deal with rename
-            if (oldSchema.getField(field.name()) == null && oldSchema.getField(lastColNameFromOldSchema) != null) {
+            if (oldSchema.getField(field.name()) == null && oldSchema.getField(fieldNameFromOldSchema) != null) {
               // find rename
-              Schema.Field oldField = oldSchema.getField(lastColNameFromOldSchema);
-              helper.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
+              Schema.Field oldField = oldSchema.getField(fieldNameFromOldSchema);
+              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
+            } else {
+              // deal with default value
+              if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
+                newRecord.put(i, null);
+              } else {
+                newRecord.put(i, fields.get(i).defaultVal());
+              }
             }
           }
           fieldNames.pop();
-        }
-        GenericData.Record newRecord = new GenericData.Record(newSchema);
-        for (int i = 0; i < fields.size(); i++) {
-          if (helper.containsKey(i)) {
-            newRecord.put(i, helper.get(i));
-          } else {
-            if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
-              newRecord.put(i, null);
-            } else {
-              newRecord.put(i, fields.get(i).defaultVal());
-            }
-          }
         }
         return newRecord;
       case ARRAY:
@@ -961,21 +955,28 @@ public class HoodieAvroUtils {
     throw new AvroRuntimeException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
   }
 
-  // convert days to Date
-  private static java.sql.Date toJavaDate(int days) {
-    long localMillis = Math.multiplyExact(days, MILLIS_PER_DAY);
-    int timeZoneOffset;
-    TimeZone defaultTimeZone = TimeZone.getDefault();
-    if (defaultTimeZone instanceof sun.util.calendar.ZoneInfo) {
-      timeZoneOffset = ((sun.util.calendar.ZoneInfo) defaultTimeZone).getOffsetsByWall(localMillis, null);
-    } else {
-      timeZoneOffset = defaultTimeZone.getOffset(localMillis - defaultTimeZone.getRawOffset());
-    }
-    return new java.sql.Date(localMillis - timeZoneOffset);
+  /**
+   * convert days to Date
+   *
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public static java.sql.Date toJavaDate(int days) {
+    LocalDate date = LocalDate.ofEpochDay(days);
+    ZoneId defaultZoneId = ZoneId.systemDefault();
+    ZonedDateTime zonedDateTime = date.atStartOfDay(defaultZoneId);
+    return new java.sql.Date(zonedDateTime.toInstant().toEpochMilli());
   }
 
-  // convert Date to days
-  private static int fromJavaDate(Date date) {
+  /**
+   * convert Date to days
+   *
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public static int fromJavaDate(Date date) {
     long millisUtc = date.getTime();
     long millisLocal = millisUtc + TimeZone.getDefault().getOffset(millisUtc);
     int julianDays = Math.toIntExact(Math.floorDiv(millisLocal, MILLIS_PER_DAY));
@@ -1027,5 +1028,9 @@ public class HoodieAvroUtils {
         return rewriteRecordWithNewSchema(oldRecords.next(), newSchema, renameCols);
       }
     };
+  }
+
+  public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema) {
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP);
   }
 }

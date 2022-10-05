@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.spark.sql.Row
+import org.apache.hudi.HoodieSparkUtils.isSpark2
+import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 
 class TestShowPartitions extends HoodieSparkSqlTestBase {
 
@@ -84,13 +85,24 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
     checkAnswer(s"show partitions $tableName partition(dt='2021-01-02')")(Seq("dt=2021-01-02"))
 
     // Insert into null partition
-    spark.sql(
-      s"""
-         | insert into $tableName
-         | select 3 as id, 'a3' as name, 10 as price, 1000 as ts, null as dt
+    if (isSpark2) {
+      // Spark 2 isn't able to convert NullType to any other type w/ appropriate nullability, so
+      // explicit cast is required
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | select 3 as id, 'a3' as name, 10 as price, 1000 as ts, cast(null as string) as dt
         """.stripMargin)
+    } else {
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | select 3 as id, 'a3' as name, 10 as price, 1000 as ts, null as dt
+        """.stripMargin)
+    }
+
     checkAnswer(s"show partitions $tableName")(
-      Seq("dt=2021-01-01"), Seq("dt=2021-01-02"), Seq("dt=default")
+      Seq("dt=2021-01-01"), Seq("dt=2021-01-02"), Seq("dt=%s".format(DEFAULT_PARTITION_PATH))
     )
   }
 
@@ -138,12 +150,12 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
       Seq("year=2021/month=01/day=01"),
       Seq("year=2021/month=01/day=02"),
       Seq("year=2021/month=02/day=01"),
-      Seq("year=2021/month=02/day=default"),
-      Seq("year=2021/month=default/day=01"),
-      Seq("year=default/month=01/day=default"),
-      Seq("year=default/month=01/day=02"),
-      Seq("year=default/month=default/day=01"),
-      Seq("year=2022/month=default/day=default")
+      Seq("year=2021/month=02/day=%s".format(DEFAULT_PARTITION_PATH)),
+      Seq("year=2021/month=%s/day=01".format(DEFAULT_PARTITION_PATH)),
+      Seq("year=%s/month=01/day=%s".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)),
+      Seq("year=%s/month=01/day=02".format(DEFAULT_PARTITION_PATH)),
+      Seq("year=%s/month=%s/day=01".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)),
+      Seq("year=2022/month=%s/day=%s".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH))
     )
 
     // check partial partitions
@@ -151,14 +163,14 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
       Seq("year=2021/month=01/day=01")
     )
     checkAnswer(s"show partitions $tableName partition(year='2021', month='02')")(
-      Seq("year=2021/month=02/day=default"),
+      Seq("year=2021/month=02/day=%s".format(DEFAULT_PARTITION_PATH)),
       Seq("year=2021/month=02/day=01")
     )
     checkAnswer(s"show partitions $tableName partition(day='01')")(
       Seq("year=2021/month=02/day=01"),
-      Seq("year=2021/month=default/day=01"),
+      Seq("year=2021/month=%s/day=01".format(DEFAULT_PARTITION_PATH)),
       Seq("year=2021/month=01/day=01"),
-      Seq("year=default/month=default/day=01")
+      Seq("year=%s/month=%s/day=01".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH))
     )
   }
 }

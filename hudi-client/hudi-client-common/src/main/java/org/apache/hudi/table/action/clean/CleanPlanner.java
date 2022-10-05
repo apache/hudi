@@ -29,9 +29,11 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -61,6 +63,7 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -104,7 +107,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * Get the list of data file names savepointed.
    */
   public Stream<String> getSavepointedDataFiles(String savepointTime) {
-    if (!hoodieTable.getSavepoints().contains(savepointTime)) {
+    if (!hoodieTable.getSavepointTimestamps().contains(savepointTime)) {
       throw new HoodieSavepointException(
           "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
     }
@@ -227,7 +230,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         + " file versions. ");
     List<CleanFileInfo> deletePaths = new ArrayList<>();
     // Collect all the datafiles savepointed by all the savepoints
-    List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
+    List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()
         .flatMap(this::getSavepointedDataFiles)
         .collect(Collectors.toList());
 
@@ -248,17 +251,17 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
 
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
+        fileSliceIterator.next();
+        keepVersions--;
+      }
+      // Delete the remaining files
+      while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
         Option<HoodieBaseFile> dataFile = nextSlice.getBaseFile();
         if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
           // do not clean up a savepoint data file
           continue;
         }
-        keepVersions--;
-      }
-      // Delete the remaining files
-      while (fileSliceIterator.hasNext()) {
-        FileSlice nextSlice = fileSliceIterator.next();
         deletePaths.addAll(getCleanFileInfoForSlice(nextSlice));
       }
     }
@@ -295,7 +298,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     List<CleanFileInfo> deletePaths = new ArrayList<>();
 
     // Collect all the datafiles savepointed by all the savepoints
-    List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
+    List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()
         .flatMap(this::getSavepointedDataFiles)
         .collect(Collectors.toList());
 
@@ -358,8 +361,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
                 deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
               }
             });
-            if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-              // If merge on read, then clean the log files for the commits as well
+            if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
+                || hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+              // 1. If merge on read, then clean the log files for the commits as well;
+              // 2. If change log capture is enabled, clean the log files no matter the table type is mor or cow.
               deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
                   .collect(Collectors.toList()));
             }
@@ -427,8 +432,20 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     }
     if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
       // If merge on read, then clean the log files for the commits as well
-      cleanPaths.addAll(nextSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-          .collect(Collectors.toList()));
+      Predicate<HoodieLogFile> notCDCLogFile =
+          hoodieLogFile -> !hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+      cleanPaths.addAll(
+          nextSlice.getLogFiles().filter(notCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+              .collect(Collectors.toList()));
+    }
+    if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+      // The cdc log files will be written out in cdc scenario, no matter the table type is mor or cow.
+      // Here we need to clean uo these cdc log files.
+      Predicate<HoodieLogFile> isCDCLogFile =
+          hoodieLogFile -> hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+      cleanPaths.addAll(
+          nextSlice.getLogFiles().filter(isCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+              .collect(Collectors.toList()));
     }
     return cleanPaths;
   }
@@ -473,6 +490,17 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
               HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
     }
     return earliestCommitToRetain;
+  }
+
+  /**
+   * Returns the last completed commit timestamp before clean.
+   */
+  public String getLastCompletedCommitTimestamp() {
+    if (commitTimeline.lastInstant().isPresent()) {
+      return commitTimeline.lastInstant().get().getTimestamp();
+    } else {
+      return "";
+    }
   }
 
   /**

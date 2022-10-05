@@ -70,9 +70,6 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
     String sparkSizeBasedClassName = HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
     String sparkSelectedPartitionsClassName = "org.apache.hudi.client.clustering.plan.strategy.SparkSelectedPartitionsClusteringPlanStrategy";
     String sparkRecentDaysClassName = "org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy";
-    String flinkSizeBasedClassName = HoodieClusteringConfig.FLINK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
-    String flinkSelectedPartitionsClassName = "org.apache.hudi.client.clustering.plan.strategy.FlinkSelectedPartitionsClusteringPlanStrategy";
-    String flinkRecentDaysClassName = "org.apache.hudi.client.clustering.plan.strategy.FlinkRecentDaysClusteringPlanStrategy";
     String javaSelectedPartitionClassName = "org.apache.hudi.client.clustering.plan.strategy.JavaRecentDaysClusteringPlanStrategy";
     String javaSizeBasedClassName = HoodieClusteringConfig.JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
 
@@ -85,14 +82,6 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
       config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
       LOG.warn(String.format(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name()));
       return sparkSizeBasedClassName;
-    } else if (flinkRecentDaysClassName.equals(className)) {
-      config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.RECENT_DAYS.name());
-      LOG.warn(String.format(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.RECENT_DAYS.name()));
-      return flinkSizeBasedClassName;
-    } else if (flinkSelectedPartitionsClassName.equals(className)) {
-      config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
-      LOG.warn(String.format(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name()));
-      return flinkSizeBasedClassName;
     } else if (javaSelectedPartitionClassName.equals(className)) {
       config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.RECENT_DAYS.name());
       LOG.warn(String.format(logStr, className, javaSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name()));
@@ -114,6 +103,13 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
    * If there is no data available to cluster, return None.
    */
   public abstract Option<HoodieClusteringPlan> generateClusteringPlan();
+
+  /**
+   * Check if the clustering can proceed. If not (i.e., return false), the PlanStrategy will generate an empty plan to stop the scheduling.
+   */
+  public boolean checkPrecondition() {
+    return true;
+  }
 
   /**
    * Return file slices eligible for clustering. FileIds in pending clustering/compaction are not eligible for clustering.
@@ -173,7 +169,7 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
     return metrics;
   }
 
-  protected HoodieTable<T,I,K, O> getHoodieTable() {
+  protected HoodieTable<T, I, K, O> getHoodieTable() {
     return this.hoodieTable;
   }
 

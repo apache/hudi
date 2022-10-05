@@ -42,10 +42,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -63,16 +62,16 @@ import java.util.stream.Collectors;
  * directory specified by the parameter --localFolder
  * The instants are exported in the json format.
  */
-@Component
-public class ExportCommand implements CommandMarker {
+@ShellComponent
+public class ExportCommand {
 
-  @CliCommand(value = "export instants", help = "Export Instants and their metadata from the Timeline")
+  @ShellMethod(key = "export instants", value = "Export Instants and their metadata from the Timeline")
   public String exportInstants(
-      @CliOption(key = {"limit"}, help = "Limit Instants", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"actions"}, help = "Comma separated list of Instant actions to export",
-          unspecifiedDefaultValue = "clean,commit,deltacommit,rollback,savepoint,restore") final String filter,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"localFolder"}, help = "Local Folder to export to", mandatory = true) String localFolder)
+      @ShellOption(value = {"--limit"}, help = "Limit Instants", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--actions"}, help = "Comma separated list of Instant actions to export",
+              defaultValue = "clean,commit,deltacommit,rollback,savepoint,restore") final String filter,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--localFolder"}, help = "Local Folder to export to") String localFolder)
       throws Exception {
 
     final String basePath = HoodieCLI.getTableMetaClient().getBasePath();

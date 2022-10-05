@@ -55,6 +55,10 @@ public class HoodieInternalWriteStatus implements Serializable {
     this.random = new Random(RANDOM_SEED);
   }
 
+  public boolean isTrackingSuccessfulWrites() {
+    return trackSuccessRecords;
+  }
+
   public void markSuccess(String recordKey) {
     if (trackSuccessRecords) {
       this.successRecordKeys.add(recordKey);
@@ -145,10 +149,27 @@ public class HoodieInternalWriteStatus implements Serializable {
     this.successRecordKeys = successRecordKeys;
   }
 
+  public double getFailureFraction() {
+    return failureFraction;
+  }
+
+  public boolean isTrackSuccessRecords() {
+    return trackSuccessRecords;
+  }
+
   @Override
   public String toString() {
     return "PartitionPath " + partitionPath + ", FileID " + fileId + ", Success records "
         + totalRecords + ", errored Rows " + totalErrorRecords
         + ", global error " + (globalError != null);
+  }
+
+  public WriteStatus toWriteStatus() {
+    WriteStatus status = new WriteStatus(trackSuccessRecords, failureFraction);
+    status.setFileId(fileId);
+    status.setTotalRecords(totalRecords);
+    status.setPartitionPath(partitionPath);
+    status.setStat(stat);
+    return status;
   }
 }

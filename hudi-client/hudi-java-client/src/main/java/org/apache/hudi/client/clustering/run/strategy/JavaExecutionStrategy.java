@@ -25,7 +25,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.JavaTaskContextSupplier;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieList;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -94,7 +94,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
             Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
             instantTime)));
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
-    writeMetadata.setWriteStatuses(HoodieList.of(writeStatusList));
+    writeMetadata.setWriteStatuses(HoodieListData.eager(writeStatusList));
     return writeMetadata;
   }
 
@@ -191,6 +191,8 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
             .withBufferSize(config.getMaxDFSStreamBufferSize())
             .withSpillableMapBasePath(config.getSpillableMapBasePath())
             .withPartition(clusteringOp.getPartitionPath())
+            .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+            .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
             .build();
 
         Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())

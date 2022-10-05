@@ -47,10 +47,6 @@ import org.apache.spark.sql.types._
 class AvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean) {
 
   def serialize(catalystData: Any): Any = {
-    converter.apply(catalystData)
-  }
-
-  private val converter: Any => Any = {
     val actualAvroType = resolveNullableType(rootAvroType, nullable)
     val baseConverter = rootCatalystType match {
       case st: StructType =>
@@ -63,14 +59,13 @@ class AvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable:
           converter.apply(tmpRow, 0)
     }
     if (nullable) {
-      (data: Any) =>
-        if (data == null) {
-          null
-        } else {
-          baseConverter.apply(data)
-        }
+      if (catalystData == null) {
+        null
+      } else {
+        baseConverter.apply(catalystData)
+      }
     } else {
-      baseConverter
+      baseConverter.apply(catalystData)
     }
   }
 
@@ -149,7 +144,7 @@ class AvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable:
         // output the timestamp value as with millisecond precision.
         case null => (getter, ordinal) => getter.getLong(ordinal) / 1000
         case other => throw new IncompatibleSchemaException(
-          s"Cannot convert Catalyst Timestamp type to Avro logical type ${other}")
+          s"Cannot convert Catalyst Timestamp type to Avro logical type $other")
       }
 
       case (ArrayType(et, containsNull), ARRAY) =>

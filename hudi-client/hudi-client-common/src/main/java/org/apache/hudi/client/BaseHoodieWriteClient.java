@@ -39,6 +39,7 @@ import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -60,6 +61,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -102,7 +104,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.text.ParseException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -276,15 +277,21 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
-    if (!historySchemaStr.isEmpty()) {
-      InternalSchema internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
-          SerDeHelper.parseSchemas(historySchemaStr));
+    if (!historySchemaStr.isEmpty() || Boolean.parseBoolean(config.getString(HoodieCommonConfig.RECONCILE_SCHEMA.key()))) {
+      InternalSchema internalSchema;
       Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
-      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(avroSchema, internalSchema);
+      if (historySchemaStr.isEmpty()) {
+        internalSchema = AvroInternalSchemaConverter.convert(avroSchema);
+        internalSchema.setSchemaId(Long.parseLong(instantTime));
+      } else {
+        internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
+            SerDeHelper.parseSchemas(historySchemaStr));
+      }
+      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(avroSchema, internalSchema);
       if (evolvedSchema.equals(internalSchema)) {
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
         //TODO save history schema by metaTable
-        schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr);
+        schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr.isEmpty() ? SerDeHelper.inheritSchemas(evolvedSchema, "") : historySchemaStr);
       } else {
         evolvedSchema.setSchemaId(Long.parseLong(instantTime));
         String newSchemaStr = SerDeHelper.toJson(evolvedSchema);
@@ -299,17 +306,14 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   protected abstract HoodieTable<T, I, K, O> createTable(HoodieWriteConfig config, Configuration hadoopConf);
 
   void emitCommitMetrics(String instantTime, HoodieCommitMetadata metadata, String actionType) {
-    try {
-
-      if (writeTimer != null) {
-        long durationInMs = metrics.getDurationInMs(writeTimer.stop());
-        metrics.updateCommitMetrics(HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime(), durationInMs,
-            metadata, actionType);
-        writeTimer = null;
-      }
-    } catch (ParseException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime
-          + "Instant time is not of valid format", e);
+    if (writeTimer != null) {
+      long durationInMs = metrics.getDurationInMs(writeTimer.stop());
+      // instantTime could be a non-standard value, so use `parseDateFromInstantTimeSafely`
+      // e.g. INIT_INSTANT_TS, METADATA_BOOTSTRAP_INSTANT_TS and FULL_BOOTSTRAP_INSTANT_TS in HoodieTimeline
+      HoodieActiveTimeline.parseDateFromInstantTimeSafely(instantTime).ifPresent(parsedInstant ->
+          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, actionType)
+      );
+      writeTimer = null;
     }
   }
 
@@ -484,7 +488,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param writeOperationType
    * @param metaClient
    */
-  protected void preWrite(String instantTime, WriteOperationType writeOperationType,
+  public void preWrite(String instantTime, WriteOperationType writeOperationType,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
@@ -714,6 +718,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointPresence(table, savepointTime);
+    ValidationUtils.checkArgument(!config.shouldArchiveBeyondSavepoint(), "Restore is not supported when " + HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key()
+        + " is enabled");
     restoreToInstant(savepointTime, initialMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointRestore(table, savepointTime);
   }
@@ -851,7 +857,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites(skipLocking));
 
-    HoodieCleanMetadata metadata = null;
     HoodieTable table = createTable(config, hadoopConf);
     if (config.allowMultipleCleans() || !table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
       LOG.info("Cleaner started");
@@ -860,15 +865,16 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
         table.getMetaClient().reloadActiveTimeline();
       }
+    }
 
-      metadata = table.clean(context, cleanInstantTime, skipLocking);
-      if (timerContext != null && metadata != null) {
-        long durationMs = metrics.getDurationInMs(timerContext.stop());
-        metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
-        LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files"
-            + " Earliest Retained Instant :" + metadata.getEarliestCommitToRetain()
-            + " cleanerElapsedMs" + durationMs);
-      }
+    // Proceeds to execute any requested or inflight clean instances in the timeline
+    HoodieCleanMetadata metadata = table.clean(context, cleanInstantTime, skipLocking);
+    if (timerContext != null && metadata != null) {
+      long durationMs = metrics.getDurationInMs(timerContext.stop());
+      metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
+      LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files"
+          + " Earliest Retained Instant :" + metadata.getEarliestCommitToRetain()
+          + " cleanerElapsedMs" + durationMs);
     }
     return metadata;
   }
@@ -1543,13 +1549,16 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
 
     if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
+      metaClient = HoodieTableMetaClient.reload(metaClient);
       // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
       List<String> instantsToRollback = getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, instantTime);
 
-      Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(metaClient);
-      instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
+      if (!instantsToRollback.isEmpty()) {
+        Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(metaClient);
+        instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
 
-      rollbackFailedWrites(pendingRollbacks, true);
+        rollbackFailedWrites(pendingRollbacks, true);
+      }
 
       new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper)
           .run(HoodieTableVersion.current(), instantTime.orElse(null));
@@ -1685,7 +1694,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
     }
     Map<String, String> extraMeta = new HashMap<>();
-    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(newSchema.setSchemaId(Long.getLong(instantTime))));
+    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(newSchema.setSchemaId(Long.parseLong(instantTime))));
     // try to save history schemas
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
     schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(newSchema, historySchemaStr));

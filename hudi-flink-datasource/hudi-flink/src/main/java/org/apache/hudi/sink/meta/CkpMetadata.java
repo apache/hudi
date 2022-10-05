@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -26,6 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -94,11 +94,9 @@ public class CkpMetadata implements Serializable {
    *
    * <p>This expects to be called by the driver.
    */
-  public void bootstrap(HoodieTableMetaClient metaClient) throws IOException {
+  public void bootstrap() throws IOException {
     fs.delete(path, true);
     fs.mkdirs(path);
-    metaClient.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction()
-        .lastInstant().ifPresent(instant -> startInstant(instant.getTimestamp()));
   }
 
   public void startInstant(String instant) {
@@ -106,7 +104,7 @@ public class CkpMetadata implements Serializable {
     try {
       fs.createNewFile(path);
     } catch (IOException e) {
-      throw new HoodieException("Exception while adding checkpoint start metadata for instant: " + instant);
+      throw new HoodieException("Exception while adding checkpoint start metadata for instant: " + instant, e);
     }
     // cleaning
     clean(instant);
@@ -144,7 +142,7 @@ public class CkpMetadata implements Serializable {
     try {
       fs.createNewFile(path);
     } catch (IOException e) {
-      throw new HoodieException("Exception while adding checkpoint commit metadata for instant: " + instant);
+      throw new HoodieException("Exception while adding checkpoint commit metadata for instant: " + instant, e);
     }
   }
 
@@ -168,15 +166,15 @@ public class CkpMetadata implements Serializable {
     try {
       this.messages = scanCkpMetadata(this.path);
     } catch (IOException e) {
-      throw new HoodieException("Exception while scanning the checkpoint meta files under path: " + this.path);
+      throw new HoodieException("Exception while scanning the checkpoint meta files under path: " + this.path, e);
     }
   }
 
   @Nullable
   public String lastPendingInstant() {
     load();
-    for (int i = this.messages.size() - 1; i >= 0; i--) {
-      CkpMessage ckpMsg = this.messages.get(i);
+    if (this.messages.size() > 0) {
+      CkpMessage ckpMsg = this.messages.get(this.messages.size() - 1);
       // consider 'aborted' as pending too to reuse the instant
       if (!ckpMsg.isComplete()) {
         return ckpMsg.getInstant();

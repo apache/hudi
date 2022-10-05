@@ -238,4 +238,119 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test Unsupported syntax can be parsed") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      checkAnswer("select 1 distribute by 1")(Seq(1))
+      withTempDir { dir =>
+        val path = dir.toURI.getPath
+        spark.sql(s"insert overwrite local directory '$path' using parquet select 1")
+        // Requires enable hive support, so didn't test it
+        // spark.sql(s"insert overwrite local directory '$path' stored as orc select 1")
+      }
+    }
+  }
+
+  test("Test Select Record with time travel and Repartition") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(s"${tmp.getCanonicalPath}/$tableName")
+          .setConf(spark.sessionState.newHadoopConf())
+          .build()
+
+        val instant = metaClient.getActiveTimeline.getAllCommitsTimeline
+          .lastInstant().get().getTimestamp
+        spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+
+        checkAnswer(s"select id, name, price, ts from $tableName distribute by cast(rand() * 2 as int)")(
+          Seq(1, "a2", 20.0, 2000)
+        )
+
+        // time travel from instant
+        checkAnswer(
+          s"select id, name, price, ts from $tableName TIMESTAMP AS OF '$instant' distribute by cast(rand() * 2 as int)")(
+          Seq(1, "a1", 10.0, 1000)
+        )
+      }
+    }
+  }
+
+  test("Test Time Travel With Schema Evolution") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        spark.sql("set hoodie.schema.on.read.enable=true")
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(s"${tmp.getCanonicalPath}/$tableName")
+          .setConf(spark.sessionState.newHadoopConf())
+          .build()
+        val instant1 = metaClient.reloadActiveTimeline().getAllCommitsTimeline
+          .lastInstant().get().getTimestamp
+
+        // add column
+        spark.sql(s"alter table $tableName add columns (company string)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 11, 1100, 'hudi')")
+        val instant2 = metaClient.reloadActiveTimeline().getAllCommitsTimeline
+          .lastInstant().get().getTimestamp
+
+        // drop column
+        spark.sql(s"alter table $tableName drop column price")
+
+        val result1 = spark.sql(s"select * from ${tableName} timestamp as of $instant1 order by id")
+          .drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name").collect()
+        checkAnswer(result1)(Seq(1, "a1", 10.0, 1000))
+
+        val result2 = spark.sql(s"select * from ${tableName} timestamp as of $instant2 order by id")
+          .drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name").collect()
+        checkAnswer(result2)(
+          Seq(1, "a1", 10.0, 1000, null),
+          Seq(2, "a2", 11.0, 1100, "hudi")
+        )
+
+        val result3 = spark.sql(s"select * from ${tableName} order by id")
+          .drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name").collect()
+        checkAnswer(result3)(
+          Seq(1, "a1", 1000, null),
+          Seq(2, "a2", 1100, "hudi")
+        )
+      }
+    }
+  }
 }

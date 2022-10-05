@@ -32,6 +32,7 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
+import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
@@ -106,7 +107,7 @@ public class AvroToRowDataConverters {
   /**
    * Creates a runtime converter which assuming input object is not null.
    */
-  private static AvroToRowDataConverter createConverter(LogicalType type) {
+  public static AvroToRowDataConverter createConverter(LogicalType type) {
     switch (type.getTypeRoot()) {
       case NULL:
         return avroObject -> null;
@@ -121,11 +122,14 @@ public class AvroToRowDataConverters {
       case INTERVAL_DAY_TIME: // long
       case FLOAT: // float
       case DOUBLE: // double
+      case RAW:
         return avroObject -> avroObject;
       case DATE:
         return AvroToRowDataConverters::convertToDate;
       case TIME_WITHOUT_TIME_ZONE:
         return AvroToRowDataConverters::convertToTime;
+      case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+        return createTimestampConverter(((LocalZonedTimestampType) type).getPrecision());
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         return createTimestampConverter(((TimestampType) type).getPrecision());
       case CHAR:
@@ -143,7 +147,6 @@ public class AvroToRowDataConverters {
       case MAP:
       case MULTISET:
         return createMapConverter(type);
-      case RAW:
       default:
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }

@@ -33,6 +33,7 @@ public class HoodieExampleSparkUtils {
     Map<String, String> additionalConfigs = new HashMap<>();
     additionalConfigs.put("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
     additionalConfigs.put("spark.kryoserializer.buffer.max", "512m");
+    additionalConfigs.put("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
     return additionalConfigs;
   }
 

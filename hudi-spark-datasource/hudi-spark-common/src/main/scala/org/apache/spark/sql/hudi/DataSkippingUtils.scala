@@ -23,10 +23,10 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, SubqueryExpression}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils._
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructType}
 import org.apache.spark.sql.{AnalysisException, HoodieCatalystExpressionUtils}
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -61,7 +61,7 @@ object DataSkippingUtils extends Logging {
     }
   }
 
-  private def tryComposeIndexFilterExpr(sourceExpr: Expression, indexSchema: StructType): Option[Expression] = {
+  private def tryComposeIndexFilterExpr(sourceFilterExpr: Expression, indexSchema: StructType): Option[Expression] = {
     //
     // For translation of the Filter Expression for the Data Table into Filter Expression for Column Stats Index, we're
     // assuming that
@@ -91,7 +91,7 @@ object DataSkippingUtils extends Logging {
     //       colA_minValue = min(colA)  =>  transform_expr(colA_minValue) = min(transform_expr(colA))
     //       colA_maxValue = max(colA)  =>  transform_expr(colA_maxValue) = max(transform_expr(colA))
     //
-    sourceExpr match {
+    sourceFilterExpr match {
       // If Expression is not resolved, we can't perform the analysis accurately, bailing
       case expr if !expr.resolved => None
 
@@ -227,6 +227,24 @@ object DataSkippingUtils extends Logging {
             list.map(lit => genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or)
           }
 
+      // Filter "expr(colA) in (B1, B2, ...)"
+      // NOTE: [[InSet]] is an optimized version of the [[In]] expression, where every sub-expression w/in the
+      //       set is a static literal
+      case InSet(sourceExpr @ AllowedTransformationExpression(attrRef), hset: Set[Any]) =>
+        getTargetIndexedColumnName(attrRef, indexSchema)
+          .map { colName =>
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            hset.map { value =>
+              // NOTE: [[Literal]] has a gap where it could hold [[UTF8String]], but [[Literal#apply]] doesn't
+              //       accept [[UTF8String]]. As such we have to handle it separately
+              val lit = value match {
+                case str: UTF8String => Literal(str.toString)
+                case _ => Literal(value)
+              }
+              genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)
+            }.reduce(Or)
+          }
+
       // Filter "expr(colA) not in (B1, B2, ...)"
       // Translates to "NOT((colA_minValue = B1 AND colA_maxValue = B1) OR (colA_minValue = B2 AND colA_maxValue = B2))" for index lookup
       // NOTE: This is NOT an inversion of `in (B1, B2, ...)` expr, this is equivalent to "colA != B1 AND colA != B2 AND ..."
@@ -331,8 +349,8 @@ private object ColumnStatsExpressionUtils {
   @inline def genColValueCountExpr: Expression = col(getValueCountColumnNameFor).expr
 
   @inline def genColumnValuesEqualToExpression(colName: String,
-                                       value: Expression,
-                                       targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
+                                               value: Expression,
+                                               targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
     val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
     val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
     // Only case when column C contains value V is when min(C) <= V <= max(c)
@@ -384,7 +402,7 @@ private object ColumnStatsExpressionUtils {
    * Returns only [[AttributeReference]] contained as a sub-expression
    */
   object AllowedTransformationExpression extends SparkAdapterSupport {
-    val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.createCatalystExpressionUtils()
+    val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.getCatalystExpressionUtils
 
     def unapply(expr: Expression): Option[AttributeReference] = {
       // First step, we check that expression

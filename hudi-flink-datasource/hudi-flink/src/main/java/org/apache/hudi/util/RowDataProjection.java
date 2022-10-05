@@ -26,6 +26,8 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Utilities to project the row data with given positions.
@@ -51,6 +53,12 @@ public class RowDataProjection implements Serializable {
     return new RowDataProjection(types, positions);
   }
 
+  public static RowDataProjection instanceV2(RowType rowType, int[] positions) {
+    List<LogicalType> fieldTypes = rowType.getChildren();
+    final LogicalType[] types = Arrays.stream(positions).mapToObj(fieldTypes::get).toArray(LogicalType[]::new);
+    return new RowDataProjection(types, positions);
+  }
+
   public static RowDataProjection instance(LogicalType[] types, int[] positions) {
     return new RowDataProjection(types, positions);
   }
@@ -60,6 +68,7 @@ public class RowDataProjection implements Serializable {
    */
   public RowData project(RowData rowData) {
     GenericRowData genericRowData = new GenericRowData(this.fieldGetters.length);
+    genericRowData.setRowKind(rowData.getRowKind());
     for (int i = 0; i < this.fieldGetters.length; i++) {
       final Object val = this.fieldGetters[i].getFieldOrNull(rowData);
       genericRowData.setField(i, val);

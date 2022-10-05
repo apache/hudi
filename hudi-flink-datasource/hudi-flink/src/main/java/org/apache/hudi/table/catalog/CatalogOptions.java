@@ -18,17 +18,24 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.CommonCatalogOptions;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Hoodie catalog options.
  */
 public class CatalogOptions {
+  public static final String HIVE_SITE_FILE = "hive-site.xml";
+  public static final String DEFAULT_DB = "default";
 
   public static final ConfigOption<String> CATALOG_PATH =
       ConfigOptions.key("catalog.path")
@@ -41,6 +48,41 @@ public class CatalogOptions {
       ConfigOptions.key(CommonCatalogOptions.DEFAULT_DATABASE_KEY)
           .stringType()
           .defaultValue("default");
+
+  public static final ConfigOption<String> HIVE_CONF_DIR = ConfigOptions
+      .key("hive.conf.dir")
+      .stringType()
+      .noDefaultValue();
+
+  public static final ConfigOption<String> MODE = ConfigOptions
+      .key("mode")
+      .stringType()
+      .defaultValue("dfs");
+
+  public static final ConfigOption<Boolean> TABLE_EXTERNAL = ConfigOptions
+      .key("table.external")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether the table is external, default false");
+
+  /**
+   * Returns all the config options.
+   */
+  public static List<ConfigOption<?>> allOptions() {
+    Field[] declaredFields = CatalogOptions.class.getDeclaredFields();
+    List<ConfigOption<?>> options = new ArrayList<>();
+    for (Field field : declaredFields) {
+      if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
+          && field.getType().equals(ConfigOption.class)) {
+        try {
+          options.add((ConfigOption<?>) field.get(ConfigOption.class));
+        } catch (IllegalAccessException e) {
+          throw new HoodieException("Error while fetching static config option", e);
+        }
+      }
+    }
+    return options;
+  }
 
   /**
    * Returns all the common table options that can be shared.

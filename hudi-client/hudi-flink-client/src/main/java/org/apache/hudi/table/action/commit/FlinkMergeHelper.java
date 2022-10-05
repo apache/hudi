@@ -42,9 +42,11 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 
-import scala.collection.immutable.List;
-
+/**
+ * Flink merge helper.
+ */
 public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>> {
 

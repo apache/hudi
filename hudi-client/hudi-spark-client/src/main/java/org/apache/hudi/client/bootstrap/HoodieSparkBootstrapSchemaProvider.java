@@ -21,11 +21,11 @@ package org.apache.hudi.client.bootstrap;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.AvroOrcUtils;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -35,8 +35,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
 import org.apache.orc.TypeDescription;
-import org.apache.parquet.schema.MessageType;
-import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaConverter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.StructType;
 
@@ -71,17 +69,22 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
   }
 
   private static Schema getBootstrapSourceSchemaParquet(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
-    MessageType parquetSchema = new ParquetUtils().readSchema(context.getHadoopConf().get(), filePath);
-
-    ParquetToSparkSchemaConverter converter = new ParquetToSparkSchemaConverter(
-        Boolean.parseBoolean(SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString()),
-        Boolean.parseBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString()));
-    StructType sparkSchema = converter.convert(parquetSchema);
+    // NOTE: The type inference of partition column in the parquet table is turned off explicitly,
+    // to be consistent with the existing bootstrap behavior, where the partition column is String
+    // typed in Hudi table.
+    // TODO(HUDI-4932): add a config to allow type inference of partition column in bootstrap and
+    //  support other types of partition column as well
+    ((HoodieSparkEngineContext) context).getSqlContext()
+        .setConf(SQLConf.PARTITION_COLUMN_TYPE_INFERENCE(), false);
+    StructType parquetSchema = ((HoodieSparkEngineContext) context).getSqlContext().read()
+        .option("basePath", writeConfig.getBootstrapSourceBasePath())
+        .parquet(filePath.toString())
+        .schema();
     String tableName = HoodieAvroUtils.sanitizeName(writeConfig.getTableName());
     String structName = tableName + "_record";
     String recordNamespace = "hoodie." + tableName;
 
-    return AvroConversionUtils.convertStructTypeToAvroSchema(sparkSchema, structName, recordNamespace);
+    return AvroConversionUtils.convertStructTypeToAvroSchema(parquetSchema, structName, recordNamespace);
   }
 
   private static Schema getBootstrapSourceSchemaOrc(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {

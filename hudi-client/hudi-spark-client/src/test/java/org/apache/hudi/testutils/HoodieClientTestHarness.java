@@ -28,7 +28,7 @@ import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -132,7 +132,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient ExecutorService executorService;
   protected transient HoodieTableMetaClient metaClient;
   protected transient SparkRDDWriteClient writeClient;
-  protected transient HoodieReadClient readClient;
+  protected transient SparkRDDReadClient readClient;
   protected transient HoodieTableFileSystemView tableView;
   protected transient TimelineService timelineService;
 
@@ -199,7 +199,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
     if (sparkSessionExtensionsInjector.isPresent()) {
       // In case we need to inject extensions into Spark Session, we have
-      // to stop any session that might still be active and since Spark will try
+      // to stop any session that might still be active, since Spark will try
       // to re-use it
       HoodieConversionUtils.toJavaOption(SparkSession.getActiveSession())
           .ifPresent(SparkSession::stop);
@@ -341,8 +341,12 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   protected Properties getPropertiesForKeyGen() {
+    return getPropertiesForKeyGen(false);
+  }
+
+  protected Properties getPropertiesForKeyGen(boolean populateMetaFields) {
     Properties properties = new Properties();
-    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
     properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
     properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
@@ -433,7 +437,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected void cleanupDFS() throws IOException {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
-      dfsCluster.shutdown();
+      dfsCluster.shutdown(true, true);
       hdfsTestService = null;
       dfsCluster = null;
       dfs = null;
@@ -477,8 +481,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     }
   }
 
-  public HoodieReadClient getHoodieReadClient(String basePath) {
-    readClient = new HoodieReadClient(context, basePath, SQLContext.getOrCreate(jsc.sc()));
+  public SparkRDDReadClient getHoodieReadClient(String basePath) {
+    readClient = new SparkRDDReadClient(context, basePath, SQLContext.getOrCreate(jsc.sc()));
     return readClient;
   }
 
@@ -728,8 +732,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   public HoodieInstant createCleanMetadata(String instantTime, boolean inflightOnly, boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
-    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(),
-            CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
+    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", "",
+            new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
     if (inflightOnly) {
       HoodieTestTable.of(metaClient).addInflightClean(instantTime, cleanerPlan);
     } else {
@@ -739,7 +743,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
               Collections.emptyList(),
               Collections.emptyList(),
               Collections.emptyList(),
-              instantTime);
+              instantTime,
+              "");
       HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
       HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata, isEmptyForAll, isEmptyCompleted);
     }

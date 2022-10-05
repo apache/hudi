@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
-import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, DataSourceReadOptions, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -53,7 +53,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
     table match {
-      case SubqueryAlias(name, _) => sparkAdapter.toTableIdentifier(name)
+      case SubqueryAlias(name, _) => sparkAdapter.getCatalystPlanUtils.toTableIdentifier(name)
       case _ => throw new IllegalArgumentException(s"Illegal table: $table")
     }
   }
@@ -201,7 +201,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val conf = sparkSession.sessionState.newHadoopConf()
     uri.map(makePathQualified(_, conf))
       .map(removePlaceHolder)
-      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${identifier}"))
+      .getOrElse(throw new IllegalArgumentException(s"Missing location for $identifier"))
   }
 
   private def removePlaceHolder(path: String): String = {
@@ -250,8 +250,16 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
                    (baseConfig: Map[String, String] = Map.empty): Map[String, String] = {
     baseConfig ++ DFSPropertiesConfiguration.getGlobalProps.asScala ++ // Table options has the highest priority
       (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mappingSqlOptionToHoodieParam(options))
-        .filterKeys(_.startsWith("hoodie."))
+        .filterKeys(isHoodieConfigKey)
   }
+
+  /**
+   * Check if Sql options are Hoodie Config keys.
+   *
+   * TODO: standardize the key prefix so that we don't need this helper (HUDI-4935)
+   */
+  def isHoodieConfigKey(key: String): Boolean =
+    key.startsWith("hoodie.") || key == DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key
 
   /**
    * Checks whether Spark is using Hive as Session's Catalog
@@ -317,8 +325,8 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
     child match {
       case Literal(nul, NullType) => Literal(nul, dataType)
-      case _ => if (child.dataType != dataType)
-        Cast(child, dataType, Option(conf.sessionLocalTimeZone)) else child
+      case expr if child.dataType != dataType => Cast(expr, dataType, Option(conf.sessionLocalTimeZone))
+      case _ => child
     }
   }
 
