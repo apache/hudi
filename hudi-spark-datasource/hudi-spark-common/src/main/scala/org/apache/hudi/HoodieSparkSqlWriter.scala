@@ -215,11 +215,23 @@ object HoodieSparkSqlWriter {
         case None => sourceSchema
         // Otherwise, we need to make sure we reconcile incoming and latest table schemas
         case Some(latestTableSchema) =>
+          // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
+          // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
+          // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
+          // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
+          val shouldCanonicalizeSchema = parameters.getOrDefault(DataSourceWriteOptions.CANONICALIZE_SCHEMA.key,
+            DataSourceWriteOptions.CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
+          val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
+            AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
+          } else {
+            sourceSchema
+          }
+
           if (reconcileSchema) {
             internalSchemaOpt match {
               case Some(internalSchema) =>
                 // Apply schema evolution, by auto-merging write schema and read schema
-                val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(sourceSchema, internalSchema)
+                val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema)
                 AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getName)
 
               case None =>
@@ -235,31 +247,20 @@ object HoodieSparkSqlWriter {
                 //       w/ the table's one and allow schemas to diverge. This is required in cases where
                 //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
                 //       only incoming dataset's projection has to match the table's schema, and not the whole one
-                if (!shouldValidateSchemasCompatibility || TableSchemaResolver.isSchemaCompatible(sourceSchema, latestTableSchema)) {
+                if (!shouldValidateSchemasCompatibility || TableSchemaResolver.isSchemaCompatible(canonicalizedSourceSchema, latestTableSchema)) {
                   latestTableSchema
                 } else {
                   log.error(
                     s"""
                        |Failed to reconcile incoming batch schema with the table's one.
                        |Incoming schema ${sourceSchema.toString(true)}
+                       |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
                        |Table's schema ${latestTableSchema.toString(true)}
                        |""".stripMargin)
                   throw new SchemaCompatibilityException("Failed to reconcile incoming schema with the table's one")
                 }
             }
           } else {
-            val shouldCanonicalizeSchema = parameters.getOrDefault(DataSourceWriteOptions.CANONICALIZE_SCHEMA.key,
-              DataSourceWriteOptions.CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
-            // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
-            // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
-            // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
-            // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
-            val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-              AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
-            } else {
-              sourceSchema
-            }
-
             // In case reconciliation is disabled, we have to validate that the source's schema
             // is compatible w/ the table's latest schema, such that we're able to read existing table's
             // records using [[sourceSchema]].
@@ -274,7 +275,8 @@ object HoodieSparkSqlWriter {
               log.error(
                 s"""
                    |Incoming batch schema is not compatible with the table's one.
-                   |Incoming schema ${canonicalizedSourceSchema.toString(true)}
+                   |Incoming schema ${sourceSchema.toString(true)}
+                   |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
                    |Table's schema ${latestTableSchema.toString(true)}
                    |""".stripMargin)
               throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
@@ -344,7 +346,7 @@ object HoodieSparkSqlWriter {
               java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).toList, jsc,
                 hoodieConfig, basePath.toString): _*)
             } else {
-              val genericRecords = HoodieSparkUtils.createRdd(df, structName, namespace, reconcileSchema)
+              val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace, reconcileSchema)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
 
