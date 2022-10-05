@@ -120,7 +120,7 @@ curl https://dist.apache.org/repos/dist/release/hudi/KEYS > ../KEYS
 echo "Checking Signature"
 (bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${ARTIFACT_SUFFIX}.src.tgz.asc hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [ERROR]\n\t\t Run with --verbose to get details\n" && exit 1)
 
-# Untar
+# Untar 
 (bash -c "tar -zxf hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT") || (echo -e "\t\t Unable to untar hudi-${ARTIFACT_SUFFIX}.src.tgz - [ERROR]\n\t\t Please run with --verbose to get details\n" && exit 1)
 cd hudi-${ARTIFACT_SUFFIX}
 
