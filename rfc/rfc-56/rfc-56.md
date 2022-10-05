@@ -194,7 +194,7 @@ detection logic based on the instant time is consistent with the existing pre-co
 
 ##### BloomAsyncTimelineMarkerEarlyConflictDetectionStrategy
 
-Same as `AsyncTimelineMarkerEarlyConflictDetectionStrategy`. The difference is that in this `BloomDirectMarkerBasedEarlyConflictDetectionStrategy`:
+Same as `AsyncTimelineMarkerEarlyConflictDetectionStrategy`. The difference is that in this `BloomAsyncTimelineMarkerEarlyConflictDetectionStrategy`:
 1. Marker handlers write a bloom files which are related to corresponding marker files.
 2. Conflict detection read these bloom files firstly to pick out potentially conflicting marker files as quick as possible.
 
