@@ -197,8 +197,9 @@ object HoodieSparkSqlWriter {
       val sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, namespace)
       val latestTableSchemaOpt = getLatestTableSchema(spark, basePath, tableIdentifier, sparkContext.hadoopConfiguration)
 
-      val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
       val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext).orElse {
+        val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+          DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
         if (reconcileSchema && schemaEvolutionEnabled) {
