@@ -301,7 +301,7 @@
 
     <dependency>
       <groupId>com.lmax</groupId>
-        <artifactId>disruptor</artifactId>
+      <artifactId>disruptor</artifactId>
     </dependency>
   </dependencies>
 </project>
