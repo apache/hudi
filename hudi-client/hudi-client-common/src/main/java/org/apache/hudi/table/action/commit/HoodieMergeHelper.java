@@ -55,7 +55,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.avro.AvroSchemaUtils.isProjectionOf;
 import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
 
-// TODO unify w/ Flink, Java impls
 public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper {
 
   private HoodieMergeHelper() {
@@ -88,9 +87,10 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
         || !isProjection
         || baseFile.getBootstrapBaseFile().isPresent();
 
-    // TODO elaborate
+    // In case Advanced Schema Evolution is enabled we might need to rewrite currently
+    // persisted records to adhere to an evolved schema
     Option<Function<GenericRecord, GenericRecord>> schemaEvolutionTransformerOpt =
-        tryEvolveSchema(writerSchema, baseFile, writeConfig, table.getMetaClient());
+        composeSchemaEvolutionTransformer(writerSchema, baseFile, writeConfig, table.getMetaClient());
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
 
@@ -131,10 +131,10 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
     }
   }
 
-  private Option<Function<GenericRecord, GenericRecord>> tryEvolveSchema(Schema writerSchema,
-                                                                         HoodieBaseFile baseFile,
-                                                                         HoodieWriteConfig writeConfig,
-                                                                         HoodieTableMetaClient metaClient) {
+  private Option<Function<GenericRecord, GenericRecord>> composeSchemaEvolutionTransformer(Schema writerSchema,
+                                                                                           HoodieBaseFile baseFile,
+                                                                                           HoodieWriteConfig writeConfig,
+                                                                                           HoodieTableMetaClient metaClient) {
     Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(writeConfig.getInternalSchema());
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
