@@ -24,6 +24,7 @@
 ## Approvers
 
 - @yihua
+- @prasannarajaperumal
 
 ## Status
 
@@ -155,6 +156,11 @@ of the data.
 
 As we can see, all these direct based early conflict detection strategy need extra FS calls.
 
+##### BloomDirectMarkerBasedEarlyConflictDetectionStrategy
+Same as `SimpleDirectMarkerBasedEarlyConflictDetectionStrategy` which has no transaction. The difference is that in this `BloomDirectMarkerBasedEarlyConflictDetectionStrategy`:
+1. Marker handlers write a bloom files which are related to corresponding marker files.
+2. Conflict detection read these bloom files firstly to pick out potentially conflicting marker files as quick as possible.
+
 #### TimelineServerBasedWriteMarkers related strategy
 
 ##### AsyncTimelineMarkerEarlyConflictDetectionStrategy
@@ -195,8 +201,9 @@ Let's take Figure 4 as an example
 
 ![](figure4.png)
 
-Writer1 starts writing data at time t1 and finishes at time t3. Writer2 starts writing at time t2, and updates a file
-already updated by writer1 at time t4. Since all markers of writer1 have been deleted at time t4, such conflict cannot
+Writer1 starts writing data at time t1 and finishes at time t3. Writer2 starts writing at time t2, and
+at time t4 - writer2 tries to create marker for a file fileA which already updated by writer1 to fileAa(updated).
+Since all markers of writer1 have been deleted at time t4, such conflict cannot
 be found in the stage of marker conflict detection until starting to commit. In order to avoid such delay of early
 conflict detection, it is necessary to add the steps of checking commit conflict during the detection.
 
@@ -225,6 +232,7 @@ This RFC adds a feature flag and three new configs to control the behavior of ea
 2. `hoodie.write.lock.early.conflict.async.checker.batch.interval` default 30000L. Used for timeline based marker AsyncTimelineMarkerEarlyConflictDetectionStrategy. The time to delay first async marker conflict checking.
 3. `hoodie.write.lock.early.conflict.async.checker.period` default 30000L. Used for timeline based marker AsyncTimelineMarkerEarlyConflictDetectionStrategy. The period between each marker conflict checking.
 4. `hoodie.write.lock.early.conflict.detection.strategy` default AsyncTimelineMarkerEarlyConflictDetectionStrategy. Early conflict detection class name, this should be subclass of oorg.apache.hudi.common.model.HoodieEarlyConflictDetectionStrategy
+5. `hoodie.write.lock.early.conflict.check.commit` default false. Set true if users are sensitive to conflict detection. When set ture hoodie is able to check commit conflict during early conflict detection.
 
 
 ## Rollout/Adoption Plan
