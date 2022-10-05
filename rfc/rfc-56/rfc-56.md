@@ -158,7 +158,7 @@ As we can see, all these direct based early conflict detection strategy need ext
 
 ##### BloomDirectMarkerBasedEarlyConflictDetectionStrategy
 Same as `SimpleDirectMarkerBasedEarlyConflictDetectionStrategy` which has no transaction. The difference is that in this `BloomDirectMarkerBasedEarlyConflictDetectionStrategy`:
-1. Marker handlers write a bloom files which are related to corresponding marker files.
+1. Marker handlers write bloom files related to corresponding markers.
 2. Conflict detection read these bloom files firstly to pick out potentially conflicting marker files as quick as possible.
 
 #### TimelineServerBasedWriteMarkers related strategy
@@ -195,7 +195,7 @@ detection logic based on the instant time is consistent with the existing pre-co
 ##### BloomAsyncTimelineMarkerEarlyConflictDetectionStrategy
 
 Same as `AsyncTimelineMarkerEarlyConflictDetectionStrategy`. The difference is that in this `BloomAsyncTimelineMarkerEarlyConflictDetectionStrategy`:
-1. Marker handlers write a bloom files which are related to corresponding marker files.
+1. Marker handlers write bloom files related to corresponding markers.
 2. Conflict detection read these bloom files firstly to pick out potentially conflicting marker files as quick as possible.
 
 ### [2] Check Commit Conflict: Why we still need to check commit conflict here?
