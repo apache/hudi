@@ -490,11 +490,6 @@ object HoodieSparkSqlWriter {
   }
 
   def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema]): Map[String, String] = {
-    val schemaEvolutionEnabled = parameters.getOrElse(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key,
-      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue.toString).toBoolean
-    // We make sure that in case Schema Evolution is enabled, [[InternalSchema]] has to be present
-    checkState(!schemaEvolutionEnabled || internalSchemaOpt.isDefined)
-
     val schemaEvolutionEnable = if (internalSchemaOpt.isDefined) "true" else "false"
     parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key -> SerDeHelper.toJson(internalSchemaOpt.orNull),
       HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> schemaEvolutionEnable)
