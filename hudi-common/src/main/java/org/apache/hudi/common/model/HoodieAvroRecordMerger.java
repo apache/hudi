@@ -39,13 +39,14 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
   }
 
   @Override
-  public Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
+  public Option<HoodieRecord> merge(HoodieRecord older, Schema oldSchema,
+      HoodieRecord newer, Schema newSchema, Properties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.AVRO);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.AVRO);
     if (older instanceof HoodieLegacyAvroRecord && newer instanceof HoodieLegacyAvroRecord) {
       return Option.of(preCombine(older, newer));
     } else if (older instanceof HoodieAvroIndexedRecord && newer instanceof HoodieLegacyAvroRecord) {
-      return combineAndGetUpdateValue(older, newer, schema, props);
+      return combineAndGetUpdateValue(older, newer, newSchema, props);
     } else {
       throw new UnsupportedOperationException();
     }

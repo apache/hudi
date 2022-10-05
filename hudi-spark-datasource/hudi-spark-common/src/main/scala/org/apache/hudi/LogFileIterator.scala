@@ -21,7 +21,7 @@ package org.apache.hudi
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, generateUnsafeProjection}
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
-import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieRecord, HoodieRecordPayload}
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.commmon.model.HoodieSparkRecord
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
@@ -32,22 +32,20 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
-import org.apache.hudi.common.util.{HoodieRecordUtils, SerializationUtils}
+import org.apache.hudi.common.util.HoodieRecordUtils
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
-import org.apache.avro.{Schema, SchemaNormalization}
-import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
+import org.apache.avro.Schema
+import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.hudi.{HoodieSparkRecordSerializer, SparkStructTypeSerializer}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.types.StructType
 import java.io.Closeable
-import java.nio.charset.StandardCharsets
 import java.util.Properties
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
 import scala.annotation.tailrec
@@ -246,14 +244,15 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
     }
     recordMerger.getRecordType match {
       case HoodieRecordType.SPARK =>
-        toScalaOption(recordMerger.merge(curRecord, newRecord, logFileReaderAvroSchema, payloadProps))
+        toScalaOption(recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps))
           .map(r => {
-            val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(r.asInstanceOf[HoodieSparkRecord].getStructType, requiredStructTypeSchema)
+            val schema = if (r == curRecord) baseFileReader.schema else logFileReaderStructType
+            val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
             projection.apply(r.getData.asInstanceOf[InternalRow])
           })
       case _ =>
-        toScalaOption(recordMerger.merge(curRecord, newRecord, logFileReaderAvroSchema, payloadProps))
-        .map(r => deserialize(projectAvroUnsafe(r.toIndexedRecord(logFileReaderAvroSchema, new Properties()).get().getData.asInstanceOf[GenericRecord], requiredAvroSchema, reusableRecordBuilder)))
+        toScalaOption(recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps))
+        .map(r => deserialize(projectAvroUnsafe(r.toIndexedRecord(logFileReaderAvroSchema, new Properties()).get().getData.asInstanceOf[GenericRecord], avroSchema, reusableRecordBuilder)))
     }
   }
 }
@@ -326,10 +325,6 @@ object LogFileIterator {
       val recordMerger = HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.mergerImpls.asJava, tableState.mergerStrategy)
       logRecordScannerBuilder.withRecordMerger(recordMerger)
 
-      if (recordMerger.getRecordType == HoodieRecordType.SPARK) {
-        HoodieInternalRowUtils.addCompressedSchema(HoodieInternalRowUtils.getCachedSchema(logSchema))
-      }
-
       logRecordScannerBuilder.build()
     }
   }
@@ -347,11 +342,5 @@ object LogFileIterator {
     split.dataFile.map(baseFile => new Path(baseFile.filePath))
       .getOrElse(split.logFiles.head.getPath)
       .getParent
-  }
-
-  private def registerStructTypeSerializerIfNeed(schemas: List[StructType]): Unit = {
-    schemas.foreach(HoodieInternalRowUtils.addCompressedSchema)
-    val serializer = new HoodieSparkRecordSerializer
-    SerializationUtils.setOverallRegister(classOf[HoodieSparkRecord].getName, serializer)
   }
 }

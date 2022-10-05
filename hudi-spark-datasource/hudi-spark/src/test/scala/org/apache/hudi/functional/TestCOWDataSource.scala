@@ -96,7 +96,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
     cleanupTestDataGenerator()
     cleanupFileSystem()
     FileSystem.closeAll()
-    HoodieInternalRowUtils.clearBroadcastFingerPint()
     System.gc()
   }
 

@@ -29,9 +29,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 
+import java.util.Properties;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
@@ -59,20 +62,28 @@ public class FlinkMergeAndReplaceHandleWithChangeLog<T, I, K, O>
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, HoodieRecord oldRecord, Option<HoodieRecord> combineRecordOp)
+  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOp, Schema combineRecordSchema)
       throws IOException {
-    final boolean result = super.writeUpdateRecord(hoodieRecord, oldRecord, combineRecordOp);
+    final boolean result = super.writeUpdateRecord(hoodieRecord, oldRecord, combineRecordOp, combineRecordSchema);
     if (result) {
       boolean isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
-      cdcLogger.put(hoodieRecord, (GenericRecord) oldRecord.getData(), isDelete ? Option.empty() : combineRecordOp.map(rec -> ((HoodieAvroIndexedRecord) rec).getData()));
+      Option<IndexedRecord> combineRecord;
+      if (combineRecordOp.isPresent()) {
+        combineRecord = combineRecordOp.get().toIndexedRecord(combineRecordSchema, new Properties()).map(HoodieAvroIndexedRecord::getData);
+      } else {
+        combineRecord = Option.empty();
+      }
+      cdcLogger.put(hoodieRecord, (GenericRecord) oldRecord.getData(), isDelete ? Option.empty() : combineRecord);
+      hoodieRecord.deflate();
     }
     return result;
   }
 
-  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord) throws IOException {
-    super.writeInsertRecord(hoodieRecord);
+  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Schema schema) throws IOException {
+    super.writeInsertRecord(hoodieRecord, schema);
     if (!HoodieOperation.isDelete(hoodieRecord.getOperation())) {
-      cdcLogger.put(hoodieRecord, null, Option.of((GenericRecord) hoodieRecord.getData()));
+      cdcLogger.put(hoodieRecord, null, hoodieRecord.toIndexedRecord(schema, new Properties()).map(HoodieAvroIndexedRecord::getData));
+      hoodieRecord.deflate();
     }
   }
 

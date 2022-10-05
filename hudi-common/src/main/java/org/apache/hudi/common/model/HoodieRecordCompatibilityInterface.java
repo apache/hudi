@@ -31,7 +31,7 @@ public interface HoodieRecordCompatibilityInterface {
    * This method used to extract HoodieKey not through keyGenerator.
    */
   HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
-      Schema schema,
+      Schema recordSchema,
       Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
@@ -41,7 +41,7 @@ public interface HoodieRecordCompatibilityInterface {
   /**
    * This method used to extract HoodieKey through keyGenerator. This method used in ClusteringExecutionStrategy.
    */
-  HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen);
+  HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema, Properties props, Option<BaseKeyGenerator> keyGen);
 
   /**
    * This method used to overwrite record key field.
@@ -49,5 +49,5 @@ public interface HoodieRecordCompatibilityInterface {
   HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyName,
       String keyValue) throws IOException;
 
-  Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema schema, Properties props) throws IOException;
+  Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException;
 }

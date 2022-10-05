@@ -21,15 +21,12 @@ package org.apache.hudi
 import java.nio.charset.StandardCharsets
 import java.util.HashMap
 import java.util.concurrent.ConcurrentHashMap
-import com.google.common.annotations.VisibleForTesting
-import org.apache.avro.{Schema, SchemaNormalization}
+import org.apache.avro.Schema
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.exception.HoodieException
-import org.apache.spark.SparkContext
-import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath
@@ -47,20 +44,7 @@ object HoodieInternalRowUtils {
       override def get(): HashMap[(StructType, StructType), UnsafeProjection] = new HashMap[(StructType, StructType), UnsafeProjection]
     })
   val schemaMap = new ConcurrentHashMap[Schema, StructType]
-  val schemaFingerPrintMap = new ConcurrentHashMap[Long, StructType]
-  var schemaFingerPrintMapBC: Broadcast[ConcurrentHashMap[Long, StructType]] = _
-  val fingerPrintSchemaMap = new ConcurrentHashMap[StructType, Long]
-  var fingerPrintSchemaMapBC: Broadcast[ConcurrentHashMap[StructType, Long]] = _
   val orderPosListMap = new ConcurrentHashMap[(StructType, String), NestedFieldPath]
-
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#stitchRecords(org.apache.avro.generic.GenericRecord, org.apache.avro.generic.GenericRecord, org.apache.avro.Schema)
-   */
-  def stitchRecords(left: InternalRow, leftSchema: StructType, right: InternalRow, rightSchema: StructType, stitchedSchema: StructType): InternalRow = {
-    val mergeSchema = StructType(leftSchema.fields ++ rightSchema.fields)
-    val row = new JoinedRow(left, right)
-    getCachedUnsafeProjection(mergeSchema, stitchedSchema)(row).copy()
-  }
 
   /**
    * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecord(org.apache.avro.generic.GenericRecord, org.apache.avro.Schema)
@@ -238,51 +222,6 @@ object HoodieInternalRowUtils {
       schemaMap.put(schema, structType)
     }
     schemaMap.get(schema)
-  }
-
-  def getCachedSchemaFromFingerPrint(fingerPrint: Long): StructType = {
-    if (schemaFingerPrintMap.containsKey(fingerPrint)) {
-      return schemaFingerPrintMap.get(fingerPrint)
-    }
-    if (schemaFingerPrintMapBC != null && schemaFingerPrintMapBC.value.containsKey(fingerPrint)) {
-      return schemaFingerPrintMapBC.value.get(fingerPrint)
-    }
-    throw new IllegalArgumentException("Not exist " + fingerPrint)
-  }
-
-  def getCachedFingerPrintFromSchema(schema: StructType): Long = {
-    if (fingerPrintSchemaMap.containsKey(schema)) {
-      return fingerPrintSchemaMap.get(schema)
-    }
-    if (fingerPrintSchemaMapBC != null && fingerPrintSchemaMapBC.value.containsKey(schema)) {
-      return fingerPrintSchemaMapBC.value.get(schema)
-    }
-    throw new IllegalArgumentException("Not exist " + schema)
-  }
-
-  def addCompressedSchema(schema: StructType): Unit ={
-    if (!fingerPrintSchemaMap.containsKey(schema)) {
-      val fingerPrint = SchemaNormalization.fingerprint64(schema.json.getBytes(StandardCharsets.UTF_8))
-      schemaFingerPrintMap.put(fingerPrint, schema)
-      fingerPrintSchemaMap.put(schema, fingerPrint)
-    }
-  }
-
-  def broadcastCompressedSchema(schemas: List[StructType], sc: SparkContext): Unit = {
-    schemas.foreach(addCompressedSchema)
-    fingerPrintSchemaMapBC = sc.broadcast(fingerPrintSchemaMap)
-    schemaFingerPrintMapBC = sc.broadcast(schemaFingerPrintMap)
-  }
-
-  def containsCompressedSchema(schema: StructType): Boolean = {
-    fingerPrintSchemaMap.containsKey(schema) || (fingerPrintSchemaMapBC != null
-      && fingerPrintSchemaMapBC.value.containsKey(schema))
-  }
-
-  @VisibleForTesting
-  def clearBroadcastFingerPint(): Unit = {
-    fingerPrintSchemaMapBC = null
-    schemaFingerPrintMapBC = null
   }
 
   def projectUnsafe(row: InternalRow, structType: StructType): InternalRow = {

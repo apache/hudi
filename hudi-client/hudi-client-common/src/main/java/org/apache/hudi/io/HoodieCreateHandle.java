@@ -187,11 +187,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     while (keyIterator.hasNext()) {
       final String key = keyIterator.next();
       HoodieRecord<T> record = recordMap.get(key);
-      if (useWriterSchema) {
-        write(record, tableSchemaWithMetaFields, config.getProps());
-      } else {
-        write(record, useWriterSchema ? tableSchemaWithMetaFields : tableSchema, config.getProps());
-      }
+      write(record, useWriterSchema ? tableSchemaWithMetaFields : tableSchema, config.getProps());
     }
   }
 

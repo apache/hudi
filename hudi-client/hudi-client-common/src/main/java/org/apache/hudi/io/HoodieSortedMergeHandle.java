@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -72,7 +73,8 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    String key = oldRecord.getRecordKey(keyGeneratorOpt);
+    Schema schema = useWriterSchemaForCompaction || withMetaFields ? tableSchemaWithMetaFields : tableSchema;
+    String key = oldRecord.getRecordKey(schema, keyGeneratorOpt);
 
     // To maintain overall sorted order across updates and inserts, write any new inserts whose keys are less than
     // the oldRecord's key.
@@ -89,11 +91,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
         throw new HoodieUpsertException("Insert/Update not in sorted order");
       }
       try {
-        if (useWriterSchemaForCompaction) {
-          writeRecord(hoodieRecord, Option.of(hoodieRecord), tableSchemaWithMetaFields, config.getProps());
-        } else {
-          writeRecord(hoodieRecord, Option.of(hoodieRecord), tableSchema, config.getProps());
-        }
+        writeRecord(hoodieRecord, Option.of(hoodieRecord), schema, config.getProps());
         insertRecordsWritten++;
         writtenRecordKeys.add(keyToPreWrite);
       } catch (IOException e) {
@@ -112,7 +110,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
         String key = newRecordKeysSorted.poll();
         HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
-          if (useWriterSchemaForCompaction) {
+          if (useWriterSchemaForCompaction || withMetaFields) {
             writeRecord(hoodieRecord, Option.of(hoodieRecord), tableSchemaWithMetaFields, config.getProps());
           } else {
             writeRecord(hoodieRecord, Option.of(hoodieRecord), tableSchema, config.getProps());

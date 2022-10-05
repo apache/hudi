@@ -59,11 +59,6 @@ public class HoodieLegacyAvroRecord<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public HoodieRecord<T> newInstance(T data) {
-    return new HoodieLegacyAvroRecord<>(key, data, operation);
-  }
-
-  @Override
   public HoodieRecord<T> newInstance(HoodieKey key, HoodieOperation op) {
     return new HoodieLegacyAvroRecord<>(key, data, op);
   }
@@ -82,17 +77,18 @@ public class HoodieLegacyAvroRecord<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Properties props) {
+  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     return this.getData().getOrderingValue();
   }
 
   @Override
-  public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public String getRecordKey(Schema recordSchema,
+      Option<BaseKeyGenerator> keyGeneratorOpt) {
     return getRecordKey();
   }
 
   @Override
-  public String getRecordKey(String keyFieldName) {
+  public String getRecordKey(Schema recordSchema, String keyFieldName) {
     return getRecordKey();
   }
 
@@ -107,7 +103,8 @@ public class HoodieLegacyAvroRecord<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) throws IOException {
+  public HoodieRecord joinWith(HoodieRecord other,
+      Schema targetSchema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
@@ -149,13 +146,13 @@ public class HoodieLegacyAvroRecord<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public boolean isDelete(Schema schema, Properties props) throws IOException {
-    return !getData().getInsertValue(schema, props).isPresent();
+  public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+    return !getData().getInsertValue(recordSchema, props).isPresent();
   }
 
   @Override
-  public boolean shouldIgnore(Schema schema, Properties props) throws IOException {
-    Option<IndexedRecord> insertRecord = getData().getInsertValue(schema, props);
+  public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
+    Option<IndexedRecord> insertRecord = getData().getInsertValue(recordSchema, props);
     // just skip the ignored record
     if (insertRecord.isPresent() && insertRecord.get().equals(SENTINEL)) {
       return true;
@@ -166,19 +163,20 @@ public class HoodieLegacyAvroRecord<T extends HoodieRecordPayload> extends Hoodi
 
   @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
-      Schema schema, Properties props,
+      Schema recordSchema, Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
       Boolean populateMetaFields) throws IOException {
-    IndexedRecord indexedRecord = (IndexedRecord) data.getInsertValue(schema, props).get();
+    IndexedRecord indexedRecord = (IndexedRecord) data.getInsertValue(recordSchema, props).get();
     String payloadClass = ConfigUtils.getPayloadClass(props);
     String preCombineField = ConfigUtils.getOrderingField(props);
     return HoodieAvroUtils.createHoodieRecordFromAvro(indexedRecord, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields);
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen) {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema,
+      Properties props, Option<BaseKeyGenerator> keyGen) {
     throw new UnsupportedOperationException();
   }
 
@@ -187,8 +185,8 @@ public class HoodieLegacyAvroRecord<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema schema, Properties props) throws IOException {
-    Option<IndexedRecord> avroData = getData().getInsertValue(schema, props);
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
+    Option<IndexedRecord> avroData = getData().getInsertValue(recordSchema, props);
     if (avroData.isPresent()) {
       return Option.of(new HoodieAvroIndexedRecord(avroData.get()));
     } else {

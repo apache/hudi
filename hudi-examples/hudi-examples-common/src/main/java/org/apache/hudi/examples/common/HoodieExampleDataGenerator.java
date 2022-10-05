@@ -150,7 +150,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
       kp.partitionPath = partitionPath;
       existingKeys.put(currSize + i, kp);
       numExistingKeys++;
-      return new HoodieAvroRecord<>(key, generateRandomValue(key, commitTime));
+      return new HoodieLegacyAvroRecord<>(key, generateRandomValue(key, commitTime));
     });
   }
 

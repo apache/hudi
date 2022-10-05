@@ -46,35 +46,19 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
     this.orderingVal = orderingVal;
   }
 
-  public HoodieEmptyRecord(HoodieRecord<T> record, HoodieRecordType type) {
-    super(record);
-    this.type = type;
-    this.orderingVal = record.getOrderingValue(new Properties());
-  }
-
-  public HoodieEmptyRecord(HoodieRecordType type) {
-    this.type = type;
-    this.orderingVal = null;
-  }
-
   @Override
   public T getData() {
     return null;
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Properties props) {
+  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     return orderingVal;
   }
 
   @Override
   public HoodieRecord<T> newInstance() {
     return this;
-  }
-
-  @Override
-  public HoodieRecord<T> newInstance(T data) {
-    return new HoodieEmptyRecord<>(key, operation, orderingVal, type);
   }
 
   @Override
@@ -93,12 +77,13 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public String getRecordKey(Schema recordSchema,
+      Option<BaseKeyGenerator> keyGeneratorOpt) {
     return key.getRecordKey();
   }
 
   @Override
-  public String getRecordKey(String keyFieldName) {
+  public String getRecordKey(Schema recordSchema, String keyFieldName) {
     return key.getRecordKey();
   }
 
@@ -108,7 +93,8 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) throws IOException {
+  public HoodieRecord joinWith(HoodieRecord other,
+      Schema targetSchema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
@@ -135,29 +121,29 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public boolean isDelete(Schema schema, Properties props) throws IOException {
+  public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
     return true;
   }
 
   @Override
-  public boolean shouldIgnore(Schema schema, Properties props) throws IOException {
+  public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
     return false;
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(Schema schema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Boolean withOperation, Option<String> partitionNameOp,
-      Boolean populateMetaFieldsOp)
-      throws IOException {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(Schema recordSchema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt,
+      Boolean withOperation, Option<String> partitionNameOp, Boolean populateMetaFieldsOp) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen) {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema,
+      Properties props, Option<BaseKeyGenerator> keyGen) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema schema, Properties props) throws IOException {
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
     return Option.empty();
   }
 

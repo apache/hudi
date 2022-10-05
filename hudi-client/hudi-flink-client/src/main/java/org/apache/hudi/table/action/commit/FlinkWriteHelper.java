@@ -103,7 +103,7 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, List<HoodieRecord
       HoodieRecord<T> reducedRecord;
       try {
         // Precombine do not need schema and do not return null
-        reducedRecord =  recordMerger.merge(rec1, rec2, null, props).get();
+        reducedRecord =  recordMerger.merge(rec1, schema, rec2, schema, props).get();
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }

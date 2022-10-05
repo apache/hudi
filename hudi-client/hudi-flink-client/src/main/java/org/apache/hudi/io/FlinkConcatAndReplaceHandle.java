@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -56,7 +57,8 @@ public class FlinkConcatAndReplaceHandle<T, I, K, O>
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    String key = oldRecord.getRecordKey(keyGeneratorOpt);
+    Schema schema = useWriterSchemaForCompaction || withMetaFields ? tableSchemaWithMetaFields : tableSchema;
+    String key = oldRecord.getRecordKey(schema, keyGeneratorOpt);
     try {
       fileWriter.write(key, oldRecord, writeSchema);
     } catch (IOException | RuntimeException e) {
@@ -70,9 +72,10 @@ public class FlinkConcatAndReplaceHandle<T, I, K, O>
 
   @Override
   protected void writeIncomingRecords() throws IOException {
+    Schema schema = useWriterSchemaForCompaction ? tableSchemaWithMetaFields : tableSchema;
     while (recordItr.hasNext()) {
       HoodieRecord<T> record = recordItr.next();
-      writeInsertRecord(record);
+      writeInsertRecord(record, schema);
     }
   }
 }

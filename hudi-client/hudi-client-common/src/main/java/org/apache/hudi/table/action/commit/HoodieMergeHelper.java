@@ -139,6 +139,8 @@ public class HoodieMergeHelper<T> extends
         }
       }
 
+      // The readerIterator return records with MetaFields. Or externalSchemaTransformation add MetaFields to schema.
+      mergeHandle.setWithMetaFields(true);
       wrapper = new BoundedInMemoryExecutor(table.getConfig().getWriteBufferLimitBytes(), readerIterator,
           new UpdateHandler(mergeHandle), record -> {
         if (!externalSchemaTransformation) {

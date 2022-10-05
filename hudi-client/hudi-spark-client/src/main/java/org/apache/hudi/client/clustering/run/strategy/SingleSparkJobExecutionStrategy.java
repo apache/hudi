@@ -63,8 +63,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
-
 /**
  * Clustering strategy to submit single spark jobs.
  * MultipleSparkJobExecution strategy is not ideal for use cases that require large number of clustering groups
@@ -150,16 +148,12 @@ public abstract class SingleSparkJobExecutionStrategy<T>
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
       Iterable<HoodieRecord<T>> indexedRecords = () -> {
         try {
-
           HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
-          Option<BaseKeyGenerator> keyGeneratorOp;
-          if (!Boolean.parseBoolean(getWriteConfig().getProps().getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
-            keyGeneratorOp = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(getWriteConfig().getProps()));
-          } else {
-            keyGeneratorOp = Option.empty();
-          }
+          Option<BaseKeyGenerator> keyGeneratorOp =
+              writeConfig.populateMetaFields() ? Option.empty() : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
           MappingIterator mappingIterator = new MappingIterator((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
-              rec -> ((HoodieRecord) rec).wrapIntoHoodieRecordPayloadWithKeyGen(getWriteConfig().getProps(), keyGeneratorOp));
+              rec -> ((HoodieRecord) rec).wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema,
+                  getWriteConfig().getProps(), keyGeneratorOp));
           return mappingIterator;
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()

@@ -64,18 +64,6 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     sparkSession.close()
   }
 
-  test("test merge") {
-    val data1 = sparkSession.sparkContext.parallelize(Seq(Row("like", 18)))
-    val data2 = sparkSession.sparkContext.parallelize(Seq(Row("like1", 181)))
-    val row1 = sparkSession.createDataFrame(data1, schema1).queryExecution.toRdd.first()
-    val row2 = sparkSession.createDataFrame(data2, schema2).queryExecution.toRdd.first()
-    val rowMerge = HoodieInternalRowUtils.stitchRecords(row1, schema1, row2, schema2, schemaMerge)
-    assert(rowMerge.get(0, StringType).toString.equals("like"))
-    assert(rowMerge.get(1, IntegerType) == 18)
-    assert(rowMerge.get(2, StringType).toString.equals("like1"))
-    assert(rowMerge.get(3, IntegerType) == 181)
-  }
-
   test("test rewrite") {
     val data = sparkSession.sparkContext.parallelize(Seq(Row("like", 18, "like1", 181)))
     val oldRow = sparkSession.createDataFrame(data, schemaMerge).queryExecution.toRdd.first()

@@ -37,7 +37,7 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
   }
 
   @Override
-  public Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
+  public Option<HoodieRecord> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Properties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
 
@@ -49,7 +49,7 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
       // use natural order for delete record
       return Option.of(newer);
     }
-    if (older.getOrderingValue(props).compareTo(newer.getOrderingValue(props)) > 0) {
+    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
       return Option.of(older);
     } else {
       return Option.of(newer);
