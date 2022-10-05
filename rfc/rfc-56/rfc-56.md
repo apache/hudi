@@ -192,6 +192,12 @@ Secondly, the marker checker runnable only looks at the instants smaller than th
 This is to avoid two writers discovering conflicts with each other at the same time and failing together. Such conflict
 detection logic based on the instant time is consistent with the existing pre-commit conflict detection.
 
+##### BloomAsyncTimelineMarkerEarlyConflictDetectionStrategy
+
+Same as `AsyncTimelineMarkerEarlyConflictDetectionStrategy`. The difference is that in this `BloomDirectMarkerBasedEarlyConflictDetectionStrategy`:
+1. Marker handlers write a bloom files which are related to corresponding marker files.
+2. Conflict detection read these bloom files firstly to pick out potentially conflicting marker files as quick as possible.
+
 ### [2] Check Commit Conflict: Why we still need to check commit conflict here?
 
 As we know, when a writer completes writing and commits, the corresponding markers are deleted immediately. Other
