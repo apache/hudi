@@ -28,7 +28,7 @@ import java.util.Iterator;
  * 2. get record from internal message queue.
  * 3. close internal message queue.
  */
-public interface HoodieMessageQueue<I, O> extends Iterable<O>{
+public interface HoodieMessageQueue<I, O> extends Iterable<O> {
 
   /**
    * Get the size of inner message queue.
