@@ -81,6 +81,11 @@ public class StreamReadMonitoringFunction
    */
   private final long interval;
 
+  /**
+   * Flag saying whether the change log capture is enabled.
+   */
+  private final boolean cdcEnabled;
+
   private transient Object checkpointLock;
 
   private volatile boolean isRunning = true;
@@ -106,6 +111,7 @@ public class StreamReadMonitoringFunction
     this.conf = conf;
     this.path = path;
     this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
+    this.cdcEnabled = conf.getBoolean(FlinkOptions.CDC_ENABLED);
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(conf)
         .path(path)
@@ -196,7 +202,7 @@ public class StreamReadMonitoringFunction
       return;
     }
     IncrementalInputSplits.Result result =
-        incrementalInputSplits.inputSplits(metaClient, this.hadoopConf, this.issuedInstant);
+        incrementalInputSplits.inputSplits(metaClient, this.hadoopConf, this.issuedInstant, this.cdcEnabled);
     if (result.isEmpty()) {
       // no new instants, returns early
       return;

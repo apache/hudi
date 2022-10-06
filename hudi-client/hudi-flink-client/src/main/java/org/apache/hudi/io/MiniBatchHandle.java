@@ -43,12 +43,4 @@ public interface MiniBatchHandle {
    * Returns the write file path.
    */
   Path getWritePath();
-
-  /**
-   * Whether the old write file should be replaced with the same name new file
-   * using content merged with incremental new data batch.
-   */
-  default boolean shouldReplace() {
-    return true;
-  }
 }

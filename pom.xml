@@ -200,6 +200,9 @@
     <protoc.version>3.21.5</protoc.version>
     <dynamodb.lockclient.version>1.1.0</dynamodb.lockclient.version>
     <zookeeper.version>3.5.7</zookeeper.version>
+    <openjdk.jol.version>0.16</openjdk.jol.version>
+    <google.cloud.pubsub.version>1.120.0</google.cloud.pubsub.version>
+    <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
     <springboot.version>2.7.3</springboot.version>
@@ -633,6 +636,12 @@
         <groupId>org.scala-lang.modules</groupId>
         <artifactId>scala-collection-compat_${scala.binary.version}</artifactId>
         <version>${scala.collection-compat.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.openjdk.jol</groupId>
+        <artifactId>jol-core</artifactId>
+        <version>${openjdk.jol.version}</version>
       </dependency>
 
       <!-- Logging -->
@@ -2008,7 +2017,7 @@
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>
-        <avro.version>1.11.0</avro.version>
+        <avro.version>1.11.1</avro.version>
         <orc.version>1.7.4</orc.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
@@ -2117,7 +2126,7 @@
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>
-        <avro.version>1.11.0</avro.version>
+        <avro.version>1.11.1</avro.version>
         <orc.version>1.7.4</orc.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>

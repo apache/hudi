@@ -116,7 +116,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Refresh commits timeline.
-   *
+   * 
    * @param visibleActiveTimeline Visible Active Timeline
    */
   protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
@@ -713,6 +713,33 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  /**
+   * Stream all "merged" file-slices before on an instant time
+   * for a MERGE_ON_READ table with index that can index log files(which means it writes pure logs first).
+   *
+   * <p>In streaming read scenario, in order for better reading efficiency, the user can choose to skip the
+   * base files that are produced by compaction. That is to say, we allow the users to consumer only from
+   * these partitioned log files, these log files keep the record sequence just like the normal message queue.
+   *
+   * <p>NOTE: only local view is supported.
+   *
+   * @param partitionStr   Partition Path
+   * @param maxInstantTime Max Instant Time
+   */
+  public final Stream<FileSlice> getAllLogsMergedFileSliceBeforeOrOn(String partitionStr, String maxInstantTime) {
+    try {
+      readLock.lock();
+      String partition = formatPartitionKey(partitionStr);
+      ensurePartitionLoadedCorrectly(partition);
+      return fetchAllStoredFileGroups(partition)
+          .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
+          .map(fileGroup -> fetchAllLogsMergedFileSlice(fileGroup, maxInstantTime))
+          .filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   @Override
   public final Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
     try {
@@ -748,20 +775,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Stream<HoodieFileGroup> getAllFileGroups(String partitionStr) {
     return getAllFileGroupsIncludingReplaced(partitionStr).filter(fg -> !isFileGroupReplaced(fg));
-  }
-
-  @Override
-  public final Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPaths) {
-    return getAllFileGroupsIncludingReplaced(partitionPaths)
-        .map(pair -> Pair.of(pair.getLeft(), pair.getRight().stream().filter(fg -> !isFileGroupReplaced(fg)).collect(Collectors.toList())));
-  }
-
-  private Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroupsIncludingReplaced(final List<String> partitionStrList) {
-    List<Pair<String, List<HoodieFileGroup>>> fileGroupPerPartitionList = new ArrayList<>();
-    for (String partitionStr : partitionStrList) {
-      fileGroupPerPartitionList.add(Pair.of(partitionStr, getAllFileGroupsIncludingReplaced(partitionStr).collect(Collectors.toList())));
-    }
-    return fileGroupPerPartitionList.stream();
   }
 
   private Stream<HoodieFileGroup> getAllFileGroupsIncludingReplaced(final String partitionStr) {
@@ -1088,6 +1101,29 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       }
     }
     return fileSlice;
+  }
+
+  /**
+   * Returns the file slice with all the file slice log files merged.
+   *
+   * @param fileGroup File Group for which the file slice belongs to
+   * @param maxInstantTime The max instant time
+   */
+  private Option<FileSlice> fetchAllLogsMergedFileSlice(HoodieFileGroup fileGroup, String maxInstantTime) {
+    List<FileSlice> fileSlices = fileGroup.getAllFileSlicesBeforeOn(maxInstantTime).collect(Collectors.toList());
+    if (fileSlices.size() == 0) {
+      return Option.empty();
+    }
+    if (fileSlices.size() == 1) {
+      return Option.of(fileSlices.get(0));
+    }
+    final FileSlice latestSlice = fileSlices.get(0);
+    FileSlice merged = new FileSlice(latestSlice.getPartitionPath(), latestSlice.getBaseInstantTime(),
+        latestSlice.getFileId());
+
+    // add log files from the latest slice to the earliest
+    fileSlices.forEach(slice -> slice.getLogFiles().forEach(merged::addLogFile));
+    return Option.of(merged);
   }
 
   /**

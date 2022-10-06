@@ -62,7 +62,7 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
         
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
             .setConf(executionContext.getJsc().hadoopConfiguration()).build();
-        Option<HoodieInstant> latestCleanInstant = metaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.CLEAN_ACTION)).lastInstant();
+        Option<HoodieInstant> latestCleanInstant = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
         if (latestCleanInstant.isPresent()) {
           log.warn("Latest clean commit " + latestCleanInstant.get());
           HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, latestCleanInstant.get());

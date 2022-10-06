@@ -28,12 +28,14 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -45,6 +47,7 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
@@ -60,17 +63,16 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.BASE_FILE_DELE
 import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.REPLACE_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.isInRange;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
 /**
  * This class helps to extract all the information which will be used when CDC query.
  *
  * There are some steps:
- * 1. filter out the completed commit instants, and get the related [[HoodieCommitMetadata]] objects.
- * 2. initialize the [[HoodieTableFileSystemView]] by the touched data files.
+ * 1. filter out the completed commit instants, and get the related {@link HoodieCommitMetadata} objects.
+ * 2. initialize the {@link HoodieTableFileSystemView} by the touched data files.
  * 3. extract the cdc information:
- *   generate a [[CDCFileSplit]] object for each of the instant in (startInstant, endInstant)
+ *   generate a {@link HoodieCDCFileSplit} object for each of the instant in (startInstant, endInstant)
  *   and each of the file group which is touched in the range of instants.
  */
 public class HoodieCDCExtractor {
@@ -83,9 +85,7 @@ public class HoodieCDCExtractor {
 
   private final HoodieCDCSupplementalLoggingMode supplementalLoggingMode;
 
-  private final String startInstant;
-
-  private final String endInstant;
+  private final InstantRange instantRange;
 
   private Map<HoodieInstant, HoodieCommitMetadata> commits;
 
@@ -93,33 +93,27 @@ public class HoodieCDCExtractor {
 
   public HoodieCDCExtractor(
       HoodieTableMetaClient metaClient,
-      String startInstant,
-      String endInstant) {
+      InstantRange range) {
     this.metaClient = metaClient;
     this.basePath = metaClient.getBasePathV2();
     this.fs = metaClient.getFs().getFileSystem();
-    this.supplementalLoggingMode = HoodieCDCSupplementalLoggingMode.parse(
-        metaClient.getTableConfig().cdcSupplementalLoggingMode());
-    this.startInstant = startInstant;
-    this.endInstant = endInstant;
+    this.supplementalLoggingMode = metaClient.getTableConfig().cdcSupplementalLoggingMode();
+    this.instantRange = range;
     init();
   }
 
   private void init() {
     initInstantAndCommitMetadatas();
-    initFSView();
   }
 
   /**
    * At the granularity of a file group, trace the mapping between
    * each commit/instant and changes to this file group.
    */
-  public Map<HoodieFileGroupId, List<Pair<HoodieInstant, HoodieCDCFileSplit>>> extractCDCFileSplits() {
-    if (commits == null || fsView == null) {
-      throw new HoodieException("Fail to init CDCExtractor");
-    }
+  public Map<HoodieFileGroupId, List<HoodieCDCFileSplit>> extractCDCFileSplits() {
+    ValidationUtils.checkState(commits != null, "Empty commits");
 
-    Map<HoodieFileGroupId, List<Pair<HoodieInstant, HoodieCDCFileSplit>>> fgToCommitChanges = new HashMap<>();
+    Map<HoodieFileGroupId, List<HoodieCDCFileSplit>> fgToCommitChanges = new HashMap<>();
     for (HoodieInstant instant : commits.keySet()) {
       HoodieCommitMetadata commitMetadata = commits.get(instant);
 
@@ -134,7 +128,7 @@ public class HoodieCDCExtractor {
           HoodieCDCFileSplit changeFile =
               parseWriteStat(fileGroupId, instant, writeStat, commitMetadata.getOperationType());
           fgToCommitChanges.computeIfAbsent(fileGroupId, k -> new ArrayList<>());
-          fgToCommitChanges.get(fileGroupId).add(Pair.of(instant, changeFile));
+          fgToCommitChanges.get(fileGroupId).add(changeFile);
         });
       }
 
@@ -144,15 +138,15 @@ public class HoodieCDCExtractor {
         for (String partition : ptToReplacedFileId.keySet()) {
           List<String> fileIds = ptToReplacedFileId.get(partition);
           fileIds.forEach(fileId -> {
-            Option<FileSlice> latestFileSliceOpt = fsView.fetchLatestFileSlice(partition, fileId);
+            Option<FileSlice> latestFileSliceOpt = getOrCreateFsView().fetchLatestFileSlice(partition, fileId);
             if (latestFileSliceOpt.isPresent()) {
               HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partition, fileId);
-              HoodieCDCFileSplit changeFile = new HoodieCDCFileSplit(
+              HoodieCDCFileSplit changeFile = new HoodieCDCFileSplit(instant.getTimestamp(),
                   REPLACE_COMMIT, null, latestFileSliceOpt, Option.empty());
               if (!fgToCommitChanges.containsKey(fileGroupId)) {
                 fgToCommitChanges.put(fileGroupId, new ArrayList<>());
               }
-              fgToCommitChanges.get(fileGroupId).add(Pair.of(instant, changeFile));
+              fgToCommitChanges.get(fileGroupId).add(changeFile);
             }
           });
         }
@@ -162,10 +156,22 @@ public class HoodieCDCExtractor {
   }
 
   /**
+   * Returns the fs view directly or creates a new one.
+   *
+   * <p>There is no need to initialize the fs view when supplemental logging mode is: WITH_BEFORE_AFTER.
+   */
+  private HoodieTableFileSystemView getOrCreateFsView() {
+    if (this.fsView == null) {
+      this.fsView = initFSView();
+    }
+    return this.fsView;
+  }
+
+  /**
    * Parse the commit metadata between (startInstant, endInstant], and extract the touched partitions
    * and files to build the filesystem view.
    */
-  private void initFSView() {
+  private HoodieTableFileSystemView initFSView() {
     Set<String> touchedPartitions = new HashSet<>();
     for (Map.Entry<HoodieInstant, HoodieCommitMetadata> entry : commits.entrySet()) {
       HoodieCommitMetadata commitMetadata = entry.getValue();
@@ -182,7 +188,7 @@ public class HoodieCDCExtractor {
         Path partitionPath = FSUtils.getPartitionPath(basePath, touchedPartition);
         touchedFiles.addAll(Arrays.asList(fs.listStatus(partitionPath)));
       }
-      this.fsView = new HoodieTableFileSystemView(
+      return new HoodieTableFileSystemView(
           metaClient,
           metaClient.getCommitsTimeline().filterCompletedInstants(),
           touchedFiles.toArray(new FileStatus[0])
@@ -191,7 +197,6 @@ public class HoodieCDCExtractor {
       throw new HoodieException("Fail to init FileSystem View for CDC", e);
     }
   }
-
 
   /**
    * Extract the required instants from all the instants between (startInstant, endInstant].
@@ -206,12 +211,12 @@ public class HoodieCDCExtractor {
    */
   private void initInstantAndCommitMetadatas() {
     try {
-      List<String> requiredActions = Arrays.asList(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
+      Set<String> requiredActions = new HashSet<>(Arrays.asList(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION));
       HoodieActiveTimeline activeTimeLine = metaClient.getActiveTimeline();
-      Map<HoodieInstant, HoodieCommitMetadata> result = activeTimeLine.getInstants()
+      this.commits = activeTimeLine.getInstants()
           .filter(instant ->
               instant.isCompleted()
-                  && isInRange(instant.getTimestamp(), startInstant, endInstant)
+                  && instantRange.isInRange(instant.getTimestamp())
                   && requiredActions.contains(instant.getAction().toLowerCase(Locale.ROOT))
           ).map(instant -> {
             HoodieCommitMetadata commitMetadata;
@@ -228,23 +233,11 @@ public class HoodieCDCExtractor {
             }
             return Pair.of(instant, commitMetadata);
           }).filter(pair ->
-              maybeChangeData(pair.getRight().getOperationType())
+              WriteOperationType.isDataChange(pair.getRight().getOperationType())
           ).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
-      this.commits = result;
     } catch (Exception e) {
       throw new HoodieIOException("Fail to get the commit metadata for CDC");
     }
-  }
-
-  private Boolean maybeChangeData(WriteOperationType operation) {
-    return operation == WriteOperationType.INSERT
-        || operation == WriteOperationType.UPSERT
-        || operation == WriteOperationType.DELETE
-        || operation == WriteOperationType.BULK_INSERT
-        || operation == WriteOperationType.DELETE_PARTITION
-        || operation == WriteOperationType.INSERT_OVERWRITE
-        || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
-        || operation == WriteOperationType.BOOTSTRAP;
   }
 
   /**
@@ -256,8 +249,9 @@ public class HoodieCDCExtractor {
       HoodieInstant instant,
       HoodieWriteStat writeStat,
       WriteOperationType operation) {
-    Path basePath = metaClient.getBasePathV2();
-    FileSystem fs = metaClient.getFs().getFileSystem();
+    final Path basePath = metaClient.getBasePathV2();
+    final FileSystem fs = metaClient.getFs().getFileSystem();
+    final String instantTs = instant.getTimestamp();
 
     HoodieCDCFileSplit cdcFileSplit;
     if (StringUtils.isNullOrEmpty(writeStat.getCdcPath())) {
@@ -268,35 +262,35 @@ public class HoodieCDCExtractor {
         if (operation == WriteOperationType.DELETE && writeStat.getNumWrites() == 0L
             && writeStat.getNumDeletes() != 0) {
           // This is a delete operation wherein all the records in this file group are deleted
-          // and no records have been writen out a new file.
+          // and no records have been written out a new file.
           // So, we find the previous file that this operation delete from, and treat each of
           // records as a deleted one.
-          HoodieBaseFile beforeBaseFile = fsView.getBaseFileOn(
+          HoodieBaseFile beforeBaseFile = getOrCreateFsView().getBaseFileOn(
               fileGroupId.getPartitionPath(), writeStat.getPrevCommit(), fileGroupId.getFileId()
           ).orElseThrow(() ->
               new HoodieIOException("Can not get the previous version of the base file")
           );
-          FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
-          cdcFileSplit = new HoodieCDCFileSplit(BASE_FILE_DELETE, null, Option.empty(), Option.of(beforeFileSlice));
+          FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, Collections.emptyList());
+          cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_DELETE, null, Option.empty(), Option.of(beforeFileSlice));
         } else if (writeStat.getNumUpdateWrites() == 0L && writeStat.getNumDeletes() == 0
             && writeStat.getNumWrites() == writeStat.getNumInserts()) {
           // all the records in this file are new.
-          cdcFileSplit = new HoodieCDCFileSplit(BASE_FILE_INSERT, path);
+          cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_INSERT, path);
         } else {
           throw new HoodieException("There should be a cdc log file.");
         }
       } else {
         // this is a log file
         Option<FileSlice> beforeFileSliceOpt = getDependentFileSliceForLogFile(fileGroupId, instant, path);
-        cdcFileSplit = new HoodieCDCFileSplit(LOG_FILE, path, beforeFileSliceOpt, Option.empty());
+        cdcFileSplit = new HoodieCDCFileSplit(instantTs, LOG_FILE, path, beforeFileSliceOpt, Option.empty());
       }
     } else {
       // this is a cdc log
       if (supplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
-        cdcFileSplit = new HoodieCDCFileSplit(AS_IS, writeStat.getCdcPath());
+        cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcPath());
       } else {
         try {
-          HoodieBaseFile beforeBaseFile = fsView.getBaseFileOn(
+          HoodieBaseFile beforeBaseFile = getOrCreateFsView().getBaseFileOn(
               fileGroupId.getPartitionPath(), writeStat.getPrevCommit(), fileGroupId.getFileId()
           ).orElseThrow(() ->
               new HoodieIOException("Can not get the previous version of the base file")
@@ -307,7 +301,7 @@ public class HoodieCDCExtractor {
           if (supplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.OP_KEY)) {
             beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           }
-          cdcFileSplit = new HoodieCDCFileSplit(AS_IS, writeStat.getCdcPath(),
+          cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcPath(),
               Option.ofNullable(beforeFileSlice), Option.ofNullable(currentFileSlice));
         } catch (Exception e) {
           throw new HoodieException("Fail to parse HoodieWriteStat", e);

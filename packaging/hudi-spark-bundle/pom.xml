@@ -135,6 +135,7 @@
                   <include>org.apache.curator:curator-recipes</include>
                   <include>commons-codec:commons-codec</include>
                   <include>commons-io:commons-io</include>
+                  <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -219,6 +220,10 @@
                 <relocation>
                   <pattern>com.google.common.</pattern>
                   <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.openjdk.jol.</pattern>
+                  <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
                 <!-- The classes below in org.apache.hadoop.metrics2 package come from

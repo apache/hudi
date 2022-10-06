@@ -125,6 +125,19 @@
       </exclusions>
     </dependency>
 
+    <!-- Hoodie - cloud providers -->
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-aws</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-gcp</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <!-- Hoodie - Other -->
 
     <!-- NOTE: This dependency is kept around even though it's not necessary, due to the fact
@@ -435,14 +448,6 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- AWS Services -->
-    <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sqs -->
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-sqs</artifactId>
-      <version>${aws.sdk.version}</version>
-    </dependency>
-    
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>

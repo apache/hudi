@@ -212,6 +212,7 @@
                       <include>commons-io:commons-io</include>
                       <include>log4j:log4j</include>
                       <include>org.objenesis:objenesis</include>
+                      <include>org.openjdk.jol:jol-core</include>
                   </includes>
                 </artifactSet>
                 <relocations>
@@ -233,6 +234,10 @@
                     <relocation>
                         <pattern>org.apache.htrace.</pattern>
                         <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                        <pattern>org.openjdk.jol.</pattern>
+                        <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                     </relocation>
                     <!-- The classes below in org.apache.hadoop.metrics2 package come from
                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,

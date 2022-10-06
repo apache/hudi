@@ -461,14 +461,17 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieData<HoodieRecord<RawTripTestPayload>> records = HoodieJavaRDD.of(
         jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1));
     HoodieWriteConfig.Builder configBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
-            .combineInput(true, true);
+        .combineInput(true, true);
     addConfigsForPopulateMetaFields(configBuilder, populateMetaFields);
     HoodieWriteConfig writeConfig = configBuilder.build();
 
     // Global dedup should be done based on recordKey only
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(true);
-    List<HoodieRecord<RawTripTestPayload>> dedupedRecs = HoodieWriteHelper.newInstance().deduplicateRecords(records, index, 1, writeConfig.getSchema()).collectAsList();
+    int dedupParallelism = records.getNumPartitions() + 100;
+    HoodieData<HoodieRecord<RawTripTestPayload>> dedupedRecsRdd = HoodieWriteHelper.newInstance().deduplicateRecords(records, index, dedupParallelism, writeConfig.getSchema());
+    List<HoodieRecord<RawTripTestPayload>> dedupedRecs = dedupedRecsRdd.collectAsList();
+    assertEquals(records.getNumPartitions(), dedupedRecsRdd.getNumPartitions());
     assertEquals(1, dedupedRecs.size());
     assertEquals(dedupedRecs.get(0).getPartitionPath(), recordThree.getPartitionPath());
     assertNodupesWithinPartition(dedupedRecs);
@@ -476,7 +479,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // non-Global dedup should be done based on both recordKey and partitionPath
     index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(false);
-    dedupedRecs = HoodieWriteHelper.newInstance().deduplicateRecords(records, index, 1, writeConfig.getSchema()).collectAsList();
+    dedupedRecsRdd = HoodieWriteHelper.newInstance().deduplicateRecords(records, index, dedupParallelism, writeConfig.getSchema());
+    dedupedRecs = dedupedRecsRdd.collectAsList();
+    assertEquals(records.getNumPartitions(), dedupedRecsRdd.getNumPartitions());
     assertEquals(2, dedupedRecs.size());
     assertNodupesWithinPartition(dedupedRecs);
 
@@ -1160,7 +1165,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // 3. insert one record with no updating reject exception, and not merge the small file, just generate a new file group
     String commitTime3 = "003";
-    insertBatchRecords(client, commitTime3, 1, 1).getKey();
+    insertBatchRecords(client, commitTime3, 1, 1);
     List<String> fileGroupIds2 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
         .map(fileGroup -> fileGroup.getFileGroupId().getFileId()).collect(Collectors.toList());
     assertEquals(3, fileGroupIds2.size());
@@ -1173,7 +1178,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String assertMsg = String.format("Not allowed to update the clustering files in partition: %s "
         + "For pending clustering operations, we are not going to support update for now.", testPartitionPath);
     assertThrows(HoodieUpsertException.class, () -> {
-      writeClient.upsert(jsc.parallelize(insertsAndUpdates3, 1), commitTime3).collect(); }, assertMsg);
+      writeClient.upsert(jsc.parallelize(insertsAndUpdates3, 1), commitTime4).collect(); }, assertMsg);
 
     // 5. insert one record with no updating reject exception, will merge the small file
     String commitTime5 = "005";

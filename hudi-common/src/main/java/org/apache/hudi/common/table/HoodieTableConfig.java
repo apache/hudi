@@ -518,9 +518,13 @@ public class HoodieTableConfig extends HoodieConfig {
 
   /**
    * @returns the partition field prop.
+   * @deprecated please use {@link #getPartitionFields()} instead
    */
+  @Deprecated
   public String getPartitionFieldProp() {
-    return getString(PARTITION_FIELDS);
+    // NOTE: We're adding a stub returning empty string to stay compatible w/ pre-existing
+    //       behavior until this method is fully deprecated
+    return Option.ofNullable(getString(PARTITION_FIELDS)).orElse("");
   }
 
   /**
@@ -610,8 +614,8 @@ public class HoodieTableConfig extends HoodieConfig {
     return getBooleanOrDefault(CDC_ENABLED);
   }
 
-  public String cdcSupplementalLoggingMode() {
-    return getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE);
+  public HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode() {
+    return HoodieCDCSupplementalLoggingMode.parse(getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE));
   }
 
   public String getKeyGeneratorClassName() {

@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -43,6 +44,9 @@ public class HoodieMetrics {
   public String finalizeTimerName = null;
   public String compactionTimerName = null;
   public String indexTimerName = null;
+  private String conflictResolutionTimerName = null;
+  private String conflictResolutionSuccessCounterName = null;
+  private String conflictResolutionFailureCounterName = null;
   private HoodieWriteConfig config;
   private String tableName;
   private Timer rollbackTimer = null;
@@ -53,6 +57,9 @@ public class HoodieMetrics {
   private Timer compactionTimer = null;
   private Timer clusteringTimer = null;
   private Timer indexTimer = null;
+  private Timer conflictResolutionTimer = null;
+  private Counter conflictResolutionSuccessCounter = null;
+  private Counter conflictResolutionFailureCounter = null;
 
   public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
@@ -67,6 +74,9 @@ public class HoodieMetrics {
       this.finalizeTimerName = getMetricsName("timer", "finalize");
       this.compactionTimerName = getMetricsName("timer", HoodieTimeline.COMPACTION_ACTION);
       this.indexTimerName = getMetricsName("timer", "index");
+      this.conflictResolutionTimerName = getMetricsName("timer", "conflict_resolution");
+      this.conflictResolutionSuccessCounterName = getMetricsName("counter", "conflict_resolution.success");
+      this.conflictResolutionFailureCounterName = getMetricsName("counter", "conflict_resolution.failure");
     }
   }
 
@@ -128,6 +138,13 @@ public class HoodieMetrics {
       indexTimer = createTimer(indexTimerName);
     }
     return indexTimer == null ? null : indexTimer.time();
+  }
+
+  public Timer.Context getConflictResolutionCtx() {
+    if (config.isLockingMetricsEnabled() && conflictResolutionTimer == null) {
+      conflictResolutionTimer = createTimer(conflictResolutionTimerName);
+    }
+    return conflictResolutionTimer == null ? null : conflictResolutionTimer.time();
   }
 
   public void updateMetricsForEmptyData(String actionType) {
@@ -243,5 +260,28 @@ public class HoodieMetrics {
    */
   public long getDurationInMs(long ctxDuration) {
     return ctxDuration / 1000000;
+  }
+
+  public void emitConflictResolutionSuccessful() {
+    if (config.isLockingMetricsEnabled()) {
+      LOG.info("Sending conflict resolution success metric");
+      conflictResolutionSuccessCounter = getCounter(conflictResolutionSuccessCounter, conflictResolutionSuccessCounterName);
+      conflictResolutionSuccessCounter.inc();
+    }
+  }
+
+  public void emitConflictResolutionFailed() {
+    if (config.isLockingMetricsEnabled()) {
+      LOG.info("Sending conflict resolution failure metric");
+      conflictResolutionFailureCounter = getCounter(conflictResolutionFailureCounter, conflictResolutionFailureCounterName);
+      conflictResolutionFailureCounter.inc();
+    }
+  }
+
+  private Counter getCounter(Counter counter, String name) {
+    if (counter == null) {
+      return Metrics.getInstance().getRegistry().counter(name);
+    }
+    return counter;
   }
 }

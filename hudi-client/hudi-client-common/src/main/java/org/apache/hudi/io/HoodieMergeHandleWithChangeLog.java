@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -75,14 +76,17 @@ public class HoodieMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K,
   protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
     final boolean result = super.writeUpdateRecord(hoodieRecord, oldRecord, indexedRecord);
     if (result) {
-      cdcLogger.put(hoodieRecord, oldRecord, indexedRecord);
+      boolean isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
+      cdcLogger.put(hoodieRecord, oldRecord, isDelete ? Option.empty() : indexedRecord);
     }
     return result;
   }
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> insertRecord) {
     super.writeInsertRecord(hoodieRecord, insertRecord);
-    cdcLogger.put(hoodieRecord, null, insertRecord);
+    if (!HoodieOperation.isDelete(hoodieRecord.getOperation())) {
+      cdcLogger.put(hoodieRecord, null, insertRecord);
+    }
   }
 
   @Override

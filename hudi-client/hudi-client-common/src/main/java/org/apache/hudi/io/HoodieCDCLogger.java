@@ -95,7 +95,7 @@ public class HoodieCDCLogger implements Closeable {
           ? HoodieRecord.RECORD_KEY_METADATA_FIELD
           : tableConfig.getRecordKeyFieldProp();
       this.cdcWriter = cdcWriter;
-      this.cdcSupplementalLoggingMode = config.getCDCSupplementalLoggingMode();
+      this.cdcSupplementalLoggingMode = tableConfig.cdcSupplementalLoggingMode();
       this.cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
           cdcSupplementalLoggingMode,
           dataSchema
