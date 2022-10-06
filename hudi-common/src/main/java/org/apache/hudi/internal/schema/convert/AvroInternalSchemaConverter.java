@@ -45,6 +45,18 @@ import static org.apache.avro.Schema.Type.UNION;
  */
 public class AvroInternalSchemaConverter {
 
+  // NOTE: We're using dot as field's name delimiter for nested fields
+  //       so that Avro is able to interpret qualified name as rather
+  //       the combination of the Avro's namespace and actual record's name.
+  //       For example qualified nested field's name "trip.fare.amount",
+  //       Avro will produce a record with
+  //          - Namespace: "trip.fare"
+  //          - Name: "amount"
+  //
+  //        This is crucial aspect of maintaining compatibility b/w schemas, after
+  //        converting Avro [[Schema]]s to [[InternalSchema]]s and back
+  private static final String AVRO_NAME_DELIMITER = ".";
+
   /**
    * Convert internalSchema to avro Schema.
    *
@@ -276,7 +288,7 @@ public class AvroInternalSchemaConverter {
         Types.RecordType record = (Types.RecordType) type;
         List<Schema> schemas = new ArrayList<>();
         record.fields().forEach(f -> {
-          String nestedRecordNameFallback = recordNameFallback + "_" + f.name();
+          String nestedRecordNameFallback = recordNameFallback + AVRO_NAME_DELIMITER + f.name();
           Schema tempSchema = visitInternalSchemaToBuildAvroSchema(f.type(), cache, nestedRecordNameFallback);
           // convert tempSchema
           Schema result = f.isOptional() ? AvroInternalSchemaConverter.nullableSchema(tempSchema) : tempSchema;
