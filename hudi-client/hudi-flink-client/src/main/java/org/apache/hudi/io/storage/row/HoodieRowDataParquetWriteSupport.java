@@ -18,20 +18,18 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.common.util.Option;
 import org.apache.parquet.hadoop.api.WriteSupport;
 
-import java.util.HashMap;
-
-import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
-import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE;
-import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
-import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * Hoodie Write Support for directly writing {@link RowData} to Parquet.
@@ -39,14 +37,13 @@ import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_
 public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport {
 
   private final Configuration hadoopConf;
-  private final BloomFilter bloomFilter;
-  private String minRecordKey;
-  private String maxRecordKey;
+  private final Option<HoodieBloomFilterWriteSupport<String>> bloomFilterWriteSupportOpt;
 
   public HoodieRowDataParquetWriteSupport(Configuration conf, RowType rowType, BloomFilter bloomFilter) {
     super(rowType);
     this.hadoopConf = new Configuration(conf);
-    this.bloomFilter = bloomFilter;
+    this.bloomFilterWriteSupportOpt = Option.ofNullable(bloomFilter)
+        .map(HoodieBloomFilterRowDataWriteSupport::new);
   }
 
   public Configuration getHadoopConf() {
@@ -55,32 +52,26 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
 
   @Override
   public WriteSupport.FinalizedWriteContext finalizeWrite() {
-    HashMap<String, String> extraMetaData = new HashMap<>();
-    if (bloomFilter != null) {
-      extraMetaData.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilter.serializeToString());
-      if (minRecordKey != null && maxRecordKey != null) {
-        extraMetaData.put(HOODIE_MIN_RECORD_KEY_FOOTER, minRecordKey);
-        extraMetaData.put(HOODIE_MAX_RECORD_KEY_FOOTER, maxRecordKey);
-      }
-      if (bloomFilter.getBloomFilterTypeCode().name().contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
-        extraMetaData.put(HOODIE_BLOOM_FILTER_TYPE_CODE, bloomFilter.getBloomFilterTypeCode().name());
-      }
-    }
-    return new WriteSupport.FinalizedWriteContext(extraMetaData);
+    Map<String, String> extraMetadata =
+        bloomFilterWriteSupportOpt.map(HoodieBloomFilterWriteSupport::finalizeMetadata)
+            .orElse(Collections.emptyMap());
+
+    return new WriteSupport.FinalizedWriteContext(extraMetadata);
   }
 
   public void add(String recordKey) {
-    this.bloomFilter.add(recordKey);
-    if (minRecordKey != null) {
-      minRecordKey = minRecordKey.compareTo(recordKey) <= 0 ? minRecordKey : recordKey;
-    } else {
-      minRecordKey = recordKey;
+    this.bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
+        bloomFilterWriteSupport.addKey(recordKey));
+  }
+
+  private static class HoodieBloomFilterRowDataWriteSupport extends HoodieBloomFilterWriteSupport<String> {
+    public HoodieBloomFilterRowDataWriteSupport(BloomFilter bloomFilter) {
+      super(bloomFilter);
     }
 
-    if (maxRecordKey != null) {
-      maxRecordKey = maxRecordKey.compareTo(recordKey) >= 0 ? maxRecordKey : recordKey;
-    } else {
-      maxRecordKey = recordKey;
+    @Override
+    protected byte[] getUTF8Bytes(String key) {
+      return key.getBytes(StandardCharsets.UTF_8);
     }
   }
 }
