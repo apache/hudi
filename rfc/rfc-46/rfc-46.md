@@ -217,13 +217,13 @@ class HoodieRecord {
    /**
     * Get column in record to support RDDCustomColumnsSortPartitioner
     */
-   Object getRecordColumnValues(Schema recordSchema, String[] columns,
+   ComparableList getComparableColumnValues(Schema recordSchema, String[] columns,
            boolean consistentLogicalTimestampEnabled);
 
    /**
     * Support bootstrap.
     */
-   HoodieRecord mergeWith(HoodieRecord other, Schema targetSchema) throws IOException;
+   HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) throws IOException;
 
    /**
     * Rewrite record into new schema(add meta columns)
