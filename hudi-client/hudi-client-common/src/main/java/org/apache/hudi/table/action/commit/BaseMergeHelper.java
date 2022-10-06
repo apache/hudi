@@ -22,7 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
+import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -109,7 +109,7 @@ public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
   /**
    * Consumer that dequeues records from queue and sends to Merge Handle.
    */
-  protected static class UpdateHandler extends BoundedInMemoryQueueConsumer<GenericRecord, Void> {
+  protected static class UpdateHandler extends IteratorBasedQueueConsumer<GenericRecord, Void> {
 
     private final HoodieMergeHandle upsertHandle;
 

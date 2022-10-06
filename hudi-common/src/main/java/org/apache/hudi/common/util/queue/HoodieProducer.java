@@ -18,6 +18,11 @@
 
 package org.apache.hudi.common.util.queue;
 
+/**
+ * Producer for {@link HoodieMessageQueue}. Memory Bounded Buffer supports multiple producers single consumer pattern.
+ *
+ * @param <I> Input type for buffer items produced
+ */
 public interface HoodieProducer<I> {
 
   /**

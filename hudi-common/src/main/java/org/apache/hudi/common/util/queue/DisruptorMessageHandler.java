@@ -22,9 +22,9 @@ import com.lmax.disruptor.EventHandler;
 
 public class DisruptorMessageHandler<O, E> implements EventHandler<HoodieDisruptorEvent<O>> {
 
-  private BoundedInMemoryQueueConsumer<O, E> consumer;
+  private IteratorBasedQueueConsumer<O, E> consumer;
 
-  public DisruptorMessageHandler(BoundedInMemoryQueueConsumer<O, E> consumer) {
+  public DisruptorMessageHandler(IteratorBasedQueueConsumer<O, E> consumer) {
     this.consumer = consumer;
   }
 

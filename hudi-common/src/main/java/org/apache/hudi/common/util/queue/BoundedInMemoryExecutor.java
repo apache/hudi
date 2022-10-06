@@ -60,27 +60,27 @@ public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E>
   // Producers
   private final List<HoodieProducer<I>> producers;
   // Consumer
-  private final Option<BoundedInMemoryQueueConsumer<O, E>> consumer;
+  private final Option<IteratorBasedQueueConsumer<O, E>> consumer;
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
   private final Runnable preExecuteRunnable;
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, final Iterator<I> inputItr,
-                                 BoundedInMemoryQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
+                                 IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
     this(bufferLimitInBytes, new IteratorBasedQueueProducer<>(inputItr), Option.of(consumer), transformFunction, preExecuteRunnable);
   }
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, HoodieProducer<I> producer,
-                                 Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
+                                 Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
     this(bufferLimitInBytes, producer, consumer, transformFunction, Functions.noop());
   }
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, HoodieProducer<I> producer,
-                                 Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, Runnable preExecuteRunnable) {
+                                 Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, Runnable preExecuteRunnable) {
     this(bufferLimitInBytes, Collections.singletonList(producer), consumer, transformFunction, new DefaultSizeEstimator<>(), preExecuteRunnable);
   }
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<HoodieProducer<I>> producers,
-                                 Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
+                                 Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                                  final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
     this.producers = producers;
     this.consumer = consumer;

@@ -21,7 +21,7 @@ package org.apache.hudi.execution;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
+import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
 import org.apache.hudi.io.HoodieWriteHandle;
 
 import java.util.ArrayList;
@@ -31,7 +31,7 @@ import java.util.List;
  * Consumes stream of hoodie records from in-memory queue and writes to one explicit create handle.
  */
 public class ExplicitWriteHandler<T extends HoodieRecordPayload>
-    extends BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
+    extends IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
   private final List<WriteStatus> statuses = new ArrayList<>();
 

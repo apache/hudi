@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
+import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -229,8 +229,8 @@ public class FormatUtils {
     /**
      * Setup log and parquet reading in parallel. Both write to central buffer.
      */
-    private List<BoundedInMemoryQueueProducer<HoodieRecord<?>>> getParallelProducers() {
-      List<BoundedInMemoryQueueProducer<HoodieRecord<?>>> producers = new ArrayList<>();
+    private List<HoodieProducer<HoodieRecord<?>>> getParallelProducers() {
+      List<HoodieProducer<HoodieRecord<?>>> producers = new ArrayList<>();
       producers.add(new FunctionBasedQueueProducer<>(buffer -> {
         scanner.scan();
         return null;

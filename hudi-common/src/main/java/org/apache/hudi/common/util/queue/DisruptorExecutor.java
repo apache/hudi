@@ -51,27 +51,27 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
   // Producers
   private final List<HoodieProducer<I>> producers;
   // Consumer
-  private final Option<BoundedInMemoryQueueConsumer<O, E>> consumer;
+  private final Option<IteratorBasedQueueConsumer<O, E>> consumer;
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
   private final Runnable preExecuteRunnable;
 
   public DisruptorExecutor(final int bufferSize, final Iterator<I> inputItr,
-                           BoundedInMemoryQueueConsumer<O, E> consumer, Function<I, O> transformFunction, String waitStrategy, Runnable preExecuteRunnable) {
+                           IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, String waitStrategy, Runnable preExecuteRunnable) {
     this(bufferSize, new IteratorBasedQueueProducer<>(inputItr), Option.of(consumer), transformFunction, waitStrategy, preExecuteRunnable);
   }
 
   public DisruptorExecutor(final int bufferSize, HoodieProducer<I> producer,
-                           Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
+                           Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
     this(bufferSize, producer, consumer, transformFunction, WaitStrategyFactory.DEFAULT_STRATEGY, Functions.noop());
   }
 
   public DisruptorExecutor(final int bufferSize, HoodieProducer<I> producer,
-                           Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, String waitStrategy, Runnable preExecuteRunnable) {
+                           Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, String waitStrategy, Runnable preExecuteRunnable) {
     this(bufferSize, Collections.singletonList(producer), consumer, transformFunction, waitStrategy, preExecuteRunnable);
   }
 
   public DisruptorExecutor(final int bufferSize, List<HoodieProducer<I>> producers,
-                           Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
+                           Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                            final String waitStrategy, Runnable preExecuteRunnable) {
     this.producers = producers;
     this.consumer = consumer;
