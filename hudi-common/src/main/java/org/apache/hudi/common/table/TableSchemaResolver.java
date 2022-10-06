@@ -317,10 +317,6 @@ public class TableSchemaResolver {
     return result.getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
   }
 
-  public static boolean isSchemaCompatible(String oldSchema, String newSchema) {
-    return isSchemaCompatible(new Schema.Parser().parse(oldSchema), new Schema.Parser().parse(newSchema));
-  }
-
   /**
    * Returns table's latest Avro {@link Schema} iff table is non-empty (ie there's at least
    * a single commit)
