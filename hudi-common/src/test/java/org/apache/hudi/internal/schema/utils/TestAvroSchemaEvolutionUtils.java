@@ -52,12 +52,12 @@ public class TestAvroSchemaEvolutionUtils {
 
   String schemaStr = "{\"type\":\"record\",\"name\":\"newTableName\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"data\","
       + "\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"preferences\",\"type\":[\"null\","
-      + "{\"type\":\"record\",\"name\":\"newTableName_preferences\",\"fields\":[{\"name\":\"feature1\","
+      + "{\"type\":\"record\",\"name\":\"preferences\",\"namespace\":\"newTableName\",\"fields\":[{\"name\":\"feature1\","
       + "\"type\":\"boolean\"},{\"name\":\"feature2\",\"type\":[\"null\",\"boolean\"],\"default\":null}]}],"
       + "\"default\":null},{\"name\":\"locations\",\"type\":{\"type\":\"map\",\"values\":{\"type\":\"record\","
-      + "\"name\":\"newTableName_locations\",\"fields\":[{\"name\":\"lat\",\"type\":\"float\"},{\"name\":\"long\","
+      + "\"name\":\"locations\",\"namespace\":\"newTableName\",\"fields\":[{\"name\":\"lat\",\"type\":\"float\"},{\"name\":\"long\","
       + "\"type\":\"float\"}]}}},{\"name\":\"points\",\"type\":[\"null\",{\"type\":\"array\",\"items\":[\"null\","
-      + "{\"type\":\"record\",\"name\":\"newTableName_points\",\"fields\":[{\"name\":\"x\",\"type\":\"long\"},"
+      + "{\"type\":\"record\",\"name\":\"points\",\"namespace\":\"newTableName\",\"fields\":[{\"name\":\"x\",\"type\":\"long\"},"
       + "{\"name\":\"y\",\"type\":\"long\"}]}]}],\"default\":null},{\"name\":\"doubles\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},"
       + "{\"name\":\"properties\",\"type\":[\"null\",{\"type\":\"map\",\"values\":[\"null\",\"string\"]}],\"default\":null}]}";
 
@@ -73,10 +73,10 @@ public class TestAvroSchemaEvolutionUtils {
         LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG)),
         LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)),
         Schema.create(Schema.Type.STRING),
-        LogicalTypes.uuid().addToSchema(Schema.createFixed("uuid_fixed", null, null, 16)),
-        Schema.createFixed("fixed_12", null, null, 12),
+        LogicalTypes.uuid().addToSchema(Schema.createFixed("t1.fixed", null, null, 16)),
+        Schema.createFixed("t1.fixed", null, null, 12),
         Schema.create(Schema.Type.BYTES),
-        LogicalTypes.decimal(9, 4).addToSchema(Schema.createFixed("decimal_9_4", null, null, 4))};
+        LogicalTypes.decimal(9, 4).addToSchema(Schema.createFixed("t1.fixed", null, null, 4))};
 
     Type[] primitiveTypes = new Type[] {
         Types.BooleanType.get(),
@@ -130,11 +130,11 @@ public class TestAvroSchemaEvolutionUtils {
         new Schema.Field("time", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG))), null, JsonProperties.NULL_VALUE),
         new Schema.Field("timestamp", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))), null, JsonProperties.NULL_VALUE),
         new Schema.Field("string", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.STRING)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("uuid", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.uuid().addToSchema(Schema.createFixed("uuid_fixed", null, null, 16))), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("fixed", AvroInternalSchemaConverter.nullableSchema(Schema.createFixed("fixed_10", null, null, 10)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("uuid", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.uuid().addToSchema(Schema.createFixed("t1.uuid.fixed", null, null, 16))), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("fixed", AvroInternalSchemaConverter.nullableSchema(Schema.createFixed("t1.fixed.fixed", null, null, 10)), null, JsonProperties.NULL_VALUE),
         new Schema.Field("binary", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BYTES)), null, JsonProperties.NULL_VALUE),
         new Schema.Field("decimal", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.decimal(10, 2)
-            .addToSchema(Schema.createFixed("decimal_10_2", null, null, 5))), null, JsonProperties.NULL_VALUE));
+            .addToSchema(Schema.createFixed("t1.decimal.fixed", null, null, 5))), null, JsonProperties.NULL_VALUE));
     Schema convertedSchema = AvroInternalSchemaConverter.convert(record, "t1");
     Assertions.assertEquals(convertedSchema, schema);
     Types.RecordType convertedRecord = AvroInternalSchemaConverter.convert(schema).getRecord();
@@ -313,14 +313,14 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("id", 2);
     avroRecord.put("data", "xs");
     // fill record type
-    GenericData.Record preferencesRecord = new GenericData.Record(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences"));
+    GenericData.Record preferencesRecord = new GenericData.Record(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1.preferences"));
     preferencesRecord.put("feature1", false);
     preferencesRecord.put("feature2", true);
-    Assertions.assertEquals(GenericData.get().validate(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences"), preferencesRecord), true);
+    Assertions.assertEquals(GenericData.get().validate(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1.preferences"), preferencesRecord), true);
     avroRecord.put("preferences", preferencesRecord);
     // fill mapType
     Map<String, GenericData.Record> locations = new HashMap<>();
-    Schema mapSchema = AvroInternalSchemaConverter.convert(((Types.MapType)record.field("locations").type()).valueType(), "test1_locations");
+    Schema mapSchema = AvroInternalSchemaConverter.convert(((Types.MapType)record.field("locations").type()).valueType(), "test1.locations");
     GenericData.Record locationsValue = new GenericData.Record(mapSchema);
     locationsValue.put("lat", 1.2f);
     locationsValue.put("long", 1.4f);
@@ -337,7 +337,7 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("doubles", doubles);
 
     // do check
-    Assertions.assertEquals(GenericData.get().validate(schema, avroRecord), true);
+    Assertions.assertTrue(GenericData.get().validate(schema, avroRecord));
     // create newSchema
     Types.RecordType newRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
