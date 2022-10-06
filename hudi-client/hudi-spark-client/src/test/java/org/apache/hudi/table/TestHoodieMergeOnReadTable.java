@@ -318,6 +318,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         .withCompactionConfig(compactionConfig);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig config = cfgBuilder.build();
+    setUp(config.getProps());
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
