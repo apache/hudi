@@ -19,4 +19,11 @@
 package org.apache.hudi.common.util.queue;
 
 public interface HoodieProducer<I> {
+
+  /**
+   * API to enqueue entries to bounded queue.
+   *
+   * @param queue In Memory bounded queue
+   */
+  void produce(HoodieMessageQueue<I, ?> queue) throws Exception;
 }

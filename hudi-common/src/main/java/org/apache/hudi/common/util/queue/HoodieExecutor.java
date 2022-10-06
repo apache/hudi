@@ -18,19 +18,49 @@
 
 package org.apache.hudi.common.util.queue;
 
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.Future;
 
-public abstract class HoodieExecutor<I, O, E> {
+/**
+ * HoodieExecutor which orchestrates concurrent producers and consumers communicating through a bounded in message queue.
+ */
+public interface HoodieExecutor<I, O, E> {
 
-  public abstract ExecutorCompletionService<Boolean> startProducers();
+  /**
+   * Start all Producers.
+   */
+  ExecutorCompletionService<Boolean> startProducers();
 
-  public abstract E execute();
+  /**
+   * Start consumer.
+   */
+  Future<E> startConsumer();
 
-  public abstract boolean isRemaining();
+  /**
+   * Main API to
+   * 1. Set up and run all the production
+   * 2. Set up and run all the consumption.
+   * 3. Shutdown and return the result.
+   */
+  E execute();
 
-  public abstract void shutdownNow();
+  boolean isRemaining();
 
-  public abstract HoodieMessageQueue<I, O> getQueue();
+  /**
+   * Wait for consumer finish consuming and return result.
+   */
+  E finishConsuming(Object o) throws ExecutionException, InterruptedException;
 
-  public abstract boolean awaitTermination();
+  /**
+   * Shutdown all the consumers and producers.
+   */
+  void shutdownNow();
+
+  /**
+   * get bounded in message queue.
+   */
+  HoodieMessageQueue<I, O> getQueue();
+
+  boolean awaitTermination();
 }

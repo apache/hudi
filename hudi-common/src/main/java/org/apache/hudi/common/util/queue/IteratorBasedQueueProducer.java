@@ -28,7 +28,7 @@ import java.util.Iterator;
  *
  * @param <I> Item type produced for the buffer.
  */
-public class IteratorBasedQueueProducer<I> extends BoundedInMemoryQueueProducer<I> {
+public class IteratorBasedQueueProducer<I> implements HoodieProducer<I> {
 
   private static final Logger LOG = LogManager.getLogger(IteratorBasedQueueProducer.class);
 
@@ -40,7 +40,7 @@ public class IteratorBasedQueueProducer<I> extends BoundedInMemoryQueueProducer<
   }
 
   @Override
-  public void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception {
+  public void produce(HoodieMessageQueue<I, ?> queue) throws Exception {
     LOG.info("starting to buffer records");
     while (inputIterator.hasNext()) {
       queue.insertRecord(inputIterator.next());

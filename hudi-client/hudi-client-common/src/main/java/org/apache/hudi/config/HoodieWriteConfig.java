@@ -244,13 +244,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
 
   public static final ConfigProperty<Integer> WRITE_BUFFER_SIZE = ConfigProperty
-      .key("hoodie.write.buffer.size")
+      .key("hoodie.write.executor.disruptor.buffer.size")
       .defaultValue(1024)
       .withDocumentation("The size of the Disruptor Executor ring buffer, must be power of 2");
 
   public static final ConfigProperty<String> WRITE_WAIT_STRATEGY = ConfigProperty
-      .key("hoodie.write.wait.strategy")
-      .defaultValue("BlockingWaitStrategy")
+      .key("hoodie.write.executor.disruptor.wait.strategy")
+      .defaultValue("Blocking_Wait_Strategy")
       .withDocumentation("Strategy employed for making DisruptorExecutor wait on a cursor.");
 
   public static final ConfigProperty<String> COMBINE_BEFORE_INSERT = ConfigProperty

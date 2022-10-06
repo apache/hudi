@@ -18,19 +18,23 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.jetbrains.annotations.NotNull;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class HoodieDaemonThreadFactory implements ThreadFactory {
 
   private Runnable preExecuteRunnable;
+  private final AtomicInteger threadsNum = new AtomicInteger();
+  private final String namePattern;
+  private final String baseName = "Hoodie-disruptor-daemon-thread";
 
   public HoodieDaemonThreadFactory(Runnable preExecuteRunnable) {
     this.preExecuteRunnable = preExecuteRunnable;
+    this.namePattern = baseName + "-%d";
   }
 
   @Override
-  public Thread newThread(@NotNull final Runnable r) {
+  public Thread newThread(Runnable r) {
     Thread t = new Thread(new Runnable() {
 
       @Override
@@ -38,7 +42,7 @@ public class HoodieDaemonThreadFactory implements ThreadFactory {
         preExecuteRunnable.run();
         r.run();
       }
-    });
+    }, String.format(namePattern, threadsNum.addAndGet(1)));
     t.setDaemon(true);
     return t;
   }

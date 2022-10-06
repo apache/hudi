@@ -102,7 +102,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
           private int count = 0;
 
           @Override
-          protected void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
             count++;
             afterRecord.add((HoodieAvroRecord) record.record);
             try {
@@ -115,7 +115,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
           }
 
           @Override
-          protected void finish() {
+          public void finish() {
           }
 
           @Override

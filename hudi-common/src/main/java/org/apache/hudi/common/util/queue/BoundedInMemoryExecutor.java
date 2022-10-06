@@ -33,6 +33,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -46,7 +47,7 @@ import java.util.stream.Collectors;
  * class takes as input the size limit, queue producer(s), consumer and transformer and exposes API to orchestrate
  * concurrent execution of these actors communicating through a central bounded queue
  */
-public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
+public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
   private static final long TERMINATE_WAITING_TIME_SECS = 60L;
@@ -57,7 +58,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   // Used for buffering records which is controlled by HoodieWriteConfig#WRITE_BUFFER_LIMIT_BYTES.
   private final BoundedInMemoryQueue<I, O> queue;
   // Producers
-  private final List<BoundedInMemoryQueueProducer<I>> producers;
+  private final List<HoodieProducer<I>> producers;
   // Consumer
   private final Option<BoundedInMemoryQueueConsumer<O, E>> consumer;
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
@@ -68,17 +69,17 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
     this(bufferLimitInBytes, new IteratorBasedQueueProducer<>(inputItr), Option.of(consumer), transformFunction, preExecuteRunnable);
   }
 
-  public BoundedInMemoryExecutor(final long bufferLimitInBytes, BoundedInMemoryQueueProducer<I> producer,
+  public BoundedInMemoryExecutor(final long bufferLimitInBytes, HoodieProducer<I> producer,
                                  Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
     this(bufferLimitInBytes, producer, consumer, transformFunction, Functions.noop());
   }
 
-  public BoundedInMemoryExecutor(final long bufferLimitInBytes, BoundedInMemoryQueueProducer<I> producer,
+  public BoundedInMemoryExecutor(final long bufferLimitInBytes, HoodieProducer<I> producer,
                                  Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, Runnable preExecuteRunnable) {
     this(bufferLimitInBytes, Collections.singletonList(producer), consumer, transformFunction, new DefaultSizeEstimator<>(), preExecuteRunnable);
   }
 
-  public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<BoundedInMemoryQueueProducer<I>> producers,
+  public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<HoodieProducer<I>> producers,
                                  Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                                  final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
     this.producers = producers;
@@ -126,7 +127,8 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   /**
    * Start only consumer.
    */
-  private Future<E> startConsumer() {
+  @Override
+  public Future<E> startConsumer() {
     return consumer.map(consumer -> {
       return consumerExecutorService.submit(() -> {
         LOG.info("starting consumer thread");
@@ -151,8 +153,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
     try {
       startProducers();
       Future<E> future = startConsumer();
-      // Wait for consumer to be done
-      return future.get();
+      return finishConsuming(future);
     } catch (InterruptedException ie) {
       shutdownNow();
       Thread.currentThread().interrupt();
@@ -164,6 +165,12 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
 
   public boolean isRemaining() {
     return queue.iterator().hasNext();
+  }
+
+  @Override
+  public E finishConsuming(Object o) throws ExecutionException, InterruptedException {
+    Future<E> future = (Future) o;
+    return future.get();
   }
 
   public void shutdownNow() {

@@ -18,28 +18,45 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.util.Iterator;
 
-public class IteratorBasedDisruptorProducer<I> extends DisruptorBasedProducer<I> {
+/**
+ * Consume entries from queue and execute callback function.
+ */
+public abstract class IteratorBasedQueueConsumer<I, O> implements HoodieConsumer<I, O> {
 
-  private static final Logger LOG = LogManager.getLogger(IteratorBasedDisruptorProducer.class);
-
-  // input iterator for producing items in the buffer.
-  private final Iterator<I> inputIterator;
-
-  public IteratorBasedDisruptorProducer(Iterator<I> inputIterator) {
-    this.inputIterator = inputIterator;
-  }
-
+  /**
+   * API to de-queue entries to memory bounded queue.
+   *
+   * @param queue In Memory bounded queue
+   */
   @Override
-  public void produce(DisruptorMessageQueue<I, ?> queue) throws Exception {
-    LOG.info("starting to buffer records");
-    while (inputIterator.hasNext()) {
-      queue.insertRecord(inputIterator.next());
+  public O consume(HoodieMessageQueue<?, I> queue) throws Exception {
+    Iterator<I> iterator = queue.iterator();
+
+    while (iterator.hasNext()) {
+      consumeOneRecord(iterator.next());
     }
-    LOG.info("finished buffering records");
+
+    // Notifies done
+    finish();
+
+    return getResult();
   }
+
+  /**
+   * Consumer One record.
+   */
+  public abstract void consumeOneRecord(I record);
+
+  /**
+   * Notifies implementation that we have exhausted consuming records from queue.
+   */
+  public abstract void finish();
+
+  /**
+   * Return result of consuming records so far.
+   */
+  protected abstract O getResult();
+
 }

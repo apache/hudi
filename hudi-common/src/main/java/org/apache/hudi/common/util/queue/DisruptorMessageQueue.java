@@ -23,10 +23,13 @@ import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
+import org.apache.hudi.common.util.Option;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.function.Function;
 
-public class DisruptorMessageQueue<I, O> extends HoodieMessageQueue<I, O> {
+public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   private final Disruptor<HoodieDisruptorEvent<O>> queue;
   private final Function<I, O> transformFunction;
@@ -66,6 +69,12 @@ public class DisruptorMessageQueue<I, O> extends HoodieMessageQueue<I, O> {
   }
 
   @Override
+  public Option<O> readNextRecord() {
+    // Let DisruptorMessageHandler to handle consuming logic.
+    return null;
+  }
+
+  @Override
   public void close() {
     queue.shutdown();
   }
@@ -76,5 +85,13 @@ public class DisruptorMessageQueue<I, O> extends HoodieMessageQueue<I, O> {
 
   public boolean isEmpty() {
     return ringBuffer.getBufferSize() == ringBuffer.remainingCapacity();
+  }
+
+  @Override
+  public Iterator<O> iterator() {
+    // fake a dummy iterator, because disruptor engine can take care of iterating consuming records.
+    ArrayList<O> dummyList = new ArrayList<>();
+    dummyList.add(ringBuffer.get(0).get());
+    return dummyList.iterator();
   }
 }

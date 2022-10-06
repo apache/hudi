@@ -30,14 +30,14 @@ public enum DisruptorWaitStrategyType {
    * The BlockingWaitStrategy is the slowest of the available wait strategies, but is the most conservative with the respect to CPU usage
    * and will give the most consistent behaviour across the widest variety of deployment options.
    */
-  BLOCKINGWAITSTRATEGY,
+  BLOCKING_WAIT_STRATEGY,
 
   /**
    * Like the `BlockingWaitStrategy` the `SleepingWaitStrategy` it attempts to be conservative with CPU usage by using a simple busy wait loop.
    * The difference is that the `SleepingWaitStrategy` uses a call to `LockSupport.parkNanos(1)` in the middle of the loop.
    * On a typical Linux system this will pause the thread for around 60µs.
    */
-  SLEEPINGWAITSTRATEGY,
+  SLEEPING_WAIT_STRATEGY,
 
   /**
    * The `YieldingWaitStrategy` is one of two WaitStrategies that can be use in low-latency systems.
@@ -47,13 +47,13 @@ public enum DisruptorWaitStrategyType {
    * This is the recommended wait strategy when you need very high performance, and the number of `EventHandler` threads is lower than the total number of logical cores,
    * e.g. you have hyper-threading enabled.
    */
-  YIELDINGWAITSRATEGY,
+  YIELDING_WAIT_SRATEGY,
 
   /**
    * The `BusySpinWaitStrategy` is the highest performing WaitStrategy.
    * Like the `YieldingWaitStrategy`, it can be used in low-latency systems, but puts the highest constraints on the deployment environment.
    */
-  BUSYSPINWAITSTRATEGY;
+  BUSY_SPIN_WAIT_STRATEGY;
 
   public static List<String> getNames() {
     List<String> names = new ArrayList<>(KeyGeneratorType.values().length);

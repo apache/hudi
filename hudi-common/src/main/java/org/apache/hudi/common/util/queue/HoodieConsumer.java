@@ -18,20 +18,10 @@
 
 package org.apache.hudi.common.util.queue;
 
-public abstract class HoodieConsumer<I, O> {
+public interface HoodieConsumer<I, O> {
 
   /**
-   * Consumer One record.
+   * Consume records from inner message queue.
    */
-  protected abstract void consumeOneRecord(I record);
-
-  /**
-   * Notifies implementation that we have exhausted consuming records from queue.
-   */
-  protected abstract void finish();
-
-  /**
-   * Return result of consuming records so far.
-   */
-  protected abstract O getResult();
+  O consume(HoodieMessageQueue<?, I> queue) throws Exception;
 }

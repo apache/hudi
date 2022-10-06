@@ -20,10 +20,10 @@ package org.apache.hudi.common.util.queue;
 
 public class DisruptorPublisher<I, O> {
 
-  DisruptorBasedProducer<I> producer;
+  HoodieProducer<I> producer;
   private final DisruptorMessageQueue<I, O> queue;
 
-  public DisruptorPublisher(DisruptorBasedProducer<I> producer, DisruptorMessageQueue<I, O> queue) {
+  public DisruptorPublisher(HoodieProducer<I> producer, DisruptorMessageQueue<I, O> queue) {
     this.producer = producer;
     this.queue = queue;
   }

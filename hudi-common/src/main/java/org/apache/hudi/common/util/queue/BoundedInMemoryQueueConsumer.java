@@ -23,15 +23,16 @@ import java.util.Iterator;
 /**
  * Consume entries from queue and execute callback function.
  */
-public abstract class BoundedInMemoryQueueConsumer<I, O> extends HoodieConsumer<I, O> {
+public abstract class BoundedInMemoryQueueConsumer<I, O> implements HoodieConsumer<I, O> {
 
   /**
    * API to de-queue entries to memory bounded queue.
    *
    * @param queue In Memory bounded queue
    */
-  public O consume(BoundedInMemoryQueue<?, I> queue) throws Exception {
-    Iterator<I> iterator = queue.iterator();
+  @Override
+  public O consume(HoodieMessageQueue<?, I> queue) throws Exception {
+    Iterator<I> iterator = ((BoundedInMemoryQueue) queue).iterator();
 
     while (iterator.hasNext()) {
       consumeOneRecord(iterator.next());
@@ -46,12 +47,12 @@ public abstract class BoundedInMemoryQueueConsumer<I, O> extends HoodieConsumer<
   /**
    * Consumer One record.
    */
-  protected abstract void consumeOneRecord(I record);
+  public abstract void consumeOneRecord(I record);
 
   /**
    * Notifies implementation that we have exhausted consuming records from queue.
    */
-  protected abstract void finish();
+  public abstract void finish();
 
   /**
    * Return result of consuming records so far.

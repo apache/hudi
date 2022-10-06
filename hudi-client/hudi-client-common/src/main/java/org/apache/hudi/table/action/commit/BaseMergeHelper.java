@@ -118,12 +118,12 @@ public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
     }
 
     @Override
-    protected void consumeOneRecord(GenericRecord record) {
+    public void consumeOneRecord(GenericRecord record) {
       upsertHandle.write(record);
     }
 
     @Override
-    protected void finish() {}
+    public void finish() {}
 
     @Override
     protected Void getResult() {

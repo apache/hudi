@@ -27,8 +27,8 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueue;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
+import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
@@ -140,7 +140,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
       recs.add(pRecs);
     }
 
-    List<BoundedInMemoryQueueProducer<HoodieRecord>> producers = new ArrayList<>();
+    List<HoodieProducer<HoodieRecord>> producers = new ArrayList<>();
     for (int i = 0; i < recs.size(); i++) {
       final List<HoodieRecord> r = recs.get(i);
       // Alternate between pull and push based iterators

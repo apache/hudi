@@ -34,10 +34,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
+public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(DisruptorExecutor.class);
 
@@ -48,7 +49,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   // Used for buffering records which is controlled by HoodieWriteConfig#WRITE_BUFFER_LIMIT_BYTES.
   private final DisruptorMessageQueue<I, O> queue;
   // Producers
-  private final List<DisruptorBasedProducer<I>> producers;
+  private final List<HoodieProducer<I>> producers;
   // Consumer
   private final Option<BoundedInMemoryQueueConsumer<O, E>> consumer;
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
@@ -56,20 +57,20 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
 
   public DisruptorExecutor(final int bufferSize, final Iterator<I> inputItr,
                            BoundedInMemoryQueueConsumer<O, E> consumer, Function<I, O> transformFunction, String waitStrategy, Runnable preExecuteRunnable) {
-    this(bufferSize, new IteratorBasedDisruptorProducer<>(inputItr), Option.of(consumer), transformFunction, waitStrategy, preExecuteRunnable);
+    this(bufferSize, new IteratorBasedQueueProducer<>(inputItr), Option.of(consumer), transformFunction, waitStrategy, preExecuteRunnable);
   }
 
-  public DisruptorExecutor(final int bufferSize, DisruptorBasedProducer<I> producer,
+  public DisruptorExecutor(final int bufferSize, HoodieProducer<I> producer,
                            Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
     this(bufferSize, producer, consumer, transformFunction, WaitStrategyFactory.DEFAULT_STRATEGY, Functions.noop());
   }
 
-  public DisruptorExecutor(final int bufferSize, DisruptorBasedProducer<I> producer,
+  public DisruptorExecutor(final int bufferSize, HoodieProducer<I> producer,
                            Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, String waitStrategy, Runnable preExecuteRunnable) {
     this(bufferSize, Collections.singletonList(producer), consumer, transformFunction, waitStrategy, preExecuteRunnable);
   }
 
-  public DisruptorExecutor(final int bufferSize, List<DisruptorBasedProducer<I>> producers,
+  public DisruptorExecutor(final int bufferSize, List<HoodieProducer<I>> producers,
                            Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                            final String waitStrategy, Runnable preExecuteRunnable) {
     this.producers = producers;
@@ -110,14 +111,9 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   public E execute() {
     try {
       assert consumer.isPresent();
-      setupConsumer();
+      startConsumer();
       ExecutorCompletionService<Boolean> pool = startProducers();
-
-      waitForProducersFinished(pool);
-      queue.getInnerQueue().shutdown();
-      consumer.get().finish();
-
-      return consumer.get().getResult();
+      return finishConsuming(pool);
     } catch (InterruptedException ie) {
       shutdownNow();
       Thread.currentThread().interrupt();
@@ -125,6 +121,16 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
     } catch (Exception e) {
       throw new HoodieException(e);
     }
+  }
+
+  @Override
+  public E finishConsuming(Object o) throws ExecutionException, InterruptedException {
+    ExecutorCompletionService<Boolean> pool = (ExecutorCompletionService) o;
+    waitForProducersFinished(pool);
+    queue.getInnerQueue().shutdown();
+    consumer.get().finish();
+
+    return consumer.get().getResult();
   }
 
   private void waitForProducersFinished(ExecutorCompletionService<Boolean> pool) throws InterruptedException, ExecutionException {
@@ -136,12 +142,14 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   /**
    * Start only consumer.
    */
-  private void setupConsumer() {
+  @Override
+  public Future<E> startConsumer() {
     DisruptorMessageHandler<O, E> handler = new DisruptorMessageHandler<>(consumer.get());
 
     Disruptor<HoodieDisruptorEvent<O>> innerQueue = queue.getInnerQueue();
     innerQueue.handleEventsWith(handler);
     innerQueue.start();
+    return null;
   }
 
   @Override

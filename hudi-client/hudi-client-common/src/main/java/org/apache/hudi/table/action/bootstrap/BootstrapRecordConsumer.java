@@ -38,7 +38,7 @@ public class BootstrapRecordConsumer extends BoundedInMemoryQueueConsumer<Hoodie
   }
 
   @Override
-  protected void consumeOneRecord(HoodieRecord record) {
+  public void consumeOneRecord(HoodieRecord record) {
     try {
       bootstrapHandle.write(record, ((HoodieRecordPayload) record.getData())
           .getInsertValue(bootstrapHandle.getWriterSchemaWithMetaFields()));
@@ -48,7 +48,7 @@ public class BootstrapRecordConsumer extends BoundedInMemoryQueueConsumer<Hoodie
   }
 
   @Override
-  protected void finish() {}
+  public void finish() {}
 
   @Override
   protected Void getResult() {

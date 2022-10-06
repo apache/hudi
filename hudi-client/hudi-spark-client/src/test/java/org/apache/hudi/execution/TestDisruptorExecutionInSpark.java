@@ -84,12 +84,12 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
           private int count = 0;
 
           @Override
-          protected void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
             count++;
           }
 
           @Override
-          protected void finish() {
+          public void finish() {
           }
 
           @Override
@@ -125,7 +125,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
         new BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
           @Override
-          protected void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
             try {
               while (true) {
                 Thread.sleep(1000);
@@ -136,7 +136,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
           }
 
           @Override
-          protected void finish() {
+          public void finish() {
           }
 
           @Override
