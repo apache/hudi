@@ -249,7 +249,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // eg: origin writeSchema is: "a String, b double" then we add a new column now the readerSchema will be: "a string, c int, b double". it's wrong to use readerSchema to read old log file.
     // after we read those record by writeSchema,  we rewrite those record with readerSchema in AbstractHoodieLogRecordReader
     if (internalSchema.isEmptySchema()) {
-      return Option.of(this.readerSchema);
+      return Option.ofNullable(this.readerSchema);
     } else {
       return Option.empty();
     }
