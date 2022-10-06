@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.Comparator;
@@ -35,7 +36,7 @@ public class LogFileNumBasedCompactionStrategy extends BoundedIOCompactionStrate
 
   @Override
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
-    Long numThreshold = writeConfig.getCompactionLogFileNumThreshold();
+    Long numThreshold = writeConfig.getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_NUM_THRESHOLD);
     List<HoodieCompactionOperation> filterOperator = operations.stream()
         .filter(e -> e.getDeltaFilePaths().size() >= numThreshold)
         .sorted(this).collect(Collectors.toList());

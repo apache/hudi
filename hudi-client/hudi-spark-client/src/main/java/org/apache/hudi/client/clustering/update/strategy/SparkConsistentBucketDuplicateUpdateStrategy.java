@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
@@ -106,7 +107,7 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
         .collect(Collectors.toMap(Map.Entry::getKey, e -> new ConsistentBucketIdentifier(e.getValue())));
 
     // Produce records tagged with new record location
-    List<String> indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
+    List<String> indexKeyFields = Arrays.asList(table.getConfig().getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD).split(","));
     HoodieData<HoodieRecord<T>> redirectedRecordsRDD = filteredRecordsRDD.map(r -> {
       ConsistentHashingNode node = partitionToIdentifier.get(r.getPartitionPath()).getBucket(r.getKey(), indexKeyFields);
       return getTaggedRecord(new HoodieAvroRecord(r.getKey(), r.getData(), r.getOperation()),

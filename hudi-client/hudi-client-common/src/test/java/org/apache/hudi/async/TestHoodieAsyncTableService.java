@@ -38,7 +38,7 @@ class TestHoodieAsyncTableService {
 
   @Test
   void tableServiceShouldNotStartIfDisabled(@Mock HoodieWriteConfig config) {
-    when(config.areTableServicesEnabled()).thenReturn(false);
+    when(config.getBooleanOrDefault(HoodieWriteConfig.TABLE_SERVICES_ENABLED)).thenReturn(false);
     HoodieAsyncTableService service = new DummyAsyncTableService(config);
     service.start(null);
     assertFalse(service.isStarted());

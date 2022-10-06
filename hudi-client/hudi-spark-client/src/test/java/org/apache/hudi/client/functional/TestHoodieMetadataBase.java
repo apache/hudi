@@ -53,6 +53,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
@@ -370,10 +371,10 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
    * the method is not public in source code. so, for now, using this method which mimics source code.
    */
   protected HoodieWriteConfig getMetadataWriteConfig(HoodieWriteConfig writeConfig) {
-    int parallelism = writeConfig.getMetadataInsertParallelism();
+    int parallelism = writeConfig.getInt(HoodieMetadataConfig.INSERT_PARALLELISM_VALUE);
 
-    int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
-    int maxCommitsToKeep = Math.max(writeConfig.getMetadataMaxCommitsToKeep(), writeConfig.getMaxCommitsToKeep());
+    int minCommitsToKeep = Math.max(writeConfig.getInt(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP), writeConfig.getInt(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP));
+    int maxCommitsToKeep = Math.max(writeConfig.getInt(HoodieMetadataConfig.MAX_COMMITS_TO_KEEP), writeConfig.getInt(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP));
 
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
@@ -396,12 +397,12 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         .forTable(writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
         // we will trigger cleaning manually, to control the instant times
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(writeConfig.isMetadataAsyncClean())
+            .withAsyncClean(writeConfig.getBoolean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE))
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-            .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
+            .retainCommits(writeConfig.getInt(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED))
             .build())
         // we will trigger archival manually, to control the instant times
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
@@ -409,7 +410,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         // we will trigger compaction manually, to control the instant times
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax()).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS)).build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
         .withRollbackParallelism(parallelism)
@@ -424,22 +425,23 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     properties.put("hoodie.datasource.write.recordkey.field", HoodieMetadataPayload.KEY_FIELD_NAME);
     builder.withProperties(properties);
 
-    if (writeConfig.isMetricsOn()) {
+    if (writeConfig.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
-          .withReporterType(writeConfig.getMetricsReporterType().toString())
-          .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
+          .withReporterType(MetricsReporterType.valueOf(writeConfig.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE)).toString())
+          .withExecutorMetrics(Boolean.parseBoolean(
+              writeConfig.getStringOrDefault(HoodieMetricsConfig.EXECUTOR_METRICS_ENABLE, "false")))
           .on(true).build());
-      switch (writeConfig.getMetricsReporterType()) {
+      switch (MetricsReporterType.valueOf(writeConfig.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE))) {
         case GRAPHITE:
           builder.withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
-              .onGraphitePort(writeConfig.getGraphiteServerPort())
-              .toGraphiteHost(writeConfig.getGraphiteServerHost())
-              .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
+              .onGraphitePort(writeConfig.getInt(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_PORT_NUM))
+              .toGraphiteHost(writeConfig.getString(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_HOST_NAME))
+              .usePrefix(writeConfig.getString(HoodieMetricsGraphiteConfig.GRAPHITE_METRIC_PREFIX_VALUE)).build());
           break;
         case JMX:
           builder.withMetricsJmxConfig(HoodieMetricsJmxConfig.newBuilder()
-              .onJmxPort(writeConfig.getJmxPort())
-              .toJmxHost(writeConfig.getJmxHost())
+              .onJmxPort(writeConfig.getString(HoodieMetricsJmxConfig.JMX_PORT_NUM))
+              .toJmxHost(writeConfig.getString(HoodieMetricsJmxConfig.JMX_HOST_NAME))
               .build());
           break;
         case DATADOG:
@@ -450,7 +452,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         case CLOUDWATCH:
           break;
         default:
-          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
+          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + MetricsReporterType.valueOf(writeConfig.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE)));
       }
     }
     return builder.build();

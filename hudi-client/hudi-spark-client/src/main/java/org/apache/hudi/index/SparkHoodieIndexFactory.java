@@ -19,9 +19,11 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -45,14 +47,14 @@ import java.io.IOException;
 public final class SparkHoodieIndexFactory {
   public static HoodieIndex createIndex(HoodieWriteConfig config) {
     // first use index class config to create index.
-    if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
-      Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
+    if (!StringUtils.isNullOrEmpty(config.getString(HoodieIndexConfig.INDEX_CLASS_NAME))) {
+      Object instance = ReflectionUtils.loadClass(config.getString(HoodieIndexConfig.INDEX_CLASS_NAME), config);
       if (!(instance instanceof HoodieIndex)) {
-        throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
+        throw new HoodieIndexException(config.getString(HoodieIndexConfig.INDEX_CLASS_NAME) + " is not a subclass of HoodieIndex");
       }
       return (HoodieIndex) instance;
     }
-    switch (config.getIndexType()) {
+    switch (HoodieIndex.IndexType.valueOf(config.getString(HoodieIndexConfig.INDEX_TYPE))) {
       case HBASE:
         return new SparkHoodieHBaseIndex(config);
       case INMEMORY:
@@ -66,16 +68,16 @@ public final class SparkHoodieIndexFactory {
       case GLOBAL_SIMPLE:
         return new HoodieGlobalSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
       case BUCKET:
-        switch (config.getBucketIndexEngineType()) {
+        switch (HoodieIndex.BucketIndexEngineType.valueOf(config.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE))) {
           case SIMPLE:
             return new HoodieSimpleBucketIndex(config);
           case CONSISTENT_HASHING:
             return new HoodieSparkConsistentBucketIndex(config);
           default:
-            throw new HoodieIndexException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
+            throw new HoodieIndexException("Unknown bucket index engine type: " + HoodieIndex.BucketIndexEngineType.valueOf(config.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE)));
         }
       default:
-        throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
+        throw new HoodieIndexException("Index type unspecified, set " + HoodieIndex.IndexType.valueOf(config.getString(HoodieIndexConfig.INDEX_TYPE)));
     }
   }
 
@@ -85,7 +87,7 @@ public final class SparkHoodieIndexFactory {
    * @return {@code true} if index is a global one. else {@code false}.
    */
   public static boolean isGlobalIndex(HoodieWriteConfig config) {
-    switch (config.getIndexType()) {
+    switch (HoodieIndex.IndexType.valueOf(config.getString(HoodieIndexConfig.INDEX_TYPE))) {
       case HBASE:
         return true;
       case INMEMORY:
@@ -107,7 +109,7 @@ public final class SparkHoodieIndexFactory {
 
   private static Option<BaseKeyGenerator> getKeyGeneratorForSimpleIndex(HoodieWriteConfig config) {
     try {
-      return config.populateMetaFields() ? Option.empty()
+      return config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS) ? Option.empty()
           : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
     } catch (IOException e) {
       throw new HoodieIOException("KeyGenerator instantiation failed ", e);

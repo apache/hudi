@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
@@ -84,7 +85,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.fs = table.getMetaClient().getFs();
     this.path = makeNewPath(partitionPath);
     this.writeStatus = new HoodieInternalWriteStatus(!table.getIndex().isImplicitWithStorage(),
-        writeConfig.getWriteStatusFailureFraction());
+        writeConfig.getDouble(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION));
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);
     writeStatus.setStat(new HoodieWriteStat());
@@ -119,7 +120,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     try {
       String seqId = HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
       HoodieRowData rowData = new HoodieRowData(instantTime, seqId, recordKey, partitionPath, path.getName(),
-          record, writeConfig.allowOperationMetadataField());
+          record, writeConfig.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD));
       try {
         fileWriter.writeRow(recordKey, rowData);
         writeStatus.markSuccess(recordKey);

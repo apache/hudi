@@ -20,8 +20,11 @@ package org.apache.hudi.client.heartbeat;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
@@ -69,7 +72,8 @@ public class HeartbeatUtils {
    * @return Boolean indicating whether heartbeat file was deleted or not
    */
   public static boolean deleteHeartbeatFile(FileSystem fs, String basePath, String instantTime, HoodieWriteConfig config) {
-    if (config.getFailedWritesCleanPolicy().isLazy()) {
+    if (HoodieFailedWritesCleaningPolicy
+        .valueOf(config.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)).isLazy()) {
       return deleteHeartbeatFile(fs, basePath, instantTime);
     }
 
@@ -87,7 +91,8 @@ public class HeartbeatUtils {
                                              HoodieHeartbeatClient heartbeatClient, HoodieWriteConfig config) {
     ValidationUtils.checkArgument(heartbeatClient != null);
     try {
-      if (config.getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instantTime)) {
+      if (HoodieFailedWritesCleaningPolicy
+          .valueOf(config.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)).isLazy() && heartbeatClient.isHeartbeatExpired(instantTime)) {
         throw new HoodieException("Heartbeat for instant " + instantTime + " has expired, last heartbeat "
             + HoodieHeartbeatClient.getLastHeartbeatTime(table.getMetaClient().getFs(), config.getBasePath(), instantTime));
       }

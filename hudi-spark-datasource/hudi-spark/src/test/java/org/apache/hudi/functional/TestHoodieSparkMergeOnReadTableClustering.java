@@ -24,6 +24,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -261,7 +262,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         "Expecting a single commit.");
     assertEquals(clusteringCommitTime, timeline.lastInstant().get().getTimestamp());
     assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, timeline.lastInstant().get().getAction());
-    if (cfg.populateMetaFields()) {
+    if (cfg.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
       assertEquals(400, HoodieClientTestUtils.countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline, Option.of("000")),
           "Must contain 200 records");
     } else {

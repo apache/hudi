@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
@@ -38,16 +39,16 @@ import org.apache.hudi.index.state.FlinkInMemoryStateIndex;
 public final class FlinkHoodieIndexFactory {
   public static HoodieIndex createIndex(HoodieFlinkEngineContext context, HoodieWriteConfig config) {
     // first use index class config to create index.
-    if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
-      Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
+    if (!StringUtils.isNullOrEmpty(config.getString(HoodieIndexConfig.INDEX_CLASS_NAME))) {
+      Object instance = ReflectionUtils.loadClass(config.getString(HoodieIndexConfig.INDEX_CLASS_NAME), config);
       if (!(instance instanceof HoodieIndex)) {
-        throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
+        throw new HoodieIndexException(config.getString(HoodieIndexConfig.INDEX_CLASS_NAME) + " is not a subclass of HoodieIndex");
       }
       return (HoodieIndex) instance;
     }
 
     // TODO more indexes to be added
-    switch (config.getIndexType()) {
+    switch (HoodieIndex.IndexType.valueOf(config.getString(HoodieIndexConfig.INDEX_TYPE))) {
       case INMEMORY:
         return new FlinkInMemoryStateIndex(context, config);
       case BLOOM:
@@ -61,7 +62,7 @@ public final class FlinkHoodieIndexFactory {
       case BUCKET:
         return new HoodieSimpleBucketIndex(config);
       default:
-        throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
+        throw new HoodieIndexException("Unsupported index type " + HoodieIndex.IndexType.valueOf(config.getString(HoodieIndexConfig.INDEX_TYPE)));
     }
   }
 }

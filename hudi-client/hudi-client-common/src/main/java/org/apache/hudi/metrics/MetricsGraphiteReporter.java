@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
@@ -48,15 +49,15 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     this.config = config;
 
     // Check the serverHost and serverPort here
-    this.serverHost = config.getGraphiteServerHost();
-    this.serverPort = config.getGraphiteServerPort();
+    this.serverHost = config.getString(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_HOST_NAME);
+    this.serverPort = config.getInt(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_PORT_NUM);
     if (serverHost == null || serverPort == 0) {
       throw new RuntimeException(String.format("Graphite cannot be initialized with serverHost[%s] and serverPort[%s].",
           serverHost, serverPort));
     }
 
     this.graphiteReporter = createGraphiteReport();
-    this.periodSeconds = config.getGraphiteReportPeriodSeconds();
+    this.periodSeconds = config.getInt(HoodieMetricsGraphiteConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS);
   }
 
   @Override
@@ -79,7 +80,7 @@ public class MetricsGraphiteReporter extends MetricsReporter {
 
   private GraphiteReporter createGraphiteReport() {
     Graphite graphite = new Graphite(new InetSocketAddress(serverHost, serverPort));
-    String reporterPrefix = config.getGraphiteMetricPrefix();
+    String reporterPrefix = config.getString(HoodieMetricsGraphiteConfig.GRAPHITE_METRIC_PREFIX_VALUE);
     return GraphiteReporter.forRegistry(registry).prefixedWith(reporterPrefix).convertRatesTo(TimeUnit.SECONDS)
         .convertDurationsTo(TimeUnit.MILLISECONDS).filter(MetricFilter.ALL).build(graphite);
   }

@@ -102,7 +102,7 @@ public class HoodieSimpleIndex
   protected <R> HoodieData<HoodieRecord<R>> tagLocationInternal(
       HoodieData<HoodieRecord<R>> inputRecords, HoodieEngineContext context,
       HoodieTable hoodieTable) {
-    if (config.getSimpleIndexUseCaching()) {
+    if (config.getBoolean(HoodieIndexConfig.SIMPLE_INDEX_USE_CACHING)) {
       inputRecords.persist(new HoodieConfig(config.getProps())
           .getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
@@ -111,7 +111,7 @@ public class HoodieSimpleIndex
         inputRecords.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingLocationsOnTable =
         fetchRecordLocationsForAffectedPartitions(keyedInputRecords.keys(), context, hoodieTable,
-            config.getSimpleIndexParallelism());
+            config.getInt(HoodieIndexConfig.SIMPLE_INDEX_PARALLELISM));
 
     HoodieData<HoodieRecord<R>> taggedRecords =
         keyedInputRecords.leftOuterJoin(existingLocationsOnTable).map(entry -> {
@@ -120,7 +120,7 @@ public class HoodieSimpleIndex
           return HoodieIndexUtils.getTaggedRecord(untaggedRecord, location);
         });
 
-    if (config.getSimpleIndexUseCaching()) {
+    if (config.getBoolean(HoodieIndexConfig.SIMPLE_INDEX_USE_CACHING)) {
       inputRecords.unpersist();
     }
     return taggedRecords;

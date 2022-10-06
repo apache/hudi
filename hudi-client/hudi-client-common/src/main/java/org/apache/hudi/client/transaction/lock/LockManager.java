@@ -22,6 +22,7 @@ import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -63,14 +64,14 @@ public class LockManager implements Serializable, AutoCloseable {
   }
 
   public void lock() {
-    if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+    if (WriteConcurrencyMode.fromValue(writeConfig.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE)).supportsOptimisticConcurrencyControl()) {
       LockProvider lockProvider = getLockProvider();
       int retryCount = 0;
       boolean acquired = false;
       while (retryCount <= maxRetries) {
         try {
           metrics.startLockApiTimerContext();
-          acquired = lockProvider.tryLock(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS);
+          acquired = lockProvider.tryLock(writeConfig.getLong(HoodieLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS), TimeUnit.MILLISECONDS);
           if (acquired) {
             metrics.updateLockAcquiredMetric();
             break;
@@ -103,7 +104,7 @@ public class LockManager implements Serializable, AutoCloseable {
    * and tries to call unlock()
    */
   public void unlock() {
-    if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+    if (WriteConcurrencyMode.fromValue(writeConfig.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE)).supportsOptimisticConcurrencyControl()) {
       getLockProvider().unlock();
       metrics.updateLockHeldTimerMetrics();
     }
@@ -112,8 +113,8 @@ public class LockManager implements Serializable, AutoCloseable {
   public synchronized LockProvider getLockProvider() {
     // Perform lazy initialization of lock provider only if needed
     if (lockProvider == null) {
-      LOG.info("LockProvider " + writeConfig.getLockProviderClass());
-      lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
+      LOG.info("LockProvider " + writeConfig.getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME));
+      lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME),
           lockConfiguration, hadoopConf.get());
     }
     return lockProvider;

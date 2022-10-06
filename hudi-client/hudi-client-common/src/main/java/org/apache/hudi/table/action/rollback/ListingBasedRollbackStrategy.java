@@ -86,7 +86,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       HoodieTableMetaClient metaClient = table.getMetaClient();
       List<String> partitionPaths =
           FSUtils.getAllPartitionPaths(context, table.getMetaClient().getBasePath(), false, false);
-      int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
+      int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getInt(HoodieWriteConfig.ROLLBACK_PARALLELISM_VALUE)), 1);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan: " + config.getTableName());
 

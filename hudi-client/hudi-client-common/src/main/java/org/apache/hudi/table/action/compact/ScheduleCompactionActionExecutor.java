@@ -21,8 +21,10 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -32,6 +34,8 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -68,8 +72,9 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
 
   @Override
   public Option<HoodieCompactionPlan> execute() {
-    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
-        && !config.getFailedWritesCleanPolicy().isLazy()) {
+    if (!WriteConcurrencyMode.fromValue(config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE)).supportsOptimisticConcurrencyControl()
+        && !HoodieFailedWritesCleaningPolicy
+        .valueOf(config.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)).isLazy()) {
       // TODO(yihua): this validation is removed for Java client used by kafka-connect.  Need to revisit this.
       if (config.getEngineType() == EngineType.SPARK) {
         // if there are inflight writes, their instantTime must not be less than that of compaction instant time
@@ -109,7 +114,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
   private HoodieCompactionPlan scheduleCompaction() {
     LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
     // judge if we need to compact according to num delta commits and time elapsed
-    boolean compactable = needCompact(config.getInlineCompactTriggerStrategy());
+    boolean compactable = needCompact(CompactionTriggerStrategy.valueOf(config.getString(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY)));
     if (compactable) {
       LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
       try {
@@ -159,8 +164,8 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
       return false;
     }
     Pair<Integer, String> latestDeltaCommitInfo = latestDeltaCommitInfoOption.get();
-    int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
-    int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
+    int inlineCompactDeltaCommitMax = config.getInt(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS);
+    int inlineCompactDeltaSecondsMax = config.getInt(HoodieCompactionConfig.INLINE_COMPACT_TIME_DELTA_SECONDS);
     switch (compactionTriggerStrategy) {
       case NUM_COMMITS:
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
@@ -203,7 +208,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
         }
         break;
       default:
-        throw new HoodieCompactionException("Unsupported compaction trigger strategy: " + config.getInlineCompactTriggerStrategy());
+        throw new HoodieCompactionException("Unsupported compaction trigger strategy: " + CompactionTriggerStrategy.valueOf(config.getString(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY)));
     }
     return compactable;
   }

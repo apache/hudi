@@ -44,6 +44,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -146,7 +148,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
       HoodieInstant requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime);
       activeTimeline.transitionRequestedToInflight(requested,
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)),
-          config.shouldAllowMultiWriteOnSameInstant());
+          config.getBoolean(HoodieWriteConfig.ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE));
     } catch (IOException io) {
       throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
     }
@@ -161,7 +163,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
    * Check if any validators are configured and run those validations. If any of the validations fail, throws HoodieValidationException.
    */
   protected void runPrecommitValidators(HoodieWriteMetadata<O> writeMetadata) {
-    if (StringUtils.isNullOrEmpty(config.getPreCommitValidators())) {
+    if (StringUtils.isNullOrEmpty(config.getString(HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES))) {
       return;
     }
     throw new HoodieIOException("Precommit validation not implemented for all engines yet");
@@ -170,7 +172,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   protected void commitOnAutoCommit(HoodieWriteMetadata result) {
     // validate commit action before committing result
     runPrecommitValidators(result);
-    if (config.shouldAutoCommit()) {
+    if (config.getBoolean(HoodieWriteConfig.AUTO_COMMIT_ENABLE)) {
       LOG.info("Auto commit enabled: Committing " + instantTime);
       autoCommit(extraMetadata, result);
     } else {
@@ -242,7 +244,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     final Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = (
         (ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>)
-            ReflectionUtils.loadClass(config.getClusteringExecutionStrategyClass(),
+            ReflectionUtils.loadClass(config.getString(HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME),
                 new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config))
         .performClustering(clusteringPlan, schema, instantTime);
     HoodieData<WriteStatus> writeStatusList = writeMetadata.getWriteStatuses();
@@ -273,7 +275,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
 
     return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
         .filter(fg -> "org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy"
-            .equals(config.getClusteringExecutionStrategyClass())
+            .equals(config.getString(HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME))
             || !newFilesWritten.contains(fg))
         .collect(Collectors.groupingBy(HoodieFileGroupId::getPartitionPath, Collectors.mapping(HoodieFileGroupId::getFileId, Collectors.toList())));
   }

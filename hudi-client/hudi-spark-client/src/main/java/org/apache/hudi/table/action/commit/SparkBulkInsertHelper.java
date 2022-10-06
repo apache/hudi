@@ -72,13 +72,13 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Bas
     //transition bulk_insert state to inflight
     table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED,
             executor.getCommitActionType(), instantTime), Option.empty(),
-        config.shouldAllowMultiWriteOnSameInstant());
+        config.getBoolean(HoodieWriteConfig.ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE));
 
     BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElse(BulkInsertInternalPartitionerFactory.get(table, config));
 
     // write new files
     HoodieData<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
-        config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
+        config.getInt(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE), new CreateHandleFactory(false));
     //update index
     ((BaseSparkCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
@@ -113,7 +113,7 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Bas
     HoodieData<HoodieRecord<T>> dedupedRecords = inputRecords;
 
     if (performDedupe) {
-      dedupedRecords = (HoodieData<HoodieRecord<T>>) HoodieWriteHelper.newInstance().combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
+      dedupedRecords = (HoodieData<HoodieRecord<T>>) HoodieWriteHelper.newInstance().combineOnCondition(config.getBoolean(HoodieWriteConfig.COMBINE_BEFORE_INSERT), inputRecords,
           parallelism, table);
     }
 

@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.MetricRegistry;
@@ -44,8 +45,8 @@ public class JmxMetricsReporter extends MetricsReporter {
     try {
       this.registry = registry;
       // Check the host and port here
-      String host = config.getJmxHost();
-      String portsConfig = config.getJmxPort();
+      String host = config.getString(HoodieMetricsJmxConfig.JMX_HOST_NAME);
+      String portsConfig = config.getString(HoodieMetricsJmxConfig.JMX_PORT_NUM);
       if (host == null || portsConfig == null) {
         throw new HoodieException(
             String.format("Jmx cannot be initialized with host[%s] and port[%s].",

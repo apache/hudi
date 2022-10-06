@@ -20,6 +20,9 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,12 +49,12 @@ public class TestHoodieGraphiteMetrics {
 
   @Test
   public void testRegisterGauge() {
-    when(config.isMetricsOn()).thenReturn(true);
+    when(config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)).thenReturn(true);
     when(config.getTableName()).thenReturn("table1");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.GRAPHITE);
-    when(config.getGraphiteServerHost()).thenReturn("localhost");
-    when(config.getGraphiteServerPort()).thenReturn(NetworkTestUtils.nextFreePort());
-    when(config.getGraphiteReportPeriodSeconds()).thenReturn(30);
+    when(MetricsReporterType.valueOf(config.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE))).thenReturn(MetricsReporterType.GRAPHITE);
+    when(config.getString(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_HOST_NAME)).thenReturn("localhost");
+    when(config.getInt(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_PORT_NUM)).thenReturn(NetworkTestUtils.nextFreePort());
+    when(config.getInt(HoodieMetricsGraphiteConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS)).thenReturn(30);
     new HoodieMetrics(config);
     registerGauge("graphite_metric", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()

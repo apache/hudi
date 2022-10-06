@@ -75,18 +75,18 @@ public class EmbeddedTimelineService {
 
   public void startServer() throws IOException {
     TimelineService.Config.Builder timelineServiceConfBuilder = TimelineService.Config.builder()
-        .serverPort(writeConfig.getEmbeddedTimelineServerPort())
-        .numThreads(writeConfig.getEmbeddedTimelineServerThreads())
-        .compress(writeConfig.getEmbeddedTimelineServerCompressOutput())
-        .async(writeConfig.getEmbeddedTimelineServerUseAsync());
+        .serverPort(Integer.parseInt(writeConfig.getStringOrDefault(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_PORT_NUM)))
+        .numThreads(Integer.parseInt(writeConfig.getStringOrDefault(HoodieWriteConfig.EMBEDDED_TIMELINE_NUM_SERVER_THREADS)))
+        .compress(Boolean.parseBoolean(writeConfig.getStringOrDefault(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_COMPRESS_ENABLE)))
+        .async(Boolean.parseBoolean(writeConfig.getStringOrDefault(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_USE_ASYNC_ENABLE)));
     // Only passing marker-related write configs to timeline server
     // if timeline-server-based markers are used.
     if (writeConfig.getMarkersType() == MarkerType.TIMELINE_SERVER_BASED) {
       timelineServiceConfBuilder
           .enableMarkerRequests(true)
-          .markerBatchNumThreads(writeConfig.getMarkersTimelineServerBasedBatchNumThreads())
-          .markerBatchIntervalMs(writeConfig.getMarkersTimelineServerBasedBatchIntervalMs())
-          .markerParallelism(writeConfig.getMarkersDeleteParallelism());
+          .markerBatchNumThreads(writeConfig.getInt(HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS))
+          .markerBatchIntervalMs(writeConfig.getLong(HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS))
+          .markerParallelism(writeConfig.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
     }
 
     server = new TimelineService(context, hadoopConf.newCopy(), timelineServiceConfBuilder.build(),

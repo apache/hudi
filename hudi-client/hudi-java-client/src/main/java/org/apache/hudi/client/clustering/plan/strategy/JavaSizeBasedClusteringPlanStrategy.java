@@ -29,6 +29,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
@@ -66,12 +68,12 @@ public class JavaSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<T
     HoodieWriteConfig writeConfig = getWriteConfig();
     for (FileSlice currentSlice : fileSlices) {
       // assume each filegroup size is ~= parquet.max.file.size
-      totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
+      totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
       // check if max size is reached and create new group, if needed.
-      if (totalSizeSoFar >= writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
-        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
+      if (totalSizeSoFar >= writeConfig.getLong(HoodieClusteringConfig.PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP) && !currentGroup.isEmpty()) {
+        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getLong(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES));
         LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-                + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+                + writeConfig.getLong(HoodieClusteringConfig.PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP) + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
         fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
         currentGroup = new ArrayList<>();
         totalSizeSoFar = 0;
@@ -80,13 +82,13 @@ public class JavaSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<T
       // totalSizeSoFar could be 0 when new group was created in the previous conditional block.
       // reset to the size of current slice, otherwise the number of output file group will become 0 even though current slice is present.
       if (totalSizeSoFar == 0) {
-        totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
+        totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
       }
     }
     if (!currentGroup.isEmpty()) {
-      int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
+      int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getLong(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES));
       LOG.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
-              + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+              + writeConfig.getLong(HoodieClusteringConfig.PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP) + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
       fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
     }
     
@@ -100,8 +102,8 @@ public class JavaSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<T
   @Override
   protected Map<String, String> getStrategyParams() {
     Map<String, String> params = new HashMap<>();
-    if (!StringUtils.isNullOrEmpty(getWriteConfig().getClusteringSortColumns())) {
-      params.put(PLAN_STRATEGY_SORT_COLUMNS.key(), getWriteConfig().getClusteringSortColumns());
+    if (!StringUtils.isNullOrEmpty(getWriteConfig().getString(PLAN_STRATEGY_SORT_COLUMNS))) {
+      params.put(PLAN_STRATEGY_SORT_COLUMNS.key(), getWriteConfig().getString(PLAN_STRATEGY_SORT_COLUMNS));
     }
     return params;
   }
@@ -110,7 +112,7 @@ public class JavaSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<T
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
     return super.getFileSlicesEligibleForClustering(partition)
         // Only files that have basefile size smaller than small file size are eligible.
-        .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L) < getWriteConfig().getClusteringSmallFileLimit());
+        .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L) < (long) getWriteConfig().getLong(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT));
   }
 
   private int getNumberOfOutputFileGroups(long groupSize, long targetFileSize) {

@@ -42,7 +42,7 @@ public class FlinkWriteHandleFactory {
   public static <T extends HoodieRecordPayload, I, K, O> Factory<T, I, K, O> getFactory(
       HoodieTableConfig tableConfig,
       HoodieWriteConfig writeConfig) {
-    if (writeConfig.allowDuplicateInserts()) {
+    if (writeConfig.getBoolean(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE)) {
       return ClusterWriteHandleFactory.getInstance();
     }
     if (tableConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {

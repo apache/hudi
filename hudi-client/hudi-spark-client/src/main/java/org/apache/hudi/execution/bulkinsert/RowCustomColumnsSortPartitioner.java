@@ -54,7 +54,7 @@ public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Da
   }
 
   private String[] getSortColumnName(HoodieWriteConfig config) {
-    return Arrays.stream(config.getUserDefinedBulkInsertPartitionerSortColumns().split(","))
+    return Arrays.stream(config.getString(HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS).split(","))
         .map(String::trim).toArray(String[]::new);
   }
 }

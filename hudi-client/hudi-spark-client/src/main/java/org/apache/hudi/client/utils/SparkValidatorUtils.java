@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.table.view.HoodieTablePreCommitFileSystemView;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -65,7 +66,7 @@ public class SparkValidatorUtils {
                                    HoodieEngineContext context,
                                    HoodieTable table,
                                    String instantTime) {
-    if (StringUtils.isNullOrEmpty(config.getPreCommitValidators())) {
+    if (StringUtils.isNullOrEmpty(config.getString(HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES))) {
       LOG.info("no validators configured.");
     } else {
       if (!writeMetadata.getWriteStats().isPresent()) {
@@ -79,7 +80,7 @@ public class SparkValidatorUtils {
       Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table).cache();
       Dataset<Row> afterState  = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime).cache();
 
-      Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
+      Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getString(HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES).split(","))
           .map(validatorClass -> {
             return ((SparkPreCommitValidator) ReflectionUtils.loadClass(validatorClass,
                 new Class<?>[] {HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},

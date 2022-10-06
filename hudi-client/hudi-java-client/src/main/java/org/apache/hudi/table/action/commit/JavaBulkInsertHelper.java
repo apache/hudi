@@ -74,14 +74,14 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
       table.getActiveTimeline().transitionRequestedToInflight(
           new HoodieInstant(HoodieInstant.State.REQUESTED, table.getMetaClient().getCommitActionType(), instantTime),
           Option.empty(),
-          config.shouldAllowMultiWriteOnSameInstant());
+          config.getBoolean(HoodieWriteConfig.ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE));
     }
 
     BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElse(JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode()));
 
     // write new files
     List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
-        config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
+        config.getInt(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE), new CreateHandleFactory(false));
     //update index
     ((BaseJavaCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
@@ -102,14 +102,14 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
     List<HoodieRecord<T>> dedupedRecords = inputRecords;
 
     if (performDedupe) {
-      dedupedRecords = (List<HoodieRecord<T>>) JavaWriteHelper.newInstance().combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
+      dedupedRecords = (List<HoodieRecord<T>>) JavaWriteHelper.newInstance().combineOnCondition(config.getBoolean(HoodieWriteConfig.COMBINE_BEFORE_INSERT), inputRecords,
           parallelism, table);
     }
 
     final List<HoodieRecord<T>> repartitionedRecords = (List<HoodieRecord<T>>) partitioner.repartitionRecords(dedupedRecords, parallelism);
 
     FileIdPrefixProvider fileIdPrefixProvider = (FileIdPrefixProvider) ReflectionUtils.loadClass(
-        config.getFileIdPrefixProviderClassName(),
+        config.getString(HoodieWriteConfig.FILEID_PREFIX_PROVIDER_CLASS),
         new TypedProperties(config.getProps()));
 
     List<WriteStatus> writeStatuses = new ArrayList<>();

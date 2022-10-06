@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.Comparator;
@@ -42,7 +43,7 @@ public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrat
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // Filter the file group which log files size is greater than the threshold in bytes.
     // Order the operations based on the reverse size of the logs and limit them by the IO
-    long threshold = writeConfig.getCompactionLogFileSizeThreshold();
+    long threshold = writeConfig.getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_SIZE_THRESHOLD);
     return super.orderAndFilter(writeConfig, operations.stream()
             .filter(e -> e.getMetrics().getOrDefault(TOTAL_LOG_FILE_SIZE, 0d) >= threshold)
             .sorted(this).collect(Collectors.toList()),

@@ -28,7 +28,7 @@ public interface RunsTableService {
   Logger LOG = LogManager.getLogger(RunsTableService.class);
 
   default boolean tableServicesEnabled(HoodieWriteConfig config) {
-    boolean enabled = config.areTableServicesEnabled();
+    boolean enabled = config.getBooleanOrDefault(HoodieWriteConfig.TABLE_SERVICES_ENABLED);
     if (!enabled) {
       LOG.warn(String.format("Table services are disabled. Set `%s` to enable.", HoodieWriteConfig.TABLE_SERVICES_ENABLED));
     }

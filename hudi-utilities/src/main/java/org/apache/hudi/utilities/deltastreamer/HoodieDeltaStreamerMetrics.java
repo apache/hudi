@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.Metrics;
 
 import com.codahale.metrics.Timer;
@@ -40,7 +41,7 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
   public HoodieDeltaStreamerMetrics(HoodieWriteConfig config) {
     this.config = config;
     this.tableName = config.getTableName();
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       Metrics.init(config);
       this.overallTimerName = getMetricsName("timer", "deltastreamer");
       this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
@@ -49,60 +50,60 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
   }
 
   public Timer.Context getOverallTimerContext() {
-    if (config.isMetricsOn() && overallTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && overallTimer == null) {
       overallTimer = createTimer(overallTimerName);
     }
     return overallTimer == null ? null : overallTimer.time();
   }
 
   public Timer.Context getHiveSyncTimerContext() {
-    if (config.isMetricsOn() && hiveSyncTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && hiveSyncTimer == null) {
       hiveSyncTimer = createTimer(hiveSyncTimerName);
     }
     return hiveSyncTimer == null ? null : hiveSyncTimer.time();
   }
 
   public Timer.Context getMetaSyncTimerContext() {
-    if (config.isMetricsOn() && metaSyncTimer == null) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) && metaSyncTimer == null) {
       metaSyncTimer = createTimer(metaSyncTimerName);
     }
     return metaSyncTimer == null ? null : metaSyncTimer.time();
   }
 
   private Timer createTimer(String name) {
-    return config.isMetricsOn() ? Metrics.getInstance().getRegistry().timer(name) : null;
+    return config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON) ? Metrics.getInstance().getRegistry().timer(name) : null;
   }
 
   String getMetricsName(String action, String metric) {
-    return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
+    return config == null ? null : String.format("%s.%s.%s", config.getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX), action, metric);
   }
 
   public void updateDeltaStreamerMetrics(long durationInNs) {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       Metrics.registerGauge(getMetricsName("deltastreamer", "duration"), getDurationInMs(durationInNs));
     }
   }
 
   public void updateDeltaStreamerMetaSyncMetrics(String syncClassShortName, long syncNs) {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       Metrics.registerGauge(getMetricsName("deltastreamer", syncClassShortName), getDurationInMs(syncNs));
     }
   }
 
   public void updateDeltaStreamerKafkaDelayCountMetrics(long kafkaDelayCount) {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       Metrics.registerGauge(getMetricsName("deltastreamer", "kafkaDelayCount"), kafkaDelayCount);
     }
   }
 
   public void updateDeltaStreamerSyncMetrics(long syncEpochTimeInMs) {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       Metrics.registerGauge(getMetricsName("deltastreamer", "lastSync"), syncEpochTimeInMs);
     }
   }
 
   public void updateDeltaStreamerKafkaMessageInCount(long totalNewMsgCount) {
-    if (config.isMetricsOn()) {
+    if (config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)) {
       Metrics.registerGauge(getMetricsName("deltastreamer", "kafkaMessageInCount"), totalNewMsgCount);
     }
   }

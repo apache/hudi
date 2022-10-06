@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2Migrati
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
@@ -153,7 +154,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       return Collections.emptyList();
     }
 
-    if (config.incrementalCleanerModeEnabled()) {
+    if (config.getBoolean(HoodieCleanConfig.CLEANER_INCREMENTAL_MODE_ENABLE)) {
       Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
         if (hoodieTable.getActiveTimeline().isEmpty(lastClean.get())) {
@@ -226,7 +227,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * single file (i.e run it with versionsRetained = 1)
    */
   private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestVersions(String partitionPath) {
-    LOG.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
+    LOG.info("Cleaning " + partitionPath + ", retaining latest " + config.getInt(HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED)
         + " file versions. ");
     List<CleanFileInfo> deletePaths = new ArrayList<>();
     // Collect all the datafiles savepointed by all the savepoints
@@ -240,7 +241,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     boolean toDeletePartition = false;
     List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     for (HoodieFileGroup fileGroup : fileGroups) {
-      int keepVersions = config.getCleanerFileVersionsRetained();
+      int keepVersions = config.getInt(HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED);
       // do not cleanup slice required for pending compaction
       Iterator<FileSlice> fileSliceIterator =
           fileGroup.getAllFileSlices().filter(fs -> !isFileSliceNeededForPendingCompaction(fs)).iterator();
@@ -273,7 +274,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   }
 
   private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath) {
-    return getFilesToCleanKeepingLatestCommits(partitionPath, config.getCleanerCommitsRetained(), HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+    return getFilesToCleanKeepingLatestCommits(partitionPath, config.getInt(HoodieCleanConfig.CLEANER_COMMITS_RETAINED), HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
   }
 
   /**
@@ -357,7 +358,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
             // this is a commit, that should be cleaned.
             aFile.ifPresent(hoodieDataFile -> {
               deletePaths.add(new CleanFileInfo(hoodieDataFile.getPath(), false));
-              if (hoodieDataFile.getBootstrapBaseFile().isPresent() && config.shouldCleanBootstrapBaseFile()) {
+              if (hoodieDataFile.getBootstrapBaseFile().isPresent() && config.getBoolean(HoodieCleanConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLE)) {
                 deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
               }
             });
@@ -426,7 +427,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     if (nextSlice.getBaseFile().isPresent()) {
       HoodieBaseFile dataFile = nextSlice.getBaseFile().get();
       cleanPaths.add(new CleanFileInfo(dataFile.getPath(), false));
-      if (dataFile.getBootstrapBaseFile().isPresent() && config.shouldCleanBootstrapBaseFile()) {
+      if (dataFile.getBootstrapBaseFile().isPresent() && config.getBoolean(HoodieCleanConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLE)) {
         cleanPaths.add(new CleanFileInfo(dataFile.getBootstrapBaseFile().get().getPath(), true));
       }
     }
@@ -477,8 +478,8 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    */
   public Option<HoodieInstant> getEarliestCommitToRetain() {
     Option<HoodieInstant> earliestCommitToRetain = Option.empty();
-    int commitsRetained = config.getCleanerCommitsRetained();
-    int hoursRetained = config.getCleanerHoursRetained();
+    int commitsRetained = config.getInt(HoodieCleanConfig.CLEANER_COMMITS_RETAINED);
+    int hoursRetained = config.getInt(HoodieCleanConfig.CLEANER_HOURS_RETAINED);
     if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_COMMITS
         && commitTimeline.countInstants() > commitsRetained) {
       earliestCommitToRetain = commitTimeline.nthInstant(commitTimeline.countInstants() - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list

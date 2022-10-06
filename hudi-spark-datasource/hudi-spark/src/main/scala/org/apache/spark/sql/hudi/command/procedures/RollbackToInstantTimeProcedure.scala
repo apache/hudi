@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.util.Option
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.Row
@@ -60,7 +61,7 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
       .setBasePath(config.getBasePath)
       .setLoadActiveTimelineOnLoad(false)
       .setConsistencyGuardConfig(config.getConsistencyGuardConfig)
-      .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion)))
+      .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM))))
       .build
 
     val activeTimeline = metaClient.getActiveTimeline

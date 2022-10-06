@@ -39,6 +39,8 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFactory;
@@ -48,6 +50,7 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -129,7 +132,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
       return new JavaCustomColumnsSortPartitioner(
           strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
           HoodieAvroUtils.addMetadataFields(schema),
-          getWriteConfig().isConsistentLogicalTimestampEnabled());
+          getWriteConfig().getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED));
     } else {
       return JavaBulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode());
     }
@@ -186,10 +189,10 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
             .withReaderSchema(readerSchema)
             .withLatestInstantTime(instantTime)
             .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-            .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
-            .withReverseReader(config.getCompactionReverseLogReadEnabled())
-            .withBufferSize(config.getMaxDFSStreamBufferSize())
-            .withSpillableMapBasePath(config.getSpillableMapBasePath())
+            .withReadBlocksLazily(config.getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
+            .withReverseReader(config.getBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE))
+            .withBufferSize(config.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
+            .withSpillableMapBasePath(config.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH))
             .withPartition(clusteringOp.getPartitionPath())
             .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
             .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())

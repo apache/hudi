@@ -44,9 +44,12 @@ import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
@@ -159,7 +162,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
       ((HoodieTable) compactionHandler).getConfig().setDefault(config);
     } else {
       readerSchema = HoodieAvroUtils.addMetadataFields(
-          new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+          new Schema.Parser().parse(config.getSchema()), config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD));
     }
     LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
         + " for commit " + instantTime);
@@ -187,13 +190,13 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withLatestInstantTime(maxInstantTime)
         .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-        .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
-        .withReverseReader(config.getCompactionReverseLogReadEnabled())
-        .withBufferSize(config.getMaxDFSStreamBufferSize())
-        .withSpillableMapBasePath(config.getSpillableMapBasePath())
+        .withReadBlocksLazily(config.getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
+        .withReverseReader(config.getBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE))
+        .withBufferSize(config.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
+        .withSpillableMapBasePath(config.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH))
         .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .withOperationField(config.allowOperationMetadataField())
+        .withOperationField(config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD))
         .withPartition(operation.getPartitionPath())
         .build();
 
@@ -279,7 +282,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
 
     // filter the partition paths if needed to reduce list status
-    partitionPaths = config.getCompactionStrategy().filterPartitionPaths(config, partitionPaths);
+    partitionPaths = ReflectionUtils.<CompactionStrategy>loadClass(config.getString(HoodieCompactionConfig.COMPACTION_STRATEGY)).filterPartitionPaths(config, partitionPaths);
 
     if (partitionPaths.isEmpty()) {
       // In case no partitions could be picked, return no compaction plan
@@ -303,7 +306,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
           // into meta files.
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
-              config.getCompactionStrategy().captureMetrics(config, s));
+              ReflectionUtils.<CompactionStrategy>loadClass(config.getString(HoodieCompactionConfig.COMPACTION_STRATEGY)).captureMetrics(config, s));
         })
         .filter(c -> !c.getDeltaFileNames().isEmpty()), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
@@ -314,7 +317,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     LOG.info("Total number of file slices " + totalFileSlices.value());
     // Filter the compactions with the passed in filter. This lets us choose most effective
     // compactions only
-    HoodieCompactionPlan compactionPlan = config.getCompactionStrategy().generateCompactionPlan(config, operations,
+    HoodieCompactionPlan compactionPlan = ReflectionUtils.<CompactionStrategy>loadClass(config.getString(HoodieCompactionConfig.COMPACTION_STRATEGY)).generateCompactionPlan(config, operations,
         CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
     ValidationUtils.checkArgument(
         compactionPlan.getOperations().stream().noneMatch(

@@ -59,7 +59,7 @@ class UpgradeOrDowngradeProcedure extends BaseProcedure with ProcedureBuilder wi
       .setBasePath(config.getBasePath)
       .setLoadActiveTimelineOnLoad(false)
       .setConsistencyGuardConfig(config.getConsistencyGuardConfig)
-      .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion)))
+      .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM))))
       .setFileSystemRetryConfig(config.getFileSystemRetryConfig)
       .build
 

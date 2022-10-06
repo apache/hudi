@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -91,7 +92,7 @@ public class HoodieCDCLogger implements Closeable {
     try {
       this.commitTime = commitTime;
       this.dataSchema = HoodieAvroUtils.removeMetadataFields(schema);
-      this.keyField = config.populateMetaFields()
+      this.keyField = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
           ? HoodieRecord.RECORD_KEY_METADATA_FIELD
           : tableConfig.getRecordKeyFieldProp();
       this.cdcWriter = cdcWriter;
@@ -104,7 +105,7 @@ public class HoodieCDCLogger implements Closeable {
 
       this.cdcData = new ExternalSpillableMap<>(
           maxInMemorySizeInBytes,
-          config.getSpillableMapBasePath(),
+          config.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH),
           new DefaultSizeEstimator<>(),
           new DefaultSizeEstimator<>(),
           config.getCommonConfig().getSpillableDiskMapType(),

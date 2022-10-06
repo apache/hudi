@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 
 import com.codahale.metrics.Timer;
 import org.junit.jupiter.api.AfterEach;
@@ -49,9 +50,9 @@ public class TestHoodieMetrics {
 
   @BeforeEach
   void setUp() {
-    when(config.isMetricsOn()).thenReturn(true);
+    when(config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)).thenReturn(true);
     when(config.getTableName()).thenReturn("raw_table");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
+    when(MetricsReporterType.valueOf(config.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE))).thenReturn(MetricsReporterType.INMEMORY);
     metrics = new HoodieMetrics(config);
   }
 

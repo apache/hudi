@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+import org.apache.hudi.config.HoodieCleanConfig;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -57,7 +58,7 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
             executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath);
         String basePath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath;
 
-        int maxCommitsRetained = executionContext.getHoodieTestSuiteWriter().getWriteConfig().getCleanerCommitsRetained() + 1;
+        int maxCommitsRetained = executionContext.getHoodieTestSuiteWriter().getWriteConfig().getInt(HoodieCleanConfig.CLEANER_COMMITS_RETAINED) + 1;
         FileSystem fs = FSUtils.getFs(basePath, executionContext.getHoodieTestSuiteWriter().getConfiguration());
         
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)

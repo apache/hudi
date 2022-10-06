@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics.datadog;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 
@@ -62,7 +63,7 @@ public class TestDatadogMetricsReporter {
   @Test
   public void instantiationShouldFailWhenNoMetricPrefix() {
     when(config.getDatadogApiKey()).thenReturn("foo");
-    when(config.getDatadogMetricPrefix()).thenReturn("");
+    when(config.getString(HoodieMetricsDatadogConfig.METRIC_PREFIX_VALUE)).thenReturn("");
     Throwable t = assertThrows(IllegalStateException.class, () -> {
       new DatadogMetricsReporter(config, registry);
     });
@@ -71,11 +72,11 @@ public class TestDatadogMetricsReporter {
 
   @Test
   public void instantiationShouldSucceed() {
-    when(config.getDatadogApiSite()).thenReturn(ApiSite.EU);
+    when(ApiSite.valueOf(config.getString(HoodieMetricsDatadogConfig.API_SITE_VALUE))).thenReturn(ApiSite.EU);
     when(config.getDatadogApiKey()).thenReturn("foo");
-    when(config.getDatadogApiKeySkipValidation()).thenReturn(true);
-    when(config.getDatadogMetricPrefix()).thenReturn("bar");
-    when(config.getDatadogMetricHost()).thenReturn("foo");
+    when(config.getBoolean(HoodieMetricsDatadogConfig.API_KEY_SKIP_VALIDATION)).thenReturn(true);
+    when(config.getString(HoodieMetricsDatadogConfig.METRIC_PREFIX_VALUE)).thenReturn("bar");
+    when(config.getString(HoodieMetricsDatadogConfig.METRIC_HOST_NAME)).thenReturn("foo");
     when(config.getDatadogMetricTags()).thenReturn(Arrays.asList("baz", "foo"));
     assertDoesNotThrow(() -> {
       new DatadogMetricsReporter(config, registry);

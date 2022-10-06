@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
@@ -66,7 +67,7 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
    * @return class name of clustering plan strategy
    */
   public static String checkAndGetClusteringPlanStrategy(HoodieWriteConfig config) {
-    String className = config.getClusteringPlanStrategyClass();
+    String className = config.getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME);
     String sparkSizeBasedClassName = HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
     String sparkSelectedPartitionsClassName = "org.apache.hudi.client.clustering.plan.strategy.SparkSelectedPartitionsClusteringPlanStrategy";
     String sparkRecentDaysClassName = "org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy";
@@ -165,7 +166,7 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
    */
   protected Map<String, Double> buildMetrics(List<FileSlice> fileSlices) {
     Map<String, Double> metrics = new HashMap<>();
-    FileSliceMetricUtils.addFileSliceCommonMetrics(fileSlices, metrics, getWriteConfig().getParquetMaxFileSize());
+    FileSliceMetricUtils.addFileSliceCommonMetrics(fileSlices, metrics, getWriteConfig().getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE));
     return metrics;
   }
 

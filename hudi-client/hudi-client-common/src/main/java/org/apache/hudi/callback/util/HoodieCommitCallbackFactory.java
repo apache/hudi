@@ -29,7 +29,7 @@ import org.apache.hudi.exception.HoodieCommitCallbackException;
  */
 public class HoodieCommitCallbackFactory {
   public static HoodieWriteCommitCallback create(HoodieWriteConfig config) {
-    String callbackClass = config.getCallbackClass();
+    String callbackClass = config.getString(HoodieWriteCommitCallbackConfig.CALLBACK_CLASS_NAME);
     if (!StringUtils.isNullOrEmpty(callbackClass)) {
       Object instance = ReflectionUtils.loadClass(callbackClass, config);
       if (!(instance instanceof HoodieWriteCommitCallback)) {

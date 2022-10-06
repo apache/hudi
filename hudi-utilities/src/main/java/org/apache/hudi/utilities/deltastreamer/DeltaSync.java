@@ -50,6 +50,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
+import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -327,7 +328,7 @@ public class DeltaSync implements Serializable, Closeable {
       }
 
       // complete the pending clustering before writing to sink
-      if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
+      if (cfg.retryLastPendingInlineClusteringJob && (boolean) getHoodieClientConfig(this.schemaProvider).getBoolean(INLINE_CLUSTERING)) {
         Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
         if (pendingClusteringInstant.isPresent()) {
           writeClient.cluster(pendingClusteringInstant.get(), true);
@@ -743,7 +744,7 @@ public class DeltaSync implements Serializable, Closeable {
     }
     registerAvroSchemas(sourceSchema, targetSchema);
     HoodieWriteConfig hoodieCfg = getHoodieClientConfig(targetSchema);
-    if (hoodieCfg.isEmbeddedTimelineServerEnabled()) {
+    if (hoodieCfg.getBoolean(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE)) {
       if (!embeddedTimelineService.isPresent()) {
         embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), hoodieCfg);
       } else {
@@ -805,14 +806,14 @@ public class DeltaSync implements Serializable, Closeable {
 
     HoodieWriteConfig config = builder.build();
 
-    if (config.writeCommitCallbackOn()) {
+    if (config.getBoolean(HoodieWriteCommitCallbackConfig.TURN_CALLBACK_ON)) {
       // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
-      if (HoodieWriteCommitKafkaCallback.class.getName().equals(config.getCallbackClass())) {
+      if (HoodieWriteCommitKafkaCallback.class.getName().equals(config.getString(HoodieWriteCommitCallbackConfig.CALLBACK_CLASS_NAME))) {
         HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config);
       }
 
       // set default value for {@link HoodieWriteCommitPulsarCallbackConfig} if needed.
-      if (HoodieWriteCommitPulsarCallback.class.getName().equals(config.getCallbackClass())) {
+      if (HoodieWriteCommitPulsarCallback.class.getName().equals(config.getString(HoodieWriteCommitCallbackConfig.CALLBACK_CLASS_NAME))) {
         HoodieWriteCommitPulsarCallbackConfig.setCallbackPulsarConfigIfNeeded(config);
       }
     }
@@ -820,17 +821,17 @@ public class DeltaSync implements Serializable, Closeable {
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.from(props);
 
     // Validate what deltastreamer assumes of write-config to be really safe
-    ValidationUtils.checkArgument(config.inlineCompactionEnabled() == cfg.isInlineCompactionEnabled(),
+    ValidationUtils.checkArgument(config.getBoolean(INLINE_COMPACT) == cfg.isInlineCompactionEnabled(),
         String.format("%s should be set to %s", INLINE_COMPACT.key(), cfg.isInlineCompactionEnabled()));
-    ValidationUtils.checkArgument(config.inlineClusteringEnabled() == clusteringConfig.isInlineClusteringEnabled(),
+    ValidationUtils.checkArgument(config.getBoolean(INLINE_CLUSTERING) == clusteringConfig.isInlineClusteringEnabled(),
         String.format("%s should be set to %s", INLINE_CLUSTERING.key(), clusteringConfig.isInlineClusteringEnabled()));
-    ValidationUtils.checkArgument(config.isAsyncClusteringEnabled() == clusteringConfig.isAsyncClusteringEnabled(),
+    ValidationUtils.checkArgument(config.getBoolean(ASYNC_CLUSTERING_ENABLE) == clusteringConfig.isAsyncClusteringEnabled(),
         String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE.key(), clusteringConfig.isAsyncClusteringEnabled()));
-    ValidationUtils.checkArgument(!config.shouldAutoCommit(),
+    ValidationUtils.checkArgument(!config.getBoolean(AUTO_COMMIT_ENABLE),
         String.format("%s should be set to %s", AUTO_COMMIT_ENABLE.key(), autoCommit));
-    ValidationUtils.checkArgument(config.shouldCombineBeforeInsert() == cfg.filterDupes,
+    ValidationUtils.checkArgument((boolean) config.getBoolean(COMBINE_BEFORE_INSERT) == cfg.filterDupes,
         String.format("%s should be set to %s", COMBINE_BEFORE_INSERT.key(), cfg.filterDupes));
-    ValidationUtils.checkArgument(config.shouldCombineBeforeUpsert(),
+    ValidationUtils.checkArgument(config.getBoolean(COMBINE_BEFORE_UPSERT),
         String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT.key(), combineBeforeUpsert));
     return config;
   }

@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.client.utils.FileSliceMetricUtils;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.io.Serializable;
@@ -55,7 +56,7 @@ public abstract class CompactionStrategy implements Serializable {
    */
   public Map<String, Double> captureMetrics(HoodieWriteConfig writeConfig, FileSlice slice) {
     Map<String, Double> metrics = new HashMap<>();
-    long defaultMaxParquetFileSize = writeConfig.getParquetMaxFileSize();
+    long defaultMaxParquetFileSize = writeConfig.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
     FileSliceMetricUtils.addFileSliceCommonMetrics(Collections.singletonList(slice), metrics, defaultMaxParquetFileSize);
     return metrics;
   }

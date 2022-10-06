@@ -49,6 +49,9 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
@@ -107,8 +110,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.table = table;
     this.metaClient = table.getMetaClient();
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
-    this.maxInstantsToKeep = config.getMaxCommitsToKeep();
-    this.minInstantsToKeep = config.getMinCommitsToKeep();
+    this.maxInstantsToKeep = config.getInt(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP);
+    this.minInstantsToKeep = config.getInt(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP);
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
@@ -188,7 +191,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   }
 
   public boolean shouldMergeSmallArchiveFies() {
-    return config.getArchiveMergeEnable() && !StorageSchemes.isAppendSupported(metaClient.getFs().getScheme());
+    return config.getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_MERGE_ENABLE) && !StorageSchemes.isAppendSupported(metaClient.getFs().getScheme());
   }
 
   /**
@@ -212,8 +215,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // Sort files by version suffix in reverse (implies reverse chronological order)
     Arrays.sort(fsStatuses, new HoodieArchivedTimeline.ArchiveFileVersionComparator());
 
-    int archiveMergeFilesBatchSize = config.getArchiveMergeFilesBatchSize();
-    long smallFileLimitBytes = config.getArchiveMergeSmallFileLimitBytes();
+    int archiveMergeFilesBatchSize = config.getInt(HoodieArchivalConfig.ARCHIVE_MERGE_FILES_BATCH_SIZE);
+    long smallFileLimitBytes = config.getLong(HoodieArchivalConfig.ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES);
 
     List<FileStatus> mergeCandidate = getMergeCandidates(smallFileLimitBytes, fsStatuses);
 
@@ -343,7 +346,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           while (reader.hasNext()) {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
             blk.getRecordIterator().forEachRemaining(records::add);
-            if (records.size() >= this.config.getCommitArchivalBatchSize()) {
+            if (records.size() >= this.config.getInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE)) {
               writeToFile(wrapperSchema, records);
             }
           }
@@ -362,7 +365,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
     return FSUtils.parallelizeFilesProcess(context,
         metaClient.getFs(),
-        config.getArchiveDeleteParallelism(),
+        config.getInt(HoodieArchivalConfig.DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE),
         pairOfSubPathAndConf -> {
           Path file = new Path(pairOfSubPathAndConf.getKey());
           try {
@@ -424,16 +427,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       // NUM_COMMITS or NUM_AND_TIME.
       Option<HoodieInstant> oldestInstantToRetainForCompaction =
           (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ
-              && (config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_COMMITS
-              || config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_AND_TIME))
+              && (CompactionTriggerStrategy.valueOf(config.getString(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY)) == CompactionTriggerStrategy.NUM_COMMITS
+              || CompactionTriggerStrategy.valueOf(config.getString(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY)) == CompactionTriggerStrategy.NUM_AND_TIME))
               ? CompactionUtils.getOldestInstantToRetainForCompaction(
-              table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax())
+              table.getActiveTimeline(), config.getInt(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS))
               : Option.empty();
 
       // Actually do the commits
       Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstants()
           .filter(s -> {
-            if (config.shouldArchiveBeyondSavepoint()) {
+            if (config.getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT)) {
               // skip savepoint commits and proceed further
               return !savepointTimestamps.contains(s.getTimestamp());
             } else {
@@ -449,7 +452,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           }).filter(s -> {
             // We need this to ensure that when multiple writers are performing conflict resolution, eligible instants don't
             // get archived, i.e, instants after the oldestInflight are retained on the timeline
-            if (config.getFailedWritesCleanPolicy() == HoodieFailedWritesCleaningPolicy.LAZY) {
+            if (HoodieFailedWritesCleaningPolicy
+                .valueOf(config.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)) == HoodieFailedWritesCleaningPolicy.LAZY) {
               return oldestInflightCommitInstant.map(instant ->
                       compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                   .orElse(true);
@@ -504,7 +508,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           .build();
       Option<HoodieInstant> earliestActiveDatasetCommit = dataMetaClient.getActiveTimeline().firstInstant();
 
-      if (config.shouldArchiveBeyondSavepoint()) {
+      if (config.getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT)) {
         // There are chances that there could be holes in the timeline due to archival and savepoint interplay.
         // So, the first non-savepoint commit in the data timeline is considered as beginning of the active timeline.
         Option<HoodieInstant> firstNonSavepointCommit = dataMetaClient.getActiveTimeline().getFirstNonSavepointCommit();
@@ -639,12 +643,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           } else {
             records.add(convertToAvroRecord(hoodieInstant));
           }
-          if (records.size() >= this.config.getCommitArchivalBatchSize()) {
+          if (records.size() >= this.config.getInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE)) {
             writeToFile(wrapperSchema, records);
           }
         } catch (Exception e) {
           LOG.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);
-          if (this.config.isFailOnTimelineArchivingEnabled()) {
+          if (this.config.getBoolean(HoodieWriteConfig.FAIL_ON_TIMELINE_ARCHIVING_ENABLE)) {
             throw e;
           }
         }
@@ -657,7 +661,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
   private void deleteAnyLeftOverMarkers(HoodieEngineContext context, HoodieInstant instant) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instant.getTimestamp());
-    if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
+    if (writeMarkers.deleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE))) {
       LOG.info("Cleaned up left over marker directory for instant :" + instant);
     }
   }

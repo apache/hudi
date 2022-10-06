@@ -318,7 +318,7 @@ public class SparkMain {
       HoodieEngineContext context = client.getEngineContext();
       HoodieSparkTable table = HoodieSparkTable.create(config, context);
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
-          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+          .quietDeleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
       return 0;
     } catch (Exception e) {
       LOG.warn(String.format("Failed: Could not clean marker instantTime: \"%s\".", instantTime), e);
@@ -615,7 +615,7 @@ public class SparkMain {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getInt(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM))))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
     HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps())
         .forTable(metaClient.getTableConfig().getTableName()).build();

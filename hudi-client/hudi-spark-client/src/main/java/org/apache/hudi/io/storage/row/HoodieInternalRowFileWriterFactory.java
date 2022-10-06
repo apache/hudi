@@ -22,7 +22,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -74,23 +77,23 @@ public class HoodieInternalRowFileWriterFactory {
         new HoodieParquetConfig<>(
             writeSupport,
             writeConfig.getParquetCompressionCodec(),
-            writeConfig.getParquetBlockSize(),
-            writeConfig.getParquetPageSize(),
-            writeConfig.getParquetMaxFileSize(),
+            writeConfig.getInt(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
+            writeConfig.getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE),
+            writeConfig.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
             writeSupport.getHadoopConf(),
-            writeConfig.getParquetCompressionRatio(),
-            writeConfig.parquetDictionaryEnabled()
+            writeConfig.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
+            writeConfig.getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED)
         ));
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {
     // NOTE: Currently Bloom Filter is only going to be populated if meta-fields are populated
-    if (writeConfig.populateMetaFields()) {
+    if (writeConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
       BloomFilter bloomFilter = BloomFilterFactory.createBloomFilter(
-          writeConfig.getBloomFilterNumEntries(),
-          writeConfig.getBloomFilterFPP(),
-          writeConfig.getDynamicBloomFilterMaxNumEntries(),
-          writeConfig.getBloomFilterType());
+          writeConfig.getInt(HoodieIndexConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE),
+          writeConfig.getDouble(HoodieIndexConfig.BLOOM_FILTER_FPP_VALUE),
+          writeConfig.getInt(HoodieIndexConfig.BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES),
+          writeConfig.getString(HoodieIndexConfig.BLOOM_FILTER_TYPE));
 
       return Option.of(bloomFilter);
     }

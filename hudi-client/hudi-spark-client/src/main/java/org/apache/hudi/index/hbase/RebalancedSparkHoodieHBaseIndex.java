@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index.hbase;
 
+import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
@@ -31,8 +32,8 @@ public class RebalancedSparkHoodieHBaseIndex extends SparkHoodieHBaseIndex  {
 
   @Override
   protected String getHBaseKey(String originalKey) {
-    int bucket = Math.abs(originalKey.hashCode()) % config.getHBaseIndexRegionCount();
-    String bucketStr = String.format("%0" + String.valueOf(config.getHBaseIndexRegionCount() - 1).length() + "d", bucket);
+    int bucket = Math.abs(originalKey.hashCode()) % config.getInt(HoodieHBaseIndexConfig.BUCKET_NUMBER);
+    String bucketStr = String.format("%0" + String.valueOf(config.getInt(HoodieHBaseIndexConfig.BUCKET_NUMBER) - 1).length() + "d", bucket);
     return bucketStr + originalKey;
   }
 }

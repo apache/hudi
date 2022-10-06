@@ -74,8 +74,8 @@ public class MarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O>
   public List<HoodieRollbackRequest> getRollbackRequests(HoodieInstant instantToRollback) {
     try {
       List<String> markerPaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
-          table, context, instantToRollback.getTimestamp(), config.getRollbackParallelism());
-      int parallelism = Math.max(Math.min(markerPaths.size(), config.getRollbackParallelism()), 1);
+          table, context, instantToRollback.getTimestamp(), config.getInt(HoodieWriteConfig.ROLLBACK_PARALLELISM_VALUE));
+      int parallelism = Math.max(Math.min(markerPaths.size(), config.getInt(HoodieWriteConfig.ROLLBACK_PARALLELISM_VALUE)), 1);
       return context.map(markerPaths, markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);

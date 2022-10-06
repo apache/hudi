@@ -65,7 +65,7 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
       // Converts the markers in new format to old format of direct markers
       try {
         convertToDirectMarkers(
-            inflightInstant.getTimestamp(), table, context, config.getMarkersDeleteParallelism());
+            inflightInstant.getTimestamp(), table, context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
       } catch (IOException e) {
         throw new HoodieException("Converting marker files to DIRECT style failed during downgrade", e);
       }

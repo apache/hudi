@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
@@ -181,7 +182,7 @@ public class BucketAssigner implements AutoCloseable {
     if (smallFiles.size() > 0) {
       LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
       SmallFileAssignState[] states = smallFiles.stream()
-          .map(smallFile -> new SmallFileAssignState(config.getParquetMaxFileSize(), smallFile, writeProfile.getAvgSize()))
+          .map(smallFile -> new SmallFileAssignState(config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE), smallFile, writeProfile.getAvgSize()))
           .toArray(SmallFileAssignState[]::new);
       SmallFileAssign assign = new SmallFileAssign(states);
       smallFileAssignMap.put(partitionPath, assign);

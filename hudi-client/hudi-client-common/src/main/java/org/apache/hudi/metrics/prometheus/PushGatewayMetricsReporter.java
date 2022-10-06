@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics.prometheus;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.metrics.MetricsReporter;
 
 import com.codahale.metrics.MetricFilter;
@@ -37,12 +38,12 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
 
   public PushGatewayMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
 
-    String serverHost = config.getPushGatewayHost();
-    int serverPort = config.getPushGatewayPort();
-    periodSeconds = config.getPushGatewayReportPeriodSeconds();
-    deleteShutdown = config.getPushGatewayDeleteOnShutdown();
-    configuredJobName = config.getPushGatewayJobName();
-    randomSuffix = config.getPushGatewayRandomJobNameSuffix();
+    String serverHost = config.getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_HOST_NAME);
+    int serverPort = config.getInt(HoodieMetricsPrometheusConfig.PUSHGATEWAY_PORT_NUM);
+    periodSeconds = config.getInt(HoodieMetricsPrometheusConfig.PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS);
+    deleteShutdown = config.getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE);
+    configuredJobName = config.getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOBNAME);
+    randomSuffix = config.getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX);
 
     pushGatewayReporter = new PushGatewayReporter(
         registry,

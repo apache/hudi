@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
@@ -40,7 +41,7 @@ public class BoundedIOCompactionStrategy extends CompactionStrategy {
     // IO limit
     // Preserves the original ordering of compactions
     List<HoodieCompactionOperation> finalOperations = new ArrayList<>();
-    long targetIORemaining = writeConfig.getTargetIOPerCompactionInMB();
+    long targetIORemaining = writeConfig.getLong(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB);
     for (HoodieCompactionOperation op : operations) {
       long opIo = op.getMetrics().get(TOTAL_IO_MB).longValue();
       targetIORemaining -= opIo;

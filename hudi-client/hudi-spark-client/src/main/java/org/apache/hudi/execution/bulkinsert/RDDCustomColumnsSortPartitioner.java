@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
@@ -46,7 +47,7 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
     this.sortColumnNames = getSortColumnName(config);
-    this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
+    this.consistentLogicalTimestampEnabled = config.getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
   }
 
   public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
@@ -80,7 +81,7 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
   }
 
   private String[] getSortColumnName(HoodieWriteConfig config) {
-    return Arrays.stream(config.getUserDefinedBulkInsertPartitionerSortColumns().split(","))
+    return Arrays.stream(config.getString(HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS).split(","))
         .map(String::trim).toArray(String[]::new);
   }
 }

@@ -21,6 +21,7 @@ package org.apache.hudi.async;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
@@ -57,7 +58,7 @@ public class AsyncArchiveService extends HoodieAsyncTableService {
 
   public static AsyncArchiveService startAsyncArchiveIfEnabled(BaseHoodieWriteClient writeClient) {
     HoodieWriteConfig config = writeClient.getConfig();
-    if (!config.isAutoArchive() || !config.isAsyncArchive()) {
+    if (!(boolean) config.getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE) || !(boolean) config.getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE)) {
       LOG.info("The HoodieWriteClient is not configured to auto & async archive. Async archive service will not start.");
       return null;
     }

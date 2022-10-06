@@ -184,7 +184,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     HoodieTimeline commitTimeLine = mock(HoodieTimeline.class);
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().build();
     when(commitTimeLine.empty()).thenReturn(true);
-    long expectAvgSize = config.getCopyOnWriteRecordSizeEstimate();
+    long expectAvgSize = config.getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
     long actualAvgSize = averageBytesPerRecord(commitTimeLine, config);
     assertEquals(expectAvgSize, actualAvgSize);
   }
@@ -204,7 +204,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     // Inserts + Updates... Check all updates go together & inserts subsplit
     UpsertPartitioner partitioner = getUpsertPartitioner(0, 250, 100, 1024, testPartitionPath, false);
     List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
-    int insertSplitSize = partitioner.config.getCopyOnWriteInsertSplitSize();
+    int insertSplitSize = partitioner.config.getInt(HoodieCompactionConfig.COPY_ON_WRITE_INSERT_SPLIT_SIZE);
     int remainedInsertSize = 250 - 2 * insertSplitSize;
     // will assigned 3 insertBuckets. 100, 100, 50 each
     assertEquals(3, insertBuckets.size(), "Total of 3 insert buckets");

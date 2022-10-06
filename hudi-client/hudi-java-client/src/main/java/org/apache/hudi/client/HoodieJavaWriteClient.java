@@ -158,7 +158,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
     HoodieTableMetaClient metaClient = createMetaClient(true);
     metaClient.getActiveTimeline().transitionRequestedToInflight(
         new HoodieInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), instantTime),
-        Option.empty(), config.shouldAllowMultiWriteOnSameInstant());
+        Option.empty(), config.getBoolean(HoodieWriteConfig.ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE));
   }
 
   @Override

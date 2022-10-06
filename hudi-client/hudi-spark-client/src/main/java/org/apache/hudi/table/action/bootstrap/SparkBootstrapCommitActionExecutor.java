@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -103,21 +104,21 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
             .withProps(config.getProps())
             .withAutoCommit(true)
             .withWriteStatusClass(BootstrapWriteStatus.class)
-            .withBulkInsertParallelism(config.getBootstrapParallelism()).build(),
+            .withBulkInsertParallelism(config.getInt(HoodieBootstrapConfig.PARALLELISM_VALUE)).build(),
         table,
         HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
         WriteOperationType.BOOTSTRAP,
         extraMetadata);
-    bootstrapSourceFileSystem = FSUtils.getFs(config.getBootstrapSourceBasePath(), hadoopConf);
+    bootstrapSourceFileSystem = FSUtils.getFs(config.getString(HoodieBootstrapConfig.BASE_PATH), hadoopConf);
   }
 
   private void validate() {
-    checkArgument(config.getBootstrapSourceBasePath() != null,
+    checkArgument(config.getString(HoodieBootstrapConfig.BASE_PATH) != null,
         "Ensure Bootstrap Source Path is set");
-    checkArgument(config.getBootstrapModeSelectorClass() != null,
+    checkArgument(config.getString(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME) != null,
         "Ensure Bootstrap Partition Selector is set");
-    if (METADATA_ONLY.name().equals(config.getBootstrapModeSelectorRegex())) {
-      checkArgument(!config.getBootstrapModeSelectorClass().equals(FullRecordBootstrapModeSelector.class.getCanonicalName()),
+    if (METADATA_ONLY.name().equals(config.getString(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_PATTERN))) {
+      checkArgument(!config.getString(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME).equals(FullRecordBootstrapModeSelector.class.getCanonicalName()),
           "FullRecordBootstrapModeSelector cannot be used with METADATA_ONLY bootstrap mode");
     }
   }
@@ -174,7 +175,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
 
     // Delete the marker directory for the instant
     WriteMarkersFactory.get(config.getMarkersType(), table, bootstrapInstantTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+        .quietDeleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
 
     return Option.of(result);
   }
@@ -215,13 +216,13 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     HoodieTableMetaClient metaClient = table.getMetaClient();
     try (BootstrapIndex.IndexWriter indexWriter = BootstrapIndex.getBootstrapIndex(metaClient)
         .createWriter(metaClient.getTableConfig().getBootstrapBasePath().get())) {
-      LOG.info("Starting to write bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
+      LOG.info("Starting to write bootstrap index for source " + config.getString(HoodieBootstrapConfig.BASE_PATH) + " in table "
           + config.getBasePath());
       indexWriter.begin();
       bootstrapSourceAndStats.forEach((key, value) -> indexWriter.appendNextPartition(key,
           value.stream().map(Pair::getKey).collect(Collectors.toList())));
       indexWriter.finish();
-      LOG.info("Finished writing bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
+      LOG.info("Finished writing bootstrap index for source " + config.getString(HoodieBootstrapConfig.BASE_PATH) + " in table "
           + config.getBasePath());
     }
 
@@ -276,10 +277,10 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     TypedProperties properties = new TypedProperties();
     properties.putAll(config.getProps());
     FullRecordBootstrapDataProvider inputProvider =
-        (FullRecordBootstrapDataProvider) ReflectionUtils.loadClass(config.getFullBootstrapInputProvider(),
+        (FullRecordBootstrapDataProvider) ReflectionUtils.loadClass(config.getString(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME),
             properties, context);
     JavaRDD<HoodieRecord> inputRecordsRDD =
-        (JavaRDD<HoodieRecord>) inputProvider.generateInputRecords("bootstrap_source", config.getBootstrapSourceBasePath(),
+        (JavaRDD<HoodieRecord>) inputProvider.generateInputRecords("bootstrap_source", config.getString(HoodieBootstrapConfig.BASE_PATH),
             partitionFilesList);
     // Start Full Bootstrap
     String bootstrapInstantTime = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
@@ -293,7 +294,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
 
     // Delete the marker directory for the instant
     WriteMarkersFactory.get(config.getMarkersType(), table, bootstrapInstantTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+        .quietDeleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
 
     return writeMetadataOption;
   }
@@ -311,7 +312,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
    */
   private Map<BootstrapMode, List<Pair<String, List<HoodieFileStatus>>>> listAndProcessSourcePartitions() throws IOException {
     List<Pair<String, List<HoodieFileStatus>>> folders = BootstrapUtils.getAllLeafFoldersWithFiles(
-            table.getMetaClient(), bootstrapSourceFileSystem, config.getBootstrapSourceBasePath(), context);
+            table.getMetaClient(), bootstrapSourceFileSystem, config.getString(HoodieBootstrapConfig.BASE_PATH), context);
 
     LOG.info("Fetching Bootstrap Schema !!");
     HoodieBootstrapSchemaProvider sourceSchemaProvider = new HoodieSparkBootstrapSchemaProvider(config);
@@ -319,11 +320,11 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     LOG.info("Bootstrap Schema :" + bootstrapSchema);
 
     BootstrapModeSelector selector =
-        (BootstrapModeSelector) ReflectionUtils.loadClass(config.getBootstrapModeSelectorClass(), config);
+        (BootstrapModeSelector) ReflectionUtils.loadClass(config.getString(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME), config);
 
     Map<BootstrapMode, List<String>> result = new HashMap<>();
     // for FULL_RECORD mode, original record along with metadata fields are needed
-    if (FULL_RECORD.equals(config.getBootstrapModeForRegexMatch())) {
+    if (FULL_RECORD.equals(BootstrapMode.valueOf(config.getString(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE)))) {
       if (!(selector instanceof FullRecordBootstrapModeSelector)) {
         FullRecordBootstrapModeSelector fullRecordBootstrapModeSelector = new FullRecordBootstrapModeSelector(config);
         result.putAll(fullRecordBootstrapModeSelector.select(folders));
@@ -359,7 +360,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     }
 
     BootstrapPartitionPathTranslator translator = (BootstrapPartitionPathTranslator) ReflectionUtils.loadClass(
-        config.getBootstrapPartitionPathTranslatorClass(), properties);
+        config.getString(HoodieBootstrapConfig.PARTITION_PATH_TRANSLATOR_CLASS_NAME), properties);
 
     List<Pair<String, Pair<String, HoodieFileStatus>>> bootstrapPaths = partitions.stream()
         .flatMap(p -> {
@@ -369,7 +370,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
         .collect(Collectors.toList());
 
     context.setJobStatus(this.getClass().getSimpleName(), "Run metadata-only bootstrap operation: " + config.getTableName());
-    return context.parallelize(bootstrapPaths, config.getBootstrapParallelism())
+    return context.parallelize(bootstrapPaths, config.getInt(HoodieBootstrapConfig.PARALLELISM_VALUE))
         .map(partitionFsPair -> getMetadataHandler(config, table, partitionFsPair.getRight().getRight()).runMetadataBootstrap(partitionFsPair.getLeft(),
                 partitionFsPair.getRight().getLeft(), keyGenerator));
   }

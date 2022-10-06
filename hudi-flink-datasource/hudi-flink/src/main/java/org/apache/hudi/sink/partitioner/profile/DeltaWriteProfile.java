@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.commit.SmallFile;
 
@@ -104,7 +105,7 @@ public class DeltaWriteProfile extends WriteProfile {
 
   private boolean isSmallFile(FileSlice fileSlice) {
     long totalSize = getTotalFileSize(fileSlice);
-    return totalSize < config.getParquetMaxFileSize();
+    return totalSize < config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
   }
 
   // TODO (NA) : Make this static part of utility
@@ -114,6 +115,6 @@ public class DeltaWriteProfile extends WriteProfile {
     // Here we assume that if there is no base parquet file, all log files contain only inserts.
     // We can then just get the parquet equivalent size of these log files, compare that with
     // {@link config.getParquetMaxFileSize()} and decide if there is scope to insert more rows
-    return (long) (totalSizeOfLogFiles * config.getLogFileToParquetCompressionRatio());
+    return (long) (totalSizeOfLogFiles * config.getDouble(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION));
   }
 }

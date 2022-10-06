@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import scala.Tuple2;
 
@@ -75,7 +76,7 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
               + table.getIndex().getClass().getSimpleName());
     }
     this.numBuckets = ((HoodieBucketIndex) table.getIndex()).getNumBuckets();
-    this.indexKeyField = config.getBucketIndexHashField();
+    this.indexKeyField = config.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
     this.totalPartitionPaths = profile.getPartitionPaths().size();
     partitionPaths = new ArrayList<>(profile.getPartitionPaths());
     partitionPathOffset = new HashMap<>();

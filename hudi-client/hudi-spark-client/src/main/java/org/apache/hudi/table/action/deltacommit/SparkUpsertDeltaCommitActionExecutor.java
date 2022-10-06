@@ -44,6 +44,6 @@ public class SparkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     return HoodieWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
-        config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(),this, operationType);
+        config.getBoolean(HoodieWriteConfig.COMBINE_BEFORE_UPSERT), config.getInt(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE),this, operationType);
   }
 }

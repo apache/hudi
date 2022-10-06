@@ -79,6 +79,8 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -357,7 +359,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     assertTrue(metadataWriter.isPresent());
     HoodieTableConfig hoodieTableConfig =
-        new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getPayloadClass());
+        new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME));
     assertFalse(hoodieTableConfig.getMetadataPartitions().isEmpty());
 
     // Turn off metadata table
@@ -374,7 +376,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertFalse(metadataWriter2.isPresent());
 
     HoodieTableConfig hoodieTableConfig2 =
-        new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig2.getPayloadClass());
+        new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig2.getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME));
     assertEquals(Collections.emptySet(), hoodieTableConfig2.getMetadataPartitions());
     // Assert metadata table folder is deleted
     assertFalse(metaClient.getFs().exists(
@@ -396,7 +398,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
     assertTrue(metadataWriter3.isPresent());
     HoodieTableConfig hoodieTableConfig3 =
-        new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getPayloadClass());
+        new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME));
     assertFalse(hoodieTableConfig3.getMetadataPartitions().isEmpty());
   }
 
@@ -2364,7 +2366,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieWriteConfig config = testClient.getConfig();
 
     SparkRDDWriteClient client;
-    if (config.isEmbeddedTimelineServerEnabled()) {
+    if (config.getBoolean(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE)) {
       testClient.close();
       client = new SparkRDDWriteClient(testClient.getEngineContext(), testClient.getConfig());
     } else {
@@ -2497,7 +2499,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoclean / compaction happens end of commits
-    int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
+    int numFileVersions = metadataWriteConfig.getInt(HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED) + 1;
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
     metadataTablePartitions.forEach(partition -> {
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
@@ -2584,7 +2586,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   private HoodieTableMetadata metadata(SparkRDDWriteClient client) {
     HoodieWriteConfig clientConfig = client.getConfig();
     return HoodieTableMetadata.create(client.getEngineContext(), clientConfig.getMetadataConfig(), clientConfig.getBasePath(),
-        clientConfig.getSpillableMapBasePath());
+        clientConfig.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH));
   }
 
   private void changeTableVersion(HoodieTableVersion version) throws IOException {

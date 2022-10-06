@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index.hbase;
 
+import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.log4j.LogManager;
@@ -34,7 +35,7 @@ public class DefaultHBaseQPSResourceAllocator implements HBaseIndexQPSResourceAl
   @Override
   public float calculateQPSFractionForPutsTime(final long numPuts, final int numRegionServers) {
     // Just return the configured qps_fraction without calculating it runtime
-    return hoodieWriteConfig.getHbaseIndexQPSFraction();
+    return hoodieWriteConfig.getFloat(HoodieHBaseIndexConfig.QPS_FRACTION);
   }
 
   @Override
@@ -47,6 +48,6 @@ public class DefaultHBaseQPSResourceAllocator implements HBaseIndexQPSResourceAl
   public void releaseQPSResources() {
     // Do nothing, as there are no resources locked in default implementation
     LOG.info(String.format("Release QPS resources called for %s with default implementation, do nothing",
-        this.hoodieWriteConfig.getHbaseTableName()));
+        this.hoodieWriteConfig.getString(HoodieHBaseIndexConfig.TABLENAME)));
   }
 }

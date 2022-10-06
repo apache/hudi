@@ -74,7 +74,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
+    when(Integer.parseInt(hoodieWriteConfig.getStringOrDefault(HoodieWriteConfig.WRITE_BUFFER_LIMIT_BYTES_VALUE))).thenReturn(1024);
     BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
@@ -97,7 +97,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
 
     BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
     try {
-      executor = new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
+      executor = new BoundedInMemoryExecutor(Integer.parseInt(hoodieWriteConfig.getStringOrDefault(HoodieWriteConfig.WRITE_BUFFER_LIMIT_BYTES_VALUE)), hoodieRecords.iterator(), consumer,
           getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
       int result = executor.execute();
       // It should buffer and write 100 records
@@ -117,7 +117,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
+    when(Integer.parseInt(hoodieWriteConfig.getStringOrDefault(HoodieWriteConfig.WRITE_BUFFER_LIMIT_BYTES_VALUE))).thenReturn(1024);
     BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
@@ -144,7 +144,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
 
     BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
     try {
-      executor = new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
+      executor = new BoundedInMemoryExecutor(Integer.parseInt(hoodieWriteConfig.getStringOrDefault(HoodieWriteConfig.WRITE_BUFFER_LIMIT_BYTES_VALUE)), hoodieRecords.iterator(), consumer,
           getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
       BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> finalExecutor = executor;
 
@@ -163,7 +163,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
   @Test
   public void testExecutorTermination() {
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
+    when(Integer.parseInt(hoodieWriteConfig.getStringOrDefault(HoodieWriteConfig.WRITE_BUFFER_LIMIT_BYTES_VALUE))).thenReturn(1024);
     Iterator<GenericRecord> unboundedRecordIter = new Iterator<GenericRecord>() {
       @Override
       public boolean hasNext() {
@@ -193,7 +193,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
         };
 
     BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor =
-        new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), unboundedRecordIter,
+        new BoundedInMemoryExecutor(Integer.parseInt(hoodieWriteConfig.getStringOrDefault(HoodieWriteConfig.WRITE_BUFFER_LIMIT_BYTES_VALUE)), unboundedRecordIter,
             consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA),
             getPreExecuteRunnable());
     executor.shutdownNow();

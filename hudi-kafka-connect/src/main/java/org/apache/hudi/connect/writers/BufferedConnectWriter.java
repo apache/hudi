@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.IOUtils;
@@ -76,7 +77,7 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(context.getTaskContextSupplier(), config);
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.bufferedRecords = new ExternalSpillableMap<>(memoryForMerge,
-          config.getSpillableMapBasePath(),
+          config.getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH),
           new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(new Schema.Parser().parse(config.getSchema())),
           config.getCommonConfig().getSpillableDiskMapType(),

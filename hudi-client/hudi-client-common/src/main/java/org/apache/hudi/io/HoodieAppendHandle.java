@@ -40,6 +40,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -54,11 +55,15 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -114,7 +119,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   // Number of records that must be written to meet the max block size for a log block
   private int numberOfRecords = 0;
   // Max block size to limit to for a log block
-  private final int maxBlockSize = config.getLogFileDataBlockMaxSize();
+  private final int maxBlockSize = config.getInt(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE);
   // Header metadata for a log block
   protected final Map<HeaderMetadataType, String> header = new HashMap<>();
   private SizeEstimator<HoodieRecord> sizeEstimator;
@@ -213,7 +218,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       // Whether it is an update or insert record.
       boolean isUpdateRecord = isUpdateRecord(hoodieRecord);
       // If the format can not record the operation field, nullify the DELETE payload manually.
-      boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
+      boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
       Option<IndexedRecord> avroRecord = nullifyPayload ? Option.empty() : hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
       if (avroRecord.isPresent()) {
@@ -225,12 +230,12 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         avroRecord = Option.of(rewriteRecord);
         String seqId =
             HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
-        if (config.populateMetaFields()) {
+        if (config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
           HoodieAvroUtils.addHoodieKeyToRecord(rewriteRecord, hoodieRecord.getRecordKey(),
               hoodieRecord.getPartitionPath(), fileId);
           HoodieAvroUtils.addCommitMetadataToRecord(rewriteRecord, instantTime, seqId);
         }
-        if (config.allowOperationMetadataField()) {
+        if (config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD)) {
           HoodieAvroUtils.addOperationToRecord(rewriteRecord, hoodieRecord.getOperation());
         }
         if (isUpdateRecord) {
@@ -266,8 +271,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     stat.setBaseFile(prevStat.getBaseFile());
     stat.setLogFiles(new ArrayList<>(prevStat.getLogFiles()));
 
-    this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+    this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getString(HoodieWriteConfig.WRITE_STATUS_CLASS_NAME),
+        !hoodieTable.getIndex().isImplicitWithStorage(), config.getDouble(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION));
     this.writeStatus.setFileId(fileId);
     this.writeStatus.setPartitionPath(partitionPath);
     this.writeStatus.setStat(stat);
@@ -354,10 +359,10 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       final List<Schema.Field> fieldsToIndex;
       // If column stats index is enabled but columns not configured then we assume that
       // all columns should be indexed
-      if (config.getColumnsEnabledForColumnStatsIndex().isEmpty()) {
+      if (config.getMetadataConfig().getColumnsEnabledForColumnStatsIndex().isEmpty()) {
         fieldsToIndex = writeSchemaWithMetaFields.getFields();
       } else {
-        Set<String> columnsToIndexSet = new HashSet<>(config.getColumnsEnabledForColumnStatsIndex());
+        Set<String> columnsToIndexSet = new HashSet<>(config.getMetadataConfig().getColumnsEnabledForColumnStatsIndex());
 
         fieldsToIndex = writeSchemaWithMetaFields.getFields().stream()
             .filter(field -> columnsToIndexSet.contains(field.name()))
@@ -394,7 +399,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
-        String keyField = config.populateMetaFields()
+        String keyField = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
@@ -418,8 +423,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   @Override
   public boolean canWrite(HoodieRecord record) {
-    return config.getParquetMaxFileSize() >= estimatedNumberOfBytesWritten
-        * config.getLogFileToParquetCompressionRatio();
+    return config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE) >= estimatedNumberOfBytesWritten
+        * config.getDouble(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION);
   }
 
   @Override
@@ -550,7 +555,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         return new HoodieAvroDataBlock(recordList, header, keyField);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(
-            recordList, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()));
+            recordList, header, Compression.Algorithm.valueOf(writeConfig.getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME)), new Path(writeConfig.getBasePath()));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(recordList, header, keyField, writeConfig.getParquetCompressionCodec());
       default:

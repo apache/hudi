@@ -47,6 +47,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -62,8 +63,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
@@ -218,7 +221,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds) {
     // Skip the empty commit if not allowed
-    if (!config.allowEmptyCommit() && stats.isEmpty()) {
+    if (!config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_EMPTY_COMMIT) && stats.isEmpty()) {
       return true;
     }
     LOG.info("Committing " + instantTime + " action " + commitActionType);
@@ -246,7 +249,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     runTableServicesInline(table, metadata, extraMetadata);
     emitCommitMetrics(instantTime, metadata, commitActionType);
     // callback if needed.
-    if (config.writeCommitCallbackOn()) {
+    if (config.getBoolean(HoodieWriteCommitCallbackConfig.TURN_CALLBACK_ON)) {
       if (null == commitCallback) {
         commitCallback = HoodieCommitCallbackFactory.create(config);
       }
@@ -352,7 +355,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public void bootstrap(Option<Map<String, String>> extraMetadata) {
     // TODO : MULTIWRITER -> check if failed bootstrap files can be cleaned later
-    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+    if (WriteConcurrencyMode.fromValue(config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE)).supportsOptimisticConcurrencyControl()) {
       throw new HoodieException("Cannot bootstrap the table in multi-writer mode");
     }
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UPSERT, Option.ofNullable(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS));
@@ -529,7 +532,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     try {
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
-          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+          .quietDeleteMarkerDir(context, config.getInt(HoodieWriteConfig.MARKERS_DELETE_PARALLELISM_VALUE));
       autoCleanOnCommit();
       autoArchiveOnCommit(table, acquireLockForArchival);
     } finally {
@@ -546,7 +549,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         table.getHoodieView().sync();
       }
       // Do an inline compaction if enabled
-      if (config.inlineCompactionEnabled()) {
+      if (config.getBoolean(HoodieCompactionConfig.INLINE_COMPACT)) {
         runAnyPendingCompactions(table);
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
         inlineCompaction(extraMetadata);
@@ -555,7 +558,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       }
 
       // if just inline schedule is enabled
-      if (!config.inlineCompactionEnabled() && config.scheduleInlineCompaction()
+      if (!(boolean) config.getBoolean(HoodieCompactionConfig.INLINE_COMPACT) && config.getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT)
           && !table.getActiveTimeline().getWriteTimeline().filterPendingCompactionTimeline().getInstants().findAny().isPresent()) {
         // proceed only if there are no pending compactions
         metadata.addMetadata(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), "true");
@@ -563,7 +566,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       }
 
       // Do an inline clustering if enabled
-      if (config.inlineClusteringEnabled()) {
+      if (config.getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING)) {
         runAnyPendingClustering(table);
         metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
         inlineClustering(extraMetadata);
@@ -572,7 +575,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       }
 
       // if just inline schedule is enabled
-      if (!config.inlineClusteringEnabled() && config.scheduleInlineClustering()
+      if (!(boolean) config.getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING) && config.getBoolean(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING)
           && !table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().findAny().isPresent()) {
         // proceed only if there are no pending clustering
         metadata.addMetadata(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), "true");
@@ -600,11 +603,11 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   protected void autoCleanOnCommit() {
-    if (!config.isAutoClean()) {
+    if (!(boolean) config.getBoolean(HoodieCleanConfig.AUTO_CLEAN)) {
       return;
     }
 
-    if (config.isAsyncClean()) {
+    if (config.getBoolean(HoodieCleanConfig.ASYNC_CLEAN)) {
       LOG.info("Async cleaner has been spawned. Waiting for it to finish");
       AsyncCleanerService.waitForCompletion(asyncCleanerService);
       LOG.info("Async cleaner has finished");
@@ -616,11 +619,11 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   protected void autoArchiveOnCommit(HoodieTable table, boolean acquireLockForArchival) {
-    if (!config.isAutoArchive()) {
+    if (!(boolean) config.getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE)) {
       return;
     }
 
-    if (config.isAsyncArchive()) {
+    if (config.getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE)) {
       LOG.info("Async archiver has been spawned. Waiting for it to finish");
       AsyncArchiveService.waitForCompletion(asyncArchiveService);
       LOG.info("Async archiver has finished");
@@ -718,7 +721,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointPresence(table, savepointTime);
-    ValidationUtils.checkArgument(!config.shouldArchiveBeyondSavepoint(), "Restore is not supported when " + HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key()
+    ValidationUtils.checkArgument(!config.getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT), "Restore is not supported when " + HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key()
         + " is enabled");
     restoreToInstant(savepointTime, initialMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointRestore(table, savepointTime);
@@ -756,7 +759,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
                 + "(exists in active timeline: %s), with rollback plan: %s",
             rollbackInstantTime, commitInstantOpt.isPresent(), pendingRollbackInfo.isPresent()));
         Option<HoodieRollbackPlan> rollbackPlanOption = pendingRollbackInfo.map(entry -> Option.of(entry.getRollbackPlan()))
-            .orElseGet(() -> table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers()));
+            .orElseGet(() -> table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.getBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE)));
         if (rollbackPlanOption.isPresent()) {
           // There can be a case where the inflight rollback failed after the instant files
           // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
@@ -854,11 +857,12 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       return null;
     }
     final Timer.Context timerContext = metrics.getCleanCtx();
-    CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
+    CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy
+            .valueOf(config.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)),
         HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites(skipLocking));
 
     HoodieTable table = createTable(config, hadoopConf);
-    if (config.allowMultipleCleans() || !table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
+    if (config.getBoolean(HoodieCleanConfig.ALLOW_MULTIPLE_CLEANS) || !table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
       LOG.info("Cleaner started");
       // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
       if (scheduleInline) {
@@ -934,7 +938,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
    */
   public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
-    CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
+    CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy
+            .valueOf(config.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)),
         HoodieTimeline.COMMIT_ACTION, () -> rollbackFailedWrites());
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     startCommit(instantTime, actionType, metaClient);
@@ -962,7 +967,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * Completes a new commit time for a write operation (insert/update/delete) with specified action.
    */
   private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
-    CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
+    CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy
+            .valueOf(config.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)),
         HoodieTimeline.COMMIT_ACTION, () -> rollbackFailedWrites());
     startCommit(instantTime, actionType, metaClient);
   }
@@ -975,7 +981,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
             HoodieTimeline.compareTimestamps(latestPending.getTimestamp(), HoodieTimeline.LESSER_THAN, instantTime),
         "Latest pending compaction instant time must be earlier than this instant time. Latest Compaction :"
             + latestPending + ",  Ingesting at " + instantTime));
-    if (config.getFailedWritesCleanPolicy().isLazy()) {
+    if (HoodieFailedWritesCleaningPolicy
+        .valueOf(config.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)).isLazy()) {
       this.heartbeatClient.start(instantTime);
     }
 
@@ -1059,7 +1066,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public HoodieWriteMetadata<O> compact(String compactionInstantTime) {
-    return compact(compactionInstantTime, config.shouldAutoCommit());
+    return compact(compactionInstantTime, config.getBoolean(HoodieWriteConfig.AUTO_COMMIT_ENABLE));
   }
 
   /**
@@ -1171,7 +1178,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   protected Boolean rollbackFailedWrites(boolean skipLocking) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
-    List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(), Option.empty());
+    List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), HoodieFailedWritesCleaningPolicy
+        .valueOf(config.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)), Option.empty());
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
     rollbackFailedWrites(pendingRollbacks, skipLocking);
@@ -1219,7 +1227,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     } else if (cleaningPolicy.isNever()) {
       return Collections.EMPTY_LIST;
     } else {
-      throw new IllegalArgumentException("Invalid Failed Writes Cleaning Policy " + config.getFailedWritesCleanPolicy());
+      throw new IllegalArgumentException("Invalid Failed Writes Cleaning Policy " + HoodieFailedWritesCleaningPolicy
+          .valueOf(config.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)));
     }
   }
 

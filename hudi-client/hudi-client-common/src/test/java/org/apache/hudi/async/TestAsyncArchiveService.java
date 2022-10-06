@@ -20,6 +20,7 @@
 package org.apache.hudi.async;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.jupiter.api.Test;
@@ -45,23 +46,23 @@ class TestAsyncArchiveService {
 
   @Test
   void startAsyncArchiveReturnsNullWhenAutoArchiveDisabled() {
-    when(config.isAutoArchive()).thenReturn(false);
+    when(config.getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE)).thenReturn(false);
     when(writeClient.getConfig()).thenReturn(config);
     assertNull(AsyncArchiveService.startAsyncArchiveIfEnabled(writeClient));
   }
 
   @Test
   void startAsyncArchiveReturnsNullWhenAsyncArchiveDisabled() {
-    when(config.isAutoArchive()).thenReturn(true);
-    when(config.isAsyncArchive()).thenReturn(false);
+    when(config.getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE)).thenReturn(true);
+    when(config.getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE)).thenReturn(false);
     when(writeClient.getConfig()).thenReturn(config);
     assertNull(AsyncArchiveService.startAsyncArchiveIfEnabled(writeClient));
   }
 
   @Test
   void startAsyncArchiveIfEnabled() {
-    when(config.isAutoArchive()).thenReturn(true);
-    when(config.isAsyncArchive()).thenReturn(true);
+    when(config.getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE)).thenReturn(true);
+    when(config.getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE)).thenReturn(true);
     when(writeClient.getConfig()).thenReturn(config);
     assertNotNull(AsyncArchiveService.startAsyncArchiveIfEnabled(writeClient));
   }

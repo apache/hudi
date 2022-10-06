@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -97,7 +99,7 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
               .collect(Collectors.toList());
     }
 
-    if (config.getParquetSmallFileLimit() <= 0) {
+    if (config.getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT) <= 0) {
       return Collections.emptyList();
     }
 
@@ -106,13 +108,10 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
     return table.getSliceView()
           .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitInstant.getTimestamp(), false)
           .filter(
-              fileSlice ->
-                  // NOTE: We can not pad slices with existing log-files w/o compacting these,
-                  //       hence skipping
-                  fileSlice.getLogFiles().count() < 1
-                  && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit())
+              fileSlice -> fileSlice.getLogFiles().count() < 1
+              && fileSlice.getBaseFile().get().getFileSize() < config.getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT))
           .sorted(Comparator.comparing(fileSlice -> fileSlice.getBaseFile().get().getFileSize()))
-          .limit(config.getSmallFileGroupCandidatesLimit())
+          .limit(config.getInt(HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT))
           .collect(Collectors.toList());
   }
 
@@ -132,7 +131,7 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
 
   private boolean isSmallFile(FileSlice fileSlice) {
     long totalSize = getTotalFileSize(fileSlice);
-    return totalSize < config.getParquetMaxFileSize();
+    return totalSize < config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
   }
 
   // TODO (NA) : Make this static part of utility
@@ -146,6 +145,6 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
     // Here we assume that if there is no base parquet file, all log files contain only inserts.
     // We can then just get the parquet equivalent size of these log files, compare that with
     // {@link config.getParquetMaxFileSize()} and decide if there is scope to insert more rows
-    return (long) (totalSizeOfLogFiles * config.getLogFileToParquetCompressionRatio());
+    return (long) (totalSizeOfLogFiles * config.getDouble(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION));
   }
 }

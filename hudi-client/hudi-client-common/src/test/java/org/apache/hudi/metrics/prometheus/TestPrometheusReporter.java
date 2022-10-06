@@ -19,6 +19,8 @@
 package org.apache.hudi.metrics.prometheus;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -45,10 +47,10 @@ public class TestPrometheusReporter {
 
   @Test
   public void testRegisterGauge() {
-    when(config.isMetricsOn()).thenReturn(true);
+    when(config.getBoolean(HoodieMetricsConfig.TURN_METRICS_ON)).thenReturn(true);
     when(config.getTableName()).thenReturn("foo");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS);
-    when(config.getPrometheusPort()).thenReturn(9090);
+    when(MetricsReporterType.valueOf(config.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE))).thenReturn(MetricsReporterType.PROMETHEUS);
+    when(config.getInt(HoodieMetricsPrometheusConfig.PROMETHEUS_PORT_NUM)).thenReturn(9090);
     assertDoesNotThrow(() -> {
       new HoodieMetrics(config);
     });

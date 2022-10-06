@@ -77,8 +77,8 @@ public class HoodieDeleteHelper<T extends HoodieRecordPayload, R> extends
                                                               BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> deleteExecutor) {
     try {
       HoodieData<HoodieKey> dedupedKeys = keys;
-      final int parallelism = config.getDeleteShuffleParallelism();
-      if (config.shouldCombineBeforeDelete()) {
+      final int parallelism = Math.max(config.getInt(HoodieWriteConfig.DELETE_PARALLELISM_VALUE), 1);
+      if (config.getBoolean(HoodieWriteConfig.COMBINE_BEFORE_DELETE)) {
         // De-dupe/merge if needed
         dedupedKeys = deduplicateKeys(keys, table, parallelism);
       } else if (!keys.isEmpty()) {

@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -65,17 +66,17 @@ public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
         .countInstants();
 
-    if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
+    if (config.getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING) && config.getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS) > commitsSinceLastClustering) {
       LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getInlineClusterMaxCommits());
+          + config.getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS));
       return Option.empty();
     }
 
-    if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
+    if (config.getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE) && config.getInt(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS) > commitsSinceLastClustering) {
       LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getAsyncClusterMaxCommits());
+          + config.getInt(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS));
       return Option.empty();
     }
 
