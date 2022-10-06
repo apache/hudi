@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -40,6 +39,7 @@ import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -68,8 +68,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
 import static org.apache.hudi.common.table.log.block.HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
@@ -628,37 +630,12 @@ public abstract class AbstractHoodieLogRecordReader {
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
     try (ClosableIterator<IndexedRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt)) {
-      Option<Schema> schemaOption = getMergedSchema(dataBlock);
       while (recordIterator.hasNext()) {
-        IndexedRecord currentRecord = recordIterator.next();
-        IndexedRecord record = schemaOption.isPresent() ? HoodieAvroUtils.rewriteRecordWithNewSchema(currentRecord, schemaOption.get(), Collections.emptyMap()) : currentRecord;
-        processNextRecord(createHoodieRecord(record, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
+        processNextRecord(createHoodieRecord(recordIterator.next(), this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
             this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
         totalLogRecords.incrementAndGet();
       }
     }
-  }
-
-  /**
-   * Get final Read Schema for support evolution.
-   * step1: find the fileSchema for current dataBlock.
-   * step2: determine whether fileSchema is compatible with the final read internalSchema.
-   * step3: merge fileSchema and read internalSchema to produce final read schema.
-   *
-   * @param dataBlock current processed block
-   * @return final read schema.
-   */
-  private Option<Schema> getMergedSchema(HoodieDataBlock dataBlock) {
-    Option<Schema> result = Option.empty();
-    if (!internalSchema.isEmptySchema()) {
-      Long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
-      InternalSchema fileSchema = InternalSchemaCache
-          .searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient, false);
-      Schema mergeSchema = AvroInternalSchemaConverter
-          .convert(new InternalSchemaMerger(fileSchema, internalSchema, true, false).mergeSchema(), readerSchema.getName());
-      result = Option.of(mergeSchema);
-    }
-    return result;
   }
 
   /**
@@ -734,15 +711,6 @@ public abstract class AbstractHoodieLogRecordReader {
     progress = (numLogFilesSeen - 1) / logFilePaths.size();
   }
 
-  private ClosableIterator<IndexedRecord> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
-    if (keySpecOpt.isPresent()) {
-      KeySpec keySpec = keySpecOpt.get();
-      return dataBlock.getRecordIterator(keySpec.keys, keySpec.fullKey);
-    }
-
-    return dataBlock.getRecordIterator();
-  }
-
   /**
    * Return progress of scanning as a float between 0.0 to 1.0.
    */
@@ -805,6 +773,50 @@ public abstract class AbstractHoodieLogRecordReader {
 
   public List<String> getValidBlockInstants() {
     return validBlockInstants;
+  }
+
+  private ClosableIterator<IndexedRecord> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
+    ClosableIterator<IndexedRecord> blockRecordsIterator;
+    if (keySpecOpt.isPresent()) {
+      KeySpec keySpec = keySpecOpt.get();
+      blockRecordsIterator = dataBlock.getRecordIterator(keySpec.keys, keySpec.fullKey);
+    } else {
+      blockRecordsIterator = dataBlock.getRecordIterator();
+    }
+
+    Option<Function<IndexedRecord, IndexedRecord>> schemaEvolutionTransformerOpt =
+        composeEvolvedSchemaTransformer(dataBlock);
+    // In case when schema has been evolved original persisted records will have to be
+    // transformed to adhere to the new schema
+    if (schemaEvolutionTransformerOpt.isPresent()) {
+      return new CloseableMappingIterator<>(blockRecordsIterator, schemaEvolutionTransformerOpt.get());
+    } else {
+      return blockRecordsIterator;
+    }
+  }
+
+  /**
+   * Get final Read Schema for support evolution.
+   * step1: find the fileSchema for current dataBlock.
+   * step2: determine whether fileSchema is compatible with the final read internalSchema.
+   * step3: merge fileSchema and read internalSchema to produce final read schema.
+   *
+   * @param dataBlock current processed block
+   * @return final read schema.
+   */
+  private Option<Function<IndexedRecord, IndexedRecord>> composeEvolvedSchemaTransformer(HoodieDataBlock dataBlock) {
+    if (internalSchema.isEmptySchema()) {
+      return Option.empty();
+    }
+
+    long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
+    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime,
+        hoodieTableMetaClient, false);
+    InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
+        true, false).mergeSchema();
+    Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, readerSchema.getName());
+
+    return Option.of((record) -> rewriteRecordWithNewSchema(record, mergedAvroSchema, Collections.emptyMap()));
   }
 
   /**
