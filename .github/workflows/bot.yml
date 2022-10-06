@@ -9,7 +9,6 @@ on:
     branches:
       - master
       - 'release-*'
-      
 env:
   MVN_ARGS: -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
 
