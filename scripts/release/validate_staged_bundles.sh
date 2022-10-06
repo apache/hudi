@@ -35,6 +35,7 @@ declare -a BUNDLE_URLS=(
 "${STAGING_REPO}/hudi-flink1.14-bundle/${VERSION}/hudi-flink1.14-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-flink1.14-bundle/${VERSION}/hudi-flink1.14-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-flink1.15-bundle/${VERSION}/hudi-flink1.15-bundle-${VERSION}.jar"
+"${STAGING_REPO}/hudi-flink1.15-bundle/${VERSION}/hudi-flink1.15-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-gcp-bundle/${VERSION}/hudi-gcp-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-hadoop-mr-bundle/${VERSION}/hudi-hadoop-mr-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-hive-sync-bundle/${VERSION}/hudi-hive-sync-bundle-${VERSION}.jar"
