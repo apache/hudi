@@ -53,15 +53,18 @@ import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.parquet.schema.MessageType;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class DataHubSyncClient extends HoodieSyncClient {
 
   protected final DataHubSyncConfig config;
   private final DatasetUrn datasetUrn;
+  private static final Status SOFT_DELETE_FALSE = new Status().setRemoved(false);
 
   public DataHubSyncClient(DataHubSyncConfig config) {
     super(config);
@@ -88,10 +91,13 @@ public class DataHubSyncClient extends HoodieSyncClient {
         .aspect(new DatasetProperties().setCustomProperties(new StringMap(tableProperties)))
         .build();
 
+    DatahubResponseLogger responseLogger = new DatahubResponseLogger();
+
     try (RestEmitter emitter = config.getRestEmitter()) {
-      emitter.emit(propertiesChangeProposal, null).get();
+      emitter.emit(propertiesChangeProposal, responseLogger).get();
     } catch (Exception e) {
-      throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": " + tableProperties, e);
+      throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": " +
+              tableProperties, e);
     }
   }
 
@@ -107,11 +113,11 @@ public class DataHubSyncClient extends HoodieSyncClient {
     final SchemaMetadata.PlatformSchema platformSchema = new SchemaMetadata.PlatformSchema();
     platformSchema.setOtherSchema(new OtherSchema().setRawSchema(avroSchema.toString()));
     MetadataChangeProposalWrapper schemaChange = createSchemaMetadataUpdate(tableName, fields, platformSchema);
-    MetadataChangeProposalWrapper statusUnDelete = createStatusUnDelete();
 
+    DatahubResponseLogger responseLogger = new DatahubResponseLogger();
     try (RestEmitter emitter = config.getRestEmitter()) {
-      emitter.emit(schemaChange, null).get();
-      emitter.emit(statusUnDelete, null).get();
+      emitter.emit(schemaChange, responseLogger).get();
+      undoSoftDelete(emitter, responseLogger);
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change schema for Dataset " + datasetUrn, e);
     }
@@ -127,14 +133,19 @@ public class DataHubSyncClient extends HoodieSyncClient {
     // no op;
   }
 
-  private MetadataChangeProposalWrapper createStatusUnDelete() {
-    return MetadataChangeProposalWrapper.builder()
+  // When updating an entity, it is ncessary to set its soft-delete status to false, or else the update won't get
+  // reflected in the UI.
+  private void undoSoftDelete(RestEmitter client, DatahubResponseLogger responseLogger) throws IOException, ExecutionException,
+          InterruptedException {
+    MetadataChangeProposalWrapper softDeleteUndoProposal = MetadataChangeProposalWrapper.builder()
             .entityType("dataset")
             .entityUrn(datasetUrn)
             .upsert()
-            .aspect(new Status().setRemoved(false))
+            .aspect(SOFT_DELETE_FALSE)
             .aspectName("status")
             .build();
+
+    client.emit(softDeleteUndoProposal, responseLogger).get();
   }
 
   private MetadataChangeProposalWrapper createSchemaMetadataUpdate(String tableName, List<SchemaField> fields,
