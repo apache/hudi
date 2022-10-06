@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
       - name: run script
-        run: python scripts/pr_compliance.py > test.log || { echo "::error::pr_compliance.py $(cat test.log)" && exit 1; }
+        run: python3 scripts/pr_compliance.py > test.log || { echo "::error::pr_compliance.py $(cat test.log)" && exit 1; }
 
 
 

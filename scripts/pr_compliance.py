@@ -370,20 +370,12 @@ def make_default_validator(body, debug=False):
     risklevel = RiskLevelData("RISKLEVEL",
         "**Risk level:",
         {"_Choose one. If medium or high, explain what verification was done to mitigate the risks._"},
-        "DOCUMENTATION")
-    documentationUpdate = ParseSectionData("DOCUMENTATION",
-        "### Documentation Update",
-        {"_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
-        "- _The config description must be updated if new configs are added or the default value of the configs are changed_",
-        "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
-       "ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
-       "changes to the website._"},
-       "CHECKLIST")
+        "CHECKLIST")
     checklist = ParseSectionData("CHECKLIST",
         "### Contributor's checklist",
         {},
         "SUCCESS")
-    parseSections = ParseSections([changelogs, impact, risklevel, documentationUpdate, checklist])
+    parseSections = ParseSections([changelogs, impact, risklevel, checklist])
 
     return ValidateBody(body, "CHANGELOGS", parseSections, debug)
 
@@ -452,20 +444,6 @@ def test_body():
     good_risklevel_medium[0] = "**Risk level: medium**"
     good_risklevel_medium[1] = "risklevel description" 
 
-    template_documentation = [
-        "### Documentation Update",
-        "",
-        "_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
-        "- _The config description must be updated if new configs are added or the default value of the configs are changed_",
-        "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
-        "ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
-        "changes to the website._",
-        ""
-    ]
-
-    good_documentation = template_documentation.copy()
-    good_documentation[1] = "documentation description"
-
     template_checklist = [
         "### Contributor's checklist",
         "",
@@ -476,10 +454,10 @@ def test_body():
     ]
 
     #list of sections that when combined form a valid body
-    good_sections = [good_changelogs, good_impact, good_risklevel_none, good_documentation, template_checklist]
+    good_sections = [good_changelogs, good_impact, good_risklevel_none, template_checklist]
 
     #list of sections that when combined form the template
-    template_sections = [template_changelogs, template_impact, template_risklevel, template_documentation ,template_checklist]
+    template_sections = [template_changelogs, template_impact, template_risklevel, template_checklist]
 
     tests_passed = True
     #Test section not filled out
@@ -506,7 +484,7 @@ def test_body():
         test_sections = []
         for j in range(len(good_sections)):
             test_sections.append(good_sections[j].copy())
-        k = (i + 2) % len(good_sections)
+        k = (i + 3) % len(good_sections)
         test_sections[i], test_sections[k] = test_sections[k],test_sections[i]
         tests_passed = run_test(f"Swapped sections: {i}, {k}", build_body(test_sections), False, DEBUG_MESSAGES) and tests_passed
 
