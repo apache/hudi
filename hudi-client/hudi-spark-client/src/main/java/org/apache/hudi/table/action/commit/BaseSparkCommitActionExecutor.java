@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -176,7 +177,10 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
-    updateIndexAndCommitIfNeeded(writeStatuses, result);
+    // dereference rdd so that no double de-referencing can happen by mistake.
+    int numPartitions = Math.max(1, writeStatuses.getNumPartitions());
+    HoodieData<WriteStatus> computedWriteStatus = HoodieJavaRDD.of(writeStatuses.collectAsList(), (HoodieSparkEngineContext) context, numPartitions);
+    updateIndexAndCommitIfNeeded(computedWriteStatus, result);
     return result;
   }
 
@@ -257,15 +261,17 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   protected HoodieData<WriteStatus> updateIndex(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
-    // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
-    // RDD actions that are performed after updating the index.
-    writeStatuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
     Instant indexStartTime = Instant.now();
     // Update the index back
-    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
+    HoodieData<WriteStatus> statusesAfterIndexUpdate = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
+    // if update index is a no-op (in built/embedded indexes),  statusesAfterIndexUpdate is same as writeStatuses. So rdd deferencing may not have kicked in.
+    // Let's trigger dereferencing if incase index is external like hbase.
+    int numPartitions = Math.max(1, statusesAfterIndexUpdate.getNumPartitions());
+    HoodieData<WriteStatus> computedWriteStatusAfterIndexUpdate = HoodieJavaRDD.of(statusesAfterIndexUpdate.collectAsList(), (HoodieSparkEngineContext) context, numPartitions);
+    computedWriteStatusAfterIndexUpdate.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
-    result.setWriteStatuses(statuses);
-    return statuses;
+    result.setWriteStatuses(computedWriteStatusAfterIndexUpdate);
+    return statusesAfterIndexUpdate;
   }
 
   protected void updateIndexAndCommitIfNeeded(HoodieData<WriteStatus> writeStatusRDD, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
