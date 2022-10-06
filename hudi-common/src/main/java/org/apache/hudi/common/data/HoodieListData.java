@@ -149,6 +149,11 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   }
 
   @Override
+  public int getNumPartitions() {
+    return 1;
+  }
+
+  @Override
   public HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc) {
     return new HoodieListData<>(asStream().filter(r -> throwingMapWrapper(filterFunc).apply(r)), lazy);
   }
@@ -179,4 +184,5 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   public List<T> collectAsList() {
     return super.collectAsList();
   }
+
 }

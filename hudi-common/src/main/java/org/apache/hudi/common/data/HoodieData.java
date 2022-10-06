@@ -180,4 +180,6 @@ public interface HoodieData<T> extends Serializable {
         .reduceByKey((value1, value2) -> value1, parallelism)
         .values();
   }
+
+  int getNumPartitions();
 }

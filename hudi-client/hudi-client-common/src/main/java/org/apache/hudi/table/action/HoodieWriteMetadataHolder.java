@@ -39,11 +39,11 @@ public class HoodieWriteMetadataHolder<O> extends HoodieWriteMetadata<O> {
   }
 
   public O getWriteStatuses() {
-    if (!getWriteStatusesInvoked.getAndSet(true)) {
-      return delegate.getWriteStatuses();
-    } else {
+    //if (!getWriteStatusesInvoked.getAndSet(true)) {
+    return delegate.getWriteStatuses();
+    /*} else {
       throw new HoodieIOException(("Repeated calling of getWriteStatuses is not supported. "));
-    }
+    }*/
   }
 
   public Option<HoodieCommitMetadata> getCommitMetadata() {

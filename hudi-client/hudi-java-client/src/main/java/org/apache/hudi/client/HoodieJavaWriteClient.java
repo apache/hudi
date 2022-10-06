@@ -39,6 +39,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.HoodieWriteMetadataHolder;
 import org.apache.hudi.table.upgrade.JavaUpgradeDowngradeHelper;
 
 import com.codahale.metrics.Timer;
@@ -103,7 +104,8 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
     }
-    return postWrite(result, instantTime, table);
+    HoodieWriteMetadataHolder<List<WriteStatus>> resultList = new HoodieWriteMetadataHolder(result.clone(HoodieListData.eager(result.getWriteStatuses())));
+    return postWrite(resultList, instantTime, table);
   }
 
   @Override
@@ -114,7 +116,8 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.upsertPrepped(context,instantTime, preppedRecords);
-    return postWrite(result, instantTime, table);
+    HoodieWriteMetadataHolder<List<WriteStatus>> resultList = new HoodieWriteMetadataHolder(result.clone(HoodieListData.eager(result.getWriteStatuses())));
+    return postWrite(resultList, instantTime, table);
   }
 
   @Override
@@ -127,7 +130,8 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
     }
-    return postWrite(result, instantTime, table);
+    HoodieWriteMetadataHolder<List<WriteStatus>> resultList = new HoodieWriteMetadataHolder(result.clone(HoodieListData.eager(result.getWriteStatuses())));
+    return postWrite(resultList, instantTime, table);
   }
 
   @Override
@@ -138,7 +142,8 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_PREPPED, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.insertPrepped(context,instantTime, preppedRecords);
-    return postWrite(result, instantTime, table);
+    HoodieWriteMetadataHolder<List<WriteStatus>> resultList = new HoodieWriteMetadataHolder(result.clone(HoodieListData.eager(result.getWriteStatuses())));
+    return postWrite(resultList, instantTime, table);
   }
 
   @Override
@@ -170,7 +175,8 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.bulkInsertPrepped(context, instantTime, preppedRecords, bulkInsertPartitioner);
-    return postWrite(result, instantTime, table);
+    HoodieWriteMetadataHolder<List<WriteStatus>> resultList = new HoodieWriteMetadataHolder(result.clone(HoodieListData.eager(result.getWriteStatuses())));
+    return postWrite(resultList, instantTime, table);
   }
 
   @Override
@@ -180,11 +186,12 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
         initTable(WriteOperationType.DELETE, Option.ofNullable(instantTime));
     preWrite(instantTime, WriteOperationType.DELETE, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.delete(context,instantTime, keys);
-    return postWrite(result, instantTime, table);
+    HoodieWriteMetadataHolder<List<WriteStatus>> resultList = new HoodieWriteMetadataHolder(result.clone(HoodieListData.eager(result.getWriteStatuses())));
+    return postWrite(resultList, instantTime, table);
   }
 
   @Override
-  protected List<WriteStatus> postWrite(HoodieWriteMetadata<List<WriteStatus>> result,
+  protected List<WriteStatus> postWrite(HoodieWriteMetadataHolder<List<WriteStatus>> result,
                                         String instantTime,
                                         HoodieTable hoodieTable) {
     if (result.getIndexLookupDuration().isPresent()) {
