@@ -305,8 +305,8 @@ object HoodieFileIndex extends Logging {
     // would be able to run SET hoodie.metadata.enable=true in the spark sql session to enable metadata listing.
     val isMetadataFilesPartitionAvailable = isFilesPartitionAvailable(metaClient) && sqlConf.getConfString(HoodieMetadataConfig.ENABLE.key(),
       HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString).toBoolean
+    properties.putAll(options.filter(p => p._2 != null).asJava)
     properties.setProperty(HoodieMetadataConfig.ENABLE.key(), String.valueOf(isMetadataFilesPartitionAvailable))
-    properties.putAll(options.filter(p => p._2 != null && !p._1.equals(HoodieMetadataConfig.ENABLE.key())).asJava)
     properties
   }
 
