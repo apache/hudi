@@ -417,6 +417,41 @@
           <skip>${skipDocker}</skip>
         </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>${maven-shade-plugin.version}</version>
+        <configuration>
+          <!-- common to all bundles -->
+          <artifactSet>
+            <includes>
+              <!-- com.esotericsoftware:kryo-shaded -->
+              <include>com.esotericsoftware:kryo-shaded</include>
+              <include>com.esotericsoftware:minlog</include>
+              <include>org.objenesis:objenesis</include>
+            </includes>
+          </artifactSet>
+          <relocations>
+            <!-- com.esotericsoftware:kryo-shaded -->
+            <relocation>
+              <pattern>com.esotericsoftware.kryo.</pattern>
+              <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>com.esotericsoftware.reflectasm.</pattern>
+              <shadedPattern>org.apache.hudi.com.esotericsoftware.reflectasm.</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>com.esotericsoftware.minlog.</pattern>
+              <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.objenesis.</pattern>
+              <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+            </relocation>
+          </relocations>
+        </configuration>
+      </plugin>
     </plugins>
 
     <pluginManagement>

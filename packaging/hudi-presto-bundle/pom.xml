@@ -65,16 +65,13 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
-                <includes>
+                <includes combine.children="append">
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
                   <include>org.codehaus.jackson:*</include>
-                  <include>com.esotericsoftware:kryo-shaded</include>
-                  <include>org.objenesis:objenesis</include>
-                  <include>com.esotericsoftware:minlog</include>
                   <include>org.apache.commons:commons-lang3</include>
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-client</include>
@@ -97,7 +94,7 @@
                   <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
-              <relocations>
+              <relocations combine.children="append">
                 <relocation>
                   <pattern>org.apache.parquet.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
@@ -128,18 +125,6 @@
                 <relocation>
                   <pattern>org.codehaus.jackson.</pattern>
                   <shadedPattern>org.apache.hudi.org.codehaus.jackson.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.esotericsoftware.kryo.</pattern>
-                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.objenesis.</pattern>
-                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.esotericsoftware.minlog.</pattern>
-                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>
@@ -248,7 +233,6 @@
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
-                    <exclude>com/esotericsoftware/reflectasm/**</exclude>
                     <exclude>hbase-webapps/**</exclude>
                     <exclude>stringBehavior.avsc</exclude>
                   </excludes>
