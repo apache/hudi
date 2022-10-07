@@ -66,10 +66,10 @@ process_scala_version() {
 
 download_spark() {
     #download and extract file
-    SPARK_URL=https://archive.apache.org/dist/spark/${PREFIX_NAME}/${FOLDER_NAME}.tgz
+    SPARK_URL=https://archive.apache.org/dist/spark/${SPARK_PREFIX_NAME}/${SPARK_FOLDER_NAME}.tgz
     wget --tries=3 $SPARK_URL || { echo "::error::get_spark_hadoop.sh failed to download ${SPARK_URL}" && exit 1; }
-    tar -xzvf ${FOLDER_NAME}.tgz || { echo "::error::get_spark_hadoop.sh failed to extract ${FOLDER_NAME}.tgz" && exit 1; }
-    rm -rf ${FOLDER_NAME}.tgz
+    tar -xzvf ${SPARK_FOLDER_NAME}.tgz || { echo "::error::get_spark_hadoop.sh failed to extract ${SPARK_FOLDER_NAME}.tgz" && exit 1; }
+    rm -rf ${SPARK_FOLDER_NAME}.tgz
 }
 
 
