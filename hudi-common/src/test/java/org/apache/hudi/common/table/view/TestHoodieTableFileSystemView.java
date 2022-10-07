@@ -1776,14 +1776,14 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String partitionPath = "2020/06/27";
     new File(basePath + "/" + partitionPath).mkdirs();
 
-    // create 2 fileId in partition1
+    // Generate 2 fileIds
     String fileId1 = UUID.randomUUID().toString();
     String fileId2 = UUID.randomUUID().toString();
 
     // This is used for verifying file system view after every commit.
     FileSystemViewExpectedState expectedState = new FileSystemViewExpectedState();
 
-    // First delta commit on partitionPath1 which creates 2 log files.
+    // First delta commit on partitionPath which creates 2 log files.
     String commitTime1 = "001";
     String logFileName1 = FSUtils.makeLogFileName(fileId1, HoodieFileFormat.HOODIE_LOG.getFileExtension(), commitTime1, 1, TEST_WRITE_TOKEN);
     String logFileName2 = FSUtils.makeLogFileName(fileId2, HoodieFileFormat.HOODIE_LOG.getFileExtension(), commitTime1, 1, TEST_WRITE_TOKEN);
@@ -1822,8 +1822,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     verifyFileSystemView(partitionPath, expectedState, fileSystemView);
 
     // Create compaction commit
-    List<HoodieLogFile> logFiles = Stream.of(basePath + "/" + partitionPath + "/" + logFileName1,
-        basePath + "/" + partitionPath + "/" + logFileName3).map(HoodieLogFile::new).collect(Collectors.toList());
+    List<HoodieLogFile> logFiles = Stream.of(
+        basePath + "/" + partitionPath + "/" + logFileName1, basePath + "/" + partitionPath + "/" + logFileName3)
+        .map(HoodieLogFile::new)
+        .collect(Collectors.toList());
     CompactionOperation compactionOperation = new CompactionOperation(Option.empty(), partitionPath, logFiles, Collections.emptyMap());
     HoodieCompactionPlan compactionPlan = getHoodieCompactionPlan(Collections.singletonList(compactionOperation));
     expectedState.pendingCompactionFgIdsCurrentlyPresent.add(fileId1);
@@ -1854,7 +1856,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         TimelineMetadataUtils.serializeCompactionPlan(logCompactionPlan));
     metaClient.getActiveTimeline().transitionLogCompactionRequestedToInflight(logCompactionRequested);
 
-    // Verify file system view after 4rd commit which is logcompaction.requested.
+    // Verify file system view after 4th commit which is logcompaction.requested.
     verifyFileSystemView(partitionPath, expectedState, fileSystemView);
   }
 

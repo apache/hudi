@@ -176,7 +176,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         testMultipleWriteSteps(view, Arrays.asList("11", "12", "13"), true, "11");
 
     view.sync();
-    // Schedule Compaction
+    // Schedule log Compaction
     scheduleLogCompaction(view, "14", "11");
 
     // Schedule Compaction
