@@ -18,10 +18,9 @@
 
 package org.apache.hudi.common.util.queue;
 
-import com.lmax.disruptor.dsl.Disruptor;
-import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.log4j.LogManager;
@@ -32,8 +31,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -42,18 +39,9 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(DisruptorExecutor.class);
 
-  // Executor service used for launching write thread.
-  private final ExecutorService producerExecutorService;
-  // Executor service used for launching read thread.
-  private final ExecutorService consumerExecutorService;
   // Used for buffering records which is controlled by HoodieWriteConfig#WRITE_BUFFER_LIMIT_BYTES.
   private final DisruptorMessageQueue<I, O> queue;
-  // Producers
-  private final List<HoodieProducer<I>> producers;
-  // Consumer
-  private final Option<IteratorBasedQueueConsumer<O, E>> consumer;
-  // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
-  private final Runnable preExecuteRunnable;
+  private final HoodieExecutorBase<I, O, E> hoodieExecutorBase;
 
   public DisruptorExecutor(final int bufferSize, final Iterator<I> inputItr,
                            IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, String waitStrategy, Runnable preExecuteRunnable) {
@@ -73,14 +61,8 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
   public DisruptorExecutor(final int bufferSize, List<HoodieProducer<I>> producers,
                            Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                            final String waitStrategy, Runnable preExecuteRunnable) {
-    this.producers = producers;
-    this.consumer = consumer;
-    this.preExecuteRunnable = preExecuteRunnable;
-    // Ensure fixed thread for each producer thread
-    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new CustomizedThreadFactory("producer"));
-    // Ensure single thread for consumer
-    this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("consumer"));
     this.queue = new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable);
+    this.hoodieExecutorBase = new HoodieExecutorBase<>(producers, consumer, preExecuteRunnable);
   }
 
   /**
@@ -88,11 +70,11 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
    */
   public ExecutorCompletionService<Boolean> startProducers() {
     final ExecutorCompletionService<Boolean> completionService =
-        new ExecutorCompletionService<Boolean>(producerExecutorService);
-    producers.stream().map(producer -> {
+        new ExecutorCompletionService<Boolean>(hoodieExecutorBase.getProducerExecutorService());
+    hoodieExecutorBase.getProducers().stream().map(producer -> {
       return completionService.submit(() -> {
         try {
-          preExecuteRunnable.run();
+          hoodieExecutorBase.getPreExecuteRunnable().run();
 
           DisruptorPublisher publisher = new DisruptorPublisher<>(producer, queue);
           publisher.startProduce();
@@ -110,7 +92,7 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
   @Override
   public E execute() {
     try {
-      assert consumer.isPresent();
+      ValidationUtils.checkState(hoodieExecutorBase.getConsumer().isPresent());
       startConsumer();
       ExecutorCompletionService<Boolean> pool = startProducers();
       return finishConsuming(pool);
@@ -127,14 +109,14 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
   public E finishConsuming(Object o) throws ExecutionException, InterruptedException {
     ExecutorCompletionService<Boolean> pool = (ExecutorCompletionService) o;
     waitForProducersFinished(pool);
-    queue.getInnerQueue().shutdown();
-    consumer.get().finish();
+    queue.close();
+    hoodieExecutorBase.getConsumer().get().finish();
 
-    return consumer.get().getResult();
+    return hoodieExecutorBase.getConsumer().get().getResult();
   }
 
   private void waitForProducersFinished(ExecutorCompletionService<Boolean> pool) throws InterruptedException, ExecutionException {
-    for (int i = 0; i < producers.size(); i++) {
+    for (int i = 0; i < hoodieExecutorBase.getProducers().size(); i++) {
       pool.take().get();
     }
   }
@@ -144,11 +126,9 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
    */
   @Override
   public Future<E> startConsumer() {
-    DisruptorMessageHandler<O, E> handler = new DisruptorMessageHandler<>(consumer.get());
-
-    Disruptor<HoodieDisruptorEvent<O>> innerQueue = queue.getInnerQueue();
-    innerQueue.handleEventsWith(handler);
-    innerQueue.start();
+    DisruptorMessageHandler<O, E> handler = new DisruptorMessageHandler<>(hoodieExecutorBase.getConsumer().get());
+    queue.setHandlers(handler);
+    queue.start();
     return null;
   }
 
@@ -159,8 +139,7 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
 
   @Override
   public void shutdownNow() {
-    producerExecutorService.shutdownNow();
-    consumerExecutorService.shutdownNow();
+    hoodieExecutorBase.shutdownNow();
     queue.close();
   }
 
@@ -171,6 +150,6 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
 
   @Override
   public boolean awaitTermination() {
-    return true;
+    return hoodieExecutorBase.awaitTermination();
   }
 }

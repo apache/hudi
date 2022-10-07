@@ -33,7 +33,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   private final Disruptor<HoodieDisruptorEvent<O>> queue;
   private final Function<I, O> transformFunction;
-  private RingBuffer<HoodieDisruptorEvent<O>> ringBuffer;
+  private final RingBuffer<HoodieDisruptorEvent<O>> ringBuffer;
 
   public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyName, int producerNumber, Runnable preExecuteRunnable) {
     WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyName);
@@ -79,7 +79,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     queue.shutdown();
   }
 
-  public Disruptor<HoodieDisruptorEvent<O>> getInnerQueue() {
+  private Disruptor<HoodieDisruptorEvent<O>> getInnerQueue() {
     return this.queue;
   }
 
@@ -93,5 +93,13 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     ArrayList<O> dummyList = new ArrayList<>();
     dummyList.add(ringBuffer.get(0).get());
     return dummyList.iterator();
+  }
+
+  public void setHandlers(DisruptorMessageHandler handler) {
+    queue.handleEventsWith(handler);
+  }
+
+  public void start() {
+    queue.start();
   }
 }

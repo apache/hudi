@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
@@ -35,10 +34,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -50,19 +46,9 @@ import java.util.stream.Collectors;
 public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
-  private static final long TERMINATE_WAITING_TIME_SECS = 60L;
-  // Executor service used for launching write thread.
-  private final ExecutorService producerExecutorService;
-  // Executor service used for launching read thread.
-  private final ExecutorService consumerExecutorService;
   // Used for buffering records which is controlled by HoodieWriteConfig#WRITE_BUFFER_LIMIT_BYTES.
   private final BoundedInMemoryQueue<I, O> queue;
-  // Producers
-  private final List<HoodieProducer<I>> producers;
-  // Consumer
-  private final Option<IteratorBasedQueueConsumer<O, E>> consumer;
-  // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
-  private final Runnable preExecuteRunnable;
+  private final HoodieExecutorBase<I, O, E> hoodieExecutorBase;
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, final Iterator<I> inputItr,
                                  IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
@@ -82,14 +68,8 @@ public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E>
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<HoodieProducer<I>> producers,
                                  Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                                  final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
-    this.producers = producers;
-    this.consumer = consumer;
-    this.preExecuteRunnable = preExecuteRunnable;
-    // Ensure fixed thread for each producer thread
-    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new CustomizedThreadFactory("producer"));
-    // Ensure single thread for consumer
-    this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("consumer"));
     this.queue = new BoundedInMemoryQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator);
+    this.hoodieExecutorBase = new HoodieExecutorBase<>(producers, consumer, preExecuteRunnable);
   }
 
   /**
@@ -97,13 +77,13 @@ public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E>
    */
   public ExecutorCompletionService<Boolean> startProducers() {
     // Latch to control when and which producer thread will close the queue
-    final CountDownLatch latch = new CountDownLatch(producers.size());
+    final CountDownLatch latch = new CountDownLatch(hoodieExecutorBase.getProducers().size());
     final ExecutorCompletionService<Boolean> completionService =
-        new ExecutorCompletionService<Boolean>(producerExecutorService);
-    producers.stream().map(producer -> {
+        new ExecutorCompletionService<Boolean>(hoodieExecutorBase.getProducerExecutorService());
+    hoodieExecutorBase.getProducers().stream().map(producer -> {
       return completionService.submit(() -> {
         try {
-          preExecuteRunnable.run();
+          hoodieExecutorBase.getPreExecuteRunnable().run();
           producer.produce(queue);
         } catch (Throwable e) {
           LOG.error("error producing records", e);
@@ -129,10 +109,10 @@ public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E>
    */
   @Override
   public Future<E> startConsumer() {
-    return consumer.map(consumer -> {
-      return consumerExecutorService.submit(() -> {
+    return hoodieExecutorBase.getConsumer().map(consumer -> {
+      return hoodieExecutorBase.getConsumerExecutorService().submit(() -> {
         LOG.info("starting consumer thread");
-        preExecuteRunnable.run();
+        hoodieExecutorBase.getPreExecuteRunnable().run();
         try {
           E result = consumer.consume(queue);
           LOG.info("Queue Consumption is done; notifying producer threads");
@@ -174,29 +154,13 @@ public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E>
   }
 
   public void shutdownNow() {
-    producerExecutorService.shutdownNow();
-    consumerExecutorService.shutdownNow();
+    hoodieExecutorBase.shutdownNow();
     // close queue to force producer stop
     queue.close();
   }
 
   public boolean awaitTermination() {
-    // if current thread has been interrupted before awaitTermination was called, we still give
-    // executor a chance to proceeding. So clear the interrupt flag and reset it if needed before return.
-    boolean interruptedBefore = Thread.interrupted();
-    boolean producerTerminated = false;
-    boolean consumerTerminated = false;
-    try {
-      producerTerminated = producerExecutorService.awaitTermination(TERMINATE_WAITING_TIME_SECS, TimeUnit.SECONDS);
-      consumerTerminated = consumerExecutorService.awaitTermination(TERMINATE_WAITING_TIME_SECS, TimeUnit.SECONDS);
-    } catch (InterruptedException ie) {
-      // fail silently for any other interruption
-    }
-    // reset interrupt flag if needed
-    if (interruptedBefore) {
-      Thread.currentThread().interrupt();
-    }
-    return producerTerminated && consumerTerminated;
+    return hoodieExecutorBase.awaitTermination();
   }
 
   public BoundedInMemoryQueue<I, O> getQueue() {
