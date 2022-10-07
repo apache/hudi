@@ -164,8 +164,8 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
           .collect(Collectors.toList());
       InternalSchema mergedSchema = new InternalSchemaMerger(writeInternalSchema, querySchema,
           true, false, false).mergeSchema();
-      Schema newWriterSchema = AvroInternalSchemaConverter.convert(mergedSchema, writerSchema.getName());
-      Schema writeSchemaFromFile = AvroInternalSchemaConverter.convert(writeInternalSchema, newWriterSchema.getName());
+      Schema newWriterSchema = AvroInternalSchemaConverter.convert(mergedSchema, writerSchema.getFullName());
+      Schema writeSchemaFromFile = AvroInternalSchemaConverter.convert(writeInternalSchema, newWriterSchema.getFullName());
       boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size()
           || SchemaCompatibility.checkReaderWriterCompatibility(newWriterSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
       if (needToReWriteRecord) {

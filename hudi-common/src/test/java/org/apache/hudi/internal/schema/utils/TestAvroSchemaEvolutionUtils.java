@@ -290,7 +290,7 @@ public class TestAvroSchemaEvolutionUtils {
         .updateColumnType("col51", Types.DecimalType.get(18, 9))
         .updateColumnType("col6", Types.StringType.get());
     InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
-    Schema newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getName());
+    Schema newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getFullName());
     GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, Collections.emptyMap());
 
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newRecord), true);
@@ -371,7 +371,7 @@ public class TestAvroSchemaEvolutionUtils {
         .renameColumn("preferences.feature2", "f2")
         .renameColumn("locations.value.lat", "lt");
     InternalSchema internalSchemaRename = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
-    Schema avroSchemaRename = AvroInternalSchemaConverter.convert(internalSchemaRename, schema.getName());
+    Schema avroSchemaRename = AvroInternalSchemaConverter.convert(internalSchemaRename, schema.getFullName());
     Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(internalSchema, internalSchemaRename);
     GenericRecord avroRecordRename = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, avroSchemaRename, renameCols);
     // test the correctly of rewrite
