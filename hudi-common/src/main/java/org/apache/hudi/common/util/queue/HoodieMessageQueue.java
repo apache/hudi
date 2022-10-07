@@ -20,15 +20,13 @@ package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.Option;
 
-import java.util.Iterator;
-
 /**
  * HoodieMessageQueue holds an internal message queue, and control the behavior of
  * 1. insert record into internal message queue.
  * 2. get record from internal message queue.
  * 3. close internal message queue.
  */
-public interface HoodieMessageQueue<I, O> extends Iterable<O> {
+public interface HoodieMessageQueue<I, O> {
 
   /**
    * Get the size of inner message queue.
@@ -46,6 +44,4 @@ public interface HoodieMessageQueue<I, O> extends Iterable<O> {
   Option<O> readNextRecord();
 
   void close();
-
-  Iterator<O> iterator();
 }

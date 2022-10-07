@@ -21,43 +21,9 @@ package org.apache.hudi.common.util.queue;
 import java.util.Iterator;
 
 /**
- * Consume entries from queue and execute callback function.
+ * IteratorBasedHoodieMessageQueue implements HoodieMessageQueue with Iterable
  */
-public abstract class IteratorBasedQueueConsumer<I, O> implements HoodieConsumer<I, O> {
+public abstract class IteratorBasedHoodieMessageQueue<I, O> implements HoodieMessageQueue<I, O>, Iterable<O>{
 
-  /**
-   * API to de-queue entries to memory bounded queue.
-   *
-   * @param queue In Memory bounded queue
-   */
-  @Override
-  public O consume(HoodieMessageQueue<?, I> queue) throws Exception {
-
-    Iterator<I> iterator = ((IteratorBasedHoodieMessageQueue) queue).iterator();
-
-    while (iterator.hasNext()) {
-      consumeOneRecord(iterator.next());
-    }
-
-    // Notifies done
-    finish();
-
-    return getResult();
-  }
-
-  /**
-   * Consumer One record.
-   */
-  public abstract void consumeOneRecord(I record);
-
-  /**
-   * Notifies implementation that we have exhausted consuming records from queue.
-   */
-  public abstract void finish();
-
-  /**
-   * Return result of consuming records so far.
-   */
-  protected abstract O getResult();
-
+  public abstract Iterator<O> iterator();
 }
