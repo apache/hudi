@@ -280,7 +280,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         return false;
       }
     }
-    return writeRecord(hoodieRecord, combineRecordOp, combineRecordSchema, config.getPayloadConfig().getProps(), isDelete, false);
+    return writeRecord(hoodieRecord, combineRecordOp, combineRecordSchema, config.getPayloadConfig().getProps(), isDelete);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Schema schema) throws IOException {
@@ -293,16 +293,16 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Option<HoodieRecord> insertRecord, Schema schema, Properties prop)
       throws IOException {
-    if (writeRecord(hoodieRecord, insertRecord, schema, prop, HoodieOperation.isDelete(hoodieRecord.getOperation()), false)) {
+    if (writeRecord(hoodieRecord, insertRecord, schema, prop, HoodieOperation.isDelete(hoodieRecord.getOperation()))) {
       insertRecordsWritten++;
     }
   }
 
   protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop) throws IOException {
-    return writeRecord(hoodieRecord, combineRecord, schema, prop, false, true);
+    return writeRecord(hoodieRecord, combineRecord, schema, prop, false);
   }
 
-  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop, boolean isDelete, boolean deflate) throws IOException {
+  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop, boolean isDelete) throws IOException {
     Option recordMetadata = hoodieRecord.getMetadata();
     if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -321,9 +321,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
-      if (deflate) {
-        hoodieRecord.deflate();
-      }
+      hoodieRecord.deflate();
       return true;
     } catch (Exception e) {
       LOG.error("Error writing record  " + hoodieRecord, e);

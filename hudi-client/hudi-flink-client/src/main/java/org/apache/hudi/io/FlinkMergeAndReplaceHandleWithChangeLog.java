@@ -34,7 +34,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 
-import java.util.Properties;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
@@ -64,25 +63,29 @@ public class FlinkMergeAndReplaceHandleWithChangeLog<T, I, K, O>
 
   protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOp, Schema combineRecordSchema)
       throws IOException {
+    Option<HoodieRecord> savedCombineRecordOp = combineRecordOp.map(HoodieRecord::newInstance);
+    HoodieRecord<T> savedOldRecord = oldRecord.newInstance();
     final boolean result = super.writeUpdateRecord(hoodieRecord, oldRecord, combineRecordOp, combineRecordSchema);
     if (result) {
       boolean isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
       Option<IndexedRecord> combineRecord;
       if (combineRecordOp.isPresent()) {
-        combineRecord = combineRecordOp.get().toIndexedRecord(combineRecordSchema, new Properties()).map(HoodieAvroIndexedRecord::getData);
+        combineRecord = savedCombineRecordOp.get().toIndexedRecord(combineRecordSchema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData);
       } else {
         combineRecord = Option.empty();
       }
-      cdcLogger.put(hoodieRecord, (GenericRecord) oldRecord.getData(), isDelete ? Option.empty() : combineRecord);
+      cdcLogger.put(hoodieRecord, (GenericRecord) savedOldRecord.getData(), isDelete ? Option.empty() : combineRecord);
       hoodieRecord.deflate();
     }
     return result;
   }
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Schema schema) throws IOException {
+    HoodieRecord<T> savedRecord = hoodieRecord.newInstance();
+    // hoodieRecord deflated after writeInsertRecord
     super.writeInsertRecord(hoodieRecord, schema);
     if (!HoodieOperation.isDelete(hoodieRecord.getOperation())) {
-      cdcLogger.put(hoodieRecord, null, hoodieRecord.toIndexedRecord(schema, new Properties()).map(HoodieAvroIndexedRecord::getData));
+      cdcLogger.put(hoodieRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
       hoodieRecord.deflate();
     }
   }
