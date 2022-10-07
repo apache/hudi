@@ -28,7 +28,7 @@ import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -239,7 +239,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     int maxSize = 10;
     List<IndexedRecord> indexRecords = new ArrayList<>();
     while (records.hasNext() && num < maxSize) {
-      Option<IndexedRecord> hoodieRecord = ((HoodieLegacyAvroRecord)records.next()).getData().getInsertValue(schema);
+      Option<IndexedRecord> hoodieRecord = ((HoodieAvroRecord)records.next()).getData().getInsertValue(schema);
       indexRecords.add(hoodieRecord.get());
       num++;
     }

@@ -20,7 +20,7 @@
 package org.apache.hudi.utilities.testutils;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 
@@ -82,7 +82,7 @@ public class JdbcTestUtils {
         .stream()
         .map(r -> {
           try {
-            return ((GenericRecord) ((HoodieLegacyAvroRecord) r).getData()
+            return ((GenericRecord) ((HoodieAvroRecord) r).getData()
                 .getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, props).get());
           } catch (IOException e) {
             return null;
@@ -127,7 +127,7 @@ public class JdbcTestUtils {
     List<HoodieRecord> updateRecords = dataGenerator.generateUpdates(commitTime, inserts);
     updateRecords.stream().map(m -> {
       try {
-        return ((HoodieLegacyAvroRecord) m).getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, props).get();
+        return ((HoodieAvroRecord) m).getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, props).get();
       } catch (IOException e) {
         return null;
       }

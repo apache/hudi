@@ -20,7 +20,7 @@ package org.apache.hudi.sink.bootstrap;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -251,7 +251,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
 
   @SuppressWarnings("unchecked")
   public static HoodieRecord generateHoodieRecord(HoodieKey hoodieKey, FileSlice fileSlice) {
-    HoodieRecord hoodieRecord = new HoodieLegacyAvroRecord(hoodieKey, null);
+    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, null);
     hoodieRecord.setCurrentLocation(new HoodieRecordGlobalLocation(hoodieKey.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId()));
     hoodieRecord.seal();
 

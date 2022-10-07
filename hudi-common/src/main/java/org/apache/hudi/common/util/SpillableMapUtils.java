@@ -19,7 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -136,7 +136,7 @@ public class SpillableMapUtils {
     Object preCombineVal = getPreCombineVal(record, preCombineField);
     HoodieOperation operation = withOperationField
         ? HoodieOperation.fromName(getNullableValAsString(record, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieLegacyAvroRecord<>(new HoodieKey(recKey, partitionPath),
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
         HoodieRecordUtils.loadPayload(payloadClazz, new Object[]{record, preCombineVal}, GenericRecord.class,
             Comparable.class), operation);
 
@@ -162,7 +162,7 @@ public class SpillableMapUtils {
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, Comparable orderingVal, String payloadClazz) {
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieLegacyAvroRecord<>(new HoodieKey(recKey, partitionPath),
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
         HoodieRecordUtils.loadPayload(payloadClazz, new Object[] {null, orderingVal}, GenericRecord.class, Comparable.class));
     return (R) hoodieRecord;
   }

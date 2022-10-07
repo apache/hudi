@@ -26,7 +26,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -200,7 +200,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     rec.put("updated", "2022-08-29T05:52:55.869Z");
 
     HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(rec));
-    return new HoodieLegacyAvroRecord(new HoodieKey(id, partitionPath), payload);
+    return new HoodieAvroRecord(new HoodieKey(id, partitionPath), payload);
   }
 
   private HoodieWriteConfig getWriteConfig() {

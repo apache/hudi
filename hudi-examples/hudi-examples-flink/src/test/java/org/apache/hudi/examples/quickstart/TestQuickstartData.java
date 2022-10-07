@@ -37,7 +37,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -325,7 +325,7 @@ public class TestQuickstartData {
           .map(hoodieRecord -> {
             try {
               // in case it is a delete
-              GenericRecord record = (GenericRecord) ((HoodieLegacyAvroRecord)hoodieRecord).getData()
+              GenericRecord record = (GenericRecord) ((HoodieAvroRecord)hoodieRecord).getData()
                   .getInsertValue(schema, new Properties())
                   .orElse(null);
               return record == null ? (String) null : filterOutVariables(record);

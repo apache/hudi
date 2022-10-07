@@ -27,7 +27,7 @@ import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -296,7 +296,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
         try {
           GenericRecord genericRecord = (GenericRecord) testPayload.getRecordToInsert(HoodieTestDataGenerator.AVRO_SCHEMA);
           genericRecord.put("partition_path", null);
-          records2.add(new HoodieLegacyAvroRecord(hoodieKey, new RawTripTestPayload(genericRecord.toString(), hoodieKey.getRecordKey(), hoodieKey.getPartitionPath(), TRIP_EXAMPLE_SCHEMA)));
+          records2.add(new HoodieAvroRecord(hoodieKey, new RawTripTestPayload(genericRecord.toString(), hoodieKey.getRecordKey(), hoodieKey.getPartitionPath(), TRIP_EXAMPLE_SCHEMA)));
         } catch (IOException e) {
           e.printStackTrace();
         }

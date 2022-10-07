@@ -25,7 +25,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ConsistentHashingNode;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -109,7 +109,7 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
     List<String> indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
     HoodieData<HoodieRecord<T>> redirectedRecordsRDD = filteredRecordsRDD.map(r -> {
       ConsistentHashingNode node = partitionToIdentifier.get(r.getPartitionPath()).getBucket(r.getKey(), indexKeyFields);
-      return getTaggedRecord(new HoodieLegacyAvroRecord(r.getKey(), r.getData(), r.getOperation()),
+      return getTaggedRecord(new HoodieAvroRecord(r.getKey(), r.getData(), r.getOperation()),
           Option.ofNullable(new HoodieRecordLocation(partitionToInstant.get(r.getPartitionPath()), FSUtils.createNewFileId(node.getFileIdPrefix(), 0))));
     });
 

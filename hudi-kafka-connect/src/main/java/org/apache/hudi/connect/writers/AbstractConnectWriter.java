@@ -20,7 +20,7 @@ package org.apache.hudi.connect.writers;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
@@ -82,7 +82,7 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
     }
 
     // Tag records with a file ID based on kafka partition and hudi partition.
-    HoodieRecord<?> hoodieRecord = new HoodieLegacyAvroRecord<>(keyGenerator.getKey(avroRecord.get()), new HoodieAvroPayload(avroRecord));
+    HoodieRecord<?> hoodieRecord = new HoodieAvroRecord<>(keyGenerator.getKey(avroRecord.get()), new HoodieAvroPayload(avroRecord));
     String fileId = KafkaConnectUtils.hashDigest(String.format("%s-%s", record.kafkaPartition(), hoodieRecord.getPartitionPath()));
     hoodieRecord.unseal();
     hoodieRecord.setCurrentLocation(new HoodieRecordLocation(instantTime, fileId));

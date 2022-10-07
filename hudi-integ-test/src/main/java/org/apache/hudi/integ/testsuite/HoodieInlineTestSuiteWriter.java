@@ -21,7 +21,7 @@ package org.apache.hudi.integ.testsuite;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -72,7 +72,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
     Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
     lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
     JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
-    return inputRDD.map(r -> (GenericRecord) ((HoodieLegacyAvroRecord) r).getData()
+    return inputRDD.map(r -> (GenericRecord) ((HoodieAvroRecord) r).getData()
         .getInsertValue(new Schema.Parser().parse(schema)).get()).rdd();
   }
 

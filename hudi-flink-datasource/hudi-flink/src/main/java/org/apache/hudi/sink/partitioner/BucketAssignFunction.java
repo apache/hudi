@@ -22,7 +22,7 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.BaseAvroPayload;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -182,7 +182,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         if (globalIndex) {
           // if partition path changes, emit a delete record for old partition path,
           // then update the index state using location with new partition path.
-          HoodieRecord<?> deleteRecord = new HoodieLegacyAvroRecord<>(new HoodieKey(recordKey, oldLoc.getPartitionPath()),
+          HoodieRecord<?> deleteRecord = new HoodieAvroRecord<>(new HoodieKey(recordKey, oldLoc.getPartitionPath()),
               payloadCreation.createDeletePayload((BaseAvroPayload) record.getData()));
           deleteRecord.setCurrentLocation(oldLoc.toLocal("U"));
           deleteRecord.seal();

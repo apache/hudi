@@ -22,7 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -393,16 +393,16 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String recordStr4 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 =
-        new HoodieLegacyAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieRecord record2 =
-        new HoodieLegacyAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
     RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieRecord record3 =
-        new HoodieLegacyAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
+        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieRecord record4 =
-        new HoodieLegacyAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
     String newCommitTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -516,7 +516,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     RawTripTestPayload originalPayload =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord originalRecord =
-        new HoodieLegacyAvroRecord(new HoodieKey(originalPayload.getRowKey(), originalPayload.getPartitionPath()),
+        new HoodieAvroRecord(new HoodieKey(originalPayload.getRowKey(), originalPayload.getPartitionPath()),
             originalPayload);
 
     /*
@@ -529,7 +529,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     RawTripTestPayload incomingPayload =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-02-28T03:16:41.415Z\",\"number\":12}");
     HoodieRecord incomingRecord =
-        new HoodieLegacyAvroRecord(new HoodieKey(incomingPayload.getRowKey(), incomingPayload.getPartitionPath()),
+        new HoodieAvroRecord(new HoodieKey(incomingPayload.getRowKey(), incomingPayload.getPartitionPath()),
             incomingPayload);
     /*
     This record has the same record key as originalRecord and the same partition
@@ -539,7 +539,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     RawTripTestPayload incomingPayloadSamePartition =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T04:16:41.415Z\",\"number\":15}");
     HoodieRecord incomingRecordSamePartition =
-        new HoodieLegacyAvroRecord(
+        new HoodieAvroRecord(
             new HoodieKey(incomingPayloadSamePartition.getRowKey(), incomingPayloadSamePartition.getPartitionPath()),
             incomingPayloadSamePartition);
 
@@ -601,7 +601,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
   private JavaPairRDD<HoodieKey, Option<Pair<String, String>>> getRecordLocations(JavaRDD<HoodieKey> keyRDD, HoodieTable hoodieTable) {
     JavaRDD<HoodieRecord> recordRDD = tagLocation(
-        index, keyRDD.map(k -> new HoodieLegacyAvroRecord(k, new EmptyHoodieRecordPayload())), hoodieTable);
+        index, keyRDD.map(k -> new HoodieAvroRecord(k, new EmptyHoodieRecordPayload())), hoodieTable);
     return recordRDD.mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
         ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
         : Option.empty())

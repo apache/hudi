@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -276,7 +276,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
       final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
       JavaRDD<HoodieRecord> recordsToDelete = jsc.parallelize(records, 1)
-          .map(key -> new HoodieLegacyAvroRecord(key, new EmptyHoodieRecordPayload()));
+          .map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
       JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, recordsToDelete, table);
       return taggedRecords.map(record -> record.getKey()).collect();
     };

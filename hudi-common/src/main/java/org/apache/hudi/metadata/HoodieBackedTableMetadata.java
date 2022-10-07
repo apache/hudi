@@ -30,7 +30,7 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -322,7 +322,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             logRecord.getRecordKey(),
             logRecord,
             (oldRecord, newRecord) ->
-                new HoodieLegacyAvroRecord<>(oldRecord.getKey(), newRecord.getData().preCombine(oldRecord.getData()))
+                new HoodieAvroRecord<>(oldRecord.getKey(), newRecord.getData().preCombine(oldRecord.getData()))
         );
       }
     }

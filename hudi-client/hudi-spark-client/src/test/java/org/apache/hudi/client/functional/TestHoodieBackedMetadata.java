@@ -33,7 +33,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -1457,7 +1457,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       AtomicInteger counter = new AtomicInteger();
       List<HoodieRecord> processedRecords = records.stream().map(entry ->
-              new HoodieLegacyAvroRecord(new HoodieKey("key1_" + counter.getAndIncrement(), entry.getPartitionPath()), (HoodieRecordPayload) entry.getData()))
+              new HoodieAvroRecord(new HoodieKey("key1_" + counter.getAndIncrement(), entry.getPartitionPath()), (HoodieRecordPayload) entry.getData()))
           .collect(Collectors.toList());
 
       client.startCommitWithTime(firstCommit);
@@ -1470,7 +1470,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       records = dataGen.generateInserts(secondCommit, 20);
       AtomicInteger counter1 = new AtomicInteger();
       processedRecords = records.stream().map(entry ->
-              new HoodieLegacyAvroRecord(new HoodieKey("key2_" + counter1.getAndIncrement(), entry.getPartitionPath()), (HoodieRecordPayload) entry.getData()))
+              new HoodieAvroRecord(new HoodieKey("key2_" + counter1.getAndIncrement(), entry.getPartitionPath()), (HoodieRecordPayload) entry.getData()))
           .collect(Collectors.toList());
       writeStatuses = client.insert(jsc.parallelize(processedRecords, 1), secondCommit).collect();
       assertNoWriteErrors(writeStatuses);

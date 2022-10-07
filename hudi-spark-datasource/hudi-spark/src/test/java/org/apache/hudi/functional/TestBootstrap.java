@@ -31,7 +31,7 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -519,7 +519,7 @@ public class TestBootstrap extends HoodieClientTestBase {
           try {
             String key = gr.get("_row_key").toString();
             String pPath = p.getKey();
-            return new HoodieLegacyAvroRecord<>(new HoodieKey(key, pPath), new RawTripTestPayload(gr.toString(), key, pPath,
+            return new HoodieAvroRecord<>(new HoodieKey(key, pPath), new RawTripTestPayload(gr.toString(), key, pPath,
                 HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);

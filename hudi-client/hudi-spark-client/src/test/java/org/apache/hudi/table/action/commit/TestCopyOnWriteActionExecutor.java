@@ -23,7 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -187,11 +187,11 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
     List<HoodieRecord> records = new ArrayList<>();
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    records.add(new HoodieLegacyAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
+    records.add(new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    records.add(new HoodieLegacyAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
+    records.add(new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
     RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    records.add(new HoodieLegacyAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
+    records.add(new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
     // Insert new records
     final HoodieSparkCopyOnWriteTable cowTable = table;
@@ -220,12 +220,12 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     String updateRecordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
     RawTripTestPayload updateRowChanges1 = new RawTripTestPayload(updateRecordStr1);
-    HoodieRecord updatedRecord1 = new HoodieLegacyAvroRecord(
+    HoodieRecord updatedRecord1 = new HoodieAvroRecord(
         new HoodieKey(updateRowChanges1.getRowKey(), updateRowChanges1.getPartitionPath()), updateRowChanges1);
 
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieRecord insertedRecord1 =
-        new HoodieLegacyAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
@@ -300,7 +300,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
       String recordStr =
           String.format("{\"_row_key\":\"%s\",\"time\":\"%s\",\"number\":%d}", UUID.randomUUID().toString(), time, i);
       RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      records.add(new HoodieLegacyAvroRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
+      records.add(new HoodieAvroRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
     }
     return records;
   }
@@ -326,11 +326,11 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
     List<HoodieRecord> records = new ArrayList<>();
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    records.add(new HoodieLegacyAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
+    records.add(new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    records.add(new HoodieLegacyAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
+    records.add(new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
     RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    records.add(new HoodieLegacyAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
+    records.add(new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
     // Insert new records
     BaseSparkCommitActionExecutor actionExecutor = new SparkInsertCommitActionExecutor(context, config, table,
@@ -426,7 +426,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
       String recordStr = "{\"_row_key\":\"" + UUID.randomUUID().toString()
           + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":" + i + "}";
       RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      records.add(new HoodieLegacyAvroRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
+      records.add(new HoodieAvroRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
     }
 
     // Insert new records

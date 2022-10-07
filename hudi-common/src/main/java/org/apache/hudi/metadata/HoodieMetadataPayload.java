@@ -43,7 +43,7 @@ import org.apache.hudi.avro.model.LongWrapper;
 import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -289,7 +289,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
         fileInfo);
-    return new HoodieLegacyAvroRecord<>(key, payload);
+    return new HoodieAvroRecord<>(key, payload);
   }
 
   /**
@@ -306,7 +306,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
         fileInfo);
-    return new HoodieLegacyAvroRecord<>(key, payload);
+    return new HoodieAvroRecord<>(key, payload);
   }
 
   /**
@@ -339,7 +339,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
-    return new HoodieLegacyAvroRecord<>(key, payload);
+    return new HoodieAvroRecord<>(key, payload);
   }
 
   /**
@@ -368,7 +368,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     HoodieMetadataBloomFilter metadataBloomFilter =
         new HoodieMetadataBloomFilter(bloomFilterType, timestamp, bloomFilter, isDeleted);
     HoodieMetadataPayload metadataPayload = new HoodieMetadataPayload(key.getRecordKey(), metadataBloomFilter);
-    return new HoodieLegacyAvroRecord<>(key, metadataPayload);
+    return new HoodieAvroRecord<>(key, metadataPayload);
   }
 
   @Override
@@ -615,7 +615,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               .setIsDeleted(isDeleted)
               .build());
 
-      return new HoodieLegacyAvroRecord<>(key, payload);
+      return new HoodieAvroRecord<>(key, payload);
     });
   }
 

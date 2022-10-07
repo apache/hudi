@@ -21,7 +21,7 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -153,7 +153,7 @@ public final class SchemaTestUtil {
   }
 
   private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
-    return new HoodieLegacyAvroRecord<>(new HoodieKey(key, partitionPath),
+    return new HoodieAvroRecord<>(new HoodieKey(key, partitionPath),
         new HoodieAvroPayload(Option.of((GenericRecord) iRecord)));
   }
 
@@ -173,7 +173,7 @@ public final class SchemaTestUtil {
       throws IOException, URISyntaxException {
 
     List<IndexedRecord> iRecords = generateTestRecords(from, limit);
-    return iRecords.stream().map(r -> new HoodieLegacyAvroRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+    return iRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
         new HoodieAvroPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
   }
 
@@ -181,9 +181,9 @@ public final class SchemaTestUtil {
       Schema schema, String fieldNameToUpdate, String newValue) {
     return oldRecords.stream().map(r -> {
       try {
-        GenericRecord rec = (GenericRecord) ((HoodieLegacyAvroRecord) r).getData().getInsertValue(schema).get();
+        GenericRecord rec = (GenericRecord) ((HoodieAvroRecord) r).getData().getInsertValue(schema).get();
         rec.put(fieldNameToUpdate, newValue);
-        return new HoodieLegacyAvroRecord<>(r.getKey(), new HoodieAvroPayload(Option.of(rec)));
+        return new HoodieAvroRecord<>(r.getKey(), new HoodieAvroPayload(Option.of(rec)));
       } catch (IOException io) {
         throw new HoodieIOException("unable to get data from hoodie record", io);
       }

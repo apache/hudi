@@ -22,7 +22,7 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -96,7 +96,7 @@ public class HoodieJavaWriteClientExample {
     List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
     List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
     List<HoodieRecord<HoodieAvroPayload>> writeRecords =
-        recordsSoFar.stream().map(r -> new HoodieLegacyAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
+        recordsSoFar.stream().map(r -> new HoodieAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
     client.insert(writeRecords, newCommitTime);
 
     // updates
@@ -106,7 +106,7 @@ public class HoodieJavaWriteClientExample {
     records.addAll(toBeUpdated);
     recordsSoFar.addAll(toBeUpdated);
     writeRecords =
-        recordsSoFar.stream().map(r -> new HoodieLegacyAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
+        recordsSoFar.stream().map(r -> new HoodieAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
     client.upsert(writeRecords, newCommitTime);
 
     // Delete

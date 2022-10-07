@@ -20,7 +20,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -51,8 +51,8 @@ public class JavaCustomColumnsSortPartitioner<T>
   public List<HoodieRecord<T>> repartitionRecords(
       List<HoodieRecord<T>> records, int outputPartitions) {
     return records.stream().sorted((o1, o2) -> {
-      Object values1 = HoodieAvroUtils.getRecordColumnValues((HoodieLegacyAvroRecord)o1, sortColumnNames, schema, consistentLogicalTimestampEnabled);
-      Object values2 = HoodieAvroUtils.getRecordColumnValues((HoodieLegacyAvroRecord)o2, sortColumnNames, schema, consistentLogicalTimestampEnabled);
+      Object values1 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)o1, sortColumnNames, schema, consistentLogicalTimestampEnabled);
+      Object values2 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)o2, sortColumnNames, schema, consistentLogicalTimestampEnabled);
       return values1.toString().compareTo(values2.toString());
     }).collect(Collectors.toList());
   }

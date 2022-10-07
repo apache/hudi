@@ -20,7 +20,7 @@ package org.apache.hudi.examples.common;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieLegacyAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -126,7 +126,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
       kp.partitionPath = partitionPath;
       existingKeys.put(currSize + i, kp);
       numExistingKeys++;
-      return new HoodieLegacyAvroRecord<>(key, generateRandomValue(key, commitTime));
+      return new HoodieAvroRecord<>(key, generateRandomValue(key, commitTime));
     });
   }
 
@@ -150,7 +150,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
       kp.partitionPath = partitionPath;
       existingKeys.put(currSize + i, kp);
       numExistingKeys++;
-      return new HoodieLegacyAvroRecord<>(key, generateRandomValue(key, commitTime));
+      return new HoodieAvroRecord<>(key, generateRandomValue(key, commitTime));
     });
   }
 
@@ -190,7 +190,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
   }
 
   public HoodieRecord<T> generateUpdateRecord(HoodieKey key, String commitTime) {
-    return new HoodieLegacyAvroRecord<>(key, generateRandomValue(key, commitTime));
+    return new HoodieAvroRecord<>(key, generateRandomValue(key, commitTime));
   }
 
   private Option<String> convertToString(HoodieRecord<T> record) {
