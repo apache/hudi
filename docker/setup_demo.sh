@@ -19,14 +19,18 @@
 SCRIPT_PATH=$(cd `dirname $0`; pwd)
 HUDI_DEMO_ENV=$1
 WS_ROOT=`dirname $SCRIPT_PATH`
+COMPOSE_FILE_NAME="docker-compose_hadoop284_hive233_spark244.yml"
+if [ "$HUDI_DEMO_ENV" = "--mac-aarch64" ]; then
+  COMPOSE_FILE_NAME="docker-compose_hadoop284_hive233_spark244_mac_aarch64.yml"
+fi
 # restart cluster
-HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop284_hive233_spark244.yml down
+HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} down
 if [ "$HUDI_DEMO_ENV" != "dev" ]; then
   echo "Pulling docker demo images ..."
-  HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop284_hive233_spark244.yml pull
+  HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} pull
 fi
 sleep 5
-HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop284_hive233_spark244.yml up -d
+HUDI_WS=${WS_ROOT} docker-compose --verbose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} up -d
 sleep 15
 
 docker exec -it adhoc-1 /bin/bash /var/hoodie/ws/docker/demo/setup_demo_container.sh
