@@ -237,10 +237,6 @@
                   <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
                   </shadedPattern>
                 </relocation>
-                <relocation>
-                  <pattern>com.google.protobuf</pattern>
-                  <shadedPattern>org.apache.hudi.com.google.protobuf</shadedPattern>
-                </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
