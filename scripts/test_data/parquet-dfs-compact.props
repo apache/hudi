@@ -1,0 +1,8 @@
+hoodie.datasource.write.recordkey.field=VendorID
+hoodie.datasource.write.partitionpath.field=date_col
+hoodie.datasource.write.precombine.field=date_col
+hoodie.metadata.enable=true
+hoodie.upsert.shuffle.parallelism=8
+hoodie.insert.shuffle.parallelism=8
+hoodie.delete.shuffle.parallelism=8
+hoodie.bulkinsert.shuffle.parallelism=8

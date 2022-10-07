@@ -1,0 +1,82 @@
+{
+  "type" : "record",
+  "name" : "ny_struct",
+  "namespace" : "ny_namespace",
+  "fields" : [ {
+    "name" : "VendorID",
+    "type" : [ "null", "int" ],
+    "default" : null
+  }, {
+    "name" : "tpep_pickup_datetime",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "tpep_dropoff_datetime",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "passenger_count",
+    "type" : [ "null", "int" ],
+    "default" : null
+  }, {
+    "name" : "trip_distance",
+    "type" : [ "null", "double" ],
+    "default" : null
+  }, {
+    "name" : "RatecodeID",
+    "type" : [ "null", "int" ],
+    "default" : null
+  }, {
+    "name" : "store_and_fwd_flag",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "PULocationID",
+    "type" : [ "null", "int" ],
+    "default" : null
+  }, {
+    "name" : "DOLocationID",
+    "type" : [ "null", "int" ],
+    "default" : null
+  }, {
+    "name" : "payment_type",
+    "type" : [ "null", "int" ],
+    "default" : null
+  }, {
+    "name" : "fare_amount",
+    "type" : [ "null", "double" ],
+    "default" : null
+  }, {
+    "name" : "extra",
+    "type" : [ "null", "double" ],
+    "default" : null
+  }, {
+    "name" : "mta_tax",
+    "type" : [ "null", "double" ],
+    "default" : null
+  }, {
+    "name" : "tip_amount",
+    "type" : [ "null", "double" ],
+    "default" : null
+  }, {
+    "name" : "tolls_amount",
+    "type" : [ "null", "double" ],
+    "default" : null
+  }, {
+    "name" : "improvement_surcharge",
+    "type" : [ "null", "double" ],
+    "default" : null
+  }, {
+    "name" : "total_amount",
+    "type" : [ "null", "double" ],
+    "default" : null
+  }, {
+    "name" : "congestion_surcharge",
+    "type" : [ "null", "double" ],
+    "default" : null
+  }, {
+    "name" : "date_col",
+    "type" : [ "null", "string" ],
+    "default" : null
+  } ]
+}
