@@ -34,6 +34,19 @@ public class AvroSchemaUtils {
 
   private AvroSchemaUtils() {}
 
+  /**
+   * Generates fully-qualified name for the Avro's schema based on the Table's name
+   *
+   * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+   *       This method should not change for compatibility reasons as older versions
+   *       of Avro might be comparing fully-qualified names rather than just the record
+   *       names
+   */
+  public static String getAvroRecordQualifiedName(String tableName) {
+    String sanitizedTableName = HoodieAvroUtils.sanitizeName(tableName);
+    return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
+  }
+
   // TODO java-doc, test
   public static boolean isProjectionOf(Schema sourceSchema, Schema targetSchema) {
     for (Schema.Field targetField : targetSchema.getFields()) {
