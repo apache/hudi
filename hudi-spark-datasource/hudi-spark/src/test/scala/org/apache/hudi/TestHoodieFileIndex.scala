@@ -394,6 +394,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       val props = Map[String, String](
         "path" -> basePath,
         QUERY_TYPE.key -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
+        HoodieMetadataConfig.ENABLE.key -> testCase.enableMetadata.toString,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> testCase.enableDataSkipping.toString,
         HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE.key -> testCase.columnStatsProcessingModeOverride
       ) ++ readMetadataOpts
@@ -403,7 +404,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       val allFilesPartitions = fileIndex.listFiles(Seq(), Seq())
       assertEquals(10, allFilesPartitions.head.files.length)
 
-      if (testCase.enableDataSkipping && testCase.enableMetadata) {
+      if (testCase.enableDataSkipping && testCase.enableMetadata && testCase.enableColumnStats) {
         // We're selecting a single file that contains "id" == 1 row, which there should be
         // strictly 1. Given that 1 is minimal possible value, Data Skipping should be able to
         // truncate search space to just a single file
