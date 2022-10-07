@@ -18,39 +18,43 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Comparator;
 import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests {@link HoodieInternalRowParquetWriter}.
  */
 public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness {
-
-  private static final Random RANDOM = new Random();
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -68,44 +72,55 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void endToEndTest(boolean parquetWriteLegacyFormatEnabled) throws Exception {
+  public void testProperWriting(boolean parquetWriteLegacyFormatEnabled) throws Exception {
+    // Generate inputs
+    Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, 100,
+        HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, false);
+    StructType schema = inputRows.schema();
+
+    List<InternalRow> rows = SparkDatasetTestUtils.toInternalRows(inputRows, SparkDatasetTestUtils.ENCODER);
+
     HoodieWriteConfig.Builder writeConfigBuilder =
         SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort);
-    for (int i = 0; i < 5; i++) {
-      // init write support and parquet config
-      HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf, parquetWriteLegacyFormatEnabled);
-      HoodieWriteConfig cfg = writeConfigBuilder.build();
-      HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
-          CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
-          writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
 
-      // prepare path
-      String fileId = UUID.randomUUID().toString();
-      Path filePath = new Path(basePath + "/" + fileId);
-      String partitionPath = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-      metaClient.getFs().mkdirs(new Path(basePath));
+    HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf, parquetWriteLegacyFormatEnabled);
+    HoodieWriteConfig cfg = writeConfigBuilder.build();
+    HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
+        CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
+        writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
 
-      // init writer
-      HoodieInternalRowParquetWriter writer = new HoodieInternalRowParquetWriter(filePath, parquetConfig);
+    Path filePath = new Path(basePath + "/internal_row_writer.parquet");
 
-      // generate input
-      int size = 10 + RANDOM.nextInt(100);
-      // Generate inputs
-      Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, size, partitionPath, false);
-      List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(inputRows, SparkDatasetTestUtils.ENCODER);
-
-      // issue writes
-      for (InternalRow internalRow : internalRows) {
-        writer.write(internalRow);
+    try (HoodieInternalRowParquetWriter writer = new HoodieInternalRowParquetWriter(filePath, parquetConfig)) {
+      for (InternalRow row : rows) {
+        writer.writeRow(row.getUTF8String(schema.fieldIndex("record_key")), row);
       }
-
-      // close the writer
-      writer.close();
-
-      // verify rows
-      Dataset<Row> result = sqlContext.read().parquet(basePath);
-      assertEquals(0, inputRows.except(result).count());
     }
+
+    // Step 1: Verify rows written correctly
+    Dataset<Row> result = sqlContext.read().parquet(basePath);
+    assertEquals(0, inputRows.except(result).count());
+
+    // Step 2: Assert Parquet metadata was written appropriately
+    List<String> recordKeys =
+        rows.stream().map(r -> r.getString(schema.fieldIndex("record_key"))).collect(Collectors.toList());
+
+    String minKey = recordKeys.stream().min(Comparator.naturalOrder()).get();
+    String maxKey = recordKeys.stream().max(Comparator.naturalOrder()).get();
+
+    FileMetaData parquetMetadata = ParquetUtils.readMetadata(hadoopConf, filePath).getFileMetaData();
+
+    Map<String, String> extraMetadata = parquetMetadata.getKeyValueMetaData();
+
+    assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER), minKey);
+    assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER), maxKey);
+    assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE), BloomFilterTypeCode.DYNAMIC_V0.name());
+
+    // Step 3: Make sure Bloom Filter contains all the record keys
+    BloomFilter bloomFilter = new ParquetUtils().readBloomFilterFromMetadata(hadoopConf, filePath);
+    recordKeys.forEach(recordKey -> {
+      assertTrue(bloomFilter.mightContain(recordKey));
+    });
   }
 
   private HoodieRowParquetWriteSupport getWriteSupport(HoodieWriteConfig.Builder writeConfigBuilder, Configuration hadoopConf, boolean parquetWriteLegacyFormatEnabled) {
