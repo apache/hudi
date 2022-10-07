@@ -52,7 +52,7 @@ public class TestHoodieAvroParquetWriter {
   @TempDir java.nio.file.Path tmpDir;
 
   @Test
-  public void testReadingAndWriting() throws IOException {
+  public void testProperWriting() throws IOException {
     Configuration hadoopConf = new Configuration();
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
