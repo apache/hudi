@@ -509,8 +509,8 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * Returns the last completed commit timestamp before clean.
    */
   public String getLastCompletedCommitTimestamp() {
-    if (commitTimeline.lastInstant().isPresent()) {
-      return commitTimeline.lastInstant().get().getTimestamp();
+    if (commitTimeline.getContiguousCompletedWriteTimeline().lastInstant().isPresent()) {
+      return commitTimeline.getContiguousCompletedWriteTimeline().lastInstant().get().getTimestamp();
     } else {
       return "";
     }
