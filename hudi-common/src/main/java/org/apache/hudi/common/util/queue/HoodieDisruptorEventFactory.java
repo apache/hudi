@@ -20,6 +20,10 @@ package org.apache.hudi.common.util.queue;
 
 import com.lmax.disruptor.EventFactory;
 
+/**
+ * Wrap a message/record as an disruptor event.
+ * @param <O>
+ */
 public class HoodieDisruptorEventFactory<O> implements EventFactory<HoodieDisruptorEvent<O>> {
 
   @Override

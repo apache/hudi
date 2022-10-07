@@ -23,7 +23,7 @@ import java.util.Iterator;
 /**
  * IteratorBasedHoodieMessageQueue implements HoodieMessageQueue with Iterable
  */
-public abstract class IteratorBasedHoodieMessageQueue<I, O> implements HoodieMessageQueue<I, O>, Iterable<O>{
+public abstract class IteratorBasedHoodieMessageQueue<I, O> implements HoodieMessageQueue<I, O>, Iterable<O> {
 
   public abstract Iterator<O> iterator();
 }
