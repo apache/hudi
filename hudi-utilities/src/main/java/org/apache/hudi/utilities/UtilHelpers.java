@@ -496,46 +496,22 @@ public class UtilHelpers {
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
 
-  /**
-   * Create latest schema provider for Target schema.
-   *
-   * @param structType spark data type of incoming batch.
-   * @param jssc instance of {@link JavaSparkContext}.
-   * @param fs instance of {@link FileSystem}.
-   * @param basePath base path of the table.
-   * @return the schema provider where target schema refers to latest schema(either incoming schema or table schema).
-   */
-  public static SchemaProvider createLatestSchemaProvider(StructType structType,
-      JavaSparkContext jssc, FileSystem fs, String basePath) {
-    SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
-    Schema writeSchema = rowSchemaProvider.getTargetSchema();
-    Schema latestTableSchema = writeSchema;
-
+  public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc, FileSystem fs, String basePath) {
     try {
       if (FSUtils.isTableExists(basePath, fs)) {
-        HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder().setConf(jssc.sc().hadoopConfiguration()).setBasePath(basePath).build();
-        TableSchemaResolver
-            tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
-        latestTableSchema = tableSchemaResolver.getLatestSchema(writeSchema, true, (Function1<Schema, Schema>) v1 -> AvroConversionUtils.convertStructTypeToAvroSchema(
-            AvroConversionUtils.convertAvroSchemaToStructType(v1), RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME,
-            RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE));
+        HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder()
+            .setConf(jssc.sc().hadoopConfiguration())
+            .setBasePath(basePath)
+            .build();
+        TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
+
+        return tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false);
       }
-    } catch (IOException e) {
-      LOG.warn("Could not fetch table schema. Falling back to writer schema");
+    } catch (Exception e) {
+      LOG.warn("Failed to fetch latest table's schema", e);
     }
 
-    final Schema finalLatestTableSchema = latestTableSchema;
-    return new SchemaProvider(new TypedProperties()) {
-      @Override
-      public Schema getSourceSchema() {
-        return rowSchemaProvider.getSourceSchema();
-      }
-
-      @Override
-      public Schema getTargetSchema() {
-        return finalLatestTableSchema;
-      }
-    };
+    return Option.empty();
   }
 
   public static HoodieTableMetaClient createMetaClient(
