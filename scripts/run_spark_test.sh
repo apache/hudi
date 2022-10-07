@@ -49,11 +49,6 @@ case $SPARK_PROFILE in
         ;;
 esac
 
-#debug
-echo "spark folder name: $SPARK_FOLDER_NAME"
-echo "spark prefix name: $SPARK_PREFIX_NAME"
-#debug
-
 #download and extract file
 wget --tries=3 https://archive.apache.org/dist/spark/${SPARK_PREFIX_NAME}/${SPARK_FOLDER_NAME}.tgz
 tar -xzvf ${SPARK_FOLDER_NAME}.tgz
@@ -68,22 +63,8 @@ echo hoodie.deltastreamer.source.dfs.root=${TEST_DATA_FOLDER}/parquet_src >> $PR
 echo hoodie.deltastreamer.schemaprovider.target.schema.file=file:${TEST_DATA_FOLDER}/ny.avsc >> $PROPS_FILE
 echo hoodie.deltastreamer.schemaprovider.source.schema.file=file:${TEST_DATA_FOLDER}/ny.avsc >> $PROPS_FILE
 
-#run spark submit
+
 SPARK_SUBMIT=${SPARK_HOME}/bin/spark-submit
-
-#debug
-echo "spark submit: $SPARK_SUBMIT"
-#debug
-
-$SPARK_SUBMIT --driver-memory 8g --executor-memory 8g \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
-${PWD}/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.0-SNAPSHOT.jar \
---props $PROPS_FILE \
---schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
---source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
---source-ordering-field date_col   --table-type MERGE_ON_READ \
---target-base-path file:\/\/\/tmp/hudi-deltastreamer-ny/ \
---target-table ny_hudi_tbl  --op UPSERT
 
 #get utilities jar name
 UTILITIES_BUNDLE_NAME=""
@@ -104,15 +85,19 @@ case $SCALA_PROFILE in
 esac
 UTILITIES_BUNDLE_NAME=${PWD}/packaging/hudi-spark-bundle/target/hudi-spark-bundle_${UTILITIES_BUNDLE_NAME}-0.13.0-SNAPSHOT.jar
 
-#debug
-echo "utilities bundle name: $UTILITIES_BUNDLE_NAME"
-#debug
+$SPARK_SUBMIT --driver-memory 8g --executor-memory 8g \
+--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+$UTILITIES_BUNDLE_NAME --props $PROPS_FILE \
+--schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
+--source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
+--source-ordering-field date_col   --table-type MERGE_ON_READ \
+--target-base-path file:\/\/\/tmp/hudi-deltastreamer-ny/ \
+--target-table ny_hudi_tbl  --op UPSERT
 
 #create spark shell command
 SPARK_SHELL_COMMAND="spark-shell --jars ${UTILITIES_BUNDLE_NAME} --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' "
 
-if [[ $SPARK_PROFILE = "spark3.2" ]] || [[ $SPARK_PROFILE = "spark3.3"]]
-then
+if [[ $SPARK_PROFILE = "spark3.2" || $SPARK_PROFILE = "spark3.3" ]]; then
     SPARK_SHELL_COMMAND="${SPARK_SHELL_COMMAND} --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'"
 fi
 
