@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.util.queue;
 
+/**
+ * HoodieConsumer is used to consume records/messages from hoodie inner message queue and write into DFS.
+ */
 public interface HoodieConsumer<I, O> {
 
   /**

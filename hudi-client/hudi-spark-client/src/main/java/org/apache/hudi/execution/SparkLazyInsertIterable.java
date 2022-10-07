@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
 import org.apache.hudi.common.util.queue.ExecutorType;
+import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -33,9 +34,11 @@ import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
+import org.apache.hudi.util.MessageQueueFactory;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
 
@@ -87,20 +90,8 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
         schema = HoodieAvroUtils.addMetadataFields(schema);
       }
 
-      ExecutorType executorType = hoodieConfig.getExecutorType();
-
-      switch (executorType) {
-        case BOUNDED_IN_MEMORY_EXECUTOR:
-          bufferedIteratorExecutor = new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getInsertHandler(),
-              getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
-          break;
-        case DISRUPTOR_EXECUTOR:
-          bufferedIteratorExecutor = new DisruptorExecutor<>(hoodieConfig.getWriteBufferSize(), inputItr, getInsertHandler(),
-              getTransformFunction(schema, hoodieConfig), hoodieConfig.getWriteWaitStrategy(), hoodieTable.getPreExecuteRunnable());
-          break;
-        default:
-          throw new HoodieException("Unsupported Executor Type " + executorType);
-      }
+      bufferedIteratorExecutor = MessageQueueFactory.create(hoodieConfig, inputItr, getInsertHandler(),
+          getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
 
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();

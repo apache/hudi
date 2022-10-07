@@ -88,7 +88,7 @@ public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E>
         } catch (Throwable e) {
           LOG.error("error producing records", e);
           queue.markAsFailed(e);
-          throw e;
+          throw new HoodieException("Error producing records in bounded in memory executor", e);
         } finally {
           synchronized (latch) {
             latch.countDown();

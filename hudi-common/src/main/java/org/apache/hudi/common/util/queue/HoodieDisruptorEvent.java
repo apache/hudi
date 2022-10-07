@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.util.queue;
 
+/**
+ * The unit of data passed from producer to consumer in disruptor world.
+ */
 public class HoodieDisruptorEvent<O> {
 
   private O value;
@@ -30,6 +33,10 @@ public class HoodieDisruptorEvent<O> {
     return this.value;
   }
 
+  /**
+   * When passing data via the Disruptor, it is possible for objects to live longer than intended.
+   * To avoid this happening it is necessary to clear out the event after processing it.
+   */
   public void clear() {
     value = null;
   }

@@ -136,10 +136,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
-      .defaultValue("BOUNDED_IN_MEMORY_EXECUTOR")
+      .defaultValue("BOUNDED_IN_MEMORY")
       .withDocumentation("Set executor which orchestrates concurrent producers and consumers communicating through a message queue."
-          + "default value is BOUNDED_IN_MEMORY_EXECUTOR which use a bounded in-memory queue using LinkedBlockingQueue."
-          + "Also users could use DISRUPTOR_EXECUTOR, which use disruptor as a lock free message queue "
+          + "default value is BOUNDED_IN_MEMORY which use a bounded in-memory queue using LinkedBlockingQueue."
+          + "Also users could use DISRUPTOR, which use disruptor as a lock free message queue "
           + "to gain better writing performance. Although DISRUPTOR_EXECUTOR is still an experimental feature.");
 
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
@@ -250,8 +250,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> WRITE_WAIT_STRATEGY = ConfigProperty
       .key("hoodie.write.executor.disruptor.wait.strategy")
-      .defaultValue("Blocking_Wait_Strategy")
-      .withDocumentation("Strategy employed for making DisruptorExecutor wait on a cursor.");
+      .defaultValue("BLOCKING_WAIT")
+      .withDocumentation("Strategy employed for making Disruptor Executor wait on a cursor.");
 
   public static final ConfigProperty<String> COMBINE_BEFORE_INSERT = ConfigProperty
       .key("hoodie.combine.before.insert")

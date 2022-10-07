@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util.queue;
 
-import static org.apache.hudi.common.util.queue.DisruptorWaitStrategyType.BLOCKING_WAIT_STRATEGY;
+import static org.apache.hudi.common.util.queue.DisruptorWaitStrategyType.BLOCKING_WAIT;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.BusySpinWaitStrategy;
@@ -29,7 +29,7 @@ import org.apache.hudi.exception.HoodieException;
 
 public class WaitStrategyFactory {
 
-  public static final String DEFAULT_STRATEGY = BLOCKING_WAIT_STRATEGY.name();
+  public static final String DEFAULT_STRATEGY = BLOCKING_WAIT.name();
 
   /**
    * Build WaitStrategy for disruptor
@@ -38,13 +38,13 @@ public class WaitStrategyFactory {
 
     DisruptorWaitStrategyType strategyType = DisruptorWaitStrategyType.valueOf(name.toUpperCase());
     switch (strategyType) {
-      case BLOCKING_WAIT_STRATEGY:
+      case BLOCKING_WAIT:
         return new BlockingWaitStrategy();
-      case SLEEPING_WAIT_STRATEGY:
+      case SLEEPING_WAIT:
         return new SleepingWaitStrategy();
-      case YIELDING_WAIT_SRATEGY:
+      case YIELDING_WAIT:
         return new YieldingWaitStrategy();
-      case BUSY_SPIN_WAIT_STRATEGY:
+      case BUSY_SPIN_WAIT:
         return new BusySpinWaitStrategy();
       default:
         throw new HoodieException("Unsupported Executor Type " + name);

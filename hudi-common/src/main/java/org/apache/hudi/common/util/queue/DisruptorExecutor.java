@@ -81,7 +81,7 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
 
         } catch (Throwable e) {
           LOG.error("error producing records", e);
-          throw e;
+          throw new HoodieException("Error producing records in disruptor executor", e);
         }
         return true;
       });

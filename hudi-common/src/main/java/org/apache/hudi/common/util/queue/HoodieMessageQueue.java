@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.Option;
+import java.io.Closeable;
 
 /**
  * HoodieMessageQueue holds an internal message queue, and control the behavior of
@@ -26,7 +27,7 @@ import org.apache.hudi.common.util.Option;
  * 2. get record from internal message queue.
  * 3. close internal message queue.
  */
-public interface HoodieMessageQueue<I, O> {
+public interface HoodieMessageQueue<I, O> extends Closeable {
 
   /**
    * Get the size of inner message queue.
@@ -42,6 +43,4 @@ public interface HoodieMessageQueue<I, O> {
    * Read records from inner message queue.
    */
   Option<O> readNextRecord();
-
-  void close();
 }

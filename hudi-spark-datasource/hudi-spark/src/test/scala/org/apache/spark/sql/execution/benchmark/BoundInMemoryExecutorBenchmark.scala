@@ -115,7 +115,7 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
           .option("hoodie.bulkinsert.shuffle.parallelism", "1")
           .option("hoodie.upsert.shuffle.parallelism", "2")
           .option("hoodie.delete.shuffle.parallelism", "2")
-          .option("hoodie.write.executor.type", "DISRUPTOR_EXECUTOR")
+          .option("hoodie.write.executor.type", "DISRUPTOR")
           .option("hoodie.populate.meta.fields", "false")
           .option("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator")
 

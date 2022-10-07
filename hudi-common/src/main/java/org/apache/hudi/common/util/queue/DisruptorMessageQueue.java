@@ -33,16 +33,11 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   private final Function<I, O> transformFunction;
   private final RingBuffer<HoodieDisruptorEvent<O>> ringBuffer;
 
-  public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyName, int producerNumber, Runnable preExecuteRunnable) {
+  public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyName, int totalProducers, Runnable preExecuteRunnable) {
     WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyName);
     HoodieDaemonThreadFactory threadFactory = new HoodieDaemonThreadFactory(preExecuteRunnable);
 
-    if (producerNumber > 1) {
-      this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, threadFactory, ProducerType.MULTI, waitStrategy);
-    } else {
-      this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, threadFactory, ProducerType.SINGLE, waitStrategy);
-    }
-
+    this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, threadFactory, totalProducers > 1 ? ProducerType.MULTI : ProducerType.SINGLE, waitStrategy);
     this.ringBuffer = queue.getRingBuffer();
     this.transformFunction = transformFunction;
   }

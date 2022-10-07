@@ -21,9 +21,14 @@ package org.apache.hudi.common.util.queue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Access to a ThreadFactory instance.
+ * 1. All threads are created with setDaemon(true).
+ * 2. All threads execute preExecuteRunnable func once.
+ */
 public class HoodieDaemonThreadFactory implements ThreadFactory {
 
-  private Runnable preExecuteRunnable;
+  private final Runnable preExecuteRunnable;
   private final AtomicInteger threadsNum = new AtomicInteger();
   private final String namePattern;
   private final String baseName = "Hoodie-disruptor-daemon-thread";

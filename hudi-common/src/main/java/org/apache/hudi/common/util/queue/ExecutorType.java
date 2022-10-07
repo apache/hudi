@@ -32,13 +32,13 @@ public enum ExecutorType {
   /**
    * Executor which orchestrates concurrent producers and consumers communicating through a bounded in-memory message queue using LinkedBlockingQueue.
    */
-  BOUNDED_IN_MEMORY_EXECUTOR,
+  BOUNDED_IN_MEMORY,
 
   /**
    * Executor which orchestrates concurrent producers and consumers communicating through disruptor as a lock free message queue
    * to gain better writing performance. Although DisruptorExecutor is still an experimental feature.
    */
-  DISRUPTOR_EXECUTOR;
+  DISRUPTOR;
 
   public static List<String> getNames() {
     List<String> names = new ArrayList<>(KeyGeneratorType.values().length);
