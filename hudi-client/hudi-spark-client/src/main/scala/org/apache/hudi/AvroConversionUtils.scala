@@ -212,12 +212,12 @@ object AvroConversionUtils {
   }
 
   /**
-   * Please use [[getAvroRecordQualifiedName(String)]]
+   * Please use [[AvroSchemaUtils.getAvroRecordQualifiedName(String)]]
    */
   @Deprecated
   def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {
     val qualifiedName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
-    val nameParts = qualifiedName.split(".")
+    val nameParts = qualifiedName.split('.')
     (nameParts.last, nameParts.init.mkString("."))
   }
 }
