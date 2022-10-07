@@ -236,7 +236,7 @@ object HoodieSparkSqlWriter {
               case Some(internalSchema) =>
                 // Apply schema evolution, by auto-merging write schema and read schema
                 val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema)
-                AvroInternalSchemaConverter.convert(mergedInternalSchema, getAvroRecordQualifiedName(latestTableSchema.getName))
+                AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getName)
 
               case None =>
                 // In case schema reconciliation is enabled and source and latest table schemas
