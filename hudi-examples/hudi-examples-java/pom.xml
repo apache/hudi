@@ -133,6 +133,12 @@
             <version>${project.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Junit dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
