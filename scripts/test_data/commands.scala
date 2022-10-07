@@ -5,5 +5,6 @@ val df = spark.read.format("parquet").load("/Users/jon/Documents/test_files/parq
 df.registerTempTable("src_tbl")
 val hudiCount = spark.sql("select distinct date_col, VendorID from hudi_tbl").count()
 val srcCount = spark.sql("select distinct date_col, VendorID from src_tbl").count()
-
-assert(hudiCount == srcCount)
+if (hudiCount == srcCount) System.exit(0)
+println(s"Counts don't match hudiCount: $hudiCount, srcCount: $srcCount")
+System.exit(1)
