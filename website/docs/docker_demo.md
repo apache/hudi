@@ -4,6 +4,8 @@ keywords: [ hudi, docker, demo]
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
 ## A Demo using Docker containers
 
@@ -57,6 +59,15 @@ mvn clean package -Pintegration-tests -DskipTests
 The next step is to run the Docker compose script and setup configs for bringing up the cluster. These files are in the [Hudi repository](https://github.com/apache/hudi) which you should already have locally on your machine from the previous steps. 
 
 This should pull the Docker images from Docker hub and setup the Docker cluster.
+
+<Tabs
+defaultValue="default"
+values={[
+{ label: 'Default', value: 'default', },
+{ label: 'Mac AArch64', value: 'm1', },
+]}
+>
+<TabItem value="default">
 
 ```java
 cd docker
@@ -118,6 +129,50 @@ Copying spark default config and setting up configs
 $ docker ps
 ```
 
+</TabItem>
+<TabItem value="m1">
+Please note that Presto and Trino do not currently work for the docker demo on Mac AArch64
+
+```java
+cd docker
+./setup_demo.sh --mac-aarch64
+.......
+......
+[+] Running 12/12
+⠿ adhoc-1 Pulled                                          2.9s
+⠿ spark-worker-1 Pulled                                   3.0s
+⠿ kafka Pulled                                            2.9s
+⠿ datanode1 Pulled                                        2.9s
+⠿ hivemetastore Pulled                                    2.9s
+⠿ hiveserver Pulled                                       3.0s
+⠿ hive-metastore-postgresql Pulled                        2.8s
+⠿ namenode Pulled                                         2.9s
+⠿ sparkmaster Pulled                                      2.9s
+⠿ zookeeper Pulled                                        2.8s
+⠿ adhoc-2 Pulled                                          2.9s
+⠿ historyserver Pulled                                    2.9s
+[+] Running 12/12
+⠿ Container zookeeper                  Started           41.0s
+⠿ Container kafkabroker                Started           41.7s
+⠿ Container hive-metastore-postgresql  Running            0.0s
+⠿ Container namenode                   Running            0.0s
+⠿ Container hivemetastore              Running            0.0s
+⠿ Container historyserver              Started           41.0s
+⠿ Container datanode1                  Started           49.9s
+⠿ Container hiveserver                 Running            0.0s
+⠿ Container sparkmaster                Started           41.9s
+⠿ Container spark-worker-1             Started           50.2s
+⠿ Container adhoc-2                    Started           38.5s
+⠿ Container adhoc-1                    Started           38.5s
+Copying spark default config and setting up configs
+Copying spark default config and setting up configs
+$ docker ps
+```
+</TabItem>
+
+</Tabs
+> 
+
 At this point, the Docker cluster will be up and running. The demo cluster brings up the following services
 
    * HDFS Services (NameNode, DataNode)
@@ -140,7 +195,9 @@ The batches are windowed intentionally so that the second batch contains updates
 
 ### Step 1 : Publish the first batch to Kafka
 
-Upload the first batch to Kafka topic 'stock ticks' `cat docker/demo/data/batch_1.json | kcat -b kafkabroker -t stock_ticks -P`
+Upload the first batch to Kafka topic 'stock ticks' 
+
+`cat docker/demo/data/batch_1.json | kcat -b kafkabroker -t stock_ticks -P`
 
 To check if the new topic shows up, use
 ```java
@@ -1137,7 +1194,7 @@ Compaction successfully completed for 20180924070031
 
 # Now refresh and check again. You will see that there is a new compaction requested
 
-hoodie:stock_ticks->refresh
+hoodie:stock_ticks_mor->refresh
 18/09/24 07:01:16 INFO table.HoodieTableMetaClient: Loading HoodieTableMetaClient from /user/hive/warehouse/stock_ticks_mor
 18/09/24 07:01:16 INFO table.HoodieTableConfig: Loading table properties from /user/hive/warehouse/stock_ticks_mor/.hoodie/hoodie.properties
 18/09/24 07:01:16 INFO table.HoodieTableMetaClient: Finished Loading Table of type MERGE_ON_READ(version=1) from /user/hive/warehouse/stock_ticks_mor
@@ -1163,7 +1220,7 @@ hoodie:stock_ticks_mor->refresh
 18/09/24 07:03:00 INFO table.HoodieTableMetaClient: Finished Loading Table of type MERGE_ON_READ(version=1) from /user/hive/warehouse/stock_ticks_mor
 Metadata for table stock_ticks_mor loaded
 
-hoodie:stock_ticks->compactions show all
+hoodie:stock_ticks_mor->compactions show all
 18/09/24 07:03:15 INFO timeline.HoodieActiveTimeline: Loaded instants [[20180924064636__clean__COMPLETED], [20180924064636__deltacommit__COMPLETED], [20180924065057__clean__COMPLETED], [20180924065057__deltacommit__COMPLETED], [20180924070031__commit__COMPLETED]]
 ___________________________________________________________________
 | Compaction Instant Time| State    | Total FileIds to be Compacted|
