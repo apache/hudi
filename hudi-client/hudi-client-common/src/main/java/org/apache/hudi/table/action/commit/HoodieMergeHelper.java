@@ -81,9 +81,10 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
     Schema readerSchema = reader.getSchema();
 
-    // NOTE: Here we check whether the writer schema is simply a projection of the reader one
+    // Check whether the writer schema is simply a projection of the file's one
     boolean isProjection = isProjectionOf(readerSchema, writerSchema);
-
+    // Check whether we will need to rewrite target (already merged) records into the
+    // writer's schema
     boolean shouldRewriteInWriterSchema = writeConfig.shouldUseExternalSchemaTransformation()
         || !isProjection
         || baseFile.getBootstrapBaseFile().isPresent();
@@ -97,7 +98,10 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
     try {
       Iterator<GenericRecord> recordIterator;
 
-      ClosableIterator<GenericRecord> baseFileRecordIterator = reader.getRecordIterator(readerSchema);
+      // In case writer's schema is simply a projection of the reader's one we can read
+      // the records in the projected schema directly
+      ClosableIterator<GenericRecord> baseFileRecordIterator =
+          reader.getRecordIterator(isProjection ? writerSchema : readerSchema);
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
         recordIterator = getMergingIterator(table, mergeHandle, bootstrapFilePath, baseFileRecordIterator);
