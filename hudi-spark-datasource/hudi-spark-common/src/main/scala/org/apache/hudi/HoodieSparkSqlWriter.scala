@@ -25,7 +25,6 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAv
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
@@ -189,9 +188,7 @@ object HoodieSparkSqlWriter {
         Array(classOf[GenericData],
           classOf[Schema]))
 
-      val reconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
-      val shouldValidateSchemasCompatibility = parameters.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
-        HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
+      val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
 
       val latestTableSchemaOpt = getLatestTableSchema(spark, basePath, tableIdentifier, sparkContext.hadoopConfiguration)
       // NOTE: We need to make sure that upon conversion of the schemas b/w Catalyst's [[StructType]] and
@@ -199,94 +196,24 @@ object HoodieSparkSqlWriter {
       //       play crucial role in establishing compatibility b/w schemas
       val (avroRecordName, avroRecordNamespace) = latestTableSchemaOpt.map(s => (s.getName, s.getNamespace))
         .getOrElse(getAvroRecordNameAndNamespace(tblName))
-      val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
 
+      val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
       val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext).orElse {
         val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
           DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
-        if (reconcileSchema && schemaEvolutionEnabled) {
+        if (shouldReconcileSchema && schemaEvolutionEnabled) {
           Some(AvroInternalSchemaConverter.convert(sourceSchema))
         } else {
           None
         }
       }
 
-      val writerSchema: Schema = latestTableSchemaOpt match {
-        // In case table schema is empty we're just going to use the source schema as a
-        // writer's schema. No additional handling is required
-        case None => sourceSchema
-        // Otherwise, we need to make sure we reconcile incoming and latest table schemas
-        case Some(latestTableSchema) =>
-          // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
-          // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
-          // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
-          // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
-          val shouldCanonicalizeSchema = parameters.getOrDefault(DataSourceWriteOptions.CANONICALIZE_SCHEMA.key,
-            DataSourceWriteOptions.CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
-          val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-            AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
-          } else {
-            sourceSchema
-          }
-
-          if (reconcileSchema) {
-            internalSchemaOpt match {
-              case Some(internalSchema) =>
-                // Apply schema evolution, by auto-merging write schema and read schema
-                val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema)
-                AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
-
-              case None =>
-                // In case schema reconciliation is enabled and source and latest table schemas
-                // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]]), then we
-                // will rebase incoming batch onto the table's latest schema (ie, reconcile them)
-                //
-                // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
-                //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
-                //       and [[latestTableSchema]] is treated as a writer's schema)
-                //
-                // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
-                //       w/ the table's one and allow schemas to diverge. This is required in cases where
-                //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
-                //       only incoming dataset's projection has to match the table's schema, and not the whole one
-                if (!shouldValidateSchemasCompatibility || TableSchemaResolver.isSchemaCompatible(canonicalizedSourceSchema, latestTableSchema)) {
-                  latestTableSchema
-                } else {
-                  log.error(
-                    s"""
-                       |Failed to reconcile incoming batch schema with the table's one.
-                       |Incoming schema ${sourceSchema.toString(true)}
-                       |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
-                       |Table's schema ${latestTableSchema.toString(true)}
-                       |""".stripMargin)
-                  throw new SchemaCompatibilityException("Failed to reconcile incoming schema with the table's one")
-                }
-            }
-          } else {
-            // In case reconciliation is disabled, we have to validate that the source's schema
-            // is compatible w/ the table's latest schema, such that we're able to read existing table's
-            // records using [[sourceSchema]].
-            //
-            // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
-            //       w/ the table's one and allow schemas to diverge. This is required in cases where
-            //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
-            //       only incoming dataset's projection has to match the table's schema, and not the whole one
-            if (!shouldValidateSchemasCompatibility || TableSchemaResolver.isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema)) {
-              canonicalizedSourceSchema
-            } else {
-              log.error(
-                s"""
-                   |Incoming batch schema is not compatible with the table's one.
-                   |Incoming schema ${sourceSchema.toString(true)}
-                   |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
-                   |Table's schema ${latestTableSchema.toString(true)}
-                   |""".stripMargin)
-              throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
-            }
-          }
-      }
+      // NOTE: Target writer's schema is deduced based on
+      //         - Source's schema
+      //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
+      val writerSchema = deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
 
       validateSchemaForHoodieIsDeleted(writerSchema)
 
@@ -299,10 +226,9 @@ object HoodieSparkSqlWriter {
 
       log.info(s"Registered Avro schemas: ${targetAvroSchemas.map(_.toString(true)).mkString("\n")}")
 
-      // short-circuit if bulk_insert via row is enabled.
+      // Short-circuit if bulk_insert via row is enabled.
       // scalastyle:off
-      if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) &&
-        operation == WriteOperationType.BULK_INSERT) {
+      if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tblName,
           basePath, path, instantTime, writerSchema)
         return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
@@ -312,7 +238,7 @@ object HoodieSparkSqlWriter {
       val (writeResult, writeClient: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]) =
         operation match {
           case WriteOperationType.DELETE =>
-            val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace, reconcileSchema)
+            val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
             // Convert to RDD[HoodieKey]
             val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
@@ -350,7 +276,7 @@ object HoodieSparkSqlWriter {
               java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).toList, jsc,
                 hoodieConfig, basePath.toString): _*)
             } else {
-              val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace, reconcileSchema)
+              val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
 
@@ -366,8 +292,8 @@ object HoodieSparkSqlWriter {
 
           case _ =>
             // Convert to RDD[HoodieRecord]
-            val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace, reconcileSchema,
-              org.apache.hudi.common.util.Option.of(writerSchema))
+            val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace,
+              Some(writerSchema))
 
             // Check whether partition columns should be persisted w/in the data-files, or should
             // be instead omitted from them and simply encoded into the partition path (which is Spark's
@@ -449,6 +375,95 @@ object HoodieSparkSqlWriter {
           TableInstantInfo(basePath, instantTime, commitActionType, operation))
 
       (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
+    }
+  }
+
+  /**
+   * Deduces writer's schema based on
+   * <ul>
+   *   <li>Source's schema</li>
+   *   <li>Target table's schema (including Hudi's [[InternalSchema]] representation)</li>
+   * </ul>
+   */
+  def deduceWriterSchema(sourceSchema: Schema,
+                         latestTableSchemaOpt: Option[Schema],
+                         internalSchemaOpt: Option[InternalSchema],
+                         opts: Map[String, String]): Schema = {
+    val shouldReconcileSchema = opts(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
+    val shouldValidateSchemasCompatibility = opts.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
+      HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
+
+    latestTableSchemaOpt match {
+      // In case table schema is empty we're just going to use the source schema as a
+      // writer's schema. No additional handling is required
+      case None => sourceSchema
+      // Otherwise, we need to make sure we reconcile incoming and latest table schemas
+      case Some(latestTableSchema) =>
+        // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
+        // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
+        // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
+        // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
+        val shouldCanonicalizeSchema = opts.getOrDefault(DataSourceWriteOptions.CANONICALIZE_SCHEMA.key,
+          DataSourceWriteOptions.CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
+        val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
+          AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
+        } else {
+          sourceSchema
+        }
+
+        if (shouldReconcileSchema) {
+          internalSchemaOpt match {
+            case Some(internalSchema) =>
+              // Apply schema evolution, by auto-merging write schema and read schema
+              val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema)
+              AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
+
+            case None =>
+              // In case schema reconciliation is enabled and source and latest table schemas
+              // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]]), then we
+              // will rebase incoming batch onto the table's latest schema (ie, reconcile them)
+              //
+              // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
+              //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
+              //       and [[latestTableSchema]] is treated as a writer's schema)
+              //
+              // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
+              //       w/ the table's one and allow schemas to diverge. This is required in cases where
+              //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
+              //       only incoming dataset's projection has to match the table's schema, and not the whole one
+              if (!shouldValidateSchemasCompatibility || TableSchemaResolver.isSchemaCompatible(canonicalizedSourceSchema, latestTableSchema)) {
+                latestTableSchema
+              } else {
+                log.error(
+                  s"""Failed to reconcile incoming batch schema with the table's one.
+                     |Incoming schema ${sourceSchema.toString(true)}
+                     |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
+                     |Table's schema ${latestTableSchema.toString(true)}
+                     |""".stripMargin)
+                throw new SchemaCompatibilityException("Failed to reconcile incoming schema with the table's one")
+              }
+          }
+        } else {
+          // In case reconciliation is disabled, we have to validate that the source's schema
+          // is compatible w/ the table's latest schema, such that we're able to read existing table's
+          // records using [[sourceSchema]].
+          //
+          // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
+          //       w/ the table's one and allow schemas to diverge. This is required in cases where
+          //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
+          //       only incoming dataset's projection has to match the table's schema, and not the whole one
+          if (!shouldValidateSchemasCompatibility || TableSchemaResolver.isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema)) {
+            canonicalizedSourceSchema
+          } else {
+            log.error(
+              s"""Incoming batch schema is not compatible with the table's one.
+                 |Incoming schema ${sourceSchema.toString(true)}
+                 |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
+                 |Table's schema ${latestTableSchema.toString(true)}
+                 |""".stripMargin)
+            throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+          }
+        }
     }
   }
 
