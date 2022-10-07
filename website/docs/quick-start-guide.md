@@ -189,7 +189,6 @@ import org.apache.hudi.common.model.HoodieRecord
 val tableName = "hudi_trips_cow"
 val basePath = "file:///tmp/hudi_trips_cow"
 val dataGen = new DataGenerator
-val snapshotQuery = "SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table"
 ```
 
 </TabItem>
@@ -200,7 +199,6 @@ val snapshotQuery = "SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare
 tableName = "hudi_trips_cow"
 basePath = "file:///tmp/hudi_trips_cow"
 dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
-snapshotQuery = "SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table"
 ```
 
 </TabItem>
@@ -429,9 +427,6 @@ df.write.format("hudi").
   option(TABLE_NAME, tableName).
   mode(Overwrite).
   save(basePath)
-  
-// validations
-assert(df.except(spark.sql(snapshotQuery)).count() == 0)
 ```
 :::info
 `mode(Overwrite)` overwrites and recreates the table if it already exists.
@@ -468,9 +463,6 @@ df.write.format("hudi"). \
     options(**hudi_options). \
     mode("overwrite"). \
     save(basePath)
-    
-# validations
-assert spark.sql(snapshotQuery).exceptAll(df).count() == 0
 ```
 :::info
 `mode(Overwrite)` overwrites and recreates the table if it already exists.
@@ -713,7 +705,6 @@ values={[
 
 ```scala
 // spark-shell
-val snapBeforeUpdate = spark.sql(snapshotQuery)
 val updates = convertToStringList(dataGen.generateUpdates(10))
 val df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
 df.write.format("hudi").
@@ -724,10 +715,6 @@ df.write.format("hudi").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
-  
-// validations
-assert(spark.sql(snapshotQuery).intersect(df).count() == df.count())
-assert(spark.sql(snapshotQuery).except(df).except(snapBeforeUpdate).count() == 0)
 ```
 :::note
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
@@ -816,17 +803,12 @@ when not matched then
 
 ```python
 # pyspark
-snapshotBeforeUpdate = spark.sql(snapshotQuery)
 updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
 df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
 df.write.format("hudi"). \
   options(**hudi_options). \
   mode("append"). \
   save(basePath)
-  
-# validations
-assert spark.sql(snapshotQuery).intersect(df).count() == df.count()
-assert spark.sql(snapshotQuery).exceptAll(snapshotBeforeUpdate).exceptAll(df).count() == 0
 ```
 :::note
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
@@ -1122,7 +1104,6 @@ Delete records for the HoodieKeys passed in.<br/>
 
 ```scala
 // spark-shell
-val snapshotBeforeDelete = spark.sql(snapshotQuery)
 // fetch total records count
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 // fetch two records to be deleted
@@ -1151,10 +1132,6 @@ val roAfterDeleteViewDF = spark.
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 // fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
-
-// validations
-assert(spark.sql("select uuid, partitionpath, ts from hudi_trips_snapshot").intersect(hardDeleteDf).count() == 0)
-assert(snapshotBeforeDelete.except(spark.sql("select uuid, partitionpath, ts from hudi_trips_snapshot")).except(snapshotBeforeDelete).count() == 0)
 ```
 :::note
 Only `Append` mode is supported for delete operation.
@@ -1182,7 +1159,6 @@ Delete records for the HoodieKeys passed in.<br/>
 
 ```python
 # pyspark
-snapshotBeforeDelete = spark.sql(snapshotQuery)
 # fetch total records count
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 # fetch two records to be deleted
@@ -1216,10 +1192,6 @@ roAfterDeleteViewDF = spark. \
 roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot")
 # fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
-
-# validations
-assert spark.sql("select uuid, partitionpath, ts from hudi_trips_snapshot").intersect(hard_delete_df).count() == 0
-assert snapshotBeforeDelete.excptAll(spark.sql("select uuid, partitionpath, ts from hudi_trips_snapshot")).count() == 0
 ```
 :::note
 Only `Append` mode is supported for delete operation.
@@ -1256,7 +1228,6 @@ spark.
   sort("partitionpath","uuid").
   show(100, false)
 
-val snapshotBeforeOverwrite = spark.sql(snapshotQuery)
 val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.
   read.json(spark.sparkContext.parallelize(inserts, 2)).
@@ -1278,11 +1249,6 @@ spark.
   select("uuid","partitionpath").
   sort("partitionpath","uuid").
   show(100, false)
-  
-// validations
-val withoutSanFran = snapshotBeforeOverwrite.filter("partitionpath != 'americas/united_states/san_francisco'")
-val expectedDf = withoutSanFran.union(df)
-assert(spark.sql(snapshotQuery).except(expectedDf).count() == 0)
 ```
 </TabItem>
 
@@ -1290,7 +1256,6 @@ assert(spark.sql(snapshotQuery).except(expectedDf).count() == 0)
 
 ```python
 # pyspark
-snapshotBeforeOverwrite = spark.sql(snapshotQuery)
 self.spark.read.format("hudi"). \
     load(basePath). \
     select(["uuid", "partitionpath"]). \
@@ -1316,11 +1281,6 @@ spark.read.format("hudi"). \
     select(["uuid", "partitionpath"]). \
     sort(["partitionpath", "uuid"]). \
     show(n=100, truncate=False)
-
-# validations
-withoutSanFran = snapshotBeforeOverwrite.filter("partitionpath != 'americas/united_states/san_francisco'")
-expectedDf = withoutSanFran.union(df)
-assert spark.sql(snapshotQuery).exceptAll(expectedDf).count() == 0
 ```
 </TabItem>
 
