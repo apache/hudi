@@ -73,7 +73,10 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
     createRdd(df, structName, recordNamespace, toScalaOption(latestTableSchema))
   }
 
-  def createRdd(df: DataFrame, structName: String, recordNamespace: String, readerAvroSchemaOpt: Option[Schema] = None): RDD[GenericRecord] = {
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String): RDD[GenericRecord] =
+    createRdd(df, structName, recordNamespace, None)
+
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, readerAvroSchemaOpt: Option[Schema]): RDD[GenericRecord] = {
     val writerSchema = df.schema
     val writerAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(writerSchema, structName, recordNamespace)
     val readerAvroSchema = readerAvroSchemaOpt.getOrElse(writerAvroSchema)
