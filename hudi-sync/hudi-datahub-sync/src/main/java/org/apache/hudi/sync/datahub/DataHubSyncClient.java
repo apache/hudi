@@ -19,6 +19,7 @@
 
 package org.apache.hudi.sync.datahub;
 
+import com.linkedin.common.Status;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -52,15 +53,18 @@ import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.parquet.schema.MessageType;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class DataHubSyncClient extends HoodieSyncClient {
 
   protected final DataHubSyncConfig config;
   private final DatasetUrn datasetUrn;
+  private static final Status SOFT_DELETE_FALSE = new Status().setRemoved(false);
 
   public DataHubSyncClient(DataHubSyncConfig config) {
     super(config);
@@ -81,16 +85,19 @@ public class DataHubSyncClient extends HoodieSyncClient {
   @Override
   public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
     MetadataChangeProposalWrapper propertiesChangeProposal = MetadataChangeProposalWrapper.builder()
-        .entityType("dataset")
-        .entityUrn(datasetUrn)
-        .upsert()
-        .aspect(new DatasetProperties().setCustomProperties(new StringMap(tableProperties)))
-        .build();
+            .entityType("dataset")
+            .entityUrn(datasetUrn)
+            .upsert()
+            .aspect(new DatasetProperties().setCustomProperties(new StringMap(tableProperties)))
+            .build();
+
+    DatahubResponseLogger responseLogger = new DatahubResponseLogger();
 
     try (RestEmitter emitter = config.getRestEmitter()) {
-      emitter.emit(propertiesChangeProposal, null).get();
+      emitter.emit(propertiesChangeProposal, responseLogger).get();
     } catch (Exception e) {
-      throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": " + tableProperties, e);
+      throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": " +
+              tableProperties, e);
     }
   }
 
@@ -98,28 +105,19 @@ public class DataHubSyncClient extends HoodieSyncClient {
   public void updateTableSchema(String tableName, MessageType schema) {
     Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
     List<SchemaField> fields = avroSchema.getFields().stream().map(f -> new SchemaField()
-        .setFieldPath(f.name())
-        .setType(toSchemaFieldDataType(f.schema().getType()))
-        .setDescription(f.doc(), SetMode.IGNORE_NULL)
-        .setNativeDataType(f.schema().getType().getName())).collect(Collectors.toList());
+            .setFieldPath(f.name())
+            .setType(toSchemaFieldDataType(f.schema().getType()))
+            .setDescription(f.doc(), SetMode.IGNORE_NULL)
+            .setNativeDataType(f.schema().getType().getName())).collect(Collectors.toList());
 
     final SchemaMetadata.PlatformSchema platformSchema = new SchemaMetadata.PlatformSchema();
     platformSchema.setOtherSchema(new OtherSchema().setRawSchema(avroSchema.toString()));
-    MetadataChangeProposalWrapper schemaChangeProposal = MetadataChangeProposalWrapper.builder()
-        .entityType("dataset")
-        .entityUrn(datasetUrn)
-        .upsert()
-        .aspect(new SchemaMetadata()
-            .setSchemaName(tableName)
-            .setVersion(0)
-            .setHash("")
-            .setPlatform(datasetUrn.getPlatformEntity())
-            .setPlatformSchema(platformSchema)
-            .setFields(new SchemaFieldArray(fields)))
-        .build();
+    MetadataChangeProposalWrapper schemaChange = createSchemaMetadataUpdate(tableName, fields, platformSchema);
 
+    DatahubResponseLogger responseLogger = new DatahubResponseLogger();
     try (RestEmitter emitter = config.getRestEmitter()) {
-      emitter.emit(schemaChangeProposal, null).get();
+      emitter.emit(schemaChange, responseLogger).get();
+      undoSoftDelete(emitter, responseLogger);
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change schema for Dataset " + datasetUrn, e);
     }
@@ -133,6 +131,37 @@ public class DataHubSyncClient extends HoodieSyncClient {
   @Override
   public void close() {
     // no op;
+  }
+
+  // When updating an entity, it is ncessary to set its soft-delete status to false, or else the update won't get
+  // reflected in the UI.
+  private void undoSoftDelete(RestEmitter client, DatahubResponseLogger responseLogger) throws IOException, ExecutionException,
+          InterruptedException {
+    MetadataChangeProposalWrapper softDeleteUndoProposal = MetadataChangeProposalWrapper.builder()
+            .entityType("dataset")
+            .entityUrn(datasetUrn)
+            .upsert()
+            .aspect(SOFT_DELETE_FALSE)
+            .aspectName("status")
+            .build();
+
+    client.emit(softDeleteUndoProposal, responseLogger).get();
+  }
+
+  private MetadataChangeProposalWrapper createSchemaMetadataUpdate(String tableName, List<SchemaField> fields,
+                                                                   SchemaMetadata.PlatformSchema platformSchema) {
+    return MetadataChangeProposalWrapper.builder()
+            .entityType("dataset")
+            .entityUrn(datasetUrn)
+            .upsert()
+            .aspect(new SchemaMetadata()
+                    .setSchemaName(tableName)
+                    .setVersion(0)
+                    .setHash("")
+                    .setPlatform(datasetUrn.getPlatformEntity())
+                    .setPlatformSchema(platformSchema)
+                    .setFields(new SchemaFieldArray(fields)))
+            .build();
   }
 
   static Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
