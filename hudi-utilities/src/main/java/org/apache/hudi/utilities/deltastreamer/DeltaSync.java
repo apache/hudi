@@ -31,7 +31,6 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -112,6 +111,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
@@ -469,23 +469,24 @@ public class DeltaSync implements Serializable, Closeable {
         schemaProvider = this.userProvidedSchemaProvider;
       } else {
         Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jssc, fs, cfg.targetBasePath);
-
-        schemaProvider = transformed.map(df -> {
+        // Deduce proper target (writer's) schema for the transformed dataset, reconciling its
+        // schema w/ the table's one
+        Option<Schema> targetSchemaOpt = transformed.map(df -> {
           Schema sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(),
-              AvroSchemaUtils.getAvroRecordQualifiedName(cfg.targetTableName));
+              latestTableSchemaOpt.map(Schema::getFullName).orElse(getAvroRecordQualifiedName(cfg.targetTableName)));
           // Target (writer's) schema is determined based on the incoming source schema
           // and existing table's one, reconciling the two (if necessary) based on configuration
-          Schema targetSchema =
-              HoodieSparkSqlWriter.deduceWriterSchema(
+          return HoodieSparkSqlWriter.deduceWriterSchema(
                   sourceSchema,
                   HoodieConversionUtils.<Schema>toScalaOption(latestTableSchemaOpt),
                   HoodieConversionUtils.<InternalSchema>toScalaOption(Option.empty()),
                   HoodieConversionUtils.fromProperties(props));
-
-          return (SchemaProvider) new DelegatingSchemaProvider(props, jssc, dataAndCheckpoint.getSchemaProvider(),
-              new SimpleSchemaProvider(jssc, targetSchema, props));
-        })
-        .orElse(dataAndCheckpoint.getSchemaProvider());
+        });
+        // Override schema provider with the reconciled target schema
+        schemaProvider = targetSchemaOpt.map(targetSchema ->
+          (SchemaProvider) new DelegatingSchemaProvider(props, jssc, dataAndCheckpoint.getSchemaProvider(),
+                new SimpleSchemaProvider(jssc, targetSchema, props)))
+          .orElse(dataAndCheckpoint.getSchemaProvider());
       }
 
       // Rewrite transformed records into the expected target schema
