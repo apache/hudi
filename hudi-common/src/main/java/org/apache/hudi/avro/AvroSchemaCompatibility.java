@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi.avro;
 
 import org.apache.avro.AvroRuntimeException;
@@ -38,6 +39,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * Evaluate the compatibility between a reader schema and a writer schema. A
@@ -72,8 +74,8 @@ public class AvroSchemaCompatibility {
    * @return a result object identifying any compatibility errors.
    */
   public static SchemaPairCompatibility checkReaderWriterCompatibility(final Schema reader, final Schema writer) {
-    final SchemaCompatibilityResult compatibility = new ReaderWriterCompatibilityChecker().getCompatibility(reader,
-        writer);
+    final SchemaCompatibilityResult compatibility =
+        new ReaderWriterCompatibilityChecker().getCompatibility(reader, writer);
 
     final String message;
     switch (compatibility.getCompatibility()) {
@@ -205,7 +207,6 @@ public class AvroSchemaCompatibility {
    * </p>
    */
   private static final class ReaderWriterCompatibilityChecker {
-    private static final String ROOT_REFERENCE_TOKEN = "";
     private final Map<ReaderWriter, SchemaCompatibilityResult> mMemoizeMap = new HashMap<>();
 
     /**
@@ -220,8 +221,10 @@ public class AvroSchemaCompatibility {
      * @return the compatibility of the reader/writer schema pair.
      */
     public SchemaCompatibilityResult getCompatibility(final Schema reader, final Schema writer) {
-      Deque<String> location = new ArrayDeque<>();
-      return getCompatibility(ROOT_REFERENCE_TOKEN, reader, writer, location);
+      ArrayDeque<LocationInfo> locations = new ArrayDeque<>(
+          Collections.singletonList(new LocationInfo(reader.getName(), reader.getType()))
+      );
+      return getCompatibility(reader, writer, locations);
     }
 
     /**
@@ -230,17 +233,15 @@ public class AvroSchemaCompatibility {
      * Memoizes the compatibility results.
      * </p>
      *
-     * @param referenceToken The equivalent JSON pointer reference token
-     *                       representation of the schema node being visited.
-     * @param reader         Reader schema to test.
-     * @param writer         Writer schema to test.
-     * @param location       Stack with which to track the location within the
-     *                       schema.
+     * @param reader      Reader schema to test.
+     * @param writer      Writer schema to test.
+     * @param locations   Stack tracking the path (chain of locations) within the
+     *                    schema.
      * @return the compatibility of the reader/writer schema pair.
      */
-    private SchemaCompatibilityResult getCompatibility(String referenceToken, final Schema reader, final Schema writer,
-                                                       final Deque<String> location) {
-      location.addFirst(referenceToken);
+    private SchemaCompatibilityResult getCompatibility(final Schema reader,
+                                                       final Schema writer,
+                                                       final Deque<LocationInfo> locations) {
       LOG.debug("Checking compatibility of reader {} with writer {}", reader, writer);
       final ReaderWriter pair = new ReaderWriter(reader, writer);
       SchemaCompatibilityResult result = mMemoizeMap.get(pair);
@@ -253,10 +254,9 @@ public class AvroSchemaCompatibility {
       } else {
         // Mark this reader/writer pair as "in progress":
         mMemoizeMap.put(pair, SchemaCompatibilityResult.recursionInProgress());
-        result = calculateCompatibility(reader, writer, location);
+        result = calculateCompatibility(reader, writer, locations);
         mMemoizeMap.put(pair, result);
       }
-      location.removeFirst();
       return result;
     }
 
@@ -270,13 +270,11 @@ public class AvroSchemaCompatibility {
      *
      * @param reader   Reader schema to test.
      * @param writer   Writer schema to test.
-     * @param location Stack with which to track the location within the schema.
+     * @param locations Stack with which to track the location within the schema.
      * @return the compatibility of the reader/writer schema pair.
      */
     private SchemaCompatibilityResult calculateCompatibility(final Schema reader, final Schema writer,
-                                                             final Deque<String> location) {
-      assert (reader != null);
-      assert (writer != null);
+                                                             final Deque<LocationInfo> locations) {
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
 
       if (reader.getType() == writer.getType()) {
@@ -292,37 +290,32 @@ public class AvroSchemaCompatibility {
             return result;
           }
           case ARRAY: {
-            return result
-                .mergedWith(getCompatibility("items", reader.getElementType(), writer.getElementType(), location));
+            return result.mergedWith(getCompatibility(reader.getElementType(), writer.getElementType(), locations));
           }
           case MAP: {
-            return result.mergedWith(getCompatibility("values", reader.getValueType(), writer.getValueType(), location));
+            return result.mergedWith(getCompatibility(reader.getValueType(), writer.getValueType(), locations));
           }
           case FIXED: {
-            result = result.mergedWith(checkSchemaNames(reader, writer, location));
-            return result.mergedWith(checkFixedSize(reader, writer, location));
+            result = result.mergedWith(checkSchemaNames(reader, writer, locations));
+            return result.mergedWith(checkFixedSize(reader, writer, locations));
           }
           case ENUM: {
-            result = result.mergedWith(checkSchemaNames(reader, writer, location));
-            return result.mergedWith(checkReaderEnumContainsAllWriterEnumSymbols(reader, writer, location));
+            result = result.mergedWith(checkSchemaNames(reader, writer, locations));
+            return result.mergedWith(checkReaderEnumContainsAllWriterEnumSymbols(reader, writer, locations));
           }
           case RECORD: {
-            result = result.mergedWith(checkSchemaNames(reader, writer, location));
-            return result.mergedWith(checkReaderWriterRecordFields(reader, writer, location));
+            result = result.mergedWith(checkSchemaNames(reader, writer, locations));
+            return result.mergedWith(checkReaderWriterRecordFields(reader, writer, locations));
           }
           case UNION: {
             // Check that each individual branch of the writer union can be decoded:
-            int i = 0;
             for (final Schema writerBranch : writer.getTypes()) {
-              location.addFirst(Integer.toString(i));
-              SchemaCompatibilityResult compatibility = getCompatibility(reader, writerBranch);
+              SchemaCompatibilityResult compatibility = getCompatibility(reader, writerBranch, locations);
               if (compatibility.getCompatibility() == SchemaCompatibilityType.INCOMPATIBLE) {
                 String message = String.format("reader union lacking writer type: %s", writerBranch.getType());
                 result = result.mergedWith(SchemaCompatibilityResult.incompatible(
-                    SchemaIncompatibilityType.MISSING_UNION_BRANCH, reader, writer, message, asList(location)));
+                    SchemaIncompatibilityType.MISSING_UNION_BRANCH, reader, writer, message, asList(locations)));
               }
-              location.removeFirst();
-              i++;
             }
             // Each schema in the writer union can be decoded with the reader:
             return result;
@@ -339,51 +332,51 @@ public class AvroSchemaCompatibility {
         // Reader compatible with all branches of a writer union is compatible
         if (writer.getType() == Schema.Type.UNION) {
           for (Schema s : writer.getTypes()) {
-            result = result.mergedWith(getCompatibility(reader, s));
+            result = result.mergedWith(getCompatibility(reader, s, locations));
           }
           return result;
         }
 
         switch (reader.getType()) {
           case NULL:
-            return result.mergedWith(typeMismatch(reader, writer, location));
+            return result.mergedWith(typeMismatch(reader, writer, locations));
           case BOOLEAN:
-            return result.mergedWith(typeMismatch(reader, writer, location));
+            return result.mergedWith(typeMismatch(reader, writer, locations));
           case INT:
-            return result.mergedWith(typeMismatch(reader, writer, location));
+            return result.mergedWith(typeMismatch(reader, writer, locations));
           case LONG: {
-            return (writer.getType() == Type.INT) ? result : result.mergedWith(typeMismatch(reader, writer, location));
+            return (writer.getType() == Type.INT) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           }
           case FLOAT: {
             return ((writer.getType() == Type.INT) || (writer.getType() == Type.LONG)) ? result
-                : result.mergedWith(typeMismatch(reader, writer, location));
+                : result.mergedWith(typeMismatch(reader, writer, locations));
 
           }
           case DOUBLE: {
             return ((writer.getType() == Type.INT) || (writer.getType() == Type.LONG) || (writer.getType() == Type.FLOAT))
                 ? result
-                : result.mergedWith(typeMismatch(reader, writer, location));
+                : result.mergedWith(typeMismatch(reader, writer, locations));
           }
           case BYTES: {
-            return (writer.getType() == Type.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, location));
+            return (writer.getType() == Type.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           }
           case STRING: {
-            return (writer.getType() == Type.BYTES) ? result : result.mergedWith(typeMismatch(reader, writer, location));
+            return (writer.getType() == Type.BYTES) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           }
 
           case ARRAY:
-            return result.mergedWith(typeMismatch(reader, writer, location));
+            return result.mergedWith(typeMismatch(reader, writer, locations));
           case MAP:
-            return result.mergedWith(typeMismatch(reader, writer, location));
+            return result.mergedWith(typeMismatch(reader, writer, locations));
           case FIXED:
-            return result.mergedWith(typeMismatch(reader, writer, location));
+            return result.mergedWith(typeMismatch(reader, writer, locations));
           case ENUM:
-            return result.mergedWith(typeMismatch(reader, writer, location));
+            return result.mergedWith(typeMismatch(reader, writer, locations));
           case RECORD:
-            return result.mergedWith(typeMismatch(reader, writer, location));
+            return result.mergedWith(typeMismatch(reader, writer, locations));
           case UNION: {
             for (final Schema readerBranch : reader.getTypes()) {
-              SchemaCompatibilityResult compatibility = getCompatibility(readerBranch, writer);
+              SchemaCompatibilityResult compatibility = getCompatibility(readerBranch, writer, locations);
               if (compatibility.getCompatibility() == SchemaCompatibilityType.COMPATIBLE) {
                 return result;
               }
@@ -392,7 +385,7 @@ public class AvroSchemaCompatibility {
             // schema:
             String message = String.format("reader union lacking writer type: %s", writer.getType());
             return result.mergedWith(SchemaCompatibilityResult
-                .incompatible(SchemaIncompatibilityType.MISSING_UNION_BRANCH, reader, writer, message, asList(location)));
+                .incompatible(SchemaIncompatibilityType.MISSING_UNION_BRANCH, reader, writer, message, asList(locations)));
           }
 
           default: {
@@ -403,13 +396,12 @@ public class AvroSchemaCompatibility {
     }
 
     private SchemaCompatibilityResult checkReaderWriterRecordFields(final Schema reader, final Schema writer,
-                                                                    final Deque<String> location) {
+                                                                    final Deque<LocationInfo> locations) {
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
-      location.addFirst("fields");
+
       // Check that each field in the reader record can be populated from the writer
       // record:
       for (final Field readerField : reader.getFields()) {
-        location.addFirst(Integer.toString(readerField.pos()));
         final Field writerField = lookupWriterField(writer, readerField);
         if (writerField == null) {
           // Reader field does not correspond to any field in the writer record schema, so
@@ -419,17 +411,15 @@ public class AvroSchemaCompatibility {
             // reader field has no default value
             result = result.mergedWith(
                 SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE,
-                    reader, writer, readerField.name(), asList(location)));
+                    reader, writer, readerField.name(), asList(locations)));
           }
         } else {
-          result = result.mergedWith(getCompatibility("type", readerField.schema(), writerField.schema(), location));
+          locations.addLast(new LocationInfo(readerField.name(), readerField.schema().getType()));
+          result = result.mergedWith(getCompatibility(readerField.schema(), writerField.schema(), locations));
+          locations.removeLast();
         }
-        // POP field index
-        location.removeFirst();
       }
-      // All fields in the reader record can be populated from the writer record:
-      // POP "fields" literal
-      location.removeFirst();
+
       return result;
     }
 
@@ -465,56 +455,62 @@ public class AvroSchemaCompatibility {
     }
 
     private SchemaCompatibilityResult checkReaderEnumContainsAllWriterEnumSymbols(final Schema reader,
-                                                                                  final Schema writer, final Deque<String> location) {
+                                                                                  final Schema writer, final Deque<LocationInfo> locations) {
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
-      location.addFirst("symbols");
       final Set<String> symbols = new TreeSet<>(writer.getEnumSymbols());
       symbols.removeAll(reader.getEnumSymbols());
       if (!symbols.isEmpty()) {
         result = SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.MISSING_ENUM_SYMBOLS, reader,
-            writer, symbols.toString(), asList(location));
+            writer, symbols.toString(), asList(locations));
       }
-      // POP "symbols" literal
-      location.removeFirst();
       return result;
     }
 
     private SchemaCompatibilityResult checkFixedSize(final Schema reader, final Schema writer,
-                                                     final Deque<String> location) {
+                                                     final Deque<LocationInfo> locations) {
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
-      location.addFirst("size");
       int actual = reader.getFixedSize();
       int expected = writer.getFixedSize();
       if (actual != expected) {
         String message = String.format("expected: %d, found: %d", expected, actual);
         result = SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.FIXED_SIZE_MISMATCH, reader, writer,
-            message, asList(location));
+            message, asList(locations));
       }
-      // POP "size" literal
-      location.removeFirst();
       return result;
     }
 
     private SchemaCompatibilityResult checkSchemaNames(final Schema reader, final Schema writer,
-                                                       final Deque<String> location) {
+                                                       final Deque<LocationInfo> locations) {
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
-      location.addFirst("name");
       if (!schemaNameEquals(reader, writer)) {
         String message = String.format("expected: %s", writer.getFullName());
         result = SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.NAME_MISMATCH, reader, writer,
-            message, asList(location));
+            message, asList(locations));
       }
-      // POP "name" literal
-      location.removeFirst();
       return result;
     }
 
     private SchemaCompatibilityResult typeMismatch(final Schema reader, final Schema writer,
-                                                   final Deque<String> location) {
+                                                   final Deque<LocationInfo> locations) {
       String message = String.format("reader type: %s not compatible with writer type: %s", reader.getType(),
           writer.getType());
       return SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.TYPE_MISMATCH, reader, writer, message,
-          asList(location));
+          asList(locations));
+    }
+
+    public static class LocationInfo {
+      private final String name;
+      private final Type type;
+
+      public LocationInfo(String name, Type type) {
+        this.name = name;
+        this.type = type;
+      }
+    }
+
+    private static List<String> asList(Deque<LocationInfo> deque) {
+      List<String> list = deque.stream().map(locInfo -> locInfo.name).collect(Collectors.toList());
+      return Collections.unmodifiableList(list);
     }
   }
 
@@ -644,18 +640,23 @@ public class AvroSchemaCompatibility {
     /** {@inheritDoc} */
     @Override
     public boolean equals(Object obj) {
-      if (this == obj)
+      if (this == obj) {
         return true;
-      if (obj == null)
+      }
+      if (obj == null) {
         return false;
-      if (getClass() != obj.getClass())
+      }
+      if (getClass() != obj.getClass()) {
         return false;
+      }
       SchemaCompatibilityResult other = (SchemaCompatibilityResult) obj;
       if (mIncompatibilities == null) {
-        if (other.mIncompatibilities != null)
+        if (other.mIncompatibilities != null) {
           return false;
-      } else if (!mIncompatibilities.equals(other.mIncompatibilities))
+        }
+      } else if (!mIncompatibilities.equals(other.mIncompatibilities)) {
         return false;
+      }
       return mCompatibilityType == other.mCompatibilityType;
     }
 
@@ -799,8 +800,9 @@ public class AvroSchemaCompatibility {
       }
       if (mLocation == null) {
         return other.mLocation == null;
-      } else
+      } else {
         return mLocation.equals(other.mLocation);
+      }
     }
 
     /** {@inheritDoc} */
@@ -922,11 +924,5 @@ public class AvroSchemaCompatibility {
   /** Borrowed from Guava's Objects.equal(a, b) */
   private static boolean objectsEqual(Object obj1, Object obj2) {
     return Objects.equals(obj1, obj2);
-  }
-
-  private static List<String> asList(Deque<String> deque) {
-    List<String> list = new ArrayList<>(deque);
-    Collections.reverse(list);
-    return Collections.unmodifiableList(list);
   }
 }
