@@ -23,6 +23,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
 import org.apache.hudi.common.util.Either;
+import org.apache.hudi.common.util.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -209,7 +210,9 @@ public class AvroSchemaCompatibility {
    * </p>
    */
   private static final class ReaderWriterCompatibilityChecker {
+    private final AvroDefaultValueAccessor defaultValueAccessor = new AvroDefaultValueAccessor();
     private final Map<ReaderWriter, SchemaCompatibilityResult> mMemoizeMap = new HashMap<>();
+
 
     /**
      * Reports the compatibility of a reader/writer schema pair.
@@ -409,7 +412,7 @@ public class AvroSchemaCompatibility {
           // Reader field does not correspond to any field in the writer record schema, so
           // the
           // reader field must have a default value.
-          if (getDefaultValue(readerField) == null) {
+          if (defaultValueAccessor.getDefaultValue(readerField) == null) {
             // reader field has no default value
             result = result.mergedWith(
                 SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE,
@@ -425,34 +428,32 @@ public class AvroSchemaCompatibility {
       return result;
     }
 
-    private Object getDefaultValue(Field readerField) {
-      Either<Object, Exception> legacyAvroDefaultEither = getDefaultValueLegacyAvroNoThrow(readerField);
-      if (legacyAvroDefaultEither.isLeft()) {
-        return legacyAvroDefaultEither.asLeft();
+    private static class AvroDefaultValueAccessor {
+      // Avro <= 1.8.2
+      private final Option<Method> legacyDefaultValueMethod = loadMethodNoThrow("defaultValue");
+      // Avro >= 1.10.0
+      private final Option<Method> newDefaultValueMethod = loadMethodNoThrow("defaultVal");
+
+      public Object getDefaultValue(Field field) {
+        return legacyDefaultValueMethod.or(newDefaultValueMethod)
+            .map(m -> invokeMethodNoThrow(m, field).asLeft())
+            .get();
       }
 
-      return getDefaultValueNewAvroNoThrow(readerField).asLeft();
-    }
-
-    // Avro >= 1.10.0
-    private static Either<Object, Exception> getDefaultValueLegacyAvroNoThrow(Field readerField) {
-      try {
-        Method defaultValueMethod = Field.class.getMethod("defaultValue");
-        Object defaultVal = defaultValueMethod.invoke(readerField);
-        return Either.left(defaultVal);
-      } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
-        return Either.right(e);
+      private static Either<Object, Exception> invokeMethodNoThrow(Method m, Object obj, Object... args) {
+        try {
+          return Either.left(m.invoke(obj, args));
+        } catch (IllegalAccessException | InvocationTargetException e) {
+          return Either.right(e);
+        }
       }
-    }
 
-    // Avro <= 1.8.2
-    private static Either<Object, Exception> getDefaultValueNewAvroNoThrow(Field readerField) {
-      try {
-        Method defaultValueMethod = Field.class.getMethod("defaultValue");
-        Object defaultVal = defaultValueMethod.invoke(readerField);
-        return Either.left(defaultVal);
-      } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
-        return Either.right(e);
+      private static Option<Method> loadMethodNoThrow(String defaultValue) {
+        try {
+          return Option.of(Field.class.getMethod(defaultValue));
+        } catch (NoSuchMethodException e) {
+          return Option.empty();
+        }
       }
     }
 
