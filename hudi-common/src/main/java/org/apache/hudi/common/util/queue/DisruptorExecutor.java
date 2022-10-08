@@ -110,6 +110,7 @@ public class DisruptorExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
     ExecutorCompletionService<Boolean> pool = (ExecutorCompletionService) o;
     waitForProducersFinished(pool);
     queue.close();
+    queue.waitForConsumingFinished();
     hoodieExecutorBase.getConsumer().get().finish();
 
     return hoodieExecutorBase.getConsumer().get().getResult();

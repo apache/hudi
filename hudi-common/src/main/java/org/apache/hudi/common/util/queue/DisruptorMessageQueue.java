@@ -24,10 +24,14 @@ import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import org.apache.hudi.common.util.Option;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.function.Function;
 
 public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
+
+  private static final Logger LOG = LogManager.getLogger(DisruptorMessageQueue.class);
 
   private final Disruptor<HoodieDisruptorEvent<O>> queue;
   private final Function<I, O> transformFunction;
@@ -72,8 +76,11 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     queue.shutdown();
   }
 
-  private Disruptor<HoodieDisruptorEvent<O>> getInnerQueue() {
-    return this.queue;
+  public void waitForConsumingFinished() throws InterruptedException {
+    while (!isEmpty()) {
+      Thread.sleep(1000);
+      LOG.info("Still waiting for consuming finished.");
+    }
   }
 
   public boolean isEmpty() {
