@@ -68,6 +68,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
     return () -> TaskContext$.MODULE$.setTaskContext(taskContext);
   }
 
+  // common produce and consume based on disruptor executor
   @Test
   public void testExecutor() {
 
