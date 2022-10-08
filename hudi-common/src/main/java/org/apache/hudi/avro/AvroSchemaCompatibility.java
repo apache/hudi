@@ -41,6 +41,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * Evaluate the compatibility between a reader schema and a writer schema. A
  * reader and a writer schema are declared compatible if all datum instances of
@@ -481,8 +483,14 @@ public class AvroSchemaCompatibility {
 
     private SchemaCompatibilityResult checkSchemaNames(final Schema reader, final Schema writer,
                                                        final Deque<LocationInfo> locations) {
+      checkState(locations.size() > 0);
+      // NOTE: We're only going to validate schema names in following cases
+      //          - This is a top-level schema (ie enclosing one)
+      //          - This is a schema enclosed w/in a union (since in that case schemas could be
+      //          reverse-looked up by their fully-qualified names)
+      boolean shouldCheckNames = locations.size() == 1 || locations.peekLast().type == Type.UNION;
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
-      if (!schemaNameEquals(reader, writer)) {
+      if (shouldCheckNames && !Objects.equals(reader.getFullName(), writer.getFullName())) {
         String message = String.format("expected: %s", writer.getFullName());
         result = SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.NAME_MISMATCH, reader, writer,
             message, asList(locations));
@@ -505,6 +513,11 @@ public class AvroSchemaCompatibility {
       public LocationInfo(String name, Type type) {
         this.name = name;
         this.type = type;
+      }
+
+      @Override
+      public String toString() {
+        return String.format("%s:%s", name, type);
       }
     }
 
