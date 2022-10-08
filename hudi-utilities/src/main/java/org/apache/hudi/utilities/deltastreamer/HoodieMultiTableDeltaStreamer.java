@@ -354,6 +354,10 @@ public class HoodieMultiTableDeltaStreamer {
         + " source-fetch -> Transform -> Hudi Write in loop")
     public Boolean continuousMode = false;
 
+    @Parameter(names = {"--continuous-iterations"}, description = "DeltaStreamer instance runs for given number of " +
+            "iterations, only used for testing")
+    public Integer continuousIterations = 1;
+
     @Parameter(names = {"--min-sync-interval-seconds"},
         description = "the min sync interval of each sync in continuous mode")
     public Integer minSyncIntervalSeconds = 0;
@@ -435,10 +439,14 @@ public class HoodieMultiTableDeltaStreamer {
         public void run() {
           try {
             HoodieDeltaStreamer streamerInstance = new HoodieDeltaStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
-            if (streamerInstance.getDeltaSyncService().getDeltaSync().isDataAvailableForIngestion()) {
-              streamerInstance.sync();
-              successTables.add(Helpers.getTableWithDatabase(context));
+            int iteration = 1;
+            while (iteration <= context.getConfig().continuousIterations) {
+              if (streamerInstance.getDeltaSyncService().getDeltaSync().isDataAvailableForIngestion()) {
+                streamerInstance.sync();
+              }
+              iteration++;
             }
+            successTables.add(Helpers.getTableWithDatabase(context));
           } catch (Exception e) {
             logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
             failedTables.add(Helpers.getTableWithDatabase(context));

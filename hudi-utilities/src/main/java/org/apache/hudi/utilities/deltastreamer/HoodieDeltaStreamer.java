@@ -174,6 +174,8 @@ public class HoodieDeltaStreamer implements Serializable {
     deltaSyncService.ifPresent(ds -> ds.shutdown(false));
   }
 
+
+
   /**
    * Main method to start syncing.
    *
@@ -326,6 +328,10 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--continuous"}, description = "Delta Streamer runs in continuous mode running"
         + " source-fetch -> Transform -> Hudi Write in loop")
     public Boolean continuousMode = false;
+
+    @Parameter(names = {"--continuous-iterations"}, description = "DeltaStreamer instance runs for given number of " +
+            "iterations, only used for testing")
+    public Integer continuousIterations = 1;
 
     @Parameter(names = {"--min-sync-interval-seconds"},
         description = "the min sync interval of each sync in continuous mode")
