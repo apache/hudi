@@ -21,7 +21,6 @@ package org.apache.hudi.util;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.hudi.HoodieInternalRowUtils;
-import org.apache.hudi.commmon.model.ComplexRowComparable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -31,11 +30,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils$;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.util.ArrayData;
-import org.apache.spark.sql.catalyst.util.MapData;
-import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
-import org.apache.spark.unsafe.types.CalendarInterval;
 
 public class HoodieSparkRecordUtils {
 
@@ -72,11 +67,6 @@ public class HoodieSparkRecordUtils {
     for (String column : columns) {
       NestedFieldPath posList = HoodieInternalRowUtils.getCachedPosList(structType, column);
       Object value = HoodieUnsafeRowUtils.getNestedInternalRowValue(row, posList);
-      DataType dataType = posList.parts()[posList.parts().length - 1]._2.dataType();
-      if (value instanceof InternalRow | value instanceof MapData | value instanceof ArrayData
-          | value instanceof CalendarInterval) {
-        value = ComplexRowComparable.getInstance(value, dataType);
-      }
       list.add((Comparable) value);
     }
     return FlatLists.ofComparable(list);
