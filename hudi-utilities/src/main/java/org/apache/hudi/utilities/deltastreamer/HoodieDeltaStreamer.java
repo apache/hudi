@@ -329,8 +329,8 @@ public class HoodieDeltaStreamer implements Serializable {
         + " source-fetch -> Transform -> Hudi Write in loop")
     public Boolean continuousMode = false;
 
-    @Parameter(names = {"--continuous-iterations"}, description = "DeltaStreamer instance runs for given number of " +
-            "iterations, only used for testing")
+    @Parameter(names = {"--continuous-iterations"}, description = "DeltaStreamer instance runs for given number of "
+            + "iterations, only used for testing")
     public Integer continuousIterations = 1;
 
     @Parameter(names = {"--min-sync-interval-seconds"},
