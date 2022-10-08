@@ -146,11 +146,11 @@ object DataSourceReadOptions {
         " This config is a fallback allowing to preserve existing behavior, and should not be used otherwise.")
 
   val REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION: ConfigProperty[Boolean] =
-    ConfigProperty.key("hoodie.datasource.read.refresh.partitions.in.initialization")
-      .defaultValue(true)
-      .sinceVersion("0.12.1")
-      .withDocumentation("When set to true, hoodie will load all partition paths and file slices when " +
-        " initializing the HoodieFileIndex. When set to false, the partitions and files will be loaded after " +
+    ConfigProperty.key("hoodie.datasource.read.file.index.list_lazily")
+      .defaultValue(false)
+      .sinceVersion("0.13.0")
+      .withDocumentation("When set to false, hoodie will load all partition paths and file slices when " +
+        " initializing the HoodieFileIndex. When set to true, the partitions and files will be loaded after " +
         " the partition pruning. Set it to false when the query has partition condition.")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
