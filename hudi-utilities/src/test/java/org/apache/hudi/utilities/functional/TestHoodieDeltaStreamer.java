@@ -702,6 +702,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertCommitMetadata(metadata, tableBasePath, fs, totalCommits);
   }
 
+  // TODO add tests w/ disabled reconciliation
   @ParameterizedTest
   @MethodSource("schemaEvolArgs")
   public void testSchemaEvolution(String tableType, boolean useUserProvidedSchema, boolean useSchemaPostProcessor) throws Exception {
@@ -766,7 +767,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Schema tableSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields();
     assertNotNull(tableSchema);
 
-    Schema expectedSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source_evolved.avsc")));
+    Schema expectedSchema;
+    if (!useSchemaPostProcessor) {
+      expectedSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source_evolved.avsc")));
+    } else {
+      expectedSchema = new Schema.Parser().parse(dfs.open(new Path(dfsBasePath + "/source_evolved_post_processed.avsc")));
+    }
     assertEquals(expectedSchema, tableSchema);
 
     // clean up and reinit
