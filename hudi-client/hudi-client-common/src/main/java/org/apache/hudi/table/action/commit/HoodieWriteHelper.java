@@ -69,7 +69,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       HoodieRecord<T> reducedRecord;
       try {
         // Precombine do not need schema and do not return null
-        reducedRecord =  recordMerger.merge(rec1, schema.get(), rec2, schema.get(), props).get();
+        reducedRecord =  recordMerger.merge(rec1, schema.get(), rec2, schema.get(), props).getLeft().get();
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }

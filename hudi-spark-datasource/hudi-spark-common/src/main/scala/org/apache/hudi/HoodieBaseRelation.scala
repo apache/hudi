@@ -461,17 +461,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   protected def getTableState: HoodieTableState = {
-    val mergerImpls = (if (optParams.contains(HoodieWriteConfig.MERGER_IMPLS.key())) {
-      optParams(HoodieWriteConfig.MERGER_IMPLS.key())
-    } else {
-      sqlContext.getConf(HoodieWriteConfig.MERGER_IMPLS.key(), HoodieWriteConfig.MERGER_IMPLS.defaultValue())
-    }).split(",")
-      .map(_.trim).distinct.toList
-    val mergerStrategy = if (optParams.contains(HoodieWriteConfig.MERGER_STRATEGY.key())) {
-      optParams(HoodieWriteConfig.MERGER_STRATEGY.key())
-    } else {
-      sqlContext.getConf(HoodieWriteConfig.MERGER_STRATEGY.key(), HoodieWriteConfig.MERGER_STRATEGY.defaultValue())
-    }
+    val mergerImpls = ConfigUtils.getMergerImpls(optParams.asJava).asScala.toList
+    val mergerStrategy = optParams.getOrElse(HoodieWriteConfig.MERGER_STRATEGY.key(),
+      sqlContext.getConf(HoodieWriteConfig.MERGER_STRATEGY.key(), HoodieWriteConfig.MERGER_STRATEGY.defaultValue()))
 
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(

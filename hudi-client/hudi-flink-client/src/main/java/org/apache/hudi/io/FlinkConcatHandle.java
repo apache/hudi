@@ -56,8 +56,8 @@ public class FlinkConcatHandle<T, I, K, O>
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    Schema schema = useWriterSchemaForCompaction || withMetaFields ? tableSchemaWithMetaFields : tableSchema;
-    String key = oldRecord.getRecordKey(schema, keyGeneratorOpt);
+    Schema oldSchema = config.populateMetaFields() ? tableSchemaWithMetaFields : tableSchema;
+    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     try {
       fileWriter.write(key, oldRecord, writeSchema);
     } catch (IOException | RuntimeException e) {

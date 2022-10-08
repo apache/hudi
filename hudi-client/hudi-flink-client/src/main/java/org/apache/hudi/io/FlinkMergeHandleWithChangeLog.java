@@ -64,16 +64,16 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOp, Schema combineRecordSchema)
+  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOp, Schema writerSchema)
       throws IOException {
     Option<HoodieRecord> savedCombineRecordOp = combineRecordOp.map(HoodieRecord::newInstance);
     HoodieRecord<T> savedOldRecord = oldRecord.newInstance();
-    final boolean result = super.writeUpdateRecord(hoodieRecord, oldRecord, combineRecordOp, combineRecordSchema);
+    final boolean result = super.writeUpdateRecord(hoodieRecord, oldRecord, combineRecordOp, writerSchema);
     if (result) {
       boolean isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
       Option<IndexedRecord> combineRecord;
       if (combineRecordOp.isPresent()) {
-        combineRecord = savedCombineRecordOp.get().toIndexedRecord(combineRecordSchema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData);
+        combineRecord = savedCombineRecordOp.get().toIndexedRecord(writerSchema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData);
       } else {
         combineRecord = Option.empty();
       }

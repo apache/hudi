@@ -24,6 +24,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import java.io.IOException;
@@ -39,14 +40,24 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
   }
 
   @Override
-  public Option<HoodieRecord> merge(HoodieRecord older, Schema oldSchema,
+  public Pair<Option<HoodieRecord>, Schema> merge(HoodieRecord older, Schema oldSchema,
       HoodieRecord newer, Schema newSchema, Properties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.AVRO);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.AVRO);
     if (older instanceof HoodieAvroRecord && newer instanceof HoodieAvroRecord) {
-      return Option.of(preCombine(older, newer));
+      HoodieRecord res = preCombine(older, newer);
+      if (res == older) {
+        return Pair.of(Option.of(res), oldSchema);
+      } else {
+        return Pair.of(Option.of(res), newSchema);
+      }
     } else if (older instanceof HoodieAvroIndexedRecord && newer instanceof HoodieAvroRecord) {
-      return combineAndGetUpdateValue(older, newer, newSchema, props);
+      Option<HoodieRecord> res = combineAndGetUpdateValue(older, newer, newSchema, props);
+      if (res.isPresent()) {
+        return Pair.of(res, ((IndexedRecord) res.get().getData()).getSchema());
+      } else {
+        return Pair.of(res, null);
+      }
     } else {
       throw new UnsupportedOperationException();
     }

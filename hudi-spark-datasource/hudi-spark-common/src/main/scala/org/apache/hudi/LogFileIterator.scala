@@ -236,23 +236,21 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
   private def merge(curRow: InternalRow, newRecord: HoodieRecord[_]): Option[InternalRow] = {
     // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
     //       on the record from the Delta Log
-    val curRecord = recordMerger.getRecordType match {
-      case HoodieRecordType.SPARK =>
-        new HoodieSparkRecord(curRow, baseFileReader.schema)
-      case _ =>
-        new HoodieAvroIndexedRecord(serialize(curRow))
-    }
     recordMerger.getRecordType match {
       case HoodieRecordType.SPARK =>
-        toScalaOption(recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps))
+        val curRecord = new HoodieSparkRecord(curRow, baseFileReader.schema)
+        val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
+        toScalaOption(result.getLeft)
           .map(r => {
-            val schema = if (r == curRecord) baseFileReader.schema else logFileReaderStructType
+            val schema = HoodieInternalRowUtils.getCachedSchema(result.getRight)
             val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
             projection.apply(r.getData.asInstanceOf[InternalRow])
           })
       case _ =>
-        toScalaOption(recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps))
-        .map(r => deserialize(projectAvroUnsafe(r.toIndexedRecord(logFileReaderAvroSchema, new Properties()).get().getData.asInstanceOf[GenericRecord], avroSchema, reusableRecordBuilder)))
+        val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
+        val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
+        toScalaOption(result.getLeft)
+          .map(r => deserialize(projectAvroUnsafe(r.toIndexedRecord(result.getRight, payloadProps).get().getData.asInstanceOf[GenericRecord], avroSchema, reusableRecordBuilder)))
     }
   }
 }

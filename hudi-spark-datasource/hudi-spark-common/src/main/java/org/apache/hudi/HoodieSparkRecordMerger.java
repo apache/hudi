@@ -21,6 +21,7 @@ package org.apache.hudi;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -37,22 +38,22 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
   }
 
   @Override
-  public Option<HoodieRecord> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Properties props) throws IOException {
+  public Pair<Option<HoodieRecord>, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Properties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
 
     if (newer.getData() == null) {
       // Delete record
-      return Option.empty();
+      return Pair.of(Option.empty(), null);
     }
     if (older.getData() == null) {
       // use natural order for delete record
-      return Option.of(newer);
+      return Pair.of(Option.of(newer), newSchema);
     }
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
-      return Option.of(older);
+      return Pair.of(Option.of(older), oldSchema);
     } else {
-      return Option.of(newer);
+      return Pair.of(Option.of(newer), newSchema);
     }
   }
 

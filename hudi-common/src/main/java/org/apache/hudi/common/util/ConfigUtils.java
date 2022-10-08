@@ -18,10 +18,15 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableConfig;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 public class ConfigUtils {
 
@@ -51,5 +56,12 @@ public class ConfigUtils {
       payloadClass = properties.getProperty("hoodie.datasource.write.payload.class");
     }
     return payloadClass;
+  }
+
+  public static List<String> getMergerImpls(Map<String, String> optParams) {
+    return Arrays.stream(
+            optParams.getOrDefault("hoodie.datasource.write.merger.impls",
+                HoodieAvroRecordMerger.class.getName()).split(","))
+        .map(String::trim).distinct().collect(Collectors.toList());
   }
 }
