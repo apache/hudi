@@ -71,7 +71,7 @@
                                     implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                             <artifactSet>
-                                <includes>
+                                <includes combine.children="append">
                                     <include>org.apache.hudi:hudi-common</include>
                                     <include>org.apache.hudi:hudi-client-common</include>
                                     <include>org.apache.hudi:hudi-java-client</include>
@@ -114,9 +114,6 @@
                                     <include>io.prometheus:simpleclient_pushgateway</include>
                                     <include>io.prometheus:simpleclient_common</include>
                                     <include>com.google.protobuf:protobuf-java</include>
-                                    <include>org.objenesis:objenesis</include>
-                                    <include>com.esotericsoftware:kryo-shaded</include>
-                                    <include>com.esotericsoftware:minlog</include>
 
                                     <include>org.apache.hbase:hbase-client</include>
                                     <include>org.apache.hbase:hbase-common</include>
@@ -136,7 +133,7 @@
                                     <include>org.openjdk.jol:jol-core</include>
                                 </includes>
                             </artifactSet>
-                            <relocations>
+                            <relocations combine.children="append">
                                 <relocation>
                                     <pattern>com.google.protobuf.</pattern>
                                     <shadedPattern>${kafka.connect.bundle.shade.prefix}com.google.protobuf.</shadedPattern>

@@ -71,7 +71,7 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                             <artifactSet>
-                                <includes>
+                                <includes combine.children="append">
                                     <include>org.apache.hudi:hudi-common</include>
                                     <include>org.apache.hudi:hudi-hadoop-mr</include>
                                     <include>org.apache.hudi:hudi-sync-common</include>
@@ -102,15 +102,7 @@
                                     <include>org.openjdk.jol:jol-core</include>
                                 </includes>
                             </artifactSet>
-                            <relocations>
-                                <relocation>
-                                    <pattern>com.esotericsoftware.kryo.</pattern>
-                                    <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>com.esotericsoftware.minlog.</pattern>
-                                    <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
-                                </relocation>
+                            <relocations combine.children="append">
                                 <relocation>
                                     <pattern>com.beust.jcommander.</pattern>
                                     <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
@@ -133,10 +125,6 @@
                                 <relocation>
                                     <pattern>org.apache.htrace.</pattern>
                                     <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>org.objenesis.</pattern>
-                                    <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>com.amazonaws.</pattern>
