@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.avro.AvroSchemaCompatibility;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -48,7 +49,6 @@ import org.apache.hudi.util.Lazy;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
-import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -303,7 +303,7 @@ public class TableSchemaResolver {
 
   /**
    * Establishes whether {@code prevSchema} is compatible w/ {@code newSchema}, as
-   * defined by Avro's {@link SchemaCompatibility}
+   * defined by Avro's {@link AvroSchemaCompatibility}
    *
    * @param prevSchema previous instance of the schema
    * @param newSchema new instance of the schema
@@ -312,9 +312,9 @@ public class TableSchemaResolver {
     // NOTE: We're establishing compatibility of the {@code prevSchema} and {@code newSchema}
     //       as following: {@code newSchema} is considered compatible to {@code prevSchema},
     //       iff data written using {@code prevSchema} could be read by {@code newSchema}
-    SchemaCompatibility.SchemaPairCompatibility result =
-        SchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema);
-    return result.getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+    AvroSchemaCompatibility.SchemaPairCompatibility result =
+        AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema);
+    return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
   }
 
   /**
