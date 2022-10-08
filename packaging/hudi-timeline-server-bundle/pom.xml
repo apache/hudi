@@ -155,7 +155,7 @@
                     </filter>
                 </filters>
                 <artifactSet>
-                  <includes>
+                  <includes combine.children="append">
                       <!-- 
                          Include hudi-timeline-server with javalin dependencies. 
                          hadoop deps are to be provided at runtime. see run_server.sh 
@@ -207,15 +207,12 @@
                       <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
                       <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
                       <include>org.apache.htrace:htrace-core4</include>
-                      <include>com.esotericsoftware:kryo-shaded</include>
-                      <include>com.esotericsoftware:minlog</include>
                       <include>commons-io:commons-io</include>
                       <include>log4j:log4j</include>
-                      <include>org.objenesis:objenesis</include>
                       <include>org.openjdk.jol:jol-core</include>
                   </includes>
                 </artifactSet>
-                <relocations>
+                <relocations combine.children="append">
                     <relocation>
                         <pattern>org.apache.commons.io.</pattern>
                         <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
