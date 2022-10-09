@@ -93,6 +93,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private final transient FileStatusCache fileStatusCache;
 
+  protected volatile boolean queryAsNonePartitionedTable = false;
+
   protected transient volatile long cachedFileSize = 0L;
   private transient volatile Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices = new HashMap<>();
   private transient volatile List<PartitionPath> cachedAllPartitionPaths;
@@ -400,6 +402,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // Refresh the partitions & file slices
     this.cachedAllInputFileSlices = loadFileSlicesForPartitions(getAllQueryPartitionPaths());
+    // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
+    // This normally happens for default partition case.
+    this.queryAsNonePartitionedTable = getAllQueryPartitionPaths().stream().anyMatch(p -> p.values.length == 0);
 
     LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), timer.endTimer()));
   }
@@ -420,7 +425,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected boolean isPartitionedTable() {
-    return partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath.toString());
+    return !queryAsNonePartitionedTable && (partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath.toString()));
   }
 
   private static long fileSliceSize(FileSlice fileSlice) {
