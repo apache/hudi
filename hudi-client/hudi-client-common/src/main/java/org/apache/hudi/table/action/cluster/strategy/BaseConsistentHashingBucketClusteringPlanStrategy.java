@@ -167,7 +167,7 @@ public class BaseConsistentHashingBucketClusteringPlanStrategy<T extends HoodieR
       ConsistentBucketIdentifier identifier, List<FileSlice> fileSlices, int splitSlot) {
     List<HoodieClusteringGroup> retGroup = new ArrayList<>();
     List<FileSlice> fsUntouched = new ArrayList<>();
-    long splitSize = getSplitSize();
+    long splitSize = getSplitThresholdSize();
     int remainingSplitSlot = splitSlot;
     for (FileSlice fs : fileSlices) {
       boolean needSplit = fs.getTotalFileSize() > splitSize;
@@ -210,7 +210,7 @@ public class BaseConsistentHashingBucketClusteringPlanStrategy<T extends HoodieR
       return Triple.of(Collections.emptyList(), 0, fileSlices);
     }
 
-    long mergeSize = getMergeSize();
+    long mergeSize = getMergeThresholdSize();
     int remainingMergeSlot = mergeSlot;
     List<HoodieClusteringGroup> groups = new ArrayList<>();
     boolean[] added = new boolean[fileSlices.size()];
@@ -301,12 +301,12 @@ public class BaseConsistentHashingBucketClusteringPlanStrategy<T extends HoodieR
     return extraMetadata;
   }
 
-  private long getSplitSize() {
+  private long getSplitThresholdSize() {
     HoodieFileFormat format = getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat();
     return (long) (getWriteConfig().getMaxFileSize(format) * getWriteConfig().getBucketSplitThreshold());
   }
 
-  private long getMergeSize() {
+  private long getMergeThresholdSize() {
     HoodieFileFormat format = getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat();
     return (long) (getWriteConfig().getMaxFileSize(format) * getWriteConfig().getBucketMergeThreshold());
   }

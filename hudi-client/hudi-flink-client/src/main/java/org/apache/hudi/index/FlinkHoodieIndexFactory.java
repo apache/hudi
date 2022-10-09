@@ -49,6 +49,8 @@ public final class FlinkHoodieIndexFactory {
     // TODO more indexes to be added
     switch (config.getIndexType()) {
       case INMEMORY:
+      case FLINK_STATE:
+        // Dummy return for FLINK_STATE
         return new FlinkInMemoryStateIndex(context, config);
       case BLOOM:
         return new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());

@@ -52,13 +52,13 @@ public class TestConsistentHashingClusteringBase {
   protected static final Map<String, String> EXPECTED_AFTER_UPSERT = new HashMap<>();
 
   static {
-    EXPECTED_AFTER_INITIAL_INSERT.put("", "id1,,id1,Danny,23,1000,, id2,,id2,Stephen,33,2000,, " +
-        "id3,,id3,Julian,53,3000,, id4,,id4,Fabian,31,4000,, id5,,id5,Sophia,18,5000,, " +
-        "id6,,id6,Emma,20,6000,, id7,,id7,Bob,44,7000,, id8,,id8,Han,56,8000,, ]");
-    EXPECTED_AFTER_UPSERT.put("", "[id1,,id1,Danny,24,1000,, id2,,id2,Stephen,34,2000,, id3,,id3,Julian,54,3000,, " +
-        "id4,,id4,Fabian,32,4000,, id5,,id5,Sophia,18,5000,, id6,,id6,Emma,20,6000,, " +
-        "id7,,id7,Bob,44,7000,, id8,,id8,Han,56,8000,, id9,,id9,Jane,19,6000,, " +
-        "id10,,id10,Ella,38,7000,, id11,,id11,Phoebe,52,8000,,]");
+    EXPECTED_AFTER_INITIAL_INSERT.put("", "id1,,id1,Danny,23,1000,, id2,,id2,Stephen,33,2000,, "
+        + "id3,,id3,Julian,53,3000,, id4,,id4,Fabian,31,4000,, id5,,id5,Sophia,18,5000,, "
+        + "id6,,id6,Emma,20,6000,, id7,,id7,Bob,44,7000,, id8,,id8,Han,56,8000,, ]");
+    EXPECTED_AFTER_UPSERT.put("", "[id1,,id1,Danny,24,1000,, id2,,id2,Stephen,34,2000,, id3,,id3,Julian,54,3000,, "
+        + "id4,,id4,Fabian,32,4000,, id5,,id5,Sophia,18,5000,, id6,,id6,Emma,20,6000,, "
+        + "id7,,id7,Bob,44,7000,, id8,,id8,Han,56,8000,, id9,,id9,Jane,19,6000,, "
+        + "id10,,id10,Ella,38,7000,, id11,,id11,Phoebe,52,8000,,]");
   }
 
   @TempDir

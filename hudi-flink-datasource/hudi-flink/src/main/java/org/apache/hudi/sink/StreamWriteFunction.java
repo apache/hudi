@@ -396,6 +396,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     if (flushBucket) {
       if (flushBucket(bucket)) {
         this.tracer.countDown(bucket.detector.totalSize);
+        bucket.reset();
       }
     } else if (flushBuffer) {
       // find the max size bucket and flush it out
@@ -405,6 +406,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       final DataBucket bucketToFlush = sortedBuckets.get(0);
       if (flushBucket(bucketToFlush)) {
         this.tracer.countDown(bucketToFlush.detector.totalSize);
+        bucketToFlush.reset();
       } else {
         LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
       }
@@ -457,7 +459,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       ret.addAll(writeFunction.apply(recordsInstantPair.records, recordsInstantPair.instantTime));
     }
 
-    bucket.reset();
     return ret;
   }
 
@@ -478,6 +479,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
             List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
               writeStatus.addAll(writeBucket(currentInstant, bucket, records));
+              records.clear();
+              bucket.reset();
             }
           });
     } else {

@@ -138,8 +138,12 @@ public class ConsistentBucketIndexUtils {
       byte[] bytes = metadata.toBytes();
       fsOut.write(bytes);
       fsOut.flush();
-      fsOut.close();
+    } catch (IOException e) {
+      LOG.warn("Failed to save bucket to tmp path, metadata: " + metadata, e);
+      return false;
+    }
 
+    try {
       // Atomic renaming to ensure only one can succeed creating the initial hashing metadata
       boolean success = fs.rename(fullPath, new Path(dir, metadata.getFilename()));
       if (success) {

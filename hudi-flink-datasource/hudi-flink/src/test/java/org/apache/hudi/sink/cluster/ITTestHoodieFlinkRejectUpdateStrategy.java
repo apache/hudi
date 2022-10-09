@@ -29,7 +29,6 @@ import org.apache.hudi.utils.TestSQL;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.TableEnvironment;
-import org.apache.flink.table.api.TableException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

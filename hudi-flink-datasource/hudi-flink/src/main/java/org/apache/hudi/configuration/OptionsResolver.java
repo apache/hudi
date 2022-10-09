@@ -120,6 +120,10 @@ public class OptionsResolver {
     return conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name());
   }
 
+  public static boolean isConsistentHashingBucketIndexType(Configuration conf) {
+    return isBucketIndexType(conf) && conf.getString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name());
+  }
+
   /**
    * Returns whether the source should emit changelog.
    *
