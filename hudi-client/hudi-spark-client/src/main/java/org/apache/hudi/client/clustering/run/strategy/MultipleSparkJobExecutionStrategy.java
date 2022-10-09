@@ -294,6 +294,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
               .withBufferSize(config.getMaxDFSStreamBufferSize())
               .withSpillableMapBasePath(config.getSpillableMapBasePath())
               .withPartition(clusteringOp.getPartitionPath())
+              .withUseScanV2(config.useScanV2ForLogRecordReader())
               .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
               .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .build();

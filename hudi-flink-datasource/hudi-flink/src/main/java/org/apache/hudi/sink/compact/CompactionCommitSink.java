@@ -118,7 +118,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       try {
         return CompactionUtils.getCompactionPlan(
             this.writeClient.getHoodieTable().getMetaClient(), instant);
-      } catch (IOException e) {
+      } catch (Exception e) {
         throw new HoodieException(e);
       }
     });

@@ -82,6 +82,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected HoodieTableMetaClient metaClient;
 
   // This is the commits timeline that will be visible for all views extending this view
+  // This is nothing but the write timeline, which contains both ingestion and compaction(major and minor) writers.
   private HoodieTimeline visibleCommitsAndCompactionTimeline;
 
   // Used to concurrently load and populate partition views
@@ -110,6 +111,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     // Load Pending Compaction Operations
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
         .map(e -> Pair.of(e.getKey(), CompactionOperation.convertFromAvroRecordInstance(e.getValue()))));
+    // Load Pending LogCompaction Operations.
+    resetPendingLogCompactionOperations(CompactionUtils.getAllPendingLogCompactionOperations(metaClient).values().stream()
+        .map(e -> Pair.of(e.getKey(), CompactionOperation.convertFromAvroRecordInstance(e.getValue()))));
+
     resetBootstrapBaseFileMapping(Stream.empty());
     resetFileGroupsInPendingClustering(ClusteringUtils.getAllFileGroupsInPendingClusteringPlans(metaClient));
   }
@@ -490,6 +495,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
+  public final Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations() {
+    try {
+      readLock.lock();
+      return fetchPendingLogCompactionOperations();
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
   public final Stream<HoodieBaseFile> getLatestBaseFiles(String partitionStr) {
     try {
       readLock.lock();
@@ -847,6 +862,35 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   abstract void removePendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations);
 
   /**
+   * Check if there is an outstanding log compaction scheduled for this file.
+   *
+   * @param fgId File-Group Id
+   * @return true if there is a pending log compaction, false otherwise
+   */
+  protected abstract boolean isPendingLogCompactionScheduledForFileId(HoodieFileGroupId fgId);
+
+  /**
+   * resets the pending Log compaction operation and overwrite with the new list.
+   *
+   * @param operations Pending Log Compaction Operations
+   */
+  abstract void resetPendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations);
+
+  /**
+   * Add pending Log compaction operations to store.
+   *
+   * @param operations Pending Log compaction operations to be added
+   */
+  abstract void addPendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations);
+
+  /**
+   * Remove pending Log compaction operations from store.
+   *
+   * @param operations Pending Log compaction operations to be removed
+   */
+  abstract void removePendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations);
+
+  /**
    * Check if there is an outstanding clustering operation (requested/inflight) scheduled for this file.
    *
    * @param fgId File-Group Id
@@ -889,9 +933,22 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       HoodieFileGroupId fileGroupId);
 
   /**
+   * Return pending Log compaction operation for a file-group.
+   *
+   * @param fileGroupId File-Group Id
+   */
+  protected abstract Option<Pair<String, CompactionOperation>> getPendingLogCompactionOperationWithInstant(
+      HoodieFileGroupId fileGroupId);
+
+  /**
    * Fetch all pending compaction operations.
    */
   abstract Stream<Pair<String, CompactionOperation>> fetchPendingCompactionOperations();
+
+  /**
+   * Fetch all pending log compaction operations.
+   */
+  abstract Stream<Pair<String, CompactionOperation>> fetchPendingLogCompactionOperations();
 
   /**
    * Check if there is an bootstrap base file present for this file.
@@ -1197,7 +1254,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public void sync() {
     HoodieTimeline oldTimeline = getTimeline();
-    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
+    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
     try {
       writeLock.lock();
       runSync(oldTimeline, newTimeline);

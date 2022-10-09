@@ -116,7 +116,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         timeline.getCommitTimeline().filterCompletedInstants().getInstants(),
         "Check the instants stream");
     assertStreamEquals(Stream.of(instant5),
-        timeline.getCommitTimeline().filterPendingExcludingCompaction().getInstants(),
+        timeline.getCommitTimeline().filterPendingExcludingMajorAndMinorCompaction().getInstants(),
         "Check the instants stream");
 
     // Backwards compatibility testing for reading compaction plans
@@ -180,7 +180,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
             .getInstants().map(HoodieInstant::getTimestamp),
         "findInstantsBefore 07 should return 3 instants");
     assertFalse(timeline.empty());
-    assertFalse(timeline.getCommitTimeline().filterPendingExcludingCompaction().empty());
+    assertFalse(timeline.getCommitTimeline().filterPendingExcludingMajorAndMinorCompaction().empty());
     assertEquals(12, timeline.countInstants());
     assertEquals("01", timeline.firstInstant(
         HoodieTimeline.COMMIT_ACTION, State.COMPLETED).get().getTimestamp());
