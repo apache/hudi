@@ -96,8 +96,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
       .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
       .withInferFunction(cfg -> {
-        Option<String> partitionFieldsOpt = Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
-            .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
+        Option<String> partitionFieldsOpt = Option.ofNullable(cfg.getString(META_SYNC_PARTITION_FIELDS));
         if (!partitionFieldsOpt.isPresent()) {
           return Option.empty();
         }
