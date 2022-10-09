@@ -35,7 +35,7 @@ import java.util.Set;
 public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> implements Serializable {
 
   protected final transient HoodieEngineContext engineContext;
-  protected final HoodieTable table;
+  protected HoodieTable table;
   protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;
 
   public UpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {

@@ -109,6 +109,10 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
     bufferRecord(record);
   }
 
+  /**
+   * Get bucket identifier for partition by loading the persisted hashing metadata.
+   * It will wait (30s maximum) for the metadata generation if the metadata has not been generated yet.
+   */
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     return partitionToIdentifier.computeIfAbsent(partition, p -> {
       TimeWait timeWait = TimeWait.builder().timeout(30000).action("consistent hashing initialize").build();

@@ -38,6 +38,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -51,36 +52,57 @@ public class FlinkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
   private static final Logger LOG = LogManager.getLogger(FlinkConsistentBucketDuplicateUpdateStrategy.class);
 
   private List<String> indexKeyFields;
+  private Map<String, Pair<String, ConsistentBucketIdentifier>> partitionToIdentifier;
 
   public FlinkConsistentBucketDuplicateUpdateStrategy(HoodieEngineContext engineContext) {
     super(engineContext);
-    indexKeyFields = null;
+    this.indexKeyFields = null;
+    this.partitionToIdentifier = new HashMap<>();
   }
 
   @Override
   public void initialize(HoodieFlinkWriteClient writeClient) {
     super.initialize(writeClient);
-    indexKeyFields = Arrays.asList(writeClient.getHoodieTable().getConfig().getBucketIndexHashField().split(","));
+    if (indexKeyFields == null) {
+      indexKeyFields = Arrays.asList(writeClient.getHoodieTable().getConfig().getBucketIndexHashField().split(","));
+    }
+  }
+
+  @Override
+  public void reset() {
+    super.reset();
+
+    // Reset the identifier cache
+    this.partitionToIdentifier = new HashMap<>();
   }
 
   @Override
   protected Pair<List<RecordsInstantPair>, List<HoodieFileGroupId>> doHandleUpdate(HoodieFileGroupId fileId, RecordsInstantPair recordsInstantPair) {
-    Map<String, List<HoodieRecord>> fileIdToRecords = new HashMap<>();
+    Map<String, List<HoodieRecord>> fileIdToRecords = new HashMap<>(4);
 
-    Map<String, Pair<String, ConsistentBucketIdentifier>> partitionToIdentifier =
-        ConsistentHashingUpdateStrategyUtils.constructPartitionToIdentifier(Collections.singleton(fileId.getPartitionPath()), table.getMetaClient());
-    String instant = partitionToIdentifier.get(fileId.getPartitionPath()).getLeft();
-    ConsistentBucketIdentifier identifier = partitionToIdentifier.get(fileId.getPartitionPath()).getRight();
+    Pair<String, ConsistentBucketIdentifier> identifierPair = getIdentifierOfPartition(fileId.getPartitionPath());
+    String instant = identifierPair.getLeft();
+    ConsistentBucketIdentifier identifier = identifierPair.getRight();
+    // TODO maybe handle bucket split & merge differently. Bucket merge does not need rehashing, just routing all records to the new bucket.
     recordsInstantPair.records.forEach(r -> {
       ConsistentHashingNode node = identifier.getBucket(r.getKey(), this.indexKeyFields);
-      fileIdToRecords.computeIfAbsent(node.getFileIdPrefix(), n -> new ArrayList<>()).add(r);
+      fileIdToRecords.computeIfAbsent(node.getFileIdPrefix(), n -> new ArrayList<>()).add(r.newInstance());
     });
 
-    Stream<RecordsInstantPair> remappedRecordsInstantPair = fileIdToRecords.values().stream().map(r -> RecordsInstantPair.of(r, instant));
-    Stream<HoodieFileGroupId> remappedFileGroupIds = fileIdToRecords.keySet().stream().map(fg -> new HoodieFileGroupId(fileId.getPartitionPath(), fg));
+    Set<Map.Entry<String, List<HoodieRecord>>> fileIdToRecordsEntry = fileIdToRecords.entrySet();
+    Stream<RecordsInstantPair> remappedRecordsInstantPair = fileIdToRecordsEntry.stream().map(e -> RecordsInstantPair.of(e.getValue(), instant));
+    Stream<HoodieFileGroupId> remappedFileGroupIds = fileIdToRecordsEntry.stream().map(e -> new HoodieFileGroupId(fileId.getPartitionPath(), e.getKey()));
 
-    // TODO add option to skip dual update
+    // TODO add option to skip dual update, i.e., write updates only to the new file group
+    LOG.info("Apply duplicate update for FileGroup" + fileId + ", routing records to: " + String.join(",", fileIdToRecords.keySet()));
     return Pair.of(Stream.concat(remappedRecordsInstantPair, Stream.of(recordsInstantPair)).collect(Collectors.toList()),
         Stream.concat(remappedFileGroupIds, Stream.of(fileId)).collect(Collectors.toList()));
+  }
+
+  private Pair<String, ConsistentBucketIdentifier> getIdentifierOfPartition(String partition) {
+    return partitionToIdentifier.computeIfAbsent(partition, p -> {
+          return ConsistentHashingUpdateStrategyUtils.constructPartitionToIdentifier(Collections.singleton(p), table.getMetaClient()).get(p);
+        }
+    );
   }
 }

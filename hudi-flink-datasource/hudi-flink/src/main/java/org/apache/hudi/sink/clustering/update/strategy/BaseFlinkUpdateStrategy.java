@@ -57,9 +57,10 @@ public abstract class BaseFlinkUpdateStrategy<T extends HoodieRecordPayload> ext
       return;
     }
 
+    this.table = writeClient.getHoodieTable();
     this.fileGroupsInPendingClustering = writeClient.getHoodieTable().getFileSystemView().getFileGroupsInPendingClustering()
         .map(Pair::getKey).collect(Collectors.toSet());
-    initialized = true;
+    this.initialized = true;
   }
 
   public void reset() {
@@ -72,6 +73,7 @@ public abstract class BaseFlinkUpdateStrategy<T extends HoodieRecordPayload> ext
     ValidationUtils.checkArgument(recordList.size() == 1);
 
     RecordsInstantPair recordsInstantPair = recordList.get(0);
+    // Return the input records directly if the corresponding file group is not under clustering.
     if (fileGroupsInPendingClustering.isEmpty() || !fileGroupsInPendingClustering.contains(fileId)) {
       return Pair.of(Collections.singletonList(recordsInstantPair), Collections.singletonList(fileId));
     }

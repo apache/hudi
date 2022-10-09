@@ -79,9 +79,9 @@ public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O
       return Option.empty();
     }
 
-    LOG.info("Generating clustering plan for table " + config.getBasePath());
-    ClusteringPlanStrategy strategy = (ClusteringPlanStrategy) ReflectionUtils.loadClass(
-        ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config),
+    String strategyClass = ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config);
+    LOG.info("Generating clustering plan for table " + config.getBasePath() + ", with plan strategy:" + strategyClass);
+    ClusteringPlanStrategy strategy = (ClusteringPlanStrategy) ReflectionUtils.loadClass(strategyClass,
             new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config);
 
     return strategy.generateClusteringPlan();

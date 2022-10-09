@@ -45,6 +45,7 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
@@ -55,6 +56,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
@@ -182,6 +184,10 @@ public class StreamerUtil {
                     .withClusteringSkipPartitionsFromLatest(conf.getInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST))
                     .withAsyncClusteringMaxCommits(conf.getInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS))
                     .build())
+            .withIndexConfig(HoodieIndexConfig.newBuilder()
+                .withIndexType(HoodieIndex.IndexType.valueOf(conf.get(FlinkOptions.INDEX_TYPE)))
+                .fromProperties(flinkConf2TypedProperties(conf))
+                .build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
                 .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))

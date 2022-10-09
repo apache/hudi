@@ -312,8 +312,9 @@ public class BaseConsistentHashingBucketClusteringPlanStrategy<T extends HoodieR
   }
 
   private void validate() {
-    ValidationUtils.checkArgument(getHoodieTable().getConfig().getIndexType() == HoodieIndex.IndexType.BUCKET
-            && getHoodieTable().getConfig().getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING,
-        "ConsistentBucketClusteringPlanStrategy is only applicable to table with consistent hash index");
+    HoodieWriteConfig config = getHoodieTable().getConfig();
+    ValidationUtils.checkArgument(config.getIndexType() == HoodieIndex.IndexType.BUCKET
+            && config.getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING,
+        "ConsistentHashingBucketClusteringPlanStrategy is only applicable to table with consistent hash index");
   }
 }

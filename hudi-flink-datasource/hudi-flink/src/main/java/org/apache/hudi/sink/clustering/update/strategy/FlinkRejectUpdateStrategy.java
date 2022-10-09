@@ -40,7 +40,9 @@ public class FlinkRejectUpdateStrategy<T extends HoodieRecordPayload> extends Ba
   @Override
   protected Pair<List<RecordsInstantPair>, List<HoodieFileGroupId>> doHandleUpdate(HoodieFileGroupId fileId, RecordsInstantPair records) {
     String msg = String.format("Not allowed to update the clustering file group %s. "
-            + "For pending clustering operations, we are not going to support update for now.", fileId.toString());
+            + "For pending clustering operations, we are not going to support update for now. "
+            + "If you are using ConsistentHashing Bucket Index, try set CLUSTERING_UPDATE_STRATEGY to %s "
+            + "to enable concurrent update & clustering.", fileId.toString(), FlinkConsistentBucketDuplicateUpdateStrategy.class.getName());
     LOG.error(msg);
     throw new HoodieClusteringUpdateException(msg);
   }

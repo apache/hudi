@@ -78,7 +78,8 @@ public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implem
 
     return partitionToBucketIdentifier.computeIfAbsent(partition, p -> {
       Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(metaClient, p);
-      // The hashing metadata is not initialized yet, use a temporal metadata for routing
+      // The hashing metadata is not initialized yet, use a temporal metadata for routing.
+      // NOTE: The routing will be the same regardless if the metadata is the persisted one. As all initial metadata have the same default node values.
       if (!metadataOption.isPresent()) {
         metadataOption = Option.of(new HoodieConsistentHashingMetadata(partition, config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)));
       }
@@ -86,12 +87,21 @@ public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implem
     });
   }
 
+  /**
+   * Clear up cached bucket identifier if necessary (i.e., resizing happens).
+   *
+   * NOTE: There will be a windows where the partitioner may use outdated identifier (New metadata is
+   *  generated async in coordinator). This does not affect the correctness, because the final file
+   *  path where the records written to is determined by writers. And writers will always use the
+   *  newest identifier during flushing.
+   */
   @Override
   public void notifyCheckpointComplete(long checkpointId) throws Exception {
     Option<HoodieInstant> latestReplaceInstant = metaClient.reloadActiveTimeline()
         .filter(instant -> instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
     if (latestReplaceInstant.isPresent() && latestReplaceInstant.get().getTimestamp().compareTo(lastRefreshInstant) > 0) {
       LOG.info("Clear up cached hashing metadata as new replace commit is spotted, instant: " + lastRefreshInstant);
+      // TODO Optimize it to clear only partitions affected by the concurrent replace_commits
       this.lastRefreshInstant = latestReplaceInstant.get().getTimestamp();
       this.partitionToBucketIdentifier.clear();
     }

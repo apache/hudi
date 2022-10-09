@@ -19,10 +19,13 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.flink.configuration.Configuration;
@@ -41,7 +44,12 @@ public class ClusteringUtil {
 
   public static void validateClusteringScheduling(Configuration conf) {
     if (OptionsResolver.isBucketIndexType(conf)) {
-      throw new UnsupportedOperationException("Clustering is not supported for bucket index.");
+      if (conf.get(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.SIMPLE.name())) {
+        throw new UnsupportedOperationException("Clustering is not supported for bucket index.");
+      } else if (!conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS).equalsIgnoreCase(FlinkConsistentBucketClusteringPlanStrategy.class.getName())) {
+        throw new UnsupportedOperationException(
+            "CLUSTERING_PLAN_STRATEGY_CLASS should be set to " + FlinkConsistentBucketClusteringPlanStrategy.class.getName() + " in order to work with Consistent Hashing Bucket Index.");
+      }
     }
   }
 
