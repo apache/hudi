@@ -57,12 +57,14 @@ SPARK_SUBMIT_COMMAND+=" --source-ordering-field date_col --table-type MERGE_ON_R
 SPARK_SUBMIT_COMMAND+=" --target-base-path file://${OUTPUT_FOLDER_NAME}"
 SPARK_SUBMIT_COMMAND+=" --target-table ny_hudi_tbl  --op UPSERT"
 
+echo "::warning::run_utilities_bundle_test.sh running spark submit command"
 #run spark submit command
 rm -rf $OUTPUT_FOLDER_NAME
 $SPARK_SUBMIT_COMMAND || { echo "::error::run_utilities_bundle_test.sh deltastreamer failed" && exit 1; }
 
 #make sure that the output folder has a bunch of data in it
 OUTPUT_SIZE=$(du -s ${OUTPUT_FOLDER_NAME} | awk '{print $1}')
+echo "::warning::run_utilities_bundle_test.sh done with spark submit, output size is ${OUTPUT_SIZE}"
 if [[ -z $OUTPUT_SIZE || "$OUTPUT_SIZE" -lt "1000" ]]; then
     echo "::error::run_utilities_bundle_test.sh deltastreamer output folder is much smaller than expected" 
     exit 1
@@ -86,10 +88,11 @@ fi
 SPARK_SHELL_COMMAND+=" --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'"
 SPARK_SHELL_COMMAND+=" -i ${COMMANDS_FILE}"
 
+echo "::warning::run_utilities_bundle_test.sh running spark shell"
 #run spark shell command
 LOGFILE="${PWD}/sparktest_${VERSION_STRING}.log"
 $SPARK_SHELL_COMMAND > $LOGFILE || { SHELL_RESULT=$(cat $LOGFILE | grep "Counts don't match") && echo "::error::run_utilities_bundle_test.sh $SHELL_RESULT" && exit 1; }
-
+echo "::warning::run_utilities_bundle_test.sh done with spark shell"
 #cleanup
 rm -rf $COMMANDS_FILE
 rm -rf $PROPS_FILE
