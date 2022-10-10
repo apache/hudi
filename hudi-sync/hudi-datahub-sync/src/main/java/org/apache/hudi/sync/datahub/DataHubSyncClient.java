@@ -100,9 +100,8 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateTableSchema(String tableName, MessageType schema) {
-    DatahubResponseLogger responseLogger = new DatahubResponseLogger();
-
     try (RestEmitter emitter = config.getRestEmitter()) {
+      DatahubResponseLogger responseLogger = new DatahubResponseLogger();
       MetadataChangeProposalWrapper schemaChange = createSchemaMetadataUpdate(tableName);
       emitter.emit(schemaChange, responseLogger).get();
 
@@ -161,7 +160,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
             .build();
   }
 
-  static Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
+  Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
     try {
       return new TableSchemaResolver(metaClient).getTableAvroSchema(true);
     } catch (Exception e) {
