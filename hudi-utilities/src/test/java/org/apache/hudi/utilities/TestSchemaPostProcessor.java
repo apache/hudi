@@ -58,8 +58,8 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
       + "[{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\","
       + "\"type\":\"string\"},{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"}]}";
 
-  private static final String RESULT_SCHEMA = "{\"type\":\"record\",\"name\":\"hoodie_source\","
-      + "\"namespace\":\"hoodie.source\",\"fields\":[{\"name\":\"timestamp\",\"type\":\"long\"},"
+  private static final String RESULT_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\","
+      + "\"fields\":[{\"name\":\"timestamp\",\"type\":\"long\"},"
       + "{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},{\"name\":\"driver\","
       + "\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"}]}";
 
@@ -99,9 +99,8 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
             properties, jsc, transformerClassNames);
 
     Schema schema = provider.getSourceSchema();
-    assertEquals(schema.getType(), Type.RECORD);
-    assertEquals(schema.getName(), "hoodie_source");
-    assertEquals(schema.getNamespace(), "hoodie.source");
+    assertEquals(Type.RECORD, schema.getType());
+    assertEquals("test", schema.getFullName());
     assertNotNull(schema.getField("day"));
   }
 
@@ -192,6 +191,6 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
   public void testSparkAvroSchema() throws IOException {
     SparkAvroPostProcessor processor = new SparkAvroPostProcessor(properties, null);
     Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
-    assertEquals(processor.processSchema(schema).toString(), RESULT_SCHEMA);
+    assertEquals(RESULT_SCHEMA, processor.processSchema(schema).toString());
   }
 }
