@@ -21,11 +21,16 @@ package org.apache.hudi.configuration;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.format.FilePathUtils;
 
+import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -188,5 +193,28 @@ public class OptionsResolver {
   public static boolean isSpecificStartCommit(Configuration conf) {
     return conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent()
         && !conf.get(FlinkOptions.READ_START_COMMIT).equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  /**
+   * Returns all the config options with the given class {@code clazz}.
+   */
+  public static List<ConfigOption<?>> allOptions(Class<?> clazz) {
+    Field[] declaredFields = clazz.getDeclaredFields();
+    List<ConfigOption<?>> options = new ArrayList<>();
+    for (Field field : declaredFields) {
+      if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
+          && field.getType().equals(ConfigOption.class)) {
+        try {
+          options.add((ConfigOption<?>) field.get(ConfigOption.class));
+        } catch (IllegalAccessException e) {
+          throw new HoodieException("Error while fetching static config option", e);
+        }
+      }
+    }
+    return options;
   }
 }
