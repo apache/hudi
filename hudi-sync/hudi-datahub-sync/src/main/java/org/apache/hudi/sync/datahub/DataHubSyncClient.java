@@ -103,21 +103,16 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateTableSchema(String tableName, MessageType schema) {
-    Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
-    List<SchemaField> fields = avroSchema.getFields().stream().map(f -> new SchemaField()
-            .setFieldPath(f.name())
-            .setType(toSchemaFieldDataType(f.schema().getType()))
-            .setDescription(f.doc(), SetMode.IGNORE_NULL)
-            .setNativeDataType(f.schema().getType().getName())).collect(Collectors.toList());
-
-    final SchemaMetadata.PlatformSchema platformSchema = new SchemaMetadata.PlatformSchema();
-    platformSchema.setOtherSchema(new OtherSchema().setRawSchema(avroSchema.toString()));
-    MetadataChangeProposalWrapper schemaChange = createSchemaMetadataUpdate(tableName, fields, platformSchema);
-
     DatahubResponseLogger responseLogger = new DatahubResponseLogger();
+
     try (RestEmitter emitter = config.getRestEmitter()) {
+      MetadataChangeProposalWrapper schemaChange = createSchemaMetadataUpdate(tableName);
       emitter.emit(schemaChange, responseLogger).get();
-      undoSoftDelete(emitter, responseLogger);
+
+      // When updating an entity, it is ncessary to set its soft-delete status to false, or else the update won't get
+      // reflected in the UI.
+      MetadataChangeProposalWrapper softDeleteUndoProposal = createUndoSoftDelete();
+      emitter.emit(softDeleteUndoProposal, responseLogger).get();
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change schema for Dataset " + datasetUrn, e);
     }
@@ -133,10 +128,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
     // no op;
   }
 
-  // When updating an entity, it is ncessary to set its soft-delete status to false, or else the update won't get
-  // reflected in the UI.
-  private void undoSoftDelete(RestEmitter client, DatahubResponseLogger responseLogger) throws IOException, ExecutionException,
-          InterruptedException {
+  private MetadataChangeProposalWrapper createUndoSoftDelete() {
     MetadataChangeProposalWrapper softDeleteUndoProposal = MetadataChangeProposalWrapper.builder()
             .entityType("dataset")
             .entityUrn(datasetUrn)
@@ -144,12 +136,20 @@ public class DataHubSyncClient extends HoodieSyncClient {
             .aspect(SOFT_DELETE_FALSE)
             .aspectName("status")
             .build();
-
-    client.emit(softDeleteUndoProposal, responseLogger).get();
+    return softDeleteUndoProposal;
   }
 
-  private MetadataChangeProposalWrapper createSchemaMetadataUpdate(String tableName, List<SchemaField> fields,
-                                                                   SchemaMetadata.PlatformSchema platformSchema) {
+  private MetadataChangeProposalWrapper createSchemaMetadataUpdate(String tableName) {
+    Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
+    List<SchemaField> fields = avroSchema.getFields().stream().map(f -> new SchemaField()
+            .setFieldPath(f.name())
+            .setType(toSchemaFieldDataType(f.schema().getType()))
+            .setDescription(f.doc(), SetMode.IGNORE_NULL)
+            .setNativeDataType(f.schema().getType().getName())).collect(Collectors.toList());
+
+    final SchemaMetadata.PlatformSchema platformSchema = new SchemaMetadata.PlatformSchema();
+    platformSchema.setOtherSchema(new OtherSchema().setRawSchema(avroSchema.toString()));
+
     return MetadataChangeProposalWrapper.builder()
             .entityType("dataset")
             .entityUrn(datasetUrn)
