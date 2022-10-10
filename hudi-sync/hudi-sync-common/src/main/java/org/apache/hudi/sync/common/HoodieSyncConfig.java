@@ -94,27 +94,22 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
-      .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
+      .defaultValue("org.apache.hudi.hive.NonPartitionedExtractor")
       .withInferFunction(cfg -> {
         Option<String> partitionFieldsOpt = Option.ofNullable(cfg.getString(META_SYNC_PARTITION_FIELDS));
-        if (!partitionFieldsOpt.isPresent()) {
+        if (!partitionFieldsOpt.isPresent() || StringUtils.isNullOrEmpty(partitionFieldsOpt.get())) {
           return Option.empty();
         }
-        String partitionFields = partitionFieldsOpt.get();
-        if (StringUtils.nonEmpty(partitionFields)) {
-          int numOfPartFields = partitionFields.split(",").length;
-          if (numOfPartFields == 1) {
-            if (cfg.contains(HIVE_STYLE_PARTITIONING_ENABLE)
-                && cfg.getString(HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
-              return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
-            } else {
-              return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
-            }
+        int numOfPartFields = partitionFieldsOpt.get().split(",").length;
+        if (numOfPartFields == 1) {
+          if (cfg.contains(HIVE_STYLE_PARTITIONING_ENABLE)
+              && cfg.getString(HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
+            return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
           } else {
-            return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
+            return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
           }
         } else {
-          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
+          return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
         }
       })
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "

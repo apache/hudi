@@ -107,7 +107,7 @@ class TestHoodieSyncConfig {
   void testInferPartitionExtractorClass() {
     Properties props0 = new Properties();
     HoodieSyncConfig config0 = new HoodieSyncConfig(props0, new Configuration());
-    assertEquals("org.apache.hudi.hive.MultiPartKeysValueExtractor",
+    assertEquals("org.apache.hudi.hive.NonPartitionedExtractor",
         config0.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
         String.format("should get default value due to absence of both %s and %s",
             HoodieTableConfig.PARTITION_FIELDS.key(), KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
