@@ -21,8 +21,10 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.hadoop.SchemaEvolutionContext;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.avro.Schema;
@@ -55,6 +57,7 @@ public abstract class AbstractRealtimeRecordReader {
   private Schema writerSchema;
   private Schema hiveSchema;
   private HoodieTableMetaClient metaClient;
+  protected SchemaEvolutionContext schemaEvolutionContext;
 
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
@@ -69,7 +72,12 @@ public abstract class AbstractRealtimeRecordReader {
       }
       this.usesCustomPayload = usesCustomPayload(metaClient);
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
-      init();
+      schemaEvolutionContext = new SchemaEvolutionContext(split, job, Option.of(metaClient));
+      if (schemaEvolutionContext.internalSchemaOption.isPresent()) {
+        schemaEvolutionContext.doEvolutionForRealtimeInputFormat(this);
+      } else {
+        init();
+      }
     } catch (Exception e) {
       throw new HoodieException("Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
     }
@@ -99,7 +107,7 @@ public abstract class AbstractRealtimeRecordReader {
         jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR), partitioningFields);
 
     Map<String, Field> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
-    hiveSchema = constructHiveOrderedSchema(writerSchema, schemaFieldsMap);
+    hiveSchema = constructHiveOrderedSchema(writerSchema, schemaFieldsMap, jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS));
     // TODO(vc): In the future, the reader schema should be updated based on log files & be able
     // to null out fields not present before
 
@@ -108,10 +116,8 @@ public abstract class AbstractRealtimeRecordReader {
         split.getDeltaLogPaths(), split.getPath(), projectionFields));
   }
 
-  private Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap) {
+  public Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap, String hiveColumnString) {
     // Get all column names of hive table
-    String hiveColumnString = jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS);
-    LOG.info("Hive Columns : " + hiveColumnString);
     String[] hiveColumns = hiveColumnString.split(",");
     LOG.info("Hive Columns : " + hiveColumnString);
     List<Field> hiveSchemaFields = new ArrayList<>();
@@ -145,6 +151,18 @@ public abstract class AbstractRealtimeRecordReader {
 
   public Schema getHiveSchema() {
     return hiveSchema;
+  }
+
+  public void setReaderSchema(Schema readerSchema) {
+    this.readerSchema = readerSchema;
+  }
+
+  public void setWriterSchema(Schema writerSchema) {
+    this.writerSchema = writerSchema;
+  }
+
+  public void setHiveSchema(Schema hiveSchema) {
+    this.hiveSchema = hiveSchema;
   }
 
   public RealtimeSplit getSplit() {

@@ -88,6 +88,7 @@
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>commons-io:commons-io</include>
                   <include>org.openjdk.jol:jol-core</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                 </includes>
               </artifactSet>
               <relocations combine.children="append">

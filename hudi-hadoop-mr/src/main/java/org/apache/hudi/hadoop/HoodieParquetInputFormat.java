@@ -72,6 +72,10 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     // ParquetInputFormat.setFilterPredicate(job, predicate);
     // clearOutExistingPredicate(job);
     // }
+
+    // adapt schema evolution
+    new SchemaEvolutionContext(split, job).doEvolutionForParquetFormat();
+
     if (split instanceof BootstrapBaseFileSplit) {
       return createBootstrappingRecordReader(split, job, reporter);
     }
