@@ -261,4 +261,5 @@ public class CollectionUtils {
   private static Object checkElementNotNull(Object element, int index) {
     return Objects.requireNonNull(element, "Element is null at index " + index);
   }
+
 }

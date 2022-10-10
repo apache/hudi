@@ -23,6 +23,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -41,11 +42,13 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
 
   @Override
   public void preCompact(
-      HoodieTable table, HoodieTimeline pendingCompactionTimeline, String compactionInstantTime) {
-    HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
-    if (!pendingCompactionTimeline.containsInstant(instant)) {
+      HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
+    HoodieInstant requestedCompactionInstantTime = WriteOperationType.COMPACT.equals(operationType)
+        ? HoodieTimeline.getCompactionRequestedInstant(instantTime)
+        : HoodieTimeline.getLogCompactionRequestedInstant(instantTime);
+    if (!pendingCompactionTimeline.containsInstant(requestedCompactionInstantTime)) {
       throw new IllegalStateException(
-          "No Compaction request available at " + compactionInstantTime + " to run compaction");
+          "No Compaction request available at " + requestedCompactionInstantTime.getTimestamp() + " to run compaction");
     }
   }
 

@@ -90,7 +90,7 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
-                <includes>
+                <includes combine.children="append">
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>
@@ -170,7 +170,7 @@
                   <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
-              <relocations>
+              <relocations combine.children="append">
                 <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
                            potential classpath collisions in case users would like to also use "spark-avro" w/in
                            their runtime, since Hudi carries some of the same classes as "spark-avro" -->

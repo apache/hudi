@@ -74,6 +74,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
       String.format("%s/%s", BASE_URL, "slices/beforeoron/latest/");
 
   public static final String PENDING_COMPACTION_OPS = String.format("%s/%s", BASE_URL, "compactions/pending/");
+  public static final String PENDING_LOG_COMPACTION_OPS = String.format("%s/%s", BASE_URL, "logcompactions/pending/");
 
   public static final String LATEST_PARTITION_DATA_FILES_URL =
       String.format("%s/%s", BASE_URL, "datafiles/latest/partition");
@@ -429,6 +430,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = getParams();
     try {
       List<CompactionOpDTO> dtos = executeRequest(PENDING_COMPACTION_OPS, paramsMap,
+          new TypeReference<List<CompactionOpDTO>>() {}, RequestMethod.GET);
+      return dtos.stream().map(CompactionOpDTO::toCompactionOperation);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations() {
+    Map<String, String> paramsMap = getParams();
+    try {
+      List<CompactionOpDTO> dtos = executeRequest(PENDING_LOG_COMPACTION_OPS, paramsMap,
           new TypeReference<List<CompactionOpDTO>>() {}, RequestMethod.GET);
       return dtos.stream().map(CompactionOpDTO::toCompactionOperation);
     } catch (IOException e) {

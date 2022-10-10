@@ -53,6 +53,7 @@ public interface HoodieTimeline extends Serializable {
   // With Async Compaction, compaction instant can be in 3 states :
   // (compaction-requested), (compaction-inflight), (completed)
   String COMPACTION_ACTION = "compaction";
+  String LOG_COMPACTION_ACTION = "logcompaction";
   String REQUESTED_EXTENSION = ".requested";
   String RESTORE_ACTION = "restore";
   String INDEXING_ACTION = "indexing";
@@ -93,6 +94,10 @@ public interface HoodieTimeline extends Serializable {
   String SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION;
   String INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION + REQUESTED_EXTENSION;
+  // Log compaction action
+  String REQUESTED_LOG_COMPACTION_SUFFIX = StringUtils.join(LOG_COMPACTION_ACTION, REQUESTED_EXTENSION);
+  String REQUESTED_LOG_COMPACTION_EXTENSION = StringUtils.join(".", REQUESTED_LOG_COMPACTION_SUFFIX);
+  String INFLIGHT_LOG_COMPACTION_EXTENSION = StringUtils.join(".", LOG_COMPACTION_ACTION, INFLIGHT_EXTENSION);
 
   String INVALID_INSTANT_TS = "0";
 
@@ -125,12 +130,27 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingExcludingCompaction();
 
   /**
+   * Filter this timeline to just include the in-flights excluding logcompaction instants.
+   *
+   * @return New instance of HoodieTimeline with just in-flights excluding compaction instants
+   */
+  HoodieTimeline filterPendingExcludingLogCompaction();
+
+  /**
+   * Filter this timeline to just include the in-flights excluding major and minor compaction instants.
+   *
+   * @return New instance of HoodieTimeline with just in-flights excluding majoe and minor compaction instants
+   */
+  HoodieTimeline filterPendingExcludingMajorAndMinorCompaction();
+
+  /**
    * Filter this timeline to just include the completed instants.
    *
    * @return New instance of HoodieTimeline with just completed instants
    */
   HoodieTimeline filterCompletedInstants();
 
+  // TODO: Check if logcompaction also needs to be included in this API.
   /**
    * Filter this timeline to just include the completed + compaction (inflight + requested) instants A RT filesystem
    * view is constructed with this timeline so that file-slice after pending compaction-requested instant-time is also
@@ -140,6 +160,15 @@ public interface HoodieTimeline extends Serializable {
    * @return New instance of HoodieTimeline with just completed instants
    */
   HoodieTimeline filterCompletedAndCompactionInstants();
+
+  HoodieTimeline filterCompletedOrMajorOrMinorCompactionInstants();
+
+  /**
+   * Timeline to just include completed commits or all rewrites like compaction, logcompaction and replace actions.
+   *
+   * @return
+   */
+  HoodieTimeline filterCompletedInstantsOrRewriteTimeline();
 
   /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
@@ -170,6 +199,20 @@ public interface HoodieTimeline extends Serializable {
    * @return
    */
   HoodieTimeline filterPendingCompactionTimeline();
+
+  /**
+   * Filter this timeline to just include requested and inflight log compaction instants.
+   *
+   * @return
+   */
+  HoodieTimeline filterPendingLogCompactionTimeline();
+
+  /**
+   * Filter this timeline to just include requested and inflight from both major and minor compaction instants.
+   *
+   * @return
+   */
+  HoodieTimeline filterPendingMajorOrMinorCompactionTimeline();
 
   /**
    * Filter this timeline to just include requested and inflight replacecommit instants.
@@ -366,6 +409,16 @@ public interface HoodieTimeline extends Serializable {
     return new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, timestamp);
   }
 
+  // Returns Log compaction requested instant
+  static HoodieInstant getLogCompactionRequestedInstant(final String timestamp) {
+    return new HoodieInstant(State.REQUESTED, LOG_COMPACTION_ACTION, timestamp);
+  }
+
+  // Returns Log compaction inflight instant
+  static HoodieInstant getLogCompactionInflightInstant(final String timestamp) {
+    return new HoodieInstant(State.INFLIGHT, LOG_COMPACTION_ACTION, timestamp);
+  }
+
   static HoodieInstant getReplaceCommitRequestedInstant(final String timestamp) {
     return new HoodieInstant(State.REQUESTED, REPLACE_COMMIT_ACTION, timestamp);
   }
@@ -388,14 +441,26 @@ public interface HoodieTimeline extends Serializable {
 
   /**
    * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
-   * between inflight and completed instants (compaction <=> commit).
+   * between inflight and completed instants (compaction <=> commit) and (logcompaction <==> deltacommit).
    * @param instant Hoodie Instant
-   * @param tableType Hoodie Table Type
+   * @param metaClient Hoodie metaClient to fetch tableType and fileSystem.
    * @return Inflight Hoodie Instant
    */
-  static HoodieInstant getInflightInstant(final HoodieInstant instant, final HoodieTableType tableType) {
-    if ((tableType == HoodieTableType.MERGE_ON_READ) && instant.getAction().equals(COMMIT_ACTION)) {
-      return new HoodieInstant(true, COMPACTION_ACTION, instant.getTimestamp());
+  static HoodieInstant getInflightInstant(final HoodieInstant instant, final HoodieTableMetaClient metaClient) {
+    if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
+      if (instant.getAction().equals(COMMIT_ACTION)) {
+        return new HoodieInstant(true, COMPACTION_ACTION, instant.getTimestamp());
+      } else if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
+        // Deltacommit is used by both ingestion and logcompaction.
+        // So, distinguish both of them check for the inflight file being present.
+        HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
+        Option<HoodieInstant> logCompactionInstant = Option.fromJavaOptional(rawActiveTimeline.getInstants()
+            .filter(hoodieInstant -> hoodieInstant.getTimestamp().equals(instant.getTimestamp())
+                && LOG_COMPACTION_ACTION.equals(hoodieInstant.getAction())).findFirst());
+        if (logCompactionInstant.isPresent()) {
+          return new HoodieInstant(true, LOG_COMPACTION_ACTION, instant.getTimestamp());
+        }
+      }
     }
     return new HoodieInstant(true, instant.getAction(), instant.getTimestamp());
   }
@@ -462,6 +527,15 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeRequestedCompactionFileName(String instantTime) {
     return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
+  }
+
+  // Log comaction action
+  static String makeInflightLogCompactionFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_LOG_COMPACTION_EXTENSION);
+  }
+
+  static String makeRequestedLogCompactionFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_LOG_COMPACTION_EXTENSION);
   }
 
   static String makeRestoreFileName(String instant) {

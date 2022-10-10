@@ -329,7 +329,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * Get only the inflights (no-completed) commit timeline.
    */
   public HoodieTimeline getPendingCommitTimeline() {
-    return metaClient.getCommitsTimeline().filterPendingExcludingCompaction();
+    return metaClient.getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
   }
 
   /**
@@ -409,6 +409,31 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public abstract HoodieWriteMetadata<O> compact(HoodieEngineContext context,
                                                  String compactionInstantTime);
+
+  /**
+   * Schedule log compaction for the instant time.
+   *
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for scheduling log compaction
+   * @param extraMetadata additional metadata to write into plan
+   * @return
+   */
+  public Option<HoodieCompactionPlan> scheduleLogCompaction(HoodieEngineContext context,
+                                                            String instantTime,
+                                                            Option<Map<String, String>> extraMetadata) {
+    throw new UnsupportedOperationException("Log compaction is not supported for this table type");
+  }
+
+  /**
+   * Run Log Compaction on the table. Log Compaction arranges the data so that it is optimized for data access.
+   *
+   * @param context               HoodieEngineContext
+   * @param logCompactionInstantTime Instant Time
+   */
+  public HoodieWriteMetadata<O> logCompact(HoodieEngineContext context,
+                                           String logCompactionInstantTime) {
+    throw new UnsupportedOperationException("Log compaction is not supported for this table type");
+  }
 
   /**
    * Schedule clustering for the instant time.
@@ -540,6 +565,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     rollbackInflightCompaction(inflightInstant, s -> Option.empty());
   }
 
+  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant) {
+    rollbackInflightLogCompaction(inflightInstant, s -> Option.empty());
+  }
+
   /**
    * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file
    * to the .requested file.
@@ -577,6 +606,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
+  }
+
+  /**
+   * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file
+   * to the .requested file.
+   *
+   * @param inflightInstant Inflight Compaction Instant
+   */
+  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
+        -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
+    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
+    rollback(context, commitTime, inflightInstant, true, false);
   }
 
   /**
