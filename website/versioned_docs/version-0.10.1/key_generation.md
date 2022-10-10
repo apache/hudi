@@ -47,6 +47,12 @@ are expected to be comma separated in the config value. For example ```"Hoodie.d
 ### [GlobalDeleteKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/GlobalDeleteKeyGenerator.java)
 Global index deletes do not require partition value. So this key generator avoids using partition value for generating HoodieKey.
 
+**_NOTE:_**
+The "GlobalDeleteKeyGenerator" has to be used with a global index to delete records solely based on the record key.
+It works for a batch with deletes only. The key generator can be used for both partitioned and non-partitioned table. Note that
+when using this key generator, the config `hoodie.[bloom|simple|hbase].index.update.partition.path` should be set to
+`false` in order to avoid redundant data written to the storage.
+
 ### [NonpartitionedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java)
 If your hudi dataset is not partitioned, you could use this “NonpartitionedKeyGenerator” which will return an empty
 partition for all records. In other words, all records go to the same partition (which is empty “”)
