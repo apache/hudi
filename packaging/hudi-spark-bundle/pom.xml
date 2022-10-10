@@ -151,6 +151,10 @@
                   <shadedPattern>org.apache.hudi.javax.servlet.</shadedPattern>
                 </relocation>
                 <relocation>
+                  <pattern>org.apache.http.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.http.</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>com.yammer.metrics.</pattern>
                   <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
                 </relocation>
