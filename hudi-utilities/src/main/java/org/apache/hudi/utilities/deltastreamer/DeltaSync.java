@@ -243,7 +243,8 @@ public class DeltaSync implements Serializable, Closeable {
     this.hoodieMetrics = new HoodieMetrics(getHoodieClientConfig(this.schemaProvider));
 
     this.formatAdapter = new SourceFormatAdapter(
-        UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
+        UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
+        Option.of(props));
     this.conf = conf;
   }
 
