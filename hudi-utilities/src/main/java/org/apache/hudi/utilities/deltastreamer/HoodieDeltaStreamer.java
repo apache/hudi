@@ -781,9 +781,11 @@ public class HoodieDeltaStreamer implements Serializable {
     protected Boolean onUpdatingWriteConfig(HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
       if (cfg.isAsyncCompactionEnabled()) {
         if (asyncCompactService.isPresent()) {
+          LOG.warn("onUpdatingWriteConfig : Notifying async compactor service on write config update");
           // Update the write client used by Async Compactor.
           asyncCompactService.get().updateWriteConfig(writeConfig);
         } else {
+          LOG.warn("onUpdatingWriteConfig: No async compact service found. Creating a new one");
           asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService));
           // Enqueue existing pending compactions first
           HoodieTableMetaClient meta =
@@ -804,8 +806,10 @@ public class HoodieDeltaStreamer implements Serializable {
       // start async clustering if required
       if (HoodieClusteringConfig.from(props).isAsyncClusteringEnabled()) {
         if (asyncClusteringService.isPresent()) {
+          LOG.warn("onUpdatingWriteConfig : Notifying async clustering service on write config update");
           asyncClusteringService.get().updateWriteConfig(writeConfig);
         } else {
+          LOG.warn("onUpdatingWriteConfig: No async clustering service found. Creating a new one");
           asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService));
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
               .setConf(new Configuration(jssc.hadoopConfiguration()))

@@ -51,7 +51,6 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   private final int maxConcurrentCompaction;
   private final Object writeConfigUpdateLock = new Object();
   protected transient HoodieEngineContext context;
-  protected HoodieWriteConfig writeConfig;
   // will be reinstantiated if write config is updated by external caller.
   private BaseCompactor compactor;
 
@@ -82,7 +81,6 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
 
         while (!isShutdownRequested()) {
           final HoodieInstant instant = fetchNextAsyncServiceInstant();
-
           if (null != instant) {
             LOG.info("Starting Compaction for instant " + instant);
             synchronized (writeConfigUpdateLock) {
@@ -96,10 +94,12 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
               }
             }
             compactor.compact(instant);
-            LOG.info("Finished Compaction for instant " + instant);
-            compactor.close();
-            compactor = null;
+            LOG.info("Completed compaction for " + instant);
           }
+        }
+        if (compactor != null) {
+          compactor.close();
+          compactor = null;
         }
         LOG.info("Compactor shutting down properly!!");
       } catch (InterruptedException ie) {

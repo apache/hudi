@@ -92,10 +92,13 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
               }
             }
             clusteringClient.cluster(instant);
-            LOG.info("Finished clustering for instant " + instant);
-            clusteringClient.close();
-            clusteringClient = null;
+            LOG.info("Completed Clustering for " + instant);
           }
+        }
+
+        if (clusteringClient != null) {
+          clusteringClient.close();
+          clusteringClient = null;
         }
         LOG.info("Clustering executor shutting down properly");
       } catch (InterruptedException ie) {

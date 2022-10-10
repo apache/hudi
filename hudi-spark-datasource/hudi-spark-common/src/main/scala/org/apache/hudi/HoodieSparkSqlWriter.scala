@@ -67,6 +67,7 @@ object HoodieSparkSqlWriter {
   private var asyncCompactionTriggerFnDefined: Boolean = false
   private var asyncClusteringTriggerFnDefined: Boolean = false
 
+  // scalastyle:off
   def write(sqlContext: SQLContext,
             mode: SaveMode,
             optParams: Map[String, String],
@@ -79,7 +80,7 @@ object HoodieSparkSqlWriter {
             = org.apache.hudi.common.util.Option.empty().asInstanceOf[org.apache.hudi.common.util.Option[EmbeddedTimelineServiceHandler]])
   : (Boolean, common.util.Option[String], common.util.Option[String], common.util.Option[String],
     SparkRDDWriteClient[HoodieRecordPayload[Nothing]], HoodieTableConfig) = {
-
+    // scalastyle:on
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
     val basePath = new Path(path)

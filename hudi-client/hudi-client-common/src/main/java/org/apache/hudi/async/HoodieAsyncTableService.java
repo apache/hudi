@@ -20,6 +20,7 @@
 package org.apache.hudi.async;
 
 import org.apache.hudi.client.RunsTableService;
+import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -44,8 +45,12 @@ public abstract class HoodieAsyncTableService extends HoodieAsyncService impleme
 
   protected HoodieAsyncTableService(HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService, boolean runInDaemonMode) {
     super(runInDaemonMode);
-    this.writeConfig = writeConfig;
     this.embeddedTimelineService = embeddedTimelineService;
+    if (embeddedTimelineService.isPresent()) {
+      this.writeConfig = EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
+    } else {
+      this.writeConfig = writeConfig;
+    }
   }
 
   @Override
@@ -58,7 +63,7 @@ public abstract class HoodieAsyncTableService extends HoodieAsyncService impleme
 
   public void updateWriteConfig(HoodieWriteConfig writeConfig) {
     synchronized (writeConfigUpdateLock) {
-      this.writeConfig = writeConfig;
+      this.writeConfig = EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
       isWriteConfigUpdated.set(true);
     }
   }

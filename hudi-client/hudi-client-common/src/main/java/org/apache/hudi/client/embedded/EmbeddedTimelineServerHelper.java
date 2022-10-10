@@ -78,11 +78,12 @@ public class EmbeddedTimelineServerHelper {
    * @param timelineServer Embedded Timeline Server
    * @param config  Hoodie Write Config
    */
-  public static void updateWriteConfigWithTimelineServer(EmbeddedTimelineService timelineServer,
+  public static HoodieWriteConfig updateWriteConfigWithTimelineServer(EmbeddedTimelineService timelineServer,
       HoodieWriteConfig config) {
     // Allow executor to find this newly instantiated timeline service
     if (config.isEmbeddedTimelineServerEnabled()) {
       config.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig());
     }
+    return config;
   }
 }

@@ -747,7 +747,7 @@ public class DeltaSync implements Serializable, Closeable {
       if (!embeddedTimelineService.isPresent()) {
         embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), writeConfig);
       } else {
-        EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
+        writeConfig = EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
       }
     }
 
