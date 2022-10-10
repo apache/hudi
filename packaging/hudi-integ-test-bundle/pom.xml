@@ -66,7 +66,7 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
-                <includes>
+                <includes combine.children="append">
                   <include>commons-codec:commons-codec</include>
                   <include>commons-dbcp:commons-dbcp</include>
                   <include>commons-lang:commons-lang</include>
@@ -76,10 +76,11 @@
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
-                  <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
-                  <include>org.apache.hudi:${hudi.spark.common.module}</include>
+                  <include>org.apache.hudi:${hudi.spark.common.modules.1}</include>
+                  <include>org.apache.hudi:${hudi.spark.common.modules.2}</include>
+                  <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
@@ -155,9 +156,6 @@
                   <include>org.apache.hive:hive-jdbc</include>
                   <include>org.apache.hive:hive-exec</include>
 
-                  <include>com.esotericsoftware:kryo-shaded</include>
-                  <include>org.objenesis:objenesis</include>
-                  <include>com.esotericsoftware:minlog</include>
                   <include>com.yammer.metrics:metrics-core</include>
 
                   <include>org.apache.thrift:libfb303</include>
@@ -183,9 +181,10 @@
                   <include>io.prometheus:simpleclient_dropwizard</include>
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
+                  <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
-              <relocations>
+              <relocations combine.children="append">
                 <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
                            potential classpath collisions in case users would like to also use "spark-avro" w/in
                            their runtime, since Hudi carries some of the same classes as "spark-avro" -->
@@ -281,18 +280,6 @@
                   <shadedPattern>org.apache.hudi.org.apache.hive.jdbc.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.esotericsoftware.kryo.</pattern>
-                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.objenesis.</pattern>
-                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.esotericsoftware.minlog.</pattern>
-                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>com.codahale.metrics.</pattern>
                   <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
                 </relocation>
@@ -307,6 +294,10 @@
                 <relocation>
                   <pattern>org.apache.parquet.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.openjdk.jol.</pattern>
+                  <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
@@ -438,10 +429,59 @@
       <version>2.7.4</version>
     </dependency>
 
+    <!-- Hoodie - Spark -->
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-common</artifactId>
+      <artifactId>hudi-spark_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+    </dependency>
+
+    <!-- Hoodie - Other -->
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-hive-sync</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>servlet-api</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-integ-test</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Hoodie - Tests -->
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-client-common</artifactId>
+      <version>${project.version}</version>
+      <classifier>tests</classifier>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark-client</artifactId>
+      <version>${project.version}</version>
+      <classifier>tests</classifier>
+      <type>test-jar</type>
+      <scope>test</scope>
     </dependency>
 
     <dependency>
@@ -459,24 +499,6 @@
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>${hudi.spark.common.module}</artifactId>
-      <version>${project.version}</version>
     </dependency>
 
     <dependency>
@@ -570,59 +592,6 @@
     </dependency>
 
     <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hive-sync</artifactId>
-      <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>servlet-api</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-client-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-client</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-integ-test</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-client-common</artifactId>
-      <version>${project.version}</version>
-      <classifier>tests</classifier>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-client</artifactId>
-      <version>${project.version}</version>
-      <classifier>tests</classifier>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
       <groupId>commons-codec</groupId>
       <artifactId>commons-codec</artifactId>
       <version>1.4</version>
@@ -643,24 +612,6 @@
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpcore</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-1.2-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
-      <version>${slf4j.version}</version>
     </dependency>
 
     <dependency>

@@ -200,7 +200,6 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void ingestFirstBatchAndHiveSync() throws Exception {
     List<String> cmds = CollectionUtils.createImmutableList(
         "spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --base-file-format " + baseFileFormat.toString()
@@ -219,7 +218,6 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --partition-value-extractor org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor"
             + " --partitioned-by dt",
         ("spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --base-file-format " + baseFileFormat.toString()
@@ -309,7 +307,6 @@ public class ITTestHoodieDemo extends ITTestBase {
     List<String> cmds = CollectionUtils.createImmutableList(
             ("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH2 + " " + HDFS_BATCH_PATH2),
             ("spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
@@ -318,7 +315,6 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME)),
             ("spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
@@ -512,7 +508,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void scheduleAndRunCompaction() throws Exception {
-    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + COMPACTION_COMMANDS, true);
-    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + COMPACTION_BOOTSTRAP_COMMANDS, true);
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " script --file " + COMPACTION_COMMANDS, true);
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " script --file " + COMPACTION_BOOTSTRAP_COMMANDS, true);
   }
 }

@@ -29,9 +29,11 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -61,6 +63,7 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -82,6 +85,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingCompactionOperations;
+  private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingLogCompactionOperations;
   private HoodieTable<T, I, K, O> hoodieTable;
   private HoodieWriteConfig config;
   private transient HoodieEngineContext context;
@@ -92,12 +96,16 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     this.fileSystemView = hoodieTable.getHoodieView();
     this.commitTimeline = hoodieTable.getCompletedCommitsTimeline();
     this.config = config;
-    this.fgIdToPendingCompactionOperations =
-        ((SyncableFileSystemView) hoodieTable.getSliceView()).getPendingCompactionOperations()
+    SyncableFileSystemView fileSystemView = (SyncableFileSystemView) hoodieTable.getSliceView();
+    this.fgIdToPendingCompactionOperations = fileSystemView
+        .getPendingCompactionOperations()
             .map(entry -> Pair.of(
                 new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()),
                 entry.getValue()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    this.fgIdToPendingLogCompactionOperations = fileSystemView.getPendingLogCompactionOperations()
+        .map(entry -> Pair.of(new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()), entry.getValue()))
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
   /**
@@ -240,25 +248,27 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       int keepVersions = config.getCleanerFileVersionsRetained();
       // do not cleanup slice required for pending compaction
       Iterator<FileSlice> fileSliceIterator =
-          fileGroup.getAllFileSlices().filter(fs -> !isFileSliceNeededForPendingCompaction(fs)).iterator();
-      if (isFileGroupInPendingCompaction(fileGroup)) {
+          fileGroup.getAllFileSlices()
+              .filter(fs -> !isFileSliceNeededForPendingMajorOrMinorCompaction(fs))
+              .iterator();
+      if (isFileGroupInPendingMajorOrMinorCompaction(fileGroup)) {
         // We have already saved the last version of file-groups for pending compaction Id
         keepVersions--;
       }
 
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
+        fileSliceIterator.next();
+        keepVersions--;
+      }
+      // Delete the remaining files
+      while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
         Option<HoodieBaseFile> dataFile = nextSlice.getBaseFile();
         if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
           // do not clean up a savepoint data file
           continue;
         }
-        keepVersions--;
-      }
-      // Delete the remaining files
-      while (fileSliceIterator.hasNext()) {
-        FileSlice nextSlice = fileSliceIterator.next();
         deletePaths.addAll(getCleanFileInfoForSlice(nextSlice));
       }
     }
@@ -349,7 +359,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
           }
 
           // Always keep the last commit
-          if (!isFileSliceNeededForPendingCompaction(aSlice) && HoodieTimeline
+          if (!isFileSliceNeededForPendingMajorOrMinorCompaction(aSlice) && HoodieTimeline
               .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
             // this is a commit, that should be cleaned.
             aFile.ifPresent(hoodieDataFile -> {
@@ -358,8 +368,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
                 deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
               }
             });
-            if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-              // If merge on read, then clean the log files for the commits as well
+            if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
+                || hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+              // 1. If merge on read, then clean the log files for the commits as well;
+              // 2. If change log capture is enabled, clean the log files no matter the table type is mor or cow.
               deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
                   .collect(Collectors.toList()));
             }
@@ -427,8 +439,20 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     }
     if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
       // If merge on read, then clean the log files for the commits as well
-      cleanPaths.addAll(nextSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-          .collect(Collectors.toList()));
+      Predicate<HoodieLogFile> notCDCLogFile =
+          hoodieLogFile -> !hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+      cleanPaths.addAll(
+          nextSlice.getLogFiles().filter(notCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+              .collect(Collectors.toList()));
+    }
+    if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+      // The cdc log files will be written out in cdc scenario, no matter the table type is mor or cow.
+      // Here we need to clean uo these cdc log files.
+      Predicate<HoodieLogFile> isCDCLogFile =
+          hoodieLogFile -> hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+      cleanPaths.addAll(
+          nextSlice.getLogFiles().filter(isCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+              .collect(Collectors.toList()));
     }
     return cleanPaths;
   }
@@ -476,6 +500,26 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   }
 
   /**
+   * Returns the last completed commit timestamp before clean.
+   */
+  public String getLastCompletedCommitTimestamp() {
+    if (commitTimeline.lastInstant().isPresent()) {
+      return commitTimeline.lastInstant().get().getTimestamp();
+    } else {
+      return "";
+    }
+  }
+
+  /*
+   * Determine if file slice needed to be preserved for pending compaction or log compaction.
+   * @param fileSlice File slice
+   * @return true if file slice needs to be preserved, false otherwise.
+   */
+  private boolean isFileSliceNeededForPendingMajorOrMinorCompaction(FileSlice fileSlice) {
+    return isFileSliceNeededForPendingCompaction(fileSlice) || isFileSliceNeededForPendingLogCompaction(fileSlice);
+  }
+
+  /**
    * Determine if file slice needed to be preserved for pending compaction.
    *
    * @param fileSlice File Slice
@@ -491,7 +535,24 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     return false;
   }
 
-  private boolean isFileGroupInPendingCompaction(HoodieFileGroup fg) {
-    return fgIdToPendingCompactionOperations.containsKey(fg.getFileGroupId());
+  /**
+   * Determine if file slice needed to be preserved for pending logcompaction.
+   *
+   * @param fileSlice File Slice
+   * @return true if file slice needs to be preserved, false otherwise.
+   */
+  private boolean isFileSliceNeededForPendingLogCompaction(FileSlice fileSlice) {
+    CompactionOperation op = fgIdToPendingLogCompactionOperations.get(fileSlice.getFileGroupId());
+    if (null != op) {
+      // If file slice's instant time is newer or same as that of operation, do not clean
+      return HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), HoodieTimeline.GREATER_THAN_OR_EQUALS, op.getBaseInstantTime()
+      );
+    }
+    return false;
+  }
+
+  private boolean isFileGroupInPendingMajorOrMinorCompaction(HoodieFileGroup fg) {
+    return fgIdToPendingCompactionOperations.containsKey(fg.getFileGroupId())
+        || fgIdToPendingLogCompactionOperations.containsKey(fg.getFileGroupId());
   }
 }

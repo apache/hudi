@@ -68,7 +68,7 @@ public class RetryHelper<T> implements Serializable {
     return this;
   }
 
-  public T start() throws IOException {
+  public T start(CheckedFunction<T> func) throws IOException {
     int retries = 0;
     T functionResult = null;
 
@@ -103,6 +103,10 @@ public class RetryHelper<T> implements Serializable {
     }
 
     return functionResult;
+  }
+
+  public T start() throws IOException {
+    return start(this.func);
   }
 
   private boolean checkIfExceptionInRetryList(Exception e) {

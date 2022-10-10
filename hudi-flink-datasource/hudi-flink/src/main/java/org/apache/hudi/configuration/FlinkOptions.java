@@ -25,13 +25,17 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
+import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
@@ -96,7 +100,7 @@ public class FlinkOptions extends HoodieConfig {
 
   public static final String NO_PRE_COMBINE = "no_precombine";
   public static final ConfigOption<String> PRECOMBINE_FIELD = ConfigOptions
-      .key("payload.ordering.field")
+      .key("precombine.field")
       .stringType()
       .defaultValue("ts")
       .withFallbackKeys("write.precombine.field")
@@ -119,6 +123,10 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 
+  // ------------------------------------------------------------------------
+  //  Changelog Capture Options
+  // ------------------------------------------------------------------------
+
   public static final ConfigOption<Boolean> CHANGELOG_ENABLED = ConfigOptions
       .key("changelog.enabled")
       .booleanType()
@@ -129,6 +137,23 @@ public class FlinkOptions extends HoodieConfig {
           + "2). The source try to emit every changes of a record.\n"
           + "The semantics is best effort because the compaction job would finally merge all changes of a record into one.\n"
           + " default false to have UPSERT semantics");
+
+  public static final ConfigOption<Boolean> CDC_ENABLED = ConfigOptions
+      .key("cdc.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withFallbackKeys(HoodieTableConfig.CDC_ENABLED.key())
+      .withDescription("When enable, persist the change data if necessary, and can be queried as a CDC query mode");
+
+  public static final ConfigOption<String> SUPPLEMENTAL_LOGGING_MODE = ConfigOptions
+      .key("cdc.supplemental.logging.mode")
+      .stringType()
+      .defaultValue("cdc_data_before_after") // default record all the change log images
+      .withFallbackKeys(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key())
+      .withDescription("The supplemental logging mode:"
+          + "1) 'cdc_op_key': persist the 'op' and the record key only,"
+          + "2) 'cdc_data_before': persist the additional 'before' image,"
+          + "3) 'cdc_data_before_after': persist the 'before' and 'after' images at the same time");
 
   // ------------------------------------------------------------------------
   //  Metadata table Options
@@ -294,7 +319,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
       .stringType()
-      .defaultValue("upsert")
+      .defaultValue(WriteOperationType.UPSERT.value())
       .withDescription("The write operation, that this write should do");
 
   /**
@@ -327,9 +352,10 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> IGNORE_FAILED = ConfigOptions
       .key("write.ignore.failed")
       .booleanType()
-      .defaultValue(true)
+      .defaultValue(false)
       .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch.\n"
-          + "By default true (in favor of streaming progressing over data integrity)");
+          + "By default false.  Turning this on, could hide the write status errors while the spark checkpoint moves ahead. \n"
+          + "  So, would recommend users to use this with caution.");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
@@ -576,7 +602,7 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
       .withDescription("Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
-          +  "Default is KEEP_LATEST_COMMITS.");
+          + "Default is KEEP_LATEST_COMMITS.");
 
   public static final ConfigOption<Integer> CLEAN_RETAIN_COMMITS = ConfigOptions
       .key("clean.retain_commits")
@@ -656,7 +682,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME = ConfigOptions
       .key("clustering.plan.partition.filter.mode")
       .stringType()
-      .defaultValue("NONE")
+      .defaultValue(ClusteringPlanPartitionFilterMode.NONE.name())
       .withDescription("Partition filter mode used in the creation of clustering plan. Available values are - "
           + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
           + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
@@ -664,16 +690,16 @@ public class FlinkOptions extends HoodieConfig {
           + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
           + PARTITION_FILTER_END_PARTITION.key() + "'].");
 
-  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES = ConfigOptions
+  public static final ConfigOption<Long> CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES = ConfigOptions
       .key("clustering.plan.strategy.target.file.max.bytes")
-      .intType()
-      .defaultValue(1024 * 1024 * 1024) // default 1 GB
+      .longType()
+      .defaultValue(1024 * 1024 * 1024L) // default 1 GB
       .withDescription("Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB");
 
-  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigOptions
+  public static final ConfigOption<Long> CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigOptions
       .key("clustering.plan.strategy.small.file.limit")
-      .intType()
-      .defaultValue(600) // default 600 MB
+      .longType()
+      .defaultValue(600L) // default 600 MB
       .withDescription("Files smaller than the size specified here are candidates for clustering, default 600 MB");
 
   public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigOptions
@@ -725,8 +751,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> HIVE_SYNC_MODE = ConfigOptions
       .key("hive_sync.mode")
       .stringType()
-      .defaultValue("hms")
-      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'");
+      .defaultValue(HiveSyncMode.HMS.name())
+      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'hms'");
 
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions
       .key("hive_sync.username")
@@ -763,7 +789,7 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue(MultiPartKeysValueExtractor.class.getName())
       .withDescription("Tool to extract the partition value from HDFS path, "
-          + "default 'SlashEncodedDayPartitionValueExtractor'");
+          + "default 'MultiPartKeysValueExtractor'");
 
   public static final ConfigOption<Boolean> HIVE_SYNC_ASSUME_DATE_PARTITION = ConfigOptions
       .key("hive_sync.assume_date_partitioning")

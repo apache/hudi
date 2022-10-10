@@ -76,6 +76,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LOG_COMPACTION_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -163,6 +164,69 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     // Finish Compaction
     instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("19"), false, "19", 2,
         Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "24"))));
+  }
+
+  @Test
+  public void testAsyncMajorAndMinorCompaction() throws IOException {
+    SyncableFileSystemView view = getFileSystemView(metaClient);
+    view.sync();
+
+    // Run 3 ingestion on MOR table (3 delta commits)
+    Map<String, List<String>> instantsToFiles =
+        testMultipleWriteSteps(view, Arrays.asList("11", "12", "13"), true, "11");
+
+    view.sync();
+    // Schedule log Compaction
+    scheduleLogCompaction(view, "14", "11");
+
+    // Schedule Compaction
+    scheduleCompaction(view, "15");
+
+    view.sync();
+    // Restore pending compaction
+    unscheduleLogCompaction(view, "14", "15", "15");
+
+    // Add one more delta instant - This will be added to second file-slice
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("16"), true, "15", 2));
+
+    view.sync();
+    // Run Compaction
+    testMultipleWriteSteps(view, Collections.singletonList("15"), false, "15", 2,
+        Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "16")));
+
+    // Run 2 more ingest
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Arrays.asList("17", "18"), true, "15", 2));
+
+    // Schedule Compaction again
+    scheduleLogCompaction(view, "19", "15");
+
+    // Clean first slice
+    testCleans(view, Collections.singletonList("20"),
+        new HashMap<String, List<String>>() {
+          {
+            put("11", Arrays.asList("12", "13"));
+          }
+        }, instantsToFiles, Collections.singletonList("11"), 0, 0);
+
+    // Add one more ingestion instant. This will be added to 1st slice now since cleaner removed the older file slice.
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("21"), true, "15", 1));
+
+    // Restore last ingestion
+    testRestore(view, Collections.singletonList("22"), new HashMap<>(), Collections.singletonList(getHoodieCommitInstant("21", true)), "24", false);
+
+    // Run one more ingestion. This is still on the 1st slice
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("23"), true, "15", 1));
+
+    // Finish Log Compaction
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("24"), true, "15", 1,
+        Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "24"))));
+
+    // Schedule Compaction again
+    scheduleCompaction(view, "25");
+
+    // Finish Compaction
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("25"), false, "25", 2,
+        Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "25"))));
   }
 
   @Test
@@ -536,7 +600,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     Map<String, List<String>> partititonToFiles = deleteFiles(files);
     List<HoodieCleanStat> cleanStats = partititonToFiles.entrySet().stream().map(e ->
         new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, e.getKey(), e.getValue(), e.getValue(),
-        new ArrayList<>(), Integer.toString(Integer.parseInt(instant) + 1))).collect(Collectors.toList());
+        new ArrayList<>(), Integer.toString(Integer.parseInt(instant) + 1), "")).collect(Collectors.toList());
 
     HoodieInstant cleanInflightInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);
@@ -611,17 +675,16 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    * Schedule a pending compaction and validate.
    *
    * @param view Hoodie View
-   * @param instantTime COmpaction Instant Time
+   * @param instantTime Compaction Instant Time
    */
-  private void scheduleCompaction(SyncableFileSystemView view, String instantTime) throws IOException {
+  private void scheduleCompaction(SyncableFileSystemView view, String  instantTime) throws IOException {
     List<Pair<String, FileSlice>> slices = partitions.stream()
         .flatMap(p -> view.getLatestFileSlices(p).map(s -> Pair.of(p, s))).collect(Collectors.toList());
 
     long initialExpTotalFileSlices = partitions.stream().mapToLong(p -> view.getAllFileSlices(p).count()).sum();
-
+    HoodieInstant compactionRequestedInstant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime);
     HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty());
-    HoodieInstant compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionRequestedInstant,
         TimelineMetadataUtils.serializeCompactionPlan(plan));
 
     view.sync();
@@ -643,6 +706,35 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
+   * Schedule a pending Log compaction and validate.
+   *
+   * @param view Hoodie View
+   * @param instantTime Log Compaction Instant Time
+   */
+  private void scheduleLogCompaction(SyncableFileSystemView view, String instantTime, String baseInstantTime) throws IOException {
+    List<Pair<String, FileSlice>> slices = partitions.stream()
+        .flatMap(p -> view.getLatestFileSlices(p).map(s -> Pair.of(p, s))).collect(Collectors.toList());
+
+    long initialExpTotalFileSlices = partitions.stream().mapToLong(p -> view.getAllFileSlices(p).count()).sum();
+    HoodieInstant logCompactionRequestedInstant = new HoodieInstant(State.REQUESTED, LOG_COMPACTION_ACTION, instantTime);
+    HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty());
+    metaClient.getActiveTimeline().saveToLogCompactionRequested(logCompactionRequestedInstant,
+        TimelineMetadataUtils.serializeCompactionPlan(plan));
+
+    view.sync();
+    partitions.forEach(p -> {
+      view.getLatestFileSlices(p).forEach(fs -> {
+        assertEquals(baseInstantTime, fs.getBaseInstantTime());
+        assertEquals(p, fs.getPartitionPath());
+      });
+    });
+
+    metaClient.reloadActiveTimeline();
+    SyncableFileSystemView newView = getFileSystemView(metaClient);
+    areViewsConsistent(view, newView, initialExpTotalFileSlices);
+  }
+
+  /**
    * Unschedule a compaction instant and validate incremental fs view.
    *
    * @param view Hoodie View
@@ -655,6 +747,25 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieInstant instant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstantTime);
     boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
     ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
+
+    view.sync();
+    assertEquals(newLastInstant, view.getLastInstant().get().getTimestamp());
+    partitions.forEach(p -> view.getLatestFileSlices(p).forEach(fs -> assertEquals(newBaseInstant, fs.getBaseInstantTime())));
+  }
+
+  /**
+   * Unschedule a log compaction instant and validate incremental fs view.
+   *
+   * @param view Hoodie View
+   * @param logCompactionInstantTime Log Compaction Instant to be removed
+   * @param newLastInstant New Last instant
+   * @param newBaseInstant New Base instant of last file-slice
+   */
+  private void unscheduleLogCompaction(SyncableFileSystemView view, String logCompactionInstantTime, String newLastInstant,
+                                    String newBaseInstant) throws IOException {
+    HoodieInstant instant = new HoodieInstant(State.REQUESTED, LOG_COMPACTION_ACTION, logCompactionInstantTime);
+    boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
+    ValidationUtils.checkArgument(deleted, "Unable to delete log compaction instant.");
 
     view.sync();
     assertEquals(newLastInstant, view.getLastInstant().get().getTimestamp());
@@ -679,8 +790,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    * Perform one or more rounds of ingestion/compaction and validate incremental timeline syncing.
    *
    * @param view Hoodie View
-   * @param instants Ingestion/Commit INstants
-   * @param deltaCommit Delta COmmit ?
+   * @param instants Ingestion/Commit Instants
+   * @param deltaCommit Delta Commit ?
    * @param baseInstantForDeltaCommit Base Instant to be used in case of delta-commit
    * @param begin initial file-slice offset
    * @return List of new file created
@@ -814,6 +925,11 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     Set<Pair<String, CompactionOperation>> ops1 = view1.getPendingCompactionOperations().collect(Collectors.toSet());
     Set<Pair<String, CompactionOperation>> ops2 = view2.getPendingCompactionOperations().collect(Collectors.toSet());
     assertEquals(ops1, ops2);
+
+    // Pending Log Compaction Operations Check
+    ops1 = view1.getPendingLogCompactionOperations().collect(Collectors.toSet());
+    ops2 = view2.getPendingLogCompactionOperations().collect(Collectors.toSet());
+    assertEquals(ops1, ops2);
   }
 
   private List<Pair<String, HoodieWriteStat>> generateDataForInstant(String baseInstant, String instant, boolean deltaCommit) {
@@ -860,7 +976,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
                                  List<Pair<String, HoodieWriteStat>> writeStats,
                                  Map<String, List<String>> partitionToReplaceFileIds) throws IOException {
     // created requested
-    HoodieInstant newRequestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant);
+    HoodieInstant newRequestedInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setOperationType(WriteOperationType.UNKNOWN.name()).build();
     metaClient.getActiveTimeline().saveToPendingReplaceCommit(newRequestedInstant,

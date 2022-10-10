@@ -60,6 +60,10 @@
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>com.github.os72</groupId>
+        <artifactId>protoc-jar-maven-plugin</artifactId>
+      </plugin>
     </plugins>
 
     <resources>
@@ -73,6 +77,22 @@
   </build>
 
   <dependencies>
+    <!-- Protobuf -->
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java-util</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>com.google.guava</groupId>
+          <artifactId>guava</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
     <!-- H2 database for JdbcbaseSchemaProvider -->
     <dependency>
       <groupId>com.h2database</groupId>
@@ -91,38 +111,8 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- Hoodie -->
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-client-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-client</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hive-sync</artifactId>
-      <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>servlet-api</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-    </dependency>
+    <!-- Hoodie - Spark -->
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark_${scala.binary.version}</artifactId>
@@ -135,16 +125,41 @@
       </exclusions>
     </dependency>
 
+    <!-- Hoodie - cloud providers -->
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
+      <artifactId>hudi-aws</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-gcp</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Hoodie - Other -->
+
+    <!-- NOTE: This dependency is kept around even though it's not necessary, due to the fact
+               that removing it messes up Orc dependencies on the class-path failing to compile
+               test for Spark 3.x (this occurs b/c Hudi depends on "nohive" version of "orc-core"
+               while Spark 3.x switches to a regular one) -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
     </dependency>
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>${hudi.spark.common.module}</artifactId>
+      <artifactId>hudi-hive-sync</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>servlet-api</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Kafka -->
@@ -182,21 +197,7 @@
     <!-- Logging -->
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-1.2-api</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
-      <version>${slf4j.version}</version>
     </dependency>
 
     <!-- Fasterxml -->
@@ -440,15 +441,13 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
-
-    <!-- AWS Services -->
-    <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sqs -->
     <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-sqs</artifactId>
-      <version>${aws.sdk.version}</version>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
     </dependency>
-    
+
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
@@ -503,12 +502,6 @@
     <dependency>
       <groupId>org.junit.platform</groupId>
       <artifactId>junit-platform-commons</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-core</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

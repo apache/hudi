@@ -172,11 +172,6 @@
   </build>
 
   <dependencies>
-    <dependency>
-      <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
-      <version>${scala12.version}</version>
-    </dependency>
 
     <dependency>
       <groupId>org.apache.spark</groupId>
@@ -248,6 +243,14 @@
       </exclusions>
     </dependency>
 
+    <!-- Hoodie - Test -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+
     <dependency>
       <groupId>org.json4s</groupId>
       <artifactId>json4s-jackson_${scala.binary.version}</artifactId>
@@ -260,17 +263,22 @@
       </exclusions>
     </dependency>
 
+    <!-- Hoodie Spark 3.x common  -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark3-common</artifactId>
       <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.spark</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
+      <scope>compile</scope>
     </dependency>
+
+    <!-- Hoodie Spark >= 3.2 common  -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark3.2plus-common</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
     <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>

@@ -29,7 +29,13 @@ public class JsonUtils {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   static {
     MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    // We need to exclude custom getters, setters and creators which can use member fields
+    // to derive new fields, so that they are not included in the serialization
     MAPPER.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
+    MAPPER.setVisibility(PropertyAccessor.GETTER, JsonAutoDetect.Visibility.NONE);
+    MAPPER.setVisibility(PropertyAccessor.IS_GETTER, JsonAutoDetect.Visibility.NONE);
+    MAPPER.setVisibility(PropertyAccessor.SETTER, JsonAutoDetect.Visibility.NONE);
+    MAPPER.setVisibility(PropertyAccessor.CREATOR, JsonAutoDetect.Visibility.NONE);
   }
 
   public static ObjectMapper getObjectMapper() {

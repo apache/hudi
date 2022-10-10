@@ -25,25 +25,24 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.StringUtils;
-
 import org.apache.spark.launcher.SparkLauncher;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 /**
  * CLI command to assist in upgrading/downgrading Hoodie table to a different version.
  */
-@Component
-public class UpgradeOrDowngradeCommand implements CommandMarker {
+@ShellComponent
+public class UpgradeOrDowngradeCommand {
 
-  @CliCommand(value = "upgrade table", help = "Upgrades a table")
+  @ShellMethod(key = "upgrade table", value = "Upgrades a table")
   public String upgradeHoodieTable(
-      @CliOption(key = {"toVersion"}, help = "To version of Hoodie table to be upgraded/downgraded to", unspecifiedDefaultValue = "") final String toVersion,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+      @ShellOption(value = {"--toVersion"}, help = "To version of Hoodie table to be upgraded/downgraded to", defaultValue = "") final String toVersion,
+      @ShellOption(value = {"--sparkProperties"}, help = "Spark Properties File Path",
+          defaultValue = "") final String sparkPropertiesPath,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
+      @ShellOption(value = "--sparkMemory", defaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
 
@@ -62,12 +61,13 @@ public class UpgradeOrDowngradeCommand implements CommandMarker {
     return String.format("Hoodie table upgraded/downgraded to %s", toVersionName);
   }
 
-  @CliCommand(value = "downgrade table", help = "Downgrades a table")
+  @ShellMethod(key = "downgrade table", value = "Downgrades a table")
   public String downgradeHoodieTable(
-      @CliOption(key = {"toVersion"}, help = "To version of Hoodie table to be upgraded/downgraded to", unspecifiedDefaultValue = "") final String toVersion,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+      @ShellOption(value = {"--toVersion"}, help = "To version of Hoodie table to be upgraded/downgraded to", defaultValue = "") final String toVersion,
+      @ShellOption(value = {"--sparkProperties"}, help = "Spark Properties File Path",
+          defaultValue = "") final String sparkPropertiesPath,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
+      @ShellOption(value = "--sparkMemory", defaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
 

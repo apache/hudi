@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
+import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 
@@ -99,7 +100,7 @@ object HoodieWriterUtils {
   def getPartitionColumns(parameters: Map[String, String]): String = {
     val props = new Properties()
     props.putAll(parameters.asJava)
-    HoodieSparkUtils.getPartitionColumns(props)
+    SparkKeyGenUtils.getPartitionColumns(props)
   }
 
   def convertMapToHoodieConfig(parameters: Map[String, String]): HoodieConfig = {
@@ -111,7 +112,7 @@ object HoodieWriterUtils {
   def getOriginKeyGenerator(parameters: Map[String, String]): String = {
     val kg = parameters.getOrElse(KEYGENERATOR_CLASS_NAME.key(), null)
     if (classOf[SqlKeyGenerator].getCanonicalName == kg) {
-      parameters.getOrElse(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
+      parameters.getOrElse(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null)
     } else {
       kg
     }

@@ -61,15 +61,25 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "but users are expected to trigger async job for execution. If `hoodie.compact.inline` is set to true, regular writers will do both scheduling and "
           + "execution inline for compaction");
 
+  public static final ConfigProperty<String> INLINE_LOG_COMPACT = ConfigProperty
+      .key("hoodie.log.compaction.inline")
+      .defaultValue("false")
+      .withDocumentation("When set to true, logcompaction service is triggered after each write. While being "
+          + " simpler operationally, this adds extra latency on the write path.");
+
   public static final ConfigProperty<String> INLINE_COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key("hoodie.compact.inline.max.delta.commits")
       .defaultValue("5")
-      .withDocumentation("Number of delta commits after the last compaction, before scheduling of a new compaction is attempted.");
+      .withDocumentation("Number of delta commits after the last compaction, before scheduling of a new compaction is attempted. "
+          + "This config takes effect only for the compaction triggering strategy based on the number of commits, "
+          + "i.e., NUM_COMMITS, NUM_COMMITS_AFTER_LAST_REQUEST, NUM_AND_TIME, and NUM_OR_TIME.");
 
   public static final ConfigProperty<String> INLINE_COMPACT_TIME_DELTA_SECONDS = ConfigProperty
       .key("hoodie.compact.inline.max.delta.seconds")
       .defaultValue(String.valueOf(60 * 60))
-      .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a new one.");
+      .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a new one. "
+          + "This config takes effect only for the compaction triggering strategy based on the elapsed time, "
+          + "i.e., TIME_ELAPSED, NUM_AND_TIME, and NUM_OR_TIME.");
 
   public static final ConfigProperty<String> INLINE_COMPACT_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.compact.inline.trigger.strategy")
@@ -104,6 +114,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .key("hoodie.compaction.logfile.size.threshold")
       .defaultValue(0L)
       .withDocumentation("Only if the log file size is greater than the threshold in bytes,"
+          + " the file group will be compacted.");
+
+  public static final ConfigProperty<Long> COMPACTION_LOG_FILE_NUM_THRESHOLD = ConfigProperty
+      .key("hoodie.compaction.logfile.num.threshold")
+      .defaultValue(0L)
+      .withDocumentation("Only if the log file num is greater than the threshold,"
           + " the file group will be compacted.");
 
   public static final ConfigProperty<String> COMPACTION_STRATEGY = ConfigProperty
@@ -163,6 +179,18 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
 
+  public static final ConfigProperty<String> LOG_COMPACTION_BLOCKS_THRESHOLD = ConfigProperty
+      .key("hoodie.log.compaction.blocks.threshold")
+      .defaultValue("5")
+      .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
+          + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
+
+  public static final ConfigProperty<String> USE_LOG_RECORD_READER_SCAN_V2 = ConfigProperty
+      .key("hoodie.log.record.reader.use.scanV2")
+      .defaultValue("false")
+      .sinceVersion("0.13.0")
+      .withDocumentation("ScanV2 logic address all the multiwriter challenges while appending to log files. "
+          + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
 
   /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
   @Deprecated
@@ -311,6 +339,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withInlineLogCompaction(Boolean inlineLogCompaction) {
+      compactionConfig.setValue(INLINE_LOG_COMPACT, String.valueOf(inlineLogCompaction));
+      return this;
+    }
+
     public Builder withInlineCompactionTriggerStrategy(CompactionTriggerStrategy compactionTriggerStrategy) {
       compactionConfig.setValue(INLINE_COMPACT_TRIGGER_STRATEGY, compactionTriggerStrategy.name());
       return this;
@@ -381,8 +414,23 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withCompactionLogFileNumThreshold(int logFileNumThreshold) {
+      compactionConfig.setValue(COMPACTION_LOG_FILE_NUM_THRESHOLD, String.valueOf(logFileNumThreshold));
+      return this;
+    }
+
     public Builder withPreserveCommitMetadata(boolean preserveCommitMetadata) {
       compactionConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveCommitMetadata));
+      return this;
+    }
+
+    public Builder withLogCompactionBlocksThreshold(String logCompactionBlocksThreshold) {
+      compactionConfig.setValue(LOG_COMPACTION_BLOCKS_THRESHOLD, logCompactionBlocksThreshold);
+      return this;
+    }
+
+    public Builder withLogRecordReaderScanV2(String useLogRecordReaderScanV2) {
+      compactionConfig.setValue(USE_LOG_RECORD_READER_SCAN_V2, useLogRecordReaderScanV2);
       return this;
     }
 

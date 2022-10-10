@@ -256,8 +256,19 @@
         </dependency>
 
         <!-- Test dependencies -->
-
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-tests-common</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- Junit 5 dependencies -->
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <version>${junit.platform.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
@@ -329,13 +340,6 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>${flink.table.runtime.artifactId}</artifactId>
-            <version>${flink.version}</version>
-            <scope>test</scope>
-            <type>test-jar</type>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-json</artifactId>
             <version>${flink.version}</version>
             <scope>test</scope>
             <type>test-jar</type>

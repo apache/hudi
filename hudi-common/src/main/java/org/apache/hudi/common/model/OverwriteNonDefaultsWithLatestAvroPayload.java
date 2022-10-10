@@ -58,22 +58,43 @@ public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLate
     GenericRecord insertRecord = (GenericRecord) recordOption.get();
     GenericRecord currentRecord = (GenericRecord) currentValue;
 
-    if (isDeleteRecord(insertRecord)) {
+    return mergeRecords(schema, insertRecord, currentRecord);
+  }
+
+  /**
+   * Merges the given records into one.
+   * The fields in {@code baseRecord} has higher priority:
+   * it is set up into the merged record if it is not null or equals to the default.
+   *
+   * @param schema       The record schema
+   * @param baseRecord   The base record to merge with
+   * @param mergedRecord The record to be merged
+   *
+   * @return the merged record option
+   */
+  protected Option<IndexedRecord> mergeRecords(Schema schema, GenericRecord baseRecord, GenericRecord mergedRecord) {
+    if (isDeleteRecord(baseRecord)) {
       return Option.empty();
     } else {
       final GenericRecordBuilder builder = new GenericRecordBuilder(schema);
       List<Schema.Field> fields = schema.getFields();
-      fields.forEach(field -> {
-        Object value = insertRecord.get(field.name());
-        value = field.schema().getType().equals(Schema.Type.STRING) && value != null ? value.toString() : value;
-        Object defaultValue = field.defaultVal();
-        if (!overwriteField(value, defaultValue)) {
-          builder.set(field, value);
-        } else {
-          builder.set(field, currentRecord.get(field.pos()));
-        }
-      });
+      fields.forEach(field -> setField(baseRecord, mergedRecord, builder, field));
       return Option.of(builder.build());
+    }
+  }
+
+  protected void setField(
+      GenericRecord baseRecord,
+      GenericRecord mergedRecord,
+      GenericRecordBuilder builder,
+      Schema.Field field) {
+    Object value = baseRecord.get(field.name());
+    value = field.schema().getType().equals(Schema.Type.STRING) && value != null ? value.toString() : value;
+    Object defaultValue = field.defaultVal();
+    if (!overwriteField(value, defaultValue)) {
+      builder.set(field, value);
+    } else {
+      builder.set(field, mergedRecord.get(field.name()));
     }
   }
 }

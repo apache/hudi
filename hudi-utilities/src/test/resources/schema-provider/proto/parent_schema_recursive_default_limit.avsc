@@ -1,0 +1,160 @@
+{
+  "type" : "record",
+  "name" : "Parent",
+  "namespace" : "test",
+  "fields" : [ {
+    "name" : "child",
+    "type" : [ "null", {
+      "type" : "record",
+      "name" : "Child",
+      "namespace" : "test.child",
+      "fields" : [ {
+        "name" : "basic_field",
+        "type" : "int",
+        "default" : 0
+      }, {
+        "name" : "recurse_field",
+        "type" : [ "null", {
+          "type" : "record",
+          "name" : "Child",
+          "namespace" : "test.child.recurse_field",
+          "fields" : [ {
+            "name" : "basic_field",
+            "type" : "int",
+            "default" : 0
+          }, {
+            "name" : "recurse_field",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "Child",
+              "namespace" : "test.child.recurse_field.recurse_field",
+              "fields" : [ {
+                "name" : "basic_field",
+                "type" : "int",
+                "default" : 0
+              }, {
+                "name" : "recurse_field",
+                "type" : [ "null", {
+                  "type" : "record",
+                  "name" : "Child",
+                  "namespace" : "test.child.recurse_field.recurse_field.recurse_field",
+                  "fields" : [ {
+                    "name" : "basic_field",
+                    "type" : "int",
+                    "default" : 0
+                  }, {
+                    "name" : "recurse_field",
+                    "type" : [ "null", {
+                      "type" : "record",
+                      "name" : "Child",
+                      "namespace" : "test.child.recurse_field.recurse_field.recurse_field.recurse_field",
+                      "fields" : [ {
+                        "name" : "basic_field",
+                        "type" : "int",
+                        "default" : 0
+                      }, {
+                        "name" : "recurse_field",
+                        "type" : [ "null", {
+                          "type" : "record",
+                          "name" : "recursion_overflow",
+                          "namespace" : "org.apache.hudi.proto",
+                          "fields" : [ {
+                            "name" : "descriptor_full_name",
+                            "type" : "string",
+                            "default" : ""
+                          }, {
+                            "name" : "proto_bytes",
+                            "type" : "bytes",
+                            "default" : ""
+                          } ]
+                        } ],
+                        "default" : null
+                      } ]
+                    } ],
+                    "default" : null
+                  } ]
+                } ],
+                "default" : null
+              } ]
+            } ],
+            "default" : null
+          } ]
+        } ],
+        "default" : null
+      } ]
+    } ],
+    "default" : null
+  }, {
+    "name" : "children",
+    "type" : {
+      "type" : "array",
+      "items" : {
+        "type" : "record",
+        "name" : "Child",
+        "namespace" : "test.children",
+        "fields" : [ {
+          "name" : "basic_field",
+          "type" : "int",
+          "default" : 0
+        }, {
+          "name" : "recurse_field",
+          "type" : [ "null", {
+            "type" : "record",
+            "name" : "Child",
+            "namespace" : "test.children.recurse_field",
+            "fields" : [ {
+              "name" : "basic_field",
+              "type" : "int",
+              "default" : 0
+            }, {
+              "name" : "recurse_field",
+              "type" : [ "null", {
+                "type" : "record",
+                "name" : "Child",
+                "namespace" : "test.children.recurse_field.recurse_field",
+                "fields" : [ {
+                  "name" : "basic_field",
+                  "type" : "int",
+                  "default" : 0
+                }, {
+                  "name" : "recurse_field",
+                  "type" : [ "null", {
+                    "type" : "record",
+                    "name" : "Child",
+                    "namespace" : "test.children.recurse_field.recurse_field.recurse_field",
+                    "fields" : [ {
+                      "name" : "basic_field",
+                      "type" : "int",
+                      "default" : 0
+                    }, {
+                      "name" : "recurse_field",
+                      "type" : [ "null", {
+                        "type" : "record",
+                        "name" : "Child",
+                        "namespace" : "test.children.recurse_field.recurse_field.recurse_field.recurse_field",
+                        "fields" : [ {
+                          "name" : "basic_field",
+                          "type" : "int",
+                          "default" : 0
+                        }, {
+                          "name" : "recurse_field",
+                          "type" : [ "null", "org.apache.hudi.proto.recursion_overflow" ],
+                          "default" : null
+                        } ]
+                      } ],
+                      "default" : null
+                    } ]
+                  } ],
+                  "default" : null
+                } ]
+              } ],
+              "default" : null
+            } ]
+          } ],
+          "default" : null
+        } ]
+      }
+    },
+    "default" : [ ]
+  } ]
+}

@@ -118,6 +118,12 @@ public class MetadataConversionUtils {
         archivedMetaWrapper.setActionType(ActionType.compaction.name());
         break;
       }
+      case HoodieTimeline.LOG_COMPACTION_ACTION: {
+        HoodieCompactionPlan plan = CompactionUtils.getLogCompactionPlan(metaClient, hoodieInstant.getTimestamp());
+        archivedMetaWrapper.setHoodieCompactionPlan(plan);
+        archivedMetaWrapper.setActionType(ActionType.logcompaction.name());
+        break;
+      }
       default: {
         throw new UnsupportedOperationException("Action not fully supported yet");
       }

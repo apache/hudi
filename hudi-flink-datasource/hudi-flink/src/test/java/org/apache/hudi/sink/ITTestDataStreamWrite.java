@@ -100,11 +100,11 @@ public class ITTestDataStreamWrite extends TestLogger {
   @ParameterizedTest
   @ValueSource(strings = {"BUCKET", "FLINK_STATE"})
   public void testWriteCopyOnWrite(String indexType) throws Exception {
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
     conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
-    conf.setBoolean(FlinkOptions.PRE_COMBINE,true);
+    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     testWriteToHoodie(conf, "cow_write", 2, EXPECTED);
   }
@@ -146,7 +146,7 @@ public class ITTestDataStreamWrite extends TestLogger {
   @ParameterizedTest
   @ValueSource(strings = {"BUCKET", "FLINK_STATE"})
   public void testWriteMergeOnReadWithCompaction(String indexType) throws Exception {
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
     conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
@@ -157,12 +157,23 @@ public class ITTestDataStreamWrite extends TestLogger {
   }
 
   @Test
-  public void testWriteMergeOnReadWithClustering() throws Exception {
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+  public void testWriteCopyOnWriteWithClustering() throws Exception {
+    testWriteCopyOnWriteWithClustering(false);
+  }
+
+  @Test
+  public void testWriteCopyOnWriteWithSortClustering() throws Exception {
+    testWriteCopyOnWriteWithClustering(true);
+  }
+
+  private void testWriteCopyOnWriteWithClustering(boolean sortClusteringEnabled) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.OPERATION, "insert");
-    conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    if (sortClusteringEnabled) {
+      conf.setString(FlinkOptions.CLUSTERING_SORT_COLUMNS, "uuid");
+    }
 
     testWriteToHoodieWithCluster(conf, "cow_write_with_cluster", 1, EXPECTED);
   }
@@ -171,7 +182,7 @@ public class ITTestDataStreamWrite extends TestLogger {
       Transformer transformer,
       String jobName,
       Map<String, List<String>> expected) throws Exception {
-    testWriteToHoodie(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()),
+    testWriteToHoodie(TestConfigurations.getDefaultConf(tempFile.toURI().toString()),
         Option.of(transformer), jobName, 2, expected);
   }
 
@@ -246,7 +257,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.addOperator(pipeline.getTransformation());
 
     if (isMor) {
-      Pipelines.clean(conf, pipeline);
       Pipelines.compact(conf, pipeline);
     }
 
@@ -282,36 +292,20 @@ public class ITTestDataStreamWrite extends TestLogger {
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_source.data")).toString();
 
-    boolean isMor = conf.getString(FlinkOptions.TABLE_TYPE).equals(HoodieTableType.MERGE_ON_READ.name());
-
-    DataStream<RowData> dataStream;
-    if (isMor) {
-      TextInputFormat format = new TextInputFormat(new Path(sourcePath));
-      format.setFilesFilter(FilePathFilter.createDefaultFilter());
-      TypeInformation<String> typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
-      format.setCharsetName("UTF-8");
-
-      dataStream = execEnv
-          // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
-          .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
-          .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
-          .setParallelism(1);
-    } else {
-      dataStream = execEnv
-          // use continuous file source to trigger checkpoint
-          .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), checkpoints))
-          .name("continuous_file_source")
-          .setParallelism(1)
-          .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
-          .setParallelism(4);
-    }
+    DataStream<RowData> dataStream = execEnv
+        // use continuous file source to trigger checkpoint
+        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), checkpoints))
+        .name("continuous_file_source")
+        .setParallelism(1)
+        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+        .setParallelism(4);
 
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
     DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, true);
     execEnv.addOperator(pipeline.getTransformation());
 
     Pipelines.cluster(conf, rowType, pipeline);
-    execEnv.execute(jobName);
+    execute(execEnv, false, jobName);
 
     TestData.checkWrittenDataCOW(tempFile, expected);
   }
@@ -342,7 +336,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     // set up checkpoint interval
     execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.TABLE_NAME, "t1");
     conf.setString(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
 
@@ -351,10 +345,10 @@ public class ITTestDataStreamWrite extends TestLogger {
     TestData.writeData(TestData.dataSetInsert(3, 4), conf);
     TestData.writeData(TestData.dataSetInsert(5, 6), conf);
 
-    String latestCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+    String latestCommit = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
 
     Map<String, String> options = new HashMap<>();
-    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.PATH.key(), tempFile.toURI().toString());
     options.put(FlinkOptions.READ_START_COMMIT.key(), latestCommit);
 
     //read a hoodie table use low-level source api.
@@ -384,15 +378,13 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
-    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
-    options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
+    options.put(FlinkOptions.PATH.key(), tempFile.toURI().toString());
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     Configuration conf = Configuration.fromMap(options);
     // Read from file source
     RowType rowType =
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
-        .getLogicalType();
+            .getLogicalType();
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
@@ -406,16 +398,15 @@ public class ITTestDataStreamWrite extends TestLogger {
 
     TextInputFormat format = new TextInputFormat(new Path(sourcePath));
     format.setFilesFilter(FilePathFilter.createDefaultFilter());
-    TypeInformation<String> typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
     format.setCharsetName("UTF-8");
 
     DataStream dataStream = execEnv
-        // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
-        .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
+        // use continuous file source to trigger checkpoint
+        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
+        .name("continuous_file_source")
+        .setParallelism(1)
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
-        .setParallelism(1);
-
-
+        .setParallelism(4);
 
     //sink to hoodie table use low-level sink api.
     HoodiePipeline.Builder builder = HoodiePipeline.builder("test_sink")
@@ -430,7 +421,7 @@ public class ITTestDataStreamWrite extends TestLogger {
 
     builder.sink(dataStream, false);
 
-    execute(execEnv, true, "Api_Sink_Test");
+    execute(execEnv, false, "Api_Sink_Test");
     TestData.checkWrittenDataCOW(tempFile, EXPECTED);
   }
 }

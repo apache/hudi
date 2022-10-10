@@ -61,6 +61,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
+import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
@@ -271,7 +272,7 @@ public class DeltaSync implements Serializable, Closeable {
     } else {
       this.commitTimelineOpt = Option.empty();
       this.allCommitsTimelineOpt = Option.empty();
-      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
+      String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
@@ -340,6 +341,7 @@ public class DeltaSync implements Serializable, Closeable {
 
     metrics.updateDeltaStreamerSyncMetrics(System.currentTimeMillis());
 
+    // TODO revisit (too early to unpersist)
     // Clear persistent RDDs
     jssc.getPersistentRDDs().values().forEach(JavaRDD::unpersist);
     return result;
@@ -368,7 +370,7 @@ public class DeltaSync implements Serializable, Closeable {
       resumeCheckpointStr = getCheckpointToResume(commitTimelineOpt);
     } else {
       // initialize the table for the first time.
-      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
+      String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
@@ -486,7 +488,7 @@ public class DeltaSync implements Serializable, Closeable {
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
-    List<String> partitionColumns = getPartitionColumns(keyGenerator, props);
+    Set<String> partitionColumns = getPartitionColumns(keyGenerator, props);
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(record -> {
       GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(record, partitionColumns) : record;
@@ -951,14 +953,14 @@ public class DeltaSync implements Serializable, Closeable {
   }
 
   /**
-   * Get the list of partition columns as a list of strings.
+   * Get the partition columns as a set of strings.
    *
    * @param keyGenerator KeyGenerator
    * @param props TypedProperties
-   * @return List of partition columns.
+   * @return Set of partition columns.
    */
-  private List<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
-    String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
-    return Arrays.asList(partitionColumns.split(","));
+  private Set<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
+    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
+    return Arrays.stream(partitionColumns.split(",")).collect(Collectors.toSet());
   }
 }

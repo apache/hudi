@@ -18,8 +18,6 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -41,6 +39,8 @@ import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
@@ -68,11 +68,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.function.Predicate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -220,6 +220,36 @@ public class TestData {
           TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
       insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
+  // changelog details of test_source.data and test_source_2.data
+  public static List<RowData> DATA_SET_SOURCE_CHANGELOG = Arrays.asList(
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+          TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
+      updateAfterRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
+          TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
+      updateBeforeRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
+          TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
+      updateAfterRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
+          TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
+      updateBeforeRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
+      updateAfterRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
       insertRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
           TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
       insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
@@ -626,8 +656,8 @@ public class TestData {
       Map<String, List<String>> expected) throws IOException {
 
     // 1. init flink table
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.getAbsolutePath());
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath.getAbsolutePath()).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toURI().toString());
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath.toURI().toString()).build();
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
 
     // 2. check each partition data
@@ -677,8 +707,8 @@ public class TestData {
     assert hoodiePropertiesFile.exists();
     // 1. init flink table
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-            .fromFile(hoodiePropertiesFile)
-            .withPath(basePath).build();
+        .fromFile(hoodiePropertiesFile)
+        .withPath(basePath).build();
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, config.getProps());
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
@@ -734,8 +764,8 @@ public class TestData {
           for (String curKey : scanner.getRecords().keySet()) {
             if (!keyToSkip.contains(curKey)) {
               Option<GenericRecord> record = (Option<GenericRecord>) scanner.getRecords()
-                      .get(curKey).getData()
-                      .getInsertValue(schema, config.getProps());
+                  .get(curKey).getData()
+                  .getInsertValue(schema, config.getProps());
               if (record.isPresent()) {
                 readBuffer.add(filterOutVariables(record.get()));
               }
@@ -786,7 +816,7 @@ public class TestData {
     fields.add(genericRecord.get("age").toString());
     fields.add(genericRecord.get("ts").toString());
     fields.add(genericRecord.get("partition").toString());
-    return String.join(",",fields);
+    return String.join(",", fields);
   }
 
   public static BinaryRowData insertRow(Object... fields) {

@@ -20,10 +20,10 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.io.storage.HoodieParquetConfig;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 

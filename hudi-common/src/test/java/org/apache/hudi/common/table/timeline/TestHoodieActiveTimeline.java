@@ -116,7 +116,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         timeline.getCommitTimeline().filterCompletedInstants().getInstants(),
         "Check the instants stream");
     assertStreamEquals(Stream.of(instant5),
-        timeline.getCommitTimeline().filterPendingExcludingCompaction().getInstants(),
+        timeline.getCommitTimeline().filterPendingExcludingMajorAndMinorCompaction().getInstants(),
         "Check the instants stream");
 
     // Backwards compatibility testing for reading compaction plans
@@ -180,7 +180,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
             .getInstants().map(HoodieInstant::getTimestamp),
         "findInstantsBefore 07 should return 3 instants");
     assertFalse(timeline.empty());
-    assertFalse(timeline.getCommitTimeline().filterPendingExcludingCompaction().empty());
+    assertFalse(timeline.getCommitTimeline().filterPendingExcludingMajorAndMinorCompaction().empty());
     assertEquals(12, timeline.countInstants());
     assertEquals("01", timeline.firstInstant(
         HoodieTimeline.COMMIT_ACTION, State.COMPLETED).get().getTimestamp());
@@ -567,9 +567,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       lastInstantTime = newInstantTime;
     }
 
-    // All zero timestamp can be parsed
-    HoodieActiveTimeline.parseDateFromInstantTime("00000000000000");
-
     // Multiple thread test
     final int numChecks = 100000;
     final int numThreads = 100;
@@ -629,6 +626,26 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
             - HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant).getTime() / 1000,
         "Expected the difference between later instant and previous instant to be 10 seconds"
     );
+  }
+
+  @Test
+  public void testInvalidInstantDateParsing() throws ParseException {
+    // Test all invalid timestamp in HoodieTimeline, shouldn't throw any error and should return a correct value
+    assertEquals(Long.parseLong(HoodieTimeline.INIT_INSTANT_TS),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.INIT_INSTANT_TS).get().getTime());
+    assertEquals(Long.parseLong(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS).get().getTime());
+    assertEquals(Long.parseLong(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS).get().getTime());
+
+    // Test metadata table compaction instant date parsing with INIT_INSTANT_TS, should return Option.empty
+    assertEquals(Option.empty(),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.INIT_INSTANT_TS + "001"));
+
+    // Test a valid instant timestamp, should equal the same result as HoodieActiveTimeline.parseDateFromInstantTime
+    String testInstant = "20210101120101";
+    assertEquals(HoodieActiveTimeline.parseDateFromInstantTime(testInstant).getTime(),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(testInstant).get().getTime());
   }
 
   /**

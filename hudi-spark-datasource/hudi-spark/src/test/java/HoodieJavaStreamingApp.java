@@ -303,7 +303,9 @@ public class HoodieJavaStreamingApp {
     }
 
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
-      numExpCommits += 1;
+      if (inputDF2 != null) {
+        numExpCommits += 1;
+      }
       // Wait for compaction to also finish and track latest timestamp as commit timestamp
       waitTillNCommits(fs, numExpCommits, 180, 3);
       commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
@@ -372,6 +374,7 @@ public class HoodieJavaStreamingApp {
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "true")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
         .option(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key(), "false")
+        .option(DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH().key(),"true")
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName).option("checkpointLocation", checkpointLocation)
         .outputMode(OutputMode.Append());
 

@@ -70,6 +70,8 @@ public class HoodieRowCreateHandle implements Serializable {
   private final UTF8String commitTime;
   private final Function<Long, String> seqIdGenerator;
 
+  private final boolean shouldPreserveHoodieMetadata;
+
   private final HoodieTimer currTimer;
 
   protected final HoodieInternalRowFileWriter fileWriter;
@@ -84,6 +86,20 @@ public class HoodieRowCreateHandle implements Serializable {
                                long taskId,
                                long taskEpochId,
                                StructType structType) {
+    this(table, writeConfig, partitionPath, fileId, instantTime, taskPartitionId, taskId, taskEpochId,
+        structType, false);
+  }
+
+  public HoodieRowCreateHandle(HoodieTable table,
+                               HoodieWriteConfig writeConfig,
+                               String partitionPath,
+                               String fileId,
+                               String instantTime,
+                               int taskPartitionId,
+                               long taskId,
+                               long taskEpochId,
+                               StructType structType,
+                               boolean shouldPreserveHoodieMetadata) {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
@@ -104,6 +120,8 @@ public class HoodieRowCreateHandle implements Serializable {
 
     this.writeStatus = new HoodieInternalWriteStatus(!table.getIndex().isImplicitWithStorage(),
         writeConfig.getWriteStatusFailureFraction());
+    this.shouldPreserveHoodieMetadata = shouldPreserveHoodieMetadata;
+
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);
     writeStatus.setStat(new HoodieWriteStat());
@@ -154,12 +172,14 @@ public class HoodieRowCreateHandle implements Serializable {
       UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
       UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
       // This is the only meta-field that is generated dynamically, hence conversion b/w
-      // [[String]] and [[UTF8String]] is unavoidable
-      UTF8String seqId = UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
+      // [[String]] and [[UTF8String]] is unavoidable if preserveHoodieMetadata is false
+      UTF8String seqId = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+          : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
+      UTF8String writeCommitTime = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
+          : commitTime;
 
-      InternalRow updatedRow = new HoodieInternalRow(commitTime, seqId, recordKey,
+      InternalRow updatedRow = new HoodieInternalRow(writeCommitTime, seqId, recordKey,
           partitionPath, fileName, row, true);
-
       try {
         fileWriter.writeRow(recordKey, updatedRow);
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]

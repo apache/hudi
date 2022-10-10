@@ -21,10 +21,11 @@ package org.apache.hudi.table;
 import org.apache.hudi.adapter.TestTableEnvs;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
+import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -56,6 +57,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -138,6 +140,41 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     List<Row> rows3 = execSelectSql(streamTableEnv,
         "select * from t1/*+options('read.start-commit'='earliest')*/", 10);
     assertRowsEquals(rows3, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieCDCSupplementalLoggingMode.class)
+  void testStreamReadFromSpecifiedCommitWithChangelog(HoodieCDCSupplementalLoggingMode mode) throws Exception {
+    streamTableEnv.getConfig().getConfiguration()
+        .setBoolean("table.dynamic-table-options.enabled", true);
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    streamTableEnv.executeSql(createSource);
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.CDC_ENABLED, true)
+        .option(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE, mode.getValue())
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    String firstCommit = TestUtils.getFirstCompleteInstant(tempFile.getAbsolutePath());
+    List<Row> rows = execSelectSql(streamTableEnv,
+        "select * from t1/*+options('read.start-commit'='" + firstCommit + "')*/", 10);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+
+    // insert another batch of data
+    execInsertSql(streamTableEnv, TestSQL.UPDATE_INSERT_T1);
+    List<Row> rows2 = execSelectSql(streamTableEnv, "select * from t1", 10);
+    assertRowsEquals(rows2, TestData.DATA_SET_SOURCE_CHANGELOG);
+
+    // specify the start commit as earliest
+    List<Row> rows3 = execSelectSql(streamTableEnv,
+        "select * from t1/*+options('read.start-commit'='earliest')*/", 10);
+    assertRowsEquals(rows3, TestData.DATA_SET_SOURCE_MERGED);
   }
 
   @ParameterizedTest
@@ -1015,8 +1052,8 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
   void testAppendWrite(boolean clustering) {
     TableEnvironment tableEnv = streamTableEnv;
     // csv source
-    String csvSourceDDL = TestConfigurations.getCsvSourceDDL("csv_source", "test_source_5.data");
-    tableEnv.executeSql(csvSourceDDL);
+    String sourceDDL = TestConfigurations.getFileSourceDDL("source");
+    tableEnv.executeSql(sourceDDL);
 
     String hoodieTableDDL = sql("hoodie_sink")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
@@ -1025,7 +1062,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
-    String insertInto = "insert into hoodie_sink select * from csv_source";
+    String insertInto = "insert into hoodie_sink select * from source";
     execInsertSql(tableEnv, insertInto);
 
     List<Row> result1 = CollectionUtil.iterableToList(
@@ -1347,7 +1384,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         .option(FlinkOptions.METADATA_ENABLED, true)
         .option("hoodie.metadata.index.column.stats.enable", true)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
-        .option(FlinkOptions.TABLE_TYPE,tableType)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -1436,6 +1473,37 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     List<Row> result2 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select f3 from t1").execute().collect());
     assertRowsEquals(result2, "[+I[3]]");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testWriteReadWithLocalTimestamp(HoodieTableType tableType) {
+    TableEnvironment tableEnv = batchTableEnv;
+    tableEnv.getConfig().setLocalTimeZone(ZoneId.of("Asia/Shanghai"));
+    String createTable = sql("t1")
+        .field("f0 int")
+        .field("f1 varchar(10)")
+        .field("f2 TIMESTAMP_LTZ(3)")
+        .field("f4 TIMESTAMP_LTZ(6)")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .pkField("f0")
+        .noPartition()
+        .end();
+    tableEnv.executeSql(createTable);
+
+    String insertInto = "insert into t1 values\n"
+        + "(1, 'abc', TIMESTAMP '1970-01-01 08:00:01', TIMESTAMP '1970-01-01 08:00:02'),\n"
+        + "(2, 'def', TIMESTAMP '1970-01-01 08:00:03', TIMESTAMP '1970-01-01 08:00:04')";
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[1, abc, 1970-01-01T00:00:01Z, 1970-01-01T00:00:02Z], "
+        + "+I[2, def, 1970-01-01T00:00:03Z, 1970-01-01T00:00:04Z]]";
+    assertRowsEquals(result, expected);
   }
 
   // -------------------------------------------------------------------------

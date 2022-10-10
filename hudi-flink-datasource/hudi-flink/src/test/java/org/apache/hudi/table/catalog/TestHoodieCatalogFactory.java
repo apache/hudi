@@ -18,7 +18,10 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.adapter.TestTableEnvs;
+
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CommonCatalogOptions;
@@ -34,7 +37,10 @@ import java.util.Map;
 
 import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
 import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for {@link HoodieCatalogFactory}.
@@ -47,7 +53,23 @@ public class TestHoodieCatalogFactory {
   File tempFile;
 
   @Test
-  public void testCreateHMSCatalog() {
+  void testCreateCatalogThroughSQL() {
+    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
+    String catalogDDL = ""
+        + "create catalog hudi_catalog\n"
+        + "  with(\n"
+        + "    'type' = 'hudi',\n"
+        + "    'catalog.path' = '" + tempFile.getAbsolutePath() + "/warehouse',\n"
+        + "    'mode' = 'hms',\n"
+        + "    'hive.conf.dir' = '" + CONF_DIR.getPath() + "',\n"
+        + "    'table.external' = 'true'\n"
+        + "  )\n";
+    RuntimeException exception = assertThrows(RuntimeException.class, () -> tableEnv.executeSql(catalogDDL));
+    assertThat(exception.getMessage(), containsString("hive metastore"));
+  }
+
+  @Test
+  void testCreateHMSCatalog() {
     final String catalogName = "mycatalog";
 
     final HoodieHiveCatalog expectedCatalog = HoodieCatalogTestUtils.createHiveCatalog(catalogName);
@@ -69,7 +91,7 @@ public class TestHoodieCatalogFactory {
   }
 
   @Test
-  public void testCreateDFSCatalog() {
+  void testCreateDFSCatalog() {
     final String catalogName = "mycatalog";
 
     Map<String, String> catalogOptions = new HashMap<>();
@@ -87,7 +109,7 @@ public class TestHoodieCatalogFactory {
         FactoryUtil.createCatalog(
             catalogName, options, null, Thread.currentThread().getContextClassLoader());
 
-    checkEquals(expectedCatalog, (AbstractCatalog)actualCatalog);
+    checkEquals(expectedCatalog, (AbstractCatalog) actualCatalog);
   }
 
   private static void checkEquals(AbstractCatalog c1, AbstractCatalog c2) {

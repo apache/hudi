@@ -68,6 +68,7 @@
           <imports>
             <!-- import avro files -->
             <import>${basedir}/src/main/avro/HoodieCommitMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieCompactionStrategy.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCompactionOperation.avsc</import>
             <import>${basedir}/src/main/avro/HoodieSavePointMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCompactionMetadata.avsc</import>
@@ -101,6 +102,17 @@
   </build>
 
   <dependencies>
+    <dependency>
+      <groupId>org.openjdk.jol</groupId>
+      <artifactId>jol-core</artifactId>
+    </dependency>
+
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-1.2-api</artifactId>
+    </dependency>
+
     <!-- Fasterxml -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
@@ -183,6 +195,13 @@
     </dependency>
 
     <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
       <scope>test</scope>
@@ -230,6 +249,16 @@
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-client</artifactId>
       <version>${hbase.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>log4j</groupId>
+          <artifactId>log4j</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     
     <dependency>
@@ -270,6 +299,5 @@
       <artifactId>joda-time</artifactId>
       <scope>test</scope>
     </dependency>
-
   </dependencies>
 </project>

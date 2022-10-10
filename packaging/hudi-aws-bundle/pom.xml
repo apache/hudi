@@ -71,14 +71,13 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                             <artifactSet>
-                                <includes>
+                                <includes combine.children="append">
                                     <include>org.apache.hudi:hudi-common</include>
                                     <include>org.apache.hudi:hudi-hadoop-mr</include>
                                     <include>org.apache.hudi:hudi-sync-common</include>
                                     <include>org.apache.hudi:hudi-hive-sync</include>
                                     <include>org.apache.hudi:hudi-aws</include>
                                     <include>org.apache.parquet:parquet-avro</include>
-                                    <include>org.apache.avro:avro</include>
                                     <include>com.amazonaws:dynamodb-lock-client</include>
                                     <include>com.amazonaws:aws-java-sdk-cloudwatch</include>
                                     <include>com.amazonaws:aws-java-sdk-dynamodb</include>
@@ -100,17 +99,10 @@
                                     <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
                                     <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
                                     <include>org.apache.htrace:htrace-core4</include>
+                                    <include>org.openjdk.jol:jol-core</include>
                                 </includes>
                             </artifactSet>
-                            <relocations>
-                                <relocation>
-                                    <pattern>com.esotericsoftware.kryo.</pattern>
-                                    <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>com.esotericsoftware.minlog.</pattern>
-                                    <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
-                                </relocation>
+                            <relocations combine.children="append">
                                 <relocation>
                                     <pattern>com.beust.jcommander.</pattern>
                                     <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
@@ -135,24 +127,16 @@
                                     <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                                 </relocation>
                                 <relocation>
-                                    <pattern>org.objenesis.</pattern>
-                                    <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
-                                </relocation>
-                                <relocation>
                                     <pattern>com.amazonaws.</pattern>
                                     <shadedPattern>org.apache.hudi.com.amazonaws.</shadedPattern>
                                 </relocation>
                                 <relocation>
-                                    <pattern>org.apache.parquet.avro.</pattern>
-                                    <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>org.apache.avro.</pattern>
-                                    <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
-                                </relocation>
-                                <relocation>
                                     <pattern>com.codahale.metrics.</pattern>
                                     <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.openjdk.jol.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                                 </relocation>
                                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
                                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
@@ -284,18 +268,12 @@
             <artifactId>hudi-aws</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- Need parquet and avro to run AwsGlueCatalogSyncTool using run_sync_tool with this bundle.
-        Parquet and avro from other packages have already been shaded above-->
+
+        <!-- Parquet -->
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-avro</artifactId>
             <version>${parquet.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.avro</groupId>
-            <artifactId>avro</artifactId>
-            <version>${avro.version}</version>
             <scope>compile</scope>
         </dependency>
     </dependencies>

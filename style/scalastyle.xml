@@ -72,7 +72,7 @@
  </check>
  <check level="error" class="org.scalastyle.scalariform.NoWhitespaceBeforeLeftBracketChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NoWhitespaceAfterLeftBracketChecker" enabled="true"/>
- <check level="error" class="org.scalastyle.scalariform.ReturnChecker" enabled="true"/>
+ <check level="warning" class="org.scalastyle.scalariform.ReturnChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NullChecker" enabled="false"/>
  <check level="error" class="org.scalastyle.scalariform.NoCloneChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NoFinalizeChecker" enabled="true"/>
@@ -128,6 +128,11 @@
    <parameter name="group.javax">java?\..*</parameter>
    <parameter name="group.java">javax?\..*</parameter>
    <parameter name="group.scala">scala\..*</parameter>
+  </parameters>
+ </check>
+ <check level="error" class="org.scalastyle.scalariform.IllegalImportsChecker" enabled="true">
+  <parameters>
+   <parameter name="illegalImports"><![CDATA[com.google.common]]></parameter>
   </parameters>
  </check>
 

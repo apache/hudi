@@ -29,7 +29,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 
@@ -107,11 +106,25 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,
                                     String spillableMapPath, boolean reuse) {
     if (metadataConfig.enabled()) {
-      return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, reuse);
+      return createHoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, reuse);
     } else {
-      return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
-          datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
+      return createFSBackedTableMetadata(engineContext, metadataConfig, datasetBasePath);
     }
+  }
+
+  static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
+                                                                   HoodieMetadataConfig metadataConfig,
+                                                                   String datasetBasePath) {
+    return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
+        datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
+  }
+
+  static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,
+                                                                   HoodieMetadataConfig metadataConfig,
+                                                                   String datasetBasePath,
+                                                                   String spillableMapPath,
+                                                                   boolean reuse) {
+    return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, reuse);
   }
 
   /**

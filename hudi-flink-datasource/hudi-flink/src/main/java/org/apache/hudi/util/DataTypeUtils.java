@@ -18,9 +18,8 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.common.util.ValidationUtils;
-
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeFamily;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
@@ -47,9 +46,13 @@ public class DataTypeUtils {
    * Returns the precision of the given TIMESTAMP type.
    */
   public static int precision(LogicalType logicalType) {
-    ValidationUtils.checkArgument(logicalType instanceof TimestampType);
-    TimestampType timestampType = (TimestampType) logicalType;
-    return timestampType.getPrecision();
+    if (logicalType instanceof TimestampType) {
+      return ((TimestampType) logicalType).getPrecision();
+    } else if (logicalType instanceof LocalZonedTimestampType) {
+      return ((LocalZonedTimestampType) logicalType).getPrecision();
+    } else {
+      throw new AssertionError("Unexpected type: " + logicalType);
+    }
   }
 
   /**
@@ -70,7 +73,7 @@ public class DataTypeUtils {
    * Projects the row fields with given names.
    */
   public static RowType.RowField[] projectRowFields(RowType rowType, String[] names) {
-    int [] fieldIndices = Arrays.stream(names).mapToInt(rowType::getFieldIndex).toArray();
+    int[] fieldIndices = Arrays.stream(names).mapToInt(rowType::getFieldIndex).toArray();
     return Arrays.stream(fieldIndices).mapToObj(i -> rowType.getFields().get(i)).toArray(RowType.RowField[]::new);
   }
 

@@ -74,7 +74,7 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
-                <includes>
+                <includes combine.children="append">
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-flink-client</include>
@@ -129,9 +129,6 @@
                   <include>org.eclipse.jetty.websocket:*</include>
                   <include>javax.servlet:javax.servlet-api</include>
 
-                  <!-- Used for HUDI write handle -->
-                  <inclide>com.esotericsoftware:kryo-shaded</inclide>
-
                   <include>org.apache.flink:${flink.hadoop.compatibility.artifactId}</include>
                   <include>org.apache.flink:flink-json</include>
                   <include>org.apache.flink:${flink.parquet.artifactId}</include>
@@ -163,9 +160,10 @@
                   <include>org.apache.htrace:htrace-core4</include>
                   <include>commons-codec:commons-codec</include>
                   <include>commons-io:commons-io</include>
+                  <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
-              <relocations>
+              <relocations combine.children="append">
                 <relocation>
                   <pattern>javax.servlet.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}javax.servlet.</shadedPattern>
@@ -213,14 +211,13 @@
                   <pattern>org.eclipse.jetty.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.jetty.</shadedPattern>
                 </relocation>
-                <!-- Shade kryo-shaded because it may conflict with kryo used by flink -->
-                <relocation>
-                  <pattern>com.esotericsoftware.kryo.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}com.esotericsoftware.kryo.</shadedPattern>
-                </relocation>
                 <relocation>
                   <pattern>com.fasterxml.jackson.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.fasterxml.jackson.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.openjdk.jol.</pattern>
+                  <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
@@ -638,13 +635,6 @@
       <artifactId>libfb303</artifactId>
       <version>${thrift.version}</version>
       <scope>${flink.bundle.hive.scope}</scope>
-    </dependency>
-
-    <!-- kryo -->
-    <dependency>
-      <groupId>com.esotericsoftware</groupId>
-      <artifactId>kryo-shaded</artifactId>
-      <version>4.0.2</version>
     </dependency>
 
     <!-- ORC -->

@@ -68,6 +68,7 @@ public class RowDataProjection implements Serializable {
    */
   public RowData project(RowData rowData) {
     GenericRowData genericRowData = new GenericRowData(this.fieldGetters.length);
+    genericRowData.setRowKind(rowData.getRowKind());
     for (int i = 0; i < this.fieldGetters.length; i++) {
       final Object val = this.fieldGetters[i].getFieldOrNull(rowData);
       genericRowData.setField(i, val);

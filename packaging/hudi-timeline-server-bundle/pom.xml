@@ -42,20 +42,6 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Logging -->
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-1.2-api</artifactId>
-        </dependency>
-
         <!-- Fasterxml -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -169,7 +155,7 @@
                     </filter>
                 </filters>
                 <artifactSet>
-                  <includes>
+                  <includes combine.children="append">
                       <!-- 
                          Include hudi-timeline-server with javalin dependencies. 
                          hadoop deps are to be provided at runtime. see run_server.sh 
@@ -221,14 +207,12 @@
                       <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
                       <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
                       <include>org.apache.htrace:htrace-core4</include>
-                      <include>com.esotericsoftware:kryo-shaded</include>
-                      <include>com.esotericsoftware:minlog</include>
                       <include>commons-io:commons-io</include>
                       <include>log4j:log4j</include>
-                      <include>org.objenesis:objenesis</include>
+                      <include>org.openjdk.jol:jol-core</include>
                   </includes>
                 </artifactSet>
-                <relocations>
+                <relocations combine.children="append">
                     <relocation>
                         <pattern>org.apache.commons.io.</pattern>
                         <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
@@ -247,6 +231,10 @@
                     <relocation>
                         <pattern>org.apache.htrace.</pattern>
                         <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                        <pattern>org.openjdk.jol.</pattern>
+                        <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                     </relocation>
                     <!-- The classes below in org.apache.hadoop.metrics2 package come from
                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,

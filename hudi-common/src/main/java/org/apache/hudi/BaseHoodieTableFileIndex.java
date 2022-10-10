@@ -34,14 +34,17 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.hadoop.CachingPath;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -53,6 +56,8 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hadoop.CachingPath.createPathUnsafe;
+
 /**
  * Common (engine-agnostic) File Index implementation enabling individual query engines to
  * list Hudi Table contents based on the
@@ -63,13 +68,11 @@ import java.util.stream.Collectors;
  *   <li>Query instant/range</li>
  * </ul>
  */
-public abstract class   BaseHoodieTableFileIndex {
-
+public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private static final Logger LOG = LogManager.getLogger(BaseHoodieTableFileIndex.class);
 
   private final String[] partitionColumns;
 
-  private final FileSystemViewStorageConfig fileSystemStorageConfig;
   protected final HoodieMetadataConfig metadataConfig;
 
   private final HoodieTableQueryType queryType;
@@ -80,7 +83,7 @@ public abstract class   BaseHoodieTableFileIndex {
   private final boolean shouldValidateInstant;
 
   private final HoodieTableType tableType;
-  protected final String basePath;
+  protected final Path basePath;
 
   private final HoodieTableMetaClient metaClient;
   private final HoodieEngineContext engineContext;
@@ -93,6 +96,8 @@ public abstract class   BaseHoodieTableFileIndex {
   protected volatile boolean queryAsNonePartitionedTable = false;
 
   private transient volatile HoodieTableFileSystemView fileSystemView = null;
+
+  private transient HoodieTableMetadata tableMetadata = null;
 
   /**
    * @param engineContext Hudi engine-specific context
@@ -117,9 +122,6 @@ public abstract class   BaseHoodieTableFileIndex {
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
         .orElse(new String[0]);
 
-    this.fileSystemStorageConfig = FileSystemViewStorageConfig.newBuilder()
-        .fromProperties(configProperties)
-        .build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(configProperties)
         .build();
@@ -131,7 +133,7 @@ public abstract class   BaseHoodieTableFileIndex {
     this.shouldValidateInstant = shouldValidateInstant;
 
     this.tableType = metaClient.getTableType();
-    this.basePath = metaClient.getBasePath();
+    this.basePath = metaClient.getBasePathV2();
 
     this.metaClient = metaClient;
     this.engineContext = engineContext;
@@ -153,7 +155,7 @@ public abstract class   BaseHoodieTableFileIndex {
    * Returns table's base-path
    */
   public String getBasePath() {
-    return metaClient.getBasePath();
+    return basePath.toString();
   }
 
   /**
@@ -172,14 +174,19 @@ public abstract class   BaseHoodieTableFileIndex {
         .mapToInt(List::size).sum();
   }
 
+  @Override
+  public void close() throws Exception {
+    resetTableMetadata(null);
+  }
+
   protected List<PartitionPath> getAllQueryPartitionPaths() {
     List<String> queryRelativePartitionPaths = queryPaths.stream()
-        .map(path -> FSUtils.getRelativePartitionPath(new Path(basePath), path))
+        .map(path -> FSUtils.getRelativePartitionPath(basePath, path))
         .collect(Collectors.toList());
 
     // Load all the partition path from the basePath, and filter by the query partition path.
     // TODO load files from the queryRelativePartitionPaths directly.
-    List<String> matchedPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, metadataConfig, basePath)
+    List<String> matchedPartitionPaths = getAllPartitionPathsUnchecked()
         .stream()
         .filter(path -> queryRelativePartitionPaths.stream().anyMatch(path::startsWith))
         .collect(Collectors.toList());
@@ -244,12 +251,7 @@ public abstract class   BaseHoodieTableFileIndex {
           );
 
       fetchedPartitionToFiles =
-          FSUtils.getFilesInPartitions(
-                  engineContext,
-                  metadataConfig,
-                  basePath,
-                  fullPartitionPathsMapToFetch.keySet().toArray(new String[0]),
-                  fileSystemStorageConfig.getSpillableDir())
+          getAllFilesInPartitionsUnchecked(fullPartitionPathsMapToFetch.keySet())
               .entrySet()
               .stream()
               .collect(Collectors.toMap(e -> fullPartitionPathsMapToFetch.get(e.getKey()), e -> e.getValue()));
@@ -267,6 +269,11 @@ public abstract class   BaseHoodieTableFileIndex {
   private void doRefresh() {
     long startTime = System.currentTimeMillis();
 
+    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+
+    resetTableMetadata(newTableMetadata);
+
     Map<PartitionPath, FileStatus[]> partitionFiles = loadPartitionPathFiles();
     FileStatus[] allFiles = partitionFiles.values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
 
@@ -278,38 +285,30 @@ public abstract class   BaseHoodieTableFileIndex {
     // TODO we can optimize the flow by:
     //  - First fetch list of files from instants of interest
     //  - Load FileStatus's
-    fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
+    this.fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
 
     Option<String> queryInstant =
         specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
 
     validate(activeTimeline, queryInstant);
 
-    if (tableType.equals(HoodieTableType.MERGE_ON_READ) && queryType.equals(HoodieTableQueryType.SNAPSHOT)) {
-      cachedAllInputFileSlices = partitionFiles.keySet().stream()
-          .collect(Collectors.toMap(
-              Function.identity(),
-              partitionPath ->
-                  queryInstant.map(instant ->
-                    fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+    // NOTE: For MOR table, when the compaction is inflight, we need to not only fetch the
+    // latest slices, but also include the base and log files of the second-last version of
+    // the file slice in the same file group as the latest file slice that is under compaction.
+    // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
+    // API.  Note that for COW table, the merging logic of two slices does not happen as there
+    // is no compaction, thus there is no performance impact.
+    cachedAllInputFileSlices = partitionFiles.keySet().stream()
+        .collect(Collectors.toMap(
+                Function.identity(),
+                partitionPath ->
+                    queryInstant.map(instant ->
+                            fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+                        )
+                        .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
                         .collect(Collectors.toList())
-                  )
-                  .orElse(Collections.emptyList())
-              )
-          );
-    } else {
-      cachedAllInputFileSlices = partitionFiles.keySet().stream()
-         .collect(Collectors.toMap(
-             Function.identity(),
-             partitionPath ->
-                 queryInstant.map(instant ->
-                     fileSystemView.getLatestFileSlicesBeforeOrOn(partitionPath.path, instant, true)
-                 )
-                   .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
-                   .collect(Collectors.toList())
-             )
-         );
-    }
+            )
+        );
 
     cachedFileSize = cachedAllInputFileSlices.values().stream()
         .flatMap(Collection::stream)
@@ -322,6 +321,22 @@ public abstract class   BaseHoodieTableFileIndex {
     long duration = System.currentTimeMillis() - startTime;
 
     LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), duration));
+  }
+
+  private Map<String, FileStatus[]> getAllFilesInPartitionsUnchecked(Collection<String> fullPartitionPathsMapToFetch) {
+    try {
+      return tableMetadata.getAllFilesInPartitions(new ArrayList<>(fullPartitionPathsMapToFetch));
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to list partition paths for a table", e);
+    }
+  }
+
+  private List<String> getAllPartitionPathsUnchecked() {
+    try {
+      return isPartitionedTable() ? tableMetadata.getAllPartitionPaths() : Collections.singletonList("");
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to fetch partition paths for a table", e);
+    }
   }
 
   private void validate(HoodieTimeline activeTimeline, Option<String> queryInstant) {
@@ -340,7 +355,23 @@ public abstract class   BaseHoodieTableFileIndex {
     return fileSlice.getBaseFile().map(BaseFile::getFileLen).orElse(0L) + logFileSize;
   }
 
+  private void resetTableMetadata(HoodieTableMetadata newTableMetadata) {
+    if (tableMetadata != null) {
+      try {
+        tableMetadata.close();
+      } catch (Exception e) {
+        throw new HoodieException("Failed to close HoodieTableMetadata instance", e);
+      }
+    }
+    tableMetadata = newTableMetadata;
+  }
+
+  private boolean isPartitionedTable() {
+    return partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath.toString());
+  }
+
   public static final class PartitionPath {
+
     final String path;
     final Object[] values;
 
@@ -353,12 +384,14 @@ public abstract class   BaseHoodieTableFileIndex {
       return path;
     }
 
-    Path fullPartitionPath(String basePath) {
+    Path fullPartitionPath(Path basePath) {
       if (!path.isEmpty()) {
-        return new CachingPath(basePath, path);
+        // NOTE: Since we now that the path is a proper relative path that doesn't require
+        //       normalization we create Hadoop's Path using more performant unsafe variant
+        return new CachingPath(basePath, createPathUnsafe(path));
       }
 
-      return new CachingPath(basePath);
+      return basePath;
     }
 
     @Override

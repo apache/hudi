@@ -88,8 +88,8 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
   public void execute(ExecutionContext context, int curItrCount) throws Exception {
     int validateOnceEveryItr = config.validateOnceEveryIteration();
     int itrCountToExecute = config.getIterationCountToExecute();
-    if ((itrCountToExecute != -1 && itrCountToExecute == curItrCount) ||
-        (itrCountToExecute == -1 && ((curItrCount % validateOnceEveryItr) == 0))) {
+    if ((itrCountToExecute != -1 && itrCountToExecute == curItrCount)
+        || (itrCountToExecute == -1 && ((curItrCount % validateOnceEveryItr) == 0))) {
       FileSystem fs = new Path(context.getHoodieTestSuiteWriter().getCfg().inputBasePath)
           .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
       if (context.getHoodieTestSuiteWriter().getCfg().testContinousMode) {
@@ -142,8 +142,8 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
           String tableName = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_TABLE().key());
           log.warn("Validating hive table with db : " + database + " and table : " + tableName);
           session.sql("REFRESH TABLE " + database + "." + tableName);
-          Dataset<Row> cowDf = session.sql("SELECT _row_key, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare, _hoodie_is_deleted, " +
-              "test_suite_source_ordering_field FROM " + database + "." + tableName);
+          Dataset<Row> cowDf = session.sql("SELECT _row_key, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare, _hoodie_is_deleted, "
+              + "test_suite_source_ordering_field FROM " + database + "." + tableName);
           Dataset<Row> reorderedInputDf = inputSnapshotDf.select("_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon", "fare",
               "_hoodie_is_deleted", "test_suite_source_ordering_field");
 
@@ -178,9 +178,9 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     FileStatus[] subDirs = fs.listStatus(new Path(inputPath));
     List<FileStatus> subDirList = Arrays.asList(subDirs);
     subDirList.sort(Comparator.comparingLong(entry -> Long.parseLong(entry.getPath().getName())));
-    String latestSubDir = subDirList.get(subDirList.size() -1).getPath().getName();
-    log.info("Latest sub directory in input path " + latestSubDir + ", latest checkpoint from deltastreamer " +
-        (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none"));
+    String latestSubDir = subDirList.get(subDirList.size() - 1).getPath().getName();
+    log.info("Latest sub directory in input path " + latestSubDir + ", latest checkpoint from deltastreamer "
+        + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none"));
     long maxWaitTime = config.maxWaitTimeForDeltastreamerToCatchupMs();
     long waitedSoFar = 0;
     while (!(latestCheckpoint.isPresent() && latestCheckpoint.get().equals(latestSubDir))) {
@@ -191,11 +191,11 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
       latestCheckpoint = getLatestCheckpoint(commitTimeline);
       waitedSoFar += 20000;
       if (waitedSoFar >= maxWaitTime) {
-        throw new AssertionError("DeltaStreamer has not caught up after 5 mins of wait time. Last known checkpoint " +
-            (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none") + ", expected checkpoint to have caugth up " + latestSubDir);
+        throw new AssertionError("DeltaStreamer has not caught up after 5 mins of wait time. Last known checkpoint "
+            + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none") + ", expected checkpoint to have caugth up " + latestSubDir);
       }
-      log.info("Latest sub directory in input path " + latestSubDir + ", latest checkpoint from deltastreamer " +
-          (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none"));
+      log.info("Latest sub directory in input path " + latestSubDir + ", latest checkpoint from deltastreamer "
+          + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none"));
     }
   }
 
@@ -223,7 +223,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
     Dataset<Row> trimmedDf = inputDf;
     if (!config.inputPartitonsToSkipWithValidate().isEmpty()) {
-      trimmedDf = inputDf.filter("instr("+partitionPathField+", \'"+ config.inputPartitonsToSkipWithValidate() +"\') != 1");
+      trimmedDf = inputDf.filter("instr(" + partitionPathField + ", \'" + config.inputPartitonsToSkipWithValidate() + "\') != 1");
     }
 
     ExpressionEncoder encoder = getEncoder(inputDf.schema());

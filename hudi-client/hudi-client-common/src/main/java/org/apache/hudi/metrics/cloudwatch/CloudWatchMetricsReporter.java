@@ -26,7 +26,6 @@ import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.Closeable;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -70,11 +69,6 @@ public class CloudWatchMetricsReporter extends MetricsReporter {
   @Override
   public void report() {
     reporter.report();
-  }
-
-  @Override
-  public Closeable getReporter() {
-    return reporter;
   }
 
   @Override

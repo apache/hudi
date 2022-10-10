@@ -88,6 +88,12 @@ public class FileSliceHandler extends Handler {
         .collect(Collectors.toList());
   }
 
+  public List<CompactionOpDTO> getPendingLogCompactionOperations(String basePath) {
+    return viewManager.getFileSystemView(basePath).getPendingLogCompactionOperations()
+        .map(instantOp -> CompactionOpDTO.fromCompactionOperation(instantOp.getKey(), instantOp.getValue()))
+        .collect(Collectors.toList());
+  }
+
   public List<FileGroupDTO> getAllFileGroups(String basePath, String partitionPath) {
     return viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
         .collect(Collectors.toList());

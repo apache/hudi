@@ -21,6 +21,7 @@ package org.apache.hudi.timeline.service;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.marker.MarkerOperation;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
@@ -122,7 +124,7 @@ public class RequestHandler {
         ctx.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, HoodieTimeline.INVALID_INSTANT_TS);
     String timelineHashFromClient = ctx.queryParam(RemoteHoodieTableFileSystemView.TIMELINE_HASH, "");
     HoodieTimeline localTimeline =
-        viewManager.getFileSystemView(basePath).getTimeline().filterCompletedAndCompactionInstants();
+        viewManager.getFileSystemView(basePath).getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
     if (LOG.isDebugEnabled()) {
       LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
           + "], localTimeline=" + localTimeline.getInstants().collect(Collectors.toList()));
@@ -373,6 +375,13 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.PENDING_LOG_COMPACTION_OPS, new ViewHandler(ctx -> {
+      metricsRegistry.add("PEDING_LOG_COMPACTION_OPS", 1);
+      List<CompactionOpDTO> dtos = sliceHandler.getPendingLogCompactionOperations(
+          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+      writeValueAsString(ctx, dtos);
+    }, true));
+
     app.get(RemoteHoodieTableFileSystemView.ALL_FILEGROUPS_FOR_PARTITION_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_FILEGROUPS_FOR_PARTITION", 1);
       List<FileGroupDTO> dtos = sliceHandler.getAllFileGroups(
@@ -502,14 +511,19 @@ public class RequestHandler {
         if (refreshCheck) {
           long beginFinalCheck = System.currentTimeMillis();
           if (isLocalViewBehind(context)) {
-            String errMsg =
-                "Last known instant from client was "
-                    + context.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS,
-                        HoodieTimeline.INVALID_INSTANT_TS)
-                    + " but server has the following timeline "
-                    + viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM))
-                        .getTimeline().getInstants().collect(Collectors.toList());
-            throw new BadRequestResponse(errMsg);
+            String lastKnownInstantFromClient = context.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS,
+                HoodieTimeline.INVALID_INSTANT_TS);
+            String timelineHashFromClient = context.queryParam(RemoteHoodieTableFileSystemView.TIMELINE_HASH, "");
+            HoodieTimeline localTimeline =
+                viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM)).getTimeline();
+            if (shouldThrowExceptionIfLocalViewBehind(localTimeline, timelineHashFromClient)) {
+              String errMsg =
+                      "Last known instant from client was "
+                              + lastKnownInstantFromClient
+                              + " but server has the following timeline "
+                              + localTimeline.getInstants().collect(Collectors.toList());
+              throw new BadRequestResponse(errMsg);
+            }
           }
           long endFinalCheck = System.currentTimeMillis();
           finalCheckTimeTaken = endFinalCheck - beginFinalCheck;
@@ -537,6 +551,21 @@ public class RequestHandler {
                 timeTakenMillis, refreshCheckTimeTaken, handleTimeTaken, finalCheckTimeTaken, success,
                 context.queryString(), context.host(), synced));
       }
+    }
+  }
+
+  /**
+   * Determine whether to throw an exception when local view of table's timeline is behind that of client's view.
+   */
+  private boolean shouldThrowExceptionIfLocalViewBehind(HoodieTimeline localTimeline, String timelineHashFromClient) {
+    Option<HoodieInstant> lastInstant = localTimeline.lastInstant();
+    // When performing async clean, we may have one more .clean.completed after lastInstantTs.
+    // In this case, we do not need to throw an exception.
+    if (lastInstant.isPresent() && lastInstant.get().getAction().equals(HoodieTimeline.CLEAN_ACTION)
+          && localTimeline.findInstantsBefore(lastInstant.get().getTimestamp()).getTimelineHash().equals(timelineHashFromClient)) {
+      return false;
+    } else {
+      return true;
     }
   }
 }

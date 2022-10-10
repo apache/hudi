@@ -21,6 +21,7 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -107,15 +108,17 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
                             Collector<CompactionCommitEvent> collector,
                             HoodieWriteConfig writeConfig) throws IOException {
     HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
+    HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
+    String maxInstantTime = compactor.getMaxInstantTime(metaClient);
     List<WriteStatus> writeStatuses = compactor.compact(
         new HoodieFlinkCopyOnWriteTable<>(
             writeConfig,
             writeClient.getEngineContext(),
-            writeClient.getHoodieTable().getMetaClient()),
-        writeClient.getHoodieTable().getMetaClient(),
+            metaClient),
+        metaClient,
         writeClient.getConfig(),
         compactionOperation,
-        instantTime,
+        instantTime, maxInstantTime,
         writeClient.getHoodieTable().getTaskContextSupplier());
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }

@@ -17,19 +17,19 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
-import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
-import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieOptionConfig
+import org.apache.spark.sql.hudi.HoodieOptionConfig.SQL_KEY_TABLE_PRIMARY_KEY
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -190,12 +190,18 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(finalSchema, false, recordName, namespace)
+      val partitionColumns = if (table.partitionColumnNames.isEmpty) {
+        null
+      } else {
+        table.partitionColumnNames.mkString(",")
+      }
+
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
         .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
         .setTableCreateSchema(schema.toString())
-        .setPartitionFields(table.partitionColumnNames.mkString(","))
+        .setPartitionFields(partitionColumns)
         .initTable(hadoopConf, tableLocation)
     }
   }
@@ -288,7 +294,10 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
           originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
     } else {
-      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = classOf[ComplexKeyGenerator].getCanonicalName
+      val primaryKeys = table.properties.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName).getOrElse(SQL_KEY_TABLE_PRIMARY_KEY.defaultValue.get)
+      val partitions = table.partitionColumnNames.mkString(",")
+      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
+        DataSourceOptionsHelper.inferKeyGenClazz(primaryKeys, partitions)
     }
     extraConfig.toMap
   }
