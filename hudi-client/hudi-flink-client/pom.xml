@@ -147,14 +147,6 @@
             <scope>test</scope>
             <exclusions>
                 <exclusion>
-                    <groupId>org.codehaus.jackson</groupId>
-                    <artifactId>jackson-mapper-asl</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.codehaus.jackson</groupId>
-                    <artifactId>jackson-core-asl</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>javax.xml.bind</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>

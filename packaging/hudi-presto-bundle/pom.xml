@@ -71,7 +71,6 @@
 
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
-                  <include>org.codehaus.jackson:*</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
@@ -124,10 +123,6 @@
                 <relocation>
                   <pattern>org.apache.htrace.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.codehaus.jackson.</pattern>
-                  <shadedPattern>org.apache.hudi.org.codehaus.jackson.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.esotericsoftware.kryo.</pattern>

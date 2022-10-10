@@ -163,12 +163,8 @@ httpclient/org.apache.httpcomponents/4.4.1//httpclient-4.4.1.jar
 httpcore/org.apache.httpcomponents/4.4.1//httpcore-4.4.1.jar
 ivy/org.apache.ivy/2.4.0//ivy-2.4.0.jar
 jackson-annotations/com.fasterxml.jackson.core/2.10.0//jackson-annotations-2.10.0.jar
-jackson-core-asl/org.codehaus.jackson/1.9.13//jackson-core-asl-1.9.13.jar
 jackson-core/com.fasterxml.jackson.core/2.10.0//jackson-core-2.10.0.jar
 jackson-databind/com.fasterxml.jackson.core/2.10.0//jackson-databind-2.10.0.jar
-jackson-jaxrs/org.codehaus.jackson/1.9.13//jackson-jaxrs-1.9.13.jar
-jackson-mapper-asl/org.codehaus.jackson/1.9.13//jackson-mapper-asl-1.9.13.jar
-jackson-xc/org.codehaus.jackson/1.9.13//jackson-xc-1.9.13.jar
 jamon-runtime/org.jamon/2.3.1//jamon-runtime-2.3.1.jar
 janino/org.codehaus.janino/2.7.6//janino-2.7.6.jar
 jasper-compiler/tomcat/5.5.23//jasper-compiler-5.5.23.jar
