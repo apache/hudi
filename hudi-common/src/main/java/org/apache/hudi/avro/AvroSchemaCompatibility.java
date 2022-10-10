@@ -435,9 +435,9 @@ public class AvroSchemaCompatibility {
       private final Option<Method> newDefaultValueMethod = loadMethodNoThrow("defaultVal");
 
       public Object getDefaultValue(Field field) {
-        return legacyDefaultValueMethod.or(newDefaultValueMethod)
+        return newDefaultValueMethod.or(legacyDefaultValueMethod)
             .map(m -> invokeMethodNoThrow(m, field).asLeft())
-            .get();
+            .orElse(null);
       }
 
       private static Either<Object, Exception> invokeMethodNoThrow(Method m, Object obj, Object... args) {
