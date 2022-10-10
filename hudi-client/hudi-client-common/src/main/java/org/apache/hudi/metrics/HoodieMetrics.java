@@ -95,6 +95,8 @@ public class HoodieMetrics {
   public static final String COUNTER_METRIC_EXTENSION = "." + COUNTER_METRIC;
   public static final String SUCCESS_COUNTER = "success" + COUNTER_METRIC_EXTENSION;
   public static final String FAILURE_COUNTER = "failure" + COUNTER_METRIC_EXTENSION;
+  public static final String TOTAL_LOG_BLOCKS_COMPACTED_STR = "totalLogBlocksCompacted";
+  public static final String TOTAL_LOG_RECORDS_COMPACTED_STR = "totalLogRecordsCompacted";
 
   private Metrics metrics;
   // Some timers
@@ -286,6 +288,7 @@ public class HoodieMetrics {
       long totalTimeTakenForInsert = metadata.getTotalCreateTime();
       long totalTimeTakenForUpsert = metadata.getTotalUpsertTime();
       long totalCompactedRecordsUpdated = metadata.getTotalCompactedRecordsUpdated();
+      long totalLogRecordsCompacted = metadata.getTotalLogRecordsCompacted();
       long totalLogFilesCompacted = metadata.getTotalLogFilesCompacted();
       long totalLogFilesSize = metadata.getTotalLogFilesSize();
       metrics.registerGauge(getMetricsName(actionType, TOTAL_PARTITIONS_WRITTEN_STR), totalPartitionsWritten);
@@ -300,13 +303,16 @@ public class HoodieMetrics {
       metrics.registerGauge(getMetricsName(actionType, TOTAL_UPSERT_TIME_STR), totalTimeTakenForUpsert);
       metrics.registerGauge(getMetricsName(actionType, TOTAL_COMPACTED_RECORDS_UPDATED_STR), totalCompactedRecordsUpdated);
       metrics.registerGauge(getMetricsName(actionType, TOTAL_LOG_FILES_COMPACTED_STR), totalLogFilesCompacted);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_LOG_RECORDS_COMPACTED_STR), totalLogRecordsCompacted);
       metrics.registerGauge(getMetricsName(actionType, TOTAL_LOG_FILES_SIZE_STR), totalLogFilesSize);
       metrics.registerGauge(getMetricsName(actionType, TOTAL_RECORDS_DELETED), totalRecordsDeleted);
       if (config.isCompactionLogBlockMetricsOn()) {
         long totalCorruptedLogBlocks = metadata.getTotalCorruptLogBlocks();
         long totalRollbackLogBlocks = metadata.getTotalRollbackLogBlocks();
+        long totalLogBlocksCompacted = metadata.getTotalLogBlocksCompacted();
         metrics.registerGauge(getMetricsName(actionType, TOTAL_CORRUPTED_LOG_BLOCKS_STR), totalCorruptedLogBlocks);
         metrics.registerGauge(getMetricsName(actionType, TOTAL_ROLLBACK_LOG_BLOCKS_STR), totalRollbackLogBlocks);
+        metrics.registerGauge(getMetricsName(actionType, TOTAL_LOG_BLOCKS_COMPACTED_STR), totalLogBlocksCompacted);
       }
     }
   }
