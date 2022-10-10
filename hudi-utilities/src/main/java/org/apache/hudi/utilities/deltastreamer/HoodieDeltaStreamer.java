@@ -182,6 +182,7 @@ public class HoodieDeltaStreamer implements Serializable {
    * @throws Exception
    */
   public void sync() throws Exception {
+    assert (false);
     if (bootstrapExecutor.isPresent()) {
       LOG.info("Performing bootstrap. Source=" + bootstrapExecutor.get().getBootstrapConfig().getBootstrapSourceBasePath());
       bootstrapExecutor.get().execute();
@@ -257,7 +258,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
-            splitter = IdentitySplitter.class)
+        splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--source-class"},
@@ -437,92 +438,92 @@ public class HoodieDeltaStreamer implements Serializable {
       }
       Config config = (Config) o;
       return sourceLimit == config.sourceLimit
-              && Objects.equals(targetBasePath, config.targetBasePath)
-              && Objects.equals(targetTableName, config.targetTableName)
-              && Objects.equals(tableType, config.tableType)
-              && Objects.equals(baseFileFormat, config.baseFileFormat)
-              && Objects.equals(propsFilePath, config.propsFilePath)
-              && Objects.equals(configs, config.configs)
-              && Objects.equals(sourceClassName, config.sourceClassName)
-              && Objects.equals(sourceOrderingField, config.sourceOrderingField)
-              && Objects.equals(payloadClassName, config.payloadClassName)
-              && Objects.equals(schemaProviderClassName, config.schemaProviderClassName)
-              && Objects.equals(transformerClassNames, config.transformerClassNames)
-              && operation == config.operation
-              && Objects.equals(filterDupes, config.filterDupes)
-              && Objects.equals(enableHiveSync, config.enableHiveSync)
-              && Objects.equals(enableMetaSync, config.enableMetaSync)
-              && Objects.equals(forceEmptyMetaSync, config.forceEmptyMetaSync)
-              && Objects.equals(syncClientToolClassNames, config.syncClientToolClassNames)
-              && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
-              && Objects.equals(maxPendingClustering, config.maxPendingClustering)
-              && Objects.equals(continuousMode, config.continuousMode)
-              && Objects.equals(minSyncIntervalSeconds, config.minSyncIntervalSeconds)
-              && Objects.equals(sparkMaster, config.sparkMaster)
-              && Objects.equals(commitOnErrors, config.commitOnErrors)
-              && Objects.equals(deltaSyncSchedulingWeight, config.deltaSyncSchedulingWeight)
-              && Objects.equals(compactSchedulingWeight, config.compactSchedulingWeight)
-              && Objects.equals(clusterSchedulingWeight, config.clusterSchedulingWeight)
-              && Objects.equals(deltaSyncSchedulingMinShare, config.deltaSyncSchedulingMinShare)
-              && Objects.equals(compactSchedulingMinShare, config.compactSchedulingMinShare)
-              && Objects.equals(clusterSchedulingMinShare, config.clusterSchedulingMinShare)
-              && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
-              && Objects.equals(checkpoint, config.checkpoint)
-              && Objects.equals(initialCheckpointProvider, config.initialCheckpointProvider)
-              && Objects.equals(help, config.help);
+          && Objects.equals(targetBasePath, config.targetBasePath)
+          && Objects.equals(targetTableName, config.targetTableName)
+          && Objects.equals(tableType, config.tableType)
+          && Objects.equals(baseFileFormat, config.baseFileFormat)
+          && Objects.equals(propsFilePath, config.propsFilePath)
+          && Objects.equals(configs, config.configs)
+          && Objects.equals(sourceClassName, config.sourceClassName)
+          && Objects.equals(sourceOrderingField, config.sourceOrderingField)
+          && Objects.equals(payloadClassName, config.payloadClassName)
+          && Objects.equals(schemaProviderClassName, config.schemaProviderClassName)
+          && Objects.equals(transformerClassNames, config.transformerClassNames)
+          && operation == config.operation
+          && Objects.equals(filterDupes, config.filterDupes)
+          && Objects.equals(enableHiveSync, config.enableHiveSync)
+          && Objects.equals(enableMetaSync, config.enableMetaSync)
+          && Objects.equals(forceEmptyMetaSync, config.forceEmptyMetaSync)
+          && Objects.equals(syncClientToolClassNames, config.syncClientToolClassNames)
+          && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
+          && Objects.equals(maxPendingClustering, config.maxPendingClustering)
+          && Objects.equals(continuousMode, config.continuousMode)
+          && Objects.equals(minSyncIntervalSeconds, config.minSyncIntervalSeconds)
+          && Objects.equals(sparkMaster, config.sparkMaster)
+          && Objects.equals(commitOnErrors, config.commitOnErrors)
+          && Objects.equals(deltaSyncSchedulingWeight, config.deltaSyncSchedulingWeight)
+          && Objects.equals(compactSchedulingWeight, config.compactSchedulingWeight)
+          && Objects.equals(clusterSchedulingWeight, config.clusterSchedulingWeight)
+          && Objects.equals(deltaSyncSchedulingMinShare, config.deltaSyncSchedulingMinShare)
+          && Objects.equals(compactSchedulingMinShare, config.compactSchedulingMinShare)
+          && Objects.equals(clusterSchedulingMinShare, config.clusterSchedulingMinShare)
+          && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
+          && Objects.equals(checkpoint, config.checkpoint)
+          && Objects.equals(initialCheckpointProvider, config.initialCheckpointProvider)
+          && Objects.equals(help, config.help);
     }
 
     @Override
     public int hashCode() {
       return Objects.hash(targetBasePath, targetTableName, tableType,
-              baseFileFormat, propsFilePath, configs, sourceClassName,
-              sourceOrderingField, payloadClassName, schemaProviderClassName,
-              transformerClassNames, sourceLimit, operation, filterDupes,
-              enableHiveSync, enableMetaSync, forceEmptyMetaSync, syncClientToolClassNames, maxPendingCompactions, maxPendingClustering,
-              continuousMode, minSyncIntervalSeconds, sparkMaster, commitOnErrors,
-              deltaSyncSchedulingWeight, compactSchedulingWeight, clusterSchedulingWeight, deltaSyncSchedulingMinShare,
-              compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
-              initialCheckpointProvider, help);
+          baseFileFormat, propsFilePath, configs, sourceClassName,
+          sourceOrderingField, payloadClassName, schemaProviderClassName,
+          transformerClassNames, sourceLimit, operation, filterDupes,
+          enableHiveSync, enableMetaSync, forceEmptyMetaSync, syncClientToolClassNames, maxPendingCompactions, maxPendingClustering,
+          continuousMode, minSyncIntervalSeconds, sparkMaster, commitOnErrors,
+          deltaSyncSchedulingWeight, compactSchedulingWeight, clusterSchedulingWeight, deltaSyncSchedulingMinShare,
+          compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
+          initialCheckpointProvider, help);
     }
 
     @Override
     public String toString() {
       return "Config{"
-              + "targetBasePath='" + targetBasePath + '\''
-              + ", targetTableName='" + targetTableName + '\''
-              + ", tableType='" + tableType + '\''
-              + ", baseFileFormat='" + baseFileFormat + '\''
-              + ", propsFilePath='" + propsFilePath + '\''
-              + ", configs=" + configs
-              + ", sourceClassName='" + sourceClassName + '\''
-              + ", sourceOrderingField='" + sourceOrderingField + '\''
-              + ", payloadClassName='" + payloadClassName + '\''
-              + ", schemaProviderClassName='" + schemaProviderClassName + '\''
-              + ", transformerClassNames=" + transformerClassNames
-              + ", sourceLimit=" + sourceLimit
-              + ", operation=" + operation
-              + ", filterDupes=" + filterDupes
-              + ", enableHiveSync=" + enableHiveSync
-              + ", enableMetaSync=" + enableMetaSync
-              + ", forceEmptyMetaSync=" + forceEmptyMetaSync
-              + ", syncClientToolClassNames=" + syncClientToolClassNames
-              + ", maxPendingCompactions=" + maxPendingCompactions
-              + ", maxPendingClustering=" + maxPendingClustering
-              + ", continuousMode=" + continuousMode
-              + ", minSyncIntervalSeconds=" + minSyncIntervalSeconds
-              + ", sparkMaster='" + sparkMaster + '\''
-              + ", commitOnErrors=" + commitOnErrors
-              + ", deltaSyncSchedulingWeight=" + deltaSyncSchedulingWeight
-              + ", compactSchedulingWeight=" + compactSchedulingWeight
-              + ", clusterSchedulingWeight=" + clusterSchedulingWeight
-              + ", deltaSyncSchedulingMinShare=" + deltaSyncSchedulingMinShare
-              + ", compactSchedulingMinShare=" + compactSchedulingMinShare
-              + ", clusterSchedulingMinShare=" + clusterSchedulingMinShare
-              + ", forceDisableCompaction=" + forceDisableCompaction
-              + ", checkpoint='" + checkpoint + '\''
-              + ", initialCheckpointProvider='" + initialCheckpointProvider + '\''
-              + ", help=" + help
-              + '}';
+          + "targetBasePath='" + targetBasePath + '\''
+          + ", targetTableName='" + targetTableName + '\''
+          + ", tableType='" + tableType + '\''
+          + ", baseFileFormat='" + baseFileFormat + '\''
+          + ", propsFilePath='" + propsFilePath + '\''
+          + ", configs=" + configs
+          + ", sourceClassName='" + sourceClassName + '\''
+          + ", sourceOrderingField='" + sourceOrderingField + '\''
+          + ", payloadClassName='" + payloadClassName + '\''
+          + ", schemaProviderClassName='" + schemaProviderClassName + '\''
+          + ", transformerClassNames=" + transformerClassNames
+          + ", sourceLimit=" + sourceLimit
+          + ", operation=" + operation
+          + ", filterDupes=" + filterDupes
+          + ", enableHiveSync=" + enableHiveSync
+          + ", enableMetaSync=" + enableMetaSync
+          + ", forceEmptyMetaSync=" + forceEmptyMetaSync
+          + ", syncClientToolClassNames=" + syncClientToolClassNames
+          + ", maxPendingCompactions=" + maxPendingCompactions
+          + ", maxPendingClustering=" + maxPendingClustering
+          + ", continuousMode=" + continuousMode
+          + ", minSyncIntervalSeconds=" + minSyncIntervalSeconds
+          + ", sparkMaster='" + sparkMaster + '\''
+          + ", commitOnErrors=" + commitOnErrors
+          + ", deltaSyncSchedulingWeight=" + deltaSyncSchedulingWeight
+          + ", compactSchedulingWeight=" + compactSchedulingWeight
+          + ", clusterSchedulingWeight=" + clusterSchedulingWeight
+          + ", deltaSyncSchedulingMinShare=" + deltaSyncSchedulingMinShare
+          + ", compactSchedulingMinShare=" + compactSchedulingMinShare
+          + ", clusterSchedulingMinShare=" + clusterSchedulingMinShare
+          + ", forceDisableCompaction=" + forceDisableCompaction
+          + ", checkpoint='" + checkpoint + '\''
+          + ", initialCheckpointProvider='" + initialCheckpointProvider + '\''
+          + ", help=" + help
+          + '}';
     }
   }
 
@@ -653,8 +654,8 @@ public class HoodieDeltaStreamer implements Serializable {
                 + cfg.baseFileFormat);
         cfg.baseFileFormat = baseFileFormat;
         this.cfg.baseFileFormat = baseFileFormat;
-        Map<String,String> propsToValidate = new HashMap<>();
-        properties.get().forEach((k,v) -> propsToValidate.put(k.toString(),v.toString()));
+        Map<String, String> propsToValidate = new HashMap<>();
+        properties.get().forEach((k, v) -> propsToValidate.put(k.toString(), v.toString()));
         HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
