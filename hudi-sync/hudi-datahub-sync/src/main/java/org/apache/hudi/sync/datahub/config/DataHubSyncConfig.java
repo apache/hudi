@@ -101,8 +101,8 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--emitter-supplier-class"}, description = "Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.")
     public String emitterSupplierClass;
 
-    @Parameter(names = {"--data-platform-name"}, description = "String used to represent Hudi when creating its " +
-            "corresponding DataPlatform entity within Datahub")
+    @Parameter(names = {"--data-platform-name"}, description = "String used to represent Hudi when creating its "
+            + "corresponding DataPlatform entity within Datahub")
     public String dataPlatformName;
 
     @Parameter(names = {"--dataset-env"}, description = "Which Datahub Environment to use when pushing entities")
