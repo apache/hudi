@@ -47,7 +47,8 @@ public class HoodieCatalogTestUtils {
         null,
         null,
         createHiveConf(),
-        true);
+        true,
+        false);
   }
 
   public static HiveConf createHiveConf() {

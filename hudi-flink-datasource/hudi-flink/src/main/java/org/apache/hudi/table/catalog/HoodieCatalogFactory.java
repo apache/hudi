@@ -58,7 +58,8 @@ public class HoodieCatalogFactory implements CatalogFactory {
             context.getName(),
             helper.getOptions().get(CatalogOptions.CATALOG_PATH),
             helper.getOptions().get(CatalogOptions.DEFAULT_DATABASE),
-            helper.getOptions().get(CatalogOptions.HIVE_CONF_DIR));
+            helper.getOptions().get(CatalogOptions.HIVE_CONF_DIR),
+            helper.getOptions().get(CatalogOptions.TABLE_EXTERNAL));
       case "dfs":
         return new HoodieCatalog(
             context.getName(),

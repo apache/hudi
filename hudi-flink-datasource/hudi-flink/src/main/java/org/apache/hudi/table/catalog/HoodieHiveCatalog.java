@@ -117,9 +117,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   // optional catalog base path: used for db/table path inference.
   private final String catalogPath;
+  private final boolean external;
 
-  public HoodieHiveCatalog(String catalogName, String catalogPath, String defaultDatabase, String hiveConfDir) {
-    this(catalogName, catalogPath, defaultDatabase, HoodieCatalogUtil.createHiveConf(hiveConfDir), false);
+  public HoodieHiveCatalog(String catalogName, String catalogPath, String defaultDatabase, String hiveConfDir, boolean external) {
+    this(catalogName, catalogPath, defaultDatabase, HoodieCatalogUtil.createHiveConf(hiveConfDir), false, external);
   }
 
   public HoodieHiveCatalog(
@@ -127,11 +128,13 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       String catalogPath,
       String defaultDatabase,
       HiveConf hiveConf,
-      boolean allowEmbedded) {
+      boolean allowEmbedded,
+      boolean external) {
     super(catalogName, defaultDatabase == null ? DEFAULT_DB : defaultDatabase);
     // fallback to hive.metastore.warehouse.dir if catalog path is not specified
     this.catalogPath = catalogPath == null ? hiveConf.getVar(HiveConf.ConfVars.METASTOREWAREHOUSE) : catalogPath;
     this.hiveConf = hiveConf;
+    this.external = external;
     if (!allowEmbedded) {
       checkArgument(
           !HoodieCatalogUtil.isEmbeddedMetastore(this.hiveConf),
@@ -512,7 +515,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     Map<String, String> properties = new HashMap<>(table.getOptions());
 
-    if (Boolean.parseBoolean(table.getOptions().get(CatalogOptions.TABLE_EXTERNAL.key()))) {
+    if (external) {
       hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
       properties.put("EXTERNAL", "TRUE");
     }
