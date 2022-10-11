@@ -34,6 +34,10 @@ github:
     issues: true
     projects: true
     discussions: true
+  enabled_merge_buttons:
+    squash:  true
+    merge:   false
+    rebase:  false
 notifications:
   commits:      commits@hudi.apache.org
   issues:       commits@hudi.apache.org
