@@ -175,8 +175,8 @@ public class CkpMetadata implements Serializable {
     load();
     if (this.messages.size() > 0) {
       CkpMessage ckpMsg = this.messages.get(this.messages.size() - 1);
-      // consider 'aborted' as pending too to reuse the instant
-      if (!ckpMsg.isComplete()) {
+      // should not consider 'aborted', which will lead writer instant not consistent with coordinator
+      if (ckpMsg.isInflight()) {
         return ckpMsg.getInstant();
       }
     }
