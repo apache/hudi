@@ -93,8 +93,8 @@ public class DataHubSyncClient extends HoodieSyncClient {
     try (RestEmitter emitter = config.getRestEmitter()) {
       emitter.emit(propertiesChangeProposal, responseLogger).get();
     } catch (Exception e) {
-      throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": " +
-              tableProperties, e);
+      throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": "
+              + tableProperties, e);
     }
   }
 
@@ -116,7 +116,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   @Override
   public Map<String, String> getMetastoreSchema(String tableName) {
-    throw new UnsupportedOperationException("Not supported: `getTableSchema`");
+    throw new UnsupportedOperationException("Not supported: `getMetastoreSchema`");
   }
 
   @Override

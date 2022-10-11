@@ -32,8 +32,8 @@ public class DatahubResponseLogger implements Callback {
 
   @Override
   public void onCompletion(MetadataWriteResponse response) {
-    LOG.info("Completed Datahub RestEmitter request. " +
-            "Status: " + (response.isSuccess() ? " succeeded" : " failed"));
+    LOG.info("Completed Datahub RestEmitter request. "
+            + "Status: " + (response.isSuccess() ? " succeeded" : " failed"));
     if (!response.isSuccess()) {
       LOG.error("Request failed. " + response);
     }

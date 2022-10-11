@@ -47,9 +47,6 @@ import static org.mockito.Mockito.verify;
 public class TestDataHubSyncClient {
 
   @Mock
-  DataHubSyncConfig configMock;
-
-  @Mock
   RestEmitter restEmitterMock;
 
   @TempDir
@@ -88,14 +85,16 @@ public class TestDataHubSyncClient {
     props.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), DummyPartitionValueExtractor.class.getName());
     props.put(META_SYNC_BASE_PATH.key(), tableBasePath);
 
-    Mockito.when(restEmitterMock.emit(any(MetadataChangeProposalWrapper.class),
-            Mockito.any())).thenReturn(CompletableFuture.completedFuture(MetadataWriteResponse.
-            builder().build()));
+    Mockito.when(
+        restEmitterMock.emit(any(MetadataChangeProposalWrapper.class), Mockito.any())
+    ).thenReturn(
+        CompletableFuture.completedFuture(MetadataWriteResponse.builder().build())
+    );
 
     DatahubSyncConfigStub configStub = new DatahubSyncConfigStub(props, restEmitterMock);
     DataHubSyncClientStub dhClient = new DataHubSyncClientStub(configStub);
 
-    dhClient.updateTableSchema("someTable", null);
+    dhClient.updateTableSchema("some_table", null);
     verify(restEmitterMock, times(2)).emit(any(MetadataChangeProposalWrapper.class),
             Mockito.any());
   }
