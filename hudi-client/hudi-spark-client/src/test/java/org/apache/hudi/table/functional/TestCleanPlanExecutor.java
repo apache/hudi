@@ -223,8 +223,6 @@ public class TestCleanPlanExecutor extends TestCleaner {
     switch (minCommitsToTriggerClean) {
       case 1:
         assertEquals(2, partitionZeroCleanStat.getSuccessDeleteFiles().size(), "Must clean at least one old file");
-//                + (partitionZeroCleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
-//                : partitionZeroCleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least one old file");
         assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
         assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
         assertFalse(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
@@ -238,8 +236,6 @@ public class TestCleanPlanExecutor extends TestCleaner {
         break;
       case 4:
         assertEquals(3, partitionZeroCleanStat.getSuccessDeleteFiles().size(), "Must clean at least one old file");
-//                + (partitionZeroCleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
-//                : partitionZeroCleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least one old file");
         assertEquals(1, partitionOneCleanStat.getSuccessDeleteFiles().size());
         assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
         assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
@@ -269,8 +265,6 @@ public class TestCleanPlanExecutor extends TestCleaner {
     switch (minCommitsToTriggerClean) {
       case 1:
         assertEquals(1, hoodieCleanStatsFive.size(), "Must clean at least one old file");
-//                + (partitionZeroCleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
-//                : partitionZeroCleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least one old file");
         assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
         assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
         assertFalse(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
