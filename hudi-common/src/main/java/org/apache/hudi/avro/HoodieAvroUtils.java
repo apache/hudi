@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import java.util.Arrays;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.AvroRuntimeException;
@@ -79,7 +81,6 @@ import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 
-import static org.apache.avro.Schema.Type.UNION;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
@@ -107,6 +108,8 @@ public class HoodieAvroUtils {
   public static final Schema METADATA_FIELD_SCHEMA = createNullableSchema(Schema.Type.STRING);
 
   public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
+
+  private static final String FIELD_LOCATION_DELIMITER = "\\.";
 
   /**
    * Convert a given avro record to bytes.
@@ -1033,7 +1036,7 @@ public class HoodieAvroUtils {
 
   private static Schema getActualSchemaFromUnion(Schema schema, Object data) {
     Schema actualSchema;
-    if (!schema.getType().equals(UNION)) {
+    if (!schema.getType().equals(Schema.Type.UNION)) {
       return schema;
     }
     if (schema.getTypes().size() == 2
@@ -1063,5 +1066,63 @@ public class HoodieAvroUtils {
 
   public static boolean gteqAvro1_10() {
     return VersionUtil.compareVersions(AVRO_VERSION, "1.10") >= 0;
+  }
+
+  /**
+   * Given an Avro schema, this method will return the field specified by the path parameter.
+   * The fieldLocation parameter is an ordered string specifying the location of the nested field to retrieve.
+   * For example, field1.nestedField1 takes field "field1", and retrieves "nestedField1" from it.
+   * @param schema is the record to retrieve the schema from
+   * @param fieldLocation is the location of the field
+   * @return the field
+   */
+  public static Option<Field> getField(Schema schema, String fieldLocation) {
+    if (schema == null || fieldLocation == null || fieldLocation.isEmpty()) {
+      return Option.empty();
+    }
+
+    List<String> pathList = Arrays.asList(fieldLocation.split(FIELD_LOCATION_DELIMITER));
+    pathList.stream()
+        .filter(pl -> pl.trim().isEmpty())
+        .findAny()
+        .ifPresent(f -> {
+          throw new HoodieValidationException("Invalid fieldLocation: " + fieldLocation);
+        });
+    if (pathList.size() == 0) {
+      return Option.empty();
+    }
+
+    return getFieldHelper(schema, pathList, 0);
+  }
+
+  /**
+   * Helper method that does the actual work for {@link #getField(Schema, String)} by recursively finding the required field.
+   *
+   * @param schema top level schema to be evaluated on
+   * @param pathList field to find, must be built in traversal order, from parent to child.
+   * @param field keeps track of the index used to access the list pathList
+   * @return the field
+   */
+  private static Option<Field> getFieldHelper(Schema schema, List<String> pathList, int field) {
+    Field curField = schema.getField(pathList.get(field));
+    Schema fieldSchema = curField.schema();
+
+    if (pathList.size() == field + 1 && curField.name().equals(pathList.get(field))) {
+      return Option.of(curField);
+    }
+
+    switch (fieldSchema.getType()) {
+      case UNION:
+        // assume UNION is strictly nullable
+        return getFieldHelper(resolveNullableSchema(fieldSchema), pathList, ++field);
+      case MAP:
+        return getFieldHelper(fieldSchema.getValueType(), pathList, ++field);
+      case RECORD:
+        return getFieldHelper(fieldSchema, pathList, ++field);
+      case ARRAY:
+        return getFieldHelper(fieldSchema.getElementType(), pathList, ++field);
+      default:
+        return Option.empty();
+    }
   }
 }

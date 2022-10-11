@@ -165,6 +165,35 @@ public class TestHoodieTableFactory {
 
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext6));
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext6));
+
+    // nested pk field is allowed
+    ResolvedSchema schema6 = SchemaBuilder.instance()
+        .field("f0",
+            DataTypes.ROW(DataTypes.FIELD("id", DataTypes.INT()), DataTypes.FIELD("date", DataTypes.VARCHAR(20))))
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .build();
+    this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "f0.id");
+    this.conf.setString(FlinkOptions.PRECOMBINE_FIELD, "f2");
+    final MockContext sourceContext7 = MockContext.getInstance(this.conf, schema6, "f2");
+
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext7));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext7));
+
+    // nested precombine field is allowed
+    ResolvedSchema schema7 = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.ROW(DataTypes.FIELD("year", DataTypes.INT()), DataTypes.FIELD("MONTH", DataTypes.INT())))
+        .build();
+    this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "f0");
+    this.conf.setString(FlinkOptions.PRECOMBINE_FIELD, "f2.year");
+    final MockContext sourceContext8 = MockContext.getInstance(this.conf, schema7, "f2");
+
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext8));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext8));
   }
 
   @Test

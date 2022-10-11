@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.Schema;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -120,6 +122,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
     List<String> fields = schema.getColumnNames();
+    Schema inferredSchema = AvroSchemaConverter.convertToSchema(schema.toPhysicalRowDataType().notNull().getLogicalType());
 
     // validate record key in pk absence.
     if (!schema.getPrimaryKey().isPresent()) {
@@ -132,7 +135,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       }
 
       Arrays.stream(recordKeys)
-          .filter(field -> !fields.contains(field))
+          .filter(field -> !HoodieAvroUtils.getField(inferredSchema, field).isPresent())
           .findAny()
           .ifPresent(f -> {
             throw new HoodieValidationException("Field '" + f + "' specified in option "
@@ -142,7 +145,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     // validate pre_combine key
     String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
-    if (!fields.contains(preCombineField)) {
+    if (!HoodieAvroUtils.getField(inferredSchema, preCombineField).isPresent()) {
       if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
         throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
             + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());

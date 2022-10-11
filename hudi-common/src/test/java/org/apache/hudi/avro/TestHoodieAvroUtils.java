@@ -18,9 +18,12 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.Schema.Field;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.AvroRuntimeException;
@@ -43,6 +46,7 @@ import java.util.Map;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -425,5 +429,31 @@ public class TestHoodieAvroUtils {
     Date now = new Date(System.currentTimeMillis());
     int days = HoodieAvroUtils.fromJavaDate(now);
     assertEquals(now.toLocalDate(), HoodieAvroUtils.toJavaDate(days).toLocalDate());
+  }
+
+  @Test
+  public void testGetField() {
+    Schema nestedSchema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD);
+
+    // empty schema should return empty option
+    Option<Field> nullSchemaTest = HoodieAvroUtils.getField(null, "nestedField");
+    assertFalse(nullSchemaTest.isPresent());
+
+    // null fieldLocation should return empty option
+    Option<Field> nullFieldLocationTest = HoodieAvroUtils.getField(nestedSchema, null);
+    assertFalse(nullFieldLocationTest.isPresent());
+
+    // empty fieldLocation should return empty option
+    Option<Field> emptyFieldLocationTest = HoodieAvroUtils.getField(nestedSchema, "");
+    assertFalse(emptyFieldLocationTest.isPresent());
+
+    // invalid fieldLocation should throw error
+    assertThrows(HoodieValidationException.class, () -> HoodieAvroUtils.getField(nestedSchema, ".firstname"));
+
+    Option<Field> topLevelFieldTest = HoodieAvroUtils.getField(nestedSchema, "firstname");
+    assertTrue(topLevelFieldTest.isPresent());
+
+    Option<Field> nestedFieldTest = HoodieAvroUtils.getField(nestedSchema, "student.lastname");
+    assertTrue(nestedFieldTest.isPresent());
   }
 }
