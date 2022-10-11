@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.FlatLists.ComparableList;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
@@ -120,7 +120,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public ComparableList getComparableColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+  public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     return HoodieSparkRecordUtils.getRecordColumnValues(data, columns, structType, consistentLogicalTimestampEnabled);
   }
@@ -141,7 +141,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       throw new UnsupportedOperationException();
     }
 
-    boolean containMetaFields = extractMetaField(structType).length != 0;
+    boolean containMetaFields = hasMetaField(structType);
     InternalRow resultRow = new HoodieInternalRow(metaFields, data, containMetaFields);
     return new HoodieSparkRecord(getKey(), resultRow, targetStructType, getOperation());
   }
@@ -173,10 +173,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyName, String keyValue) {
+  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
-    int pos = structType.fieldIndex(keyName);
-    data.update(pos, CatalystTypeConverters.convertToCatalyst(keyValue));
+    int pos = structType.fieldIndex(keyFieldName);
+    data.update(pos, CatalystTypeConverters.convertToCatalyst(StringUtils.EMPTY_STRING));
     return this;
   }
 
@@ -263,6 +263,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
         .filter(f -> HoodieCatalystExpressionUtils$.MODULE$.existField(structType, f))
         .map(field -> data.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(field)))
         .toArray(UTF8String[]::new);
+  }
+
+  private boolean hasMetaField(StructType structType) {
+    return HoodieCatalystExpressionUtils$.MODULE$.existField(structType, COMMIT_TIME_METADATA_FIELD);
   }
 
   /**

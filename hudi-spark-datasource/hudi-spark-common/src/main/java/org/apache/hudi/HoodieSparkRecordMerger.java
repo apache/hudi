@@ -38,22 +38,22 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
   }
 
   @Override
-  public Pair<Option<HoodieRecord>, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Properties props) throws IOException {
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Properties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
 
     if (newer.getData() == null) {
       // Delete record
-      return Pair.of(Option.empty(), null);
+      return Option.empty();
     }
     if (older.getData() == null) {
       // use natural order for delete record
-      return Pair.of(Option.of(newer), newSchema);
+      return Option.of(Pair.of(newer, newSchema));
     }
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
-      return Pair.of(Option.of(older), oldSchema);
+      return Option.of(Pair.of(older, oldSchema));
     } else {
-      return Pair.of(Option.of(newer), newSchema);
+      return Option.of(Pair.of(newer, newSchema));
     }
   }
 

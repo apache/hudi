@@ -43,7 +43,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
@@ -216,7 +215,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Option<Schema.Field> keyField = getKeyField(schema);
     // Reset key value w/in the record to avoid duplicating the key w/in payload
     if (keyField.isPresent()) {
-      record.truncateRecordKey(schema, new Properties(), keyField.get().name(), StringUtils.EMPTY_STRING);
+      record.truncateRecordKey(schema, new Properties(), keyField.get().name());
     }
     return HoodieAvroUtils.recordToBytes(record, schema).get();
   }

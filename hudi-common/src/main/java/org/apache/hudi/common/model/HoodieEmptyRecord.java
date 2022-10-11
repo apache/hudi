@@ -19,7 +19,6 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.FlatLists.ComparableList;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
@@ -88,7 +87,7 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public ComparableList getComparableColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+  public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     throw new UnsupportedOperationException();
   }
 
@@ -114,9 +113,7 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props,
-      String keyName,
-      String keyValue) {
+  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) {
     throw new UnsupportedOperationException();
   }
 

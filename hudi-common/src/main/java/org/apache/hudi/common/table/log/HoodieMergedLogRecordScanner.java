@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -147,22 +148,22 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   @Override
-  protected <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws IOException {
-    String key = hoodieRecord.getRecordKey();
+  protected <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
+    String key = newRecord.getRecordKey();
     if (records.containsKey(key)) {
       // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
       // done when a DELETE (empty payload) is encountered before or after an insert/update.
 
       HoodieRecord<T> oldRecord = records.get(key);
       T oldValue = oldRecord.getData();
-      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(oldRecord, readerSchema, hoodieRecord, readerSchema, this.getPayloadProps()).getLeft().get();
+      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(oldRecord, readerSchema, newRecord, readerSchema, ConfigUtils.setDeDuping(this.getPayloadProps())).get().getLeft();
       // If combinedValue is oldValue, no need rePut oldRecord
       if (combinedRecord.getData() != oldValue) {
         records.put(key, combinedRecord);
       }
     } else {
       // Put the record as is
-      records.put(key, hoodieRecord);
+      records.put(key, newRecord);
     }
   }
 

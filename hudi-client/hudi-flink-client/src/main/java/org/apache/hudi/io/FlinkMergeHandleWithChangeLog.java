@@ -64,32 +64,33 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOp, Schema writerSchema)
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOp, Schema writerSchema)
       throws IOException {
     Option<HoodieRecord> savedCombineRecordOp = combineRecordOp.map(HoodieRecord::newInstance);
     HoodieRecord<T> savedOldRecord = oldRecord.newInstance();
-    final boolean result = super.writeUpdateRecord(hoodieRecord, oldRecord, combineRecordOp, writerSchema);
+    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecordOp, writerSchema);
     if (result) {
-      boolean isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
-      Option<IndexedRecord> combineRecord;
-      if (combineRecordOp.isPresent()) {
-        combineRecord = savedCombineRecordOp.get().toIndexedRecord(writerSchema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData);
-      } else {
-        combineRecord = Option.empty();
-      }
-      cdcLogger.put(hoodieRecord, (GenericRecord) savedOldRecord.getData(), isDelete ? Option.empty() : combineRecord);
-      hoodieRecord.deflate();
+      boolean isDelete = HoodieOperation.isDelete(newRecord.getOperation());
+      savedCombineRecordOp.ifPresent(record -> {
+        try {
+          Option<IndexedRecord> avroRecord = savedCombineRecordOp.get()
+              .toIndexedRecord(writerSchema, config.getPayloadConfig().getProps())
+              .map(HoodieAvroIndexedRecord::getData);
+          cdcLogger.put(newRecord, (GenericRecord) savedOldRecord.getData(), isDelete ? Option.empty() : avroRecord);
+        } catch (IOException e) {
+          LOG.error("Fail to get indexRecord from " + savedCombineRecordOp, e);
+        }
+      });
     }
     return result;
   }
 
-  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Schema schema) throws IOException {
-    HoodieRecord<T> savedRecord = hoodieRecord.newInstance();
+  protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema) throws IOException {
+    HoodieRecord<T> savedRecord = newRecord.newInstance();
     // hoodieRecord deflated after writeInsertRecord
-    super.writeInsertRecord(hoodieRecord, schema);
-    if (!HoodieOperation.isDelete(hoodieRecord.getOperation())) {
-      cdcLogger.put(hoodieRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
-      hoodieRecord.deflate();
+    super.writeInsertRecord(newRecord, schema);
+    if (!HoodieOperation.isDelete(newRecord.getOperation())) {
+      cdcLogger.put(newRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
     }
   }
 

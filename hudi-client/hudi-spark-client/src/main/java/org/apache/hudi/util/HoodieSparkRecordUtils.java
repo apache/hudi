@@ -18,14 +18,10 @@
 
 package org.apache.hudi.util;
 
-import java.util.LinkedList;
-import java.util.List;
 import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.apache.hudi.common.util.collection.FlatLists;
-import org.apache.hudi.common.util.collection.FlatLists.ComparableList;
 import org.apache.spark.sql.HoodieCatalystExpressionUtils$;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
@@ -60,15 +56,15 @@ public class HoodieSparkRecordUtils {
    * @param structType  {@link StructType} instance.
    * @return Column value if a single column, or concatenated String values by comma.
    */
-  public static ComparableList getRecordColumnValues(InternalRow row,
+  public static Object[] getRecordColumnValues(InternalRow row,
       String[] columns,
       StructType structType, boolean consistentLogicalTimestampEnabled) {
-    List<Comparable> list = new LinkedList<>();
-    for (String column : columns) {
-      NestedFieldPath posList = HoodieInternalRowUtils.getCachedPosList(structType, column);
+    Object[] objects = new Object[columns.length];
+    for (int i = 0; i < objects.length; i++) {
+      NestedFieldPath posList = HoodieInternalRowUtils.getCachedPosList(structType, columns[i]);
       Object value = HoodieUnsafeRowUtils.getNestedInternalRowValue(row, posList);
-      list.add((Comparable) value);
+      objects[i] = value;
     }
-    return FlatLists.ofComparable(list);
+    return objects;
   }
 }

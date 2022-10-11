@@ -98,7 +98,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
           if (row instanceof UnsafeRow) {
             return row.copy();
           } else {
-            return HoodieInternalRowUtils.getCachedUnsafeConvert(requestedStructType).apply(row).copy();
+            return HoodieInternalRowUtils.projectUnsafe(row, requestedStructType);
           }
         });
     readerIterators.add(parquetReaderIterator);

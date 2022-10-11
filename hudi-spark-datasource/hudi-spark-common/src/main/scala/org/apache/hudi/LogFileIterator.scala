@@ -240,17 +240,17 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
       case HoodieRecordType.SPARK =>
         val curRecord = new HoodieSparkRecord(curRow, baseFileReader.schema)
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
-        toScalaOption(result.getLeft)
+        toScalaOption(result)
           .map(r => {
-            val schema = HoodieInternalRowUtils.getCachedSchema(result.getRight)
+            val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
             val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
-            projection.apply(r.getData.asInstanceOf[InternalRow])
+            projection.apply(r.getLeft.getData.asInstanceOf[InternalRow])
           })
       case _ =>
         val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
-        toScalaOption(result.getLeft)
-          .map(r => deserialize(projectAvroUnsafe(r.toIndexedRecord(result.getRight, payloadProps).get().getData.asInstanceOf[GenericRecord], avroSchema, reusableRecordBuilder)))
+        toScalaOption(result)
+          .map(r => deserialize(projectAvroUnsafe(r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord], avroSchema, reusableRecordBuilder)))
     }
   }
 }

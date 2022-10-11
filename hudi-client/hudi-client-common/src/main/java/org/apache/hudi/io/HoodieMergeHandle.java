@@ -268,64 +268,64 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOp, Schema writerSchema) throws IOException {
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOp, Schema writerSchema) throws IOException {
     boolean isDelete = false;
     if (combineRecordOp.isPresent()) {
       updatedRecordsWritten++;
       if (oldRecord.getData() != combineRecordOp.get().getData()) {
         // the incoming record is chosen
-        isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
+        isDelete = HoodieOperation.isDelete(newRecord.getOperation());
       } else {
         // the incoming record is dropped
         return false;
       }
     }
-    return writeRecord(hoodieRecord, combineRecordOp, writerSchema, config.getPayloadConfig().getProps(), isDelete);
+    return writeRecord(newRecord, combineRecordOp, writerSchema, config.getPayloadConfig().getProps(), isDelete);
   }
 
-  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Schema schema) throws IOException {
+  protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema) throws IOException {
     // just skip the ignored record
-    if (hoodieRecord.shouldIgnore(schema, config.getProps())) {
+    if (newRecord.shouldIgnore(schema, config.getProps())) {
       return;
     }
-    writeInsertRecord(hoodieRecord, Option.of(hoodieRecord), schema, config.getProps());
+    writeInsertRecord(newRecord, schema, config.getProps());
   }
 
-  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Option<HoodieRecord> insertRecord, Schema schema, Properties prop)
+  protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop)
       throws IOException {
-    if (writeRecord(hoodieRecord, insertRecord, schema, prop, HoodieOperation.isDelete(hoodieRecord.getOperation()))) {
+    if (writeRecord(newRecord, Option.of(newRecord), schema, prop, HoodieOperation.isDelete(newRecord.getOperation()))) {
       insertRecordsWritten++;
     }
   }
 
-  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop) throws IOException {
-    return writeRecord(hoodieRecord, combineRecord, schema, prop, false);
+  protected boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop) throws IOException {
+    return writeRecord(newRecord, combineRecord, schema, prop, false);
   }
 
-  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop, boolean isDelete) throws IOException {
-    Option recordMetadata = hoodieRecord.getMetadata();
-    if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
+  protected boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop, boolean isDelete) throws IOException {
+    Option recordMetadata = newRecord.getMetadata();
+    if (!partitionPath.equals(newRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
-          + hoodieRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
-      writeStatus.markFailure(hoodieRecord, failureEx, recordMetadata);
+          + newRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
+      writeStatus.markFailure(newRecord, failureEx, recordMetadata);
       return false;
     }
     try {
       if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
-        writeToFile(hoodieRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata && useWriterSchemaForCompaction);
+        writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata && useWriterSchemaForCompaction);
         recordsWritten++;
       } else {
         recordsDeleted++;
       }
-      writeStatus.markSuccess(hoodieRecord, recordMetadata);
+      writeStatus.markSuccess(newRecord, recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
-      hoodieRecord.deflate();
+      newRecord.deflate();
       return true;
     } catch (Exception e) {
-      LOG.error("Error writing record  " + hoodieRecord, e);
-      writeStatus.markFailure(hoodieRecord, e, recordMetadata);
+      LOG.error("Error writing record  " + newRecord, e);
+      writeStatus.markFailure(newRecord, e, recordMetadata);
     }
     return false;
   }
@@ -342,16 +342,16 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
       // writing the first record. So make a copy of the record to be merged
-      HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key).newInstance();
+      HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        Pair<Option<HoodieRecord>, Schema> mergeResult = recordMerger.merge(oldRecord, oldSchema, hoodieRecord, newSchema, props);
-        Schema combineRecordSchema = mergeResult.getRight();
-        Option<HoodieRecord> combinedRecord = mergeResult.getLeft();
+        Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
+        Schema combineRecordSchema = mergeResult.map(Pair::getRight).orElse(null);
+        Option<HoodieRecord> combinedRecord = mergeResult.map(Pair::getLeft);
 
         if (combinedRecord.isPresent() && combinedRecord.get().shouldIgnore(combineRecordSchema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;
-        } else if (writeUpdateRecord(hoodieRecord, oldRecord, combinedRecord, combineRecordSchema)) {
+        } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {
           /*
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully
            * write the combined new value

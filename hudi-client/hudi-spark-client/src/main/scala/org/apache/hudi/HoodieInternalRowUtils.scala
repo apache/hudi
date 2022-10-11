@@ -202,10 +202,6 @@ object HoodieInternalRowUtils {
     orderPosListMap.get(schemaPair)
   }
 
-  def getCachedUnsafeConvert(structType: StructType): UnsafeProjection = {
-    getCachedUnsafeProjection(structType, structType)
-  }
-
   def getCachedUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
     val schemaPair = (from, to)
     val map = unsafeProjectionThreadLocal.get()
@@ -228,7 +224,7 @@ object HoodieInternalRowUtils {
     if (row == null || row.isInstanceOf[UnsafeRow] || row.isInstanceOf[HoodieInternalRow]) {
       row
     } else {
-      HoodieInternalRowUtils.getCachedUnsafeConvert(structType).apply(row).copy()
+      HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType).apply(row).copy()
     }
   }
 

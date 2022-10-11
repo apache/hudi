@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
@@ -69,7 +70,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       HoodieRecord<T> reducedRecord;
       try {
         // Precombine do not need schema and do not return null
-        reducedRecord =  recordMerger.merge(rec1, schema.get(), rec2, schema.get(), props).getLeft().get();
+        reducedRecord =  recordMerger.merge(rec1, schema.get(), rec2, schema.get(), ConfigUtils.setDeDuping(props)).get().getLeft();
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }

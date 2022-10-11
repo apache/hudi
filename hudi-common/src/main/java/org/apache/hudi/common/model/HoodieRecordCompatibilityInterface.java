@@ -46,8 +46,7 @@ public interface HoodieRecordCompatibilityInterface {
   /**
    * This method used to overwrite record key field.
    */
-  HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyName,
-      String keyValue) throws IOException;
+  HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException;
 
   Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException;
 }

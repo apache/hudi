@@ -19,12 +19,10 @@
 
 package org.apache.hudi.common.model;
 
-import java.util.Arrays;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.FlatLists;
-import org.apache.hudi.common.util.collection.FlatLists.ComparableList;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
@@ -98,8 +96,8 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public ComparableList getComparableColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
-    return FlatLists.ofComparable(Arrays.asList((Comparable)HoodieAvroUtils.getRecordColumnValues(this, columns, recordSchema, consistentLogicalTimestampEnabled)));
+  public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+    return new Object[]{HoodieAvroUtils.getRecordColumnValues(this, columns, recordSchema, consistentLogicalTimestampEnabled)};
   }
 
   @Override
@@ -137,11 +135,9 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props,
-      String keyName,
-      String keyValue) throws IOException {
+  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException {
     GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
-    avroRecordPayload.put(keyName, keyValue);
+    avroRecordPayload.put(keyFieldName, StringUtils.EMPTY_STRING);
     return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
   }
 

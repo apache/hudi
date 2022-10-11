@@ -24,7 +24,6 @@ import org.apache.avro.generic.GenericRecord;
 
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.FlatLists.ComparableList;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
@@ -287,7 +286,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * Get column in record to support RDDCustomColumnsSortPartitioner
    * @return
    */
-  public abstract ComparableList getComparableColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
+  public abstract Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
 
   /**
    * Support bootstrap.

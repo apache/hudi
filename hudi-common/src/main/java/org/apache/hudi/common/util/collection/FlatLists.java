@@ -19,7 +19,9 @@ package org.apache.hudi.common.util.collection;
 
 import java.util.AbstractList;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
@@ -47,6 +49,10 @@ public class FlatLists {
 
   public static <T extends Comparable> ComparableList<T> ofComparable(List<T> t) {
     return of_(t);
+  }
+
+  public static <T extends Comparable> ComparableList<T> ofComparableArray(Object[] t) {
+    return ofComparable(Arrays.stream(t).map(v -> (T)v).collect(Collectors.toList()));
   }
 
   private static <T> ComparableList<T> of_(List<T> t) {
