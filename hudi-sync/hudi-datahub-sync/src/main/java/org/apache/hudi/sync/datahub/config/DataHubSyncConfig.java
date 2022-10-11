@@ -30,6 +30,9 @@ import datahub.client.rest.RestEmitter;
 
 import java.util.Properties;
 
+import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_DATAHUB_ENV;
+import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME;
+
 public class DataHubSyncConfig extends HoodieSyncConfig {
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS = ConfigProperty
@@ -51,6 +54,17 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .key("hoodie.meta.sync.datahub.emitter.supplier.class")
       .noDefaultValue()
       .withDocumentation("Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_DATAPLATFORM_NAME = ConfigProperty
+          .key("hoodie.meta.sync.datahub.dataplatform.name")
+          .defaultValue(DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME)
+          .withDocumentation("String used to represent Hudi when creating its corresponding DataPlatform entity "
+                  + "within Datahub");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_DATASET_ENV = ConfigProperty
+          .key("hoodie.meta.sync.datahub.dataset.env")
+          .defaultValue(DEFAULT_DATAHUB_ENV.name())
+          .withDocumentation("Environment to use when pushing entities to Datahub");
 
   public final HoodieDataHubDatasetIdentifier datasetIdentifier;
 
@@ -87,6 +101,13 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--emitter-supplier-class"}, description = "Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.")
     public String emitterSupplierClass;
 
+    @Parameter(names = {"--data-platform-name"}, description = "String used to represent Hudi when creating its "
+            + "corresponding DataPlatform entity within Datahub")
+    public String dataPlatformName;
+
+    @Parameter(names = {"--dataset-env"}, description = "Which Datahub Environment to use when pushing entities")
+    public String datasetEnv;
+
     public boolean isHelp() {
       return hoodieSyncConfigParams.isHelp();
     }
@@ -97,6 +118,8 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SERVER.key(), emitterServer);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_TOKEN.key(), emitterToken);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), emitterSupplierClass);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATAPLATFORM_NAME.key(), dataPlatformName);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATASET_ENV.key(), datasetEnv);
       return props;
     }
   }
