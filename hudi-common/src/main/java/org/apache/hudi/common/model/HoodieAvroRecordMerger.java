@@ -82,4 +82,10 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
     return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), schema, props)
         .map(combinedAvroPayload -> new HoodieAvroIndexedRecord((IndexedRecord) combinedAvroPayload));
   }
+
+  public static Properties withDeDuping(Properties props) {
+    Properties newProps = new Properties(props);
+    newProps.setProperty(HoodieAvroRecordMerger.DE_DUPING, "true");
+    return newProps;
+  }
 }

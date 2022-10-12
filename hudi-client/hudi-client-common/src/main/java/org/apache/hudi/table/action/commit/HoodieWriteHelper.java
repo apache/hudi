@@ -25,7 +25,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
@@ -54,8 +53,8 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> deduplicateRecords(
-      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, Properties props, HoodieRecordMerger recordMerger) {
+  public HoodieData<HoodieRecord<T>> innerDeduplicateRecords(
+      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, Properties props, HoodieRecordMerger merger) {
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
     // Auto-tunes the parallelism for reduce transformation based on the number of data partitions
@@ -69,8 +68,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
     }).reduceByKey((rec1, rec2) -> {
       HoodieRecord<T> reducedRecord;
       try {
-        // Precombine do not need schema and do not return null
-        reducedRecord =  recordMerger.merge(rec1, schema.get(), rec2, schema.get(), ConfigUtils.setDeDuping(props)).get().getLeft();
+        reducedRecord =  merger.merge(rec1, schema.get(), rec2, schema.get(), props).get().getLeft();
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }

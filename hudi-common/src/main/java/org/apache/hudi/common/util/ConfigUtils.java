@@ -64,9 +64,4 @@ public class ConfigUtils {
                 HoodieAvroRecordMerger.class.getName()).split(","))
         .map(String::trim).distinct().collect(Collectors.toList());
   }
-
-  public static Properties setDeDuping(Properties props) {
-    props.setProperty(HoodieAvroRecordMerger.DE_DUPING, "true");
-    return props;
-  }
 }

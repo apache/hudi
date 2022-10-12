@@ -64,30 +64,32 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOp, Schema writerSchema)
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema)
       throws IOException {
-    Option<HoodieRecord> savedCombineRecordOp = combineRecordOp.map(HoodieRecord::newInstance);
+    // TODO Remove these unnecessary newInstance invocations
+    Option<HoodieRecord> savedCombineRecordOp = combineRecordOpt.map(HoodieRecord::newInstance);
     HoodieRecord<T> savedOldRecord = oldRecord.newInstance();
-    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecordOp, writerSchema);
+    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecordOpt, writerSchema);
     if (result) {
       boolean isDelete = HoodieOperation.isDelete(newRecord.getOperation());
-      savedCombineRecordOp.ifPresent(record -> {
-        try {
-          Option<IndexedRecord> avroRecord = savedCombineRecordOp.get()
-              .toIndexedRecord(writerSchema, config.getPayloadConfig().getProps())
-              .map(HoodieAvroIndexedRecord::getData);
-          cdcLogger.put(newRecord, (GenericRecord) savedOldRecord.getData(), isDelete ? Option.empty() : avroRecord);
-        } catch (IOException e) {
-          LOG.error("Fail to get indexRecord from " + savedCombineRecordOp, e);
-        }
-      });
+      Option<IndexedRecord> avroOpt = savedCombineRecordOp
+          .flatMap(r -> {
+            try {
+              return r.toIndexedRecord(writerSchema, config.getPayloadConfig().getProps())
+                  .map(HoodieAvroIndexedRecord::getData);
+            } catch (IOException e) {
+              LOG.error("Fail to get indexRecord from " + savedCombineRecordOp, e);
+              return Option.empty();
+            }
+          });
+      cdcLogger.put(newRecord, (GenericRecord) savedOldRecord.getData(), isDelete ? Option.empty() : avroOpt);
     }
     return result;
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema) throws IOException {
+    // TODO Remove these unnecessary newInstance invocations
     HoodieRecord<T> savedRecord = newRecord.newInstance();
-    // hoodieRecord deflated after writeInsertRecord
     super.writeInsertRecord(newRecord, schema);
     if (!HoodieOperation.isDelete(newRecord.getOperation())) {
       cdcLogger.put(newRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));

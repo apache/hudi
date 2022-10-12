@@ -265,7 +265,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
         .toArray(UTF8String[]::new);
   }
 
-  private boolean hasMetaField(StructType structType) {
+  private static boolean hasMetaField(StructType structType) {
     return HoodieCatalystExpressionUtils$.MODULE$.existField(structType, COMMIT_TIME_METADATA_FIELD);
   }
 

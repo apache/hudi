@@ -268,11 +268,11 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOp, Schema writerSchema) throws IOException {
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema) throws IOException {
     boolean isDelete = false;
-    if (combineRecordOp.isPresent()) {
+    if (combineRecordOpt.isPresent()) {
       updatedRecordsWritten++;
-      if (oldRecord.getData() != combineRecordOp.get().getData()) {
+      if (oldRecord.getData() != combineRecordOpt.get().getData()) {
         // the incoming record is chosen
         isDelete = HoodieOperation.isDelete(newRecord.getOperation());
       } else {
@@ -280,7 +280,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         return false;
       }
     }
-    return writeRecord(newRecord, combineRecordOp, writerSchema, config.getPayloadConfig().getProps(), isDelete);
+    return writeRecord(newRecord, combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema) throws IOException {
