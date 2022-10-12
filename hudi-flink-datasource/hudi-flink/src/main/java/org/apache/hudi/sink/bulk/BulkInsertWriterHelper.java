@@ -35,6 +35,8 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,6 +59,7 @@ public class BulkInsertWriterHelper {
   protected final HoodieTable hoodieTable;
   protected final HoodieWriteConfig writeConfig;
   protected final RowType rowType;
+  protected final boolean preserveHoodieMetadata;
   protected final Boolean isInputSorted;
   private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
   protected HoodieRowDataCreateHandle handle;
@@ -64,20 +67,27 @@ public class BulkInsertWriterHelper {
   private final String fileIdPrefix;
   private int numFilesWritten = 0;
   protected final Map<String, HoodieRowDataCreateHandle> handles = new HashMap<>();
-  protected final RowDataKeyGen keyGen;
+  @Nullable protected final RowDataKeyGen keyGen;
 
   public BulkInsertWriterHelper(Configuration conf, HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                 String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType) {
+    this(conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType, false);
+  }
+
+  public BulkInsertWriterHelper(Configuration conf, HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
+                                String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType,
+                                boolean preserveHoodieMetadata) {
     this.hoodieTable = hoodieTable;
     this.writeConfig = writeConfig;
     this.instantTime = instantTime;
     this.taskPartitionId = taskPartitionId;
     this.taskId = taskId;
     this.taskEpochId = taskEpochId;
-    this.rowType = addMetadataFields(rowType, writeConfig.allowOperationMetadataField()); // patch up with metadata fields
+    this.rowType = preserveHoodieMetadata ? rowType : addMetadataFields(rowType, writeConfig.allowOperationMetadataField()); // patch up with metadata fields
+    this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.isInputSorted = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
     this.fileIdPrefix = UUID.randomUUID().toString();
-    this.keyGen = RowDataKeyGen.instance(conf, rowType);
+    this.keyGen = preserveHoodieMetadata ? null : RowDataKeyGen.instance(conf, rowType);
   }
 
   /**
@@ -89,8 +99,12 @@ public class BulkInsertWriterHelper {
 
   public void write(RowData record) throws IOException {
     try {
-      String recordKey = keyGen.getRecordKey(record);
-      String partitionPath = keyGen.getPartitionPath(record);
+      String recordKey = preserveHoodieMetadata
+          ? record.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD).toString()
+          : keyGen.getRecordKey(record);
+      String partitionPath = preserveHoodieMetadata
+          ? record.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD).toString()
+          : keyGen.getPartitionPath(record);
 
       if ((lastKnownPartitionPath == null) || !lastKnownPartitionPath.equals(partitionPath) || !handle.canWrite()) {
         LOG.info("Creating new file for partition path " + partitionPath);
@@ -116,14 +130,14 @@ public class BulkInsertWriterHelper {
         close();
       }
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, rowType);
+          instantTime, taskPartitionId, taskId, taskEpochId, rowType, preserveHoodieMetadata);
       handles.put(partitionPath, rowCreateHandle);
     } else if (!handles.get(partitionPath).canWrite()) {
       // even if there is a handle to the partition path, it could have reached its max size threshold. So, we close the handle here and
       // create a new one.
       writeStatusList.add(handles.remove(partitionPath).close());
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, rowType);
+          instantTime, taskPartitionId, taskId, taskEpochId, rowType, preserveHoodieMetadata);
       handles.put(partitionPath, rowCreateHandle);
     }
     return handles.get(partitionPath);
@@ -144,7 +158,7 @@ public class BulkInsertWriterHelper {
   /**
    * Adds the Hoodie metadata fields to the given row type.
    */
-  private static RowType addMetadataFields(RowType rowType, boolean withOperationField) {
+  public static RowType addMetadataFields(RowType rowType, boolean withOperationField) {
     List<RowType.RowField> mergedFields = new ArrayList<>();
 
     LogicalType metadataFieldType = DataTypes.STRING().getLogicalType();
