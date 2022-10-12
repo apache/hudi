@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
@@ -107,10 +106,8 @@ public class HoodieMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K,
     }
 
     cdcLogger.close();
-    Pair<List<String>, List<Long>> cdcWriteStats = cdcLogger.getCDCWriteStats();
     HoodieWriteStat stat = writeStatuses.get(0).getStat();
-    stat.setCdcPath(cdcWriteStats.getLeft());
-    stat.setCdcWriteBytes(cdcWriteStats.getRight());
+    stat.setCdcStats(cdcLogger.getCDCWriteStats());
     return writeStatuses;
   }
 }

@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -95,7 +94,7 @@ public class HoodieCDCLogger implements Closeable {
   private long averageCDCRecordSize = 0;
 
   // Number of records that must be written to meet the max block size for a log block
-  private AtomicInteger numOfCDCRecordInMemory = new AtomicInteger();
+  private AtomicInteger numOfCDCRecordsInMemory = new AtomicInteger();
 
   private final SizeEstimator<HoodieAvroPayload> sizeEstimator;
 
@@ -174,11 +173,11 @@ public class HoodieCDCLogger implements Closeable {
       averageCDCRecordSize = sizeEstimator.sizeEstimate(payload);
     }
     cdcData.put(recordKey, payload);
-    numOfCDCRecordInMemory.incrementAndGet();
+    numOfCDCRecordsInMemory.incrementAndGet();
   }
 
   private void flushIfNeeded(Boolean force) {
-    if (force || numOfCDCRecordInMemory.get() * averageCDCRecordSize >= maxBlockSize) {
+    if (force || numOfCDCRecordsInMemory.get() * averageCDCRecordSize >= maxBlockSize) {
       try {
         List<IndexedRecord> records = cdcData.values().stream()
             .map(record -> {
@@ -199,28 +198,25 @@ public class HoodieCDCLogger implements Closeable {
 
         // reset stat
         cdcData.clear();
-        numOfCDCRecordInMemory = new AtomicInteger();
+        numOfCDCRecordsInMemory = new AtomicInteger();
       } catch (Exception e) {
         throw new HoodieException("Failed to write the cdc data to " + cdcWriter.getLogFile().getPath(), e);
       }
     }
   }
 
-  public Pair<List<String>, List<Long>> getCDCWriteStats() {
-    List<String> cdcPaths = new ArrayList<>();
-    List<Long> cdcWriteSizeList = new ArrayList<>();
+  public Map<String, Long> getCDCWriteStats() {
+    Map<String, Long> stats = new HashMap<>();
     try {
       for (Path cdcAbsPath : cdcAbsPaths) {
         String cdcFileName = cdcAbsPath.getName();
         String cdcPath = StringUtils.isNullOrEmpty(partitionPath) ? cdcFileName : partitionPath + "/" + cdcFileName;
-
-        cdcPaths.add(cdcPath);
-        cdcWriteSizeList.add(FSUtils.getFileSize(fs, cdcAbsPath));
+        stats.put(cdcPath, FSUtils.getFileSize(fs, cdcAbsPath));
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to get cdc write stat", e);
     }
-    return Pair.of(cdcPaths, cdcWriteSizeList);
+    return stats;
   }
 
   @Override
@@ -257,10 +253,6 @@ public class HoodieCDCLogger implements Closeable {
 
   private GenericRecord removeCommitMetadata(GenericRecord record) {
     return record == null ? null : HoodieAvroUtils.rewriteRecordWithNewSchema(record, dataSchema, Collections.emptyMap());
-  }
-
-  public boolean isEmpty() {
-    return this.cdcData.isEmpty();
   }
 
   // -------------------------------------------------------------------------

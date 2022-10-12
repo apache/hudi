@@ -100,7 +100,7 @@ abstract class HoodieCDCTestBase extends HoodieClientTestBase {
     )
     val hoodieWriteStats = commitMetadata.getWriteStats.asScala
     hoodieWriteStats.exists { hoodieWriteStat =>
-      val cdcPaths = hoodieWriteStat.getCdcPaths
+      val cdcPaths = hoodieWriteStat.getCdcStats
       cdcPaths != null && cdcPaths.nonEmpty
     }
   }
@@ -113,7 +113,7 @@ abstract class HoodieCDCTestBase extends HoodieClientTestBase {
       metaClient.reloadActiveTimeline().getInstantDetails(instant).get(),
       classOf[HoodieCommitMetadata]
     )
-    commitMetadata.getWriteStats.asScala.flatMap(_.getCdcPaths).toList
+    commitMetadata.getWriteStats.asScala.flatMap(_.getCdcStats.keys).toList
   }
 
   protected def getCDCBlocks(relativeLogFile: String, cdcSchema: Schema): List[HoodieDataBlock] = {

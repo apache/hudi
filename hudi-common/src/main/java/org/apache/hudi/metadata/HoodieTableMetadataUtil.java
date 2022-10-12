@@ -333,12 +333,9 @@ public class HoodieTableMetadataUtil {
                         // monotonically increasing (ie file-size never goes down, unless deleted)
                         map.merge(fileName, stat.getFileSizeInBytes(), Math::max);
 
-                        List<String> cdcPaths = stat.getCdcPaths();
-                        if (cdcPaths != null && !cdcPaths.isEmpty()) {
-                          List<Long> cdcWriteBytes = stat.getCdcWriteBytes();
-                          for (int idx = 0; idx < cdcPaths.size(); idx++) {
-                            map.put(cdcPaths.get(idx), cdcWriteBytes.get(idx));
-                          }
+                        Map<String, Long> cdcPathAndSizes = stat.getCdcStats();
+                        if (cdcPathAndSizes != null && !cdcPathAndSizes.isEmpty()) {
+                          map.putAll(cdcPathAndSizes);
                         }
                         return map;
                       },

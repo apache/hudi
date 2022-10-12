@@ -21,12 +21,12 @@ package org.apache.hudi.common.model;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.JsonUtils;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
-import java.util.List;
+import java.util.Map;
 
 /**
  * Statistics about a single Hoodie write operation.
@@ -47,9 +47,9 @@ public class HoodieWriteStat implements Serializable {
   private String path;
 
   /**
-   * Relative CDC file path that store the CDC data.
+   * Relative CDC file path that store the CDC data and its size.
    */
-  private List<String> cdcPaths;
+  private Map<String, Long> cdcStats;
 
   /**
    * The previous version of the file. (null if this is the first version. i.e insert)
@@ -76,11 +76,6 @@ public class HoodieWriteStat implements Serializable {
    * Total number of insert records or converted to updates (for small file handling).
    */
   private long numInserts;
-
-  /**
-   * Total number of cdc bytes written.
-   */
-  private List<Long> cdcWriteBytes;
 
   /**
    * Total number of bytes written.
@@ -207,16 +202,8 @@ public class HoodieWriteStat implements Serializable {
     return totalWriteBytes;
   }
 
-  public List<Long> getCdcWriteBytes() {
-    return cdcWriteBytes;
-  }
-
   public void setTotalWriteBytes(long totalWriteBytes) {
     this.totalWriteBytes = totalWriteBytes;
-  }
-
-  public void setCdcWriteBytes(List<Long> cdcWriteBytes) {
-    this.cdcWriteBytes = cdcWriteBytes;
   }
 
   public long getTotalWriteErrors() {
@@ -256,12 +243,12 @@ public class HoodieWriteStat implements Serializable {
   }
 
   @Nullable
-  public List<String> getCdcPaths() {
-    return cdcPaths;
+  public Map<String, Long> getCdcStats() {
+    return cdcStats;
   }
 
-  public void setCdcPath(List<String> cdcPaths) {
-    this.cdcPaths = cdcPaths;
+  public void setCdcStats(Map<String, Long> cdcStats) {
+    this.cdcStats = cdcStats;
   }
 
   public String getPartitionPath() {
@@ -386,13 +373,10 @@ public class HoodieWriteStat implements Serializable {
 
   @Override
   public String toString() {
-    String joinedCDCPathStr = cdcPaths == null ? "" : StringUtils.join(cdcPaths.toArray(new String[0]), ",");
-    String joinedCDCWriteBytesStr = cdcWriteBytes == null ? "" : StringUtils.join(
-        cdcWriteBytes.stream().map(Object::toString).toArray(String[]::new), ",");
     return "HoodieWriteStat{fileId='" + fileId + '\'' + ", path='" + path + '\'' + ", prevCommit='" + prevCommit
         + '\'' + ", numWrites=" + numWrites + ", numDeletes=" + numDeletes + ", numUpdateWrites=" + numUpdateWrites
         + ", totalWriteBytes=" + totalWriteBytes + ", totalWriteErrors=" + totalWriteErrors + ", tempPath='" + tempPath
-        + '\'' + ", cdcPaths='" + joinedCDCPathStr + ", cdcWriteBytes=" + joinedCDCWriteBytesStr
+        + '\'' + ", cdcStats='" + JsonUtils.toString(cdcStats)
         + '\'' + ", partitionPath='" + partitionPath + '\'' + ", totalLogRecords=" + totalLogRecords
         + ", totalLogFilesCompacted=" + totalLogFilesCompacted + ", totalLogSizeCompacted=" + totalLogSizeCompacted
         + ", totalUpdatedRecordsCompacted=" + totalUpdatedRecordsCompacted + ", totalLogBlocks=" + totalLogBlocks

@@ -451,9 +451,13 @@ public class FSUtils {
    * Get the last part of the file name in the log file and convert to int.
    */
   public static int getFileVersionFromLog(Path logPath) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
+    return getFileVersionFromLog(logPath.getName());
+  }
+
+  public static int getFileVersionFromLog(String logFileName) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(logFileName);
     if (!matcher.find()) {
-      throw new InvalidHoodiePathException(logPath, "LogFile");
+      throw new HoodieIOException("Invalid log file name: " + logFileName);
     }
     return Integer.parseInt(matcher.group(4));
   }

@@ -254,7 +254,7 @@ public class HoodieCDCExtractor {
     final String instantTs = instant.getTimestamp();
 
     HoodieCDCFileSplit cdcFileSplit;
-    if (CollectionUtils.isNullOrEmpty(writeStat.getCdcPaths())) {
+    if (CollectionUtils.isNullOrEmpty(writeStat.getCdcStats())) {
       // no cdc log files can be used directly. we reuse the existing data file to retrieve the change data.
       String path = writeStat.getPath();
       if (FSUtils.isBaseFile(new Path(path))) {
@@ -287,7 +287,7 @@ public class HoodieCDCExtractor {
     } else {
       // this is a cdc log
       if (supplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
-        cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcPaths());
+        cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcStats().keySet());
       } else {
         try {
           HoodieBaseFile beforeBaseFile = getOrCreateFsView().getBaseFileOn(
@@ -301,7 +301,7 @@ public class HoodieCDCExtractor {
           if (supplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.OP_KEY)) {
             beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           }
-          cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcPaths(),
+          cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcStats().keySet(),
               Option.ofNullable(beforeFileSlice), Option.ofNullable(currentFileSlice));
         } catch (Exception e) {
           throw new HoodieException("Fail to parse HoodieWriteStat", e);

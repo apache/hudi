@@ -18,14 +18,18 @@
 
 package org.apache.hudi.common.table.cdc;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.Option;
 
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * This contains all the information that retrieve the change data at a single file group and
@@ -73,7 +77,7 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
     this(instant, cdcInferCase, cdcFile, Option.empty(), Option.empty());
   }
 
-  public HoodieCDCFileSplit(String instant, HoodieCDCInferCase cdcInferCase, List<String> cdcFiles) {
+  public HoodieCDCFileSplit(String instant, HoodieCDCInferCase cdcInferCase, Collection<String> cdcFiles) {
     this(instant, cdcInferCase, cdcFiles, Option.empty(), Option.empty());
   }
 
@@ -89,12 +93,13 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
   public HoodieCDCFileSplit(
       String instant,
       HoodieCDCInferCase cdcInferCase,
-      List<String> cdcFileS,
+      Collection<String> cdcFiles,
       Option<FileSlice> beforeFileSlice,
       Option<FileSlice> afterFileSlice) {
     this.instant = instant;
     this.cdcInferCase = cdcInferCase;
-    this.cdcFiles = cdcFileS;
+    this.cdcFiles = cdcFiles.stream()
+        .sorted(Comparator.comparingInt(FSUtils::getFileVersionFromLog)).collect(Collectors.toList());
     this.beforeFileSlice = beforeFileSlice;
     this.afterFileSlice = afterFileSlice;
   }
