@@ -182,9 +182,6 @@ public class HoodieDeltaStreamer implements Serializable {
    * @throws Exception
    */
   public void sync() throws Exception {
-    if (true) {
-      throw new HoodieException("186 vexler");
-    }
     if (bootstrapExecutor.isPresent()) {
       LOG.info("Performing bootstrap. Source=" + bootstrapExecutor.get().getBootstrapConfig().getBootstrapSourceBasePath());
       bootstrapExecutor.get().execute();

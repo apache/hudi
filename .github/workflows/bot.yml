@@ -80,4 +80,12 @@ jobs:
         if: ${{ !endsWith(env.FLINK_PROFILE, '1.13') }} # skip test flink1.13 tests as changing flink version doesn't matter for this
         run:
           ./scripts/run_utilities_bundle_test.sh
+      - name: Spark Bundle Tests
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        if: ${{ !endsWith(env.FLINK_PROFILE, '1.13') }} # skip test flink1.13 tests as changing flink version doesn't matter for this
+        run:
+          ./scripts/run_spark_bundle_test.sh
           

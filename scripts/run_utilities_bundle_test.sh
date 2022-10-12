@@ -96,5 +96,6 @@ echo "::warning::run_utilities_bundle_test.sh done with spark shell"
 #cleanup
 rm -rf $COMMANDS_FILE
 rm -rf $PROPS_FILE
-rm -rf $LOGFILE
+#cat $LOGFILE
+#rm -rf $LOGFILE
 exit 0

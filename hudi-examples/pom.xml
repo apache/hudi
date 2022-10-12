@@ -32,6 +32,7 @@
     <module>hudi-examples-spark</module>
     <module>hudi-examples-flink</module>
     <module>hudi-examples-java</module>
+    <module>hudi-examples-spark-slim</module>
   </modules>
 
 </project>
