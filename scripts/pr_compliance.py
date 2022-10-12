@@ -18,7 +18,7 @@
 import re
 import os
 import sys
-
+import inspect
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #  
 #  _____ _ _   _       __     __    _ _     _       _   _                 #
 # |_   _(_) |_| | ___  \ \   / /_ _| (_) __| | __ _| |_(_) ___  _ __      #  
@@ -130,14 +130,15 @@ class Outcomes:
 # identifier: str - line that signifies the start of a section
 # linesAfter: set of str - default lines in the template that we ignore when 
 #                          verifying that the user filled out the section
-# nextSection: str - The name of the next section or "SUCCESS" if this is the 
-#                    last section
 class ParseSectionData:
-    def __init__(self, name: str, identifier: str, linesAfter, nextSection: str):
+    def __init__(self, name: str, identifier: str, linesAfter: str):
         self.name = name
         self.identifier = identifier
         self.linesAfter = linesAfter
-        self.nextSection = nextSection
+        self.prevSection = ""
+        self.nextSection = ""
+        
+        
     
     #returns true if line matches the identifier
     def identify(self, line: str):
@@ -151,8 +152,8 @@ class ParseSectionData:
 #Special holder of data for risk level because the identifier line is modified
 #by the user
 class RiskLevelData(ParseSectionData):
-    def __init__(self, name: str, identifier: str, linesAfter, nextSection: str):
-        super().__init__(name, identifier, linesAfter, nextSection)
+    def __init__(self, name: str, identifier: str, linesAfter):
+        super().__init__(name, identifier, linesAfter)
     
     #we check that the line start with the identifier because the identifier 
     #line will be modified when filled out correctly
@@ -165,8 +166,23 @@ class RiskLevelData(ParseSectionData):
 class ParseSections:
     def __init__(self, psd):
         self.sections = {}
-        for x in psd:
-            self.sections[x.name] = x
+        assert len(psd) > 0
+        for i in range(len(psd)):
+            prevI = i - 1
+            nextI = i + 1
+            if prevI < 0:
+                psd[i].prevSection = "START"
+            else:
+                psd[i].prevSection = psd[prevI].name
+            
+            if nextI >= len(psd):
+                psd[i].nextSection = "END"
+            else:
+                psd[i].nextSection = psd[nextI].name
+            
+            self.sections[psd[i].name] = psd[i]
+            
+
     
     #returns true if line is an identifier for a section that is not value
     #   PARAMS
@@ -179,6 +195,18 @@ class ParseSections:
                     return True
         return False    
     
+    #gets the name of the section identified in the line
+    #   PARAMS
+    # line: str - the line that we are parsing
+    #   RETURN
+    # string - name of the section if the identifier is found, else none
+    def getSectionName(self, line: str):
+        for name in self.sections:
+            if self.sections[name].identify(line):
+                return name
+        return None    
+
+
     #returns the ParseSectionData that is named name
     def get(self, name):
         return self.sections.get(name)
@@ -200,9 +228,13 @@ class ParseSection:
         self.sections = sections
 
     #prints error message if debug is set to true
-    def error(self, message):
+    def error(self, line: str, lineno: str, message: str):
         if self.debug:
-            print(f"ERROR:(state: {self.data.name}, found: {self.found}, message: {message}")
+            pyline = inspect.getframeinfo(inspect.stack()[1][0]).lineno
+            print(f"::error file=pr_compliance.py,line={pyline}::{message}")
+            if lineno != "" and line != "":
+                print(f"::error file=pr_compliance.py,line={pyline}::found on line {lineno}: {line}")
+            print(f"::debug::state: {self.data.name}, found: {self.found},")
 
     #returns the name of the next section
     def nextSection(self):
@@ -214,29 +246,55 @@ class ParseSection:
         return self.found and self.data.identifyAfter(line)
 
     #Decides what outcome occurs when the section identifier is found
-    def processIdentify(self, line):
+    def processIdentify(self, line, lineno):
         if self.found:
             #since we have already found the identifier, this means that we have
             #found a duplicate of the identifier
-            self.error(f"duplicate line \"{line}\"")
+            self.error(line, lineno, f"Duplicate {self.data.name} section found")
             return Outcomes.ERROR
         self.found = True
         return Outcomes.CONTINUE
+
+    def makeValidateOthersErrorMessage(self, line):
+        if self.found:
+            if self.nextSection() != "END" and self.sections.sections[self.nextSection()].identify(line):
+                #we found the next identifier but haven't found a description
+                #yet for this section
+                return f"Section {self.data.name} is missing a description"
+            #we found a section other than the next section
+            return f"Section {self.data.name} should be followed by section {self.data.nextSection}"
+
+        #section identifier has not been found yet
+        sectionFound = self.sections.getSectionName(line)
+        if sectionFound is None:
+            print("ERROR: none found even though validateOthers returned True")
+            exit(1)
+        elif sectionFound == self.data.prevSection:
+            #we have not found the current section identifier but we found the
+            #previous section identifier again
+            return f"Duplicate {self.data.prevSection} section found"
+         
+        if self.data.prevSection == "START":
+            return f"Section {self.data.name} should be the first section"
+        if sectionFound == self.data.nextSection:
+            return f"Missing section {self.data.name} between {self.data.prevSection} and {self.data.nextSection}"
+        return f"Section {self.data.name} was expected after section {self.data.prevSection}"
     
     #Decides the outcome state by processing line
-    def validateLine(self,line):
+    def validateLine(self,line,lineno):
         if self.data.identify(line):
             #we have found the identifier so we should decide what to do
-            return self.processIdentify(line)
+            return self.processIdentify(line,lineno)
         elif self.sections.validateOthers(line, self.data.name):
             #we have found the identifier for another section
-            self.error(f"Out of order section or missing description \"{line}\"")
+            #figure out what the error is
+            self.error(line,lineno,self.makeValidateOthersErrorMessage(line))
             return Outcomes.ERROR
         elif self.validateAfter(line):
             #the pr author has added new text to this section so we consider it
             #to be filled out
-            if self.nextSection() == "SUCCESS":
-                #if next section is "SUCCESS" then there are no more sections 
+            if self.nextSection() == "END":
+                #if next section is "END" then there are no more sections 
                 #to process
                 return Outcomes.SUCCESS
             return Outcomes.NEXTSECTION
@@ -250,10 +308,10 @@ class NoDataSection(ParseSection):
 
     #After finding the identifier we don't need to look for anything else so we
     #can just go to the next section or terminate if this is the last
-    def processIdentify(self, line):
-        o = super().processIdentify(line)
+    def processIdentify(self, line, lineno):
+        o = super().processIdentify(line, lineno)
         if o  == Outcomes.CONTINUE:
-            if self.nextSection() == "SUCCESS":
+            if self.nextSection() == "END":
                 return Outcomes.SUCCESS
             else:
                 return Outcomes.NEXTSECTION
@@ -265,20 +323,20 @@ class RiskLevelSection(ParseSection):
     def __init__(self, data: ParseSectionData, sections: ParseSections, debug=False):
         super().__init__(data, sections, debug)
 
-    def processIdentify(self, line):
+    def processIdentify(self, line, lineno):
         if self.found:
             #since we have already found the identifier, this means that we have
             #found a duplicate of the identifier
-            self.error(f"duplicate line starting with \"{self.identifier}\"")
+            self.error(line, lineno, f"Duplicate line starting with \"{self.identifier}\" found")
             return Outcomes.ERROR
         if line == "**Risk level: none | low | medium | high**":
             #the user has not modified this line so a risk level was not chosen
-            self.error("risk level not chosen")
+            self.error(line, lineno, "Risk level not chosen")
             return Outcomes.ERROR
         if "NONE" in line.upper() or "LOW" in line.upper():
             # an explanation is not required for none or low so we can just
             # move on to the next section or terminate if this is the last
-            if self.nextSection() == "SUCCESS":
+            if self.nextSection() == "END":
                 return Outcomes.SUCCESS
             else:
                 return Outcomes.NEXTSECTION
@@ -288,7 +346,7 @@ class RiskLevelSection(ParseSection):
             return Outcomes.CONTINUE
         else:
             #the pr author put something weird in for risk level
-            self.error("invalid choice for risk level")
+            self.error(line, lineno, "Invalid choice for risk level")
             return Outcomes.ERROR
 
 #Class that orchestrates the validation of the entire body
@@ -319,7 +377,7 @@ class ValidateBody:
         #get the data for that section
         data = self.sections.get(sectionName)
         if data is None:
-            print(f"parse section {sectionName} not found")
+            print(f"ERROR with your parse section setup. Parse section {sectionName} not found")
             exit(-3)
         
         #create the section
@@ -336,13 +394,13 @@ class ValidateBody:
         self.nextSection()
 
         #validate each line
-        for line in self.body.splitlines():
+        for lineno, line in enumerate(self.body.splitlines(), 1):
             #ignore empty lines
             if len(line) == 0:
                 continue
 
             #run the parse section validation
-            o = self.section.validateLine(line)
+            o = self.section.validateLine(line, lineno)
             
             #decide what to do based on outcome
             if o == Outcomes.ERROR:
@@ -353,7 +411,13 @@ class ValidateBody:
                 self.nextSection()
         #if we get through all the lines without a success outcome, then the 
         #body does not comply
-        self.section.error("template is not filled out properly")
+        if self.section.data.nextSection == "END":
+            if self.section.found:
+                self.section.error("","",f"Section {self.section.data.name} is missing a description")
+                return False
+            self.section.error("","",f"Missing section {self.section.data.name} at the end")
+            return False
+        self.section.error("","", "Please make sure you have filled out the template correctly. You can find a blank template in /.github/PULL_REQUEST_TEMPLATE.md")
         return False
         
 #Generate the validator for the current template.
@@ -361,20 +425,16 @@ class ValidateBody:
 def make_default_validator(body, debug=False):
     changelogs = ParseSectionData("CHANGELOGS",
         "### Change Logs",
-        {"_Describe context and summary for this change. Highlight if any code was copied._"},
-        "IMPACT")
+        {"_Describe context and summary for this change. Highlight if any code was copied._"})
     impact = ParseSectionData("IMPACT",
         "### Impact",
-        {"_Describe any public API or user-facing feature change or any performance impact._"},
-        "RISKLEVEL")
+        {"_Describe any public API or user-facing feature change or any performance impact._"})
     risklevel = RiskLevelData("RISKLEVEL",
         "**Risk level:",
-        {"_Choose one. If medium or high, explain what verification was done to mitigate the risks._"},
-        "CHECKLIST")
+        {"_Choose one. If medium or high, explain what verification was done to mitigate the risks._"})
     checklist = ParseSectionData("CHECKLIST",
         "### Contributor's checklist",
-        {},
-        "SUCCESS")
+        {})
     parseSections = ParseSections([changelogs, impact, risklevel, checklist])
 
     return ValidateBody(body, "CHANGELOGS", parseSections, debug)
@@ -480,13 +540,13 @@ def test_body():
         tests_passed = run_test(f"duplicate section: {i}", build_body(test_sections), False, DEBUG_MESSAGES) and tests_passed
     
     #Test out of order section
-    for i in range(len(good_sections)):
+    for i in range(len(good_sections)-1):
         test_sections = []
         for j in range(len(good_sections)):
             test_sections.append(good_sections[j].copy())
-        k = (i + 3) % len(good_sections)
-        test_sections[i], test_sections[k] = test_sections[k],test_sections[i]
-        tests_passed = run_test(f"Swapped sections: {i}, {k}", build_body(test_sections), False, DEBUG_MESSAGES) and tests_passed
+        for k in range(i+1,len(good_sections)):
+            test_sections[i], test_sections[k] = test_sections[k],test_sections[i]
+            tests_passed = run_test(f"Swapped sections: {i}, {k}", build_body(test_sections), False, DEBUG_MESSAGES) and tests_passed
 
     #Test missing section
     for i in range(len(good_sections)):
