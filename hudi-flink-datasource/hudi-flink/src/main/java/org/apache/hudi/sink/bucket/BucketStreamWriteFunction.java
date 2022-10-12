@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A stream write function with bucket hash index.
+ * A stream write function with SIMPLE bucket hash index.
  *
  * <p>The task holds a fresh new local index: {(partition + bucket number) &rarr fileId} mapping, this index
  * is used for deciding whether the incoming records in an UPDATE or INSERT.

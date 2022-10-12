@@ -51,7 +51,9 @@ public class ConsistentBucketIndexUtils {
 
   /**
    * Load hashing metadata of the given partition, if it is not existed, create a new one (also persist it into storage)
-   * NOTE: In multi-writer case, the validity of this function only holds if the file system has atomic rename guarantee, like HDFS.
+   * NOTE: When creating a new hashing metadata, the content will always be the same for the same partition. It means when
+   * multiple writer are trying to initialize metadata for the same partition, no lock or synchronization is necessary as they
+   * are creating the file with the same content;
    *
    * @param metaClient  hoodie meta client
    * @param partition   table partition
@@ -82,11 +84,11 @@ public class ConsistentBucketIndexUtils {
 
 
   /**
-   * Load hashing metadata of the given partition, if it is not existed, return null
+   * Load hashing metadata of the given partition, if it is not existed, return Option.empty
    *
    * @param metaClient  hoodie meta client
    * @param partition   table partition
-   * @return Consistent hashing metadata or null if it does not exist
+   * @return Consistent hashing metadata or Option.empty if it does not exist
    */
   public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTableMetaClient metaClient, String partition) {
     Path metadataPath = FSUtils.getPartitionPath(metaClient.getHashingMetadataPath(), partition);

@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.append.AppendWriteOperator;
@@ -31,7 +30,6 @@ import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bucket.BucketStreamWriteOperatorFactory;
-import org.apache.hudi.sink.bucket.ConsistentBucketInitOperatorFactory;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
@@ -318,7 +316,6 @@ public class Pipelines {
   public static DataStream<Object> hoodieStreamWrite(Configuration conf, DataStream<HoodieRecord> dataStream) {
     if (OptionsResolver.isBucketIndexType(conf)) {
       WriteOperatorFactory<HoodieRecord> operatorFactory = BucketStreamWriteOperatorFactory.getFactory(conf);
-      dataStream = addBucketBootstrapIfNecessary(conf, dataStream);
       Partitioner<HoodieKey> partitioner = BucketIndexPartitioner.instance(conf);
       return dataStream.partitionCustom(partitioner, HoodieRecord::getKey)
           .transform(opIdentifier("bucket_write", conf), TypeInformation.of(Object.class), operatorFactory)
@@ -341,16 +338,6 @@ public class Pipelines {
           .uid("uid_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
     }
-  }
-
-  private static DataStream<HoodieRecord> addBucketBootstrapIfNecessary(Configuration conf, DataStream<HoodieRecord> dataStream) {
-    if (conf.get(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name())) {
-      return dataStream.transform("consistent_hashing_metadata_initialization",
-              TypeInformation.of(HoodieRecord.class),
-              ConsistentBucketInitOperatorFactory.instance(conf))
-          .setParallelism(dataStream.getParallelism());
-    }
-    return dataStream;
   }
 
   /**

@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
@@ -72,18 +73,13 @@ public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implem
   }
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
-    if (metaClient == null) {
-      metaClient = StreamerUtil.createMetaClient(config);
-    }
-
     return partitionToBucketIdentifier.computeIfAbsent(partition, p -> {
-      Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(metaClient, p);
-      // The hashing metadata is not initialized yet, use a temporal metadata for routing.
-      // NOTE: The routing will be the same regardless if the metadata is the persisted one. As all initial metadata have the same default node values.
-      if (!metadataOption.isPresent()) {
-        metadataOption = Option.of(new HoodieConsistentHashingMetadata(partition, config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)));
-      }
-      return new ConsistentBucketIdentifier(metadataOption.get());
+      // NOTE: If the metadata does not exist, there maybe concurrent creation of the metadata. And we allow multiple partitioner
+      // trying to create the same metadata as the initial metadata always has the same content for the same partition.
+      HoodieConsistentHashingMetadata metadata =
+          ConsistentBucketIndexUtils.loadOrCreateMetadata(getMetaClient(), p, config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+      ValidationUtils.checkState(metadata != null);
+      return new ConsistentBucketIdentifier(metadata);
     });
   }
 
@@ -97,7 +93,7 @@ public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implem
    */
   @Override
   public void notifyCheckpointComplete(long checkpointId) throws Exception {
-    Option<HoodieInstant> latestReplaceInstant = metaClient.reloadActiveTimeline()
+    Option<HoodieInstant> latestReplaceInstant = getMetaClient().reloadActiveTimeline()
         .filter(instant -> instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
     if (latestReplaceInstant.isPresent() && latestReplaceInstant.get().getTimestamp().compareTo(lastRefreshInstant) > 0) {
       LOG.info("Clear up cached hashing metadata as new replace commit is spotted, instant: " + lastRefreshInstant);
@@ -105,5 +101,12 @@ public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implem
       this.lastRefreshInstant = latestReplaceInstant.get().getTimestamp();
       this.partitionToBucketIdentifier.clear();
     }
+  }
+
+  private HoodieTableMetaClient getMetaClient() {
+    if (metaClient == null) {
+      metaClient = StreamerUtil.createMetaClient(config);
+    }
+    return metaClient;
   }
 }
