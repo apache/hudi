@@ -30,7 +30,7 @@ import org.apache.hudi.sink.append.AppendWriteOperator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
-import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
+import org.apache.hudi.sink.bucket.BucketStreamWriteOperatorFactory;
 import org.apache.hudi.sink.bucket.ConsistentBucketInitOperatorFactory;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
@@ -317,7 +317,7 @@ public class Pipelines {
    */
   public static DataStream<Object> hoodieStreamWrite(Configuration conf, DataStream<HoodieRecord> dataStream) {
     if (OptionsResolver.isBucketIndexType(conf)) {
-      WriteOperatorFactory<HoodieRecord> operatorFactory = BucketStreamWriteOperator.getFactory(conf);
+      WriteOperatorFactory<HoodieRecord> operatorFactory = BucketStreamWriteOperatorFactory.getFactory(conf);
       dataStream = addBucketBootstrapIfNecessary(conf, dataStream);
       Partitioner<HoodieKey> partitioner = BucketIndexPartitioner.instance(conf);
       return dataStream.partitionCustom(partitioner, HoodieRecord::getKey)

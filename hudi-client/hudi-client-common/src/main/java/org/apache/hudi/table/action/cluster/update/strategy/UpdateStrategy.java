@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -51,13 +50,4 @@ public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> implement
    * @return the recordsRDD strategy updated and a set of file groups to be updated while pending clustering.
    */
   public abstract Pair<I, Set<HoodieFileGroupId>> handleUpdate(I taggedRecordsRDD);
-
-  /**
-   * Check the update records to the file group in clustering with given file group id
-   * NOTE: used in flink engine
-   */
-  public Pair<I, List<HoodieFileGroupId>> handleUpdate(HoodieFileGroupId fileId, I records) {
-    throw new UnsupportedOperationException("Unsupported");
-  }
-
 }

@@ -28,6 +28,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.util.List;
+import java.util.Set;
 
 public class FlinkRejectUpdateStrategy<T extends HoodieRecordPayload> extends BaseFlinkUpdateStrategy<T> {
 
@@ -38,7 +39,7 @@ public class FlinkRejectUpdateStrategy<T extends HoodieRecordPayload> extends Ba
   }
 
   @Override
-  protected Pair<List<RecordsInstantPair>, List<HoodieFileGroupId>> doHandleUpdate(HoodieFileGroupId fileId, RecordsInstantPair records) {
+  protected Pair<List<RecordsInstantPair>, Set<HoodieFileGroupId>> doHandleUpdate(HoodieFileGroupId fileId, RecordsInstantPair records) {
     String msg = String.format("Not allowed to update the clustering file group %s. "
             + "For pending clustering operations, we are not going to support update for now. "
             + "If you are using ConsistentHashing Bucket Index, try set CLUSTERING_UPDATE_STRATEGY to %s "

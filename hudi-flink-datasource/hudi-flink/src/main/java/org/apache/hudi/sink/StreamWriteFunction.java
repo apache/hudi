@@ -55,6 +55,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -243,21 +244,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   /**
-   * Used for setting up before flush: patch up the first record with correct partition path and fileID.
-   *
-   * <p>Note: the method may modify the given records {@code records}.
-   */
-  private void patchFileIdToRecords(List<HoodieRecord> records, String fileId) {
-    // rewrite the first record with expected fileID
-    HoodieRecord<?> first = records.get(0);
-    HoodieRecord<?> record = new HoodieAvroRecord<>(first.getKey(), (HoodieRecordPayload) first.getData(), first.getOperation());
-    HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileId);
-    record.setCurrentLocation(newLoc);
-
-    records.set(0, record);
-  }
-
-  /**
    * Data bucket.
    */
   private static class DataBucket {
@@ -281,6 +267,21 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       return records.stream()
           .map(record -> record.toHoodieRecord(partitionPath))
           .collect(Collectors.toList());
+    }
+
+    /**
+     * Sets up before flush: patch up the first record with correct partition path and fileID.
+     *
+     * <p>Note: the method may modify the given records {@code records}.
+     */
+    public void preWrite(List<HoodieRecord> records) {
+      // rewrite the first record with expected fileID
+      HoodieRecord<?> first = records.get(0);
+      HoodieRecord<?> record = new HoodieAvroRecord<>(first.getKey(), (HoodieRecordPayload) first.getData(), first.getOperation());
+      HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileID);
+      record.setCurrentLocation(newLoc);
+
+      records.set(0, record);
     }
 
     public void reset() {
@@ -449,17 +450,13 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       records = FlinkWriteHelper.newInstance().deduplicateRecords(records, null, -1, this.writeClient.getConfig().getSchema());
     }
     this.updateStrategy.initialize(this.writeClient);
-    Pair<List<BaseFlinkUpdateStrategy.RecordsInstantPair>, List<HoodieFileGroupId>> recordListFgPair =
-        this.updateStrategy.handleUpdate(new HoodieFileGroupId(bucket.partitionPath, bucket.fileID),
-            Collections.singletonList(BaseFlinkUpdateStrategy.RecordsInstantPair.of(records, instant)));
-    List<WriteStatus> ret = new ArrayList<>();
-    for (int i = 0; i < recordListFgPair.getKey().size(); ++i) {
-      BaseFlinkUpdateStrategy.RecordsInstantPair recordsInstantPair = recordListFgPair.getKey().get(i);
-      patchFileIdToRecords(recordsInstantPair.records, recordListFgPair.getValue().get(i).getFileId());
-      ret.addAll(writeFunction.apply(recordsInstantPair.records, recordsInstantPair.instantTime));
-    }
+    bucket.preWrite(records);
+    Pair<List<BaseFlinkUpdateStrategy.RecordsInstantPair>, Set<HoodieFileGroupId>> recordListFgPair =
+        this.updateStrategy.handleUpdate(Collections.singletonList(BaseFlinkUpdateStrategy.RecordsInstantPair.of(records, instant)));
 
-    return ret;
+    return recordListFgPair.getKey().stream().flatMap(
+        recordsInstantPair -> writeFunction.apply(recordsInstantPair.records, recordsInstantPair.instantTime).stream()
+    ).collect(Collectors.toList());
   }
 
   @SuppressWarnings("unchecked, rawtypes")

@@ -68,22 +68,19 @@ public abstract class BaseFlinkUpdateStrategy<T extends HoodieRecordPayload> ext
   }
 
   @Override
-  public Pair<List<RecordsInstantPair>, List<HoodieFileGroupId>> handleUpdate(HoodieFileGroupId fileId, List<RecordsInstantPair> recordList) {
+  public Pair<List<RecordsInstantPair>, Set<HoodieFileGroupId>> handleUpdate(List<RecordsInstantPair> recordsList) {
     ValidationUtils.checkArgument(initialized, "Strategy has not been initialized");
-    ValidationUtils.checkArgument(recordList.size() == 1);
+    ValidationUtils.checkArgument(recordsList.size() == 1);
 
-    RecordsInstantPair recordsInstantPair = recordList.get(0);
+    RecordsInstantPair recordsInstantPair = recordsList.get(0);
+    HoodieRecord sampleRecord = recordsInstantPair.records.get(0);
+    HoodieFileGroupId fileId = new HoodieFileGroupId(sampleRecord.getPartitionPath(), sampleRecord.getCurrentLocation().getFileId());
     // Return the input records directly if the corresponding file group is not under clustering.
     if (fileGroupsInPendingClustering.isEmpty() || !fileGroupsInPendingClustering.contains(fileId)) {
-      return Pair.of(Collections.singletonList(recordsInstantPair), Collections.singletonList(fileId));
+      return Pair.of(recordsList, Collections.singleton(fileId));
     }
 
     return doHandleUpdate(fileId, recordsInstantPair);
-  }
-
-  @Override
-  public Pair<List<RecordsInstantPair>, Set<HoodieFileGroupId>> handleUpdate(List<RecordsInstantPair> recordList) {
-    throw new UnsupportedOperationException("handleUpdate(String, List<HoodieRecord>) should be used instead");
   }
 
   /**
@@ -95,5 +92,5 @@ public abstract class BaseFlinkUpdateStrategy<T extends HoodieRecordPayload> ext
    *   - pair.left:  the batch records and their corresponding instant time
    *   - pair.right: set of file group id that the records need to write to
    */
-  protected abstract Pair<List<RecordsInstantPair>, List<HoodieFileGroupId>> doHandleUpdate(HoodieFileGroupId fileId, RecordsInstantPair recordsInstantPair);
+  protected abstract Pair<List<RecordsInstantPair>, Set<HoodieFileGroupId>> doHandleUpdate(HoodieFileGroupId fileId, RecordsInstantPair recordsInstantPair);
 }

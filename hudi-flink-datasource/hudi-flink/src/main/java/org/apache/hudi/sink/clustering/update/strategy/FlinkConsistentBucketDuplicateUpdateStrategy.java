@@ -21,9 +21,10 @@ package org.apache.hudi.sink.clustering.update.strategy;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.ConsistentHashingNode;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
@@ -32,7 +33,6 @@ import org.apache.hudi.table.action.cluster.update.strategy.ConsistentHashingUpd
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -77,32 +77,46 @@ public class FlinkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
   }
 
   @Override
-  protected Pair<List<RecordsInstantPair>, List<HoodieFileGroupId>> doHandleUpdate(HoodieFileGroupId fileId, RecordsInstantPair recordsInstantPair) {
-    Map<String, List<HoodieRecord>> fileIdToRecords = new HashMap<>(4);
+  protected Pair<List<RecordsInstantPair>, Set<HoodieFileGroupId>> doHandleUpdate(HoodieFileGroupId fileId, RecordsInstantPair recordsInstantPair) {
+    Pair<String, ConsistentBucketIdentifier> bucketIdentifierPair = getBucketIdentifierOfPartition(fileId.getPartitionPath());
+    String clusteringInstant = bucketIdentifierPair.getLeft();
+    ConsistentBucketIdentifier identifier = bucketIdentifierPair.getRight();
 
-    Pair<String, ConsistentBucketIdentifier> identifierPair = getIdentifierOfPartition(fileId.getPartitionPath());
-    String instant = identifierPair.getLeft();
-    ConsistentBucketIdentifier identifier = identifierPair.getRight();
     // TODO maybe handle bucket split & merge differently. Bucket merge does not need rehashing, just routing all records to the new bucket.
-    recordsInstantPair.records.forEach(r -> {
-      ConsistentHashingNode node = identifier.getBucket(r.getKey(), this.indexKeyFields);
-      fileIdToRecords.computeIfAbsent(node.getFileIdPrefix(), n -> new ArrayList<>()).add(r.newInstance());
-    });
+    // Construct records list routing to new file groups according the new bucket identifier
+    Map<String, List<HoodieRecord>> fileIdToRecords = recordsInstantPair.records.stream().map(HoodieRecord::newInstance)
+        .collect(Collectors.groupingBy(r -> identifier.getBucket(r.getKey(), indexKeyFields).getFileIdPrefix()));
 
+    // Tag first record with the corresponding fileId & clusteringInstantTime
     Set<Map.Entry<String, List<HoodieRecord>>> fileIdToRecordsEntry = fileIdToRecords.entrySet();
-    Stream<RecordsInstantPair> remappedRecordsInstantPair = fileIdToRecordsEntry.stream().map(e -> RecordsInstantPair.of(e.getValue(), instant));
+    Stream<RecordsInstantPair> patchedRecordsList = fileIdToRecordsEntry.stream().map(e -> {
+      patchFileIdToRecords(e.getValue(), e.getKey());
+      return RecordsInstantPair.of(e.getValue(), clusteringInstant);
+    });
     Stream<HoodieFileGroupId> remappedFileGroupIds = fileIdToRecordsEntry.stream().map(e -> new HoodieFileGroupId(fileId.getPartitionPath(), e.getKey()));
 
     // TODO add option to skip dual update, i.e., write updates only to the new file group
     LOG.info("Apply duplicate update for FileGroup" + fileId + ", routing records to: " + String.join(",", fileIdToRecords.keySet()));
-    return Pair.of(Stream.concat(remappedRecordsInstantPair, Stream.of(recordsInstantPair)).collect(Collectors.toList()),
-        Stream.concat(remappedFileGroupIds, Stream.of(fileId)).collect(Collectors.toList()));
+    return Pair.of(Stream.concat(patchedRecordsList, Stream.of(recordsInstantPair)).collect(Collectors.toList()),
+        Stream.concat(remappedFileGroupIds, Stream.of(fileId)).collect(Collectors.toSet()));
   }
 
-  private Pair<String, ConsistentBucketIdentifier> getIdentifierOfPartition(String partition) {
+  private Pair<String, ConsistentBucketIdentifier> getBucketIdentifierOfPartition(String partition) {
     return partitionToIdentifier.computeIfAbsent(partition, p -> {
           return ConsistentHashingUpdateStrategyUtils.constructPartitionToIdentifier(Collections.singleton(p), table.getMetaClient()).get(p);
         }
     );
+  }
+
+  /**
+   * Rewrite the first record with given fileID
+   */
+  private void patchFileIdToRecords(List<HoodieRecord> records, String fileId) {
+    HoodieRecord<?> first = records.get(0);
+    HoodieRecord<?> record = new HoodieAvroRecord<>(first.getKey(), (HoodieRecordPayload) first.getData(), first.getOperation());
+    HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileId);
+    record.setCurrentLocation(newLoc);
+
+    records.set(0, record);
   }
 }
