@@ -75,7 +75,7 @@ public final class HoodieSparkQuickstartSlim {
     queryData(spark, jsc, tablePath, tableName, dataGen);
     Dataset<Row> snapshotAfterUpdate = spark.sql(snapshotQuery);
     assertTrue(snapshotAfterUpdate.intersect(updateDf).count() == updateDf.count());
-    assertTrue(snapshotAfterUpdate.except(updateDf).except(snapshotBeforeUpdate).count() == 1);
+    assertTrue(snapshotAfterUpdate.except(updateDf).except(snapshotBeforeUpdate).count() == 0);
 
     incrementalQuery(spark, tablePath, tableName);
     pointInTimeQuery(spark, tablePath, tableName);
