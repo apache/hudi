@@ -438,6 +438,10 @@
               <include>org.apache.httpcomponents:httpclient</include>
               <include>org.apache.httpcomponents:httpcore</include>
               <include>org.apache.httpcomponents:fluent-hc</include>
+              <!-- org.apache.parquet -->
+              <include>org.apache.parquet:parquet-avro</include>
+              <!-- org.apache.avro -->
+              <include>org.apache.avro:avro</include>
             </includes>
           </artifactSet>
           <relocations>
@@ -462,6 +466,16 @@
             <relocation>
               <pattern>org.apache.http.</pattern>
               <shadedPattern>org.apache.hudi.org.apache.http.</shadedPattern>
+            </relocation>
+            <!-- org.apache.parquet -->
+            <relocation>
+              <pattern>org.apache.parquet.avro.</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
+            </relocation>
+            <!-- org.apache.avro -->
+            <relocation>
+              <pattern>org.apache.avro.</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
             </relocation>
           </relocations>
         </configuration>

@@ -360,6 +360,13 @@
       <scope>compile</scope>
     </dependency>
 
+    <!-- Avro -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
     <!-- Hive -->
     <dependency>
       <groupId>${hive.groupid}</groupId>

@@ -93,7 +93,6 @@
                   <include>org.rocksdb:rocksdbjni</include>
                   <include>org.antlr:stringtemplate</include>
                   <!-- Parquet -->
-                  <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.parquet:parquet-hadoop</include>
                   <include>org.apache.parquet:parquet-column</include>
                   <include>org.apache.parquet:parquet-common</include>
@@ -101,7 +100,6 @@
                   <include>org.apache.parquet:parquet-encoding</include>
                   <include>org.apache.parquet:parquet-jackson</include>
 
-                  <include>org.apache.avro:avro</include>
                   <include>joda-time:joda-time</include>
                   <include>com.fasterxml.jackson.core:jackson-annotations</include>
                   <include>com.fasterxml.jackson.core:jackson-databind</include>
@@ -164,10 +162,6 @@
                 <relocation>
                   <pattern>javax.servlet.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}javax.servlet.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.avro.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.avro.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.commons.io.</pattern>
