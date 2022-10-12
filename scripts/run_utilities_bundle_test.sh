@@ -48,25 +48,38 @@ echo hoodie.deltastreamer.schemaprovider.source.schema.file=file:${TEST_DATA_FOL
 SPARK_SUBMIT=${SPARK_HOME}/bin/spark-submit
 OUTPUT_FOLDER_NAME="/tmp/hudi-deltastreamer-ny_${VERSION_STRING}/"
 UTILITIES_BUNDLE_NAME=${PWD}/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_${SCALA_NUM}-0.13.0-SNAPSHOT.jar
+UTILITIES_SLIM_BUNDLE_NAME=${PWD}/packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_${SCALA_NUM}-0.13.0-SNAPSHOT.jar
+SPARK_BUNDLE_NAME=${PWD}/packaging/hudi-spark-bundle/target/hudi-${SPARK_PROFILE}-bundle_${SCALA_NUM}-0.13.0-SNAPSHOT.jar
+BUNDLE_TEST_TYPE=$1
+JARS_ARG="${SPARK_BUNDLE_NAME} ${UTILITIES_SLIM_BUNDLE_NAME}"
+JARS_BEGIN="--jars"
+SLIM_BUNDLE="true"
+if [ "$BUNDLE_TEST_TYPE" != "slim" ]; then
+    JARS_ARG="$UTILITIES_BUNDLE_NAME"
+    JARS_BEGIN=""
+    SLIM_BUNDLE="false"
+fi
+
+
 SPARK_SUBMIT_COMMAND="${SPARK_SUBMIT} --driver-memory 8g --executor-memory 8g"
 SPARK_SUBMIT_COMMAND+=" --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer"
-SPARK_SUBMIT_COMMAND+=" ${UTILITIES_BUNDLE_NAME} --props ${PROPS_FILE}"
+SPARK_SUBMIT_COMMAND+=" ${JARS_BEGIN} ${JARS_ARG} --props ${PROPS_FILE}"
 SPARK_SUBMIT_COMMAND+=" --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider"
 SPARK_SUBMIT_COMMAND+=" --source-class org.apache.hudi.utilities.sources.ParquetDFSSource"
 SPARK_SUBMIT_COMMAND+=" --source-ordering-field date_col --table-type MERGE_ON_READ"
 SPARK_SUBMIT_COMMAND+=" --target-base-path file://${OUTPUT_FOLDER_NAME}"
 SPARK_SUBMIT_COMMAND+=" --target-table ny_hudi_tbl  --op UPSERT"
 
-echo "::warning::run_utilities_bundle_test.sh running spark submit command"
+echo "::warning::run_utilities_bundle_test.sh running spark submit command (slim bundle?: ${SLIM_BUNDLE})"
 #run spark submit command
 rm -rf $OUTPUT_FOLDER_NAME
-$SPARK_SUBMIT_COMMAND || { echo "::error::run_utilities_bundle_test.sh deltastreamer failed" && exit 1; }
+$SPARK_SUBMIT_COMMAND || { echo "::error::run_utilities_bundle_test.sh deltastreamer failed (slim bundle?: ${SLIM_BUNDLE})" && exit 1; }
 
 #make sure that the output folder has a bunch of data in it
 OUTPUT_SIZE=$(du -s ${OUTPUT_FOLDER_NAME} | awk '{print $1}')
-echo "::warning::run_utilities_bundle_test.sh done with spark submit, output size is ${OUTPUT_SIZE}"
+echo "::warning::run_utilities_bundle_test.sh done with spark submit, output size is ${OUTPUT_SIZE} (slim bundle?: ${SLIM_BUNDLE})"
 if [[ -z $OUTPUT_SIZE || "$OUTPUT_SIZE" -lt "1000" ]]; then
-    echo "::error::run_utilities_bundle_test.sh deltastreamer output folder is much smaller than expected" 
+    echo "::error::run_utilities_bundle_test.sh deltastreamer output folder is much smaller than expected (slim bundle?: ${SLIM_BUNDLE})" 
     exit 1
 fi
 
@@ -80,7 +93,7 @@ cat $TEST_DATA_FOLDER/commands.scala >> $COMMANDS_FILE
 
 #create spark shell command
 SPARK_SHELL=${SPARK_HOME}/bin/spark-shell
-SPARK_SHELL_COMMAND="${SPARK_SHELL} --jars ${UTILITIES_BUNDLE_NAME}" 
+SPARK_SHELL_COMMAND="${SPARK_SHELL} --jars ${JARS_ARG}" 
 SPARK_SHELL_COMMAND+=" --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'"
 if [[ $SPARK_PROFILE = "spark3.2" || $SPARK_PROFILE = "spark3.3" ]]; then
     SPARK_SHELL_COMMAND+=" --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'"
@@ -88,14 +101,14 @@ fi
 SPARK_SHELL_COMMAND+=" --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'"
 SPARK_SHELL_COMMAND+=" -i ${COMMANDS_FILE}"
 
-echo "::warning::run_utilities_bundle_test.sh running spark shell"
+echo "::warning::run_utilities_bundle_test.sh running spark shell (slim bundle?: ${SLIM_BUNDLE})"
 #run spark shell command
 LOGFILE="${PWD}/sparktest_${VERSION_STRING}.log"
-$SPARK_SHELL_COMMAND > $LOGFILE || { SHELL_RESULT=$(cat $LOGFILE | grep "Counts don't match") && echo "::error::run_utilities_bundle_test.sh $SHELL_RESULT" && exit 1; }
-echo "::warning::run_utilities_bundle_test.sh done with spark shell"
+$SPARK_SHELL_COMMAND > $LOGFILE || { SHELL_RESULT=$(cat $LOGFILE | grep "Counts don't match") && echo "::error::run_utilities_bundle_test.sh $SHELL_RESULT (slim bundle?: ${SLIM_BUNDLE})" && exit 1; }
+echo "::warning::run_utilities_bundle_test.sh done with spark shell (slim bundle?: ${SLIM_BUNDLE})"
+
 #cleanup
 rm -rf $COMMANDS_FILE
 rm -rf $PROPS_FILE
-#cat $LOGFILE
-#rm -rf $LOGFILE
+rm -rf $LOGFILE
 exit 0

@@ -35,7 +35,6 @@ fi
 
 SPARK_BUNDLE_NAME=${PWD}/packaging/hudi-spark-bundle/target/hudi-${SPARK_PROFILE}-bundle_${SCALA_NUM}-0.13.0-SNAPSHOT.jar
 SLIM_EXAMPLE_BUNDLE=${PWD}/hudi-examples/hudi-examples-spark-slim/target/hudi-examples-spark-slim-0.13.0-SNAPSHOT.jar
-UTILITIES_BUNDLE_NAME=${PWD}/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_${SCALA_NUM}-0.13.0-SNAPSHOT.jar
 
 SPARK_SUBMIT=${SPARK_HOME}/bin/spark-submit
 OUTPUT_FOLDER_NAME="/tmp/spark-bundle-test_${VERSION_STRING}/"
