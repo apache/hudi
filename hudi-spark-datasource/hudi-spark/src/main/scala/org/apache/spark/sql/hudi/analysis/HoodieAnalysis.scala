@@ -191,10 +191,10 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
         }
 
       // Convert to CreateIndexCommand
-      case CreateIndex(table, indexName, indexType, ignoreIfExists, columns, properties, output)
+      case CreateIndex(table, indexName, indexType, ignoreIfExists, columns, options, output)
         if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
         CreateIndexCommand(
-          getTableIdentifier(table), indexName, indexType, ignoreIfExists, columns, properties, output)
+          getTableIdentifier(table), indexName, indexType, ignoreIfExists, columns, options, output)
 
       // Convert to DropIndexCommand
       case DropIndex(table, indexName, ignoreIfNotExists, output)
