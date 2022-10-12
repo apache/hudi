@@ -21,15 +21,12 @@ package org.apache.hudi.common.table.view;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
-import org.junit.jupiter.api.Disabled;
-
 import java.io.IOException;
 import java.nio.file.Files;
 
 /**
  * Tests rocks db based incremental file system view sync {@link RocksDbBasedFileSystemView}.
  */
-@Disabled
 public class TestRocksDBBasedIncrementalFSViewSync extends TestIncrementalFSViewSync {
 
   @Override
