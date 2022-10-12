@@ -1048,8 +1048,12 @@ public class HoodieTableMetadataUtil {
     HoodieTableFileSystemView fsView = fileSystemView.orElse(getFileSystemView(metaClient));
     Stream<FileSlice> fileSliceStream;
     if (mergeFileSlices) {
-      fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
-          partition, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
+      if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
+        fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
+            partition, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
+      } else {
+        return Collections.EMPTY_LIST;
+      }
     } else {
       fileSliceStream = fsView.getLatestFileSlices(partition);
     }
