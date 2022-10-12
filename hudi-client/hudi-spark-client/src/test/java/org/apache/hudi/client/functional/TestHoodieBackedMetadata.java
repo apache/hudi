@@ -344,8 +344,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieCommitMetadata hoodieCommitMetadata = doWriteOperationWithMeta(testTable, instant1, INSERT);
 
     // Simulate the complete data directory including ".hoodie_partition_metadata" file
-    File metaForP1 = new File(metaClient.getBasePath() + "/p1",".hoodie_partition_metadata");
-    File metaForP2 = new File(metaClient.getBasePath() + "/p2",".hoodie_partition_metadata");
+    File metaForP1 = new File(metaClient.getBasePath() + "/p1", ".hoodie_partition_metadata");
+    File metaForP2 = new File(metaClient.getBasePath() + "/p2", ".hoodie_partition_metadata");
     metaForP1.createNewFile();
     metaForP2.createNewFile();
 
@@ -1716,8 +1716,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-        .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(true).retainCommits(4)
-        .build())
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(true).retainCommits(4)
+            .build())
         .withAutoCommit(false)
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
@@ -1817,6 +1817,29 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(replacedFileIds, updatedReplacedFileIds);
     validateMetadata(client);
   }
+
+  @Test
+  public void testMetadataReadWithNoCompletedCommits() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    List<HoodieRecord> records;
+    List<WriteStatus> writeStatuses;
+    String[] commitTimestamps = {HoodieActiveTimeline.createNewInstantTime(), HoodieActiveTimeline.createNewInstantTime()};
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+      records = dataGen.generateInserts(commitTimestamps[0], 5);
+      client.startCommitWithTime(commitTimestamps[0]);
+      writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commitTimestamps[0]).collect();
+      assertNoWriteErrors(writeStatuses);
+
+      // make all commits to inflight in metadata table. Still read should go through, just that it may not return any data.
+      FileCreateUtils.deleteDeltaCommit(basePath + "/.hoodie/metadata/", commitTimestamps[0]);
+      FileCreateUtils.deleteDeltaCommit(basePath + " /.hoodie/metadata/", HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP);
+      assertEquals(getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet()).size(), 0);
+    }
+  }
+
 
   /**
    * Ensure that the reader only reads completed instants.
@@ -2050,7 +2073,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(false, true, false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-        .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .withProperties(properties)
@@ -2078,7 +2101,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // set hoodie.table.version to 2 in hoodie.properties file
     changeTableVersion(HoodieTableVersion.TWO);
     writeConfig = getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).withCleanConfig(HoodieCleanConfig.newBuilder()
-        .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .withProperties(properties)

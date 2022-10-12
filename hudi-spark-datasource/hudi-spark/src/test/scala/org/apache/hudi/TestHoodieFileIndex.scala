@@ -394,6 +394,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       val props = Map[String, String](
         "path" -> basePath,
         QUERY_TYPE.key -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
+        HoodieMetadataConfig.ENABLE.key -> testCase.enableMetadata.toString,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> testCase.enableDataSkipping.toString,
         HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE.key -> testCase.columnStatsProcessingModeOverride
       ) ++ readMetadataOpts
