@@ -42,13 +42,17 @@ public class HoodieCatalogTestUtils {
   }
 
   public static HoodieHiveCatalog createHiveCatalog(String name) {
+    return createHiveCatalog(name, false);
+  }
+
+  public static HoodieHiveCatalog createHiveCatalog(String name, boolean external) {
     return new HoodieHiveCatalog(
-        name,
-        null,
-        null,
-        createHiveConf(),
-        true,
-        false);
+            name,
+            null,
+            null,
+            createHiveConf(),
+            external,
+            true);
   }
 
   public static HiveConf createHiveConf() {

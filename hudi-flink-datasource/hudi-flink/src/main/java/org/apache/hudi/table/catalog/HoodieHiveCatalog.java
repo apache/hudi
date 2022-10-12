@@ -120,7 +120,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   private final boolean external;
 
   public HoodieHiveCatalog(String catalogName, String catalogPath, String defaultDatabase, String hiveConfDir, boolean external) {
-    this(catalogName, catalogPath, defaultDatabase, HoodieCatalogUtil.createHiveConf(hiveConfDir), false, external);
+    this(catalogName, catalogPath, defaultDatabase, HoodieCatalogUtil.createHiveConf(hiveConfDir), external, false);
   }
 
   public HoodieHiveCatalog(
@@ -128,8 +128,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       String catalogPath,
       String defaultDatabase,
       HiveConf hiveConf,
-      boolean allowEmbedded,
-      boolean external) {
+      boolean external,
+      boolean allowEmbedded) {
     super(catalogName, defaultDatabase == null ? DEFAULT_DB : defaultDatabase);
     // fallback to hive.metastore.warehouse.dir if catalog path is not specified
     this.catalogPath = catalogPath == null ? hiveConf.getVar(HiveConf.ConfVars.METASTOREWAREHOUSE) : catalogPath;
