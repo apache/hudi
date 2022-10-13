@@ -66,6 +66,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+
 @SuppressWarnings("Duplicates")
 /**
  * Handle to merge incoming records to those in storage.
