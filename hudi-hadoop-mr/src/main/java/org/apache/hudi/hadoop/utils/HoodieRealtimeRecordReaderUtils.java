@@ -57,6 +57,7 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -97,9 +98,10 @@ public class HoodieRealtimeRecordReaderUtils {
     if (writable == null) {
       return "null";
     }
+    Random random = new Random(2);
     StringBuilder builder = new StringBuilder();
     Writable[] values = writable.get();
-    builder.append("\"values_" + Math.random() + "_" + values.length + "\": {");
+    builder.append("\"values_" + random.nextDouble() + "_" + values.length + "\": {");
     int i = 0;
     for (Writable w : values) {
       if (w instanceof ArrayWritable) {
@@ -195,7 +197,7 @@ public class HoodieRealtimeRecordReaderUtils {
           try {
             fieldValue = record.get(field.name());
           } catch (AvroRuntimeException e) {
-            LOG.debug("Field:" + field.name() + "not found in Schema:" + schema.toString());
+            LOG.debug("Field:" + field.name() + "not found in Schema:" + schema);
           }
           recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema());
         }

@@ -1185,6 +1185,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * compaction properties.
    */
+
+  public int getLogCompactionBlocksThreshold() {
+    return getInt(HoodieCompactionConfig.LOG_COMPACTION_BLOCKS_THRESHOLD);
+  }
+
+  public boolean useScanV2ForLogRecordReader() {
+    return getBoolean(HoodieCompactionConfig.USE_LOG_RECORD_READER_SCAN_V2);
+  }
+
   public HoodieCleaningPolicy getCleanerPolicy() {
     return HoodieCleaningPolicy.valueOf(getString(CLEANER_POLICY));
   }
@@ -1287,6 +1296,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean scheduleInlineCompaction() {
     return getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
+  }
+
+  public boolean inlineLogCompactionEnabled() {
+    return getBoolean(HoodieCompactionConfig.INLINE_LOG_COMPACT);
   }
 
   public CompactionTriggerStrategy getInlineCompactTriggerStrategy() {
@@ -2132,7 +2145,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public Boolean areAnyTableServicesExecutedInline() {
     return areTableServicesEnabled()
-        && (inlineClusteringEnabled() || inlineCompactionEnabled()
+        && (inlineClusteringEnabled() || inlineCompactionEnabled() || inlineLogCompactionEnabled()
         || (isAutoClean() && !isAsyncClean()) || (isAutoArchive() && !isAsyncArchive()));
   }
 

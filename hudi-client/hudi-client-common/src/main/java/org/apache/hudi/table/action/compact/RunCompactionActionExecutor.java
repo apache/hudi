@@ -41,8 +41,9 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.io.IOException;
 import java.util.List;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
@@ -50,29 +51,37 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
 
   private final HoodieCompactor compactor;
   private final HoodieCompactionHandler compactionHandler;
+  private WriteOperationType operationType;
 
   public RunCompactionActionExecutor(HoodieEngineContext context,
                                      HoodieWriteConfig config,
                                      HoodieTable table,
                                      String instantTime,
                                      HoodieCompactor compactor,
-                                     HoodieCompactionHandler compactionHandler) {
+                                     HoodieCompactionHandler compactionHandler,
+                                     WriteOperationType operationType) {
     super(context, config, table, instantTime);
     this.compactor = compactor;
     this.compactionHandler = compactionHandler;
+    this.operationType = operationType;
+    checkArgument(operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.LOG_COMPACT,
+        "Only COMPACT and LOG_COMPACT is supported");
   }
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
-    HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
-    compactor.preCompact(table, pendingCompactionTimeline, instantTime);
+    HoodieTimeline pendingMajorOrMinorCompactionTimeline = WriteOperationType.COMPACT.equals(operationType)
+        ? table.getActiveTimeline().filterPendingCompactionTimeline()
+        : table.getActiveTimeline().filterPendingLogCompactionTimeline();
+    compactor.preCompact(table, pendingMajorOrMinorCompactionTimeline, this.operationType, instantTime);
 
     HoodieWriteMetadata<HoodieData<WriteStatus>> compactionMetadata = new HoodieWriteMetadata<>();
     try {
       // generate compaction plan
       // should support configurable commit metadata
-      HoodieCompactionPlan compactionPlan =
-          CompactionUtils.getCompactionPlan(table.getMetaClient(), instantTime);
+      HoodieCompactionPlan compactionPlan = operationType.equals(WriteOperationType.COMPACT)
+          ? CompactionUtils.getCompactionPlan(table.getMetaClient(), instantTime)
+          : CompactionUtils.getLogCompactionPlan(table.getMetaClient(), instantTime);
 
       // try to load internalSchema to support schema Evolution
       HoodieWriteConfig configCopy = config;
@@ -100,11 +109,11 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
         metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
       }
-      metadata.setOperationType(WriteOperationType.COMPACT);
+      metadata.setOperationType(operationType);
       compactionMetadata.setWriteStatuses(statuses);
       compactionMetadata.setCommitted(false);
       compactionMetadata.setCommitMetadata(Option.of(metadata));
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }
 

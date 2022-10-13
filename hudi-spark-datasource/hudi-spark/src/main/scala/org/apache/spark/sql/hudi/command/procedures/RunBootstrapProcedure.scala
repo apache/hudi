@@ -45,7 +45,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     ProcedureParameter.optional(6, "partition_path_field", DataTypes.StringType, ""),
     ProcedureParameter.optional(7, "bootstrap_index_class", DataTypes.StringType, "org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex"),
     ProcedureParameter.optional(8, "selector_class", DataTypes.StringType, "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector"),
-    ProcedureParameter.optional(9, "key_generator_glass", DataTypes.StringType, "org.apache.hudi.keygen.SimpleKeyGenerator"),
+    ProcedureParameter.optional(9, "key_generator_class", DataTypes.StringType, "org.apache.hudi.keygen.SimpleKeyGenerator"),
     ProcedureParameter.optional(10, "full_bootstrap_input_provider", DataTypes.StringType, "org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider"),
     ProcedureParameter.optional(11, "schema_provider_class", DataTypes.StringType, ""),
     ProcedureParameter.optional(12, "payload_class", DataTypes.StringType, "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"),

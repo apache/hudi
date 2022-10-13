@@ -17,48 +17,48 @@
  * under the License.
  */
 
-package org.apache.hudi.common.index;
+package org.apache.hudi.secondary.index;
 
-import java.util.Arrays;
+import org.apache.hudi.exception.HoodieSecondaryIndexException;
+
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class HoodieIndex {
+public class HoodieSecondaryIndex {
   private String indexName;
-  private String[] colNames;
-  private HoodieIndexType indexType;
-  private Map<String, Map<String, String>> colOptions;
+  private SecondaryIndexType indexType;
+
+  // The index fields need to be in order
+  private LinkedHashMap<String, Map<String, String>> columns;
   private Map<String, String> options;
 
-  public HoodieIndex() {
+  public HoodieSecondaryIndex() {
   }
 
-  public HoodieIndex(
+  public HoodieSecondaryIndex(
       String indexName,
-      String[] colNames,
-      HoodieIndexType indexType,
-      Map<String, Map<String, String>> colOptions,
+      SecondaryIndexType indexType,
+      LinkedHashMap<String, Map<String, String>> columns,
       Map<String, String> options) {
     this.indexName = indexName;
-    this.colNames = colNames;
     this.indexType = indexType;
-    this.colOptions = colOptions;
+    this.columns = columns;
     this.options = options;
+
+    validate();
   }
 
   public String getIndexName() {
     return indexName;
   }
 
-  public String[] getColNames() {
-    return colNames;
-  }
-
-  public HoodieIndexType getIndexType() {
+  public SecondaryIndexType getIndexType() {
     return indexType;
   }
 
-  public Map<String, Map<String, String>> getColOptions() {
-    return colOptions;
+  public Map<String, Map<String, String>> getColumns() {
+    return columns;
   }
 
   public Map<String, String> getOptions() {
@@ -69,22 +69,32 @@ public class HoodieIndex {
     return new Builder();
   }
 
+  private void validate() {
+    switch (indexType) {
+      case LUCENE:
+        if (columns.size() != 1) {
+          throw new HoodieSecondaryIndexException("Lucene index only support single column");
+        }
+        break;
+      default:
+        return;
+    }
+  }
+
   @Override
   public String toString() {
     return "HoodieIndex{"
         + "indexName='" + indexName + '\''
-        + ", colNames='" + Arrays.toString(colNames) + '\''
         + ", indexType=" + indexType
-        + ", colOptions=" + colOptions
+        + ", columns=" + columns
         + ", options=" + options
         + '}';
   }
 
   public static class Builder {
     private String indexName;
-    private String[] colNames;
-    private HoodieIndexType indexType;
-    private Map<String, Map<String, String>> colOptions;
+    private SecondaryIndexType indexType;
+    private LinkedHashMap<String, Map<String, String>> columns;
     private Map<String, String> options;
 
     public Builder setIndexName(String indexName) {
@@ -92,18 +102,13 @@ public class HoodieIndex {
       return this;
     }
 
-    public Builder setColNames(String[] colNames) {
-      this.colNames = colNames;
-      return this;
-    }
-
     public Builder setIndexType(String indexType) {
-      this.indexType = HoodieIndexType.of(indexType);
+      this.indexType = SecondaryIndexType.of(indexType);
       return this;
     }
 
-    public Builder setColOptions(Map<String, Map<String, String>> colOptions) {
-      this.colOptions = colOptions;
+    public Builder setColumns(LinkedHashMap<String, Map<String, String>> columns) {
+      this.columns = columns;
       return this;
     }
 
@@ -112,8 +117,15 @@ public class HoodieIndex {
       return this;
     }
 
-    public HoodieIndex build() {
-      return new HoodieIndex(indexName, colNames, indexType, colOptions, options);
+    public HoodieSecondaryIndex build() {
+      return new HoodieSecondaryIndex(indexName, indexType, columns, options);
+    }
+  }
+
+  public static class HoodieIndexCompactor implements Comparator<HoodieSecondaryIndex> {
+    @Override
+    public int compare(HoodieSecondaryIndex o1, HoodieSecondaryIndex o2) {
+      return o1.indexName.compareTo(o2.indexName);
     }
   }
 }

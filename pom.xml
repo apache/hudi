@@ -145,6 +145,7 @@
     <flink.clients.artifactId>flink-clients</flink.clients.artifactId>
     <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
     <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
+    <rocksdbjni.version>5.17.2</rocksdbjni.version>
     <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.2</spark32.version>
     <spark33.version>3.3.0</spark33.version>
@@ -208,6 +209,7 @@
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
+    <snappy.version>1.1.8.3</snappy.version>
   </properties>
 
   <scm>
@@ -392,12 +394,16 @@
                     <exclude>org.apache.hbase:hbase-common:*</exclude>
                     <exclude>org.apache.hbase:hbase-client:*</exclude>
                     <exclude>org.apache.hbase:hbase-server:*</exclude>
+                    <!--To upgrade snappy because pre 1.1.8.2 does not work on m1 mac-->
+                    <exclude>org.xerial.snappy:snappy-java:*</exclude>
                   </excludes>
                   <includes>
                     <include>org.slf4j:slf4j-simple:*:*:test</include>
                     <include>org.apache.hbase:hbase-common:${hbase.version}</include>
                     <include>org.apache.hbase:hbase-client:${hbase.version}</include>
                     <include>org.apache.hbase:hbase-server:${hbase.version}</include>
+                    <!--To upgrade snappy because pre 1.1.8.2 does not work on m1 mac-->
+                    <include>org.xerial.snappy:snappy-java:${snappy.version}</include>
                   </includes>
                 </bannedDependencies>
               </rules>
@@ -416,6 +422,41 @@
         <version>${maven-docker-plugin.version}</version>
         <configuration>
           <skip>${skipDocker}</skip>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>${maven-shade-plugin.version}</version>
+        <configuration>
+          <!-- common to all bundles -->
+          <artifactSet>
+            <includes>
+              <!-- com.esotericsoftware:kryo-shaded -->
+              <include>com.esotericsoftware:kryo-shaded</include>
+              <include>com.esotericsoftware:minlog</include>
+              <include>org.objenesis:objenesis</include>
+            </includes>
+          </artifactSet>
+          <relocations>
+            <!-- com.esotericsoftware:kryo-shaded -->
+            <relocation>
+              <pattern>com.esotericsoftware.kryo.</pattern>
+              <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>com.esotericsoftware.reflectasm.</pattern>
+              <shadedPattern>org.apache.hudi.com.esotericsoftware.reflectasm.</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>com.esotericsoftware.minlog.</pattern>
+              <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.objenesis.</pattern>
+              <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+            </relocation>
+          </relocations>
         </configuration>
       </plugin>
     </plugins>
@@ -742,7 +783,20 @@
         <groupId>org.apache.avro</groupId>
         <artifactId>avro</artifactId>
         <version>${avro.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+          </exclusion>
+        </exclusions>
         <scope>provided</scope>
+      </dependency>
+
+      <!-- Snappy -->
+      <dependency>
+        <groupId>org.xerial.snappy</groupId>
+        <artifactId>snappy-java</artifactId>
+        <version>${snappy.version}</version>
       </dependency>
 
       <!-- caffeine -->
@@ -912,7 +966,7 @@
       <dependency>
         <groupId>org.rocksdb</groupId>
         <artifactId>rocksdbjni</artifactId>
-        <version>5.17.2</version>
+        <version>${rocksdbjni.version}</version>
       </dependency>
 
       <!-- Httpcomponents -->
@@ -1998,6 +2052,19 @@
         <property>
           <name>spark2.4</name>
         </property>
+      </activation>
+    </profile>
+    <profile>
+      <id>m1-mac</id>
+      <properties>
+        <spark2.version>2.4.8</spark2.version>
+        <rocksdbjni.version>6.29.4.1</rocksdbjni.version>
+      </properties>
+      <activation>
+        <os>
+          <family>mac</family>
+          <arch>aarch64</arch>
+        </os>
       </activation>
     </profile>
 

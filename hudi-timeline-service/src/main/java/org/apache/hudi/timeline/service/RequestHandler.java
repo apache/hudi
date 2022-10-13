@@ -124,7 +124,7 @@ public class RequestHandler {
         ctx.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, HoodieTimeline.INVALID_INSTANT_TS);
     String timelineHashFromClient = ctx.queryParam(RemoteHoodieTableFileSystemView.TIMELINE_HASH, "");
     HoodieTimeline localTimeline =
-        viewManager.getFileSystemView(basePath).getTimeline().filterCompletedAndCompactionInstants();
+        viewManager.getFileSystemView(basePath).getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
     if (LOG.isDebugEnabled()) {
       LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
           + "], localTimeline=" + localTimeline.getInstants().collect(Collectors.toList()));
@@ -371,6 +371,13 @@ public class RequestHandler {
     app.get(RemoteHoodieTableFileSystemView.PENDING_COMPACTION_OPS, new ViewHandler(ctx -> {
       metricsRegistry.add("PEDING_COMPACTION_OPS", 1);
       List<CompactionOpDTO> dtos = sliceHandler.getPendingCompactionOperations(
+          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+      writeValueAsString(ctx, dtos);
+    }, true));
+
+    app.get(RemoteHoodieTableFileSystemView.PENDING_LOG_COMPACTION_OPS, new ViewHandler(ctx -> {
+      metricsRegistry.add("PEDING_LOG_COMPACTION_OPS", 1);
+      List<CompactionOpDTO> dtos = sliceHandler.getPendingLogCompactionOperations(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));

@@ -366,7 +366,7 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, rolledBackInstant);
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     // if update belongs to an existing log file
     writer.appendBlock(new HoodieCommandBlock(header));
     return writer;
@@ -420,7 +420,7 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, oldCommit);
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     HoodieCommandBlock rollbackBlock = new HoodieCommandBlock(header);
     writer.appendBlock(rollbackBlock);
     return writer;

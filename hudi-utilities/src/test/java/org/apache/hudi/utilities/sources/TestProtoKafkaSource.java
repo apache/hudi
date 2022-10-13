@@ -98,7 +98,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceFlatten";
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
-    props.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_FLATTEN_WRAPPED_PRIMITIVES.key(), "true");
+    props.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
     SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
     Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(protoKafkaSource);

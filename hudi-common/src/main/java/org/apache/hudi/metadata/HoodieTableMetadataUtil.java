@@ -144,7 +144,7 @@ public class HoodieTableMetadataUtil {
 
         GenericRecord genericRecord = (GenericRecord) record;
 
-        final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), true);
+        final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), false);
         final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
 
         if (fieldVal != null && canCompare(fieldSchema)) {
@@ -1052,8 +1052,12 @@ public class HoodieTableMetadataUtil {
     HoodieTableFileSystemView fsView = fileSystemView.orElse(getFileSystemView(metaClient));
     Stream<FileSlice> fileSliceStream;
     if (mergeFileSlices) {
-      fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
-          partition, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
+      if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
+        fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
+            partition, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
+      } else {
+        return Collections.EMPTY_LIST;
+      }
     } else {
       fileSliceStream = fsView.getLatestFileSlices(partition);
     }

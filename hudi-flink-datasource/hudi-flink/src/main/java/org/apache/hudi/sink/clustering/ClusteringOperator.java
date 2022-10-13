@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -96,6 +97,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private static final Logger LOG = LoggerFactory.getLogger(ClusteringOperator.class);
 
   private final Configuration conf;
+  private final boolean preserveHoodieMetadata;
   private final RowType rowType;
   private int taskID;
   private transient HoodieWriteConfig writeConfig;
@@ -125,7 +127,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
   public ClusteringOperator(Configuration conf, RowType rowType) {
     this.conf = conf;
-    this.rowType = rowType;
+    this.preserveHoodieMetadata = conf.getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key(), HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.defaultValue());
+    this.rowType = this.preserveHoodieMetadata
+        ? BulkInsertWriterHelper.addMetadataFields(rowType, false)
+        : rowType;
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
     this.sortClusteringEnabled = OptionsResolver.sortClusteringEnabled(conf);
 
@@ -144,7 +149,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.table = writeClient.getHoodieTable();
 
     this.schema = AvroSchemaConverter.convertToSchema(rowType);
-    this.readerSchema = HoodieAvroUtils.addMetadataFields(this.schema);
+    this.readerSchema = this.preserveHoodieMetadata ? this.schema : HoodieAvroUtils.addMetadataFields(this.schema);
     this.requiredPos = getRequiredPositions();
 
     this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType);
@@ -199,7 +204,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
     BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
         instantTime, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-        this.rowType);
+        this.rowType, this.preserveHoodieMetadata);
 
     List<ClusteringOperation> clusteringOps = clusteringGroupInfo.getOperations();
     boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
@@ -316,7 +321,9 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
    * Transform IndexedRecord into HoodieRecord.
    */
   private RowData transform(IndexedRecord indexedRecord) {
-    GenericRecord record = buildAvroRecordBySchema(indexedRecord, schema, requiredPos, new GenericRecordBuilder(schema));
+    GenericRecord record = this.preserveHoodieMetadata
+        ? (GenericRecord) indexedRecord
+        : buildAvroRecordBySchema(indexedRecord, schema, requiredPos, new GenericRecordBuilder(schema));
     return (RowData) avroToRowDataConverter.convert(record);
   }
 
