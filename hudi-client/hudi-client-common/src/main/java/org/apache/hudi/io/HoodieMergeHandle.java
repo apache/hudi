@@ -456,7 +456,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     // Fast verify the integrity of the parquet file.
     // only check the readable of parquet metadata.
     final String extension = FSUtils.getFileExtension(newFilePath.toString());
-    if (PARQUET.getFileExtension().equals(extension )) {
+    if (PARQUET.getFileExtension().equals(extension)) {
       new ParquetUtils().readMetadata(hoodieTable.getHadoopConf(), newFilePath);
     }
 
