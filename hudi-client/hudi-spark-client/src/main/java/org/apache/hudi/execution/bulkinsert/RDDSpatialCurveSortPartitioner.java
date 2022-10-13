@@ -105,7 +105,7 @@ public class RDDSpatialCurveSortPartitioner<T>
             String key = internalRow.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal());
             String partition = internalRow.getString(HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal());
             HoodieKey hoodieKey = new HoodieKey(key, partition);
-            HoodieRecord hoodieRecord = new HoodieSparkRecord(hoodieKey, internalRow, structType);
+            HoodieRecord hoodieRecord = new HoodieSparkRecord(hoodieKey, internalRow, structType, true);
             return hoodieRecord;
           });
     } else {

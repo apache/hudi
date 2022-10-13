@@ -219,15 +219,6 @@ object HoodieInternalRowUtils {
     schemaMap.get(schema)
   }
 
-  def projectUnsafe(row: InternalRow, structType: StructType): InternalRow = {
-    if (row == null || row.isInstanceOf[UnsafeRow]) {
-      row
-    } else {
-      val unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
-      unsafeProjection.apply(row)
-    }
-  }
-
   private def rewritePrimaryType(oldValue: Any, oldSchema: DataType, newSchema: DataType) = {
     if (oldSchema.equals(newSchema) || (oldSchema.isInstanceOf[DecimalType] && newSchema.isInstanceOf[DecimalType])) {
       oldSchema match {

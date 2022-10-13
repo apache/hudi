@@ -881,7 +881,7 @@ object HoodieSparkSqlWriter {
           val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structType)
           val key = new HoodieKey(recordKey.toString, partitionPath.toString)
 
-          new HoodieSparkRecord(key, processedRow, writeSchema)
+          new HoodieSparkRecord(key, processedRow, writeSchema, true)
         }).toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]
     }
   }

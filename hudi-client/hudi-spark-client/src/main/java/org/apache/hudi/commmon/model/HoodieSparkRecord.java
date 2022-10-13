@@ -18,6 +18,7 @@
 
 package org.apache.hudi.commmon.model;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -28,18 +29,18 @@ import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 import org.apache.hudi.util.HoodieSparkRecordUtils;
-
-import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieCatalystExpressionUtils$;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
 import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.JoinedRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
@@ -70,46 +71,39 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    */
   public HoodieSparkRecord(InternalRow data, StructType schema) {
     super(null, data);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema);
     this.copy = false;
   }
 
-  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema) {
+  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, boolean copy) {
     super(key, data);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema).copy();
-    this.copy = true;
-  }
-
-  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation) {
-    super(key, data, operation);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema).copy();
-    this.copy = true;
+    this.copy = copy;
   }
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation, boolean copy) {
     super(key, data, operation);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema).copy();
     this.copy = copy;
   }
 
-  public HoodieSparkRecord(HoodieSparkRecord record) {
-    super(record);
-    this.copy = record.copy;
+  private HoodieSparkRecord(HoodieKey key, InternalRow data, HoodieOperation operation, boolean copy) {
+    super(key, data, operation);
+    ValidationUtils.checkState(data instanceof UnsafeRow);
+
+    this.copy = copy;
   }
 
   @Override
   public HoodieSparkRecord newInstance() {
-    return new HoodieSparkRecord(this);
+    return new HoodieSparkRecord(this.key, this.data, this.operation, this.copy);
   }
 
   @Override
   public HoodieSparkRecord newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieSparkRecord(key, data, null, op);
+    return new HoodieSparkRecord(key, this.data, op, this.copy);
   }
 
   @Override
   public HoodieSparkRecord newInstance(HoodieKey key) {
-    return new HoodieSparkRecord(key, data, null);
+    return new HoodieSparkRecord(key, this.data, this.operation, this.copy);
   }
 
   @Override
