@@ -32,6 +32,7 @@ import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.TimestampType;
 
 import javax.validation.constraints.NotNull;
 
@@ -523,6 +524,8 @@ public class ExpressionEvaluator {
       //       manually encoding corresponding values as int and long w/in the Column Stats Index and
       //       here we have to decode those back into corresponding logical representation.
       case TIMESTAMP_WITHOUT_TIME_ZONE:
+        TimestampType tsType = (TimestampType) colType;
+        return indexRow.getTimestamp(pos, tsType.getPrecision()).getMillisecond();
       case TIME_WITHOUT_TIME_ZONE:
       case DATE:
         return indexRow.getLong(pos);

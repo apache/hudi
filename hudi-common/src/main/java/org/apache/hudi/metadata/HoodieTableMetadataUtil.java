@@ -144,7 +144,7 @@ public class HoodieTableMetadataUtil {
 
         GenericRecord genericRecord = (GenericRecord) record;
 
-        final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), true);
+        final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), false);
         final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
 
         if (fieldVal != null && canCompare(fieldSchema)) {
