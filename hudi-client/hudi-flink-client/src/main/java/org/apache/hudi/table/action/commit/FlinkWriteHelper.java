@@ -91,7 +91,7 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, List<HoodieRecord
   }
 
   @Override
-  public List<HoodieRecord<T>> innerDeduplicateRecords(
+  public List<HoodieRecord<T>> deduplicateRecordsInternal(
       List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, Properties props, HoodieRecordMerger merger) {
     // If index used is global, then records are expected to differ in their partitionPath
     Map<Object, List<HoodieRecord<T>>> keyedRecords = records.stream()

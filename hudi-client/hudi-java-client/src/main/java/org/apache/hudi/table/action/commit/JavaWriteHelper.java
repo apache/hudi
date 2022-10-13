@@ -58,7 +58,7 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
   }
 
   @Override
-  public List<HoodieRecord<T>> innerDeduplicateRecords(
+  public List<HoodieRecord<T>> deduplicateRecordsInternal(
       List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, Properties props, HoodieRecordMerger merger) {
     boolean isIndexingGlobal = index.isGlobal();
     Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {

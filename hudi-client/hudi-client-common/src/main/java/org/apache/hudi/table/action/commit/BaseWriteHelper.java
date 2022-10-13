@@ -90,9 +90,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> {
 
   public I deduplicateRecords(
       I records, HoodieIndex<?, ?> index, int parallelism, String schema, Properties props, HoodieRecordMerger merger) {
-    return innerDeduplicateRecords(records, index, parallelism, schema, HoodieAvroRecordMerger.withDeDuping(props), merger);
+    return deduplicateRecordsInternal(records, index, parallelism, schema, HoodieAvroRecordMerger.withDeDuping(props), merger);
   }
 
-  protected abstract I innerDeduplicateRecords(
+  protected abstract I deduplicateRecordsInternal(
       I records, HoodieIndex<?, ?> index, int parallelism, String schema, Properties props, HoodieRecordMerger merger);
 }

@@ -84,7 +84,8 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
   }
 
   public static Properties withDeDuping(Properties props) {
-    Properties newProps = new Properties(props);
+    Properties newProps = new Properties();
+    newProps.putAll(props);
     newProps.setProperty(HoodieAvroRecordMerger.DE_DUPING, "true");
     return newProps;
   }

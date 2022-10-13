@@ -82,7 +82,7 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandl
 
   protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema)
       throws IOException {
-    // TODO Remove these unnecessary newInstance invocations
+    // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
     Option<HoodieRecord> savedCombineRecordOp = combineRecordOpt.map(HoodieRecord::newInstance);
     HoodieRecord<T> savedOldRecord = oldRecord.newInstance();
     final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecordOpt, writerSchema);

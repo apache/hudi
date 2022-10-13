@@ -53,7 +53,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> innerDeduplicateRecords(
+  public HoodieData<HoodieRecord<T>> deduplicateRecordsInternal(
       HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, Properties props, HoodieRecordMerger merger) {
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);

@@ -136,7 +136,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
-    UTF8String[] metaFields = extractMetaField(targetStructType);
+    UTF8String[] metaFields = extractMetaField(structType, targetStructType);
     if (metaFields.length == 0) {
       throw new UnsupportedOperationException();
     }
@@ -151,7 +151,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
     InternalRow rewriteRow = HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, structType, newStructType, renameCols);
-    UTF8String[] metaFields = extractMetaField(newStructType);
+    UTF8String[] metaFields = extractMetaField(structType, newStructType);
     if (metaFields.length > 0) {
       rewriteRow = new HoodieInternalRow(metaFields, data, true);
     }
@@ -258,11 +258,16 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     }
   }
 
-  private UTF8String[] extractMetaField(StructType structType) {
+  private UTF8String[] extractMetaField(StructType recordStructType, StructType structTypeWithMetaField) {
     return HOODIE_META_COLUMNS_WITH_OPERATION.stream()
-        .filter(f -> HoodieCatalystExpressionUtils$.MODULE$.existField(structType, f))
-        .map(field -> data.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(field)))
-        .toArray(UTF8String[]::new);
+        .filter(f -> HoodieCatalystExpressionUtils$.MODULE$.existField(structTypeWithMetaField, f))
+        .map(field -> {
+          if (HoodieCatalystExpressionUtils$.MODULE$.existField(recordStructType, field)) {
+            return data.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(field));
+          } else {
+            return UTF8String.EMPTY_UTF8;
+          }
+        }).toArray(UTF8String[]::new);
   }
 
   private static boolean hasMetaField(StructType structType) {
