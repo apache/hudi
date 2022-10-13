@@ -18,6 +18,9 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -32,10 +35,6 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -80,25 +79,16 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandl
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema)
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combinedRecordOpt, Schema writerSchema)
       throws IOException {
     // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
-    Option<HoodieRecord> savedCombineRecordOp = combineRecordOpt.map(HoodieRecord::newInstance);
-    HoodieRecord<T> savedOldRecord = oldRecord.newInstance();
-    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecordOpt, writerSchema);
+    Option<HoodieRecord> savedCombineRecordOp = combinedRecordOpt.map(HoodieRecord::newInstance);
+    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combinedRecordOpt, writerSchema);
     if (result) {
       boolean isDelete = HoodieOperation.isDelete(newRecord.getOperation());
-      Option<IndexedRecord> avroOpt = savedCombineRecordOp
-          .flatMap(r -> {
-            try {
-              return r.toIndexedRecord(writerSchema, config.getPayloadConfig().getProps())
-                  .map(HoodieAvroIndexedRecord::getData);
-            } catch (IOException e) {
-              LOG.error("Fail to get indexRecord from " + savedCombineRecordOp, e);
-              return Option.empty();
-            }
-          });
-      cdcLogger.put(newRecord, (GenericRecord) savedOldRecord.getData(), isDelete ? Option.empty() : avroOpt);
+      Option<IndexedRecord> avroRecordOpt = savedCombineRecordOp.flatMap(r ->
+          toAvroRecord(r, writerSchema, config.getPayloadConfig().getProps()));
+      cdcLogger.put(newRecord, (GenericRecord) oldRecord.getData(), isDelete ? Option.empty() : avroRecordOpt);
     }
     return result;
   }

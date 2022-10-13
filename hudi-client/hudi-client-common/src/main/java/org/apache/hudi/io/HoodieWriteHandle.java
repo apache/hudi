@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -277,6 +279,15 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       throw new HoodieException("Creating logger writer with fileId: " + fileId + ", "
           + "base commit time: " + baseCommitTime + ", "
           + "file suffix: " + fileSuffix + " error");
+    }
+  }
+
+  protected static Option<IndexedRecord> toAvroRecord(HoodieRecord record, Schema writerSchema, TypedProperties props) {
+    try {
+      return record.toIndexedRecord(writerSchema, props).map(HoodieAvroIndexedRecord::getData);
+    } catch (IOException e) {
+      LOG.error("Fail to get indexRecord from " + record, e);
+      return Option.empty();
     }
   }
 }

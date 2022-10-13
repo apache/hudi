@@ -68,21 +68,12 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
       throws IOException {
     // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
     Option<HoodieRecord> savedCombineRecordOp = combineRecordOpt.map(HoodieRecord::newInstance);
-    HoodieRecord<T> savedOldRecord = oldRecord.newInstance();
     final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecordOpt, writerSchema);
     if (result) {
       boolean isDelete = HoodieOperation.isDelete(newRecord.getOperation());
-      Option<IndexedRecord> avroOpt = savedCombineRecordOp
-          .flatMap(r -> {
-            try {
-              return r.toIndexedRecord(writerSchema, config.getPayloadConfig().getProps())
-                  .map(HoodieAvroIndexedRecord::getData);
-            } catch (IOException e) {
-              LOG.error("Fail to get indexRecord from " + savedCombineRecordOp, e);
-              return Option.empty();
-            }
-          });
-      cdcLogger.put(newRecord, (GenericRecord) savedOldRecord.getData(), isDelete ? Option.empty() : avroOpt);
+      Option<IndexedRecord> avroRecordOpt = savedCombineRecordOp.flatMap(r ->
+          toAvroRecord(r, writerSchema, config.getPayloadConfig().getProps()));
+      cdcLogger.put(newRecord, (GenericRecord) oldRecord.getData(), isDelete ? Option.empty() : avroRecordOpt);
     }
     return result;
   }
