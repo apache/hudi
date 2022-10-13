@@ -156,7 +156,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     switch (fileSplit.getCdcInferCase()) {
       case BASE_FILE_INSERT:
         ValidationUtils.checkState(fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
-            "CDC file path should exist and only one");
+            "CDC file path should exist and be only one");
         String path = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
         return new AddBaseFileIterator(getRequiredSchemaReader(path));
       case BASE_FILE_DELETE:

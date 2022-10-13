@@ -31,7 +31,6 @@ import org.apache.hadoop.fs.FileSystem;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecord> {
 
@@ -43,14 +42,9 @@ public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecor
 
   private HoodieLogFormat.Reader reader;
 
-  /**
-   * Due to the hasNext of {@link HoodieLogFormat.Reader} is not idempotent,
-   * Here guarantee idempotent by `hasNextCall` and `nextCall`.
-   */
-  private final AtomicInteger hasNextCall = new AtomicInteger(0);
-  private final AtomicInteger nextCall = new AtomicInteger(0);
-
   private ClosableIterator<IndexedRecord> itr;
+
+  private IndexedRecord record;
 
   public HoodieCDCLogRecordIterator(FileSystem fs, HoodieLogFile[] cdcLogFiles, Schema cdcSchema) {
     this.fs = fs;
@@ -60,27 +54,28 @@ public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecor
 
   @Override
   public boolean hasNext() {
-    if (hasNextCall.get() > nextCall.get()) {
+    if (record != null) {
       return true;
     }
-    hasNextCall.incrementAndGet();
     if (itr == null || !itr.hasNext()) {
       if (reader == null || !reader.hasNext()) {
-        if (!loadNextCDCLogFile()) {
+        // step1: load new file reader first.
+        if (!loadReader()) {
           return false;
         }
       }
-      return loadNextCDCBlock();
+      // step2: load block records iterator
+      if (!loadItr()) {
+        return false;
+      }
     }
+    record = itr.next();
     return true;
   }
 
-  private boolean loadNextCDCLogFile() {
+  private boolean loadReader() {
     try {
-      if (reader != null) {
-        // call close explicitly to release memory.
-        reader.close();
-      }
+      closeReader();
       if (cdcLogFileIter.hasNext()) {
         reader = new HoodieLogFileReader(fs, cdcLogFileIter.next(), cdcSchema,
             HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
@@ -92,31 +87,45 @@ public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecor
     }
   }
 
-  private boolean loadNextCDCBlock() {
+  private boolean loadItr() {
     HoodieDataBlock dataBlock = (HoodieDataBlock) reader.next();
-    if (itr != null) {
-      // call close explicitly to release memory.
-      itr.close();
-    }
+    closeItr();
     itr = dataBlock.getRecordIterator();
     return itr.hasNext();
   }
 
   @Override
   public IndexedRecord next() {
-    nextCall.incrementAndGet();
-    return itr.next();
+    IndexedRecord ret = record;
+    record = null;
+    return ret;
   }
 
   @Override
   public void close() {
     try {
-      itr.close();
-      itr = null;
-      reader.close();
-      reader = null;
+      closeItr();
+      closeReader();
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage());
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  private void closeReader() throws IOException {
+    if (reader != null) {
+      reader.close();
+      reader = null;
+    }
+  }
+
+  private void closeItr() {
+    if (itr != null) {
+      itr.close();
+      itr = null;
     }
   }
 }
