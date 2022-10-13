@@ -29,8 +29,6 @@ import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.net.URL;
@@ -70,18 +68,17 @@ public class TestHoodieCatalogFactory {
     assertThat(exception.getMessage(), containsString("hive metastore"));
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testCreateHMSCatalog(boolean isExternal) {
+  @Test
+  void testCreateHMSCatalog() {
     final String catalogName = "mycatalog";
 
-    final HoodieHiveCatalog expectedCatalog = HoodieCatalogTestUtils.createHiveCatalog(catalogName, isExternal);
+    final HoodieHiveCatalog expectedCatalog = HoodieCatalogTestUtils.createHiveCatalog(catalogName);
 
     final Map<String, String> options = new HashMap<>();
     options.put(CommonCatalogOptions.CATALOG_TYPE.key(), HoodieCatalogFactory.IDENTIFIER);
     options.put(CatalogOptions.HIVE_CONF_DIR.key(), CONF_DIR.getPath());
     options.put(CatalogOptions.MODE.key(), "hms");
-    options.put(CatalogOptions.TABLE_EXTERNAL.key(), Boolean.toString(isExternal));
+    options.put(CatalogOptions.TABLE_EXTERNAL.key(), "false");
 
     final Catalog actualCatalog =
         FactoryUtil.createCatalog(

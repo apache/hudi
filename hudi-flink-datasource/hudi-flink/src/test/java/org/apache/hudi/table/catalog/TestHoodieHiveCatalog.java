@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
@@ -35,7 +36,6 @@ import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.junit.jupiter.api.AfterAll;
@@ -44,7 +44,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -55,7 +54,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,7 +72,6 @@ public class TestHoodieHiveCatalog {
           .build();
   List<String> partitions = Collections.singletonList("par1");
   private static HoodieHiveCatalog hoodieCatalog;
-  private static HoodieHiveCatalog externalHoodieCatalog;
   private final ObjectPath tablePath = new ObjectPath("default", "test");
 
   @BeforeAll
@@ -92,9 +89,6 @@ public class TestHoodieHiveCatalog {
   public static void closeCatalog() {
     if (hoodieCatalog != null) {
       hoodieCatalog.close();
-    }
-    if (externalHoodieCatalog != null) {
-      externalHoodieCatalog.close();
     }
   }
 
@@ -153,29 +147,23 @@ public class TestHoodieHiveCatalog {
     assertEquals("id", table2.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testCreateExternalTable(boolean isExternal) throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException, IOException {
-    externalHoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog("externalCatalog", isExternal);
-    externalHoodieCatalog.open();
+  @Test
+  public void testCreateExternalTable() throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException, IOException {
+    HoodieHiveCatalog catalog = HoodieCatalogTestUtils.createHiveCatalog("myCatalog", true);
+    catalog.open();
     Map<String, String> originOptions = new HashMap<>();
     originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
     CatalogTable table =
         new CatalogTableImpl(schema, originOptions, "hudi table");
-    externalHoodieCatalog.createTable(tablePath, table, false);
-    Table table1 = externalHoodieCatalog.getHiveTable(tablePath);
-    if (isExternal) {
-      assertTrue(Boolean.parseBoolean(table1.getParameters().get("EXTERNAL")));
-      assertEquals("EXTERNAL_TABLE", table1.getTableType());
-    } else {
-      assertFalse(Boolean.parseBoolean(table1.getParameters().get("EXTERNAL")));
-      assertEquals("MANAGED_TABLE", table1.getTableType());
-    }
+    catalog.createTable(tablePath, table, false);
+    Table table1 = catalog.getHiveTable(tablePath);
+    assertTrue(Boolean.parseBoolean(table1.getParameters().get("EXTERNAL")));
+    assertEquals("EXTERNAL_TABLE", table1.getTableType());
 
-    externalHoodieCatalog.dropTable(tablePath, false);
+    catalog.dropTable(tablePath, false);
     Path path = new Path(table1.getParameters().get(FlinkOptions.PATH.key()));
-    boolean exists = StreamerUtil.fileExists(FileSystem.getLocal(new Configuration()), path);
-    assertTrue(isExternal && exists || !isExternal && !exists);
+    boolean created = StreamerUtil.fileExists(FSUtils.getFs(path, new Configuration()), path);
+    assertTrue(created, "Table should have been created");
   }
 
   @Test

@@ -101,7 +101,6 @@ import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 import static org.apache.hudi.configuration.FlinkOptions.PATH;
-import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DB;
 import static org.apache.hudi.table.catalog.TableOptionProperties.COMMENT;
 import static org.apache.hudi.table.catalog.TableOptionProperties.PK_CONSTRAINT_NAME;
 import static org.apache.hudi.table.catalog.TableOptionProperties.SPARK_SOURCE_PROVIDER;
@@ -119,22 +118,20 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   private final String catalogPath;
   private final boolean external;
 
-  public HoodieHiveCatalog(String catalogName, String catalogPath, String defaultDatabase, String hiveConfDir, boolean external) {
-    this(catalogName, catalogPath, defaultDatabase, HoodieCatalogUtil.createHiveConf(hiveConfDir), external, false);
+  public HoodieHiveCatalog(String catalogName, Configuration options) {
+    this(catalogName, options, HoodieCatalogUtil.createHiveConf(options.getString(CatalogOptions.HIVE_CONF_DIR)), false);
   }
 
   public HoodieHiveCatalog(
       String catalogName,
-      String catalogPath,
-      String defaultDatabase,
+      Configuration options,
       HiveConf hiveConf,
-      boolean external,
       boolean allowEmbedded) {
-    super(catalogName, defaultDatabase == null ? DEFAULT_DB : defaultDatabase);
+    super(catalogName, options.getString(CatalogOptions.DEFAULT_DATABASE));
     // fallback to hive.metastore.warehouse.dir if catalog path is not specified
-    this.catalogPath = catalogPath == null ? hiveConf.getVar(HiveConf.ConfVars.METASTOREWAREHOUSE) : catalogPath;
     this.hiveConf = hiveConf;
-    this.external = external;
+    this.catalogPath = options.getString(CatalogOptions.CATALOG_PATH, hiveConf.getVar(HiveConf.ConfVars.METASTOREWAREHOUSE));
+    this.external = options.getBoolean(CatalogOptions.TABLE_EXTERNAL);
     if (!allowEmbedded) {
       checkArgument(
           !HoodieCatalogUtil.isEmbeddedMetastore(this.hiveConf),
