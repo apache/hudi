@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -82,17 +83,16 @@ public abstract class BaseWriteHelper<T, I, K, O, R> {
    * @param parallelism parallelism or partitions to be used while reducing/deduplicating
    * @return Collection of HoodieRecord already be deduplicated
    */
-  public I deduplicateRecords(
-      I records, HoodieTable<T, I, K, O> table, int parallelism) {
+  public I deduplicateRecords(I records, HoodieTable<T, I, K, O> table, int parallelism) {
     HoodieRecordMerger recordMerger = table.getConfig().getRecordMerger();
     return deduplicateRecords(records, table.getIndex(), parallelism, table.getConfig().getSchema(), table.getConfig().getProps(), recordMerger);
   }
 
-  public I deduplicateRecords(
-      I records, HoodieIndex<?, ?> index, int parallelism, String schema, Properties props, HoodieRecordMerger merger) {
-    return deduplicateRecordsInternal(records, index, parallelism, schema, HoodieAvroRecordMerger.withDeDuping(props), merger);
+  public I deduplicateRecords(I records, HoodieIndex<?, ?> index, int parallelism, String schema, Properties props, HoodieRecordMerger merger) {
+    TypedProperties updatedProps = HoodieAvroRecordMerger.Config.withLegacyOperatingModePreCombining(props);
+    return doDeduplicateRecords(records, index, parallelism, schema, updatedProps, merger);
   }
 
-  protected abstract I deduplicateRecordsInternal(
-      I records, HoodieIndex<?, ?> index, int parallelism, String schema, Properties props, HoodieRecordMerger merger);
+  protected abstract I doDeduplicateRecords(
+      I records, HoodieIndex<?, ?> index, int parallelism, String schema, TypedProperties props, HoodieRecordMerger merger);
 }
