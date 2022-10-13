@@ -230,6 +230,8 @@ Savepoint is already support Merge-On-Read table
 
 ### Precise Event time Snapshot On Merge-On-Read table
 
+handle drifted data issue 
+
 ## Rollout/Adoption Plan
 there should be no impact on existing users
 
