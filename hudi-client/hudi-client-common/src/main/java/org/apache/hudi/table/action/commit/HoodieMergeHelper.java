@@ -43,7 +43,6 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -97,7 +96,7 @@ public class HoodieMergeHelper<T> extends
       readSchema = mergeHandle.getWriterSchemaWithMetaFields();
     }
 
-    BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
+    BoundedInMemoryExecutor<HoodieRecord, HoodieRecord, Void> wrapper = null;
     Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(table.getConfig().getInternalSchema());
     boolean needToReWriteRecord = false;
     Map<String, String> renameCols = new HashMap<>();
@@ -139,13 +138,14 @@ public class HoodieMergeHelper<T> extends
         }
       }
 
-      wrapper = new BoundedInMemoryExecutor(table.getConfig().getWriteBufferLimitBytes(), readerIterator,
+      wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), readerIterator,
           new UpdateHandler(mergeHandle), record -> {
+        HoodieRecord recordCopy = record.copy();
         if (!externalSchemaTransformation) {
-          return record;
+          return recordCopy;
         }
         try {
-          return ((HoodieRecord) record).rewriteRecord(writerSchema, new Properties(), readerSchema);
+          return recordCopy.rewriteRecord(writerSchema, new Properties(), readerSchema);
         } catch (IOException e) {
           throw new HoodieException(String.format("Failed to rewrite record. WriterSchema: %s; ReaderSchema: %s", writerSchema, readerSchema), e);
         }

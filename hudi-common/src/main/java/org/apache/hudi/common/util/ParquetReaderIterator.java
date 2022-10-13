@@ -24,7 +24,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.parquet.hadoop.ParquetReader;
 
 import java.io.IOException;
-import java.util.function.Function;
 
 /**
  * This class wraps a parquet reader and provides an iterator based api to read from a parquet file. This is used in
@@ -36,24 +35,20 @@ public class ParquetReaderIterator<T> implements ClosableIterator<T> {
   private final ParquetReader<T> parquetReader;
   // Holds the next entry returned by the parquet reader
   private T next;
-  // For directly use InternalRow
-  private Function<T, T> mapper;
+  // Whether next is consumed
+  private boolean consumed;
 
   public ParquetReaderIterator(ParquetReader<T> parquetReader) {
     this.parquetReader = parquetReader;
-  }
-
-  public ParquetReaderIterator(ParquetReader<T> parquetReader, Function<T, T> mapper) {
-    this.parquetReader = parquetReader;
-    this.mapper = mapper;
   }
 
   @Override
   public boolean hasNext() {
     try {
       // To handle when hasNext() is called multiple times for idempotency and/or the first time
-      if (this.next == null) {
-        this.next = read();
+      if (this.next == null || consumed) {
+        this.next = parquetReader.read();
+        consumed = false;
       }
       return this.next != null;
     } catch (Exception e) {
@@ -71,21 +66,12 @@ public class ParquetReaderIterator<T> implements ClosableIterator<T> {
           throw new HoodieException("No more records left to read from parquet file");
         }
       }
-      T retVal = this.next;
-      this.next = read();
-      return retVal;
+      // Avoid holding two rows
+      consumed = true;
+      return this.next;
     } catch (Exception e) {
       FileIOUtils.closeQuietly(parquetReader);
       throw new HoodieException("unable to read next record from parquet file ", e);
-    }
-  }
-
-  private T read() throws IOException {
-    T record = parquetReader.read();
-    if (mapper == null || record == null) {
-      return record;
-    } else {
-      return mapper.apply(record);
     }
   }
 

@@ -32,7 +32,6 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
@@ -82,7 +81,7 @@ public class FlinkMergeHelper<T> extends BaseMergeHelper<T, List<HoodieRecord<T>
       readSchema = mergeHandle.getWriterSchemaWithMetaFields();
     }
 
-    BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
+    BoundedInMemoryExecutor<HoodieRecord, HoodieRecord, Void> wrapper = null;
     try {
       final Iterator<HoodieRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
@@ -91,13 +90,14 @@ public class FlinkMergeHelper<T> extends BaseMergeHelper<T, List<HoodieRecord<T>
         readerIterator = reader.getRecordIterator(readSchema);
       }
 
-      wrapper = new BoundedInMemoryExecutor(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
+      wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
           Option.of(new UpdateHandler(mergeHandle)), record -> {
+        HoodieRecord recordCopy = record.copy();
         if (!externalSchemaTransformation) {
-          return record;
+          return recordCopy;
         }
         try {
-          return ((HoodieRecord) record).rewriteRecord(writerSchema, new Properties(), readerSchema);
+          return recordCopy.rewriteRecord(writerSchema, new Properties(), readerSchema);
         } catch (IOException e) {
           throw new HoodieException(e);
         }

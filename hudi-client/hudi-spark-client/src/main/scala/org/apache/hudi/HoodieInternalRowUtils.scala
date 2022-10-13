@@ -27,10 +27,9 @@ import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.exception.HoodieException
-import org.apache.spark.sql.HoodieCatalystExpressionUtils
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieUnsafeRowUtils}
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath
-import org.apache.spark.sql.HoodieUnsafeRowUtils
+import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.types._
@@ -220,11 +219,12 @@ object HoodieInternalRowUtils {
     schemaMap.get(schema)
   }
 
-  def projectUnsafe(row: InternalRow, structType: StructType): InternalRow = {
+  def projectUnsafe(row: InternalRow, structType: StructType, copy: Boolean = true): InternalRow = {
     if (row == null || row.isInstanceOf[UnsafeRow] || row.isInstanceOf[HoodieInternalRow]) {
       row
     } else {
-      HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType).apply(row).copy()
+      val unsafeRow = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType).apply(row)
+      if (copy) unsafeRow.copy() else unsafeRow
     }
   }
 

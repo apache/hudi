@@ -128,6 +128,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
+  public HoodieRecord<T> copy() {
+    return this;
+  }
+
+  @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(Schema recordSchema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation, Option<String> partitionNameOp, Boolean populateMetaFieldsOp) throws IOException {
     throw new UnsupportedOperationException();

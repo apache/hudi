@@ -69,10 +69,11 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
             .getFileReader(table.getHadoopConf(), sourceFilePath);
     try {
       wrapper = new BoundedInMemoryExecutor<HoodieRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
-          reader.getRecordIterator(), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
+          reader.getRecordIterator(), new BootstrapRecordConsumer(bootstrapHandle), record -> {
         try {
-          String recKey = inp.getRecordKey(reader.getSchema(), Option.of(keyGenerator));
-          HoodieRecord hoodieRecord = inp.rewriteRecord(reader.getSchema(), config.getProps(), HoodieAvroUtils.RECORD_KEY_SCHEMA);
+          HoodieRecord recordCopy = record.copy();
+          String recKey = recordCopy.getRecordKey(reader.getSchema(), Option.of(keyGenerator));
+          HoodieRecord hoodieRecord = recordCopy.rewriteRecord(reader.getSchema(), config.getProps(), HoodieAvroUtils.RECORD_KEY_SCHEMA);
           MetadataValues metadataValues = new MetadataValues();
           metadataValues.setRecordKey(recKey);
           return hoodieRecord

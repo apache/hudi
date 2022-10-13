@@ -144,6 +144,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
+  public HoodieRecord<IndexedRecord> copy() {
+    return this;
+  }
+
+  @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
       Schema recordSchema,
       Properties props,

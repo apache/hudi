@@ -158,6 +158,11 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
+  public HoodieRecord<T> copy() {
+    return this;
+  }
+
+  @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
       Schema recordSchema, Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,

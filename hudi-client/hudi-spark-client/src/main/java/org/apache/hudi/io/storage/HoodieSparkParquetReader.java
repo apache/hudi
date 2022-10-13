@@ -32,7 +32,6 @@ import org.apache.parquet.hadoop.api.ReadSupport;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.InputFile;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.StructType;
@@ -93,14 +92,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
         return new ParquetReadSupport();
       }
     }.withConf(conf).build();
-    ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader,
-        row -> {
-          if (row instanceof UnsafeRow) {
-            return row.copy();
-          } else {
-            return HoodieInternalRowUtils.projectUnsafe(row, requestedStructType);
-          }
-        });
+    ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
   }

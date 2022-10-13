@@ -152,7 +152,7 @@ public abstract class SingleSparkJobExecutionStrategy<T>
           Option<BaseKeyGenerator> keyGeneratorOp =
               writeConfig.populateMetaFields() ? Option.empty() : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
           MappingIterator mappingIterator = new MappingIterator((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
-              rec -> ((HoodieRecord) rec).wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema,
+              rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema,
                   getWriteConfig().getProps(), keyGeneratorOp));
           return mappingIterator;
         } catch (IOException e) {

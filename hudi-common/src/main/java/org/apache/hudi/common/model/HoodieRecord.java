@@ -320,6 +320,11 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   public abstract boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException;
 
+  /**
+   * This is used to copy data.
+   */
+  public abstract HoodieRecord<T> copy();
+
   public abstract Option<Map<String, String>> getMetadata();
 
   public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
