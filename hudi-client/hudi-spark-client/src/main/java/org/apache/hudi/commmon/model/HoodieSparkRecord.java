@@ -70,25 +70,25 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    */
   public HoodieSparkRecord(InternalRow data, StructType schema) {
     super(null, data);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema, false);
+    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema);
     this.copy = false;
   }
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema) {
     super(key, data);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema, true);
+    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema).copy();
     this.copy = true;
   }
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation) {
     super(key, data, operation);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema, true);
+    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema).copy();
     this.copy = true;
   }
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation, boolean copy) {
     super(key, data, operation);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema, true);
+    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema).copy();
     this.copy = copy;
   }
 

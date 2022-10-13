@@ -219,12 +219,12 @@ object HoodieInternalRowUtils {
     schemaMap.get(schema)
   }
 
-  def projectUnsafe(row: InternalRow, structType: StructType, copy: Boolean = true): InternalRow = {
-    if (row == null || row.isInstanceOf[UnsafeRow] || row.isInstanceOf[HoodieInternalRow]) {
+  def projectUnsafe(row: InternalRow, structType: StructType): InternalRow = {
+    if (row == null || row.isInstanceOf[UnsafeRow]) {
       row
     } else {
-      val unsafeRow = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType).apply(row)
-      if (copy) unsafeRow.copy() else unsafeRow
+      val unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
+      unsafeProjection.apply(row)
     }
   }
 
