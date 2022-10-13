@@ -19,16 +19,15 @@
 package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
-
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Properties;
 
 /**
  * HoodieMerge defines how to merge two records. It is a stateless component.
@@ -45,7 +44,7 @@ public interface HoodieRecordMerger extends Serializable {
    * It'd be associative operation: f(a, f(b, c)) = f(f(a, b), c) (which we can translate as having 3 versions A, B, C
    * of the single record, both orders of operations applications have to yield the same result)
    */
-  Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Properties props) throws IOException;
+  Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException;
 
   /**
    * The record type handled by the current merger.

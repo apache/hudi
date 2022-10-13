@@ -18,17 +18,16 @@
 
 package org.apache.hudi;
 
+import org.apache.avro.Schema;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
-import java.util.Properties;
 
 public class HoodieSparkRecordMerger implements HoodieRecordMerger {
 
@@ -38,7 +37,7 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Properties props) throws IOException {
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
 

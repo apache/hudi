@@ -21,6 +21,8 @@ package org.apache.hudi.common.model;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -42,7 +44,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Properties props) throws IOException {
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.AVRO);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.AVRO);
     boolean deDuping = Boolean.parseBoolean(props.getOrDefault(DE_DUPING, "false").toString());
