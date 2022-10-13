@@ -82,8 +82,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
   protected var recordToLoad: InternalRow = _
 
   protected val requiredSchemaSafeAvroProjection: SafeAvroProjection = SafeAvroProjection.create(logFileReaderAvroSchema, avroSchema)
-
-  protected val requiredSchemaSafeRowProjection: UnsafeProjection = HoodieCatalystExpressionUtils.generateUnsafeProjection(logFileReaderStructType, structTypeSchema)
+  protected val requiredSchemaUnsafeRowProjection: UnsafeProjection = HoodieCatalystExpressionUtils.generateUnsafeProjection(logFileReaderStructType, structTypeSchema)
 
   // TODO: now logScanner with internalSchema support column project, we may no need projectAvroUnsafe
   private var logScanner = {
@@ -122,7 +121,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
           recordToLoad = deserialize(projectedAvroRecord)
           true
         case Some(r: HoodieSparkRecord) =>
-          recordToLoad = requiredSchemaSafeRowProjection(r.getData)
+          recordToLoad = requiredSchemaUnsafeRowProjection(r.getData)
           true
         case None => this.hasNextInternal
       }
