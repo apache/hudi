@@ -145,6 +145,7 @@ public class HdfsTestService {
     config.set("hadoop.proxyuser." + user + ".groups", "*");
     config.set("hadoop.proxyuser." + user + ".hosts", "*");
     config.setBoolean("dfs.permissions", false);
+    config.set("dfs.blocksize","16777216");
     return config;
   }
 
