@@ -226,19 +226,15 @@ public abstract class AbstractHoodieLogRecordReader {
     scanInternal(Option.empty(), false);
   }
 
-  public synchronized void scan(List<String> keys) {
-    scanInternal(Option.of(new KeySpec(keys, true)), false);
-  }
-
   public synchronized void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
     if (useScanV2) {
       scanInternalV2(keySpecOpt, skipProcessingBlocks);
     } else {
-      scanInternal(keySpecOpt);
+      scanInternalV1(keySpecOpt);
     }
   }
 
-  protected synchronized void scanInternal(Option<KeySpec> keySpecOpt) {
+  private synchronized void scanInternalV1(Option<KeySpec> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);

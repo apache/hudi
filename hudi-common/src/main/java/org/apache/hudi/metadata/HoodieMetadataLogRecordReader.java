@@ -60,7 +60,8 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     // TODO remove locking
     synchronized (this) {
       logRecordScanner.scan();
-      return logRecordScanner.getRecords().values().stream()
+      return logRecordScanner.getRecords().values()
+          .stream()
           .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
           .collect(Collectors.toList());
     }
@@ -73,11 +74,12 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     // processing log block records as part of scan.
     // TODO remove locking
     synchronized (this) {
-      records.clear();
-      scanInternal(Option.of(new KeySpec(keyPrefixes, false)));
-      return records.values().stream()
-          .filter(Objects::nonNull)
-          .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
+      logRecordScanner.scanByKeyPrefixes(keyPrefixes);
+      Map<String, HoodieRecord<? extends HoodieRecordPayload>> allRecords = logRecordScanner.getRecords();
+      return allRecords.entrySet()
+          .stream()
+          .filter(r -> r == null || keyPrefixes.stream().noneMatch(r.getKey()::startsWith))
+          .map(r -> (HoodieRecord<HoodieMetadataPayload>) r)
           .collect(Collectors.toList());
     }
   }
