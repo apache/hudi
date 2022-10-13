@@ -22,31 +22,30 @@ import org.apache.flink.table.data.RowData;
 
 /**
  * RowData implementation for Hoodie Row. It wraps an {@link RowData} and keeps meta columns locally. But the {@link RowData}
- * does include the meta columns as well just that {@link HoodieRowData} will intercept queries for meta columns and serve from its
+ * does include the meta columns as well just that {@link HoodieRowDataWithMetaFields} will intercept queries for meta columns and serve from its
  * copy rather than fetching from {@link RowData}.
  *
- * <p>The wrapped {@link RowData} does not contain hoodie metadata fields.
+ * <p>The wrapped {@link RowData} contains hoodie metadata fields.
  */
-public class HoodieRowData extends AbstractHoodieRowData {
+public class HoodieRowDataWithMetaFields extends AbstractHoodieRowData {
 
-  public HoodieRowData(String commitTime,
-                       String commitSeqNumber,
-                       String recordKey,
-                       String partitionPath,
-                       String fileName,
-                       RowData row,
-                       boolean withOperation) {
+  public HoodieRowDataWithMetaFields(String commitTime,
+                                     String commitSeqNumber,
+                                     String recordKey,
+                                     String partitionPath,
+                                     String fileName,
+                                     RowData row,
+                                     boolean withOperation) {
     super(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, row, withOperation);
   }
 
   @Override
   public int getArity() {
-    return metaColumnsNum + row.getArity();
+    return row.getArity();
   }
 
   protected int rebaseOrdinal(int ordinal) {
-    // NOTE: In cases when source row does not contain meta fields, we will have to
-    //       rebase ordinal onto its indexes
-    return ordinal - metaColumnsNum;
+    // NOTE: The source row contains the same number of meta fields of current row
+    return ordinal;
   }
 }
