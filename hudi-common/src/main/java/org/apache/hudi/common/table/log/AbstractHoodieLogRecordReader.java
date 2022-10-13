@@ -96,7 +96,7 @@ public abstract class AbstractHoodieLogRecordReader {
   protected final String preCombineField;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
-  private final Properties payloadProps = new Properties();
+  private final Properties payloadProps;
   // simple key gen fields
   private Option<Pair<String, String>> simpleKeyGenFields = Option.empty();
   // Log File Paths
@@ -164,10 +164,11 @@ public abstract class AbstractHoodieLogRecordReader {
     this.payloadClassFQN = tableConfig.getPayloadClass();
     this.preCombineField = tableConfig.getPreCombineField();
     // Log scanner merge log with precombine
-    this.payloadProps.setProperty(HoodieAvroRecordMerger.DE_DUPING, "true");
+    Properties props = HoodieAvroRecordMerger.Config.withLegacyOperatingModePreCombining(new Properties());
     if (this.preCombineField != null) {
-      this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
+      props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
     }
+    this.payloadProps = props;
     this.recordMerger = recordMerger;
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;

@@ -36,8 +36,6 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 public class HoodieAvroRecordMerger implements HoodieRecordMerger {
 
-  public static String DE_DUPING = "de_duping";
-
   @Override
   public String getMergingStrategy() {
     return HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
@@ -47,17 +45,24 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.AVRO);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.AVRO);
-    boolean deDuping = Boolean.parseBoolean(props.getOrDefault(DE_DUPING, "false").toString());
-    if (deDuping) {
-      HoodieRecord res = preCombine(older, newer);
-      if (res == older) {
-        return Option.of(Pair.of(res, oldSchema));
-      } else {
-        return Option.of(Pair.of(res, newSchema));
-      }
-    } else {
-      return combineAndGetUpdateValue(older, newer, newSchema, props)
-          .map(r -> Pair.of(r, (((HoodieAvroIndexedRecord) r).getData()).getSchema()));
+    Config.LegacyOperationMode legacyOperatingMode = Config.LegacyOperationMode.valueOf(
+            props.getString(Config.LEGACY_OPERATING_MODE.key(), Config.LEGACY_OPERATING_MODE.defaultValue()));
+
+    switch (legacyOperatingMode) {
+      case PRE_COMBINING:
+        HoodieRecord res = preCombine(older, newer);
+        if (res == older) {
+          return Option.of(Pair.of(res, oldSchema));
+        } else {
+          return Option.of(Pair.of(res, newSchema));
+        }
+
+      case COMBINING:
+        return combineAndGetUpdateValue(older, newer, newSchema, props)
+            .map(r -> Pair.of(r, (((HoodieAvroIndexedRecord) r).getData()).getSchema()));
+
+      default:
+        throw new UnsupportedOperationException(String.format("Unsupported legacy operating mode (%s)", legacyOperatingMode));
     }
   }
 
@@ -85,10 +90,25 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
         .map(combinedAvroPayload -> new HoodieAvroIndexedRecord((IndexedRecord) combinedAvroPayload));
   }
 
-  public static Properties withDeDuping(Properties props) {
-    Properties newProps = new Properties();
-    newProps.putAll(props);
-    newProps.setProperty(HoodieAvroRecordMerger.DE_DUPING, "true");
-    return newProps;
+  public static class Config {
+
+    public enum LegacyOperationMode {
+      PRE_COMBINING,
+      COMBINING
+    }
+
+    public static ConfigProperty<String> LEGACY_OPERATING_MODE =
+        ConfigProperty.key("hoodie.datasource.write.merger.legacy.operation")
+            .defaultValue(LegacyOperationMode.COMBINING.name())
+            .withDocumentation("Controls the mode of the merging operation performed by `HoodieAvroRecordMerger`. "
+                + "This is required to maintain backward-compatibility w/ the existing semantic of `HoodieRecordPayload` "
+                + "implementations providing `preCombine` and `combineAndGetUpdateValue` methods.");
+
+    public static TypedProperties withLegacyOperatingModePreCombining(Properties props) {
+      TypedProperties newProps = new TypedProperties();
+      newProps.putAll(props);
+      newProps.setProperty(Config.LEGACY_OPERATING_MODE.key(), Config.LegacyOperationMode.PRE_COMBINING.name());
+      return newProps;
+    }
   }
 }
