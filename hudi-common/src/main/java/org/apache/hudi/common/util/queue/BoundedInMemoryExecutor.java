@@ -71,7 +71,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends MessageQueueBasedHoodieExe
   }
 
   /**
-   * Start all Producers.
+   * Start all producers at once.
    */
   public List<Future<Boolean>> startProducers() {
     // Latch to control when and which producer thread will close the queue
