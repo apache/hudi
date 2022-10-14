@@ -163,7 +163,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
-    UTF8String[] metaFields = extractMetaField(structType, targetStructType);
+    UTF8String[] metaFields = extractMetaFields(data, structType, targetStructType);
     if (metaFields.length == 0) {
       throw new UnsupportedOperationException();
     }
@@ -178,7 +178,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
     InternalRow rewriteRow = HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, structType, newStructType, renameCols);
-    UTF8String[] metaFields = extractMetaField(structType, newStructType);
+    UTF8String[] metaFields = extractMetaFields(data, structType, newStructType);
     if (metaFields.length > 0) {
       rewriteRow = new HoodieInternalRow(metaFields, data, true);
     }
@@ -189,14 +189,16 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   @Override
   public HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
+    HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(data, structType);
+
     metadataValues.getKv().forEach((key, value) -> {
       int pos = structType.fieldIndex(key);
       if (value != null) {
-        data.update(pos, CatalystTypeConverters.convertToCatalyst(value));
+        updatableRow.update(pos, CatalystTypeConverters.convertToCatalyst(value));
       }
     });
 
-    return new HoodieSparkRecord(getKey(), data, structType, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), copy);
   }
 
   @Override
@@ -250,7 +252,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String key;
     String partition;
-    if (keyGen.isPresent() && !Boolean.parseBoolean(props.getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
+    boolean populateMetaFields = Boolean.parseBoolean(props.getOrDefault(POPULATE_META_FIELDS.key(),
+        POPULATE_META_FIELDS.defaultValue().toString()).toString());
+    if (!populateMetaFields && keyGen.isPresent()) {
       SparkKeyGeneratorInterface keyGenerator = (SparkKeyGeneratorInterface) keyGen.get();
       key = keyGenerator.getRecordKey(data, structType).toString();
       partition = keyGenerator.getPartitionPath(data, structType).toString();
@@ -294,12 +298,22 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     }
   }
 
-  private UTF8String[] extractMetaField(StructType recordStructType, StructType structTypeWithMetaField) {
+  private static HoodieInternalRow wrapIntoUpdatableOverlay(InternalRow data, StructType structType) {
+    if (data instanceof HoodieInternalRow) {
+      return (HoodieInternalRow) data;
+    }
+
+    boolean containsMetaFields = structType.getFieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD).isDefined();
+    UTF8String[] metaFields = containsMetaFields ? extractMetaFields(data, structType, structType) : new UTF8String[5];
+    return new HoodieInternalRow(metaFields, data, containsMetaFields);
+  }
+
+  private static UTF8String[] extractMetaFields(InternalRow row, StructType recordStructType, StructType structTypeWithMetaField) {
     return HOODIE_META_COLUMNS_WITH_OPERATION.stream()
         .filter(f -> HoodieCatalystExpressionUtils$.MODULE$.existField(structTypeWithMetaField, f))
         .map(field -> {
           if (HoodieCatalystExpressionUtils$.MODULE$.existField(recordStructType, field)) {
-            return data.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(field));
+            return row.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(field));
           } else {
             return UTF8String.EMPTY_UTF8;
           }

@@ -388,12 +388,11 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     } else {
       rewriteRecord = record.rewriteRecord(schema, prop, writeSchemaWithMetaFields);
     }
-    MetadataValues metadataValues = new MetadataValues();
-    metadataValues.setFileName(newFilePath.getName());
+    // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
+    //       file holding this record even in cases when overall metadata is preserved
+    MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
     rewriteRecord = rewriteRecord.updateMetadataValues(writeSchemaWithMetaFields, prop, metadataValues);
     if (shouldPreserveRecordMetadata) {
-      // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
-      //       file holding this record even in cases when overall metadata is preserved
       fileWriter.write(key.getRecordKey(), rewriteRecord, writeSchemaWithMetaFields);
     } else {
       fileWriter.writeWithMetadata(key, rewriteRecord, writeSchemaWithMetaFields);

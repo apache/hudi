@@ -18,46 +18,44 @@
 
 package org.apache.hudi.common.model;
 
-import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION;
-
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.hudi.common.util.ValidationUtils;
 
 public class MetadataValues {
-  private Map<String, String> kv;
-
-  public MetadataValues(Map<String, String> kv) {
-    ValidationUtils.checkArgument(HOODIE_META_COLUMNS_WITH_OPERATION.containsAll(kv.values()));
-    this.kv = kv;
-  }
+  private final Map<String, String> kv;
 
   public MetadataValues() {
     this.kv = new HashMap<>();
   }
 
-  public void setCommitTime(String value) {
+  public MetadataValues setCommitTime(String value) {
     this.kv.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, value);
+    return this;
   }
 
-  public void setCommitSeqno(String value) {
+  public MetadataValues setCommitSeqno(String value) {
     this.kv.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, value);
+    return this;
   }
 
-  public void setRecordKey(String value) {
+  public MetadataValues setRecordKey(String value) {
     this.kv.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, value);
+    return this;
   }
 
-  public void setPartitionPath(String value) {
+  public MetadataValues setPartitionPath(String value) {
     this.kv.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, value);
+    return this;
   }
 
-  public void setFileName(String value) {
+  public MetadataValues setFileName(String value) {
     this.kv.put(HoodieRecord.FILENAME_METADATA_FIELD, value);
+    return this;
   }
 
-  public void setOperation(String value) {
+  public MetadataValues setOperation(String value) {
     this.kv.put(HoodieRecord.OPERATION_METADATA_FIELD, value);
+    return this;
   }
 
   public Map<String, String> getKv() {
