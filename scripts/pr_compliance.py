@@ -317,38 +317,6 @@ class NoDataSection(ParseSection):
                 return Outcomes.NEXTSECTION
         return o
 
-#Risk level has different processing because the pr author will modify the 
-#identifier and doesn't need to add description if risk is none or low
-class RiskLevelSection(ParseSection):
-    def __init__(self, data: ParseSectionData, sections: ParseSections, debug=False):
-        super().__init__(data, sections, debug)
-
-    def processIdentify(self, line, lineno):
-        if self.found:
-            #since we have already found the identifier, this means that we have
-            #found a duplicate of the identifier
-            self.error(line, lineno, f"Duplicate line starting with \"{self.identifier}\" found")
-            return Outcomes.ERROR
-        if line == "**Risk level: none | low | medium | high**":
-            #the user has not modified this line so a risk level was not chosen
-            self.error(line, lineno, "Risk level not chosen")
-            return Outcomes.ERROR
-        if "NONE" in line.upper() or "LOW" in line.upper():
-            # an explanation is not required for none or low so we can just
-            # move on to the next section or terminate if this is the last
-            if self.nextSection() == "END":
-                return Outcomes.SUCCESS
-            else:
-                return Outcomes.NEXTSECTION
-        elif "MEDIUM" in line.upper() or "HIGH" in line.upper():
-            # an explanation is required so we don't change state
-            self.found = True
-            return Outcomes.CONTINUE
-        else:
-            #the pr author put something weird in for risk level
-            self.error(line, lineno, "Invalid choice for risk level")
-            return Outcomes.ERROR
-
 #Class that orchestrates the validation of the entire body
 class ValidateBody:
     def __init__(self, body: str, firstSection: str, sections: ParseSections, debug=False):
@@ -381,9 +349,7 @@ class ValidateBody:
             exit(-3)
         
         #create the section
-        if data.name == "RISKLEVEL":
-            self.section = RiskLevelSection(data=data, sections=self.sections, debug=self.debug)
-        elif data.name == "CHECKLIST":
+        if data.name == "CHECKLIST":
             self.section = NoDataSection(data=data, sections=self.sections, debug=self.debug)
         else:
             self.section = ParseSection(data=data, sections=self.sections, debug=self.debug)
@@ -430,8 +396,8 @@ def make_default_validator(body, debug=False):
         "### Impact",
         {"_Describe any public API or user-facing feature change or any performance impact._"})
     risklevel = RiskLevelData("RISKLEVEL",
-        "**Risk level:",
-        {"_Choose one. If medium or high, explain what verification was done to mitigate the risks._"})
+        "### Risk level ",
+        {"_If medium or high, explain what verification was done to mitigate the risks._"})
     checklist = ParseSectionData("CHECKLIST",
         "### Contributor's checklist",
         {})
@@ -491,18 +457,14 @@ def test_body():
     good_impact[1] = "impact description"
 
     template_risklevel = [
-        "**Risk level: none | low | medium | high**",
+        "### Risk level (write none, low medium or high below)",
         "",
-        "_Choose one. If medium or high, explain what verification was done to mitigate the risks._",
+        "_If medium or high, explain what verification was done to mitigate the risks._",
         ""
     ]
 
-    good_risklevel_none = template_risklevel.copy()
-    good_risklevel_none[0] = "**Risk level: none**"
-
-    good_risklevel_medium = template_risklevel.copy()
-    good_risklevel_medium[0] = "**Risk level: medium**"
-    good_risklevel_medium[1] = "risklevel description" 
+    good_risklevel = template_risklevel.copy()
+    good_risklevel[1] = "none"
 
     template_checklist = [
         "### Contributor's checklist",
@@ -514,13 +476,14 @@ def test_body():
     ]
 
     #list of sections that when combined form a valid body
-    good_sections = [good_changelogs, good_impact, good_risklevel_none, template_checklist]
+    good_sections = [good_changelogs, good_impact, good_risklevel, template_checklist]
 
     #list of sections that when combined form the template
     template_sections = [template_changelogs, template_impact, template_risklevel, template_checklist]
 
     tests_passed = True
     #Test section not filled out
+    #no need to test checklist section
     for i in range(len(good_sections)-1):
         test_sections = []
         for j in range(len(good_sections)):
@@ -556,28 +519,8 @@ def test_body():
                 test_sections.append(good_sections[j].copy())
         tests_passed = run_test(f"Missing Section: {i}", build_body(test_sections), False, DEBUG_MESSAGES) and tests_passed
     
-    #Test good body with risk level of none:
-    tests_passed = run_test("good documentation. risk level none", build_body(good_sections), True, DEBUG_MESSAGES) and tests_passed
-
-    #Test good body with risk level of medium:
-    risk_level_index = 2
-    good_medium_risk_level = good_sections.copy()
-    good_medium_risk_level[risk_level_index] = good_risklevel_medium
-    tests_passed = run_test("good documentation. risk level medium", build_body(good_medium_risk_level), True, DEBUG_MESSAGES) and tests_passed
-
-    #Test good body except medium risk level and there is no description
-    bad_medium_risk_level = good_sections.copy()
-    bad_risklevel_medium = good_risklevel_medium.copy()
-    bad_risklevel_medium[1] = ""
-    bad_medium_risk_level[risk_level_index] = bad_risklevel_medium
-    tests_passed = run_test("medium risk level but no description", build_body(bad_medium_risk_level), False, DEBUG_MESSAGES) and tests_passed
-
-    #Test unknown risk level:
-    unknow_risk_level = good_sections.copy()
-    unknow_risk_level_section = template_risklevel.copy()
-    unknow_risk_level_section[0] = "**Risk level: unknown**"
-    unknow_risk_level[risk_level_index] = unknow_risk_level_section
-    tests_passed = run_test("unknown risk level", build_body(unknow_risk_level), False, DEBUG_MESSAGES) and tests_passed
+    #Test good body:
+    tests_passed = run_test("good documentation", build_body(good_sections), True, DEBUG_MESSAGES) and tests_passed
 
     print("*****")
     if tests_passed:
