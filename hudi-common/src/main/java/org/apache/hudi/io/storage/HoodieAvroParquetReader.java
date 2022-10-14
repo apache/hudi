@@ -37,12 +37,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-public class HoodieAvroParquetReader implements HoodieAvroFileReader {
+public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
   private final Path path;
   private final Configuration conf;
   private final BaseFileUtils parquetUtils;
-  private List<ParquetReaderIterator> readerIterators = new ArrayList<>();
+  private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
   public HoodieAvroParquetReader(Configuration configuration, Path path) {
     this.conf = configuration;
