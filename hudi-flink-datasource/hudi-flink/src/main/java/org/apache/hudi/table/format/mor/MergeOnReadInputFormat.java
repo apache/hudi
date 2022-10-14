@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -715,7 +716,7 @@ public class MergeOnReadInputFormat
 
     private final Set<String> keyToSkip = new HashSet<>();
 
-    private final Properties payloadProps;
+    private final TypedProperties payloadProps;
 
     private RowData currentRecord;
 
