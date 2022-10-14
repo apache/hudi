@@ -22,7 +22,6 @@ import org.apache.hudi.common.util.Functions;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 
 /**
  * Access to a ThreadFactory instance.

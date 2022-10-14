@@ -101,40 +101,17 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   public void start() {
     queue.start();
   }
-}
-
-/**
- * HoodieDisruptorEventFactory is used to create/preallocate HoodieDisruptorEvent.
- *
- */
-class HoodieDisruptorEventFactory<O> implements EventFactory<HoodieDisruptorEvent<O>> {
-
-  @Override
-  public HoodieDisruptorEvent<O> newInstance() {
-    return new HoodieDisruptorEvent<>();
-  }
-}
-
-/**
- * The unit of data passed from producer to consumer in disruptor world.
- */
-class HoodieDisruptorEvent<O> {
-
-  private O value;
-
-  public void set(O value) {
-    this.value = value;
-  }
-
-  public O get() {
-    return this.value;
-  }
 
   /**
-   * When passing data via the Disruptor, it is possible for objects to live longer than intended.
-   * To avoid this happening it is necessary to clear out the event after processing it.
+   * HoodieDisruptorEventFactory is used to create/preallocate HoodieDisruptorEvent.
+   *
    */
-  public void clear() {
-    value = null;
+  class HoodieDisruptorEventFactory<O> implements EventFactory<HoodieDisruptorEvent<O>> {
+
+    @Override
+    public HoodieDisruptorEvent<O> newInstance() {
+      return new HoodieDisruptorEvent<>();
+    }
   }
 }
+

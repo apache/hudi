@@ -105,17 +105,17 @@ public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<
   @Override
   public Future<E> startConsumer() {
     // consumer is already started. Here just wait for all record consumed and return the result.
-   return hoodieExecutorBase.getConsumerExecutorService().submit(() -> {
+    return hoodieExecutorBase.getConsumerExecutorService().submit(() -> {
 
-     // Waits for all producers finished.
-     for (Future f : producerTasks) {
-       f.get();
-     }
+      // Waits for all producers finished.
+      for (Future f : producerTasks) {
+        f.get();
+      }
 
-     // Call disruptor queue close function which will wait until all events currently in the disruptor have been processed by all event processors
-     queue.close();
-     hoodieExecutorBase.getConsumer().get().finish();
-     return hoodieExecutorBase.getConsumer().get().getResult();
+      // Call disruptor queue close function which will wait until all events currently in the disruptor have been processed by all event processors
+      queue.close();
+      hoodieExecutorBase.getConsumer().get().finish();
+      return hoodieExecutorBase.getConsumer().get().getResult();
     });
   }
 
