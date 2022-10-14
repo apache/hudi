@@ -24,8 +24,8 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -52,6 +52,8 @@ public class HoodieMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K,
         instantTime,
         config,
         hoodieTable.getMetaClient().getTableConfig(),
+        partitionPath,
+        fs,
         tableSchema,
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
@@ -68,6 +70,8 @@ public class HoodieMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K,
         instantTime,
         config,
         hoodieTable.getMetaClient().getTableConfig(),
+        partitionPath,
+        fs,
         tableSchema,
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
@@ -93,9 +97,17 @@ public class HoodieMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K,
   public List<WriteStatus> close() {
     List<WriteStatus> writeStatuses = super.close();
     // if there are cdc data written, set the CDC-related information.
-    Option<AppendResult> cdcResult =
-        HoodieCDCLogger.writeCDCDataIfNeeded(cdcLogger, recordsWritten, insertRecordsWritten);
-    HoodieCDCLogger.setCDCStatIfNeeded(writeStatuses.get(0).getStat(), cdcResult, partitionPath, fs);
+
+    if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
+      // the following cases where we do not need to write out the cdc file:
+      // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
+      // case 2: all the incoming data is INSERT.
+      return writeStatuses;
+    }
+
+    cdcLogger.close();
+    HoodieWriteStat stat = writeStatuses.get(0).getStat();
+    stat.setCdcStats(cdcLogger.getCDCWriteStats());
     return writeStatuses;
   }
 }
