@@ -85,6 +85,15 @@ import java.util.concurrent.TimeUnit;
 
 import scala.Tuple2;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_QUORUM;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_ZNODE_PARENT;
+import static org.apache.hadoop.hbase.HConstants.CLIENT_ZOOKEEPER_CLIENT_PORT;
+import static org.apache.hadoop.hbase.security.SecurityConstants.MASTER_KRB_PRINCIPAL;
+import static org.apache.hadoop.hbase.security.SecurityConstants.REGIONSERVER_KRB_PRINCIPAL;
+import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_AUTHORIZATION_CONF_KEY;
+import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_CONF_KEY;
+
 /**
  * Hoodie Index implementation backed by HBase.
  */
@@ -145,22 +154,22 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   private Connection getHBaseConnection() {
     Configuration hbaseConfig = HBaseConfiguration.create();
     String quorum = config.getHbaseZkQuorum();
-    hbaseConfig.set("hbase.zookeeper.quorum", quorum);
+    hbaseConfig.set(ZOOKEEPER_QUORUM, quorum);
     String zkZnodeParent = config.getHBaseZkZnodeParent();
     if (zkZnodeParent != null) {
-      hbaseConfig.set("zookeeper.znode.parent", zkZnodeParent);
+      hbaseConfig.set(ZOOKEEPER_ZNODE_PARENT, zkZnodeParent);
     }
     String port = String.valueOf(config.getHbaseZkPort());
-    hbaseConfig.set("hbase.zookeeper.property.clientPort", port);
+    hbaseConfig.set(CLIENT_ZOOKEEPER_CLIENT_PORT, port);
 
     try {
       String authentication = config.getHBaseIndexSecurityAuthentication();
       if (authentication.equals("kerberos")) {
-        hbaseConfig.set("hbase.security.authentication", "kerberos");
-        hbaseConfig.set("hadoop.security.authentication", "kerberos");
-        hbaseConfig.set("hbase.security.authorization", "true");
-        hbaseConfig.set("hbase.regionserver.kerberos.principal", config.getHBaseIndexRegionserverPrincipal());
-        hbaseConfig.set("hbase.master.kerberos.principal", config.getHBaseIndexMasterPrincipal());
+        hbaseConfig.set(HBASE_SECURITY_CONF_KEY, "kerberos");
+        hbaseConfig.set(HADOOP_SECURITY_AUTHENTICATION, "kerberos");
+        hbaseConfig.set(HBASE_SECURITY_AUTHORIZATION_CONF_KEY, "true");
+        hbaseConfig.set(REGIONSERVER_KRB_PRINCIPAL, config.getHBaseIndexRegionserverPrincipal());
+        hbaseConfig.set(MASTER_KRB_PRINCIPAL, config.getHBaseIndexMasterPrincipal());
 
         String principal = config.getHBaseIndexKerberosUserPrincipal();
         String keytab = SparkFiles.get(config.getHBaseIndexKerberosUserKeytab());
