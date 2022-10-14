@@ -163,27 +163,29 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
-    UTF8String[] metaFields = extractMetaFields(data, structType, targetStructType);
-    if (metaFields.length == 0) {
-      throw new UnsupportedOperationException();
-    }
 
-    boolean containMetaFields = hasMetaField(structType);
-    InternalRow resultRow = new HoodieInternalRow(metaFields, data, containMetaFields);
-    return new HoodieSparkRecord(getKey(), resultRow, targetStructType, getOperation(), copy);
+    boolean containMetaFields = hasMetaFields(structType);
+    UTF8String[] metaFields = tryExtractMetaFields(data, structType);
+
+    // TODO add actual rewriting
+    InternalRow finalRow = new HoodieInternalRow(metaFields, data, containMetaFields);
+
+    return new HoodieSparkRecord(getKey(), finalRow, targetStructType, getOperation(), copy);
   }
 
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
-    InternalRow rewriteRow = HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, structType, newStructType, renameCols);
-    UTF8String[] metaFields = extractMetaFields(data, structType, newStructType);
-    if (metaFields.length > 0) {
-      rewriteRow = new HoodieInternalRow(metaFields, data, true);
-    }
 
-    return new HoodieSparkRecord(getKey(), rewriteRow, newStructType, getOperation(), copy);
+    boolean containMetaFields = hasMetaFields(structType);
+    UTF8String[] metaFields = tryExtractMetaFields(data, structType);
+
+    InternalRow rewrittenRow =
+        HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, structType, newStructType, renameCols);
+    HoodieInternalRow finalRow = new HoodieInternalRow(metaFields, rewrittenRow, containMetaFields);
+
+    return new HoodieSparkRecord(getKey(), finalRow, newStructType, getOperation(), copy);
   }
 
   @Override
@@ -303,25 +305,24 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       return (HoodieInternalRow) data;
     }
 
-    boolean containsMetaFields = structType.getFieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD).isDefined();
-    UTF8String[] metaFields = containsMetaFields ? extractMetaFields(data, structType, structType) : new UTF8String[5];
+    boolean containsMetaFields = hasMetaFields(structType);
+    UTF8String[] metaFields = tryExtractMetaFields(data, structType);
     return new HoodieInternalRow(metaFields, data, containsMetaFields);
   }
 
-  private static UTF8String[] extractMetaFields(InternalRow row, StructType recordStructType, StructType structTypeWithMetaField) {
-    return HOODIE_META_COLUMNS_WITH_OPERATION.stream()
-        .filter(f -> HoodieCatalystExpressionUtils$.MODULE$.existField(structTypeWithMetaField, f))
-        .map(field -> {
-          if (HoodieCatalystExpressionUtils$.MODULE$.existField(recordStructType, field)) {
-            return row.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(field));
-          } else {
-            return UTF8String.EMPTY_UTF8;
-          }
-        }).toArray(UTF8String[]::new);
+  private static UTF8String[] tryExtractMetaFields(InternalRow row, StructType structType) {
+    boolean containsMetaFields = hasMetaFields(structType);
+    if (containsMetaFields) {
+      return HoodieRecord.HOODIE_META_COLUMNS.stream()
+          .map(col -> row.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(col)))
+          .toArray(UTF8String[]::new);
+    } else {
+      return new UTF8String[HoodieRecord.HOODIE_META_COLUMNS.size()];
+    }
   }
 
-  private static boolean hasMetaField(StructType structType) {
-    return HoodieCatalystExpressionUtils$.MODULE$.existField(structType, COMMIT_TIME_METADATA_FIELD);
+  private static boolean hasMetaFields(StructType structType) {
+    return structType.getFieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD).isDefined();
   }
 
   /**
