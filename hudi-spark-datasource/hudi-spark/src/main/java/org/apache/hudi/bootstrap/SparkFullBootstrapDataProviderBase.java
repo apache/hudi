@@ -94,12 +94,11 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
       } else if (recordType == HoodieRecordType.SPARK) {
         SparkKeyGeneratorInterface sparkKeyGenerator = (SparkKeyGeneratorInterface) keyGenerator;
         StructType structType = inputDataset.schema();
-        return inputDataset.queryExecution().toRdd().toJavaRDD().map(row -> {
-          InternalRow internalRow = row.copy();
+        return inputDataset.queryExecution().toRdd().toJavaRDD().map(internalRow -> {
           String recordKey = sparkKeyGenerator.getRecordKey(internalRow, structType).toString();
           String partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structType).toString();
           HoodieKey key = new HoodieKey(recordKey, partitionPath);
-          return new HoodieSparkRecord(key, internalRow, structType, true);
+          return new HoodieSparkRecord(key, internalRow, false);
         });
       } else {
         throw new UnsupportedOperationException(recordType.name());
