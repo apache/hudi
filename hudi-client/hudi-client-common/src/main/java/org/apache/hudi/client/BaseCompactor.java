@@ -27,7 +27,7 @@ import java.io.Serializable;
 /**
  * Run one round of compaction.
  */
-public abstract class BaseCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class BaseCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable, AutoCloseable {
 
   private static final long serialVersionUID = 1L;
 

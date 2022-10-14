@@ -112,12 +112,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       return
     }
 
-    // Override to use direct markers. In Structured streaming, timeline server is closed after
-    // first micro-batch and subsequent micro-batches do not have timeline server running.
-    // Thus, we can't use timeline-server-based markers.
-    var updatedOptions = options.updated(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.DIRECT.name())
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
-    updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
+    var updatedOptions = options.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
     // Add batchId as checkpoint to the extra metadata. To enable same checkpoint metadata structure for multi-writers,
     // SINK_CHECKPOINT_KEY holds a map of batchId to writer context (composed of applicationId and queryId), e.g.
     // "_hudi_streaming_sink_checkpoint" : "{\"$batchId\":\"${sqlContext.sparkContext.applicationId}-$queryId\"}"
