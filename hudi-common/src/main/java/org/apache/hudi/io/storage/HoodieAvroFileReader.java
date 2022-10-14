@@ -18,71 +18,10 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.MappingIterator;
-import org.apache.hudi.common.util.Option;
-
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.util.List;
-
-import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
-
-public interface HoodieAvroFileReader extends HoodieFileReader<IndexedRecord>, AutoCloseable {
-
-  ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema) throws IOException;
-
-  ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
-
-  default Option<IndexedRecord> getIndexedRecordByKey(String key, Schema readerSchema) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  default ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  default ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys) throws IOException {
-    return getIndexedRecordsByKeysIterator(keys, getSchema());
-  }
-
-  default ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
-    throw new UnsupportedEncodingException();
-  }
-
-  default ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> keyPrefixes) throws IOException {
-    return getIndexedRecordsByKeyPrefixIterator(keyPrefixes, getSchema());
-  }
-
-  default ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
-    ClosableIterator<IndexedRecord> iterator = getIndexedRecordsByKeysIterator(keys, schema);
-    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
-  }
-
-  default ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
-    ClosableIterator<IndexedRecord> iterator = getIndexedRecordsByKeyPrefixIterator(keyPrefixes, schema);
-    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
-  }
-
-  @Override
-  default ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema schema) throws IOException {
-    ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(schema);
-    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
-  }
-
-  @Override
-  default ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(readerSchema, requestedSchema);
-    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
-  }
-
-  default Option<HoodieRecord<IndexedRecord>> getRecordByKey(String key, Schema readerSchema) throws IOException {
-    return getIndexedRecordByKey(key, readerSchema)
-        .map(data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
-  }
-}
+/**
+ * Marker interface for every {@link HoodieFileReader} reading in Avro (ie
+ * producing {@link IndexedRecord}s)
+ */
+public interface HoodieAvroFileReader extends HoodieFileReader<IndexedRecord> {}

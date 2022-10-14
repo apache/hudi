@@ -18,31 +18,10 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
-import org.apache.hudi.commmon.model.HoodieSparkRecord;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.MappingIterator;
 import org.apache.spark.sql.catalyst.InternalRow;
 
-import java.io.IOException;
-
-import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
-
-public interface HoodieSparkFileReader extends HoodieFileReader<InternalRow> {
-
-  ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema) throws IOException;
-
-  ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
-
-  default ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema) throws IOException {
-    ClosableIterator<InternalRow> iterator = getInternalRowIterator(readerSchema);
-    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
-  }
-
-  @Override
-  default ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    ClosableIterator<InternalRow> iterator = getInternalRowIterator(readerSchema, requestedSchema);
-    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
-  }
-}
+/**
+ * Marker interface for every {@link HoodieFileReader} reading in Catalyst (Spark native tyeps, ie
+ * producing {@link InternalRow}s)
+ */
+public interface HoodieSparkFileReader extends HoodieFileReader<InternalRow> {}
