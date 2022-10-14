@@ -56,7 +56,19 @@ import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
- * Spark Engine-specific Implementations of `HoodieRecord`.
+ * Spark Engine-specific Implementations of `HoodieRecord`
+ *
+ * NOTE: [[HoodieSparkRecord]] is expected to hold either [[UnsafeRow]] or [[HoodieInternalRow]]:
+ *
+ * <ul>
+ *    <li>[[UnsafeRow]] is held to make sure a) we don't deserialize raw bytes payload
+ *       into JVM types unnecessarily, b) we don't incur penalty of ser/de during shuffling,
+ *       c) we don't add strain on GC</li>
+ *    <li>[[HoodieInternalRow]] is held in cases when underlying [[UnsafeRow]]'s metadata fields
+ *       need to be updated (ie serving as an overlay layer on top of [[UnsafeRow]])</li>
+ * </ul>
+ *
+
  */
 public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
@@ -69,8 +81,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    * We should use this construction method when we read internalRow from file.
    * The record constructed by this method must be used in iter.
    */
-  public HoodieSparkRecord(InternalRow data, StructType schema) {
+  public HoodieSparkRecord(InternalRow data) {
     super(null, data);
+    // NOTE: [[HoodieSparkRecord]] is expected to hold either [[UnsafeRow]] or [[HoodieInternalRow]]
+    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow);
     this.copy = false;
   }
 

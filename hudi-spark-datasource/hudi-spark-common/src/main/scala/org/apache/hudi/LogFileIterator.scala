@@ -238,7 +238,7 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
     //       on the record from the Delta Log
     recordMerger.getRecordType match {
       case HoodieRecordType.SPARK =>
-        val curRecord = new HoodieSparkRecord(curRow, baseFileReader.schema)
+        val curRecord = new HoodieSparkRecord(curRow)
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
         toScalaOption(result)
           .map(r => {
