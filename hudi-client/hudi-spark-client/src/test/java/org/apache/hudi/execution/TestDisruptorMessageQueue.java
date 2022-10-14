@@ -267,7 +267,6 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
 
     // wait for all the records consumed.
     queue.close();
-    queue.waitForConsumingFinished();
 
     for (int i = 0; i < numProducers; i++) {
       // Ensure we have seen all the records for each producers

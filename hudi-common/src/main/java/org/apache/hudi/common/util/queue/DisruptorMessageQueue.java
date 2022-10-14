@@ -83,13 +83,6 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     queue.shutdown();
   }
 
-  public void waitForConsumingFinished() throws InterruptedException {
-    while (!isEmpty()) {
-      Thread.sleep(1000);
-      LOG.info("Still waiting for consuming finished.");
-    }
-  }
-
   public boolean isEmpty() {
     return ringBuffer.getBufferSize() == ringBuffer.remainingCapacity();
   }
