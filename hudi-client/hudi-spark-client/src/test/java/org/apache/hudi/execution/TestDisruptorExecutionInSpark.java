@@ -37,16 +37,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import scala.Tuple2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -75,9 +76,10 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
   public void testExecutor() {
 
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 128);
+    final List<HoodieRecord> consumedRecords = new ArrayList<>();
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferSize()).thenReturn(8);
+    when(hoodieWriteConfig.getWriteBufferSize()).thenReturn(Option.of(8));
     IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
@@ -85,11 +87,8 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
 
           @Override
           public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+            consumedRecords.add(record.record);
             count++;
-          }
-
-          @Override
-          public void finish() {
           }
 
           @Override
@@ -101,12 +100,20 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
 
     try {
       exec = new DisruptorExecutor(hoodieWriteConfig.getWriteBufferSize(), hoodieRecords.iterator(), consumer,
-          getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
+          getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), getPreExecuteRunnable());
       int result = exec.execute();
       // It should buffer and write 100 records
       assertEquals(128, result);
       // There should be no remaining records in the buffer
       assertFalse(exec.isRemaining());
+
+      // collect all records and assert that consumed records are identical to produced ones
+      // assert there's no tampering, and that the ordering is preserved
+      assertEquals(hoodieRecords.size(), consumedRecords.size());
+      for (int i = 0; i < hoodieRecords.size(); i++) {
+        assertEquals(hoodieRecords.get(i), consumedRecords.get(i));
+      }
+
     } finally {
       if (exec != null) {
         exec.shutdownNow();
@@ -117,26 +124,21 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
   @Test
   public void testInterruptExecutor() {
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
-    ExecutorService pool = Executors.newSingleThreadExecutor();
+    final Lock lock = new ReentrantLock();
+    Condition condition = lock.newCondition();
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferSize()).thenReturn(1024);
+    when(hoodieWriteConfig.getWriteBufferSize()).thenReturn(Option.of(1024));
     IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
           @Override
           public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
             try {
-              while (true) {
-                Thread.sleep(1000);
-              }
+              condition.wait();
             } catch (InterruptedException ie) {
-              return;
+              // ignore here
             }
-          }
-
-          @Override
-          public void finish() {
           }
 
           @Override
@@ -145,30 +147,18 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
           }
         };
 
-    DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
-    AtomicReference<Exception> actualException = new AtomicReference<>();
+    DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer>
+        executor = new DisruptorExecutor(hoodieWriteConfig.getWriteBufferSize(), hoodieRecords.iterator(), consumer,
+        getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), getPreExecuteRunnable());
+
     try {
-      executor = new DisruptorExecutor(hoodieWriteConfig.getWriteBufferSize(), hoodieRecords.iterator(), consumer,
-          getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
-      DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> finalExecutor = executor;
-
-      Future<?> future = pool.submit(() -> {
-        try {
-          finalExecutor.execute();
-        } catch (Exception e) {
-          actualException.set(e);
-        }
-
-      });
-      future.cancel(true);
-      future.get();
-      assertTrue(actualException.get() instanceof HoodieException);
+      Thread.currentThread().interrupt();
+      assertThrows(HoodieException.class, executor::execute);
+      assertTrue(Thread.interrupted());
     } catch (Exception e) {
       // ignore here
     } finally {
-      if (executor != null) {
-        executor.shutdownNow();
-      }
+      executor.shutdownNow();
     }
   }
 }

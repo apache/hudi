@@ -68,11 +68,11 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
     return () -> TaskContext$.MODULE$.setTaskContext(taskContext);
   }
 
-  // common produce and consume based on disruptor executor
   @Test
   public void testExecutor() {
 
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
+    final int recordNumber = 100;
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, recordNumber);
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
@@ -87,10 +87,6 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
           }
 
           @Override
-          public void finish() {
-          }
-
-          @Override
           protected Integer getResult() {
             return count;
           }
@@ -101,7 +97,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
       executor = new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
           getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
       int result = executor.execute();
-      // It should buffer and write 100 records
+
       assertEquals(100, result);
       // There should be no remaining records in the buffer
       assertFalse(executor.isRemaining());
@@ -131,10 +127,6 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
             } catch (InterruptedException ie) {
               return;
             }
-          }
-
-          @Override
-          public void finish() {
           }
 
           @Override
@@ -181,10 +173,6 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
         new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
           @Override
           public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
-          }
-
-          @Override
-          public void finish() {
           }
 
           @Override

@@ -54,7 +54,7 @@ public class HoodieExecutorBase<I, O, E> {
     this.consumer = consumer;
     this.preExecuteRunnable = preExecuteRunnable;
     // Ensure fixed thread for each producer thread
-    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new CustomizedThreadFactory("producer"));
+    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new HoodieDaemonThreadFactory("producer", preExecuteRunnable));
     // Ensure single thread for consumer
     this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("consumer"));
   }
@@ -101,5 +101,10 @@ public class HoodieExecutorBase<I, O, E> {
   public void shutdownNow() {
     producerExecutorService.shutdownNow();
     consumerExecutorService.shutdownNow();
+  }
+
+  public void close() {
+    producerExecutorService.shutdown();
+    consumerExecutorService.shutdown();
   }
 }

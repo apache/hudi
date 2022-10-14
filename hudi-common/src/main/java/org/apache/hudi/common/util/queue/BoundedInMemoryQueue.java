@@ -260,6 +260,11 @@ public class BoundedInMemoryQueue<I, O> extends IteratorBasedHoodieMessageQueue<
   }
 
   @Override
+  public boolean isEmpty() {
+    return this.queue.size() == 0;
+  }
+
+  @Override
   public Iterator<O> iterator() {
     return iterator;
   }

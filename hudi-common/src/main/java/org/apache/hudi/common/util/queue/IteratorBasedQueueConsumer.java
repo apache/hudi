@@ -53,7 +53,7 @@ public abstract class IteratorBasedQueueConsumer<I, O> implements HoodieConsumer
   /**
    * Notifies implementation that we have exhausted consuming records from queue.
    */
-  public abstract void finish();
+  public void finish(){}
 
   /**
    * Return result of consuming records so far.

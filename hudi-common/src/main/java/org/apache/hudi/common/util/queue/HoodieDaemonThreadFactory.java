@@ -18,8 +18,11 @@
 
 package org.apache.hudi.common.util.queue;
 
+import org.apache.hudi.common.util.Functions;
+
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 /**
  * Access to a ThreadFactory instance.
@@ -31,11 +34,23 @@ public class HoodieDaemonThreadFactory implements ThreadFactory {
   private final Runnable preExecuteRunnable;
   private final AtomicInteger threadsNum = new AtomicInteger();
   private final String namePattern;
-  private final String baseName = "Hoodie-disruptor-daemon-thread";
+  private static final String BASE_NAME = "Hoodie-daemon-thread";
+
+  public HoodieDaemonThreadFactory() {
+    this(BASE_NAME, Functions.noop());
+  }
+
+  public HoodieDaemonThreadFactory(String threadNamePrefix) {
+    this(threadNamePrefix, Functions.noop());
+  }
 
   public HoodieDaemonThreadFactory(Runnable preExecuteRunnable) {
+    this(BASE_NAME, preExecuteRunnable);
+  }
+
+  public HoodieDaemonThreadFactory(String threadNamePrefix, Runnable preExecuteRunnable) {
     this.preExecuteRunnable = preExecuteRunnable;
-    this.namePattern = baseName + "-%d";
+    this.namePattern = threadNamePrefix + "-%d";
   }
 
   @Override
@@ -48,6 +63,7 @@ public class HoodieDaemonThreadFactory implements ThreadFactory {
         r.run();
       }
     }, String.format(namePattern, threadsNum.addAndGet(1)));
+
     t.setDaemon(true);
     return t;
   }

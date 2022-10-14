@@ -25,6 +25,7 @@ import com.lmax.disruptor.BusySpinWaitStrategy;
 import com.lmax.disruptor.SleepingWaitStrategy;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.YieldingWaitStrategy;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 public class WaitStrategyFactory {
@@ -34,9 +35,12 @@ public class WaitStrategyFactory {
   /**
    * Build WaitStrategy for disruptor
    */
-  public static WaitStrategy build(String name) {
+  public static WaitStrategy build(Option<String> name) {
+    if (!name.isPresent()) {
+      return new BlockingWaitStrategy();
+    }
 
-    DisruptorWaitStrategyType strategyType = DisruptorWaitStrategyType.valueOf(name.toUpperCase());
+    DisruptorWaitStrategyType strategyType = DisruptorWaitStrategyType.valueOf(name.get().toUpperCase());
     switch (strategyType) {
       case BLOCKING_WAIT:
         return new BlockingWaitStrategy();

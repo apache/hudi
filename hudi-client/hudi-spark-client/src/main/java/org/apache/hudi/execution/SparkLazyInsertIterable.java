@@ -30,7 +30,7 @@ import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.util.MessageQueueFactory;
+import org.apache.hudi.util.QueueBasedExecutorFactory;
 
 import java.util.Iterator;
 import java.util.List;
@@ -85,7 +85,7 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
         schema = HoodieAvroUtils.addMetadataFields(schema);
       }
 
-      bufferedIteratorExecutor = MessageQueueFactory.create(hoodieConfig, inputItr, getInsertHandler(),
+      bufferedIteratorExecutor = QueueBasedExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(),
           getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
 
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();

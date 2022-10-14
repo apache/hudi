@@ -22,11 +22,14 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -39,16 +42,13 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Executor which orchestrates concurrent producers and consumers communicating through a bounded in-memory queue. This
+ * Executor which orchestrates concurrent producers and consumers communicating through 'BoundedInMemoryQueue'. This
  * class takes as input the size limit, queue producer(s), consumer and transformer and exposes API to orchestrate
  * concurrent execution of these actors communicating through a central bounded queue
  */
-public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
+public class BoundedInMemoryExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
-  // Used for buffering records which is controlled by HoodieWriteConfig#WRITE_BUFFER_LIMIT_BYTES.
-  private final BoundedInMemoryQueue<I, O> queue;
-  private final HoodieExecutorBase<I, O, E> hoodieExecutorBase;
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, final Iterator<I> inputItr,
                                  IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
@@ -68,19 +68,19 @@ public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E>
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<HoodieProducer<I>> producers,
                                  Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                                  final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
-    this.queue = new BoundedInMemoryQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator);
-    this.hoodieExecutorBase = new HoodieExecutorBase<>(producers, consumer, preExecuteRunnable);
+    super(new BoundedInMemoryQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator),
+        new HoodieExecutorBase<>(producers, consumer, preExecuteRunnable));
   }
 
   /**
    * Start all Producers.
    */
-  public ExecutorCompletionService<Boolean> startProducers() {
+  public List<Future<Boolean>> startProducers() {
     // Latch to control when and which producer thread will close the queue
     final CountDownLatch latch = new CountDownLatch(hoodieExecutorBase.getProducers().size());
     final ExecutorCompletionService<Boolean> completionService =
         new ExecutorCompletionService<Boolean>(hoodieExecutorBase.getProducerExecutorService());
-    hoodieExecutorBase.getProducers().stream().map(producer -> {
+    List<Future<Boolean>> producerTasks = hoodieExecutorBase.getProducers().stream().map(producer -> {
       return completionService.submit(() -> {
         try {
           hoodieExecutorBase.getPreExecuteRunnable().run();
@@ -101,7 +101,7 @@ public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E>
         return true;
       });
     }).collect(Collectors.toList());
-    return completionService;
+    return producerTasks;
   }
 
   /**
@@ -126,44 +126,30 @@ public class BoundedInMemoryExecutor<I, O, E> implements HoodieExecutor<I, O, E>
     }).orElse(CompletableFuture.completedFuture(null));
   }
 
-  /**
-   * Main API to run both production and consumption.
-   */
-  public E execute() {
-    try {
-      startProducers();
-      Future<E> future = startConsumer();
-      return finishConsuming(future);
-    } catch (InterruptedException ie) {
-      shutdownNow();
-      Thread.currentThread().interrupt();
-      throw new HoodieException(ie);
-    } catch (Exception e) {
-      throw new HoodieException(e);
-    }
-  }
-
   public boolean isRemaining() {
-    return queue.iterator().hasNext();
+    return ((BoundedInMemoryQueue)queue).iterator().hasNext();
   }
 
   @Override
-  public E finishConsuming(Object o) throws ExecutionException, InterruptedException {
-    Future<E> future = (Future) o;
-    return future.get();
+  public void postAction() {
+    hoodieExecutorBase.close();
   }
 
   public void shutdownNow() {
     hoodieExecutorBase.shutdownNow();
     // close queue to force producer stop
-    queue.close();
+    try {
+      queue.close();
+    } catch (IOException e) {
+      throw new HoodieIOException("catch IOException while closing HoodieMessageQueue", e);
+    }
   }
 
   public boolean awaitTermination() {
     return hoodieExecutorBase.awaitTermination();
   }
 
-  public BoundedInMemoryQueue<I, O> getQueue() {
+  public HoodieMessageQueue<I, O> getQueue() {
     return queue;
   }
 }

@@ -1064,12 +1064,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_LIMIT_BYTES_VALUE));
   }
 
-  public String getWriteWaitStrategy() {
-    return getString(WRITE_WAIT_STRATEGY);
+  public Option<String> getWriteExecutorWaitStrategy() {
+    return Option.of(getString(WRITE_WAIT_STRATEGY));
   }
 
-  public int getWriteBufferSize() {
-    return getInt(WRITE_BUFFER_SIZE);
+  public Option<Integer> getWriteBufferSize() {
+    return Option.of(getInt(WRITE_BUFFER_SIZE));
   }
 
   public boolean shouldCombineBeforeInsert() {
@@ -2319,7 +2319,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withExecutorName(String executorClass) {
+    public Builder withExecutorType(String executorClass) {
       writeConfig.setValue(EXECUTOR_TYPE, executorClass);
       return this;
     }

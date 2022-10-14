@@ -37,11 +37,11 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   private final Function<I, O> transformFunction;
   private final RingBuffer<HoodieDisruptorEvent<O>> ringBuffer;
 
-  public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyName, int totalProducers, Runnable preExecuteRunnable) {
+  public DisruptorMessageQueue(Option<Integer> bufferSize, Function<I, O> transformFunction, Option<String> waitStrategyName, int totalProducers, Runnable preExecuteRunnable) {
     WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyName);
     HoodieDaemonThreadFactory threadFactory = new HoodieDaemonThreadFactory(preExecuteRunnable);
 
-    this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, threadFactory, totalProducers > 1 ? ProducerType.MULTI : ProducerType.SINGLE, waitStrategy);
+    this.queue = new Disruptor<>(new HoodieDisruptorEventFactory<>(), bufferSize.get(), threadFactory, totalProducers > 1 ? ProducerType.MULTI : ProducerType.SINGLE, waitStrategy);
     this.ringBuffer = queue.getRingBuffer();
     this.transformFunction = transformFunction;
   }
@@ -72,7 +72,13 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   }
 
   @Override
+  public void markAsFailed(Throwable e) {
+    // do nothing.
+  }
+
+  @Override
   public void close() {
+    // Waits until all events currently in the disruptor have been processed by all event processors
     queue.shutdown();
   }
 

@@ -29,7 +29,7 @@ import org.apache.hudi.exception.HoodieException;
 import java.util.Iterator;
 import java.util.function.Function;
 
-public class MessageQueueFactory {
+public class QueueBasedExecutorFactory {
 
   /**
    * Create a new hoodie executor instance on demand.
@@ -44,7 +44,7 @@ public class MessageQueueFactory {
             transformFunction, preExecuteRunnable);
       case DISRUPTOR:
         return new DisruptorExecutor<>(hoodieConfig.getWriteBufferSize(), inputItr, consumer,
-            transformFunction, hoodieConfig.getWriteWaitStrategy(), preExecuteRunnable);
+            transformFunction, hoodieConfig.getWriteExecutorWaitStrategy(), preExecuteRunnable);
       default:
         throw new HoodieException("Unsupported Executor Type " + executorType);
     }

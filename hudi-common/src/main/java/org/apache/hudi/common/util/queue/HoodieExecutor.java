@@ -18,8 +18,7 @@
 
 package org.apache.hudi.common.util.queue;
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorCompletionService;
+import java.util.List;
 import java.util.concurrent.Future;
 
 /**
@@ -30,7 +29,7 @@ public interface HoodieExecutor<I, O, E> {
   /**
    * Start all Producers.
    */
-  ExecutorCompletionService<Boolean> startProducers();
+  List<Future<Boolean>> startProducers();
 
   /**
    * Start consumer.
@@ -48,9 +47,9 @@ public interface HoodieExecutor<I, O, E> {
   boolean isRemaining();
 
   /**
-   * Wait for consumer finish consuming and return result.
+   * Closing/cleaning up the executor's resources after consuming finished.
    */
-  E finishConsuming(Object o) throws ExecutionException, InterruptedException;
+  void postAction();
 
   /**
    * Shutdown all the consumers and producers.
@@ -63,4 +62,9 @@ public interface HoodieExecutor<I, O, E> {
   HoodieMessageQueue<I, O> getQueue();
 
   boolean awaitTermination();
+
+  /**
+   * set all the resources for current HoodieExecutor before start to produce and consume records.
+   */
+  void setup();
 }

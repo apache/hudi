@@ -43,4 +43,11 @@ public interface HoodieMessageQueue<I, O> extends Closeable {
    * Read records from inner message queue.
    */
   Option<O> readNextRecord();
+
+  /**
+   * API to allow producers and consumer to communicate termination due to failure.
+   */
+  void markAsFailed(Throwable e);
+
+  boolean isEmpty();
 }
