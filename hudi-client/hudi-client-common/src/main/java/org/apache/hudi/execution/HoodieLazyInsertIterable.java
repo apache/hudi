@@ -23,7 +23,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.WriteHandleFactory;
@@ -90,18 +89,19 @@ public abstract class HoodieLazyInsertIterable<T>
     }
   }
 
-  /**
-   * Transformer function to help transform a HoodieRecord. This transformer is used by BufferedIterator to offload some
-   * expensive operations of transformation to the reader thread.
-   */
-  static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
-      Schema schema, HoodieWriteConfig config) {
-    return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, config.getProps());
+  static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getCloningTransformer(Schema schema,
+                                                                                                       HoodieWriteConfig config) {
+    return record -> {
+      // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+      //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+      //       it since these records will be subsequently buffered (w/in the in-memory queue)
+      HoodieRecord<T> clonedRecord = record.copy();
+      return new HoodieInsertValueGenResult(clonedRecord, schema, config.getProps());
+    };
   }
 
-  static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
-      Schema schema) {
-    return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, CollectionUtils.emptyProps());
+  static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getCloningTransformer(Schema schema) {
+    return getCloningTransformer(schema, HoodieWriteConfig.newBuilder().build());
   }
 
   @Override
