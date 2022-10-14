@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -32,8 +31,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-
-import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -77,16 +74,7 @@ public abstract class BaseMergeHelper<T, I, K, O> {
     return new MergingIterator<>(
         (Iterator<HoodieRecord>) reader.getRecordIterator(readerSchema),
         (Iterator<HoodieRecord>) bootstrapReader.getRecordIterator(bootstrapReadSchema),
-        (oneRecord, otherRecord) -> mergeRecords(oneRecord, otherRecord, mergeHandle.getWriterSchemaWithMetaFields()));
-  }
-
-  @Nonnull
-  private static HoodieRecord mergeRecords(HoodieRecord left, HoodieRecord right, Schema targetSchema) {
-    try {
-      return left.joinWith(right, targetSchema);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to merge records", e);
-    }
+        (oneRecord, otherRecord) -> oneRecord.joinWith(otherRecord, mergeHandle.getWriterSchemaWithMetaFields()));
   }
 
   /**

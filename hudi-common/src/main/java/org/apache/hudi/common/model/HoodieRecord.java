@@ -291,7 +291,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Support bootstrap.
    */
-  public abstract HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) throws IOException;
+  public abstract HoodieRecord joinWith(HoodieRecord other, Schema targetSchema);
 
   /**
    * Rewrite record into new schema(add meta columns)

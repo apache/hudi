@@ -101,8 +101,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord joinWith(HoodieRecord other,
-      Schema targetSchema) throws IOException {
+  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     throw new UnsupportedOperationException();
   }
 
