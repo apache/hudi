@@ -135,8 +135,8 @@ public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<
   }
 
   @Override
-  public HoodieMessageQueue<I, O> getQueue() {
-    return queue;
+  public DisruptorMessageQueue<I, O> getQueue() {
+    return (DisruptorMessageQueue)queue;
   }
 
   @Override
