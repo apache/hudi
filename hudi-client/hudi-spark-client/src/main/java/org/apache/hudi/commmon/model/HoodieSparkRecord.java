@@ -40,6 +40,7 @@ import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
 import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.JoinedRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
@@ -88,19 +89,17 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     this.copy = false;
   }
 
-  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, boolean copy) {
+  public HoodieSparkRecord(HoodieKey key, InternalRow data, boolean copy) {
     super(key, data);
-    this.copy = copy;
-  }
-
-  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation, boolean copy) {
-    super(key, data, operation);
+    // NOTE: [[HoodieSparkRecord]] is expected to hold either [[UnsafeRow]] or [[HoodieInternalRow]]
+    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow);
     this.copy = copy;
   }
 
   private HoodieSparkRecord(HoodieKey key, InternalRow data, HoodieOperation operation, boolean copy) {
     super(key, data, operation);
-    ValidationUtils.checkState(data instanceof UnsafeRow);
+    // NOTE: [[HoodieSparkRecord]] is expected to hold either [[UnsafeRow]] or [[HoodieInternalRow]]
+    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow);
 
     this.copy = copy;
   }
@@ -156,7 +155,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
     InternalRow mergeRow = new JoinedRow(data, (InternalRow) other.getData());
-    return new HoodieSparkRecord(getKey(), mergeRow, targetStructType, getOperation(), copy);
+    UnsafeProjection projection =
+        HoodieInternalRowUtils.getCachedUnsafeProjection(targetStructType, targetStructType);
+    return new HoodieSparkRecord(getKey(), projection.apply(mergeRow), getOperation(), copy);
   }
 
   @Override
@@ -170,7 +171,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     // TODO add actual rewriting
     InternalRow finalRow = new HoodieInternalRow(metaFields, data, containMetaFields);
 
-    return new HoodieSparkRecord(getKey(), finalRow, targetStructType, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), finalRow, getOperation(), copy);
   }
 
   @Override
@@ -185,7 +186,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
         HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, structType, newStructType, renameCols);
     HoodieInternalRow finalRow = new HoodieInternalRow(metaFields, rewrittenRow, containMetaFields);
 
-    return new HoodieSparkRecord(getKey(), finalRow, newStructType, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), finalRow, getOperation(), copy);
   }
 
   @Override
@@ -200,7 +201,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       }
     });
 
-    return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), updatableRow, getOperation(), copy);
   }
 
   @Override
@@ -265,7 +266,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       partition = data.get(HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal(), StringType).toString();
     }
     HoodieKey hoodieKey = new HoodieKey(key, partition);
-    return new HoodieSparkRecord(hoodieKey, data, structType, getOperation(), copy);
+    return new HoodieSparkRecord(hoodieKey, data, getOperation(), copy);
   }
 
   @Override
@@ -282,7 +283,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieSparkRecord copy() {
     if (!copy) {
       this.data = this.data.copy();
-      copy = true;
+      this.copy = true;
     }
     return this;
   }
@@ -352,6 +353,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
     HoodieOperation operation = withOperationField
         ? HoodieOperation.fromName(getNullableValAsString(structType, record.data, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
-    return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), record.data, structType, operation, record.copy);
+    return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), record.data, operation, record.copy);
   }
 }
