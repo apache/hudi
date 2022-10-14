@@ -646,7 +646,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
     var recordsReadDF = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath + "/*/*")
-    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_ts").cast("string")).count() == 0)
+
+    assertEquals(0L, recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_ts").cast("string")).count())
 
     // Specify fieldType as TIMESTAMP
     writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, writeOpts)
@@ -659,7 +660,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .options(readOpts)
       .load(basePath + "/*/*")
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
-    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
+
+    assertEquals(0L, recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count())
 
     // Mixed fieldType
     writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, writeOpts)

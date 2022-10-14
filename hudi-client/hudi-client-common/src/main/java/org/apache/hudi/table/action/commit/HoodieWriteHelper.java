@@ -64,7 +64,10 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
       Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
-      return Pair.of(key, record);
+      // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+      //       Here we have to make a copy of the incoming record, since it might be holding
+      //       an instance of [[InternalRow]] pointing into shared, mutable buffer
+      return Pair.of(key, record.copy());
     }).reduceByKey((rec1, rec2) -> {
       HoodieRecord<T> reducedRecord;
       try {
