@@ -35,8 +35,6 @@ public class ParquetReaderIterator<T> implements ClosableIterator<T> {
   private final ParquetReader<T> parquetReader;
   // Holds the next entry returned by the parquet reader
   private T next;
-  // Whether next is consumed
-  private boolean consumed;
 
   public ParquetReaderIterator(ParquetReader<T> parquetReader) {
     this.parquetReader = parquetReader;
@@ -46,9 +44,8 @@ public class ParquetReaderIterator<T> implements ClosableIterator<T> {
   public boolean hasNext() {
     try {
       // To handle when hasNext() is called multiple times for idempotency and/or the first time
-      if (this.next == null || consumed) {
+      if (this.next == null) {
         this.next = parquetReader.read();
-        consumed = false;
       }
       return this.next != null;
     } catch (Exception e) {
@@ -66,9 +63,9 @@ public class ParquetReaderIterator<T> implements ClosableIterator<T> {
           throw new HoodieException("No more records left to read from parquet file");
         }
       }
-      // Avoid holding two rows
-      consumed = true;
-      return this.next;
+      T retVal = this.next;
+      this.next = null;
+      return retVal;
     } catch (Exception e) {
       FileIOUtils.closeQuietly(parquetReader);
       throw new HoodieException("unable to read next record from parquet file ", e);
