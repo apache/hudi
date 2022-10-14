@@ -23,9 +23,12 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -36,6 +39,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
@@ -48,6 +53,15 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     this.conf = configuration;
     this.path = path;
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
+  }
+
+  @Override
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema readerSchema) throws IOException {
+    // TODO(HUDI-4588) remove after HUDI-4588 is resolved
+    // NOTE: This is a workaround to avoid leveraging projection w/in [[AvroParquetReader]],
+    //       until schema handling issues (nullability canonicalization, etc) are resolved
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(readerSchema);
+    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
   @Override
@@ -66,12 +80,12 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema schema) throws IOException {
+  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema schema) throws IOException {
     return getIndexedRecordIteratorInternal(schema, Option.empty());
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
     return getIndexedRecordIteratorInternal(readerSchema, Option.of(requestedSchema));
   }
 
