@@ -56,9 +56,7 @@ public class HoodieCatalogFactory implements CatalogFactory {
       case "hms":
         return new HoodieHiveCatalog(
             context.getName(),
-            helper.getOptions().get(CatalogOptions.CATALOG_PATH),
-            helper.getOptions().get(CatalogOptions.DEFAULT_DATABASE),
-            helper.getOptions().get(CatalogOptions.HIVE_CONF_DIR));
+            (Configuration) helper.getOptions());
       case "dfs":
         return new HoodieCatalog(
             context.getName(),

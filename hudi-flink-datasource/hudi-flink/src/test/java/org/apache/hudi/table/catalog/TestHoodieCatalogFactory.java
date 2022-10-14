@@ -78,6 +78,7 @@ public class TestHoodieCatalogFactory {
     options.put(CommonCatalogOptions.CATALOG_TYPE.key(), HoodieCatalogFactory.IDENTIFIER);
     options.put(CatalogOptions.HIVE_CONF_DIR.key(), CONF_DIR.getPath());
     options.put(CatalogOptions.MODE.key(), "hms");
+    options.put(CatalogOptions.TABLE_EXTERNAL.key(), "false");
 
     final Catalog actualCatalog =
         FactoryUtil.createCatalog(

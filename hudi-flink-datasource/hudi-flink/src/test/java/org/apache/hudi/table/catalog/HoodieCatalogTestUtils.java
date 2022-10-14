@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.hadoop.hive.conf.HiveConf;
 
@@ -42,10 +43,15 @@ public class HoodieCatalogTestUtils {
   }
 
   public static HoodieHiveCatalog createHiveCatalog(String name) {
+    return createHiveCatalog(name, false);
+  }
+
+  public static HoodieHiveCatalog createHiveCatalog(String name, boolean external) {
+    Configuration options = new Configuration();
+    options.setBoolean(CatalogOptions.TABLE_EXTERNAL, external);
     return new HoodieHiveCatalog(
         name,
-        null,
-        null,
+        options,
         createHiveConf(),
         true);
   }
