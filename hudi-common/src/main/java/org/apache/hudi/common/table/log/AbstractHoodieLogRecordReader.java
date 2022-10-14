@@ -477,14 +477,12 @@ public abstract class AbstractHoodieLogRecordReader {
   }
 
   private ClosableIterator<HoodieRecord> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt, HoodieRecordType type) throws IOException {
-    ClosableIterator<HoodieRecord> iter;
     if (keySpecOpt.isPresent()) {
       KeySpec keySpec = keySpecOpt.get();
-      iter =  unsafeCast(dataBlock.getRecordIterator(keySpec.keys, keySpec.fullKey, type));
+      return unsafeCast(dataBlock.getRecordIterator(keySpec.keys, keySpec.fullKey, type));
     } else {
-      iter = unsafeCast(dataBlock.getRecordIterator(type));
+      return unsafeCast(dataBlock.getRecordIterator(type));
     }
-    return iter;
   }
 
   /**

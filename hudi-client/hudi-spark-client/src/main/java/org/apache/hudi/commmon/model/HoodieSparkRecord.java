@@ -84,22 +84,19 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    */
   public HoodieSparkRecord(InternalRow data) {
     super(null, data);
-    // NOTE: [[HoodieSparkRecord]] is expected to hold either [[UnsafeRow]] or [[HoodieInternalRow]]
-    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow);
+    validateRow(data);
     this.copy = false;
   }
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, boolean copy) {
     super(key, data);
-    // NOTE: [[HoodieSparkRecord]] is expected to hold either [[UnsafeRow]] or [[HoodieInternalRow]]
-    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow);
+    validateRow(data);
     this.copy = copy;
   }
 
   private HoodieSparkRecord(HoodieKey key, InternalRow data, HoodieOperation operation, boolean copy) {
     super(key, data, operation);
-    // NOTE: [[HoodieSparkRecord]] is expected to hold either [[UnsafeRow]] or [[HoodieInternalRow]]
-    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow);
+    validateRow(data);
 
     this.copy = copy;
   }
@@ -354,5 +351,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     HoodieOperation operation = withOperationField
         ? HoodieOperation.fromName(getNullableValAsString(structType, record.data, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
     return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), record.data, operation, record.copy);
+  }
+
+  private static void validateRow(InternalRow data) {
+    // NOTE: [[HoodieSparkRecord]] is expected to hold either [[UnsafeRow]] or [[HoodieInternalRow]]
+    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow);
   }
 }
