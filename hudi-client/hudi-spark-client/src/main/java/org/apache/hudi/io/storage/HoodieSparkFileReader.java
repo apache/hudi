@@ -18,15 +18,12 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.HoodieInternalRowUtils;
+import org.apache.avro.Schema;
 import org.apache.hudi.commmon.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.MappingIterator;
-
-import org.apache.avro.Schema;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 
