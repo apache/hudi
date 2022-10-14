@@ -355,18 +355,7 @@ object HoodieSparkSqlWriter {
     processedRecord
   }
 
-  def getSparkProcessedRecord(partitionParam: String, record: InternalRow,
-                              dropPartitionColumns: Boolean, schema: StructType): (InternalRow, StructType) = {
-    var processedRecord = record
-    var writeSchema = schema
-    if (dropPartitionColumns) {
-      writeSchema = generateSparkSchemaWithoutPartitionColumns(partitionParam, schema)
-      processedRecord = HoodieInternalRowUtils.rewriteRecord(record, schema, writeSchema)
-    }
-    (processedRecord, writeSchema)
-  }
-
-  def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema]): Map[String, String] = {
+  private def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema]): Map[String, String] = {
     val schemaEvolutionEnable = if (internalSchemaOpt.isDefined) "true" else "false"
     parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> SerDeHelper.toJson(internalSchemaOpt.getOrElse(null)),
       HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaEvolutionEnable)
@@ -874,16 +863,23 @@ object HoodieSparkSqlWriter {
         // ut will use AvroKeyGenerator, so we need to cast it in spark record
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
         val structType = HoodieInternalRowUtils.getCachedSchema(schema)
-        df.queryExecution.toRdd.map(row => {
-          val internalRow = row.copy()
-          val (processedRow, writeSchema) = getSparkProcessedRecord(partitionCols, internalRow, dropPartitionColumns, structType)
-          val recordKey = sparkKeyGenerator.getRecordKey(internalRow, structType)
-          val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structType)
-          val key = new HoodieKey(recordKey.toString, partitionPath.toString)
+        df.queryExecution.toRdd.mapPartitions { iter =>
+          val projection: Function[InternalRow, InternalRow] = if (dropPartitionColumns) {
+            val newSchema = generateSparkSchemaWithoutPartitionColumns(partitionCols, structType)
+            HoodieInternalRowUtils.getCachedUnsafeProjection(structType, newSchema)
+          } else {
+            identity
+          }
 
-          new HoodieSparkRecord(key, processedRow, writeSchema, true)
-        }).toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]
+          iter.map { internalRow =>
+            val processedRow = projection(internalRow)
+            val recordKey = sparkKeyGenerator.getRecordKey(internalRow, structType)
+            val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structType)
+            val key = new HoodieKey(recordKey.toString, partitionPath.toString)
+
+            new HoodieSparkRecord(key, processedRow, false)
+          }
+        }.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]
     }
   }
-
 }
