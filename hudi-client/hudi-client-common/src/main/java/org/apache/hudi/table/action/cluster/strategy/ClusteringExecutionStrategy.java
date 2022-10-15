@@ -39,7 +39,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
   private final HoodieTable<T, I, K, O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
-  private final HoodieWriteConfig writeConfig;
+  protected final HoodieWriteConfig writeConfig;
   protected final HoodieRecordType recordType;
 
   public ClusteringExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {

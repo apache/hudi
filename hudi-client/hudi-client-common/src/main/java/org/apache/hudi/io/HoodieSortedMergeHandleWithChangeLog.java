@@ -53,10 +53,10 @@ public class HoodieSortedMergeHandleWithChangeLog<T, I, K, O> extends HoodieMerg
     super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
   }
 
-  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<HoodieRecord> insertRecord, Schema schema, Properties props)
+  protected boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> insertRecord, Schema schema, Properties props)
       throws IOException {
-    final boolean result = super.writeRecord(hoodieRecord, insertRecord, schema, props);
-    this.cdcLogger.put(hoodieRecord, null, insertRecord.map(rec -> ((HoodieAvroIndexedRecord) rec).getData()));
+    final boolean result = super.writeRecord(newRecord, insertRecord, schema, props);
+    this.cdcLogger.put(newRecord, null, insertRecord.map(rec -> ((HoodieAvroIndexedRecord) rec).getData()));
     return result;
   }
 }

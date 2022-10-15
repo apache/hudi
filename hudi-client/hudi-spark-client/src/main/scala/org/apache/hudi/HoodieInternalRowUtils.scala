@@ -21,16 +21,15 @@ package org.apache.hudi
 import java.nio.charset.StandardCharsets
 import java.util.HashMap
 import java.util.concurrent.ConcurrentHashMap
-import org.apache.avro.{Schema, SchemaNormalization}
+import org.apache.avro.Schema
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
+import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.exception.HoodieException
-import org.apache.spark.sql.HoodieCatalystExpressionUtils
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow, Projection}
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieUnsafeRowUtils}
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath
-import org.apache.spark.sql.HoodieUnsafeRowUtils
-import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
+import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.types._
@@ -43,24 +42,8 @@ object HoodieInternalRowUtils {
     ThreadLocal.withInitial(new Supplier[HashMap[(StructType, StructType), UnsafeProjection]] {
       override def get(): HashMap[(StructType, StructType), UnsafeProjection] = new HashMap[(StructType, StructType), UnsafeProjection]
     })
-  val unsafeConvertThreadLocal: ThreadLocal[HashMap[StructType, UnsafeProjection]] =
-    ThreadLocal.withInitial(new Supplier[HashMap[StructType, UnsafeProjection]] {
-      override def get(): HashMap[StructType, UnsafeProjection] = new HashMap[StructType, UnsafeProjection]
-    })
   val schemaMap = new ConcurrentHashMap[Schema, StructType]
-  val schemaFingerPrintMap = new ConcurrentHashMap[Long, StructType]
-  val fingerPrintSchemaMap = new ConcurrentHashMap[StructType, Long]
   val orderPosListMap = new ConcurrentHashMap[(StructType, String), NestedFieldPath]
-
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#stitchRecords(org.apache.avro.generic.GenericRecord, org.apache.avro.generic.GenericRecord, org.apache.avro.Schema)
-   */
-  def stitchRecords(left: InternalRow, leftSchema: StructType, right: InternalRow, rightSchema: StructType, stitchedSchema: StructType): InternalRow = {
-    val mergeSchema = StructType(leftSchema.fields ++ rightSchema.fields)
-    val row = new JoinedRow(left, right)
-    val projection = getCachedUnsafeProjection(mergeSchema, stitchedSchema)
-    projection(row)
-  }
 
   /**
    * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecord(org.apache.avro.generic.GenericRecord, org.apache.avro.Schema)
@@ -218,16 +201,7 @@ object HoodieInternalRowUtils {
     orderPosListMap.get(schemaPair)
   }
 
-  def getCachedUnsafeConvert(structType: StructType): UnsafeProjection = {
-    val map = unsafeConvertThreadLocal.get()
-    if (!map.containsKey(structType)) {
-      val projection = UnsafeProjection.create(structType)
-      map.put(structType, projection)
-    }
-    map.get(structType)
-  }
-
-  def getCachedUnsafeProjection(from: StructType, to: StructType): Projection = {
+  def getCachedUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
     val schemaPair = (from, to)
     val map = unsafeProjectionThreadLocal.get()
     if (!map.containsKey(schemaPair)) {
@@ -245,33 +219,16 @@ object HoodieInternalRowUtils {
     schemaMap.get(schema)
   }
 
-  def getCachedSchemaFromFingerPrint(fingerPrint: Long): StructType = {
-    if (!schemaFingerPrintMap.containsKey(fingerPrint)) {
-      throw new IllegalArgumentException("Not exist " + fingerPrint)
-    }
-    schemaFingerPrintMap.get(fingerPrint)
-  }
-
-  def getCachedFingerPrintFromSchema(schema: StructType): Long = {
-    if (!fingerPrintSchemaMap.containsKey(schema)) {
-      throw new IllegalArgumentException("Not exist " + schema)
-    }
-    fingerPrintSchemaMap.get(schema)
-  }
-
-  def addCompressedSchema(schema: StructType): Unit ={
-    if (!fingerPrintSchemaMap.containsKey(schema)) {
-      val fingerPrint = SchemaNormalization.fingerprint64(schema.json.getBytes(StandardCharsets.UTF_8))
-      schemaFingerPrintMap.put(fingerPrint, schema)
-      fingerPrintSchemaMap.put(schema, fingerPrint)
+  def projectUnsafe(row: InternalRow, structType: StructType, copy: Boolean = true): InternalRow = {
+    if (row == null || row.isInstanceOf[UnsafeRow] || row.isInstanceOf[HoodieInternalRow]) {
+      row
+    } else {
+      val unsafeRow = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType).apply(row)
+      if (copy) unsafeRow.copy() else unsafeRow
     }
   }
 
-  def containsCompressedSchema(schema: StructType): Boolean = {
-    fingerPrintSchemaMap.containsKey(schema)
-  }
-
-  private def rewritePrimaryType(oldValue: Any, oldSchema: DataType, newSchema: DataType): Any = {
+  private def rewritePrimaryType(oldValue: Any, oldSchema: DataType, newSchema: DataType) = {
     if (oldSchema.equals(newSchema) || (oldSchema.isInstanceOf[DecimalType] && newSchema.isInstanceOf[DecimalType])) {
       oldSchema match {
         case NullType | BooleanType | IntegerType | LongType | FloatType | DoubleType | StringType | DateType | TimestampType | BinaryType =>

@@ -19,7 +19,6 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
@@ -42,13 +41,13 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
 
   @Override
   default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException {
-    IndexedRecord avroPayload = ((HoodieAvroIndexedRecord) record.toIndexedRecord(schema, props).get()).getData();
+    IndexedRecord avroPayload = record.toIndexedRecord(schema, props).get().getData();
     writeAvroWithMetadata(key, avroPayload);
   }
 
   @Override
   default void write(String recordKey, HoodieRecord record, Schema schema, Properties props) throws IOException {
-    IndexedRecord avroPayload = ((HoodieAvroIndexedRecord) record.toIndexedRecord(schema, props).get()).getData();
+    IndexedRecord avroPayload = record.toIndexedRecord(schema, props).get().getData();
     writeAvro(recordKey, avroPayload);
   }
 

@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -75,7 +76,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public String getRecordKey(Schema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
     return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getRecordKey((GenericRecord) data) : ((GenericRecord) data).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
   }
 
@@ -85,19 +86,20 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public String getRecordKey(String keyFieldName) {
+  public String getRecordKey(Schema recordSchema, String keyFieldName) {
     return Option.ofNullable(data.getSchema().getField(keyFieldName))
         .map(keyField -> data.get(keyField.pos()))
         .map(Object::toString).orElse(null);
   }
 
   @Override
-  public Object getRecordColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+  public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public HoodieRecord mergeWith(HoodieRecord other, Schema targetSchema) throws IOException {
+  public HoodieRecord joinWith(HoodieRecord other,
+      Schema targetSchema) throws IOException {
     GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), targetSchema);
     return new HoodieAvroIndexedRecord(record);
   }
@@ -115,8 +117,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord updateValues(Schema recordSchema, Properties props, Map<String, String> metadataValues) throws IOException {
-    metadataValues.forEach((key, value) -> {
+  public HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException {
+    metadataValues.getKv().forEach((key, value) -> {
       if (value != null) {
         ((GenericRecord) data).put(key, value);
       }
@@ -126,18 +128,29 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public boolean isDelete(Schema schema, Properties props) {
+  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) {
+    ((GenericRecord) data).put(keyFieldName, StringUtils.EMPTY_STRING);
+    return this;
+  }
+
+  @Override
+  public boolean isDelete(Schema recordSchema, Properties props) {
     return false;
   }
 
   @Override
-  public boolean shouldIgnore(Schema schema, Properties props) throws IOException {
+  public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
     return getData().equals(SENTINEL);
   }
 
   @Override
+  public HoodieRecord<IndexedRecord> copy() {
+    return this;
+  }
+
+  @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
-      Schema schema,
+      Schema recordSchema,
       Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
@@ -149,7 +162,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen) {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema,
+      Properties props, Option<BaseKeyGenerator> keyGen) {
     GenericRecord record = (GenericRecord) data;
     String key;
     String partition;
@@ -174,7 +188,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Properties props) {
+  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(props.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
@@ -184,7 +198,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema schema, Properties props) {
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
     return Option.of(this);
   }
 }

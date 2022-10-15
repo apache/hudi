@@ -86,13 +86,13 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     conf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(), (Boolean) SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()));
     conf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), (Boolean) SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()));
     InputFile inputFile = HadoopInputFile.fromPath(path, conf);
-    ParquetReader reader = new ParquetReader.Builder<InternalRow>(inputFile) {
+    ParquetReader<InternalRow> reader = new ParquetReader.Builder<InternalRow>(inputFile) {
       @Override
       protected ReadSupport getReadSupport() {
         return new ParquetReadSupport();
       }
     }.withConf(conf).build();
-    ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader, InternalRow::copy);
+    ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
   }

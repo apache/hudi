@@ -22,7 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
+import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -44,7 +44,6 @@ import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Properties;
 
 class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
@@ -70,12 +69,15 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
             .getFileReader(table.getHadoopConf(), sourceFilePath);
     try {
       wrapper = new BoundedInMemoryExecutor<HoodieRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
-          reader.getRecordIterator(), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
+          reader.getRecordIterator(), new BootstrapRecordConsumer(bootstrapHandle), record -> {
         try {
-          String recKey = inp.getRecordKey(Option.of(keyGenerator));
-          HoodieRecord hoodieRecord = inp.rewriteRecord(reader.getSchema(), config.getProps(), HoodieAvroUtils.RECORD_KEY_SCHEMA);
+          HoodieRecord recordCopy = record.copy();
+          String recKey = recordCopy.getRecordKey(reader.getSchema(), Option.of(keyGenerator));
+          HoodieRecord hoodieRecord = recordCopy.rewriteRecord(reader.getSchema(), config.getProps(), HoodieAvroUtils.RECORD_KEY_SCHEMA);
+          MetadataValues metadataValues = new MetadataValues();
+          metadataValues.setRecordKey(recKey);
           return hoodieRecord
-              .updateValues(HoodieAvroUtils.RECORD_KEY_SCHEMA, new Properties(), Collections.singletonMap(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(), recKey))
+              .updateMetadataValues(HoodieAvroUtils.RECORD_KEY_SCHEMA, new Properties(), metadataValues)
               .newInstance(new HoodieKey(recKey, partitionPath));
         } catch (IOException e) {
           LOG.error("Unable to overrideMetadataFieldValue", e);

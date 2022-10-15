@@ -55,7 +55,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   @Override
   protected <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception {
     // Just call callback without merging
-    callback.apply(hoodieRecord);
+    callback.apply(hoodieRecord.copy());
   }
 
   @Override

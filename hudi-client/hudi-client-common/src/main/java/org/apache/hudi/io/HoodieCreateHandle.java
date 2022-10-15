@@ -27,11 +27,11 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
@@ -143,7 +143,9 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         } else {
           rewriteRecord = record.rewriteRecord(schema, config.getProps(), writeSchemaWithMetaFields);
         }
-        rewriteRecord = rewriteRecord.updateValues(writeSchemaWithMetaFields, config.getProps(), Collections.singletonMap(HoodieMetadataField.FILENAME_METADATA_FIELD.getFieldName(), path.getName()));
+        MetadataValues metadataValues = new MetadataValues();
+        metadataValues.setFileName(path.getName());
+        rewriteRecord = rewriteRecord.updateMetadataValues(writeSchemaWithMetaFields, config.getProps(), metadataValues);
         if (preserveMetadata) {
           fileWriter.write(record.getRecordKey(), rewriteRecord, writeSchemaWithMetaFields);
         } else {
@@ -185,11 +187,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     while (keyIterator.hasNext()) {
       final String key = keyIterator.next();
       HoodieRecord<T> record = recordMap.get(key);
-      if (useWriterSchema) {
-        write(record, tableSchemaWithMetaFields, config.getProps());
-      } else {
-        write(record, useWriterSchema ? tableSchemaWithMetaFields : tableSchema, config.getProps());
-      }
+      write(record, useWriterSchema ? tableSchemaWithMetaFields : tableSchema, config.getProps());
     }
   }
 

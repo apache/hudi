@@ -213,7 +213,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   protected Option<String> getRecordKey(HoodieRecord record) {
-    return Option.ofNullable(record.getRecordKey(keyFieldName));
+    return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
   }
 
   /**

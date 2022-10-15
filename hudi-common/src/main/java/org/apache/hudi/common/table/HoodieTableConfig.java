@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -174,8 +175,8 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MERGER_STRATEGY = ConfigProperty
       .key("hoodie.compaction.merger.strategy")
-      .defaultValue(StringUtils.DEFAULT_MERGER_STRATEGY_UUID)
-      .withDocumentation("Id of merger strategy.  Hudi will pick RecordMergers in hoodie.datasource.write.merger.impls which has the same merger strategy id");
+      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")
@@ -259,7 +260,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
-  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String mergerStrategy) {
+  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String mergerStrategyId) {
     super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
@@ -272,8 +273,8 @@ public class HoodieTableConfig extends HoodieConfig {
         needStore = true;
       }
       if (contains(MERGER_STRATEGY) && payloadClassName != null
-          && !getString(MERGER_STRATEGY).equals(mergerStrategy)) {
-        setValue(MERGER_STRATEGY, mergerStrategy);
+          && !getString(MERGER_STRATEGY).equals(mergerStrategyId)) {
+        setValue(MERGER_STRATEGY, mergerStrategyId);
         needStore = true;
       }
       if (needStore) {

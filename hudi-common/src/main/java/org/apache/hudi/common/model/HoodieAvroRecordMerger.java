@@ -23,8 +23,8 @@ import org.apache.avro.generic.IndexedRecord;
 
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import java.io.IOException;
@@ -34,21 +34,28 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 public class HoodieAvroRecordMerger implements HoodieRecordMerger {
 
+  public static String DE_DUPING = "de_duping";
+
   @Override
   public String getMergingStrategy() {
-    return StringUtils.DEFAULT_MERGER_STRATEGY_UUID;
+    return HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
   }
 
   @Override
-  public Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Properties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.AVRO);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.AVRO);
-    if (older instanceof HoodieAvroRecord && newer instanceof HoodieAvroRecord) {
-      return Option.of(preCombine(older, newer));
-    } else if (older instanceof HoodieAvroIndexedRecord && newer instanceof HoodieAvroRecord) {
-      return combineAndGetUpdateValue(older, newer, schema, props);
+    boolean deDuping = Boolean.parseBoolean(props.getOrDefault(DE_DUPING, "false").toString());
+    if (deDuping) {
+      HoodieRecord res = preCombine(older, newer);
+      if (res == older) {
+        return Option.of(Pair.of(res, oldSchema));
+      } else {
+        return Option.of(Pair.of(res, newSchema));
+      }
     } else {
-      throw new UnsupportedOperationException();
+      return combineAndGetUpdateValue(older, newer, newSchema, props)
+          .map(r -> Pair.of(r, (((HoodieAvroIndexedRecord) r).getData()).getSchema()));
     }
   }
 
@@ -67,12 +74,19 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
   }
 
   private Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
-    Option<HoodieAvroIndexedRecord> previousRecordAvroPayload = older.toIndexedRecord(schema, props);
-    if (!previousRecordAvroPayload.isPresent()) {
+    Option<IndexedRecord> previousAvroData = older.toIndexedRecord(schema, props).map(HoodieAvroIndexedRecord::getData);
+    if (!previousAvroData.isPresent()) {
       return Option.empty();
     }
 
-    return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousRecordAvroPayload.get().getData(), schema, props)
+    return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), schema, props)
         .map(combinedAvroPayload -> new HoodieAvroIndexedRecord((IndexedRecord) combinedAvroPayload));
+  }
+
+  public static Properties withDeDuping(Properties props) {
+    Properties newProps = new Properties();
+    newProps.putAll(props);
+    newProps.setProperty(HoodieAvroRecordMerger.DE_DUPING, "true");
+    return newProps;
   }
 }

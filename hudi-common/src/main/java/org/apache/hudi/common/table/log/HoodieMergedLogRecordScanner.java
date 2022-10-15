@@ -131,6 +131,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     return records;
   }
 
+  public HoodieRecordType getRecordType() {
+    return recordMerger.getRecordType();
+  }
+
   public long getNumMergedRecordsInLog() {
     return numMergedRecordsInLog;
   }
@@ -143,23 +147,22 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   @Override
-  protected <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws IOException {
-    String key = hoodieRecord.getRecordKey();
+  protected <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
+    String key = newRecord.getRecordKey();
     if (records.containsKey(key)) {
       // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
       // done when a DELETE (empty payload) is encountered before or after an insert/update.
 
       HoodieRecord<T> oldRecord = records.get(key);
       T oldValue = oldRecord.getData();
-      T combinedValue = ((HoodieRecord<T>) recordMerger.merge(oldRecord, hoodieRecord, readerSchema, this.getPayloadProps()).get()).getData();
+      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(oldRecord, readerSchema, newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
       // If combinedValue is oldValue, no need rePut oldRecord
-      if (combinedValue != oldValue) {
-        hoodieRecord.setData(combinedValue);
-        records.put(key, hoodieRecord);
+      if (combinedRecord.getData() != oldValue) {
+        records.put(key, combinedRecord.copy());
       }
     } else {
       // Put the record as is
-      records.put(key, hoodieRecord);
+      records.put(key, newRecord.copy());
     }
   }
 
@@ -172,8 +175,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
       // For same ordering values, uses the natural order(arrival time semantics).
 
-      Comparable curOrderingVal = oldRecord.getOrderingValue(
-          this.hoodieTableMetaClient.getTableConfig().getProps());
+      Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order

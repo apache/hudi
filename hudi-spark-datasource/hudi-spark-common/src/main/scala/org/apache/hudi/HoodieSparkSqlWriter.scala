@@ -295,8 +295,7 @@ object HoodieSparkSqlWriter {
               tblName, mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
             )).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
             val writeConfig = client.getConfig
-            if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ &&
-              writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
+            if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
               throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
             }
             // Create a HoodieWriteClient & issue the write.
@@ -837,7 +836,7 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  private def createHoodieRecordRdd(df: DataFrame, config: HoodieWriteConfig, parameters: Map[String, String], schema: Schema): JavaRDD[HoodieRecord[_]] = {
+  private def createHoodieRecordRdd(df: DataFrame, config: HoodieWriteConfig, parameters: Map[String, String], schema: Schema) = {
     val reconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
     val tblName = config.getString(HoodieWriteConfig.TBL_NAME)
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
@@ -849,7 +848,9 @@ object HoodieSparkSqlWriter {
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps))
     val partitionCols = SparkKeyGenUtils.getPartitionColumns(keyGenerator, toProperties(parameters))
     val dropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
-    config.getRecordMerger.getRecordType match {
+    val recordType = config.getRecordMerger.getRecordType
+    log.debug(s"Use $recordType")
+    recordType match {
       case HoodieRecord.HoodieRecordType.AVRO =>
         val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema,
           org.apache.hudi.common.util.Option.of(schema))
@@ -873,15 +874,12 @@ object HoodieSparkSqlWriter {
         // ut will use AvroKeyGenerator, so we need to cast it in spark record
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
         val structType = HoodieInternalRowUtils.getCachedSchema(schema)
-        val structTypeBC = SparkContext.getOrCreate().broadcast(structType)
-        HoodieInternalRowUtils.addCompressedSchema(structType)
         df.queryExecution.toRdd.map(row => {
           val internalRow = row.copy()
-          val (processedRow, writeSchema) = getSparkProcessedRecord(partitionCols, internalRow, dropPartitionColumns, structTypeBC.value)
-          val recordKey = sparkKeyGenerator.getRecordKey(internalRow, structTypeBC.value)
-          val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structTypeBC.value)
+          val (processedRow, writeSchema) = getSparkProcessedRecord(partitionCols, internalRow, dropPartitionColumns, structType)
+          val recordKey = sparkKeyGenerator.getRecordKey(internalRow, structType)
+          val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structType)
           val key = new HoodieKey(recordKey.toString, partitionPath.toString)
-          HoodieInternalRowUtils.addCompressedSchema(structTypeBC.value)
 
           new HoodieSparkRecord(key, processedRow, writeSchema)
         }).toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]

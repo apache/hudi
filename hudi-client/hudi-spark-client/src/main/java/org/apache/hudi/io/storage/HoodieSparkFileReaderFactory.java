@@ -27,17 +27,6 @@ import org.apache.spark.sql.internal.SQLConf;
 
 public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory  {
 
-  private static class SingletonHolder {
-    private static final HoodieSparkFileReaderFactory INSTANCE = new HoodieSparkFileReaderFactory();
-  }
-
-  private HoodieSparkFileReaderFactory() {
-  }
-
-  public static HoodieFileReaderFactory getFileReaderFactory() {
-    return SingletonHolder.INSTANCE;
-  }
-
   protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
     conf.setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(),
         SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());

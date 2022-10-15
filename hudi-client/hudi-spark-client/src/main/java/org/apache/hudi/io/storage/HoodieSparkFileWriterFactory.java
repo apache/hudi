@@ -39,15 +39,6 @@ import java.io.IOException;
 
 public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
 
-  private static class SingletonHolder {
-
-    private static final HoodieSparkFileWriterFactory INSTANCE = new HoodieSparkFileWriterFactory();
-  }
-
-  public static HoodieFileWriterFactory getFileWriterFactory() {
-    return HoodieSparkFileWriterFactory.SingletonHolder.INSTANCE;
-  }
-
   @Override
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,

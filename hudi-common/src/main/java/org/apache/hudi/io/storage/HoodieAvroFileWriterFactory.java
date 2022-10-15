@@ -44,17 +44,6 @@ import static org.apache.hudi.io.storage.HoodieHFileConfig.PREFETCH_ON_OPEN;
 
 public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
 
-  private static class SingletonHolder {
-    private static final HoodieAvroFileWriterFactory INSTANCE = new HoodieAvroFileWriterFactory();
-  }
-
-  private HoodieAvroFileWriterFactory() {
-  }
-
-  public static HoodieFileWriterFactory getFileReaderFactory() {
-    return HoodieAvroFileWriterFactory.SingletonHolder.INSTANCE;
-  }
-
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
