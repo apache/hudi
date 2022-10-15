@@ -61,7 +61,7 @@ public class HoodieSchemaProviderConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> SPARK_AVRO_POST_PROCESSOR_ENABLE = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "spark_avro_post_processor.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .withAlternatives(OLD_SCHEMAPROVIDER_CONFIG_PREFIX + "spark_avro_post_processor.enable")
       .markAdvanced()
       .withDocumentation("Whether to enable Spark Avro post processor.");
