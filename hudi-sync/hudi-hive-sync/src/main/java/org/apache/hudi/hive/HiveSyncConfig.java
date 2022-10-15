@@ -138,7 +138,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--serde-properties"}, description = "Serde properties to hive table")
     public String serdeProperties;
     @Parameter(names = {"--support-timestamp"}, description = "'INT64' with original type TIMESTAMP_MICROS is converted to hive 'timestamp' type."
-        + "Disabled by default for backward compatibility.")
+        + "From 0.13.0, 'timestamp' type will be supported and also can be disabled by this variable. "
+        + "Previous versions keep being disabled by default.")
     public Boolean supportTimestamp;
     @Parameter(names = {"--managed-table"}, description = "Create a managed table")
     public Boolean createManagedTable;

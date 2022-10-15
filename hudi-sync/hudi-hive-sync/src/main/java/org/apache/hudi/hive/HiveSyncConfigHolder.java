@@ -79,9 +79,10 @@ public class HiveSyncConfigHolder {
       .withDocumentation("Skip the _ro suffix for Read optimized table, when registering");
   public static final ConfigProperty<String> HIVE_SUPPORT_TIMESTAMP_TYPE = ConfigProperty
       .key("hoodie.datasource.hive_sync.support_timestamp")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. "
-          + "Disabled by default for backward compatibility.");
+          + "From 0.13.0, 'timestamp' type will be supported and also can be disabled by this variable. "
+          + "Previous versions keep being disabled by default.");
   public static final ConfigProperty<String> HIVE_TABLE_PROPERTIES = ConfigProperty
       .key("hoodie.datasource.hive_sync.table_properties")
       .noDefaultValue()
