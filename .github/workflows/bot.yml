@@ -64,6 +64,20 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-flink,hudi-examples/hudi-examples-java,hudi-examples/hudi-examples-spark $MVN_ARGS
+      - name: Bundle Validation
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        if: ${{ endsWith(env.SPARK_PROFILE, '2.4') }} # only test spark 2.4 for now
+        run: |
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          mkdir ${GITHUB_WORKSPACE}/jars
+          cp packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar ${GITHUB_WORKSPACE}/jars
+          cd packaging/bundle-validation/spark-write-hive-sync
+          ls ${GITHUB_WORKSPACE}/jars
+          docker build -t hudi-ci-bundle-validation:spark248hive239 .
+          docker run -v ${GITHUB_WORKSPACE}/jars:/opt/hudi-bundles/jars -i hudi-ci-bundle-validation:spark248hive239 bash validate.sh
       - name: Spark SQL Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
