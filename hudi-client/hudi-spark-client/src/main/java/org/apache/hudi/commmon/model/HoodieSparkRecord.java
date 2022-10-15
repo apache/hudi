@@ -20,6 +20,7 @@ package org.apache.hudi.commmon.model;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.HoodieInternalRowUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -354,7 +355,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   private static void validateRow(InternalRow data) {
-    // NOTE: [[HoodieSparkRecord]] is expected to hold either [[UnsafeRow]] or [[HoodieInternalRow]]
-    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow);
+    // NOTE: [[HoodieSparkRecord]] is expected to hold either
+    //          - Instance of [[UnsafeRow]] or
+    //          - Instance of [[HoodieInternalRow]] or
+    //          - Instance of [[ColumnarBatchRow]]
+    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
   }
 }
