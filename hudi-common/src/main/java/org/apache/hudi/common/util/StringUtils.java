@@ -78,6 +78,13 @@ public class StringUtils {
     return String.join(delimiter, elements);
   }
 
+  public static String join(final List<String> list, final String separator) {
+    if (list == null || list.size() == 0) {
+      return null;
+    }
+    return org.apache.hadoop.util.StringUtils.join(separator, list.toArray(new String[0]));
+  }
+
   public static String toHexString(byte[] bytes) {
     StringBuilder sb = new StringBuilder(bytes.length * 2);
     for (byte b : bytes) {

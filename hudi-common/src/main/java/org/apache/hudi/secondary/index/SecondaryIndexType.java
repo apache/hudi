@@ -17,18 +17,18 @@
  * under the License.
  */
 
-package org.apache.hudi.common.index;
+package org.apache.hudi.secondary.index;
 
 import org.apache.hudi.exception.HoodieIndexException;
 
 import java.util.Arrays;
 
-public enum HoodieIndexType {
+public enum SecondaryIndexType {
   LUCENE((byte) 1);
 
   private final byte type;
 
-  HoodieIndexType(byte type) {
+  SecondaryIndexType(byte type) {
     this.type = type;
   }
 
@@ -36,16 +36,16 @@ public enum HoodieIndexType {
     return type;
   }
 
-  public static HoodieIndexType of(byte indexType) {
-    return Arrays.stream(HoodieIndexType.values())
+  public static SecondaryIndexType of(byte indexType) {
+    return Arrays.stream(SecondaryIndexType.values())
         .filter(t -> t.type == indexType)
         .findAny()
         .orElseThrow(() ->
             new HoodieIndexException("Unknown hoodie index type:" + indexType));
   }
 
-  public static HoodieIndexType of(String indexType) {
-    return Arrays.stream(HoodieIndexType.values())
+  public static SecondaryIndexType of(String indexType) {
+    return Arrays.stream(SecondaryIndexType.values())
         .filter(t -> t.name().equals(indexType.toUpperCase()))
         .findAny()
         .orElseThrow(() ->

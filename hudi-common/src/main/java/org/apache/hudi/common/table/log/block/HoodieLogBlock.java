@@ -114,6 +114,14 @@ public abstract class HoodieLogBlock {
   }
 
   /**
+   * Compacted blocks are created using log compaction which basically merges the consecutive blocks together and create
+   * huge block with all the changes.
+   */
+  public boolean isCompactedLogBlock() {
+    return logBlockHeader.containsKey(HeaderMetadataType.COMPACTED_BLOCK_TIMES);
+  }
+
+  /**
    * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
    */
   public enum HoodieLogBlockType {
@@ -144,7 +152,7 @@ public abstract class HoodieLogBlock {
    * new enums at the end.
    */
   public enum HeaderMetadataType {
-    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE
+    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE, COMPACTED_BLOCK_TIMES
   }
 
   /**

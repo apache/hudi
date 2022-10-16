@@ -112,7 +112,7 @@ object HoodieWriterUtils {
   def getOriginKeyGenerator(parameters: Map[String, String]): String = {
     val kg = parameters.getOrElse(KEYGENERATOR_CLASS_NAME.key(), null)
     if (classOf[SqlKeyGenerator].getCanonicalName == kg) {
-      parameters.getOrElse(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
+      parameters.getOrElse(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null)
     } else {
       kg
     }

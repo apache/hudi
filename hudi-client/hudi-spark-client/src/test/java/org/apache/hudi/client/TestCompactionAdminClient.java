@@ -100,7 +100,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
         Stream.of("001", "003", "005", "007").map(instant -> {
           try {
             return Pair.of(instant, CompactionUtils.getCompactionPlan(metaClient, instant));
-          } catch (IOException ioe) {
+          } catch (Exception ioe) {
             throw new HoodieException(ioe);
           }
         }).map(instantWithPlan -> instantWithPlan.getRight().getOperations().stream()

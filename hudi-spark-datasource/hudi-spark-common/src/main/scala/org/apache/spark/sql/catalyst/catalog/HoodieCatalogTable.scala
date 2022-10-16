@@ -190,12 +190,18 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(finalSchema, false, recordName, namespace)
+      val partitionColumns = if (table.partitionColumnNames.isEmpty) {
+        null
+      } else {
+        table.partitionColumnNames.mkString(",")
+      }
+
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
         .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
         .setTableCreateSchema(schema.toString())
-        .setPartitionFields(table.partitionColumnNames.mkString(","))
+        .setPartitionFields(partitionColumns)
         .initTable(hadoopConf, tableLocation)
     }
   }

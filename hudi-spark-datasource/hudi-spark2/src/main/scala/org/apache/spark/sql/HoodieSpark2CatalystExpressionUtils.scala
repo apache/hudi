@@ -19,6 +19,7 @@ package org.apache.spark.sql
 
 import HoodieSparkTypeUtils.isCastPreservingOrdering
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Like, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
+import org.apache.spark.sql.types.DataType
 
 object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
 
@@ -28,6 +29,17 @@ object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils
       case _ => None
     }
   }
+
+  def canUpCast(fromType: DataType, toType: DataType): Boolean =
+    // Spark 2.x does not support up-casting, hence we simply check whether types are
+    // actually the same
+    fromType.sameType(toType)
+
+  override def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)] =
+    expr match {
+      case Cast(castedExpr, dataType, timeZoneId) => Some((castedExpr, dataType, timeZoneId, false))
+      case _ => None
+    }
 
   private object OrderPreservingTransformation {
     def unapply(expr: Expression): Option[AttributeReference] = {

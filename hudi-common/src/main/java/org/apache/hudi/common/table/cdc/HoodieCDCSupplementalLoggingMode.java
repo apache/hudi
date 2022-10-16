@@ -28,8 +28,8 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
  *
  * <ul>
  *   <li>OP_KEY: record keys, the reader needs to figure out the update before image and after image;</li>
- *   <li>OP_KEY: before images, the reader needs to figure out the update after images;</li>
- *   <li>OP_KEY: before and after images, the reader can generate the details directly from the log.</li>
+ *   <li>WITH_BEFORE: before images, the reader needs to figure out the update after images;</li>
+ *   <li>WITH_BEFORE_AFTER: before and after images, the reader can generate the details directly from the log.</li>
  * </ul>
  */
 public enum HoodieCDCSupplementalLoggingMode {

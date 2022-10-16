@@ -51,11 +51,9 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -76,6 +74,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
       String.format("%s/%s", BASE_URL, "slices/beforeoron/latest/");
 
   public static final String PENDING_COMPACTION_OPS = String.format("%s/%s", BASE_URL, "compactions/pending/");
+  public static final String PENDING_LOG_COMPACTION_OPS = String.format("%s/%s", BASE_URL, "logcompactions/pending/");
 
   public static final String LATEST_PARTITION_DATA_FILES_URL =
       String.format("%s/%s", BASE_URL, "datafiles/latest/partition");
@@ -380,16 +379,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<Pair<String, List<HoodieFileGroup>>> getAllFileGroups(List<String> partitionPaths) {
-    ArrayList<Pair<String, List<HoodieFileGroup>>> fileGroupPerPartitionList = new ArrayList<>();
-    for (String partitionPath : partitionPaths) {
-      Stream<HoodieFileGroup> fileGroup = getAllFileGroups(partitionPath);
-      fileGroupPerPartitionList.add(Pair.of(partitionPath, fileGroup.collect(Collectors.toList())));
-    }
-    return fileGroupPerPartitionList.stream();
-  }
-
-  @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBeforeOrOn(String maxCommitTime, String partitionPath) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxCommitTime);
     try {
@@ -441,6 +430,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = getParams();
     try {
       List<CompactionOpDTO> dtos = executeRequest(PENDING_COMPACTION_OPS, paramsMap,
+          new TypeReference<List<CompactionOpDTO>>() {}, RequestMethod.GET);
+      return dtos.stream().map(CompactionOpDTO::toCompactionOperation);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations() {
+    Map<String, String> paramsMap = getParams();
+    try {
+      List<CompactionOpDTO> dtos = executeRequest(PENDING_LOG_COMPACTION_OPS, paramsMap,
           new TypeReference<List<CompactionOpDTO>>() {}, RequestMethod.GET);
       return dtos.stream().map(CompactionOpDTO::toCompactionOperation);
     } catch (IOException e) {

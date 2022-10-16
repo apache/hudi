@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.hudi.common.fs.FSUtils
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase {
@@ -946,6 +946,86 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            |""".stripMargin)
       checkAnswer(s"select id, name, value, ts from $tableName")(
         Seq(1, "a1", 10, 1001)
+      )
+    }
+  }
+
+  test("Test Merge Into with target matched columns cast-ed") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  value int,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
+      val errorMsg = if (HoodieSparkUtils.gteqSpark3_2) {
+        "Invalid MERGE INTO matching condition: s0.id: can't cast s0.id (of LongType) to IntegerType"
+      } else {
+        "Invalid MERGE INTO matching condition: s0.`id`: can't cast s0.`id` (of LongType) to IntegerType"
+      }
+
+      checkExceptionContain(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as long) as id, 1001 as ts
+           | ) s0
+           | on cast(h0.id as long) = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)(errorMsg)
+
+      // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
+      checkExceptionContain(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as long) as id, 1002 as ts
+           | ) s0
+           | on h0.id = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)(errorMsg)
+
+      // Can up-cast incoming dataset's primary-key w/o loss of precision (should succeed)
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as short) as id, 1003 as ts
+           | ) s0
+           | on h0.id = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, value, ts from $tableName")(
+        Seq(1, "a1", 10, 1003)
+      )
+
+      // Can remove redundant symmetrical casting on both sides (should succeed)
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as int) as id, 1004 as ts
+           | ) s0
+           | on cast(h0.id as string) = cast(s0.id as string)
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, value, ts from $tableName")(
+        Seq(1, "a1", 10, 1004)
       )
     }
   }

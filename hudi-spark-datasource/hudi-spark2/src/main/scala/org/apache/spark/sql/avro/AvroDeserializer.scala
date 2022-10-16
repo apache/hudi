@@ -49,26 +49,32 @@ import scala.collection.mutable.ArrayBuffer
 class AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
   private lazy val decimalConversions = new DecimalConversion()
 
-  def deserialize(data: Any): Any = rootCatalystType match {
+  private val converter: Any => Any = rootCatalystType match {
     // A shortcut for empty schema.
     case st: StructType if st.isEmpty =>
-      InternalRow.empty
+      (data: Any) => InternalRow.empty
 
     case st: StructType =>
       val resultRow = new SpecificInternalRow(st.map(_.dataType))
       val fieldUpdater = new RowUpdater(resultRow)
       val writer = getRecordWriter(rootAvroType, st, Nil)
-      val record = data.asInstanceOf[GenericRecord]
-      writer(fieldUpdater, record)
-      resultRow
+      (data: Any) => {
+        val record = data.asInstanceOf[GenericRecord]
+        writer(fieldUpdater, record)
+        resultRow
+      }
 
     case _ =>
       val tmpRow = new SpecificInternalRow(Seq(rootCatalystType))
       val fieldUpdater = new RowUpdater(tmpRow)
       val writer = newWriter(rootAvroType, rootCatalystType, Nil)
-      writer(fieldUpdater, 0, data)
-      tmpRow.get(0, rootCatalystType)
+      (data: Any) => {
+        writer(fieldUpdater, 0, data)
+        tmpRow.get(0, rootCatalystType)
+      }
   }
+
+  def deserialize(data: Any): Any = converter(data)
 
   /**
    * Creates a writer to write avro values to Catalyst values at the given ordinal with the given

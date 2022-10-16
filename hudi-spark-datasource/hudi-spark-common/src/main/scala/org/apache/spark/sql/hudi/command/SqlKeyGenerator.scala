@@ -18,24 +18,28 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.generic.GenericRecord
-import org.apache.hudi.DataSourceOptionsHelper
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.model.HoodieKey
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{StructType, TimestampType}
+import org.apache.spark.unsafe.types.UTF8String
 import org.joda.time.format.DateTimeFormat
 
 import java.sql.Timestamp
+import java.util
+import java.util.Collections
 import java.util.concurrent.TimeUnit.{MICROSECONDS, MILLISECONDS}
 
 /**
- * A complex key generator for sql command which do some process for the
- * timestamp data type partition field.
+ * Custom Spark-specific [[KeyGenerator]] overriding behavior handling [[TimestampType]] partition values
  */
-class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props) {
+class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props) {
 
   private lazy val partitionSchema = {
     val partitionSchema = props.getString(SqlKeyGenerator.PARTITION_SCHEMA, "")
@@ -45,37 +49,91 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
       None
     }
   }
-  // The origin key generator class for this table.
-  private lazy val originKeyGen = {
-    val beforeKeyGenClassName = props.getString(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
-    if (beforeKeyGenClassName != null && beforeKeyGenClassName.nonEmpty) {
-      val keyGenProps = new TypedProperties()
-      keyGenProps.putAll(props)
-      keyGenProps.remove(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME)
-      val convertedKeyGenClassName = SqlKeyGenerator.getRealKeyGenClassName(props)
-      keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, convertedKeyGenClassName)
-      Some(KeyGenUtils.createKeyGeneratorByClassName(keyGenProps))
-    } else {
-      None
+
+  private lazy val complexKeyGen = new ComplexKeyGenerator(props)
+  private lazy val originalKeyGen =
+    Option(props.getString(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null))
+      .map { originalKeyGenClassName =>
+        checkArgument(originalKeyGenClassName.nonEmpty)
+
+        val convertedKeyGenClassName = HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(originalKeyGenClassName)
+
+        val keyGenProps = new TypedProperties()
+        keyGenProps.putAll(props)
+        keyGenProps.remove(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME)
+        keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, convertedKeyGenClassName)
+
+        KeyGenUtils.createKeyGeneratorByClassName(keyGenProps).asInstanceOf[SparkKeyGeneratorInterface]
+      }
+
+  override def getRecordKey(record: GenericRecord): String =
+    originalKeyGen.map {
+      _.getKey(record).getRecordKey
+    } getOrElse {
+      complexKeyGen.getRecordKey(record)
+    }
+
+  override def getRecordKey(row: Row): String =
+    originalKeyGen.map {
+      _.getRecordKey(row)
+    } getOrElse {
+      complexKeyGen.getRecordKey(row)
+    }
+
+
+  override def getRecordKey(internalRow: InternalRow, schema: StructType): UTF8String =
+    originalKeyGen.map {
+      _.getRecordKey(internalRow, schema)
+    } getOrElse {
+      complexKeyGen.getRecordKey(internalRow, schema)
+    }
+
+  override def getPartitionPath(record: GenericRecord): String = {
+    val partitionPath = originalKeyGen.map {
+      _.getKey(record).getPartitionPath
+    } getOrElse {
+      complexKeyGen.getPartitionPath(record)
+    }
+
+    convertPartitionPathToSqlType(partitionPath, rowType = false)
+  }
+
+  override def getPartitionPath(row: Row): String = {
+    val partitionPath = originalKeyGen.map {
+      _.getPartitionPath(row)
+    } getOrElse {
+      complexKeyGen.getPartitionPath(row)
+    }
+
+    convertPartitionPathToSqlType(partitionPath, rowType = true)
+  }
+
+  override def getPartitionPath(internalRow: InternalRow, schema: StructType): UTF8String = {
+    val partitionPath = originalKeyGen.map {
+      _.getPartitionPath(internalRow, schema)
+    } getOrElse {
+      complexKeyGen.getPartitionPath(internalRow, schema)
+    }
+
+    UTF8String.fromString(convertPartitionPathToSqlType(partitionPath.toString, rowType = true))
+  }
+
+  override def getRecordKeyFieldNames: util.List[String] = {
+    originalKeyGen.map(_.getRecordKeyFieldNames)
+      .getOrElse(complexKeyGen.getRecordKeyFieldNames)
+  }
+
+  override def getPartitionPathFields: util.List[String] = {
+    originalKeyGen.map {
+      case bkg: BaseKeyGenerator => bkg.getPartitionPathFields
+      case _ =>
+        Option(super.getPartitionPathFields).getOrElse(Collections.emptyList[String])
+    } getOrElse {
+      complexKeyGen.getPartitionPathFields
     }
   }
 
-  override def getRecordKey(record: GenericRecord): String = {
-    if (originKeyGen.isDefined) {
-      originKeyGen.get.getKey(record).getRecordKey
-    } else {
-      super.getRecordKey(record)
-    }
-  }
-
-  override def getRecordKey(row: Row): String = {
-    if (originKeyGen.isDefined) {
-      originKeyGen.get.asInstanceOf[SparkKeyGeneratorInterface].getRecordKey(row)
-    } else {
-      super.getRecordKey(row)
-    }
-  }
-
+  // TODO clean up
   private def convertPartitionPathToSqlType(partitionPath: String, rowType: Boolean): String = {
     if (partitionSchema.isDefined) {
       // we can split the partitionPath here because we enable the URL_ENCODE_PARTITIONING_OPT
@@ -113,30 +171,11 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
       }
     } else partitionPath
   }
-
-  override def getPartitionPath(record: GenericRecord): String = {
-    val partitionPath = super.getPartitionPath(record)
-    convertPartitionPathToSqlType(partitionPath, rowType = false)
-  }
-
-  override def getPartitionPath(row: Row): String = {
-    val partitionPath = super.getPartitionPath(row)
-    convertPartitionPathToSqlType(partitionPath, rowType = true)
-  }
 }
 
 object SqlKeyGenerator {
   val PARTITION_SCHEMA = "hoodie.sql.partition.schema"
-  val ORIGIN_KEYGEN_CLASS_NAME = "hoodie.sql.origin.keygen.class"
+  val ORIGINAL_KEYGEN_CLASS_NAME = "hoodie.sql.origin.keygen.class"
   private val timestampTimeFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss")
   private val sqlTimestampFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.S")
-
-  def getRealKeyGenClassName(props: TypedProperties): String = {
-    val beforeKeyGenClassName = props.getString(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
-    if (beforeKeyGenClassName != null && beforeKeyGenClassName.nonEmpty) {
-      HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(beforeKeyGenClassName)
-    } else {
-      DataSourceOptionsHelper.inferKeyGenClazz(props)
-    }
-  }
 }

@@ -65,13 +65,14 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
-                <includes>
+                <includes combine.children="append">
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
 
                   <include>com.beust:jcommander</include>
+                  <include>org.apache.avro:avro</include>
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-hadoop-compat</include>
@@ -86,25 +87,11 @@
                   <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
                   <include>org.apache.htrace:htrace-core4</include>
                   <include>org.apache.parquet:parquet-avro</include>
-                  <include>com.esotericsoftware:kryo-shaded</include>
-                  <include>org.objenesis:objenesis</include>
-                  <include>com.esotericsoftware:minlog</include>
                   <include>commons-io:commons-io</include>
+                  <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
-              <relocations>
-                <relocation>
-                  <pattern>com.esotericsoftware.kryo.</pattern>
-                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.objenesis.</pattern>
-                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.esotericsoftware.minlog.</pattern>
-                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
-                </relocation>
+              <relocations combine.children="append">
                 <relocation>
                   <pattern>org.apache.commons.io.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
@@ -123,6 +110,10 @@
                 <relocation>
                   <pattern>org.apache.htrace.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.openjdk.jol.</pattern>
+                  <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
@@ -248,6 +239,14 @@
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
       <version>${parquet.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
+    <!-- Avro -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <version>${avro.version}</version>
       <scope>compile</scope>
     </dependency>
 

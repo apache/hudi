@@ -42,6 +42,7 @@ import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -393,8 +394,12 @@ public class HoodieTableSource implements
     if (FlinkOptions.QUERY_TYPE_SNAPSHOT.equals(queryType)) {
       final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE));
       boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
-      return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
-          rowDataType, Collections.emptyList(), emitDelete);
+      if (this.conf.getBoolean(FlinkOptions.CDC_ENABLED)) {
+        return cdcInputFormat(rowType, requiredRowType, tableAvroSchema, rowDataType, Collections.emptyList());
+      } else {
+        return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
+            rowDataType, Collections.emptyList(), emitDelete);
+      }
     }
     String errMsg = String.format("Invalid query type : '%s', options ['%s'] are supported now", queryType,
         FlinkOptions.QUERY_TYPE_SNAPSHOT);
@@ -408,6 +413,31 @@ public class HoodieTableSource implements
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = activeTimeline.getLastCommitMetadataWithValidData();
     return instantAndCommitMetadata.isPresent();
+  }
+
+  private MergeOnReadInputFormat cdcInputFormat(
+      RowType rowType,
+      RowType requiredRowType,
+      Schema tableAvroSchema,
+      DataType rowDataType,
+      List<MergeOnReadInputSplit> inputSplits) {
+    final MergeOnReadTableState hoodieTableState = new MergeOnReadTableState(
+        rowType,
+        requiredRowType,
+        tableAvroSchema.toString(),
+        AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
+        inputSplits,
+        conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
+    return CdcInputFormat.builder()
+        .config(this.conf)
+        .tableState(hoodieTableState)
+        // use the explicit fields' data type because the AvroSchemaConverter
+        // is not very stable.
+        .fieldTypes(rowDataType.getChildren())
+        .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+        .limit(this.limit)
+        .emitDelete(false) // the change logs iterator can handle the DELETE records
+        .build();
   }
 
   private MergeOnReadInputFormat mergeOnReadInputFormat(

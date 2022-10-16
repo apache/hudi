@@ -90,6 +90,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
 import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
@@ -136,7 +137,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
 
   /**
    * Execute clustering to write inputRecords into new files based on strategyParams.
-   * Different from {@link performClusteringWithRecordsRDD}, this method take {@link Dataset<Row>}
+   * Different from {@link MultipleSparkJobExecutionStrategy#performClusteringWithRecordsRDD}, this method take {@link Dataset<Row>}
    * as inputs.
    */
   public abstract HoodieData<WriteStatus> performClusteringWithRecordsAsRow(final Dataset<Row> inputRecords,
@@ -293,6 +294,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
               .withBufferSize(config.getMaxDFSStreamBufferSize())
               .withSpillableMapBasePath(config.getSpillableMapBasePath())
               .withPartition(clusteringOp.getPartitionPath())
+              .withUseScanV2(config.useScanV2ForLogRecordReader())
               .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
               .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .build();
@@ -375,7 +377,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
 
     HashMap<String, String> params = new HashMap<>();
     params.put("hoodie.datasource.query.type", "snapshot");
-    params.put("as.of.instant", instantTime);
+    params.put(TIMESTAMP_AS_OF.key(), instantTime);
 
     Path[] paths;
     if (hasLogFiles) {

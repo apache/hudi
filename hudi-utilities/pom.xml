@@ -85,7 +85,6 @@
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java-util</artifactId>
-      <scope>test</scope>
       <exclusions>
         <exclusion>
           <groupId>com.google.guava</groupId>
@@ -124,6 +123,19 @@
           <artifactId>servlet-api</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+
+    <!-- Hoodie - cloud providers -->
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-aws</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-gcp</artifactId>
+      <version>${project.version}</version>
     </dependency>
 
     <!-- Hoodie - Other -->
@@ -436,14 +448,6 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- AWS Services -->
-    <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sqs -->
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-sqs</artifactId>
-      <version>${aws.sdk.version}</version>
-    </dependency>
-    
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>

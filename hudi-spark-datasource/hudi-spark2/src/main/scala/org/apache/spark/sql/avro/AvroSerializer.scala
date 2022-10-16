@@ -47,6 +47,10 @@ import org.apache.spark.sql.types._
 class AvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean) {
 
   def serialize(catalystData: Any): Any = {
+    converter.apply(catalystData)
+  }
+
+  private val converter: Any => Any = {
     val actualAvroType = resolveNullableType(rootAvroType, nullable)
     val baseConverter = rootCatalystType match {
       case st: StructType =>
@@ -59,13 +63,14 @@ class AvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable:
           converter.apply(tmpRow, 0)
     }
     if (nullable) {
-      if (catalystData == null) {
-        null
-      } else {
-        baseConverter.apply(catalystData)
-      }
+      (data: Any) =>
+        if (data == null) {
+          null
+        } else {
+          baseConverter.apply(data)
+        }
     } else {
-      baseConverter.apply(catalystData)
+      baseConverter
     }
   }
 
