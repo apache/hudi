@@ -65,6 +65,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.WriteConcurrencyMode.SINGLE_WRITER;
 import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
 
 /**
@@ -437,10 +438,11 @@ public class StreamWriteOperatorCoordinator
     // the write task does not block after checkpointing(and before it receives a checkpoint success event),
     // if it checkpoints succeed then flushes the data buffer again before this coordinator receives a checkpoint
     // success event, the data buffer would flush with an older instant time.
-    ValidationUtils.checkState(
-        HoodieTimeline.compareTimestamps(this.instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, event.getInstantTime()),
-        String.format("Receive an unexpected event for instant %s from task %d",
-            event.getInstantTime(), event.getTaskID()));
+    if (HoodieTimeline.compareTimestamps(this.instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, event.getInstantTime())
+        && this.writeClient.getConfig().getWriteConcurrencyMode() == SINGLE_WRITER) {
+      ValidationUtils.checkState(true, String.format("Receive an unexpected event for instant %s from task %d",
+          event.getInstantTime(), event.getTaskID()));
+    }
 
     addEventToBuffer(event);
   }

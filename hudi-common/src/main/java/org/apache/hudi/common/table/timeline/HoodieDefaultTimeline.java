@@ -135,6 +135,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline filterMorCompactionInstants() {
+    // Note: use for mor.
+    return new HoodieDefaultTimeline(instants.stream().filter(s ->
+        ((s.isRequested() || s.isInflight()) && s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
+            || (s.isCompleted() && s.getAction().equals(HoodieTimeline.COMMIT_ACTION))), details);
+  }
+
+  @Override
   public HoodieDefaultTimeline getWriteTimeline() {
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     return new HoodieDefaultTimeline(instants.stream().filter(s -> validActions.contains(s.getAction())), details);

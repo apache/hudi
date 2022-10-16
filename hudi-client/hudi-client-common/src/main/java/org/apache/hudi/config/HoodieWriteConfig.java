@@ -256,6 +256,10 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "SLEEPING_WAIT, it attempts to be conservative with CPU usage by using a simple busy wait loop"
           + "YIELDING_WAIT, it is designed for cases where there is the option to burn CPU cycles with the goal of improving latency"
           + "BUSY_SPIN_WAIT, it can be used in low-latency systems, but puts the highest constraints on the deployment environment");
+  public static final ConfigProperty<String> WRITE_LOG_SUFFIX_VALUE = ConfigProperty
+      .key("hoodie.write.log.suffix")
+      .defaultValue("")
+      .withDocumentation("Distinguish the log files written by different jobs by suffixes.");
 
   public static final ConfigProperty<String> COMBINE_BEFORE_INSERT = ConfigProperty
       .key("hoodie.combine.before.insert")
@@ -1074,6 +1078,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public Option<Integer> getDisruptorWriteBufferSize() {
     return Option.of(Integer.parseInt(getStringOrDefault(WRITE_DISRUPTOR_BUFFER_SIZE)));
+  }
+
+  public String getWriteLogSuffix() {
+    return getString(WRITE_LOG_SUFFIX_VALUE);
   }
 
   public boolean shouldCombineBeforeInsert() {
@@ -2381,6 +2389,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteBufferSize(int size) {
       writeConfig.setValue(WRITE_DISRUPTOR_BUFFER_SIZE, String.valueOf(size));
+      return this;
+    }
+
+    public Builder withWriteLogSuffix(String writeLogSuffix) {
+      writeConfig.setValue(WRITE_LOG_SUFFIX_VALUE, writeLogSuffix);
       return this;
     }
 

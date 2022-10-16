@@ -299,6 +299,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
         .withRolloverLogWriteToken(writeToken)
         .withLogWriteToken(latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
         .withSuffix(suffix)
+        .withLogSuffix(config.getWriteLogSuffix())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
   }
 

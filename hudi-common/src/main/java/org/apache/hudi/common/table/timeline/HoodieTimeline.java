@@ -171,6 +171,13 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedInstantsOrRewriteTimeline();
 
   /**
+   * Filter this timeline to just include the completed compaction instants.
+   *
+   * @return New instance of HoodieTimeline with just completed compaction instants
+   */
+  HoodieTimeline filterMorCompactionInstants();
+
+  /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
    * 
    * @return

@@ -30,6 +30,7 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.TemporalAccessor;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Utility class to generate and parse timestamps used in Instants.
@@ -56,6 +57,10 @@ public class HoodieInstantTimeGenerator {
   // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
   private static final String DEFAULT_MILLIS_EXT = "999";
 
+  private static final ReentrantReadWriteLock LOCK = new ReentrantReadWriteLock();
+
+  private static final ReentrantReadWriteLock.WriteLock WRITE_LOCK = LOCK.writeLock();
+
   private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.LOCAL;
 
   /**
@@ -65,19 +70,24 @@ public class HoodieInstantTimeGenerator {
    * @param milliseconds Milliseconds to add to current time while generating the new instant time
    */
   public static String createNewInstantTime(long milliseconds) {
-    return lastInstantTime.updateAndGet((oldVal) -> {
-      String newCommitTime;
-      do {
-        if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
-          LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-          newCommitTime = now.format(MILLIS_INSTANT_TIME_FORMATTER);
-        } else {
-          Date d = new Date(System.currentTimeMillis() + milliseconds);
-          newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
-        }
-      } while (HoodieTimeline.compareTimestamps(newCommitTime, HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldVal));
-      return newCommitTime;
-    });
+    try {
+      WRITE_LOCK.lock();
+      return lastInstantTime.updateAndGet((oldVal) -> {
+        String newCommitTime;
+        do {
+          if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
+            LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+            newCommitTime = now.format(MILLIS_INSTANT_TIME_FORMATTER);
+          } else {
+            Date d = new Date(System.currentTimeMillis() + milliseconds);
+            newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
+          }
+        } while (HoodieTimeline.compareTimestamps(newCommitTime, HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldVal));
+        return newCommitTime;
+      });
+    } finally {
+      WRITE_LOCK.unlock();
+    }
   }
 
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {

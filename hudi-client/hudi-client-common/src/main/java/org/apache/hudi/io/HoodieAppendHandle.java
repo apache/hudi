@@ -48,6 +48,8 @@ import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -145,7 +147,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.fileId = fileId;
     this.recordItr = recordItr;
-    sizeEstimator = new DefaultSizeEstimator();
+    this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
   }
@@ -164,20 +166,31 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       String baseInstantTime;
       String baseFile = "";
       List<String> logFiles = new ArrayList<>();
+      Option<HoodieInstant> maxCompleteInstant = hoodieTable.getMetaClient().getActiveTimeline().getWriteTimeline()
+          .filterMorCompactionInstants().lastInstant();
+      if (maxCompleteInstant.isPresent()) {
+        if (fileSlice.isPresent()) {
+          baseInstantTime = fileSlice.get().getBaseInstantTime();
+        } else {
+          baseInstantTime = instantTime;
+          // Handle log file only case. This is necessary for the concurrent clustering and writer case (e.g., consistent hashing bucket index).
+          // NOTE: flink engine use instantTime to mark operation type, check BaseFlinkCommitActionExecutor::execute
+          if (record.getCurrentLocation() != null && HoodieInstantTimeGenerator.isValidInstantTime(record.getCurrentLocation().getInstantTime())) {
+            baseInstantTime = record.getCurrentLocation().getInstantTime();
+          }
+        }
+      } else {
+        String instantTime = HoodieActiveTimeline.createNewInstantTime();
+        baseInstantTime = instantTime.substring(0, instantTime.length() - 9) + String.format("%09d", 0);
+      }
+
       if (fileSlice.isPresent()) {
-        baseInstantTime = fileSlice.get().getBaseInstantTime();
         baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
         logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
       } else {
-        baseInstantTime = instantTime;
-        // Handle log file only case. This is necessary for the concurrent clustering and writer case (e.g., consistent hashing bucket index).
-        // NOTE: flink engine use instantTime to mark operation type, check BaseFlinkCommitActionExecutor::execute
-        if (record.getCurrentLocation() != null && HoodieInstantTimeGenerator.isValidInstantTime(record.getCurrentLocation().getInstantTime())) {
-          baseInstantTime = record.getCurrentLocation().getInstantTime();
-        }
         // This means there is no base data file, start appending to a new log file
         fileSlice = Option.of(new FileSlice(partitionPath, baseInstantTime, this.fileId));
-        LOG.info("New AppendHandle for partition :" + partitionPath);
+        LOG.info("New AppendHandle for partition :" + partitionPath + " baseInstantTime :" + baseInstantTime + " fileId :" + this.fileId);
       }
 
       // Prepare the first write status

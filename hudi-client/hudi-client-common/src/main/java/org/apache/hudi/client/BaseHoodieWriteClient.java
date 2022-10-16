@@ -956,6 +956,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> rollbackFailedWrites());
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    LOG.info("writeLogSuffix: " + config.getWriteLogSuffix() + " instantTime: " + instantTime);
     startCommit(instantTime, actionType, metaClient);
     return instantTime;
   }
