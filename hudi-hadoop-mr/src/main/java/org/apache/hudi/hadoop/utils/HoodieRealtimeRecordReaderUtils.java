@@ -204,7 +204,7 @@ public class HoodieRealtimeRecordReaderUtils {
           } catch (AvroRuntimeException e) {
             LOG.debug("Field:" + field.name() + "not found in Schema:" + schema);
           }
-          recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema());
+          recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema(), supportTimestamp);
         }
         return new ArrayWritable(Writable.class, recordValues);
       case ENUM:
@@ -214,7 +214,7 @@ public class HoodieRealtimeRecordReaderUtils {
         Writable[] arrayValues = new Writable[arrayValue.size()];
         int arrayValueIndex = 0;
         for (Object obj : arrayValue) {
-          arrayValues[arrayValueIndex++] = avroToArrayWritable(obj, schema.getElementType());
+          arrayValues[arrayValueIndex++] = avroToArrayWritable(obj, schema.getElementType(), supportTimestamp);
         }
         // Hive 1.x will fail here, it requires values2 to be wrapped into another ArrayWritable
         return new ArrayWritable(Writable.class, arrayValues);
@@ -226,7 +226,7 @@ public class HoodieRealtimeRecordReaderUtils {
           Map.Entry mapEntry = (Map.Entry) entry;
           Writable[] nestedMapValues = new Writable[2];
           nestedMapValues[0] = new Text(mapEntry.getKey().toString());
-          nestedMapValues[1] = avroToArrayWritable(mapEntry.getValue(), schema.getValueType());
+          nestedMapValues[1] = avroToArrayWritable(mapEntry.getValue(), schema.getValueType(), supportTimestamp);
           mapValues[mapValueIndex++] = new ArrayWritable(Writable.class, nestedMapValues);
         }
         // Hive 1.x will fail here, it requires values3 to be wrapped into another ArrayWritable
