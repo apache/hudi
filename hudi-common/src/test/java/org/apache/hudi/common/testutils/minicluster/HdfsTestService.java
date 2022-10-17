@@ -53,8 +53,13 @@ public class HdfsTestService {
   private MiniDFSCluster miniDfsCluster;
 
   public HdfsTestService() throws IOException {
-    hadoopConf = new Configuration();
     workDir = Files.createTempDirectory("temp").toAbsolutePath().toString();
+    hadoopConf = new Configuration();
+    // lower heartbeat interval for fast recognition of DN
+    hadoopConf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, workDir);
+    hadoopConf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, 1000);
+    hadoopConf.setInt(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 1);
+    hadoopConf.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 3000);
   }
 
   public Configuration getHadoopConf() {
