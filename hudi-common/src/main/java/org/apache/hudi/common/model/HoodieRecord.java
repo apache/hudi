@@ -19,6 +19,12 @@
 package org.apache.hudi.common.model;
 
 import java.util.Collections;
+
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
@@ -40,7 +46,7 @@ import java.util.stream.IntStream;
 /**
  * A Single Record managed by Hoodie.
  */
-public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterface, Serializable {
+public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterface, KryoSerializable, Serializable {
 
   public static final String COMMIT_TIME_METADATA_FIELD = HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName();
   public static final String COMMIT_SEQNO_METADATA_FIELD = HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD.getFieldName();
@@ -158,8 +164,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.sealed = record.sealed;
   }
 
-  public HoodieRecord() {
-  }
+  public HoodieRecord() {}
 
   public abstract HoodieRecord<T> newInstance();
 
@@ -280,6 +285,39 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     if (sealed) {
       throw new UnsupportedOperationException("Not allowed to modify after sealed");
     }
+  }
+
+  protected abstract void writeRecordPayload(T recordPayload, Kryo kryo, Output output);
+
+  protected abstract T readRecordPayload(Kryo kryo, Input input);
+
+  @Override
+  public void write(Kryo kryo, Output output) {
+    Serializer recLocSerializer = kryo.getSerializer(HoodieRecordLocation.class);
+
+    kryo.writeObjectOrNull(output, key, HoodieKey.class);
+    kryo.writeObjectOrNull(output, currentLocation, recLocSerializer);
+    kryo.writeObjectOrNull(output, newLocation, recLocSerializer);
+    kryo.writeObjectOrNull(output, operation, HoodieOperation.class);
+    // NOTE: Writing out actual record payload is relegated to the actual
+    //       implementation
+    writeRecordPayload(data, kryo, output);
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    Serializer recLocSerializer = kryo.getSerializer(HoodieRecordLocation.class);
+
+    this.key = kryo.readObjectOrNull(input, HoodieKey.class);
+    this.currentLocation = kryo.readObjectOrNull(input, HoodieRecordLocation.class, recLocSerializer);
+    this.newLocation = kryo.readObjectOrNull(input, HoodieRecordLocation.class, recLocSerializer);
+    this.operation = kryo.readObjectOrNull(input, HoodieOperation.class);
+    // NOTE: Reading out actual record payload is relegated to the actual
+    //       implementation
+    this.data = readRecordPayload(kryo, input);
+
+    // NOTE: We're always seal object after deserialization
+    this.sealed = true;
   }
 
   /**

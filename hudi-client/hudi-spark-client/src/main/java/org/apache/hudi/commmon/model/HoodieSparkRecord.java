@@ -18,6 +18,10 @@
 
 package org.apache.hudi.commmon.model;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.SparkAdapterSupport$;
@@ -70,9 +74,8 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
  *       need to be updated (ie serving as an overlay layer on top of [[UnsafeRow]])</li>
  * </ul>
  *
-
  */
-public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
+public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements KryoSerializable {
 
   /**
    * Record copy operation to avoid double copying. InternalRow do not need to copy twice.
@@ -98,7 +101,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   private HoodieSparkRecord(HoodieKey key, InternalRow data, HoodieOperation operation, boolean copy) {
     super(key, data, operation);
     validateRow(data);
-
     this.copy = copy;
   }
 
@@ -297,6 +299,20 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       Comparable<?> value = (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
       return value;
     }
+  }
+
+  @Override
+  public void write(Kryo kryo, Output output) {
+    // NOTE: We only serialize data held by the [[HoodieRecord]] base class
+    super.write(kryo, output);
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    super.read(kryo, input);
+    // NOTE: After deserialization every object is allocated on the heap, therefore
+    //       we annotate this object as being copied
+    this.copy = true;
   }
 
   private static HoodieInternalRow wrapIntoUpdatableOverlay(InternalRow data, StructType structType) {
