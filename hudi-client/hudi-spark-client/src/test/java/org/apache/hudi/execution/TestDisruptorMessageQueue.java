@@ -27,7 +27,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.queue.DisruptorMessageHandler;
 import org.apache.hudi.common.util.queue.DisruptorMessageQueue;
 import org.apache.hudi.common.util.queue.DisruptorPublisher;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
@@ -62,6 +61,7 @@ import scala.Tuple2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -222,29 +222,26 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
 
 
     // setup consumer and start disruptor
-    DisruptorMessageHandler<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> handler =
-        new DisruptorMessageHandler<>(new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
-          @Override
-          public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
-            // Read recs and ensure we have covered all producer recs.
-            final HoodieRecord rec = payload.record;
-            Pair<Integer, Integer> producerPos = keyToProducerAndIndexMap.get(rec.getRecordKey());
-            Integer lastSeenPos = lastSeenMap.get(producerPos.getLeft());
-            countMap.put(producerPos.getLeft(), countMap.get(producerPos.getLeft()) + 1);
-            lastSeenMap.put(producerPos.getLeft(), lastSeenPos + 1);
-            // Ensure we are seeing the next record generated
-            assertEquals(lastSeenPos + 1, producerPos.getRight().intValue());
-          }
+    queue.setHandlers(new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
-          @Override
-          protected Integer getResult() {
-            return 0;
-          }
-        });
+      @Override
+      public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
+        // Read recs and ensure we have covered all producer recs.
+        final HoodieRecord rec = payload.record;
+        Pair<Integer, Integer> producerPos = keyToProducerAndIndexMap.get(rec.getRecordKey());
+        Integer lastSeenPos = lastSeenMap.get(producerPos.getLeft());
+        countMap.put(producerPos.getLeft(), countMap.get(producerPos.getLeft()) + 1);
+        lastSeenMap.put(producerPos.getLeft(), lastSeenPos + 1);
+        // Ensure we are seeing the next record generated
+        assertEquals(lastSeenPos + 1, producerPos.getRight().intValue());
+      }
 
-
-    queue.setHandlers(handler);
+      @Override
+      protected Integer getResult() {
+        return 0;
+      }
+    });
     queue.start();
 
 
@@ -333,7 +330,6 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,
         "exception is expected");
-    assertEquals("java.util.concurrent.ExecutionException: org.apache.hudi.exception.HoodieException: Error producing records in disruptor executor",
-        thrown.getMessage());
+    assertTrue(thrown.getMessage().contains("Error producing records in disruptor executor"));
   }
 }

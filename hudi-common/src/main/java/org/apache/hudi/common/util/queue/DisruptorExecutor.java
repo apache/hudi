@@ -88,8 +88,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   @Override
   public void setup() {
-    DisruptorMessageHandler<O, E> handler = new DisruptorMessageHandler<>(consumer.get());
-    ((DisruptorMessageQueue)queue).setHandlers(handler);
+    ((DisruptorMessageQueue)queue).setHandlers(consumer.get());
     ((DisruptorMessageQueue)queue).start();
   }
 

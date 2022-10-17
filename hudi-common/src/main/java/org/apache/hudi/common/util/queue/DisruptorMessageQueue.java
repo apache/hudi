@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util.queue;
 
 import com.lmax.disruptor.EventFactory;
+import com.lmax.disruptor.EventHandler;
 import com.lmax.disruptor.EventTranslator;
 import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.WaitStrategy;
@@ -34,15 +35,15 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   private static final Logger LOG = LogManager.getLogger(DisruptorMessageQueue.class);
 
-  private final Disruptor<HoodieDisruptorEvent<O>> queue;
+  private final Disruptor<HoodieDisruptorEvent> queue;
   private final Function<I, O> transformFunction;
-  private final RingBuffer<HoodieDisruptorEvent<O>> ringBuffer;
+  private final RingBuffer<HoodieDisruptorEvent> ringBuffer;
 
   public DisruptorMessageQueue(Option<Integer> bufferSize, Function<I, O> transformFunction, Option<String> waitStrategyName, int totalProducers, Runnable preExecuteRunnable) {
     WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyName);
     HoodieDaemonThreadFactory threadFactory = new HoodieDaemonThreadFactory(preExecuteRunnable);
 
-    this.queue = new Disruptor<>(new HoodieDisruptorEventFactory<>(), bufferSize.get(), threadFactory, totalProducers > 1 ? ProducerType.MULTI : ProducerType.SINGLE, waitStrategy);
+    this.queue = new Disruptor<>(new HoodieDisruptorEventFactory(), bufferSize.get(), threadFactory, totalProducers > 1 ? ProducerType.MULTI : ProducerType.SINGLE, waitStrategy);
     this.ringBuffer = queue.getRingBuffer();
     this.transformFunction = transformFunction;
   }
@@ -56,9 +57,9 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   public void insertRecord(I value) throws Exception {
     O applied = transformFunction.apply(value);
 
-    EventTranslator<HoodieDisruptorEvent<O>> translator = new EventTranslator<HoodieDisruptorEvent<O>>() {
+    EventTranslator<HoodieDisruptorEvent> translator = new EventTranslator<HoodieDisruptorEvent>() {
       @Override
-      public void translateTo(HoodieDisruptorEvent<O> event, long sequence) {
+      public void translateTo(HoodieDisruptorEvent event, long sequence) {
         event.set(applied);
       }
     };
@@ -87,8 +88,15 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     return ringBuffer.getBufferSize() == ringBuffer.remainingCapacity();
   }
 
-  public void setHandlers(DisruptorMessageHandler handler) {
-    queue.handleEventsWith(handler);
+  public void setHandlers(IteratorBasedQueueConsumer consumer) {
+    queue.handleEventsWith(new EventHandler<HoodieDisruptorEvent>() {
+
+      @Override
+      public void onEvent(HoodieDisruptorEvent event, long sequence, boolean endOfBatch) throws Exception {
+        consumer.consumeOneRecord(event.get());
+        event.clear();
+      }
+    });
   }
 
   public void start() {
@@ -99,11 +107,35 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
    * HoodieDisruptorEventFactory is used to create/preallocate HoodieDisruptorEvent.
    *
    */
-  class HoodieDisruptorEventFactory<O> implements EventFactory<HoodieDisruptorEvent<O>> {
+  class HoodieDisruptorEventFactory implements EventFactory<HoodieDisruptorEvent> {
 
     @Override
-    public HoodieDisruptorEvent<O> newInstance() {
-      return new HoodieDisruptorEvent<>();
+    public HoodieDisruptorEvent newInstance() {
+      return new HoodieDisruptorEvent();
+    }
+  }
+
+  /**
+   * The unit of data passed from producer to consumer in disruptor world.
+   */
+  class HoodieDisruptorEvent {
+
+    private O value;
+
+    public void set(O value) {
+      this.value = value;
+    }
+
+    public O get() {
+      return this.value;
+    }
+
+    /**
+     * When passing data via the Disruptor, it is possible for objects to live longer than intended.
+     * To avoid this happening it is necessary to clear out the event after processing it.
+     */
+    public void clear() {
+      value = null;
     }
   }
 }
