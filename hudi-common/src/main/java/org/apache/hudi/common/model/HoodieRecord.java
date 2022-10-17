@@ -287,12 +287,16 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     }
   }
 
-  protected abstract void writeRecordPayload(T recordPayload, Kryo kryo, Output output);
+  protected abstract void writeRecordPayload(T payload, Kryo kryo, Output output);
 
   protected abstract T readRecordPayload(Kryo kryo, Input input);
 
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
   @Override
-  public void write(Kryo kryo, Output output) {
+  public final void write(Kryo kryo, Output output) {
     Serializer recLocSerializer = kryo.getSerializer(HoodieRecordLocation.class);
 
     kryo.writeObjectOrNull(output, key, HoodieKey.class);
@@ -304,8 +308,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     writeRecordPayload(data, kryo, output);
   }
 
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
   @Override
-  public void read(Kryo kryo, Input input) {
+  public final void read(Kryo kryo, Input input) {
     Serializer recLocSerializer = kryo.getSerializer(HoodieRecordLocation.class);
 
     this.key = kryo.readObjectOrNull(input, HoodieKey.class);
