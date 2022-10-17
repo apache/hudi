@@ -143,8 +143,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         } else {
           rewriteRecord = record.rewriteRecord(schema, config.getProps(), writeSchemaWithMetaFields);
         }
-        MetadataValues metadataValues = new MetadataValues();
-        metadataValues.setFileName(path.getName());
+        MetadataValues metadataValues = new MetadataValues().setFileName(path.getName());
         rewriteRecord = rewriteRecord.updateMetadataValues(writeSchemaWithMetaFields, config.getProps(), metadataValues);
         if (preserveMetadata) {
           fileWriter.write(record.getRecordKey(), rewriteRecord, writeSchemaWithMetaFields);

@@ -98,8 +98,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord joinWith(HoodieRecord other,
-      Schema targetSchema) throws IOException {
+  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), targetSchema);
     return new HoodieAvroIndexedRecord(record);
   }

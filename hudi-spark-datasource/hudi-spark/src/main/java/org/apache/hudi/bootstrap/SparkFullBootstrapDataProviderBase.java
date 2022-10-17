@@ -18,6 +18,7 @@
 
 package org.apache.hudi.bootstrap;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -38,13 +39,10 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -94,12 +92,11 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
       } else if (recordType == HoodieRecordType.SPARK) {
         SparkKeyGeneratorInterface sparkKeyGenerator = (SparkKeyGeneratorInterface) keyGenerator;
         StructType structType = inputDataset.schema();
-        return inputDataset.queryExecution().toRdd().toJavaRDD().map(row -> {
-          InternalRow internalRow = row.copy();
+        return inputDataset.queryExecution().toRdd().toJavaRDD().map(internalRow -> {
           String recordKey = sparkKeyGenerator.getRecordKey(internalRow, structType).toString();
           String partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structType).toString();
           HoodieKey key = new HoodieKey(recordKey, partitionPath);
-          return new HoodieSparkRecord(key, internalRow, structType);
+          return new HoodieSparkRecord(key, internalRow, false);
         });
       } else {
         throw new UnsupportedOperationException(recordType.name());

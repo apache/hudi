@@ -752,9 +752,9 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       val requiredAvroSchema = new Schema.Parser().parse(requiredDataSchema.avroSchemaStr)
       val avroToRowConverter = AvroConversionUtils.createAvroToInternalRowConverter(requiredAvroSchema, requiredRowSchema)
 
-      reader.getIndexedRecordIterator(requiredAvroSchema).asScala
+      reader.getRecordIterator(requiredAvroSchema).asScala
         .map(record => {
-          avroToRowConverter.apply(record.asInstanceOf[GenericRecord]).get
+          avroToRowConverter.apply(record.getData.asInstanceOf[GenericRecord]).get
         })
     }
   }

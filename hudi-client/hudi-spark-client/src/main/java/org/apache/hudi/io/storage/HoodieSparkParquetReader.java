@@ -22,16 +22,19 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.HoodieInternalRowUtils;
+import org.apache.hudi.commmon.model.HoodieSparkRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.api.ReadSupport;
-import org.apache.parquet.hadoop.util.HadoopInputFile;
-import org.apache.parquet.io.InputFile;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
+import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.StructType;
@@ -40,6 +43,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
@@ -70,12 +75,20 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   @Override
-  public ClosableIterator<InternalRow> getInternalRowIterator(Schema schema) throws IOException {
-    return getInternalRowIterator(schema, null);
+  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    ClosableIterator<InternalRow> iterator = getInternalRowIterator(readerSchema, requestedSchema);
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
+    UnsafeProjection projection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType);
+
+    return new MappingIterator<>(iterator, data -> {
+      // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert
+      //       it to [[UnsafeRow]] holding just raw bytes
+      UnsafeRow unsafeRow = projection.apply(data);
+      return unsafeCast(new HoodieSparkRecord(unsafeRow));
+    });
   }
 
-  @Override
-  public ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  private ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
     if (requestedSchema == null) {
       requestedSchema = readerSchema;
     }
@@ -85,13 +98,9 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), requestedStructType.json());
     conf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(), (Boolean) SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()));
     conf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), (Boolean) SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()));
-    InputFile inputFile = HadoopInputFile.fromPath(path, conf);
-    ParquetReader<InternalRow> reader = new ParquetReader.Builder<InternalRow>(inputFile) {
-      @Override
-      protected ReadSupport getReadSupport() {
-        return new ParquetReadSupport();
-      }
-    }.withConf(conf).build();
+    ParquetReader<InternalRow> reader = ParquetReader.<InternalRow>builder((ReadSupport) new ParquetReadSupport(), path)
+        .withConf(conf)
+        .build();
     ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;

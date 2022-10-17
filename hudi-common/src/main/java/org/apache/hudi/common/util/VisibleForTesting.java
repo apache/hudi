@@ -16,12 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
-
-import org.apache.spark.sql.catalyst.InternalRow;
+package org.apache.hudi.common.util;
 
 /**
- * Marker interface for every {@link HoodieFileReader} reading in Catalyst (Spark native tyeps, ie
- * producing {@link InternalRow}s)
+ * Annotation designating a field or a method as visible for the testing purposes
  */
-public interface HoodieSparkFileReader extends HoodieFileReader<InternalRow> {}
+public @interface VisibleForTesting {
+}

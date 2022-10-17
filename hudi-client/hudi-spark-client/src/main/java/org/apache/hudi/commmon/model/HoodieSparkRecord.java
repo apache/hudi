@@ -18,7 +18,9 @@
 
 package org.apache.hudi.commmon.model;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.HoodieInternalRowUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -28,18 +30,19 @@ import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 import org.apache.hudi.util.HoodieSparkRecordUtils;
-
-import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieCatalystExpressionUtils$;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
 import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.JoinedRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
+import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
@@ -55,7 +58,19 @@ import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
- * Spark Engine-specific Implementations of `HoodieRecord`.
+ * Spark Engine-specific Implementations of `HoodieRecord`
+ *
+ * NOTE: [[HoodieSparkRecord]] is expected to hold either [[UnsafeRow]] or [[HoodieInternalRow]]:
+ *
+ * <ul>
+ *    <li>[[UnsafeRow]] is held to make sure a) we don't deserialize raw bytes payload
+ *       into JVM types unnecessarily, b) we don't incur penalty of ser/de during shuffling,
+ *       c) we don't add strain on GC</li>
+ *    <li>[[HoodieInternalRow]] is held in cases when underlying [[UnsafeRow]]'s metadata fields
+ *       need to be updated (ie serving as an overlay layer on top of [[UnsafeRow]])</li>
+ * </ul>
+ *
+
  */
 public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
@@ -68,48 +83,38 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    * We should use this construction method when we read internalRow from file.
    * The record constructed by this method must be used in iter.
    */
-  public HoodieSparkRecord(InternalRow data, StructType schema) {
+  public HoodieSparkRecord(InternalRow data) {
     super(null, data);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema, false);
+    validateRow(data);
     this.copy = false;
   }
 
-  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema) {
+  public HoodieSparkRecord(HoodieKey key, InternalRow data, boolean copy) {
     super(key, data);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema, true);
-    this.copy = true;
-  }
-
-  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation) {
-    super(key, data, operation);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema, true);
-    this.copy = true;
-  }
-
-  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation, boolean copy) {
-    super(key, data, operation);
-    this.data = HoodieInternalRowUtils.projectUnsafe(data, schema, true);
+    validateRow(data);
     this.copy = copy;
   }
 
-  public HoodieSparkRecord(HoodieSparkRecord record) {
-    super(record);
-    this.copy = record.copy;
+  private HoodieSparkRecord(HoodieKey key, InternalRow data, HoodieOperation operation, boolean copy) {
+    super(key, data, operation);
+    validateRow(data);
+
+    this.copy = copy;
   }
 
   @Override
   public HoodieSparkRecord newInstance() {
-    return new HoodieSparkRecord(this);
+    return new HoodieSparkRecord(this.key, this.data, this.operation, this.copy);
   }
 
   @Override
   public HoodieSparkRecord newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieSparkRecord(key, data, null, op);
+    return new HoodieSparkRecord(key, this.data, op, this.copy);
   }
 
   @Override
   public HoodieSparkRecord newInstance(HoodieKey key) {
-    return new HoodieSparkRecord(key, data, null);
+    return new HoodieSparkRecord(key, this.data, this.operation, this.copy);
   }
 
   @Override
@@ -145,50 +150,56 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) throws IOException {
+  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
     InternalRow mergeRow = new JoinedRow(data, (InternalRow) other.getData());
-    return new HoodieSparkRecord(getKey(), mergeRow, targetStructType, getOperation(), copy);
+    UnsafeProjection projection =
+        HoodieInternalRowUtils.getCachedUnsafeProjection(targetStructType, targetStructType);
+    return new HoodieSparkRecord(getKey(), projection.apply(mergeRow), getOperation(), copy);
   }
 
   @Override
   public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
-    UTF8String[] metaFields = extractMetaField(structType, targetStructType);
-    if (metaFields.length == 0) {
-      throw new UnsupportedOperationException();
-    }
 
-    boolean containMetaFields = hasMetaField(structType);
-    InternalRow resultRow = new HoodieInternalRow(metaFields, data, containMetaFields);
-    return new HoodieSparkRecord(getKey(), resultRow, targetStructType, getOperation(), copy);
+    boolean containMetaFields = hasMetaFields(structType);
+    UTF8String[] metaFields = tryExtractMetaFields(data, structType);
+
+    // TODO add actual rewriting
+    InternalRow finalRow = new HoodieInternalRow(metaFields, data, containMetaFields);
+
+    return new HoodieSparkRecord(getKey(), finalRow, getOperation(), copy);
   }
 
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
-    InternalRow rewriteRow = HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, structType, newStructType, renameCols);
-    UTF8String[] metaFields = extractMetaField(structType, newStructType);
-    if (metaFields.length > 0) {
-      rewriteRow = new HoodieInternalRow(metaFields, data, true);
-    }
 
-    return new HoodieSparkRecord(getKey(), rewriteRow, newStructType, getOperation(), copy);
+    boolean containMetaFields = hasMetaFields(structType);
+    UTF8String[] metaFields = tryExtractMetaFields(data, structType);
+
+    InternalRow rewrittenRow =
+        HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, structType, newStructType, renameCols);
+    HoodieInternalRow finalRow = new HoodieInternalRow(metaFields, rewrittenRow, containMetaFields);
+
+    return new HoodieSparkRecord(getKey(), finalRow, getOperation(), copy);
   }
 
   @Override
   public HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
+    HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(data, structType);
+
     metadataValues.getKv().forEach((key, value) -> {
       int pos = structType.fieldIndex(key);
       if (value != null) {
-        data.update(pos, CatalystTypeConverters.convertToCatalyst(value));
+        updatableRow.update(pos, CatalystTypeConverters.convertToCatalyst(value));
       }
     });
 
-    return new HoodieSparkRecord(getKey(), data, structType, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), updatableRow, getOperation(), copy);
   }
 
   @Override
@@ -242,7 +253,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String key;
     String partition;
-    if (keyGen.isPresent() && !Boolean.parseBoolean(props.getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
+    boolean populateMetaFields = Boolean.parseBoolean(props.getOrDefault(POPULATE_META_FIELDS.key(),
+        POPULATE_META_FIELDS.defaultValue().toString()).toString());
+    if (!populateMetaFields && keyGen.isPresent()) {
       SparkKeyGeneratorInterface keyGenerator = (SparkKeyGeneratorInterface) keyGen.get();
       key = keyGenerator.getRecordKey(data, structType).toString();
       partition = keyGenerator.getPartitionPath(data, structType).toString();
@@ -251,7 +264,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       partition = data.get(HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal(), StringType).toString();
     }
     HoodieKey hoodieKey = new HoodieKey(key, partition);
-    return new HoodieSparkRecord(hoodieKey, data, structType, getOperation(), copy);
+    return new HoodieSparkRecord(hoodieKey, data, getOperation(), copy);
   }
 
   @Override
@@ -268,7 +281,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieSparkRecord copy() {
     if (!copy) {
       this.data = this.data.copy();
-      copy = true;
+      this.copy = true;
     }
     return this;
   }
@@ -286,20 +299,29 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     }
   }
 
-  private UTF8String[] extractMetaField(StructType recordStructType, StructType structTypeWithMetaField) {
-    return HOODIE_META_COLUMNS_WITH_OPERATION.stream()
-        .filter(f -> HoodieCatalystExpressionUtils$.MODULE$.existField(structTypeWithMetaField, f))
-        .map(field -> {
-          if (HoodieCatalystExpressionUtils$.MODULE$.existField(recordStructType, field)) {
-            return data.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(field));
-          } else {
-            return UTF8String.EMPTY_UTF8;
-          }
-        }).toArray(UTF8String[]::new);
+  private static HoodieInternalRow wrapIntoUpdatableOverlay(InternalRow data, StructType structType) {
+    if (data instanceof HoodieInternalRow) {
+      return (HoodieInternalRow) data;
+    }
+
+    boolean containsMetaFields = hasMetaFields(structType);
+    UTF8String[] metaFields = tryExtractMetaFields(data, structType);
+    return new HoodieInternalRow(metaFields, data, containsMetaFields);
   }
 
-  private static boolean hasMetaField(StructType structType) {
-    return HoodieCatalystExpressionUtils$.MODULE$.existField(structType, COMMIT_TIME_METADATA_FIELD);
+  private static UTF8String[] tryExtractMetaFields(InternalRow row, StructType structType) {
+    boolean containsMetaFields = hasMetaFields(structType);
+    if (containsMetaFields) {
+      return HoodieRecord.HOODIE_META_COLUMNS.stream()
+          .map(col -> row.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(col)))
+          .toArray(UTF8String[]::new);
+    } else {
+      return new UTF8String[HoodieRecord.HOODIE_META_COLUMNS.size()];
+    }
+  }
+
+  private static boolean hasMetaFields(StructType structType) {
+    return structType.getFieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD).isDefined();
   }
 
   /**
@@ -329,6 +351,14 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
     HoodieOperation operation = withOperationField
         ? HoodieOperation.fromName(getNullableValAsString(structType, record.data, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
-    return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), record.data, structType, operation, record.copy);
+    return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), record.data, operation, record.copy);
+  }
+
+  private static void validateRow(InternalRow data) {
+    // NOTE: [[HoodieSparkRecord]] is expected to hold either
+    //          - Instance of [[UnsafeRow]] or
+    //          - Instance of [[HoodieInternalRow]] or
+    //          - Instance of [[ColumnarBatchRow]]
+    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
   }
 }

@@ -18,36 +18,36 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, generateUnsafeProjection}
-import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
-import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
-import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieRecord}
-import org.apache.hudi.config.HoodiePayloadConfig
-import org.apache.hudi.commmon.model.HoodieSparkRecord
-import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-import org.apache.hudi.LogFileIterator._
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
-import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
-import org.apache.hudi.common.util.HoodieRecordUtils
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
-import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, generateUnsafeProjection}
+import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
+import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
+import org.apache.hudi.LogFileIterator._
+import org.apache.hudi.commmon.model.HoodieSparkRecord
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieRecord}
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
+import org.apache.hudi.common.util.HoodieRecordUtils
+import org.apache.hudi.config.HoodiePayloadConfig
+import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
+import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils
-import org.apache.spark.sql.types.StructType
-import java.io.Closeable
-import java.util.Properties
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
+import org.apache.spark.sql.types.StructType
+
+import java.io.Closeable
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.util.Try
@@ -65,13 +65,14 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
-  protected val payloadProps = tableState.preCombineFieldOpt
+  protected val payloadProps: TypedProperties = tableState.preCombineFieldOpt
     .map { preCombineField =>
       HoodiePayloadConfig.newBuilder
         .withPayloadOrderingField(preCombineField)
         .build
         .getProps
-    }.getOrElse(new Properties())
+    }
+    .getOrElse(new TypedProperties())
 
   protected override val avroSchema: Schema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
   protected override val structTypeSchema: StructType = requiredSchema.structTypeSchema
@@ -82,8 +83,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
   protected var recordToLoad: InternalRow = _
 
   protected val requiredSchemaSafeAvroProjection: SafeAvroProjection = SafeAvroProjection.create(logFileReaderAvroSchema, avroSchema)
-
-  protected val requiredSchemaSafeRowProjection: UnsafeProjection = HoodieCatalystExpressionUtils.generateUnsafeProjection(logFileReaderStructType, structTypeSchema)
+  protected val requiredSchemaUnsafeRowProjection: UnsafeProjection = HoodieCatalystExpressionUtils.generateUnsafeProjection(logFileReaderStructType, structTypeSchema)
 
   // TODO: now logScanner with internalSchema support column project, we may no need projectAvroUnsafe
   private var logScanner = {
@@ -122,7 +122,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
           recordToLoad = deserialize(projectedAvroRecord)
           true
         case Some(r: HoodieSparkRecord) =>
-          recordToLoad = requiredSchemaSafeRowProjection(r.getData)
+          recordToLoad = requiredSchemaUnsafeRowProjection(r.getData)
           true
         case None => this.hasNextInternal
       }
@@ -238,7 +238,7 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
     //       on the record from the Delta Log
     recordMerger.getRecordType match {
       case HoodieRecordType.SPARK =>
-        val curRecord = new HoodieSparkRecord(curRow, baseFileReader.schema)
+        val curRecord = new HoodieSparkRecord(curRow)
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
         toScalaOption(result)
           .map(r => {

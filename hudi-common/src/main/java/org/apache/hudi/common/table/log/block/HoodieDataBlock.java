@@ -179,7 +179,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     HashSet<String> keySet = new HashSet<>(keys);
-    return FilteringIterator.getInstance(allRecords, keySet, fullKey, record -> getRecordKey(record));
+    return FilteringIterator.getInstance(allRecords, keySet, fullKey, this::getRecordKey);
   }
 
   protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type) throws IOException {

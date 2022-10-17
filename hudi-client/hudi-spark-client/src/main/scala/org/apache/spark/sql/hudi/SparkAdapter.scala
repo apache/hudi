@@ -47,6 +47,11 @@ import java.util.Locale
 trait SparkAdapter extends Serializable {
 
   /**
+   * Checks whether provided instance of [[InternalRow]] is actually an instance of [[ColumnarBatchRow]]
+   */
+  def isColumnarBatchRow(r: InternalRow): Boolean
+
+  /**
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
    * [[TableCatalog]]s
    */

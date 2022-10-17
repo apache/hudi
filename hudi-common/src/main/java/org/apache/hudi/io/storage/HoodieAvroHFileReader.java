@@ -37,8 +37,12 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -53,10 +57,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -64,7 +69,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * <p>
  * {@link HoodieFileReader} implementation allowing to read from {@link HFile}.
  */
-public class HoodieAvroHFileReader implements HoodieAvroFileReader {
+public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements HoodieSeekingFileReader<IndexedRecord> {
 
   // TODO HoodieHFileReader right now tightly coupled to MT, we should break that coupling
   public static final String SCHEMA_KEY = "schema";
@@ -112,6 +117,30 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
     this.sharedScanner = getHFileScanner(reader, true);
     this.schema = schemaOpt.map(Lazy::eagerly)
         .orElseGet(() -> Lazy.lazily(() -> fetchSchema(reader)));
+  }
+
+  @Override
+  public Option<HoodieRecord<IndexedRecord>> getRecordByKey(String key, Schema readerSchema) throws IOException {
+    synchronized (sharedScannerLock) {
+      return fetchRecordByKeyInternal(sharedScanner, key, getSchema(), readerSchema)
+          .map(data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
+    }
+  }
+
+  @Override
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
+    // We're caching blocks for this scanner to minimize amount of traffic
+    // to the underlying storage as we fetched (potentially) sparsely distributed
+    // keys
+    HFileScanner scanner = getHFileScanner(reader, true);
+    ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(scanner, keys, getSchema(), schema);
+    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
+  }
+
+  @Override
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordsByKeyPrefixIterator(keyPrefixes, schema);
+    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
   @Override
@@ -169,28 +198,19 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
     }
   }
 
-  @SuppressWarnings("unchecked")
   @Override
-  public Option<IndexedRecord> getIndexedRecordByKey(String key, Schema readerSchema) throws IOException {
-    synchronized (sharedScannerLock) {
-      return fetchRecordByKeyInternal(sharedScanner, key, getSchema(), readerSchema);
+  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) {
+    if (!Objects.equals(readerSchema, requestedSchema)) {
+      throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
     }
-  }
 
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema) throws IOException {
     // TODO eval whether seeking scanner would be faster than pread
     HFileScanner scanner = getHFileScanner(reader, false);
     return new RecordIterator(scanner, getSchema(), readerSchema);
   }
 
-  @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @SuppressWarnings("unchecked")
-  @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys, Schema readerSchema) throws IOException {
+  @VisibleForTesting
+  protected ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys, Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
@@ -198,9 +218,8 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
     return new RecordByKeyIterator(scanner, keys, getSchema(), readerSchema);
   }
 
-  @SuppressWarnings("unchecked")
-  @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
+  @VisibleForTesting
+  protected ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys

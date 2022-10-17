@@ -36,11 +36,13 @@ import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Set;
 
-public class HoodieAvroOrcReader implements HoodieAvroFileReader {
-  private Path path;
-  private Configuration conf;
+public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
+
+  private final Path path;
+  private final Configuration conf;
   private final BaseFileUtils orcUtils;
 
   public HoodieAvroOrcReader(Configuration configuration, Path path) {
@@ -65,20 +67,19 @@ public class HoodieAvroOrcReader implements HoodieAvroFileReader {
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema schema) throws IOException {
+  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    if (!Objects.equals(readerSchema, requestedSchema)) {
+      throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
+    }
+
     try {
       Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf));
-      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema);
+      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readerSchema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
-      return new OrcReaderIterator<>(recordReader, schema, orcSchema);
+      return new OrcReaderIterator<>(recordReader, readerSchema, orcSchema);
     } catch (IOException io) {
       throw new HoodieIOException("Unable to create an ORC reader.", io);
     }
-  }
-
-  @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -87,8 +88,7 @@ public class HoodieAvroOrcReader implements HoodieAvroFileReader {
   }
 
   @Override
-  public void close() {
-  }
+  public void close() {}
 
   @Override
   public long getTotalRecords() {

@@ -228,14 +228,14 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         IntStream.concat(IntStream.range(40, NUM_RECORDS * 2), IntStream.range(10, 20))
             .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toList());
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
-    Iterator<IndexedRecord> iterator = hfileReader.getIndexedRecordsByKeysIterator(keys, avroSchema);
+    Iterator<HoodieRecord<IndexedRecord>> iterator = hfileReader.getRecordsByKeysIterator(keys, avroSchema);
 
     List<Integer> expectedIds =
         IntStream.concat(IntStream.range(40, NUM_RECORDS), IntStream.range(10, 20))
             .boxed().collect(Collectors.toList());
     int index = 0;
     while (iterator.hasNext()) {
-      GenericRecord record = (GenericRecord) iterator.next();
+      GenericRecord record = (GenericRecord) iterator.next().getData();
       String key = "key" + String.format("%02d", expectedIds.get(index));
       assertEquals(key, record.get("_row_key").toString());
       assertEquals(Integer.toString(expectedIds.get(index)), record.get("time").toString());

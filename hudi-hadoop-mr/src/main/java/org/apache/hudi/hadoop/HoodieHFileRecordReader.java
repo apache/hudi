@@ -30,6 +30,7 @@ import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 
@@ -41,7 +42,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
   private long count = 0;
   private ArrayWritable valueObj;
   private HoodieAvroHFileReader reader;
-  private Iterator<IndexedRecord> recordIterator;
+  private Iterator<HoodieRecord<IndexedRecord>> recordIterator;
   private Schema schema;
 
   public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
@@ -56,14 +57,14 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
   @Override
   public boolean next(NullWritable key, ArrayWritable value) throws IOException {
     if (recordIterator == null) {
-      recordIterator = reader.getIndexedRecordIterator(schema);
+      recordIterator = reader.getRecordIterator(schema);
     }
 
     if (!recordIterator.hasNext()) {
       return false;
     }
 
-    IndexedRecord record = recordIterator.next();
+    IndexedRecord record = recordIterator.next().getData();
     ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, schema);
     value.set(aWritable.get());
     count++;
