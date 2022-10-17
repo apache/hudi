@@ -18,10 +18,12 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenResult;
@@ -33,6 +35,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.io.HoodieWriteHandle.IGNORE_RECORD;
 
 /**
  * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
@@ -69,9 +73,16 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
 
   @Override
   public void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
-    final HoodieRecord insertPayload = payload.record;
+    final HoodieRecord<T> insertPayload = payload.record;
     String partitionPath = insertPayload.getPartitionPath();
     HoodieWriteHandle<?,?,?,?> handle = handles.get(partitionPath);
+
+    Option<IndexedRecord> insertRecord = payload.insertValue;
+    // just skip the ignored record，do not make partitions on fs
+    if (insertRecord.isPresent() && insertRecord.get().equals(IGNORE_RECORD)) {
+      return;
+    }
+
     if (handle == null) {
       // If the records are sorted, this means that we encounter a new partition path
       // and the records for the previous partition path are all written,
