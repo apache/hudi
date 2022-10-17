@@ -2400,7 +2400,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       return;
     }
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start().startTimer();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     // Partitions should match

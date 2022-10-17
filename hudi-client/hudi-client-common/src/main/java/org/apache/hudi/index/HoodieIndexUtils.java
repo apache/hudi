@@ -152,7 +152,7 @@ public class HoodieIndexUtils {
     try {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
-        HoodieTimer timer = new HoodieTimer().startTimer();
+        HoodieTimer timer = HoodieTimer.start().startTimer();
         HoodieFileReader fileReader = HoodieFileReaderFactory.getFileReader(configuration, filePath);
         Set<String> fileRowKeys = fileReader.filterRowKeys(new TreeSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);

@@ -68,7 +68,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
 
   @Override
   public HoodieRestoreMetadata execute() {
-    HoodieTimer restoreTimer = new HoodieTimer();
+    HoodieTimer restoreTimer = HoodieTimer.start();
     restoreTimer.startTimer();
 
     Option<HoodieInstant> restoreInstant = table.getRestoreTimeline()

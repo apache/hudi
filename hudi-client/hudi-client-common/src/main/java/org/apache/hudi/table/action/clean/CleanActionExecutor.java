@@ -198,7 +198,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
 
     HoodieInstant inflightInstant = null;
     try {
-      final HoodieTimer timer = new HoodieTimer();
+      final HoodieTimer timer = HoodieTimer.start();
       timer.startTimer();
       if (cleanInstant.isRequested()) {
         inflightInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant,

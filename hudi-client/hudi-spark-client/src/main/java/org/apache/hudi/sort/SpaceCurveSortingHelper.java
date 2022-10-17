@@ -243,7 +243,7 @@ public class SpaceCurveSortingHelper {
     } else if (dataType instanceof IntegerType) {
       return row.isNullAt(index) ? Long.MAX_VALUE : (long) row.getInt(index);
     } else if (dataType instanceof FloatType) {
-      return row.isNullAt(index) ? Long.MAX_VALUE : Double.doubleToLongBits((double) row.getFloat(index));
+      return row.isNullAt(index) ? Long.MAX_VALUE : Double.doubleToLongBits(row.getFloat(index));
     } else if (dataType instanceof StringType) {
       return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtil.convertStringToLong(row.getString(index));
     } else if (dataType instanceof DateType) {
