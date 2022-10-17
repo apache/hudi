@@ -32,7 +32,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
- * HoodieExecutorBase holds common elements producerExecutorService, consumerExecutorService, producers and a signle consumer.
+ * HoodieExecutorBase holds common elements producerExecutorService, consumerExecutorService, producers and a single consumer.
  * Also HoodieExecutorBase control the lifecycle of producerExecutorService and consumerExecutorService.
  */
 public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O, E> {
