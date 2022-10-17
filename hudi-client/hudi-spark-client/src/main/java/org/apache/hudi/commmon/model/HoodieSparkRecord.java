@@ -319,18 +319,37 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     }
   }
 
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
   @Override
-  public void write(Kryo kryo, Output output) {
-    // NOTE: We only serialize data held by the [[HoodieRecord]] base class
-    super.write(kryo, output);
+  protected final void writeRecordPayload(InternalRow payload, Kryo kryo, Output output) {
+    UnsafeRow unsafeRow = convertToUnsafeRow(payload, schema);
+
+    kryo.writeObject(output, unsafeRow);
   }
 
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
   @Override
-  public void read(Kryo kryo, Input input) {
-    super.read(kryo, input);
+  protected final InternalRow readRecordPayload(Kryo kryo, Input input) {
     // NOTE: After deserialization every object is allocated on the heap, therefore
     //       we annotate this object as being copied
     this.copy = true;
+
+    return kryo.readObject(input, UnsafeRow.class);
+  }
+
+  private static UnsafeRow convertToUnsafeRow(InternalRow payload, StructType schema) {
+    if (payload instanceof UnsafeRow) {
+      return (UnsafeRow) payload;
+    }
+
+    UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, schema);
+    return unsafeProjection.apply(payload);
   }
 
   private static HoodieInternalRow wrapIntoUpdatableOverlay(InternalRow data, StructType structType) {
@@ -397,8 +416,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     //       In case provided row is anything but [[UnsafeRow]], it's expected that the
     //       corresponding schema has to be provided as well so that it could be properly
     //       serialized (in case it would need to be)
-    boolean isValid = data instanceof UnsafeRow ||
-        schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
+    boolean isValid = data instanceof UnsafeRow
+        || schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
 
     ValidationUtils.checkState(isValid);
   }
