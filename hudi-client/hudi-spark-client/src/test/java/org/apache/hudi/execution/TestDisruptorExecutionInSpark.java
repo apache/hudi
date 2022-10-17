@@ -124,8 +124,6 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
   @Test
   public void testInterruptExecutor() {
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
-    final Lock lock = new ReentrantLock();
-    Condition condition = lock.newCondition();
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferSize()).thenReturn(Option.of(1024));
@@ -135,7 +133,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
           @Override
           public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
             try {
-              condition.wait();
+              Thread.currentThread().wait(-1);
             } catch (InterruptedException ie) {
               // ignore here
             }
