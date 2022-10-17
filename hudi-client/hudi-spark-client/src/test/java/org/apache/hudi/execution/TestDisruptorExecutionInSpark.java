@@ -36,6 +36,7 @@ import org.apache.spark.TaskContext$;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -119,6 +120,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
   }
 
   @Test
+  @Timeout(value = 60)
   public void testInterruptExecutor() {
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
 
@@ -130,7 +132,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
           @Override
           public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
             try {
-              Thread.currentThread().wait(-1);
+              Thread.currentThread().wait();
             } catch (InterruptedException ie) {
               // ignore here
             }
@@ -152,8 +154,6 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
       assertTrue(Thread.interrupted());
     } catch (Exception e) {
       // ignore here
-    } finally {
-      executor.shutdownNow();
     }
   }
 }
