@@ -20,33 +20,38 @@ package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
  * HoodieExecutorBase holds common elements producerExecutorService, consumerExecutorService, producers and consumer.
  * Also HoodieExecutorBase control the lifecycle of producerExecutorService and consumerExecutorService.
  */
-public class HoodieExecutorBase<I, O, E> {
+public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O, E> {
 
-  private static final Logger LOG = LogManager.getLogger(DisruptorExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieExecutorBase.class);
 
   private static final long TERMINATE_WAITING_TIME_SECS = 60L;
   // Executor service used for launching write thread.
-  private final ExecutorService producerExecutorService;
+  public final ExecutorService producerExecutorService;
   // Executor service used for launching read thread.
-  private final ExecutorService consumerExecutorService;
+  public final ExecutorService consumerExecutorService;
   // Producers
-  private final List<HoodieProducer<I>> producers;
+  public final List<HoodieProducer<I>> producers;
   // Consumer
-  private final Option<IteratorBasedQueueConsumer<O, E>> consumer;
+  public final Option<IteratorBasedQueueConsumer<O, E>> consumer;
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
-  private final Runnable preExecuteRunnable;
+  public final Runnable preExecuteRunnable;
+
+  public List<Future<Boolean>> producerTasks;
 
   public HoodieExecutorBase(List<HoodieProducer<I>> producers, Option<IteratorBasedQueueConsumer<O, E>> consumer,
                             Runnable preExecuteRunnable) {
@@ -57,26 +62,6 @@ public class HoodieExecutorBase<I, O, E> {
     this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new HoodieDaemonThreadFactory("producer", preExecuteRunnable));
     // Ensure single thread for consumer
     this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("consumer"));
-  }
-
-  public Runnable getPreExecuteRunnable() {
-    return preExecuteRunnable;
-  }
-
-  public ExecutorService getConsumerExecutorService() {
-    return consumerExecutorService;
-  }
-
-  public ExecutorService getProducerExecutorService() {
-    return producerExecutorService;
-  }
-
-  public List<HoodieProducer<I>> getProducers() {
-    return producers;
-  }
-
-  public Option<IteratorBasedQueueConsumer<O, E>> getConsumer() {
-    return consumer;
   }
 
   public boolean awaitTermination() {
@@ -107,4 +92,28 @@ public class HoodieExecutorBase<I, O, E> {
     producerExecutorService.shutdown();
     consumerExecutorService.shutdown();
   }
+
+  /**
+   * Main API to run both production and consumption.
+   */
+  @Override
+  public E execute() {
+    try {
+      ValidationUtils.checkState(this.consumer.isPresent());
+      setup();
+      producerTasks = startProducers();
+      Future<E> future = startConsumer();
+      return future.get();
+    } catch (InterruptedException ie) {
+      shutdownNow();
+      Thread.currentThread().interrupt();
+      throw new HoodieException(ie);
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    } finally {
+      postAction();
+    }
+  }
+
+  public void setup(){}
 }

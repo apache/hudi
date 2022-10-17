@@ -40,9 +40,10 @@ import java.util.stream.Collectors;
  * class takes as queue producer(s), consumer and transformer and exposes API to orchestrate
  * concurrent execution of these actors communicating through disruptor
  */
-public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<I, O, E> {
+public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(DisruptorExecutor.class);
+  private final HoodieMessageQueue<I, O> queue;
 
   public DisruptorExecutor(final Option<Integer> bufferSize, final Iterator<I> inputItr,
                            IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
@@ -62,8 +63,8 @@ public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<
   public DisruptorExecutor(final Option<Integer> bufferSize, List<HoodieProducer<I>> producers,
                            Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                            final Option<String> waitStrategy, Runnable preExecuteRunnable) {
-    super(new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable),
-        new HoodieExecutorBase<>(producers, consumer, preExecuteRunnable));
+    super(producers, consumer, preExecuteRunnable);
+    this.queue = new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable);
   }
 
   /**
@@ -71,8 +72,8 @@ public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<
    */
   public List<Future<Boolean>> startProducers() {
     final ExecutorCompletionService<Boolean> completionService =
-        new ExecutorCompletionService<Boolean>(hoodieExecutorBase.getProducerExecutorService());
-    return hoodieExecutorBase.getProducers().stream().map(producer -> {
+        new ExecutorCompletionService<Boolean>(producerExecutorService);
+    return producers.stream().map(producer -> {
       return completionService.submit(() -> {
         try {
           producer.produce(queue);
@@ -87,7 +88,7 @@ public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<
 
   @Override
   public void setup() {
-    DisruptorMessageHandler<O, E> handler = new DisruptorMessageHandler<>(hoodieExecutorBase.getConsumer().get());
+    DisruptorMessageHandler<O, E> handler = new DisruptorMessageHandler<>(consumer.get());
     ((DisruptorMessageQueue)queue).setHandlers(handler);
     ((DisruptorMessageQueue)queue).start();
   }
@@ -96,7 +97,7 @@ public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<
   public void postAction() {
     try {
       queue.close();
-      hoodieExecutorBase.close();
+      super.close();
     } catch (IOException e) {
       throw new HoodieIOException("Catch IOException while closing DisruptorMessageQueue", e);
     }
@@ -105,7 +106,7 @@ public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<
   @Override
   public Future<E> startConsumer() {
     // consumer is already started. Here just wait for all record consumed and return the result.
-    return hoodieExecutorBase.getConsumerExecutorService().submit(() -> {
+    return consumerExecutorService.submit(() -> {
 
       // Waits for all producers finished.
       for (Future f : producerTasks) {
@@ -114,8 +115,8 @@ public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<
 
       // Call disruptor queue close function which will wait until all events currently in the disruptor have been processed by all event processors
       queue.close();
-      hoodieExecutorBase.getConsumer().get().finish();
-      return hoodieExecutorBase.getConsumer().get().getResult();
+      consumer.get().finish();
+      return consumer.get().getResult();
     });
   }
 
@@ -126,7 +127,7 @@ public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<
 
   @Override
   public void shutdownNow() {
-    hoodieExecutorBase.shutdownNow();
+    super.shutdownNow();
     try {
       queue.close();
     } catch (IOException e) {
@@ -137,10 +138,5 @@ public class DisruptorExecutor<I, O, E> extends MessageQueueBasedHoodieExecutor<
   @Override
   public DisruptorMessageQueue<I, O> getQueue() {
     return (DisruptorMessageQueue)queue;
-  }
-
-  @Override
-  public boolean awaitTermination() {
-    return hoodieExecutorBase.awaitTermination();
   }
 }
