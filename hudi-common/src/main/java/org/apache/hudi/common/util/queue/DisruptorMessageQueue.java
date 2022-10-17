@@ -94,7 +94,6 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
       @Override
       public void onEvent(HoodieDisruptorEvent event, long sequence, boolean endOfBatch) throws Exception {
         consumer.consumeOneRecord(event.get());
-        event.clear();
       }
     });
   }
@@ -128,14 +127,6 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
     public O get() {
       return this.value;
-    }
-
-    /**
-     * When passing data via the Disruptor, it is possible for objects to live longer than intended.
-     * To avoid this happening it is necessary to clear out the event after processing it.
-     */
-    public void clear() {
-      value = null;
     }
   }
 }
