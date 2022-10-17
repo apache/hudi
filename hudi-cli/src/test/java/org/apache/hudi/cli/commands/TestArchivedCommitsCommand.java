@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -62,6 +63,9 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
   private Shell shell;
 
   private String tablePath;
+
+
+
 
   @BeforeEach
   public void init() throws Exception {
@@ -111,6 +115,22 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
     HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
     archiver.archiveIfRequired(context());
+  }
+
+
+  @Test
+  public void testArchiving() {
+    Configuration conf = HoodieCLI.conf;
+
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+
+    for (int i = 1; i < 20; i++) {
+      String timestamp = String.valueOf(i);
+      // Write corrupted requested Clean File
+      HoodieTestCommitMetadataGenerator.createCommitFile(HoodieCLI.basePath, timestamp, conf);
+    }
+
+
   }
 
   /**

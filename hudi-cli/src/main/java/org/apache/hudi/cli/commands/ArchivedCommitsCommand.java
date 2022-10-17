@@ -28,7 +28,12 @@ import org.apache.hudi.avro.model.HoodieCommitMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -37,6 +42,13 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieSparkTable;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -52,6 +64,29 @@ import java.util.stream.Collectors;
  */
 @ShellComponent
 public class ArchivedCommitsCommand {
+  private static final Logger LOG = LogManager.getLogger(ArchivedCommitsCommand.class);
+  private JavaSparkContext jsc;
+  @ShellMethod(key = "trigger archival", value = "trigger archival")
+  public void triggerArchival(@ShellOption(value = {"--minCommits"},
+      help = "Minimum number of instants to retain in the active timeline. See hoodie.keep.min.commits",
+      defaultValue = "20") int minCommits,
+                              @ShellOption(value = {"--maxCommits"},
+                                  help = "Maximum number of instants to retain in the active timeline. See hoodie.keep.max.commits",
+                                  defaultValue = "30") int maxCommits) {
+
+    initJavaSparkContext();
+    HoodieArchivalConfig arCfg = HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits,maxCommits).build();
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath).withArchivalConfig(arCfg).build();
+    HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
+    HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
+    try {
+      HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
+      archiver.archiveIfRequired(context,true);
+    } catch (IOException ioe) {
+      LOG.error("Failed to archive with IOException: " + ioe);
+    }
+  }
 
   @ShellMethod(key = "show archived commit stats", value = "Read commits from archived files and show details")
   public String showArchivedCommits(
@@ -204,6 +239,12 @@ public class ArchivedCommitsCommand {
     } catch (Exception e) {
       e.printStackTrace();
       return new Comparable[] {};
+    }
+  }
+
+  private void initJavaSparkContext() {
+    if (jsc == null) {
+      jsc = SparkUtil.initJavaSparkContext(SparkUtil.getDefaultConf("HoodieCLI", Option.of(SparkUtil.DEFAULT_SPARK_MASTER)));
     }
   }
 }
