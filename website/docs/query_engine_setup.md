@@ -70,10 +70,18 @@ Beginning query by connecting hive metastore with presto client. The presto clie
 ```
 
 ## Trino
+
+Just like PrestoDB, there are two ways to query Hudi tables using Trino i.e. either using Hive connector or the native 
+Hudi connector. If you're on Trino version **398** or higher, it is recommended to use the Hudi connector. To learn more 
+about the usage of Hudi connector, please check out the [connector documentation](https://trino.io/docs/current/connector/hudi.html).
+Both the connectors are on par in terms of query support, i.e. 'Snapshot' queries for Copy-On-Write tables and 
+'Read Optimized' queries for Merge-On-Read tables.  
+
 :::note
 [Trino](https://trino.io/) (formerly PrestoSQL) was forked off of PrestoDB a few years ago. Hudi supports 'Snapshot' queries for Copy-On-Write tables and 'Read Optimized' queries
 for Merge-On-Read tables. This is through the initial input format based integration in PrestoDB (pre forking). This approach has
-known performance limitations with very large tables, which has been since fixed on PrestoDB. We are working on replicating the same fixes on Trino as well.
+known performance limitations with very large tables, which has been since fixed on PrestoDB. 
+We recommend using the new Hudi connector in Trino (released since Trino version 398).
 :::
 
 To query Hudi tables on Trino, please place the `hudi-trino-bundle` jar into the Hive connector installation `<trino_install>/plugin/hive-hadoop2`.
