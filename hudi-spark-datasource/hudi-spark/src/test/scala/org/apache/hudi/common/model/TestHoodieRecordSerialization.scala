@@ -20,7 +20,7 @@ package org.apache.hudi.common.model
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
-import org.apache.hudi.HoodieInternalRowUtils
+import org.apache.hudi.{HoodieInternalRowUtils, SparkAdapterSupport}
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.commmon.model.HoodieSparkRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -166,19 +166,16 @@ object TestHoodieRecordSerialization {
   }
 
   private def toUnsafeRow(row: Row, schema: StructType): UnsafeRow = {
-    val encoder = RowEncoder(schema).resolveAndBind()
-    val internalRow = encoder.toRow(row)
+    val encoder = SparkAdapterSupport.sparkAdapter.createSparkRowSerDe(schema)
+    val internalRow = encoder.serializeRow(row)
     internalRow.asInstanceOf[UnsafeRow]
   }
 
   private def convertToAvroRecord(row: Row): GenericRecord = {
-    val encoder = RowEncoder(row.schema).resolveAndBind()
-    val internalRow = encoder.toRow(row)
-
     val schema = convertStructTypeToAvroSchema(row.schema, "testRecord", "testNamespace")
 
     createInternalRowToAvroConverter(row.schema, schema, nullable = false)
-      .apply(internalRow)
+      .apply(toUnsafeRow(row, row.schema))
   }
 
   class OverwriteWithLatestAvroPayloadWithEquality(avroRecord: GenericRecord, _orderingVal: Comparable[_])
