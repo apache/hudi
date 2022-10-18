@@ -90,7 +90,7 @@ public class HdfsTestService {
         String bindIP = "127.0.0.1";
         configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort,
             datanodePort, datanodeIpcPort, datanodeHttpPort);
-        miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(1).format(format).checkDataNodeAddrConfig(true)
+        miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(2).format(format).checkDataNodeAddrConfig(true)
             .checkDataNodeHostConfig(true).build();
         LOG.info("HDFS Minicluster service started.");
         return miniDfsCluster;
@@ -105,11 +105,15 @@ public class HdfsTestService {
     }
   }
 
-  public void stop() throws IOException {
+  public void stop() {
     LOG.info("HDFS Minicluster service being shut down.");
     if (miniDfsCluster != null) {
-      miniDfsCluster.getFileSystem().delete(new Path(workDir), true);
-      miniDfsCluster.shutdown(true, true);
+      try {
+        miniDfsCluster.getFileSystem().delete(new Path(workDir), true);
+        miniDfsCluster.shutdown(true, true);
+      } catch (IOException e) {
+        LOG.error("Failed to stop the MiniCluster ", e);
+      }
     }
     miniDfsCluster = null;
   }
@@ -155,6 +159,7 @@ public class HdfsTestService {
     config.set("dfs.datanode.max.transfer.threads", "1024");
     config.set("dfs.client.file-block-storage-locations.num-threads","10");
     config.set("dfs.datanode.handler.count", "10");
+    config.set("dfs.client.block.write.replace-datanode-on-failure.policy","never");
     return config;
   }
 
