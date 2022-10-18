@@ -340,5 +340,8 @@ public class HoodieTestSuiteJob {
 
     @Parameter(names = {"--trino-jdbc-password"}, description = "Password corresponding to the username to use for authentication")
     public String trinoPassword;
+
+    @Parameter(names = {"--index-type"}, description = "Index type to use for writes")
+    public String indexType = "SIMPLE";
   }
 }
