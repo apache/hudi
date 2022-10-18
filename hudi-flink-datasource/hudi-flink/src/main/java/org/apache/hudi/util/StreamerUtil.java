@@ -346,6 +346,23 @@ public class StreamerUtil {
   }
 
   /**
+   * Returns whether the hoodie partition exists under given table path {@code tablePath} and partition path {@code partitionPath}.
+   *
+   * @param tablePath     Base path of the table.
+   * @param partitionPath The path of the partition.
+   * @param hadoopConf    The hadoop configuration.
+   */
+  public static boolean partitionExists(String tablePath, String partitionPath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    // Hadoop FileSystem
+    FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
+    try {
+      return fs.exists(new Path(tablePath, partitionPath));
+    } catch (IOException e) {
+      throw new HoodieException(String.format("Error while checking whether partition exists under table path [%s] and partition path [%s]", tablePath, partitionPath), e);
+    }
+  }
+
+  /**
    * Generates the bucket ID using format {partition path}_{fileID}.
    */
   public static String generateBucketKey(String partitionPath, String fileId) {

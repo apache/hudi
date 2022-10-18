@@ -210,7 +210,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @param partitions   {@link List} of partition to be deleted
    * @return HoodieWriteMetadata
    */
-  public abstract HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions);
+  public abstract HoodieWriteMetadata<O> deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions);
 
   /**
    * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
