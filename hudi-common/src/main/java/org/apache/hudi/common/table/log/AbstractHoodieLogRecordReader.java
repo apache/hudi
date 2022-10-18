@@ -141,6 +141,11 @@ public abstract class AbstractHoodieLogRecordReader {
   // Populate meta fields for the records
   private boolean populateMetaFields = true;
 
+  private Option<String[]> partitionFields;
+  private Option<String[]> partitionValues;
+  private boolean dropPartitions = false;
+  private boolean hiveStylePartition = false;
+
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema,
                                           String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
@@ -162,6 +167,9 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
     this.preCombineField = tableConfig.getPreCombineField();
+    this.dropPartitions = tableConfig.getBooleanOrDefault(HoodieTableConfig.DROP_PARTITION_COLUMNS);
+    this.partitionFields = tableConfig.getPartitionFields();
+    this.hiveStylePartition = tableConfig.getBooleanOrDefault(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE);
     if (this.preCombineField != null) {
       this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
     }
@@ -184,6 +192,24 @@ public abstract class AbstractHoodieLogRecordReader {
           Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
     }
     this.partitionName = partitionName;
+    this.partitionValues  = getPartitionValues();
+  }
+
+  private Option<String[]> getPartitionValues() {
+    if (!this.partitionName.isPresent()) {
+      return Option.empty();
+    }
+
+    String[] partitionValues = this.partitionName.get().split("/");
+    if (this.hiveStylePartition) {
+      return Option.of(Arrays.stream(partitionValues)
+          .map(partition -> partition.split("="))
+          .filter(partition -> partition.length ==2)
+          .map(partition -> partition[1])
+          .toArray(String[]::new));
+    } else {
+      return Option.of(partitionValues);
+    }
   }
 
   protected String getKeyField() {
@@ -387,6 +413,19 @@ public abstract class AbstractHoodieLogRecordReader {
       while (recordIterator.hasNext()) {
         IndexedRecord currentRecord = recordIterator.next();
         IndexedRecord record = schemaOption.isPresent() ? HoodieAvroUtils.rewriteRecordWithNewSchema(currentRecord, schemaOption.get(), Collections.emptyMap()) : currentRecord;
+
+        Schema schema = record.getSchema();
+        if (this.dropPartitions && this.partitionFields.isPresent() && this.partitionValues.isPresent()) {
+          String[] partitionFields = this.partitionFields.get();
+          String[] partitionValues = this.partitionValues.get();
+
+          if (partitionFields.length == partitionValues.length) {
+            for (int i = 0; i < partitionValues.length; i++) {
+              record.put(schema.getField(partitionFields[i]).pos(), partitionValues[i]);
+            }
+          }
+        }
+
         processNextRecord(createHoodieRecord(record, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
             this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
         totalLogRecords.incrementAndGet();
