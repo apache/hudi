@@ -345,7 +345,7 @@ public class RequestHandler {
       metricsRegistry.add("LATEST_SLICE_RANGE_INSTANT", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSliceInRange(
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
-          Arrays.asList(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANTS_PARAM, String.class).getOrThrow(e -> new HoodieException("INSTANTS_PARAM is invalid2")).split(",")));
+          Arrays.asList(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANTS_PARAM, String.class).getOrThrow(e -> new HoodieException("INSTANTS_PARAM is invalid")).split(",")));
       writeValueAsString(ctx, dtos);
     }, true));
 
@@ -380,7 +380,7 @@ public class RequestHandler {
     app.get(RemoteHoodieTableFileSystemView.PENDING_LOG_COMPACTION_OPS, new ViewHandler(ctx -> {
       metricsRegistry.add("PEDING_LOG_COMPACTION_OPS", 1);
       List<CompactionOpDTO> dtos = sliceHandler.getPendingLogCompactionOperations(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
 
