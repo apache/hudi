@@ -84,7 +84,7 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanupClass() throws IOException {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
     }

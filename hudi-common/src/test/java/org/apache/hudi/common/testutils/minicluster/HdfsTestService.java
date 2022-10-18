@@ -105,9 +105,10 @@ public class HdfsTestService {
     }
   }
 
-  public void stop() {
+  public void stop() throws IOException {
     LOG.info("HDFS Minicluster service being shut down.");
     if (miniDfsCluster != null) {
+      miniDfsCluster.getFileSystem().delete(new Path(workDir), true);
       miniDfsCluster.shutdown(true, true);
     }
     miniDfsCluster = null;
@@ -151,6 +152,9 @@ public class HdfsTestService {
     config.set("hadoop.proxyuser." + user + ".hosts", "*");
     config.setBoolean("dfs.permissions", false);
     config.set("dfs.blocksize","16777216");
+    config.set("dfs.datanode.max.transfer.threads", "1024");
+    config.set("dfs.client.file-block-storage-locations.num-threads","10");
+    config.set("dfs.datanode.handler.count", "10");
     return config;
   }
 
