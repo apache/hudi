@@ -38,6 +38,7 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
+import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -136,6 +137,11 @@ public class StreamWriteOperatorCoordinator
   private NonThrownExecutor executor;
 
   /**
+   * A single-thread executor to wait acknowledgement of metadata events ready.
+   */
+  private NonThrownExecutor commitExecutor;
+
+  /**
    * A single-thread executor to handle asynchronous hive sync.
    */
   private NonThrownExecutor hiveSyncExecutor;
@@ -189,6 +195,10 @@ public class StreamWriteOperatorCoordinator
     this.executor = NonThrownExecutor.builder(LOG)
         .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
         .waitForTasksFinish(true).build();
+    // start the commit executor
+    this.commitExecutor = NonThrownExecutor.builder(LOG)
+        .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
+        .waitForTasksFinish(true).build();
     // start the executor if required
     if (tableState.syncHive) {
       initHiveSync();
@@ -200,6 +210,9 @@ public class StreamWriteOperatorCoordinator
     // teardown the resource
     if (executor != null) {
       executor.close();
+    }
+    if (commitExecutor != null) {
+      commitExecutor.close();
     }
     if (hiveSyncExecutor != null) {
       hiveSyncExecutor.close();
@@ -234,8 +247,17 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void notifyCheckpointComplete(long checkpointId) {
-    executor.execute(
-        () -> {
+    // reasons why we need an ack mechanism:
+    // in some extreme cases, when checkpoints in the writting functions are completed and sending back their meta events,
+    // but due to network latency, the coordinator notifyCheckpointComplete might be invoked before handleEventFromOperator to handle metas,
+    // thus we will commit the instant with un-completed meta events by mistake
+    commitExecutor.execute(() -> {
+          // a wait and ack mechanism to verify that all last meta events（lastBatch = true）from each task are received, to rescue this commit
+          // reasons why we need a specific ack thread but not in the common single thread executor:
+          // it'll be a DEAD lock between notifyCheckpointComplete verification and handleEventFromOperator in the single thread executor
+          acknowledgeWriteMetaDataEventReady();
+
+          LOG.info("start to commit.");
           // The executor thread inherits the classloader of the #notifyCheckpointComplete
           // caller, which is a AppClassLoader.
           Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
@@ -467,6 +489,17 @@ public class StreamWriteOperatorCoordinator
     });
   }
 
+  private void acknowledgeWriteMetaDataEventReady() {
+    LOG.info("waiting for write metadata events ready.");
+    TimeWait timeWait = TimeWait.builder()
+        .timeout(this.conf.getLong(FlinkOptions.WRITE_METADATA_EVENT_ACK_TIMEOUT))
+        .action("write metadata event ready")
+        .build();
+    while (!allEventsReceived()) {
+      timeWait.waitFor();
+    }
+  }
+
   /**
    * Decides whether the given exception is caused by sending events to FINISHED tasks.
    *
@@ -580,6 +613,14 @@ public class StreamWriteOperatorCoordinator
       this.executor.close();
     }
     this.executor = executor;
+  }
+
+  @VisibleForTesting
+  public void setCommitExecutor(NonThrownExecutor executor) throws Exception {
+    if (this.commitExecutor != null) {
+      this.commitExecutor.close();
+    }
+    this.commitExecutor = executor;
   }
 
   // -------------------------------------------------------------------------

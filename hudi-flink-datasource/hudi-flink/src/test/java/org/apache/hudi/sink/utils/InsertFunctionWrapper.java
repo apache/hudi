@@ -100,6 +100,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   public void openFunction() throws Exception {
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+    this.coordinator.setCommitExecutor(new MockCoordinatorExecutor(coordinatorContext));
 
     setupWriteFunction();
 

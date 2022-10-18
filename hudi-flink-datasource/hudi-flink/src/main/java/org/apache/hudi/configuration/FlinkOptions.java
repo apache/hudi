@@ -535,6 +535,13 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
           + "waits for the instant commit success, only for internal use");
 
+  public static final ConfigOption<Long> WRITE_METADATA_EVENT_ACK_TIMEOUT = ConfigOptions
+      .key("write.metadata.event.ack.timeout")
+      .longType()
+      .defaultValue(10_000L) // default 10 seconds
+      .withDescription("Timeout limit for StreamWriteCoordinator notifyCheckpointComplete to \n"
+          + "wait in the ack thread until all meta events from tasks are received and handled");
+
   public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_INPUT = ConfigOptions
       .key("write.bulk_insert.shuffle_input")
       .booleanType()

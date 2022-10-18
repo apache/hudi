@@ -81,6 +81,7 @@ public class TestStreamWriteOperatorCoordinator {
         TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    coordinator.setCommitExecutor(new MockCoordinatorExecutor(context));
 
     coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
     coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
@@ -140,29 +141,53 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  public void testCheckpointCompleteWithPartialEvents() {
+  public void testCheckpointCompleteWithPartialEvents() throws InterruptedException {
+    // empty case
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
     String instant = coordinator.getInstant();
-    OperatorEvent event = WriteMetadataEvent.builder()
+    OperatorEvent event10 = WriteMetadataEvent.builder()
         .taskID(0)
         .instantTime(instant)
         .writeStatus(Collections.emptyList())
+        .lastBatch(true)
         .build();
-    coordinator.handleEventFromOperator(0, event);
-
+    coordinator.handleEventFromOperator(0, event10);
+    OperatorEvent event11 = WriteMetadataEvent.builder()
+        .taskID(1)
+        .instantTime(instant)
+        .writeStatus(Collections.emptyList())
+        .lastBatch(true)
+        .build();
+    coordinator.handleEventFromOperator(1, event11);
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1),
         "Returns early for empty write results");
+    TimeUnit.MILLISECONDS.sleep(100L);
     String lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
     assertNull(lastCompleted, "Returns early for empty write results");
     assertNull(coordinator.getEventBuffer()[0]);
+    assertNull(coordinator.getEventBuffer()[1]);
 
-    OperatorEvent event1 = createOperatorEvent(1, instant, "par2", false, 0.2);
-    coordinator.handleEventFromOperator(1, event1);
+    // normal complete case
+    OperatorEvent event20 = createOperatorEvent(0, instant, "par1", false, 0.2);
+    coordinator.handleEventFromOperator(0, event20);
+    OperatorEvent event21 = createOperatorEvent(1, instant, "par2", false, 0.2);
+    coordinator.handleEventFromOperator(1, event21);
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(2),
-        "Commits the instant with partial events anyway");
+        "Commits the instant with complete events");
+    TimeUnit.MILLISECONDS.sleep(100L);
     lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
-    assertThat("Commits the instant with partial events anyway", lastCompleted, is(instant));
+    assertThat("Commits the instant with complete events", lastCompleted, is(instant));
+
+    // uncompleted meta events case
+    final CompletableFuture<byte[]> future1 = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(3, future1);
+    // not the last batch
+    OperatorEvent event30 = createOperatorEvent(0, instant, "par1", false, 0.2, false);
+    coordinator.handleEventFromOperator(0, event30);
+    OperatorEvent event31 = createOperatorEvent(1, instant, "par2", false, 0.2);
+    coordinator.handleEventFromOperator(1, event31);
+    assertError(() -> coordinator.notifyCheckpointComplete(3), "Commits the instant with partial events anyway");
   }
 
   @Test
@@ -192,7 +217,7 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
-
+    coordinator.setCommitExecutor(new MockCoordinatorExecutor(context));
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
     coordinator.handleEventFromOperator(0, event0);
@@ -216,6 +241,7 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    coordinator.setCommitExecutor(new MockCoordinatorExecutor(context));
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
@@ -408,6 +434,16 @@ public class TestStreamWriteOperatorCoordinator {
       String partitionPath,
       boolean trackSuccessRecords,
       double failureFraction) {
+    return createOperatorEvent(taskId, instant, partitionPath, trackSuccessRecords, failureFraction, true);
+  }
+
+  private static WriteMetadataEvent createOperatorEvent(
+      int taskId,
+      String instant,
+      String partitionPath,
+      boolean trackSuccessRecords,
+      double failureFraction,
+      boolean lastBatch) {
     final WriteStatus writeStatus = new WriteStatus(trackSuccessRecords, failureFraction);
     writeStatus.setPartitionPath(partitionPath);
 
@@ -425,7 +461,7 @@ public class TestStreamWriteOperatorCoordinator {
         .taskID(taskId)
         .instantTime(instant)
         .writeStatus(Collections.singletonList(writeStatus))
-        .lastBatch(true)
+        .lastBatch(lastBatch)
         .build();
   }
 
