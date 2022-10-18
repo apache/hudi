@@ -24,12 +24,18 @@ import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.UtilHelpers;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
+
 import scala.collection.JavaConverters;
 
 @ShellComponent
@@ -147,5 +153,59 @@ public class ClusteringCommand {
       return "Failed to run clustering for scheduleAndExecute.";
     }
     return "Succeeded to run clustering for scheduleAndExecute";
+  }
+
+  /**
+   * Roll back incomplete clustering action, deleting the data files written
+   * and the replacecommit from the active timeline.
+   * <p>
+   * Example:
+   * > connect --path {path to hudi table}
+   * > clustering rollback --clusteringInstant  --sparkMaster local --sparkMemory 2g
+   */
+  @ShellMethod(key = "clustering rollback", value = "Roll back incomplete clustering action, "
+      + "deleting the data files written and the replacecommit from the active timeline.")
+  public String rollbackClustering(
+      @ShellOption(value = "--sparkMaster", defaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
+      @ShellOption(value = "--sparkMemory", help = "Spark executor memory", defaultValue = "4g") final String sparkMemory,
+      @ShellOption(value = "--clusteringInstant", help = "Clustering instant time",
+          defaultValue = ShellOption.NULL) final String clusteringInstantTime,
+      @ShellOption(value = "--rollbackUsingMarkers", defaultValue = "true",
+          help = "Enabling marker based rollback") final String rollbackUsingMarkers) throws Exception {
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    Option<HoodieInstant> instantOption = activeTimeline
+        .filterInflightsAndRequested()
+        .filter(instant -> instant.getTimestamp().equals(clusteringInstantTime))
+        .firstInstant();
+    if (!instantOption.isPresent()) {
+      return "Requested or inflight clustering commit "
+          + clusteringInstantTime + " not found in the active timeline";
+    }
+
+    boolean isClustering = HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instantOption.get().getAction())
+        && ClusteringUtils.getClusteringPlan(metaClient, instantOption.get()).isPresent();
+    if (!isClustering) {
+      return "Instant " + clusteringInstantTime + " is not a replacecommit for clustering.";
+    }
+
+    boolean initialized = HoodieCLI.initConf();
+    HoodieCLI.initFS(initialized);
+
+    String sparkPropertiesPath =
+        Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    sparkLauncher.addAppArgs(
+        SparkCommand.CLUSTERING_ROLLBACK.toString(), master, sparkMemory, clusteringInstantTime,
+        HoodieCLI.getTableMetaClient().getBasePath(), rollbackUsingMarkers);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+    // Refresh the current
+    HoodieCLI.refreshTableMetadata();
+    if (exitCode != 0) {
+      return "Clustering instant " + clusteringInstantTime + " failed to roll back";
+    }
+    return "Clustering instant " + clusteringInstantTime + " is successfully rolled back";
   }
 }

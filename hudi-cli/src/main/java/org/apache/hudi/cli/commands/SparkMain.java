@@ -97,8 +97,8 @@ public class SparkMain {
   enum SparkCommand {
     BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_SCHEDULE_AND_EXECUTE,
     COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLUSTERING_SCHEDULE,
-    CLUSTERING_RUN, CLUSTERING_SCHEDULE_AND_EXECUTE, CLEAN, DELETE_MARKER, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE,
-    REPAIR_DEPRECATED_PARTITION, RENAME_PARTITION
+    CLUSTERING_RUN, CLUSTERING_SCHEDULE_AND_EXECUTE, CLUSTERING_ROLLBACK, CLEAN, DELETE_MARKER,
+    DELETE_SAVEPOINT, UPGRADE, DOWNGRADE, REPAIR_DEPRECATED_PARTITION, RENAME_PARTITION
   }
 
   public static void main(String[] args) throws Exception {
@@ -239,6 +239,10 @@ public class SparkMain {
           }
           returnCode = cluster(jsc, args[3], args[4], args[5], 1, args[2],
               0, SCHEDULE, propsFilePath, configs);
+          break;
+        case CLUSTERING_ROLLBACK:
+          assert (args.length == 6);
+          returnCode = rollbackClustering(jsc, args[3], args[4], Boolean.parseBoolean(args[5]));
           break;
         case CLEAN:
           assert (args.length >= 5);
@@ -559,6 +563,18 @@ public class SparkMain {
       return 0;
     } else {
       LOG.warn(String.format("The commit \"%s\" failed to roll back.", instantTime));
+      return -1;
+    }
+  }
+
+  private static int rollbackClustering(JavaSparkContext jsc, String clusteringInstantTime,
+                                        String basePath, Boolean rollbackUsingMarkers) throws Exception {
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, rollbackUsingMarkers, false);
+    if (client.rollback(clusteringInstantTime, Option.empty(), rollbackUsingMarkers)) {
+      LOG.info(String.format("The clustering instant \"%s\" is rolled back.", clusteringInstantTime));
+      return 0;
+    } else {
+      LOG.warn(String.format("The clustering instant \"%s\" failed to roll back.", clusteringInstantTime));
       return -1;
     }
   }
