@@ -27,13 +27,15 @@ import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenRe
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
@@ -41,6 +43,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class CopyOnWriteInsertHandler<T>
     implements HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
+  private static final Logger LOG = LogManager.getLogger(CopyOnWriteInsertHandler.class);
   private final HoodieWriteConfig config;
   private final String instantTime;
   private final boolean areRecordsSorted;
@@ -72,6 +75,14 @@ public class CopyOnWriteInsertHandler<T>
   public void consume(HoodieInsertValueGenResult<HoodieRecord> genResult) {
     final HoodieRecord record = genResult.getResult();
     String partitionPath = record.getPartitionPath();
+    // just skip the ignored record，do not make partitions on fs
+    try {
+      if (record.shouldIgnore(genResult.schema, genResult.props)) {
+        return;
+      }
+    } catch (IOException e) {
+      LOG.warn("Writing record should be ignore " + record, e);
+    }
     HoodieWriteHandle<?,?,?,?> handle = handles.get(partitionPath);
     if (handle == null) {
       // If the records are sorted, this means that we encounter a new partition path
@@ -100,7 +111,6 @@ public class CopyOnWriteInsertHandler<T>
   @Override
   public List<WriteStatus> finish() {
     closeOpenHandles();
-    checkState(statuses.size() > 0);
     return statuses;
   }
 
