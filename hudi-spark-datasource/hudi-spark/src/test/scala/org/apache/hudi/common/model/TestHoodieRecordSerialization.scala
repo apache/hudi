@@ -18,12 +18,12 @@
 
 package org.apache.hudi.common.model
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
 import org.apache.hudi.HoodieInternalRowUtils
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.commmon.model.HoodieSparkRecord
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{OverwriteWithLatestAvroPayloadWithEquality, cloneUsingKryo, convertToAvroRecord, toUnsafeRow}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.Row
@@ -89,7 +89,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
   @Test
   def testAvroRecords(): Unit = {
     def routine(record: HoodieRecord[_], expectedSize: Int): Unit = {
-      // Step 1: Serialize/de- original [[HoodieSparkRecord]]
+      // Step 1: Serialize/de- original [[HoodieRecord]]
       val (cloned, originalBytes) = cloneUsingKryo(record)
 
       assertEquals(expectedSize, originalBytes.length)
@@ -111,9 +111,32 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
 
     Seq(
       (legacyRecord, 573),
-      (avroIndexedRecord, 159)
+      (avroIndexedRecord, 442)
     ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
   }
+
+  @Test
+  def testEmptyRecord(): Unit = {
+    def routine(record: HoodieRecord[_], expectedSize: Int): Unit = {
+      // Step 1: Serialize/de- original [[HoodieRecord]]
+      val (cloned, originalBytes) = cloneUsingKryo(record)
+
+      assertEquals(expectedSize, originalBytes.length)
+      assertEquals(record, cloned)
+
+      // Step 2: Serialize the already cloned record, and assert that ser/de loop is lossless
+      val (_, clonedBytes) = cloneUsingKryo(cloned)
+      assertEquals(ByteBuffer.wrap(originalBytes), ByteBuffer.wrap(clonedBytes))
+    }
+
+    val key = new HoodieKey("rec-key", "part-path")
+
+    Seq(
+      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 1, HoodieRecordType.AVRO), 74),
+      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 2, HoodieRecordType.SPARK), 74)
+    ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
+  }
+
 
   private def toLegacyAvroRecord(avroRecord: GenericRecord, key: HoodieKey): HoodieAvroRecord[OverwriteWithLatestAvroPayload] = {
     val avroRecordPayload = new OverwriteWithLatestAvroPayloadWithEquality(avroRecord, 0)
@@ -163,7 +186,8 @@ object TestHoodieRecordSerialization {
     override def equals(obj: Any): Boolean =
       obj match {
         case p: OverwriteWithLatestAvroPayloadWithEquality =>
-          Objects.equals(this.recordBytes, p.recordBytes) && Objects.equals(this.orderingVal, p.orderingVal)
+          Objects.equals(ByteBuffer.wrap(this.recordBytes), ByteBuffer.wrap(p.recordBytes)) &&
+            Objects.equals(this.orderingVal, p.orderingVal)
         case _ =>
           false
       }
