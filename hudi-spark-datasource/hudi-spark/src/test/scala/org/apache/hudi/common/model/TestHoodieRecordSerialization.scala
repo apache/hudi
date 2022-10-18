@@ -18,15 +18,19 @@
 
 package org.apache.hudi.common.model
 
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
 import org.apache.hudi.HoodieInternalRowUtils
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.commmon.model.HoodieSparkRecord
-import org.apache.hudi.common.model.TestHoodieSparkRecord.{cloneUsingKryo, toUnsafeRow}
+import org.apache.hudi.common.model.TestHoodieRecordSerialization.{OverwriteWithLatestAvroPayloadWithEquality, cloneUsingKryo, convertToAvroRecord, toUnsafeRow}
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.catalyst.expressions.UnsafeRow
 import org.apache.spark.sql.catalyst.expressions.objects.SerializerSupport
+import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, UnsafeRow}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.addMetaFields
 import org.apache.spark.sql.types.{Decimal, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -36,13 +40,14 @@ import org.junit.jupiter.api.Test
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
 import java.time.{Instant, LocalDate}
+import java.util.Objects
 
-class TestHoodieSparkRecord {
+class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
 
   private val rowSchema = StructType.fromDDL("a INT, b STRING, c DATE, d TIMESTAMP, e STRUCT<a: DECIMAL(3, 2)>")
 
   @Test
-  def testSerialization(): Unit = {
+  def testSparkRecord(): Unit = {
     def routine(row: InternalRow, schema: StructType, serializedSize: Int): Unit = {
       val record = row match {
         case ur: UnsafeRow => new HoodieSparkRecord(ur)
@@ -80,15 +85,51 @@ class TestHoodieSparkRecord {
       (hoodieInternalRow, addMetaFields(rowSchema), 175)
     ) foreach { case (row, schema, expectedSize) => routine(row, schema, expectedSize) }
   }
+
+  @Test
+  def testAvroRecords(): Unit = {
+    def routine(record: HoodieRecord[_], expectedSize: Int): Unit = {
+      // Step 1: Serialize/de- original [[HoodieSparkRecord]]
+      val (cloned, originalBytes) = cloneUsingKryo(record)
+
+      assertEquals(expectedSize, originalBytes.length)
+      assertEquals(record, cloned)
+
+      // Step 2: Serialize the already cloned record, and assert that ser/de loop is lossless
+      val (_, clonedBytes) = cloneUsingKryo(cloned)
+      assertEquals(ByteBuffer.wrap(originalBytes), ByteBuffer.wrap(clonedBytes))
+    }
+
+    val row = new GenericRowWithSchema(Array(1, "test", Date.valueOf(LocalDate.of(2022, 10, 1)),
+      Timestamp.from(Instant.parse("2022-10-01T23:59:59.00Z")), Row(Decimal.apply(123, 3, 2))), rowSchema)
+    val avroRecord = convertToAvroRecord(row)
+
+    val key = new HoodieKey("rec-key", "part-path")
+
+    val legacyRecord = toLegacyAvroRecord(avroRecord, key)
+    val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
+
+    Seq(
+      (legacyRecord, 573),
+      (avroIndexedRecord, 159)
+    ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
+  }
+
+  private def toLegacyAvroRecord(avroRecord: GenericRecord, key: HoodieKey): HoodieAvroRecord[OverwriteWithLatestAvroPayload] = {
+    val avroRecordPayload = new OverwriteWithLatestAvroPayloadWithEquality(avroRecord, 0)
+    val legacyRecord = new HoodieAvroRecord[OverwriteWithLatestAvroPayload](key, avroRecordPayload)
+
+    legacyRecord
+  }
 }
 
-object TestHoodieSparkRecord {
+object TestHoodieRecordSerialization {
 
-  private def cloneUsingKryo(r: HoodieSparkRecord): (HoodieSparkRecord, Array[Byte]) = {
+  private def cloneUsingKryo[T](r: HoodieRecord[T]): (HoodieRecord[T], Array[Byte]) = {
     val serializer = SerializerSupport.newSerializer(true)
 
     val buf = serializer.serialize(r)
-    val cloned: HoodieSparkRecord = serializer.deserialize(buf)
+    val cloned: HoodieRecord[T] = serializer.deserialize(buf)
 
     val bytes = new Array[Byte](buf.remaining())
     buf.get(bytes)
@@ -105,6 +146,29 @@ object TestHoodieSparkRecord {
     val encoder = RowEncoder(schema).resolveAndBind()
     val internalRow = encoder.toRow(row)
     internalRow.asInstanceOf[UnsafeRow]
+  }
+
+  private def convertToAvroRecord(row: Row): GenericRecord = {
+    val encoder = RowEncoder(row.schema).resolveAndBind()
+    val internalRow = encoder.toRow(row)
+
+    val schema = convertStructTypeToAvroSchema(row.schema, "testRecord", "testNamespace")
+
+    createInternalRowToAvroConverter(row.schema, schema, nullable = false)
+      .apply(internalRow)
+  }
+
+  class OverwriteWithLatestAvroPayloadWithEquality(avroRecord: GenericRecord, _orderingVal: Comparable[_])
+    extends OverwriteWithLatestAvroPayload(avroRecord, _orderingVal) {
+    override def equals(obj: Any): Boolean =
+      obj match {
+        case p: OverwriteWithLatestAvroPayloadWithEquality =>
+          Objects.equals(this.recordBytes, p.recordBytes) && Objects.equals(this.orderingVal, p.orderingVal)
+        case _ =>
+          false
+      }
+
+    override def hashCode(): Int = Objects.hash(avroRecord, _orderingVal.asInstanceOf[AnyRef])
   }
 
 }
