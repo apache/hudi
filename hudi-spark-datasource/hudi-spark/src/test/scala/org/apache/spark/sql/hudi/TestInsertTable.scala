@@ -923,7 +923,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              |  preCombineField = 'ts',
              |  type = '$tableType'
              | )
-       """.stripMargin)
+        """.stripMargin)
         spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a1', 10, 1000)")
         checkAnswer(s"select id, name, price, ts, dt from $tableName")(
           Seq(1, "a1", 10, 1000, "2021-12-25")
