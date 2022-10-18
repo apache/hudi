@@ -5,9 +5,31 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
-            "id": "/2022/09/20/Data-Lake-Lakehouse-Guide-Powered-by-Data-Lake-Table-Formats-Delta-Lake-Iceberg-Hudi",
+            "id": "/2022/10/06/Ingest-streaming-data-to-Apache-Hudi-using-AWS-Glue-and-DeltaStreamer",
+            "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/ingest-streaming-data-to-apache-hudi-tables-using-aws-glue-and-apache-hudi-deltastreamer/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2022/10/06/Ingest-streaming-data-to-Apache-Hudi-using-AWS-Glue-and-DeltaStreamer",
+            "title": "Ingest streaming data to Apache Hudi tables using AWS Glue and Apache Hudi DeltaStreamer",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2022-10-06T00:00:00.000Z",
+            "author": {
+                "name": "Vishal Pathak"
+            }
+        },
+        {
+            "id": "/2022/09/28/Data-processing-with-Spark-time-traveling",
+            "content_html": "<div url=\"https://blog.devgenius.io/data-processing-with-spark-time-traveling-55905f765694\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2022/09/28/Data-processing-with-Spark-time-traveling",
+            "title": "Data processing with Spark: time traveling",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2022-09-28T00:00:00.000Z",
+            "author": {
+                "name": "Petrica Leuca"
+            }
+        },
+        {
+            "id": "/2022/09/20/Building-Streaming-Data-Lakes-with-Hudi-and-MinIO",
             "content_html": "<div url=\"https://blog.min.io/streaming-data-lakes-hudi-minio/\">Redirecting... please wait!! </div>",
-            "url": "https://hudi.apache.org/cn/blog/2022/09/20/Data-Lake-Lakehouse-Guide-Powered-by-Data-Lake-Table-Formats-Delta-Lake-Iceberg-Hudi",
+            "url": "https://hudi.apache.org/cn/blog/2022/09/20/Building-Streaming-Data-Lakes-with-Hudi-and-MinIO",
             "title": "Building Streaming Data Lakes with Hudi and MinIO",
             "summary": "Redirecting... please wait!!",
             "date_modified": "2022-09-20T00:00:00.000Z",
