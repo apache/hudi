@@ -69,15 +69,9 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ endsWith(env.SPARK_PROFILE, '2.4') }} # only test spark 2.4 for now
+        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
         run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          mkdir ${GITHUB_WORKSPACE}/jars
-          cp packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar ${GITHUB_WORKSPACE}/jars
-          cd packaging/bundle-validation/spark-write-hive-sync
-          ls ${GITHUB_WORKSPACE}/jars
-          docker build -t hudi-ci-bundle-validation:spark248hive239 .
-          docker run -v ${GITHUB_WORKSPACE}/jars:/opt/hudi-bundles/jars -i hudi-ci-bundle-validation:spark248hive239 bash validate.sh
+          ./packaging/bundle-validation/spark-write-hive-sync/ci_run.sh
       - name: Spark SQL Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}

@@ -37,6 +37,11 @@
     <name>hive.metastore.schema.verification</name>
     <value>false</value>
   </property>
+  <!-- TODO: use autoCreateAll = false for hive 2.x -->
+  <property>
+    <name>datanucleus.schema.autoCreateAll</name>
+    <value>true</value>
+  </property>
   <property>
     <name>javax.jdo.option.ConnectionDriverName</name>
     <value>org.apache.derby.jdbc.ClientDriver</value>

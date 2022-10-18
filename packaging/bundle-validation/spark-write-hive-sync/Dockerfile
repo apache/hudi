@@ -22,25 +22,31 @@ RUN mkdir /opt/hudi-bundles
 ENV WORKDIR=/opt/hudi-bundles
 WORKDIR $WORKDIR
 
-RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-2.7.7/hadoop-2.7.7.tar.gz -P "$WORKDIR" \
-    && tar -xf $WORKDIR/hadoop-2.7.7.tar.gz -C $WORKDIR/ \
-    && rm $WORKDIR/hadoop-2.7.7.tar.gz
-ENV HADOOP_HOME=$WORKDIR/hadoop-2.7.7
+ARG HADOOP_VERSION=2.7.7
+ARG HIVE_VERSION=2.3.9
+ARG DERBY_VERSION=10.10.2.0
+ARG SPARK_VERSION=2.4.8
+ARG SPARK_HADOOP_VERSION=2.7
 
-RUN wget https://archive.apache.org/dist/spark/spark-2.4.8/spark-2.4.8-bin-hadoop2.7.tgz -P "$WORKDIR" \
-    && tar -xf $WORKDIR/spark-2.4.8-bin-hadoop2.7.tgz -C $WORKDIR/ \
-    && rm $WORKDIR/spark-2.4.8-bin-hadoop2.7.tgz
-ENV SPARK_HOME=$WORKDIR/spark-2.4.8-bin-hadoop2.7
+RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz -P "$WORKDIR" \
+    && tar -xf $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz -C $WORKDIR/ \
+    && rm $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz
+ENV HADOOP_HOME=$WORKDIR/hadoop-$HADOOP_VERSION
 
-RUN wget https://archive.apache.org/dist/hive/hive-2.3.9/apache-hive-2.3.9-bin.tar.gz -P "$WORKDIR" \
-    && tar -xf $WORKDIR/apache-hive-2.3.9-bin.tar.gz -C $WORKDIR/ \
-    && rm $WORKDIR/apache-hive-2.3.9-bin.tar.gz
-ENV HIVE_HOME=$WORKDIR/apache-hive-2.3.9-bin
+RUN wget https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HIVE_VERSION-bin.tar.gz -P "$WORKDIR" \
+    && tar -xf $WORKDIR/apache-hive-$HIVE_VERSION-bin.tar.gz -C $WORKDIR/ \
+    && rm $WORKDIR/apache-hive-$HIVE_VERSION-bin.tar.gz
+ENV HIVE_HOME=$WORKDIR/apache-hive-$HIVE_VERSION-bin
 
-RUN wget https://archive.apache.org/dist/db/derby/db-derby-10.10.2.0/db-derby-10.10.2.0-bin.tar.gz -P "$WORKDIR" \
-    && tar -xf $WORKDIR/db-derby-10.10.2.0-bin.tar.gz -C $WORKDIR/ \
-    && rm $WORKDIR/db-derby-10.10.2.0-bin.tar.gz
-ENV DERBY_HOME=$WORKDIR/db-derby-10.10.2.0-bin
+RUN wget https://archive.apache.org/dist/db/derby/db-derby-$DERBY_VERSION/db-derby-$DERBY_VERSION-bin.tar.gz -P "$WORKDIR" \
+    && tar -xf $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz -C $WORKDIR/ \
+    && rm $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz
+ENV DERBY_HOME=$WORKDIR/db-derby-$DERBY_VERSION-bin
+
+RUN wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -P "$WORKDIR" \
+    && tar -xf $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -C $WORKDIR/ \
+    && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz
+ENV SPARK_HOME=$WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION
 
 RUN cp $DERBY_HOME/lib/derbyclient.jar $SPARK_HOME/jars/
 COPY hive-site.xml $HIVE_HOME/conf/
