@@ -325,9 +325,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
    */
   @Override
   protected final void writeRecordPayload(InternalRow payload, Kryo kryo, Output output) {
+    // NOTE: [[payload]] could be null if record has already been deflated
     UnsafeRow unsafeRow = convertToUnsafeRow(payload, schema);
 
-    kryo.writeObject(output, unsafeRow);
+    kryo.writeObjectOrNull(output, unsafeRow, UnsafeRow.class);
   }
 
   /**
@@ -340,11 +341,13 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     //       we annotate this object as being copied
     this.copy = true;
 
-    return kryo.readObject(input, UnsafeRow.class);
+    return kryo.readObjectOrNull(input, UnsafeRow.class);
   }
 
   private static UnsafeRow convertToUnsafeRow(InternalRow payload, StructType schema) {
-    if (payload instanceof UnsafeRow) {
+    if (payload == null) {
+      return null;
+    } else if (payload instanceof UnsafeRow) {
       return (UnsafeRow) payload;
     }
 
