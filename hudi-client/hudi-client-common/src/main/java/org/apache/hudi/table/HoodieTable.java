@@ -67,6 +67,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
@@ -672,7 +673,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
   public void finalizeWrite(HoodieEngineContext context, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
-    reconcileAgainstMarkers(context, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled());
+    reconcileAgainstMarkers(context, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled(), config.shouldFailOnDuplicateDataFileDetection());
   }
 
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
@@ -714,7 +715,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected void reconcileAgainstMarkers(HoodieEngineContext context,
                                          String instantTs,
                                          List<HoodieWriteStat> stats,
-                                         boolean consistencyCheckEnabled) throws HoodieIOException {
+                                         boolean consistencyCheckEnabled,
+                                         boolean shouldFailOnDuplicateDataFileDetection) throws HoodieIOException {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
@@ -736,7 +738,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       // Contains list of partially created files. These needs to be cleaned up.
       invalidDataPaths.removeAll(validDataPaths);
 
+
+
       if (!invalidDataPaths.isEmpty()) {
+        if (shouldFailOnDuplicateDataFileDetection) {
+          throw new HoodieDuplicateDataFileDetectedException("duplicate data files detected " + invalidDataPaths);
+        }
+
         LOG.info("Removing duplicate data files created due to task retries before committing. Paths=" + invalidDataPaths);
         Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
             .map(dp -> Pair.of(new Path(basePath, dp).getParent().toString(), new Path(basePath, dp).toString()))

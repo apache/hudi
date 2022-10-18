@@ -198,6 +198,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Enables a more efficient mechanism for rollbacks based on the marker files generated "
           + "during the writes. Turned on by default.");
 
+  public static final ConfigProperty<String> FAIL_JOB_ON_DUPLICATE_DATA_FILE_DETECTION = ConfigProperty
+      .key("hoodie.fail.job.on.duplicate.data.file.detection")
+      .defaultValue("false")
+      .withDocumentation("should fail entire job if there is invalid file detected");
+
   public static final ConfigProperty<String> TIMELINE_LAYOUT_VERSION_NUM = ConfigProperty
       .key("hoodie.timeline.layout.version")
       .defaultValue(Integer.toString(TimelineLayoutVersion.CURR_VERSION))
@@ -1315,6 +1320,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldRollbackUsingMarkers() {
     return getBoolean(ROLLBACK_USING_MARKERS_ENABLE);
+  }
+
+  public boolean shouldFailOnDuplicateDataFileDetection() {
+    return getBoolean(FAIL_JOB_ON_DUPLICATE_DATA_FILE_DETECTION);
   }
 
   public int getWriteBufferLimitBytes() {
