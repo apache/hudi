@@ -170,7 +170,7 @@ public interface HoodieTimeline extends Serializable {
    *
    * @return
    */
-  HoodieTimeline filterCompletedInstantsOrRewriteTimeline();
+  HoodieTimeline filterCompletedAndRewriteInstants();
 
   /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.

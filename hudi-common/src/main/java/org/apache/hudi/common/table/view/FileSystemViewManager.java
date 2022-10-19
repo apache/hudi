@@ -137,7 +137,7 @@ public class FileSystemViewManager {
    */
   private static RocksDbBasedFileSystemView createRocksDBBasedFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, HoodieTableMetaClient metaClient) {
-    HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndRewriteInstants();
     return new RocksDbBasedFileSystemView(metaClient, timeline, viewConf);
   }
 
@@ -152,7 +152,7 @@ public class FileSystemViewManager {
   private static SpillableMapBasedFileSystemView createSpillableMapBasedFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, HoodieTableMetaClient metaClient, HoodieCommonConfig commonConfig) {
     LOG.info("Creating SpillableMap based view for basePath " + metaClient.getBasePath());
-    HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndRewriteInstants();
     return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf, commonConfig);
   }
 
@@ -163,7 +163,7 @@ public class FileSystemViewManager {
   private static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig viewConf,
                                                                         HoodieTableMetaClient metaClient, SerializableSupplier<HoodieTableMetadata> metadataSupplier) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePathV2());
-    HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndRewriteInstants();
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       ValidationUtils.checkArgument(metadataSupplier != null, "Metadata supplier is null. Cannot instantiate metadata file system view");
       return new HoodieMetadataFileSystemView(metaClient, timeline, metadataSupplier.get());

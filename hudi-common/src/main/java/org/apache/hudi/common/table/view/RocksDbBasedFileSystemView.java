@@ -180,6 +180,21 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
+  protected void removePendingLogCompactionOperations(String logCompactionInstant) {
+    List<HoodieFileGroupId> fileGroupIdsToRemove = this.fetchPendingLogCompactionOperations()
+        .filter(instantToCompactionOperationPair -> logCompactionInstant.equals(instantToCompactionOperationPair.getKey()))
+        .map(instantToCompactionOperationPair -> instantToCompactionOperationPair.getValue().getFileGroupId())
+        .collect(Collectors.toList());
+    ValidationUtils.checkArgument(!fileGroupIdsToRemove.isEmpty(),
+        "Trying to remove a FileGroupId from pending Log compaction operations for instant " + logCompactionInstant
+            + ". But none were found.");
+    rocksDB.writeBatch(batch ->
+        fileGroupIdsToRemove.forEach(fileGroupId ->
+            rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForPendingLogCompaction(),
+                schemaHelper.getKeyForPendingLogCompactionLookup(fileGroupId))));
+  }
+
+  @Override
   protected boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId) {
     return getPendingClusteringInstant(fgId).isPresent();
   }
@@ -236,6 +251,21 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
               schemaHelper.getKeyForFileGroupsInPendingClustering(fgToPendingClusteringInstant.getLeft()));
         })
     );
+  }
+
+  @Override
+  protected void removeFileGroupsInPendingClustering(String clusteringInstant) {
+    List<HoodieFileGroupId> fileGroupIdsToRemove = this.fetchFileGroupsInPendingClustering()
+        .filter(fgIdInstantPair -> clusteringInstant.equals(fgIdInstantPair.getValue().getTimestamp()))
+        .map(Pair::getKey)
+        .collect(Collectors.toList());
+    ValidationUtils.checkArgument(!fileGroupIdsToRemove.isEmpty(),
+        "Trying to remove a FileGroupId from pending clustering operations for instant " + clusteringInstant
+            + ". But none were found.");
+    rocksDB.writeBatch(batch ->
+        fileGroupIdsToRemove.forEach(fileGroupId ->
+            rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
+                schemaHelper.getKeyForFileGroupsInPendingClustering(fileGroupId))));
   }
 
   @Override
@@ -544,10 +574,13 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   private Stream<HoodieFileGroup> getFileGroups(Stream<FileSlice> sliceStream) {
+    // HoodieFileGroup using timeline to determine whether a file slice is committed or not so passing
+    // completedAndCompactionTimeline object while creating HoodieFileGroup.
+    HoodieTimeline completedAndCompactionTimeline = getVisibleCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
     return sliceStream.map(s -> Pair.of(Pair.of(s.getPartitionPath(), s.getFileId()), s))
         .collect(Collectors.groupingBy(Pair::getKey)).entrySet().stream().map(slicePair -> {
           HoodieFileGroup fg = new HoodieFileGroup(slicePair.getKey().getKey(), slicePair.getKey().getValue(),
-              getVisibleCommitsAndCompactionTimeline());
+              completedAndCompactionTimeline);
           slicePair.getValue().forEach(e -> fg.addFileSlice(e.getValue()));
           return fg;
         });

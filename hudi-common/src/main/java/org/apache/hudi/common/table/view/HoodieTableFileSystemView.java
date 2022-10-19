@@ -257,6 +257,17 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
+  protected void removePendingLogCompactionOperations(String logCompactionInstant) {
+    List<HoodieFileGroupId> fileGroupIdsToRemove = fgIdToPendingLogCompaction.entrySet()
+        .stream().filter(fgIdInstantEntry -> logCompactionInstant.equals(fgIdInstantEntry.getValue().getKey()))
+        .map(Map.Entry::getKey).collect(Collectors.toList());
+    ValidationUtils.checkArgument(!fileGroupIdsToRemove.isEmpty(),
+        "Trying to remove a FileGroupId from pending log compaction operations for instant " + logCompactionInstant
+            + ". But none were found.");
+    fileGroupIdsToRemove.forEach(fileGroupId -> fgIdToPendingLogCompaction.remove(fileGroupId));
+  }
+
+  @Override
   protected boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId) {
     return fgIdToPendingClustering.containsKey(fgId);
   }
@@ -279,7 +290,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   void addFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
     fileGroups.forEach(fileGroupInstantPair -> {
-      ValidationUtils.checkArgument(fgIdToPendingClustering.containsKey(fileGroupInstantPair.getLeft()),
+      ValidationUtils.checkArgument(!fgIdToPendingClustering.containsKey(fileGroupInstantPair.getLeft()),
           "Trying to add a FileGroupId which is already in pending clustering operation. FgId :"
               + fileGroupInstantPair.getLeft() + ", new instant: " + fileGroupInstantPair.getRight() + ", existing instant "
               + fgIdToPendingClustering.get(fileGroupInstantPair.getLeft()));
@@ -297,6 +308,17 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
       fgIdToPendingClustering.remove(fileGroupInstantPair.getLeft());
     });
+  }
+
+  @Override
+  protected void removeFileGroupsInPendingClustering(String clusteringInstant) {
+    List<HoodieFileGroupId> fileGroupIdsToRemove = fgIdToPendingClustering.entrySet()
+        .stream().filter(fgIdInstantEntry -> clusteringInstant.equals(fgIdInstantEntry.getValue().getTimestamp()))
+        .map(Map.Entry::getKey).collect(Collectors.toList());
+    ValidationUtils.checkArgument(!fileGroupIdsToRemove.isEmpty(),
+        "Trying to remove a FileGroupId from pending clustering operations for instant " + clusteringInstant
+            + ". But none were found.");
+    fileGroupIdsToRemove.forEach(fileGroupId -> fgIdToPendingClustering.remove(fileGroupId));
   }
 
   /**

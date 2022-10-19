@@ -141,7 +141,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Adds the provided statuses into the file system view, and also caches it inside this object.
    */
   public List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
-    HoodieTimer timer = HoodieTimer.start();
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    // Timeline determines whether a file slice is committed or not. Timeline object is attached to each HoodieFileGroup.
+    // Using this timeline object HoodieFileGroup determines whether a fileSlice is committed or not.
+    // visibleCommitsAndCompactionTimeline contains entire write timeline with pending commits, so filtering it
+    // to contain only completed commits and pending compaction commits.
     List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
     timer.startTimer();
@@ -170,6 +174,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Build FileGroups from passed in file-status.
+   * TODO: Note here timeline is completedAndCompactionTimeline.
    */
   protected List<HoodieFileGroup> buildFileGroups(FileStatus[] statuses, HoodieTimeline timeline,
                                                   boolean addPendingCompactionFileSlice) {
@@ -177,8 +182,17 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         addPendingCompactionFileSlice);
   }
 
+  /**
+   *
+   * @param baseFileStream
+   * @param logFileStream
+   * @param timeline here timeline is completedAndCompactionTimeline.
+   * @param addPendingCompactionFileSlice
+   * @return
+   */
   protected List<HoodieFileGroup> buildFileGroups(Stream<HoodieBaseFile> baseFileStream,
-                                                  Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline, boolean addPendingCompactionFileSlice) {
+                                                  Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline,
+                                                  boolean addPendingCompactionFileSlice) {
     Map<Pair<String, String>, List<HoodieBaseFile>> baseFiles =
         baseFileStream.collect(Collectors.groupingBy(baseFile -> {
           String partitionPathStr = getPartitionPathFor(baseFile);
@@ -1070,6 +1084,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   abstract void removePendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations);
 
   /**
+   * Remove pending Log compaction operations from store.
+   *
+   * @param logCompactionInstant Pending Log compaction operations to be removed
+   */
+  abstract void removePendingLogCompactionOperations(String logCompactionInstant);
+
+  /**
    * Check if there is an outstanding clustering operation (requested/inflight) scheduled for this file.
    *
    * @param fgId File-Group Id
@@ -1102,6 +1123,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Remove metadata for file groups in pending clustering operations from the view.
    */
   abstract void removeFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups);
+
+  /**
+   * Remove metadata for file groups in pending clustering operations from the view.
+   */
+  abstract void removeFileGroupsInPendingClustering(String clusteringInstant);
 
   /**
    * Return pending compaction operation for a file-group.
