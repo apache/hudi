@@ -60,6 +60,7 @@ public class CleanerUtils {
     Map<String, HoodieCleanPartitionMetadata> partitionBootstrapMetadataMap = new HashMap<>();
 
     int totalDeleted = 0;
+    String policy = "";
     String earliestCommitToRetain = null;
     String lastCompletedCommitTimestamp = "";
     for (HoodieCleanStat stat : cleanStats) {
@@ -77,12 +78,13 @@ public class CleanerUtils {
       totalDeleted += stat.getSuccessDeleteFiles().size();
       if (earliestCommitToRetain == null) {
         // This will be the same for all partitions
+        policy = stat.getPolicy().name();
         earliestCommitToRetain = stat.getEarliestCommitToRetain();
         lastCompletedCommitTimestamp = stat.getLastCompletedCommitTimestamp();
       }
     }
 
-    return new HoodieCleanMetadata(startCleanTime, durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
+    return new HoodieCleanMetadata(policy, startCleanTime, durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
       lastCompletedCommitTimestamp, partitionMetadataMap, CLEAN_METADATA_VERSION_2, partitionBootstrapMetadataMap);
   }
 

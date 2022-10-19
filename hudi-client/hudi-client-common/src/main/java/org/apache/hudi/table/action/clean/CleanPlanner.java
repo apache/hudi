@@ -42,6 +42,7 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1Migrati
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -135,25 +136,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * @throws IOException when underlying file-system throws this exception
    */
   public List<String> getPartitionPathsToClean(Option<HoodieInstant> earliestRetainedInstant) throws IOException {
-    switch (config.getCleanerPolicy()) {
-      case KEEP_LATEST_COMMITS:
-      case KEEP_LATEST_BY_HOURS:
-        return getPartitionPathsForCleanByCommits(earliestRetainedInstant);
-      case KEEP_LATEST_FILE_VERSIONS:
-        return getPartitionPathsForFullCleaning();
-      default:
-        throw new IllegalStateException("Unknown Cleaner Policy");
-    }
-  }
-
-  /**
-   * Return partition paths for cleaning by commits mode.
-   * @param instantToRetain Earliest Instant to retain
-   * @return list of partitions
-   * @throws IOException
-   */
-  private List<String> getPartitionPathsForCleanByCommits(Option<HoodieInstant> instantToRetain) throws IOException {
-    if (!instantToRetain.isPresent()) {
+    if (!config.getCleanerPolicy().equals(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) && !earliestRetainedInstant.isPresent()) {
       LOG.info("No earliest commit to retain. No need to scan partitions !!");
       return Collections.emptyList();
     }
@@ -165,10 +148,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
           hoodieTable.getActiveTimeline().deleteEmptyInstantIfExists(lastClean.get());
         } else {
           HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-                  .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
-          if ((cleanMetadata.getEarliestCommitToRetain() != null)
-                  && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
-            return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
+              .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
+          if (!StringUtils.isNullOrEmpty(cleanMetadata.getEarliestCommitToRetain())
+              || (!StringUtils.isNullOrEmpty(cleanMetadata.getPolicy()) && config.getCleanerPolicy().name().equals(cleanMetadata.getPolicy()))) {
+            return getPartitionPathsForIncrementalCleaning(cleanMetadata, earliestRetainedInstant);
           }
         }
       }
@@ -179,18 +162,22 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   /**
    * Use Incremental Mode for finding partition paths.
    * @param cleanMetadata
-   * @param newInstantToRetain
+   * @param earliestRetainedInstant
    * @return
    */
   private List<String> getPartitionPathsForIncrementalCleaning(HoodieCleanMetadata cleanMetadata,
-      Option<HoodieInstant> newInstantToRetain) {
+      Option<HoodieInstant> earliestRetainedInstant) {
     LOG.info("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
-        + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
-        + ". New Instant to retain : " + newInstantToRetain);
+        + "since last cleaned at " + (config.getCleanerPolicy().equals(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+        ? cleanMetadata.getLastCompletedCommitTimestamp()
+        : (cleanMetadata.getEarliestCommitToRetain() + ". New Instant to retain : " + earliestRetainedInstant)));
+
     return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(
-        instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
+        instant -> config.getCleanerPolicy().equals(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            ? HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, cleanMetadata.getLastCompletedCommitTimestamp())
+            : HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
             cleanMetadata.getEarliestCommitToRetain()) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
-            HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())).flatMap(instant -> {
+            HoodieTimeline.LESSER_THAN, earliestRetainedInstant.get().getTimestamp())).flatMap(instant -> {
               try {
                 if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
                   HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(

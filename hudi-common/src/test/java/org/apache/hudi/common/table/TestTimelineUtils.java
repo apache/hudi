@@ -334,6 +334,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     partitionToFilesCleaned.putIfAbsent(partition, partitionMetadata);
     HoodieCleanMetadata cleanMetadata = HoodieCleanMetadata.newBuilder()
         .setVersion(1)
+        .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
         .setTimeTakenInMillis(100)
         .setTotalFilesDeleted(1)
         .setStartCleanTime(time)
