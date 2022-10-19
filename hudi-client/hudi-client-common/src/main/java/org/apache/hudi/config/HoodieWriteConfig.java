@@ -2121,6 +2121,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public HoodieEarlyConflictDetectionStrategy getEarlyConflictDetectionStrategy() {
     return ReflectionUtils.loadClass(getString(HoodieLockConfig.EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME));
   }
+
   // misc configs
   public Boolean doSkipDefaultPartitionValidation() {
     return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
