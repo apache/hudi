@@ -20,7 +20,6 @@ package org.apache.hudi.common.model;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
-import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
@@ -295,12 +294,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   @Override
   public final void write(Kryo kryo, Output output) {
-    Serializer recLocSerializer = kryo.getSerializer(HoodieRecordLocation.class);
-
     kryo.writeObjectOrNull(output, key, HoodieKey.class);
-    kryo.writeObjectOrNull(output, currentLocation, recLocSerializer);
-    kryo.writeObjectOrNull(output, newLocation, recLocSerializer);
     kryo.writeObjectOrNull(output, operation, HoodieOperation.class);
+    // NOTE: We have to write actual class along with the object here,
+    //       since [[HoodieRecordLocation]] has inheritors
+    kryo.writeClassAndObject(output, currentLocation);
+    kryo.writeClassAndObject(output, newLocation);
     // NOTE: Writing out actual record payload is relegated to the actual
     //       implementation
     writeRecordPayload(data, kryo, output);
@@ -312,12 +311,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   @Override
   public final void read(Kryo kryo, Input input) {
-    Serializer recLocSerializer = kryo.getSerializer(HoodieRecordLocation.class);
-
     this.key = kryo.readObjectOrNull(input, HoodieKey.class);
-    this.currentLocation = kryo.readObjectOrNull(input, HoodieRecordLocation.class, recLocSerializer);
-    this.newLocation = kryo.readObjectOrNull(input, HoodieRecordLocation.class, recLocSerializer);
     this.operation = kryo.readObjectOrNull(input, HoodieOperation.class);
+    this.currentLocation = (HoodieRecordLocation) kryo.readClassAndObject(input);
+    this.newLocation = (HoodieRecordLocation) kryo.readClassAndObject(input);
     // NOTE: Reading out actual record payload is relegated to the actual
     //       implementation
     this.data = readRecordPayload(kryo, input);

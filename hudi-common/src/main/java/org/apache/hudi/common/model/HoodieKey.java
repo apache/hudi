@@ -32,7 +32,7 @@ import java.util.Objects;
  * - recordKey : a recordKey that acts as primary key for a record.
  * - partitionPath : the partition path of a record.
  */
-public class HoodieKey implements Serializable, KryoSerializable {
+public final class HoodieKey implements Serializable, KryoSerializable {
 
   private String recordKey;
   private String partitionPath;
