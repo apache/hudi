@@ -20,6 +20,7 @@ package org.apache.spark.sql
 
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
