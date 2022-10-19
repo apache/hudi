@@ -204,7 +204,7 @@ public abstract class AbstractHoodieLogRecordReader {
     if (this.hiveStylePartition) {
       return Option.of(Arrays.stream(partitionValues)
           .map(partition -> partition.split("="))
-          .filter(partition -> partition.length ==2)
+          .filter(partition -> partition.length == 2)
           .map(partition -> partition[1])
           .toArray(String[]::new));
     } else {
