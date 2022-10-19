@@ -20,24 +20,27 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path, PathFilter}
 import org.apache.hadoop.mapred.{FileInputFormat, JobConf}
+
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.sync.common.util.ConfigUtils
-import org.apache.spark.internal.config.RDD_PARALLEL_LISTING_THRESHOLD
-import org.apache.spark.sql.{Row, SparkSession}
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition, ExternalCatalogUtils, HoodieCatalogTable, SessionCatalog}
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
-import org.apache.spark.sql.errors.QueryCompilationErrors
+import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.execution.command.PartitionStatistics
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.util.{SerializableConfiguration, ThreadUtils}
 
 import java.util.concurrent.TimeUnit.MILLISECONDS
+
 import scala.collection.parallel.ForkJoinTaskSupport
 import scala.collection.parallel.immutable.ParVector
 import scala.util.control.NonFatal
 
+/**
+ * Command for repair hudi table's partitions.
+ * Most of the code is copied from spark3.3, the main change is scanPartitions() when disable isHiveStyledPartitioning
+ */
 case class RepairHoodieTableCommand(tableName: TableIdentifier,
                                     enableAddPartitions: Boolean,
                                     enableDropPartitions: Boolean,
@@ -67,14 +70,16 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
 
   override def run(spark: SparkSession): Seq[Row] = {
     val catalog = spark.sessionState.catalog
-    val table = catalog.getTableRawMetadata(tableName)
+    val table = catalog.getTableMetadata(tableName)
     val tableIdentWithDB = table.identifier.quotedString
     if (table.partitionColumnNames.isEmpty) {
-      throw QueryCompilationErrors.cmdOnlyWorksOnPartitionedTablesError(cmd, tableIdentWithDB)
+      throw new AnalysisException(
+        s"Operation not allowed: $cmd only works on partitioned tables: $tableIdentWithDB")
     }
 
     if (table.storage.locationUri.isEmpty) {
-      throw QueryCompilationErrors.cmdOnlyWorksOnTableWithLocationError(cmd, tableIdentWithDB)
+      throw new AnalysisException(s"Operation not allowed: $cmd only works on table with " +
+        s"location provided: $tableIdentWithDB")
     }
 
     val root = new Path(table.location)
@@ -86,7 +91,7 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
       dropPartitions(catalog, fs)
     } else 0
     val addedAmount = if (enableAddPartitions) {
-      val threshold = spark.sparkContext.conf.get(RDD_PARALLEL_LISTING_THRESHOLD)
+      val threshold = spark.sparkContext.conf.getInt("spark.rdd.parallelListingThreshold", 10)
       val pathFilter = getPathFilter(hadoopConf)
 
       val evalPool = ThreadUtils.newForkJoinPool("RepairTableCommand", 8)
@@ -155,8 +160,8 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
       }
     statusPar.flatMap { st =>
       val name = st.getPath.getName
-      if (st.isDirectory) {
-        if (isHiveStyledPartitioning && name.contains("=")) {
+      (st.isDirectory, isHiveStyledPartitioning, name.contains("=")) match {
+        case (true, true, true) =>
           val ps = name.split("=", 2)
           val columnName = ExternalCatalogUtils.unescapePathName(ps(0))
           // TODO: Validate the value
@@ -169,14 +174,14 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
               s"expected partition column ${partitionNames.head}, but got ${ps(0)}, ignoring it")
             Seq.empty
           }
-        } else {
+        case (true, false, _) =>
+          // TODO: Validate the value
           val value = ExternalCatalogUtils.unescapePathName(name)
           scanPartitions(spark, fs, filter, st.getPath, spec ++ Map(partitionNames.head -> value),
             partitionNames.drop(1), threshold, resolver, evalTaskSupport, isHiveStyledPartitioning)
-        }
-      } else {
-        logWarning(s"ignore ${new Path(path, name)}")
-        Seq.empty
+        case _ =>
+          logWarning(s"ignore ${new Path(path, name)}")
+          Seq.empty
       }
     }
   }
@@ -201,7 +206,7 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
       spark.sparkContext.parallelize(serializedPaths, numParallelism)
         .mapPartitions { paths =>
           val pathFilter = getPathFilter(serializableConfiguration.value)
-          paths.map(new Path(_)).map{ path =>
+          paths.map(new Path(_)).map { path =>
             val fs = path.getFileSystem(serializableConfiguration.value)
             val statuses = fs.listStatus(path, pathFilter)
             (path.toString, PartitionStatistics(statuses.length, statuses.map(_.getLen).sum))
@@ -224,7 +229,7 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     // Hive metastore may not have enough memory to handle millions of partitions in single RPC,
     // we should split them into smaller batches. Since Hive client is not thread safe, we cannot
     // do this in parallel.
-    val batchSize = spark.conf.get(SQLConf.ADD_PARTITION_BATCH_SIZE)
+    val batchSize = spark.sparkContext.conf.getInt("spark.sql.addPartitionInBatch.size", 100)
     partitionSpecsAndLocs.iterator.grouped(batchSize).foreach { batch =>
       val now = MILLISECONDS.toSeconds(System.currentTimeMillis())
       val parts = batch.map { case (spec, location) =>
