@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.timeline.TimelineDiffHelper;
 import org.apache.hudi.common.table.timeline.TimelineDiffHelper.TimelineDiffResult;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -53,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Adds the capability to incrementally sync the changes to file-system view as and when new instants gets completed.
@@ -89,7 +91,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
   protected void maySyncIncrementally() {
     HoodieTimeline oldTimeline = getTimeline();
-    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
+    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedAndRewriteInstants();
     try {
       if (incrementalTimelineSyncEnabled) {
         TimelineDiffResult diffResult = TimelineDiffHelper.getNewInstantsForIncrementalSync(oldTimeline, newTimeline);
@@ -99,11 +101,13 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
           LOG.info("Finished incremental sync");
           // Reset timeline to latest
           refreshTimeline(newTimeline);
+          this.metaClient.setLastIncrementalSyncSuccessful(true);
           return;
         }
       }
     } catch (Exception ioe) {
       LOG.error("Got exception trying to perform incremental sync. Reverting to complete sync", ioe);
+      this.metaClient.setLastIncrementalSyncSuccessful(false);
     }
     clear();
     // Initialize with new Hoodie timeline.
@@ -130,9 +134,18 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     });
 
     // Now remove pending log compaction instants which were completed or removed
-    diffResult.getFinishedOrRemovedLogCompactionInstants().stream().forEach(instant -> {
+    diffResult.getFinishedOrRemovedLogCompactionInstants().stream().forEach(instantPair -> {
       try {
-        removePendingLogCompactionInstant(instant);
+        removePendingLogCompactionInstant(instantPair.getKey(), instantPair.getValue());
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    });
+
+    // Now remove pending replacecommit instants which were completed or removed
+    diffResult.getFinishedOrRemovedReplaceCommitInstants().stream().forEach(instantPair -> {
+      try {
+        removePendingFileGroupsInPendingClustering(instantPair.getKey(), instantPair.getValue());
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -142,7 +155,9 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     diffResult.getNewlySeenInstants().stream()
         .filter(instant -> instant.isCompleted()
             || instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
-            || instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION))
+            || instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION)
+            || (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
+                && ClusteringUtils.isClusteringCommit(metaClient, instant)))
         .forEach(instant -> {
           try {
             if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)
@@ -159,7 +174,12 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
             } else if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
               addRollbackInstant(timeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-              addReplaceInstant(timeline, instant);
+              boolean isClusteringCommit = ClusteringUtils.isClusteringCommit(metaClient, instant);
+              if (!instant.isCompleted() && isClusteringCommit) {
+                addPendingClusteringInstant(instant);
+              } else {
+                addReplaceInstant(timeline, instant);
+              }
             }
           } catch (IOException ioe) {
             throw new HoodieException(ioe);
@@ -181,17 +201,24 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
-   * Remove Pending compaction instant. This is called when logcompaction is converted to delta commit,
-   * so you no longer need to track them as pending.
+   * Remove Pending compaction instant. This is called when logcompaction is converted to delta commit or the log compaction
+   * operation is failed, so it is no longer need to be tracked as pending.
    *
    * @param instant Log Compaction Instant to be removed
+   * @param isSuccessful true if log compaction operation is successful, false if the operation is failed and rollbacked.
    */
-  private void removePendingLogCompactionInstant(HoodieInstant instant) throws IOException {
-    LOG.info("Removing completed log compaction instant (" + instant + ")");
-    HoodieCompactionPlan plan = CompactionUtils.getLogCompactionPlan(metaClient, instant.getTimestamp());
-    removePendingLogCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)
-        .map(instantPair -> Pair.of(instantPair.getValue().getKey(),
-            CompactionOperation.convertFromAvroRecordInstance(instantPair.getValue().getValue()))));
+  private void removePendingLogCompactionInstant(HoodieInstant instant, boolean isSuccessful) throws IOException {
+    if (isSuccessful) {
+      LOG.info("Removing completed log compaction instant (" + instant + ")");
+      HoodieCompactionPlan plan = CompactionUtils.getLogCompactionPlan(metaClient, instant.getTimestamp());
+      removePendingLogCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)
+          .map(instantPair -> Pair.of(instantPair.getValue().getKey(),
+              CompactionOperation.convertFromAvroRecordInstance(instantPair.getValue().getValue()))));
+    } else {
+      LOG.info("Removing failed log compaction instant (" + instant + ")");
+      removePendingLogCompactionOperations(instant.getTimestamp());
+    }
+    LOG.info("Done Syncing log compaction transition for instant (" + instant + ")");
   }
 
   /**
@@ -328,10 +355,42 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
+   * Add pending replace file groups
+   * @param pendingClusteringInstant pending instant
+   * @throws IOException
+   */
+  private void addPendingClusteringInstant(HoodieInstant pendingClusteringInstant) throws IOException {
+    LOG.info("Syncing pending clustering instant (" + pendingClusteringInstant + ")");
+    Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroupStreamToInstant =
+        ClusteringUtils.getFileGroupEntriesFromClusteringInstant(pendingClusteringInstant, metaClient);
+    addFileGroupsInPendingClustering(fileGroupStreamToInstant);
+  }
+
+  /**
+   * Remove Pending compaction instant. This is called when logcompaction is converted to delta commit or the log compaction
+   * operation is failed, so it is no longer need to be tracked as pending.
+   *
+   * @param clusteringInstant Log Compaction Instant to be removed
+   * @param isSuccessful true if log compaction operation is successful, false if the operation is failed and rollbacked.
+   */
+  private void removePendingFileGroupsInPendingClustering(HoodieInstant clusteringInstant, boolean isSuccessful) throws IOException {
+    if (isSuccessful) {
+      LOG.info("Removing completed clustering instant (" + clusteringInstant + ")");
+      Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroupStreamToInstant =
+          ClusteringUtils.getFileGroupEntriesFromClusteringInstant(clusteringInstant, metaClient);
+      removeFileGroupsInPendingClustering(fileGroupStreamToInstant);
+    } else {
+      LOG.info("Removing failed clustering instant (" + clusteringInstant + ")");
+      removeFileGroupsInPendingClustering(clusteringInstant.getTimestamp());
+    }
+    LOG.info("Done Syncing clustering transition for instant (" + clusteringInstant + ")");
+  }
+
+  /**
    * Add newly found REPLACE instant.
    *
    * @param timeline Hoodie Timeline
-   * @param instant REPLACE Instant
+   * @param instant REPLACE Instant is a completed instant
    */
   private void addReplaceInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing replace instant (" + instant + ")");
