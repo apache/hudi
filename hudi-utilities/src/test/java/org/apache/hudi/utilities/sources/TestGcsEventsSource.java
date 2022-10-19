@@ -63,25 +63,14 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
     UtilitiesTestBase.initTestServices(false, false);
   }
 
-  @AfterAll
-  public static void afterAll() {
-    UtilitiesTestBase.cleanupClass();
-  }
-
   @BeforeEach
   public void beforeEach() throws Exception {
-    super.setup();
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
     MockitoAnnotations.initMocks(this);
 
     props = new TypedProperties();
     props.put(GOOGLE_PROJECT_ID, "dummy-project");
     props.put(PUBSUB_SUBSCRIPTION_ID, "dummy-subscription");
-  }
-
-  @AfterEach
-  public void afterEach() throws Exception {
-    super.teardown();
   }
 
   @Test
