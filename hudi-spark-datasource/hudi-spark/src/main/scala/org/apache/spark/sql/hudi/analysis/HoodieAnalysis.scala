@@ -611,9 +611,13 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
         TruncateHoodieTableCommand(tableName, partitionSpec)
       // Rewrite RepairTableCommand to RepairHoodieTableCommand
-      case RepairTableCommand(tableName, addPartitions, dropPartitions, cmd)
-        if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
-        RepairHoodieTableCommand(tableName, addPartitions, dropPartitions, cmd)
+      case r if sparkAdapter.getCatalystPlanUtils.isRepairTable(r) =>
+        val (tableName, enableAddPartitions, enableDropPartitions, cmd) = sparkAdapter.getCatalystPlanUtils.getRepairTableChildren(r).get
+        if (sparkAdapter.isHoodieTable(tableName, sparkSession)) {
+          RepairHoodieTableCommand(tableName, enableAddPartitions, enableDropPartitions, cmd)
+        } else {
+          r
+        }
       case _ => plan
     }
   }
