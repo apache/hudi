@@ -144,6 +144,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @AfterEach
   public void tearDown() throws IOException {
     fs.delete(partitionPath, true);
+    fs.delete(new Path(basePath), true);
   }
 
   @Test
