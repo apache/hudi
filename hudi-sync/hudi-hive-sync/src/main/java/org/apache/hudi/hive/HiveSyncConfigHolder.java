@@ -103,7 +103,7 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.create_managed_table")
       .defaultValue(false)
       .withDocumentation("Whether to sync the table as managed table.");
-  public static final ConfigProperty<Boolean> HIVE_OMIT_METADATA_FIELDS = ConfigProperty
+  public static final ConfigProperty<Boolean> HIVE_SYNC_OMIT_METADATA_FIELDS = ConfigProperty
       .key("hoodie.datasource.hive_sync.omit_metadata_fields")
       .defaultValue(false)
       .sinceVersion("0.13.0")

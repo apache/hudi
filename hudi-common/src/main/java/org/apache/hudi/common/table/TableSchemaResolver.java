@@ -176,8 +176,8 @@ public class TableSchemaResolver {
    *
    * @return Parquet schema for the table
    */
-  public MessageType getTableParquetSchemaWithoutMetadataFields() throws Exception {
-    return convertAvroSchemaToParquet(getTableAvroSchema(false));
+  public MessageType getTableParquetSchema(boolean includeMetadataField) throws Exception {
+    return convertAvroSchemaToParquet(getTableAvroSchema(includeMetadataField));
   }
 
   /**

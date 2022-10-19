@@ -104,9 +104,10 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     }
   }
 
-  public MessageType getStorageSchemaWithoutMetadataFields() {
+  @Override
+  public MessageType getStorageSchema(boolean includeMetadataField) {
     try {
-      return new TableSchemaResolver(metaClient).getTableParquetSchemaWithoutMetadataFields();
+      return new TableSchemaResolver(metaClient).getTableParquetSchema(includeMetadataField);
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read schema from storage.", e);
     }
