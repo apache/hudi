@@ -221,6 +221,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected String partitionName;
     // operation field default false
     private boolean withOperationField = false;
+    // Use scanV2 method.
+    private boolean useScanV2 = false;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -309,6 +311,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     @Override
     public Builder withPartition(String partitionName) {
       this.partitionName = partitionName;
+      return this;
+    }
+
+    @Override
+    public Builder withUseScanV2(boolean useScanV2) {
+      this.useScanV2 = useScanV2;
       return this;
     }
 

@@ -56,6 +56,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
@@ -137,6 +138,10 @@ public abstract class AbstractHoodieLogRecordReader {
   private Option<String> partitionName;
   // Populate meta fields for the records
   private boolean populateMetaFields = true;
+  // Collect all the block instants after scanning all the log files.
+  private List<String> validBlockInstants = new ArrayList<>();
+  // Use scanV2 method.
+  private boolean useScanV2;
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema,
@@ -541,6 +546,10 @@ public abstract class AbstractHoodieLogRecordReader {
     }
   }
 
+  public List<String> getValidBlockInstants() {
+    return validBlockInstants;
+  }
+
   /**
    * Builder used to build {@code AbstractHoodieLogRecordScanner}.
    */
@@ -571,6 +580,10 @@ public abstract class AbstractHoodieLogRecordReader {
     }
 
     public Builder withOperationField(boolean withOperationField) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withUseScanV2(boolean useScanV2) {
       throw new UnsupportedOperationException();
     }
 
