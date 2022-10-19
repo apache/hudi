@@ -30,7 +30,7 @@ if [ "$HUDI_DEMO_ENV" != "dev" ]; then
   HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} pull
 fi
 sleep 5
-HUDI_WS=${WS_ROOT} docker-compose --verbose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} up -d
+HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} up -d
 sleep 15
 
 docker exec -it adhoc-1 /bin/bash /var/hoodie/ws/docker/demo/setup_demo_container.sh
