@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -32,6 +33,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -42,11 +44,22 @@ import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@SuppressWarnings("unchecked")
 /**
  * Test-cases for covering HoodieReadClient APIs
  */
+@SuppressWarnings("unchecked")
 public class TestHoodieReadClient extends HoodieClientTestBase {
+
+  @Override
+  protected void initPath() {
+    try {
+      java.nio.file.Path basePath = tempDir.resolve("dataset");
+      java.nio.file.Files.createDirectories(basePath);
+      this.basePath = basePath.toUri().toString();
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
 
   /**
    * Test ReadFilter API after writing new records using HoodieWriteClient.insert.
@@ -85,7 +98,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
 
   @Test
   public void testReadROViewFailsWithoutSqlContext() {
-    HoodieReadClient readClient = new HoodieReadClient(context, getConfig());
+    SparkRDDReadClient readClient = new SparkRDDReadClient(context, getConfig());
     JavaRDD<HoodieKey> recordsRDD = jsc.parallelize(new ArrayList<>(), 1);
     assertThrows(IllegalStateException.class, () -> {
       readClient.readROView(recordsRDD, 1);
@@ -103,7 +116,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
   private void testReadFilterExist(HoodieWriteConfig config,
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn) throws Exception {
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
-      HoodieReadClient readClient = getHoodieReadClient(config.getBasePath());
+      SparkRDDReadClient readClient = getHoodieReadClient(config.getBasePath());
       String newCommitTime = writeClient.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -119,7 +132,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
       // Verify there are no errors
       assertNoWriteErrors(statuses);
 
-      HoodieReadClient anotherReadClient = getHoodieReadClient(config.getBasePath());
+      SparkRDDReadClient anotherReadClient = getHoodieReadClient(config.getBasePath());
       filteredRDD = anotherReadClient.filterExists(recordsRDD);
       List<HoodieRecord> result = filteredRDD.collect();
       // Check results
@@ -212,7 +225,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
           jsc.parallelize(result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
               .map(record -> new HoodieAvroRecord(record.getKey(), null)).collect(Collectors.toList()));
       // Should have 100 records in table (check using Index), all in locations marked at commit
-      HoodieReadClient readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
+      SparkRDDReadClient readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
       List<HoodieRecord> taggedRecords = readClient.tagLocation(recordRDD).collect();
       checkTaggedRecords(taggedRecords, newCommitTime);
 

@@ -32,8 +32,9 @@ import org.junit.jupiter.api.Assertions;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.sql.Date;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -248,7 +249,7 @@ public class TestHoodieAvroUtils {
     rec.put("non_pii_col", "val1");
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
-    GenericRecord rec1 = HoodieAvroUtils.removeFields(rec, Arrays.asList("pii_col"));
+    GenericRecord rec1 = HoodieAvroUtils.removeFields(rec, Collections.singleton("pii_col"));
     assertEquals("key1", rec1.get("_row_key"));
     assertEquals("val1", rec1.get("non_pii_col"));
     assertEquals(3.5, rec1.get("timestamp"));
@@ -261,7 +262,7 @@ public class TestHoodieAvroUtils {
         + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
         + "{\"name\": \"pii_col\", \"type\": \"string\"}]},";
     expectedSchema = new Schema.Parser().parse(schemaStr);
-    rec1 = HoodieAvroUtils.removeFields(rec, Arrays.asList(""));
+    rec1 = HoodieAvroUtils.removeFields(rec, Collections.singleton(""));
     assertEquals(expectedSchema, rec1.getSchema());
   }
 
@@ -371,5 +372,12 @@ public class TestHoodieAvroUtils {
     colRenames.put("ss.ln", "lastname");
     GenericRecord studentRecordRename = HoodieAvroUtils.rewriteRecordWithNewSchema(rec3, nestedSchemaRename, colRenames);
     Assertions.assertEquals(GenericData.get().validate(nestedSchemaRename, studentRecordRename), true);
+  }
+
+  @Test
+  public void testConvertDaysToDate() {
+    Date now = new Date(System.currentTimeMillis());
+    int days = HoodieAvroUtils.fromJavaDate(now);
+    assertEquals(now.toLocalDate(), HoodieAvroUtils.toJavaDate(days).toLocalDate());
   }
 }

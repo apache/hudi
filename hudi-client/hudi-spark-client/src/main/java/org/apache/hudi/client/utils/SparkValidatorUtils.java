@@ -50,7 +50,7 @@ import java.util.stream.Stream;
 import scala.collection.JavaConverters;
 
 /**
- * Spark validator utils to verify and run any precommit validators configured.
+ * Spark validator utils to verify and run any pre-commit validators configured.
  */
 public class SparkValidatorUtils {
   private static final Logger LOG = LogManager.getLogger(BaseSparkCommitActionExecutor.class);

@@ -94,7 +94,7 @@ public class CkpMetadata implements Serializable {
    *
    * <p>This expects to be called by the driver.
    */
-  public void bootstrap(HoodieTableMetaClient metaClient) throws IOException {
+  public void bootstrap() throws IOException {
     fs.delete(path, true);
     fs.mkdirs(path);
   }
@@ -173,8 +173,8 @@ public class CkpMetadata implements Serializable {
   @Nullable
   public String lastPendingInstant() {
     load();
-    for (int i = this.messages.size() - 1; i >= 0; i--) {
-      CkpMessage ckpMsg = this.messages.get(i);
+    if (this.messages.size() > 0) {
+      CkpMessage ckpMsg = this.messages.get(this.messages.size() - 1);
       // consider 'aborted' as pending too to reuse the instant
       if (!ckpMsg.isComplete()) {
         return ckpMsg.getInstant();

@@ -120,10 +120,4 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
   public Path getWritePath() {
     return writer.getLogFile().getPath();
   }
-
-  @Override
-  public boolean shouldReplace() {
-    // log files can append new data buffer directly
-    return false;
-  }
 }

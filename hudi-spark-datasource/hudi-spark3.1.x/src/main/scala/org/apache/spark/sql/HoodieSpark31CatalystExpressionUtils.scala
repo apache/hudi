@@ -19,7 +19,8 @@
 package org.apache.spark.sql
 
 import HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, AnsiCast, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
+import org.apache.spark.sql.types.DataType
 
 object HoodieSpark31CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
 
@@ -29,6 +30,16 @@ object HoodieSpark31CatalystExpressionUtils extends HoodieCatalystExpressionUtil
       case _ => None
     }
   }
+
+  def canUpCast(fromType: DataType, toType: DataType): Boolean =
+    Cast.canUpCast(fromType, toType)
+
+  override def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)] =
+    expr match {
+      case Cast(castedExpr, dataType, timeZoneId) => Some((castedExpr, dataType, timeZoneId, false))
+      case AnsiCast(castedExpr, dataType, timeZoneId) => Some((castedExpr, dataType, timeZoneId, true))
+      case _ => None
+    }
 
   private object OrderPreservingTransformation {
     def unapply(expr: Expression): Option[AttributeReference] = {

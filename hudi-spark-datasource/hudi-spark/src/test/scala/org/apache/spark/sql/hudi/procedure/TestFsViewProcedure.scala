@@ -17,9 +17,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-
-class TestFsViewProcedure extends HoodieSparkSqlTestBase {
+class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_fsview_all Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName

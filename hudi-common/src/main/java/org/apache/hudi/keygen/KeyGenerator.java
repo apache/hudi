@@ -34,7 +34,7 @@ import java.util.List;
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public abstract class KeyGenerator implements KeyGeneratorInterface {
 
-  protected TypedProperties config;
+  protected final TypedProperties config;
 
   protected KeyGenerator(TypedProperties config) {
     this.config = config;

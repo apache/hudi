@@ -59,6 +59,7 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.IntType;
+import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
@@ -334,7 +335,10 @@ public class ParquetSplitReaderUtil {
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         switch (descriptor.getPrimitiveType().getPrimitiveTypeName()) {
           case INT64:
-            return new Int64TimestampColumnReader(utcTimestamp, descriptor, pageReader, ((TimestampType) fieldType).getPrecision());
+            int precision = fieldType instanceof TimestampType
+                ? ((TimestampType) fieldType).getPrecision()
+                : ((LocalZonedTimestampType) fieldType).getPrecision();
+            return new Int64TimestampColumnReader(utcTimestamp, descriptor, pageReader, precision);
           case INT96:
             return new TimestampColumnReader(utcTimestamp, descriptor, pageReader);
           default:

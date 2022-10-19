@@ -55,11 +55,11 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     spark.sql(
       s"""
          | insert into $tableName values
-         | (1,1,11,100001,101.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
-         | (2,2,12,100002,102.02,1002.0002,100002.0002,'a000002','2021-12-25','2021-12-25 12:02:02',true,'a02','2021-12-25'),
-         | (3,3,13,100003,103.03,1003.0003,100003.0003,'a000003','2021-12-25','2021-12-25 12:03:03',false,'a03','2021-12-25'),
-         | (4,4,14,100004,104.04,1004.0004,100004.0004,'a000004','2021-12-26','2021-12-26 12:04:04',true,'a04','2021-12-26'),
-         | (5,5,15,100005,105.05,1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
+         | (1,1,11,100001,101.01,1001.0001,100001.0001,'a000001',DATE'2021-12-25',TIMESTAMP'2021-12-25 12:01:01',true,X'a01',TIMESTAMP'2021-12-25'),
+         | (2,2,12,100002,102.02,1002.0002,100002.0002,'a000002',DATE'2021-12-25',TIMESTAMP'2021-12-25 12:02:02',true,X'a02',TIMESTAMP'2021-12-25'),
+         | (3,3,13,100003,103.03,1003.0003,100003.0003,'a000003',DATE'2021-12-25',TIMESTAMP'2021-12-25 12:03:03',false,X'a03',TIMESTAMP'2021-12-25'),
+         | (4,4,14,100004,104.04,1004.0004,100004.0004,'a000004',DATE'2021-12-26',TIMESTAMP'2021-12-26 12:04:04',true,X'a04',TIMESTAMP'2021-12-26'),
+         | (5,5,15,100005,105.05,1005.0005,100005.0005,'a000005',DATE'2021-12-26',TIMESTAMP'2021-12-26 12:05:05',false,X'a05',TIMESTAMP'2021-12-26')
          |""".stripMargin)
   }
 
@@ -70,6 +70,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
+          // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
+          //       and are disallowed now by default in Spark 3.x
+          spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
           createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
           // date -> string -> date
           spark.sql(s"alter table $tableName alter column col6 type String")
@@ -138,6 +141,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
+          // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
+          //       and are disallowed now by default in Spark 3.x
+          spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
           createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
           // float -> double -> decimal -> String
           spark.sql(s"alter table $tableName alter column col2 type double")
@@ -172,6 +178,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
+          // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
+          //       and are disallowed now by default in Spark 3.x
+          spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
           createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
 
           // test set properties
@@ -402,7 +411,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
           spark.sql(s"alter table $tableName alter column members.value.a first")
 
-          spark.sql(s"insert into ${tableName} values(1, 'jack', map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStruct', 29, 100), 1000)")
+          spark.sql(s"insert into ${tableName} values(1, 'jack', map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStruct', 29, 100), 1000)")
 
           // rename column
           spark.sql(s"alter table ${tableName} rename column user to userx")
@@ -424,7 +433,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           checkAnswer(spark.sql(s"select name, userx.name, userx.score from ${tableName}").collect())(Seq(null, null, null))
 
           // insert again
-          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStructNew', 291 , 101), 'jacknew', 1000)")
+          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000)")
 
           // check again
           checkAnswer(spark.sql(s"select name, userx.name as uxname, userx.score as uxs from ${tableName} order by id").collect())(
@@ -440,9 +449,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             Seq(291, 2, "jacknew"))
           // test map value type change
           spark.sql(s"alter table ${tableName} add columns(mxp map<String, int>)")
-          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 9))")
+          spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 9))")
           spark.sql(s"alter table ${tableName} alter column mxp.value type double")
-          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
+          spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
           spark.sql(s"select * from $tableName").show(false)
           checkAnswer(spark.sql(s"select mxp from ${tableName} order by id").collect())(
             Seq(null),
@@ -453,7 +462,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"alter table ${tableName} rename column userx to us")
           spark.sql(s"alter table ${tableName} rename column us.age to age1")
 
-          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
+          spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
           spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").show()
           checkAnswer(spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").collect())(
             Seq(null, 29),

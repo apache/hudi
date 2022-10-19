@@ -43,6 +43,11 @@
       "default" : null
     },
     {
+      "name": "lastCompletedCommitTimestamp",
+      "type": "string",
+      "default" : ""
+    },
+    {
       "name": "policy",
       "type": "string"
     },

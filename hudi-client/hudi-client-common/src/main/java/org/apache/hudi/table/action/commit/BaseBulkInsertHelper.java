@@ -38,6 +38,8 @@ public abstract class BaseBulkInsertHelper<T extends HoodieRecordPayload, I, K, 
 
   /**
    * Only write input records. Does not change timeline/index. Return information about new files created.
+   *
+   * @param writeHandleFactory default write handle factory writing records.
    */
   public abstract O bulkInsert(I inputRecords, String instantTime,
                                HoodieTable<T, I, K, O> table, HoodieWriteConfig config,

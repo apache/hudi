@@ -162,7 +162,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         StorageDescriptor partitionSd = sd.clone();
         String fullPartitionPath = FSUtils.getPartitionPath(getBasePath(), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-        sd.setLocation(fullPartitionPath);
+        partitionSd.setLocation(fullPartitionPath);
         PartitionInput partitionInput = new PartitionInput().withValues(partitionValues).withStorageDescriptor(partitionSd);
         return new BatchUpdatePartitionRequestEntry().withPartitionInput(partitionInput).withPartitionValueList(partitionValues);
       }).collect(Collectors.toList());

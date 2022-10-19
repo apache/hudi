@@ -45,7 +45,7 @@ import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
-import org.apache.hudi.utilities.schema.ChainedSchemaPostProcessor;
+import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
@@ -283,6 +283,24 @@ public class UtilHelpers {
 
     additionalConfigs.forEach(sparkConf::set);
     return SparkRDDWriteClient.registerClasses(sparkConf);
+  }
+
+  private static SparkConf buildSparkConf(String appName, Map<String, String> additionalConfigs) {
+    final SparkConf sparkConf = new SparkConf().setAppName(appName);
+    sparkConf.set("spark.ui.port", "8090");
+    sparkConf.setIfMissing("spark.driver.maxResultSize", "2g");
+    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    sparkConf.set("spark.hadoop.mapred.output.compress", "true");
+    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
+    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
+    sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
+
+    additionalConfigs.forEach(sparkConf::set);
+    return SparkRDDWriteClient.registerClasses(sparkConf);
+  }
+
+  public static JavaSparkContext buildSparkContext(String appName, Map<String, String> configs) {
+    return new JavaSparkContext(buildSparkConf(appName, configs));
   }
 
   public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {

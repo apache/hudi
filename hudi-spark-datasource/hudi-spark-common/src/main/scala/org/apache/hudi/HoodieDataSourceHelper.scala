@@ -18,13 +18,17 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{PredicateHelper, SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -41,15 +45,17 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
   /**
    * Wrapper for `buildReaderWithPartitionValues` of [[ParquetFileFormat]] handling [[ColumnarBatch]],
    * when Parquet's Vectorized Reader is used
+   *
+   * TODO move to HoodieBaseRelation, make private
    */
-  def buildHoodieParquetReader(sparkSession: SparkSession,
-                               dataSchema: StructType,
-                               partitionSchema: StructType,
-                               requiredSchema: StructType,
-                               filters: Seq[Filter],
-                               options: Map[String, String],
-                               hadoopConf: Configuration,
-                               appendPartitionValues: Boolean = false): PartitionedFile => Iterator[InternalRow] = {
+  private[hudi] def buildHoodieParquetReader(sparkSession: SparkSession,
+                                             dataSchema: StructType,
+                                             partitionSchema: StructType,
+                                             requiredSchema: StructType,
+                                             filters: Seq[Filter],
+                                             options: Map[String, String],
+                                             hadoopConf: Configuration,
+                                             appendPartitionValues: Boolean = false): PartitionedFile => Iterator[InternalRow] = {
     val parquetFileFormat: ParquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(appendPartitionValues).get
     val readParquetFile: PartitionedFile => Iterator[Any] = parquetFileFormat.buildReaderWithPartitionValues(
       sparkSession = sparkSession,
@@ -80,6 +86,19 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
       val remaining = file.getLen - offset
       val size = if (remaining > maxSplitBytes) maxSplitBytes else remaining
       PartitionedFile(partitionValues, filePath.toUri.toString, offset, size)
+    }
+  }
+
+  trait AvroDeserializerSupport extends SparkAdapterSupport {
+    protected val avroSchema: Schema
+    protected val structTypeSchema: StructType
+
+    private lazy val deserializer: HoodieAvroDeserializer =
+      sparkAdapter.createAvroDeserializer(avroSchema, structTypeSchema)
+
+    protected def deserialize(avroRecord: GenericRecord): InternalRow = {
+      checkState(avroRecord.getSchema.getFields.size() == structTypeSchema.fields.length)
+      deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
     }
   }
 }

@@ -174,6 +174,13 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
+   * Update the SerDe properties in metastore.
+   */
+  default void updateSerdeProperties(String tableName, Map<String, String> serdeProperties) {
+
+  }
+
+  /**
    * Get the timestamp of last replication.
    */
   default Option<String> getLastReplicatedTime(String tableName) {

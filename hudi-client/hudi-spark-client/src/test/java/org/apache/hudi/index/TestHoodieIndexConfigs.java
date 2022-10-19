@@ -93,7 +93,7 @@ public class TestHoodieIndexConfigs {
                 .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE).build()).build();
         assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieSimpleBucketIndex);
 
-        config = clientConfigBuilder.withPath(basePath)
+        config = HoodieWriteConfig.newBuilder().withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.BUCKET)
               .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING).build())
             .build();

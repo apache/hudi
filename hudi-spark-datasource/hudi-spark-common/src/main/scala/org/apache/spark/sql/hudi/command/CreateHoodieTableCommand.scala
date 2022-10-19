@@ -18,12 +18,15 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.HoodieFileFormat
+
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
+import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
+
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
@@ -33,7 +36,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 
 import scala.collection.JavaConverters._
@@ -62,12 +65,22 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     // check if there are conflict between table configs defined in hoodie table and properties defined in catalog.
     CreateHoodieTableCommand.validateTblProperties(hoodieCatalogTable)
 
-    // init hoodie table
-    hoodieCatalogTable.initHoodieTable()
+    val queryAsProp = hoodieCatalogTable.catalogProperties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE)
+    if (queryAsProp.isEmpty) {
+      // init hoodie table for a normal table (not a ro/rt table)
+      hoodieCatalogTable.initHoodieTable()
+    } else {
+      if (!hoodieCatalogTable.hoodieTableExists) {
+        throw new AnalysisException("Creating ro/rt table need the existence of the base table.")
+      }
+      if (HoodieTableType.MERGE_ON_READ != hoodieCatalogTable.tableType) {
+        throw new AnalysisException("Creating ro/rt table should only apply to a mor table.")
+      }
+    }
 
     try {
       // create catalog table for this hoodie table
-      CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists)
+      CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists, queryAsProp)
     } catch {
       case NonFatal(e) =>
         logWarning(s"Failed to create catalog table in metastore: ${e.getMessage}")
@@ -92,8 +105,11 @@ object CreateHoodieTableCommand {
     }
   }
 
-  def createTableInCatalog(sparkSession: SparkSession,
-      hoodieCatalogTable: HoodieCatalogTable, ignoreIfExists: Boolean): Unit = {
+  def createTableInCatalog(
+      sparkSession: SparkSession,
+      hoodieCatalogTable: HoodieCatalogTable,
+      ignoreIfExists: Boolean,
+      queryAsProp: Option[String] = None): Unit = {
     val table = hoodieCatalogTable.table
     assert(table.tableType != CatalogTableType.VIEW)
 
@@ -121,7 +137,8 @@ object CreateHoodieTableCommand {
       Some(outputFormat),
       Some(serdeFormat),
       table.storage.compressed,
-      storageProperties + ("path" -> path))
+      storageProperties + ("path" -> path) ++ queryAsProp.map(ConfigUtils.IS_QUERY_AS_RO_TABLE -> _)
+    )
 
     val tableName = HoodieSqlCommonUtils.formatName(sparkSession, table.identifier.table)
     val newDatabaseName = HoodieSqlCommonUtils.formatName(sparkSession, table.identifier.database

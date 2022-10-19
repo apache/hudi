@@ -45,9 +45,9 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -89,7 +89,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @ValueSource(booleans = {true})
   public void testMergeOnReadRollbackActionExecutor(boolean isUsingMarkers) throws IOException {
     //1. prepare data and assert data result
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
@@ -279,21 +279,6 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertTrue(partitionMetadata.getFailedDeleteFiles().isEmpty());
     assertTrue(partitionMetadata.getRollbackLogFiles().isEmpty());
     assertEquals(1, partitionMetadata.getSuccessDeleteFiles().size());
-  }
-
-  @Test
-  public void testFailForCompletedInstants() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> {
-      HoodieInstant rollBackInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
-      new MergeOnReadRollbackActionExecutor(context, getConfigBuilder().build(),
-          getHoodieTable(metaClient, getConfigBuilder().build()),
-          "003",
-          rollBackInstant,
-          true,
-          true,
-          true,
-          false).execute();
-    });
   }
 
   /**

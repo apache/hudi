@@ -18,14 +18,14 @@
 
 package org.apache.hudi.client.clustering.update.strategy;
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.table.HoodieTable;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,9 +35,9 @@ import java.util.stream.Collectors;
  */
 public class SparkAllowUpdateStrategy<T extends HoodieRecordPayload<T>> extends BaseSparkUpdateStrategy<T> {
 
-  public SparkAllowUpdateStrategy(HoodieSparkEngineContext engineContext,
-                                  HashSet<HoodieFileGroupId> fileGroupsInPendingClustering) {
-    super(engineContext, fileGroupsInPendingClustering);
+  public SparkAllowUpdateStrategy(
+      HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
+    super(engineContext, table, fileGroupsInPendingClustering);
   }
 
   @Override

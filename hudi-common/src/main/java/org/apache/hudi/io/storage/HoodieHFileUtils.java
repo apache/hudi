@@ -67,7 +67,9 @@ public class HoodieHFileUtils {
    */
   public static HFile.Reader createHFileReader(
       FileSystem fs, Path dummyPath, byte[] content) throws IOException {
-    Configuration conf = new Configuration();
+    // Avoid loading default configs, from the FS, since this configuration is mostly
+    // used as a stub to initialize HFile reader
+    Configuration conf = new Configuration(false);
     HoodieHFileReader.SeekableByteArrayInputStream bis = new HoodieHFileReader.SeekableByteArrayInputStream(content);
     FSDataInputStream fsdis = new FSDataInputStream(bis);
     FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);

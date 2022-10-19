@@ -83,7 +83,7 @@ public class DeltaGenerator implements Serializable {
     this.jsc = jsc;
     this.sparkSession = sparkSession;
     this.schemaStr = schemaStr;
-    this.recordRowKeyFieldNames = keyGenerator.getRecordKeyFields();
+    this.recordRowKeyFieldNames = keyGenerator.getRecordKeyFieldNames();
     this.partitionPathFieldNames = keyGenerator.getPartitionPathFields();
   }
 

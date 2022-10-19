@@ -43,6 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -71,17 +72,24 @@ public class TestDatadogHttpClient {
   @Mock
   StatusLine statusLine;
 
+  private Level initialLogLevel;
+
   @BeforeEach
   void prepareAppender() {
-    when(appender.getName()).thenReturn("MockAppender");
+    when(appender.getName()).thenReturn("MockAppender-" + UUID.randomUUID());
     when(appender.isStarted()).thenReturn(true);
     when(appender.isStopped()).thenReturn(false);
-    ((Logger) LogManager.getLogger(DatadogHttpClient.class)).addAppender(appender);
+    Logger logger = (Logger) LogManager.getLogger(DatadogHttpClient.class);
+    initialLogLevel = logger.getLevel();
+    logger.setLevel(Level.DEBUG);
+    logger.addAppender(appender);
   }
 
   @AfterEach
   void resetMocks() {
-    ((org.apache.logging.log4j.core.Logger) LogManager.getLogger(DatadogHttpClient.class)).removeAppender(appender);
+    Logger logger = (Logger) LogManager.getLogger(DatadogHttpClient.class);
+    logger.setLevel(initialLogLevel);
+    logger.removeAppender(appender);
     reset(appender, httpClient, httpResponse, statusLine);
   }
 
@@ -117,7 +125,6 @@ public class TestDatadogHttpClient {
 
   @Test
   public void sendPayloadShouldLogWhenRequestFailed() throws IOException {
-    ((Logger) LogManager.getLogger(DatadogHttpClient.class)).addAppender(appender);
     when(httpClient.execute(any())).thenThrow(IOException.class);
 
     DatadogHttpClient ddClient = new DatadogHttpClient(ApiSite.US, "foo", true, httpClient);
@@ -130,7 +137,6 @@ public class TestDatadogHttpClient {
 
   @Test
   public void sendPayloadShouldLogUnsuccessfulSending() {
-    ((Logger) LogManager.getLogger(DatadogHttpClient.class)).addAppender(appender);
     mockResponse(401);
     when(httpResponse.toString()).thenReturn("unauthorized");
 
@@ -144,7 +150,6 @@ public class TestDatadogHttpClient {
 
   @Test
   public void sendPayloadShouldLogSuccessfulSending() {
-    ((Logger) LogManager.getLogger(DatadogHttpClient.class)).addAppender(appender);
     mockResponse(202);
 
     DatadogHttpClient ddClient = new DatadogHttpClient(ApiSite.US, "foo", true, httpClient);

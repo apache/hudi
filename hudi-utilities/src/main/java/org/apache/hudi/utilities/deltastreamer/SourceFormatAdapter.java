@@ -21,16 +21,15 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.AvroSource;
 import org.apache.hudi.utilities.sources.InputBatch;
-import org.apache.hudi.utilities.sources.JsonSource;
-import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 
+import com.google.protobuf.Message;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -38,13 +37,16 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructType;
 
+import java.io.Closeable;
+import java.io.IOException;
+
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 /**
  * Adapts data-format provided by the source to the data-format required by the client (DeltaStreamer).
  */
-public final class SourceFormatAdapter {
+public final class SourceFormatAdapter implements Closeable {
 
   private final Source source;
 
@@ -58,15 +60,15 @@ public final class SourceFormatAdapter {
   public InputBatch<JavaRDD<GenericRecord>> fetchNewDataInAvroFormat(Option<String> lastCkptStr, long sourceLimit) {
     switch (source.getSourceType()) {
       case AVRO:
-        return ((AvroSource) source).fetchNext(lastCkptStr, sourceLimit);
+        return ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCkptStr, sourceLimit);
       case JSON: {
-        InputBatch<JavaRDD<String>> r = ((JsonSource) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromJson)).orElse(null)),
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case ROW: {
-        InputBatch<Dataset<Row>> r = ((RowSource) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<Dataset<Row>> r = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
               SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
@@ -81,6 +83,12 @@ public final class SourceFormatAdapter {
             })
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
+      case PROTO: {
+        InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCkptStr, sourceLimit);
+        AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
+        return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromProtoMessage)).orElse(null)),
+            r.getCheckpointForNextBatch(), r.getSchemaProvider());
+      }
       default:
         throw new IllegalArgumentException("Unknown source type (" + source.getSourceType() + ")");
     }
@@ -92,9 +100,9 @@ public final class SourceFormatAdapter {
   public InputBatch<Dataset<Row>> fetchNewDataInRowFormat(Option<String> lastCkptStr, long sourceLimit) {
     switch (source.getSourceType()) {
       case ROW:
-        return ((RowSource) source).fetchNext(lastCkptStr, sourceLimit);
+        return ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
       case AVRO: {
-        InputBatch<JavaRDD<GenericRecord>> r = ((AvroSource) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<GenericRecord>> r = ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
         return new InputBatch<>(
             Option
@@ -107,12 +115,27 @@ public final class SourceFormatAdapter {
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case JSON: {
-        InputBatch<JavaRDD<String>> r = ((JsonSource) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
         StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
         return new InputBatch<>(
             Option.ofNullable(
                 r.getBatch().map(rdd -> source.getSparkSession().read().schema(dataType).json(rdd)).orElse(null)),
+            r.getCheckpointForNextBatch(), r.getSchemaProvider());
+      }
+      case PROTO: {
+        InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCkptStr, sourceLimit);
+        Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
+        AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
+        return new InputBatch<>(
+            Option
+                .ofNullable(
+                    r.getBatch()
+                        .map(rdd -> rdd.map(convertor::fromProtoMessage))
+                        .map(rdd -> AvroConversionUtils.createDataFrame(JavaRDD.toRDD(rdd), sourceSchema.toString(),
+                            source.getSparkSession())
+                        )
+                        .orElse(null)),
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       default:
@@ -122,5 +145,16 @@ public final class SourceFormatAdapter {
 
   public Source getSource() {
     return source;
+  }
+
+  @Override
+  public void close() {
+    if (source instanceof Closeable) {
+      try {
+        ((Closeable) source).close();
+      } catch (IOException e) {
+        throw new HoodieIOException(String.format("Failed to shutdown the source (%s)", source.getClass().getName()), e);
+      }
+    }
   }
 }

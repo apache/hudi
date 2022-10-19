@@ -19,7 +19,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -100,7 +100,7 @@ public class HoodieClientTestUtils {
       sparkConf.set("spark.eventLog.dir", evlogDir);
     }
 
-    return HoodieReadClient.addHoodieSupport(sparkConf);
+    return SparkRDDReadClient.addHoodieSupport(sparkConf);
   }
 
   private static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,

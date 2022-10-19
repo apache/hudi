@@ -50,7 +50,6 @@ public class HoodieInstantTimeGenerator {
 
   // The last Instant timestamp generated
   private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
-  private static final String ALL_ZERO_TIMESTAMP = "00000000000000";
 
   // The default number of milliseconds that we add if they are not present
   // We prefer the max timestamp as it mimics the current behavior with second granularity
@@ -96,11 +95,7 @@ public class HoodieInstantTimeGenerator {
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
       return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
     } catch (DateTimeParseException e) {
-      // Special handling for all zero timestamp which is not parsable by DateTimeFormatter
-      if (timestamp.equals(ALL_ZERO_TIMESTAMP)) {
-        return new Date(0);
-      }
-      throw e;
+      throw new ParseException(e.getMessage(), e.getErrorIndex());
     }
   }
 
@@ -138,5 +133,14 @@ public class HoodieInstantTimeGenerator {
 
   public static void setCommitTimeZone(HoodieTimelineTimeZone commitTimeZone) {
     HoodieInstantTimeGenerator.commitTimeZone = commitTimeZone;
+  }
+
+  public static boolean isValidInstantTime(String instantTime) {
+    try {
+      Long.parseLong(instantTime);
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
   }
 }

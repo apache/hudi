@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -99,9 +100,11 @@ public class WriteStatus implements Serializable {
     if (optionalRecordMetadata.isPresent()) {
       String eventTimeVal = optionalRecordMetadata.get().getOrDefault(METADATA_EVENT_TIME_KEY, null);
       try {
-        long eventTime = DateTimeUtils.parseDateTime(eventTimeVal).toEpochMilli();
-        stat.setMinEventTime(eventTime);
-        stat.setMaxEventTime(eventTime);
+        if (!StringUtils.isNullOrEmpty(eventTimeVal)) {
+          long eventTime = DateTimeUtils.parseDateTime(eventTimeVal).toEpochMilli();
+          stat.setMinEventTime(eventTime);
+          stat.setMaxEventTime(eventTime);
+        }
       } catch (DateTimeException | IllegalArgumentException e) {
         LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
       }

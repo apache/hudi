@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.ViewStorageProperties;
 
@@ -67,6 +68,7 @@ public class TestStreamerUtil {
         "Missing partition columns in the hoodie.properties.");
     assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
     assertEquals(metaClient1.getTableConfig().getPreCombineField(), "ts");
+    assertEquals(metaClient1.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
 
     // Test for non-partitioned table.
     conf.removeConfig(FlinkOptions.PARTITION_PATH_FIELD);
@@ -77,6 +79,7 @@ public class TestStreamerUtil {
         .setConf(new org.apache.hadoop.conf.Configuration())
         .build();
     assertFalse(metaClient2.getTableConfig().getPartitionFields().isPresent());
+    assertEquals(metaClient2.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
   }
 
   @Test

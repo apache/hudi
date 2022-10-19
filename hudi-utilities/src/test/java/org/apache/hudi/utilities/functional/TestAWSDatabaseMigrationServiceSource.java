@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hudi.payload.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.transform.AWSDmsTransformer;
 

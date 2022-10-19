@@ -34,12 +34,12 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
     assertTrue(with1.size == 3)
     assertTrue(with1("primaryKey") == "id")
     assertTrue(with1("type") == "cow")
-    assertTrue(with1("payloadClass") == classOf[DefaultHoodieRecordPayload].getName)
+    assertTrue(with1("payloadClass") == classOf[OverwriteWithLatestAvroPayload].getName)
 
     val ops2 = Map("primaryKey" -> "id",
       "preCombineField" -> "timestamp",
       "type" -> "mor",
-      "payloadClass" -> classOf[OverwriteWithLatestAvroPayload].getName
+      "payloadClass" -> classOf[DefaultHoodieRecordPayload].getName
     )
     val with2 = HoodieOptionConfig.withDefaultSqlOptions(ops2)
     assertTrue(ops2 == with2)

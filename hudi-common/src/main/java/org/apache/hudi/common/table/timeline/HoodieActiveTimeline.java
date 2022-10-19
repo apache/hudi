@@ -70,18 +70,60 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
       INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION,
       REQUESTED_RESTORE_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION,
+      INFLIGHT_LOG_COMPACTION_EXTENSION, REQUESTED_LOG_COMPACTION_EXTENSION,
       ROLLBACK_EXTENSION, REQUESTED_ROLLBACK_EXTENSION, INFLIGHT_ROLLBACK_EXTENSION,
       REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION,
       REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION,
       REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION, INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION, SAVE_SCHEMA_ACTION_EXTENSION));
+
+  private static final Set<String> NOT_PARSABLE_TIMESTAMPS = new HashSet<String>(3) {{
+      add(HoodieTimeline.INIT_INSTANT_TS);
+      add(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS);
+      add(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
+    }};
+
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
 
   /**
    * Parse the timestamp of an Instant and return a {@code Date}.
+   * Throw ParseException if timestamp is not valid format as
+   *  {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
+   *
+   * @param timestamp a timestamp String which follow pattern as
+   *  {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
+   * @return Date of instant timestamp
    */
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
     return HoodieInstantTimeGenerator.parseDateFromInstantTime(timestamp);
+  }
+
+  /**
+   * The same parsing method as above, but this method will mute ParseException.
+   * If the given timestamp is invalid, returns {@code Option.empty}.
+   * Or a corresponding Date value if these timestamp strings are provided
+   *  {@link org.apache.hudi.common.table.timeline.HoodieTimeline#INIT_INSTANT_TS},
+   *  {@link org.apache.hudi.common.table.timeline.HoodieTimeline#METADATA_BOOTSTRAP_INSTANT_TS},
+   *  {@link org.apache.hudi.common.table.timeline.HoodieTimeline#FULL_BOOTSTRAP_INSTANT_TS}.
+   * This method is useful when parsing timestamp for metrics
+   *
+   * @param timestamp a timestamp String which follow pattern as
+   *  {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
+   * @return {@code Option<Date>} of instant timestamp, {@code Option.empty} if invalid timestamp
+   */
+  public static Option<Date> parseDateFromInstantTimeSafely(String timestamp) {
+    Option<Date> parsedDate;
+    try {
+      parsedDate = Option.of(HoodieInstantTimeGenerator.parseDateFromInstantTime(timestamp));
+    } catch (ParseException e) {
+      if (NOT_PARSABLE_TIMESTAMPS.contains(timestamp)) {
+        parsedDate = Option.of(new Date(Integer.parseInt(timestamp)));
+      } else {
+        LOG.warn("Failed to parse timestamp " + timestamp + ": " + e.getMessage());
+        parsedDate = Option.empty();
+      }
+    }
+    return parsedDate;
   }
 
   /**
@@ -184,7 +226,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public HoodieInstant revertToInflight(HoodieInstant instant) {
     LOG.info("Reverting instant to inflight " + instant);
-    HoodieInstant inflight = HoodieTimeline.getInflightInstant(instant, metaClient.getTableType());
+    HoodieInstant inflight = HoodieTimeline.getInflightInstant(instant, metaClient);
     revertCompleteToInflight(instant, inflight);
     LOG.info("Reverted " + instant + " to inflight " + inflight);
     return inflight;
@@ -366,6 +408,27 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
+   * TODO: This method is not needed, since log compaction plan is not a immutable plan.
+   * Revert logcompaction State from inflight to requested.
+   *
+   * @param inflightInstant Inflight Instant
+   * @return requested instant
+   */
+  public HoodieInstant revertLogCompactionInflightToRequested(HoodieInstant inflightInstant) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight());
+    HoodieInstant requestedInstant =
+        new HoodieInstant(State.REQUESTED, LOG_COMPACTION_ACTION, inflightInstant.getTimestamp());
+    if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
+      // Pass empty data since it is read from the corresponding .aux/.compaction instant file
+      transitionState(inflightInstant, requestedInstant, Option.empty());
+    } else {
+      deleteInflight(inflightInstant);
+    }
+    return requestedInstant;
+  }
+
+  /**
    * Transition Compaction State from requested to inflight.
    *
    * @param requestedInstant Requested instant
@@ -381,6 +444,21 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
+   * Transition LogCompaction State from requested to inflight.
+   *
+   * @param requestedInstant Requested instant
+   * @return inflight instant
+   */
+  public HoodieInstant transitionLogCompactionRequestedToInflight(HoodieInstant requestedInstant) {
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
+    ValidationUtils.checkArgument(requestedInstant.isRequested());
+    HoodieInstant inflightInstant =
+        new HoodieInstant(State.INFLIGHT, LOG_COMPACTION_ACTION, requestedInstant.getTimestamp());
+    transitionState(requestedInstant, inflightInstant, Option.empty());
+    return inflightInstant;
+  }
+
+  /**
    * Transition Compaction State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
@@ -391,6 +469,21 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, COMMIT_ACTION, inflightInstant.getTimestamp());
+    transitionState(inflightInstant, commitInstant, data);
+    return commitInstant;
+  }
+
+  /**
+   * Transition Log Compaction State from inflight to Committed.
+   *
+   * @param inflightInstant Inflight instant
+   * @param data Extra Metadata
+   * @return commit instant
+   */
+  public HoodieInstant transitionLogCompactionInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight());
+    HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, DELTA_COMMIT_ACTION, inflightInstant.getTimestamp());
     transitionState(inflightInstant, commitInstant, data);
     return commitInstant;
   }
@@ -607,6 +700,17 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
+    // Write workload to auxiliary folder
+    createFileInAuxiliaryFolder(instant, content);
+    createFileInMetaPath(instant.getFileName(), content, overwrite);
+  }
+
+  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content) {
+    saveToLogCompactionRequested(instant, content, false);
+  }
+
+  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
     // Write workload to auxiliary folder
     createFileInAuxiliaryFolder(instant, content);
     createFileInMetaPath(instant.getFileName(), content, overwrite);

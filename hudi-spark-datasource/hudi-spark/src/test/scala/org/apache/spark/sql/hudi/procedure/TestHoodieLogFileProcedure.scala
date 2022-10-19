@@ -19,9 +19,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-
-class TestHoodieLogFileProcedure extends HoodieSparkSqlTestBase {
+class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_logfile_metadata Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName

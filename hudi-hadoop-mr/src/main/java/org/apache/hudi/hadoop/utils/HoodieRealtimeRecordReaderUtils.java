@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -56,6 +57,7 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -96,9 +98,10 @@ public class HoodieRealtimeRecordReaderUtils {
     if (writable == null) {
       return "null";
     }
+    Random random = new Random(2);
     StringBuilder builder = new StringBuilder();
     Writable[] values = writable.get();
-    builder.append("\"values_" + Math.random() + "_" + values.length + "\": {");
+    builder.append("\"values_" + random.nextDouble() + "_" + values.length + "\": {");
     int i = 0;
     for (Writable w : values) {
       if (w instanceof ArrayWritable) {
@@ -189,7 +192,14 @@ public class HoodieRealtimeRecordReaderUtils {
         Writable[] recordValues = new Writable[schema.getFields().size()];
         int recordValueIndex = 0;
         for (Schema.Field field : schema.getFields()) {
-          recordValues[recordValueIndex++] = avroToArrayWritable(record.get(field.name()), field.schema());
+          // TODO Revisit Avro exception handling in future
+          Object fieldValue = null;
+          try {
+            fieldValue = record.get(field.name());
+          } catch (AvroRuntimeException e) {
+            LOG.debug("Field:" + field.name() + "not found in Schema:" + schema);
+          }
+          recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema());
         }
         return new ArrayWritable(Writable.class, recordValues);
       case ENUM:

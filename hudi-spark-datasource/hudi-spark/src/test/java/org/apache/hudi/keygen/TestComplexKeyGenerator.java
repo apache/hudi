@@ -28,6 +28,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -83,7 +84,6 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   public void testWrongRecordKeyField() {
     ComplexKeyGenerator keyGenerator = new ComplexKeyGenerator(getWrongRecordKeyFieldProps());
     Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
-    Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.buildFieldSchemaInfoIfNeeded(KeyGeneratorTestUtilities.structType));
   }
 
   @Test
@@ -98,7 +98,7 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "timestamp=4357686/ts_ms=2020-03-21");
 
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(keyGenerator.getPartitionPath(internalRow, row.schema()), "timestamp=4357686/ts_ms=2020-03-21");
+    Assertions.assertEquals(UTF8String.fromString("timestamp=4357686/ts_ms=2020-03-21"), keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 
   @Test
@@ -107,7 +107,7 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
-    assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 1);
+    assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 1);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 1);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);
@@ -119,9 +119,9 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
     Row row = KeyGeneratorTestUtilities.getRow(record, HoodieTestDataGenerator.AVRO_SCHEMA,
         AvroConversionUtils.convertAvroSchemaToStructType(HoodieTestDataGenerator.AVRO_SCHEMA));
-    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(row), partitionPath);
+    Assertions.assertEquals(partitionPath, compositeKeyGenerator.getPartitionPath(row));
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(internalRow, row.schema()), partitionPath);
+    Assertions.assertEquals(UTF8String.fromString(partitionPath), compositeKeyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 
   @Test
@@ -130,7 +130,7 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "rider,driver");
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
-    assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 2);
+    assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 2);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);
@@ -144,10 +144,10 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
     Row row = KeyGeneratorTestUtilities.getRow(record, HoodieTestDataGenerator.AVRO_SCHEMA,
         AvroConversionUtils.convertAvroSchemaToStructType(HoodieTestDataGenerator.AVRO_SCHEMA));
-    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(row), partitionPath);
+    Assertions.assertEquals(partitionPath, compositeKeyGenerator.getPartitionPath(row));
 
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(internalRow, row.schema()), partitionPath);
+    Assertions.assertEquals(UTF8String.fromString(partitionPath), compositeKeyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 
   @Test
@@ -156,7 +156,7 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
-    assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 2);
+    assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 2);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 0);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);
@@ -170,9 +170,9 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
     Row row = KeyGeneratorTestUtilities.getRow(record, HoodieTestDataGenerator.AVRO_SCHEMA,
         AvroConversionUtils.convertAvroSchemaToStructType(HoodieTestDataGenerator.AVRO_SCHEMA));
-    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(row), partitionPath);
+    Assertions.assertEquals(partitionPath, compositeKeyGenerator.getPartitionPath(row));
 
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(internalRow, row.schema()), partitionPath);
+    Assertions.assertEquals(UTF8String.fromString(partitionPath), compositeKeyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 }

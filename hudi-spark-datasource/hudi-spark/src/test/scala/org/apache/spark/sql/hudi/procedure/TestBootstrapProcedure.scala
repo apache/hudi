@@ -21,13 +21,12 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.apache.spark.sql.{Dataset, Row}
 
 import java.time.Instant
 import java.util
 
-class TestBootstrapProcedure extends HoodieSparkSqlTestBase {
+class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call run_bootstrap Procedure") {
     withTempDir { tmp =>
@@ -55,12 +54,12 @@ class TestBootstrapProcedure extends HoodieSparkSqlTestBase {
       checkAnswer(
         s"""call run_bootstrap(
            |table => '$tableName',
-           |basePath => '$tablePath',
-           |tableType => '${HoodieTableType.COPY_ON_WRITE.name}',
-           |bootstrapPath => '$sourcePath',
-           |rowKeyField => '$RECORD_KEY_FIELD',
-           |partitionPathField => '$PARTITION_FIELD',
-           |bootstrapOverwrite => true)""".stripMargin) {
+           |base_path => '$tablePath',
+           |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
+           |bootstrap_path => '$sourcePath',
+           |rowKey_field => '$RECORD_KEY_FIELD',
+           |partition_path_field => '$PARTITION_FIELD',
+           |bootstrap_overwrite => true)""".stripMargin) {
         Seq(0)
       }
 

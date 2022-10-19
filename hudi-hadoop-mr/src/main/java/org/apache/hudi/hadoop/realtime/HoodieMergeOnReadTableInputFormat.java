@@ -103,6 +103,18 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     }
   }
 
+  @Override
+  protected boolean checkIfValidFileSlice(FileSlice fileSlice) {
+    Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
+    Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
+
+    if (baseFileOpt.isPresent() || latestLogFileOpt.isPresent()) {
+      return true;
+    } else {
+      throw new IllegalStateException("Invalid state: either base-file or log-file has to be present for " + fileSlice.getFileId());
+    }
+  }
+
   /**
    * Keep the logic of mor_incr_view as same as spark datasource.
    * Step1: Get list of commits to be fetched based on start commit and max commits(for snapshot max commits is -1).

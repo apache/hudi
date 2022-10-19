@@ -31,6 +31,8 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -95,6 +97,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private static final Logger LOG = LoggerFactory.getLogger(ClusteringOperator.class);
 
   private final Configuration conf;
+  private final boolean preserveHoodieMetadata;
   private final RowType rowType;
   private int taskID;
   private transient HoodieWriteConfig writeConfig;
@@ -104,9 +107,6 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private transient int[] requiredPos;
   private transient AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
   private transient HoodieFlinkWriteClient writeClient;
-  private transient BulkInsertWriterHelper writerHelper;
-
-  private transient BinaryExternalSorter sorter;
   private transient StreamRecordCollector<ClusteringCommitEvent> collector;
   private transient BinaryRowDataSerializer binarySerializer;
 
@@ -127,9 +127,16 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
   public ClusteringOperator(Configuration conf, RowType rowType) {
     this.conf = conf;
-    this.rowType = rowType;
+    this.preserveHoodieMetadata = conf.getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key(), HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.defaultValue());
+    this.rowType = this.preserveHoodieMetadata
+        ? BulkInsertWriterHelper.addMetadataFields(rowType, false)
+        : rowType;
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
     this.sortClusteringEnabled = OptionsResolver.sortClusteringEnabled(conf);
+
+    // override max parquet file size in conf
+    this.conf.setLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(),
+        this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES));
   }
 
   @Override
@@ -142,15 +149,11 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.table = writeClient.getHoodieTable();
 
     this.schema = AvroSchemaConverter.convertToSchema(rowType);
-    this.readerSchema = HoodieAvroUtils.addMetadataFields(this.schema);
+    this.readerSchema = this.preserveHoodieMetadata ? this.schema : HoodieAvroUtils.addMetadataFields(this.schema);
     this.requiredPos = getRequiredPositions();
 
     this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType);
     this.binarySerializer = new BinaryRowDataSerializer(rowType.getFieldCount());
-
-    if (this.sortClusteringEnabled) {
-      initSorter();
-    }
 
     if (this.asyncClustering) {
       this.executor = NonThrownExecutor.builder(LOG).build();
@@ -181,6 +184,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     if (this.writeClient != null) {
       this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
+      this.writeClient = null;
     }
   }
 
@@ -198,7 +202,9 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private void doClustering(String instantTime, ClusteringPlanEvent event) throws Exception {
     final ClusteringGroupInfo clusteringGroupInfo = event.getClusteringGroupInfo();
 
-    initWriterHelper(instantTime);
+    BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
+        instantTime, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
+        this.rowType, this.preserveHoodieMetadata);
 
     List<ClusteringOperation> clusteringOps = clusteringGroupInfo.getOperations();
     boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
@@ -215,32 +221,27 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     RowDataSerializer rowDataSerializer = new RowDataSerializer(rowType);
 
     if (this.sortClusteringEnabled) {
+      BinaryExternalSorter sorter = initSorter();
       while (iterator.hasNext()) {
         RowData rowData = iterator.next();
         BinaryRowData binaryRowData = rowDataSerializer.toBinaryRow(rowData).copy();
-        this.sorter.write(binaryRowData);
+        sorter.write(binaryRowData);
       }
 
       BinaryRowData row = binarySerializer.createInstance();
       while ((row = sorter.getIterator().next(row)) != null) {
-        this.writerHelper.write(row);
+        writerHelper.write(row);
       }
+      sorter.close();
     } else {
       while (iterator.hasNext()) {
-        this.writerHelper.write(iterator.next());
+        writerHelper.write(iterator.next());
       }
     }
 
-    List<WriteStatus> writeStatuses = this.writerHelper.getWriteStatuses(this.taskID);
+    List<WriteStatus> writeStatuses = writerHelper.getWriteStatuses(this.taskID);
     collector.collect(new ClusteringCommitEvent(instantTime, writeStatuses, this.taskID));
-  }
-
-  private void initWriterHelper(String clusteringInstantTime) {
-    if (this.writerHelper == null) {
-      this.writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
-          clusteringInstantTime, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-          this.rowType);
-    }
+    writerHelper.close();
   }
 
   /**
@@ -320,7 +321,9 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
    * Transform IndexedRecord into HoodieRecord.
    */
   private RowData transform(IndexedRecord indexedRecord) {
-    GenericRecord record = buildAvroRecordBySchema(indexedRecord, schema, requiredPos, new GenericRecordBuilder(schema));
+    GenericRecord record = this.preserveHoodieMetadata
+        ? (GenericRecord) indexedRecord
+        : buildAvroRecordBySchema(indexedRecord, schema, requiredPos, new GenericRecordBuilder(schema));
     return (RowData) avroToRowDataConverter.convert(record);
   }
 
@@ -332,13 +335,13 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
         .toArray();
   }
 
-  private void initSorter() {
+  private BinaryExternalSorter initSorter() {
     ClassLoader cl = getContainingTask().getUserCodeClassLoader();
     NormalizedKeyComputer computer = createSortCodeGenerator().generateNormalizedKeyComputer("SortComputer").newInstance(cl);
     RecordComparator comparator = createSortCodeGenerator().generateRecordComparator("SortComparator").newInstance(cl);
 
     MemoryManager memManager = getContainingTask().getEnvironment().getMemoryManager();
-    this.sorter =
+    BinaryExternalSorter sorter =
         new BinaryExternalSorter(
             this.getContainingTask(),
             memManager,
@@ -349,12 +352,13 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             computer,
             comparator,
             getContainingTask().getJobConfiguration());
-    this.sorter.startThreads();
+    sorter.startThreads();
 
     // register the metrics.
     getMetricGroup().gauge("memoryUsedSizeInBytes", (Gauge<Long>) sorter::getUsedMemoryInBytes);
     getMetricGroup().gauge("numSpillFiles", (Gauge<Long>) sorter::getNumSpillFiles);
     getMetricGroup().gauge("spillInBytes", (Gauge<Long>) sorter::getSpillInBytes);
+    return sorter;
   }
 
   private SortCodeGenerator createSortCodeGenerator() {

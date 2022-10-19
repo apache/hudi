@@ -136,7 +136,7 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
   /**
    * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters.
    * The number of new file groups created is bounded by numOutputGroups.
-   * Note that commit is not done as part of strategy. commit is callers responsibility.
+   * Note that commit is not done as part of strategy. Commit is callers responsibility.
    */
   public abstract Iterator<List<WriteStatus>> performClusteringWithRecordsIterator(final Iterator<HoodieRecord<T>> records, final int numOutputGroups,
                                                                                    final String instantTime,

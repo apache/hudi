@@ -78,8 +78,7 @@ public class EmbeddedTimelineService {
         .serverPort(writeConfig.getEmbeddedTimelineServerPort())
         .numThreads(writeConfig.getEmbeddedTimelineServerThreads())
         .compress(writeConfig.getEmbeddedTimelineServerCompressOutput())
-        .async(writeConfig.getEmbeddedTimelineServerUseAsync())
-        .refreshTimelineBasedOnLatestCommit(writeConfig.isRefreshTimelineServerBasedOnLatestCommit());
+        .async(writeConfig.getEmbeddedTimelineServerUseAsync());
     // Only passing marker-related write configs to timeline server
     // if timeline-server-based markers are used.
     if (writeConfig.getMarkersType() == MarkerType.TIMELINE_SERVER_BASED) {
@@ -118,6 +117,11 @@ public class EmbeddedTimelineService {
         .withRemoteServerHost(hostAddr)
         .withRemoteServerPort(serverPort)
         .withRemoteTimelineClientTimeoutSecs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientTimeoutSecs())
+        .withRemoteTimelineClientRetry(writeConfig.getClientSpecifiedViewStorageConfig().isRemoteTimelineClientRetryEnabled())
+        .withRemoteTimelineClientMaxRetryNumbers(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryNumbers())
+        .withRemoteTimelineInitialRetryIntervalMs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineInitialRetryIntervalMs())
+        .withRemoteTimelineClientMaxRetryIntervalMs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryIntervalMs())
+        .withRemoteTimelineClientRetryExceptions(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientRetryExceptions())
         .build();
   }
 

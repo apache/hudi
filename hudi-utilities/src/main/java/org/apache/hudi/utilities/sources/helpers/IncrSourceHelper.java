@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.DataSourceReadOptions;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -26,10 +27,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Row;
 
 import java.util.Objects;
+
+import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT;
+import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.MISSING_CHECKPOINT_STRATEGY;
+import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 
 public class IncrSourceHelper {
 
@@ -73,7 +79,7 @@ public class IncrSourceHelper {
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
 
     final HoodieTimeline activeCommitTimeline =
-        srcMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+        srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
 
     String beginInstantTime = beginInstant.orElseGet(() -> {
       if (missingCheckpointStrategy != null) {
@@ -117,5 +123,26 @@ public class IncrSourceHelper {
         HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, endInstant),
         "Instant time(_hoodie_commit_time) in row (" + row + ") was : " + instantTime + "but expected to be between "
             + sinceInstant + "(excl) - " + endInstant + "(incl)");
+  }
+
+  /**
+   * Determine the policy to choose if a checkpoint is missing (detected by the absence of a beginInstant),
+   * during a run of a {@link HoodieIncrSource}.
+   * @param props the usual Hudi props object
+   * @return
+   */
+  public static MissingCheckpointStrategy getMissingCheckpointStrategy(TypedProperties props) {
+    boolean readLatestOnMissingCkpt = props.getBoolean(
+            READ_LATEST_INSTANT_ON_MISSING_CKPT, DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT);
+
+    if (readLatestOnMissingCkpt) {
+      return MissingCheckpointStrategy.READ_LATEST;
+    }
+
+    if (props.containsKey(MISSING_CHECKPOINT_STRATEGY)) {
+      return MissingCheckpointStrategy.valueOf(props.getString(MISSING_CHECKPOINT_STRATEGY));
+    }
+
+    return null;
   }
 }

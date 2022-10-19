@@ -23,9 +23,9 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.apache.hadoop.hbase.exceptions.IllegalArgumentIOException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
@@ -179,7 +179,7 @@ public class SerDeHelper {
         if (!type.isNestedType()) {
           generator.writeString(type.toString());
         } else {
-          throw new IllegalArgumentIOException(String.format("cannot write unknown types: %s", type));
+          throw new HoodieIOException(String.format("cannot write unknown types: %s", type));
         }
     }
   }

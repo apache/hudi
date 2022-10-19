@@ -18,10 +18,14 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
@@ -33,6 +37,8 @@ import org.apache.hudi.sync.common.model.Partition;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
+import org.apache.hadoop.hive.metastore.api.SerDeInfo;
+import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.log4j.LogManager;
@@ -48,6 +54,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
@@ -70,19 +78,23 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
     try {
-      HiveSyncMode syncMode = HiveSyncMode.of(config.getStringOrDefault(HIVE_SYNC_MODE));
-      switch (syncMode) {
-        case HMS:
-          ddlExecutor = new HMSDDLExecutor(config);
-          break;
-        case HIVEQL:
-          ddlExecutor = new HiveQueryDDLExecutor(config);
-          break;
-        case JDBC:
-          ddlExecutor = new JDBCExecutor(config);
-          break;
-        default:
-          throw new HoodieHiveSyncException("Invalid sync mode given " + config.getString(HIVE_SYNC_MODE));
+      if (!StringUtils.isNullOrEmpty(config.getString(HIVE_SYNC_MODE))) {
+        HiveSyncMode syncMode = HiveSyncMode.of(config.getString(HIVE_SYNC_MODE));
+        switch (syncMode) {
+          case HMS:
+            ddlExecutor = new HMSDDLExecutor(config);
+            break;
+          case HIVEQL:
+            ddlExecutor = new HiveQueryDDLExecutor(config);
+            break;
+          case JDBC:
+            ddlExecutor = new JDBCExecutor(config);
+            break;
+          default:
+            throw new HoodieHiveSyncException("Invalid sync mode given " + config.getString(HIVE_SYNC_MODE));
+        }
+      } else {
+        ddlExecutor = config.getBoolean(HIVE_USE_JDBC) ? new JDBCExecutor(config) : new HiveQueryDDLExecutor(config);
       }
       this.client = Hive.get(config.getHiveConf()).getMSC();
     } catch (Exception e) {
@@ -107,7 +119,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
-    if (tableProperties == null || tableProperties.isEmpty()) {
+    if (MapUtils.isNullOrEmpty(tableProperties)) {
       return;
     }
     try {
@@ -118,6 +130,36 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       client.alter_table(databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to update table properties for table: "
+          + tableName, e);
+    }
+  }
+
+  @Override
+  public void updateSerdeProperties(String tableName, Map<String, String> serdeProperties) {
+    if (MapUtils.isNullOrEmpty(serdeProperties)) {
+      return;
+    }
+    try {
+      serdeProperties.putIfAbsent("serialization.format", "1");
+      Table table = client.getTable(databaseName, tableName);
+      StorageDescriptor storageDescriptor = table.getSd();
+      SerDeInfo serdeInfo = storageDescriptor.getSerdeInfo();
+      if (serdeInfo != null && serdeInfo.getParametersSize() == serdeProperties.size()) {
+        Map<String, String> parameters = serdeInfo.getParameters();
+        boolean different = serdeProperties.entrySet().stream().anyMatch(e ->
+            !parameters.containsKey(e.getKey()) || !parameters.get(e.getKey()).equals(e.getValue()));
+        if (!different) {
+          LOG.debug("Table " + tableName + " serdeProperties already up to date, skip update serde properties.");
+          return;
+        }
+      }
+
+      HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
+      String serDeClassName = HoodieInputFormatUtils.getSerDeClassName(baseFileFormat);
+      storageDescriptor.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
+      client.alter_table(databaseName, tableName, table);
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to update table serde info for table: "
           + tableName, e);
     }
   }

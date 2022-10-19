@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import com.google.common.collect.Lists
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieCommonConfig
@@ -61,7 +60,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
       .map(_.getPath.toString).toList
     ValidationUtils.checkArgument(logFilePaths.nonEmpty, "There is no log file")
     val converter = new AvroSchemaConverter()
-    val allRecords: java.util.List[IndexedRecord] = Lists.newArrayList()
+    val allRecords: java.util.List[IndexedRecord] = new java.util.ArrayList[IndexedRecord]
     if (merge) {
       val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.last))))
       val scanner = HoodieMergedLogRecordScanner.newBuilder
@@ -106,7 +105,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         }
       }
     }
-    val rows: java.util.List[Row] = Lists.newArrayList()
+    val rows: java.util.List[Row] = new java.util.ArrayList[Row](allRecords.size())
     allRecords.asScala.foreach(record => {
       rows.add(Row(record.toString))
     })

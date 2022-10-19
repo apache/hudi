@@ -32,7 +32,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -45,9 +44,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.io.storage.HoodieOrcConfig;
 import org.apache.hudi.io.storage.HoodieOrcWriter;
+import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -152,27 +151,21 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
     return baseFilePath;
   }
 
-  public Map<String, List<HoodieLogFile>> withLogAppends(List<HoodieRecord> records) throws Exception {
+  public Map<String, List<HoodieLogFile>> withLogAppends(String partition, String fileId, List<HoodieRecord> records) throws Exception {
     Map<String, List<HoodieLogFile>> partitionToLogfilesMap = new HashMap<>();
-    for (List<HoodieRecord> groupedRecords : records.stream()
-        .collect(Collectors.groupingBy(HoodieRecord::getCurrentLocation)).values()) {
-      final Pair<String, HoodieLogFile> appendedLogFile = appendRecordsToLogFile(groupedRecords);
-      partitionToLogfilesMap.computeIfAbsent(
-          appendedLogFile.getKey(), k -> new ArrayList<>()).add(appendedLogFile.getValue());
-    }
+    final Pair<String, HoodieLogFile> appendedLogFile = appendRecordsToLogFile(partition, fileId, records);
+    partitionToLogfilesMap.computeIfAbsent(appendedLogFile.getKey(), k -> new ArrayList<>()).add(appendedLogFile.getValue());
     return partitionToLogfilesMap;
   }
 
-  private Pair<String, HoodieLogFile> appendRecordsToLogFile(List<HoodieRecord> groupedRecords) throws Exception {
-    String partitionPath = groupedRecords.get(0).getPartitionPath();
-    HoodieRecordLocation location = groupedRecords.get(0).getCurrentLocation();
+  private Pair<String, HoodieLogFile> appendRecordsToLogFile(String partitionPath, String fileId, List<HoodieRecord> records) throws Exception {
     try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
-        .overBaseCommit(location.getInstantTime()).withFs(fs).build()) {
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
+        .overBaseCommit(currentInstantTime).withFs(fs).build()) {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
+      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, currentInstantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-      logWriter.appendBlock(new HoodieAvroDataBlock(groupedRecords.stream().map(r -> {
+      logWriter.appendBlock(new HoodieAvroDataBlock(records.stream().map(r -> {
         try {
           GenericRecord val = (GenericRecord) ((HoodieRecordPayload) r.getData()).getInsertValue(schema).get();
           HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");

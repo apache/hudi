@@ -52,13 +52,13 @@ public class ReflectUtil {
   public static DateFormatter getDateFormatter(ZoneId zoneId) {
     try {
       ClassLoader loader = Thread.currentThread().getContextClassLoader();
-      if (HoodieSparkUtils.isSpark3_2()) {
-        Class clazz = loader.loadClass(DateFormatter.class.getName());
+      if (HoodieSparkUtils.gteqSpark3_2()) {
+        Class<?> clazz = loader.loadClass(DateFormatter.class.getName());
         Method applyMethod = clazz.getDeclaredMethod("apply");
         applyMethod.setAccessible(true);
         return (DateFormatter)applyMethod.invoke(null);
       } else {
-        Class clazz = loader.loadClass(DateFormatter.class.getName());
+        Class<?> clazz = loader.loadClass(DateFormatter.class.getName());
         Method applyMethod = clazz.getDeclaredMethod("apply", ZoneId.class);
         applyMethod.setAccessible(true);
         return (DateFormatter)applyMethod.invoke(null, zoneId);

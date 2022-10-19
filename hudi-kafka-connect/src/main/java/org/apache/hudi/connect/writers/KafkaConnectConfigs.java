@@ -172,6 +172,7 @@ public class KafkaConnectConfigs extends HoodieConfig {
   public static final String HIVE_URL = "hoodie.datasource.hive_sync.jdbcurl";
   public static final String HIVE_PARTITION_FIELDS = "hoodie.datasource.hive_sync.partition_fields";
   public static final String HIVE_PARTITION_EXTRACTOR_CLASS = "hoodie.datasource.hive_sync.partition_extractor_class";
+  public static final String HIVE_USE_JDBC = "hoodie.datasource.hive_sync.use_jdbc";
   public static final String HIVE_SYNC_MODE = "hoodie.datasource.hive_sync.mode";
   public static final String HIVE_AUTO_CREATE_DATABASE = "hoodie.datasource.hive_sync.auto_create_database";
   public static final String HIVE_IGNORE_EXCEPTIONS = "hoodie.datasource.hive_sync.ignore_exceptions";

@@ -62,6 +62,7 @@ import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.mapred.JobConf;
@@ -346,6 +347,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     assertEquals(expNumInstants, metaClient.getCommitsTimeline().filterCompletedInstants().countInstants());
     assertEquals(instant, metaClient.getActiveTimeline()
         .getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
+    verifyNoMarkerInTempFolder();
 
     Dataset<Row> bootstrapped = sqlContext.read().format("parquet").load(basePath);
     Dataset<Row> original = sqlContext.read().format("parquet").load(bootstrapBasePath);
@@ -463,7 +465,7 @@ public class TestBootstrap extends HoodieClientTestBase {
         jsc.hadoopConfiguration(),
         FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, rtJobConf, true, schema,  TRIP_HIVE_COLUMN_TYPES, true,
+        basePath, rtJobConf, true, schema, TRIP_HIVE_COLUMN_TYPES, true,
         Arrays.asList("_row_key"));
     assertEquals(totalRecords, records.size());
     for (GenericRecord r : records) {
@@ -471,6 +473,12 @@ public class TestBootstrap extends HoodieClientTestBase {
       seenKeys.add(r.get("_row_key").toString());
     }
     assertEquals(totalRecords, seenKeys.size());
+  }
+
+  private void verifyNoMarkerInTempFolder() throws IOException {
+    String tempFolderPath = metaClient.getTempFolderPath();
+    FileSystem fileSystem = FSUtils.getFs(tempFolderPath, jsc.hadoopConfiguration());
+    assertEquals(0, fileSystem.listStatus(new Path(tempFolderPath)).length);
   }
 
   public static class TestFullBootstrapDataProvider extends FullRecordBootstrapDataProvider<JavaRDD<HoodieRecord>> {
@@ -481,7 +489,7 @@ public class TestBootstrap extends HoodieClientTestBase {
 
     @Override
     public JavaRDD<HoodieRecord> generateInputRecords(String tableName, String sourceBasePath,
-        List<Pair<String, List<HoodieFileStatus>>> partitionPaths) {
+                                                      List<Pair<String, List<HoodieFileStatus>>> partitionPaths) {
       String filePath = FileStatusUtils.toPath(partitionPaths.stream().flatMap(p -> p.getValue().stream())
           .findAny().get().getPath()).toString();
       ParquetFileReader reader = null;

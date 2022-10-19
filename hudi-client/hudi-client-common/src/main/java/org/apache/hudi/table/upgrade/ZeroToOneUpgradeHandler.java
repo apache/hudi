@@ -55,7 +55,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     // fetch pending commit info
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
+    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
     List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     if (commits.size() > 0 && instantTime != null) {

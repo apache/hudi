@@ -103,7 +103,7 @@ public class TestInputPathHandler {
   public static void cleanUp() throws Exception {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
-      dfsCluster.shutdown();
+      dfsCluster.shutdown(true, true);
       dfsCluster = null;
       dfs = null;
       hdfsTestService = null;

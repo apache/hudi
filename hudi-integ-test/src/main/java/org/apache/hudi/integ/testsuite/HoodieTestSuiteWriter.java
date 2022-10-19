@@ -116,7 +116,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
 
   public abstract RDD<GenericRecord> getNextBatch() throws Exception;
 
-  public abstract Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception ;
+  public abstract Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception;
 
   public abstract Option<String> startCommit();
 
@@ -132,7 +132,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
 
   public abstract JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception;
 
-  public abstract void inlineClustering() throws Exception ;
+  public abstract void inlineClustering() throws Exception;
 
   public abstract Option<String> scheduleCompaction(Option<Map<String, String>> previousCommitExtraMetadata) throws Exception;
 

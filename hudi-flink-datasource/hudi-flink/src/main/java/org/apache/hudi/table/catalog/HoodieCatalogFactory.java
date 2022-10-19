@@ -33,8 +33,6 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
-import static org.apache.flink.table.factories.FactoryUtil.PROPERTY_VERSION;
-
 /**
  * A catalog factory impl that creates {@link HoodieCatalog}.
  */
@@ -58,9 +56,7 @@ public class HoodieCatalogFactory implements CatalogFactory {
       case "hms":
         return new HoodieHiveCatalog(
             context.getName(),
-            helper.getOptions().get(CatalogOptions.CATALOG_PATH),
-            helper.getOptions().get(CatalogOptions.DEFAULT_DATABASE),
-            helper.getOptions().get(CatalogOptions.HIVE_CONF_DIR));
+            (Configuration) helper.getOptions());
       case "dfs":
         return new HoodieCatalog(
             context.getName(),
@@ -77,12 +73,6 @@ public class HoodieCatalogFactory implements CatalogFactory {
 
   @Override
   public Set<ConfigOption<?>> optionalOptions() {
-    final Set<ConfigOption<?>> options = new HashSet<>();
-    options.add(CatalogOptions.DEFAULT_DATABASE);
-    options.add(PROPERTY_VERSION);
-    options.add(CatalogOptions.HIVE_CONF_DIR);
-    options.add(CatalogOptions.MODE);
-    options.add(CatalogOptions.CATALOG_PATH);
-    return options;
+    return new HashSet<>(CatalogOptions.allOptions());
   }
 }

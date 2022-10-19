@@ -179,6 +179,7 @@ public class SparkDatasetTestUtils {
 
   public static HoodieWriteConfig.Builder getConfigBuilder(String basePath, int timelineServicePort) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withPopulateMetaFields(true)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())

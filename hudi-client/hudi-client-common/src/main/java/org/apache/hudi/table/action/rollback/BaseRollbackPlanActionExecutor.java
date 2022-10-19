@@ -65,7 +65,7 @@ public class BaseRollbackPlanActionExecutor<T extends HoodieRecordPayload, I, K,
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.skipTimelinePublish = skipTimelinePublish;
-    this.shouldRollbackUsingMarkers = shouldRollbackUsingMarkers;
+    this.shouldRollbackUsingMarkers = shouldRollbackUsingMarkers && !instantToRollback.isCompleted();
   }
 
   /**

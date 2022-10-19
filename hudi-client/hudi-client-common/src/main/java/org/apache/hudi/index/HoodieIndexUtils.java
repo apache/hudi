@@ -22,6 +22,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -68,6 +69,26 @@ public class HoodieIndexUtils {
       return hoodieTable.getBaseFileOnlyView()
           .getLatestBaseFilesBeforeOrOn(partition, latestCommitTime.get().getTimestamp())
           .collect(toList());
+    }
+    return Collections.emptyList();
+  }
+
+  /**
+   * Fetches Pair of partition path and {@link FileSlice}s for interested partitions.
+   *
+   * @param partition   Partition of interest
+   * @param hoodieTable Instance of {@link HoodieTable} of interest
+   * @return the list of {@link FileSlice}
+   */
+  public static List<FileSlice> getLatestFileSlicesForPartition(
+          final String partition,
+          final HoodieTable hoodieTable) {
+    Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
+            .filterCompletedInstants().lastInstant();
+    if (latestCommitTime.isPresent()) {
+      return hoodieTable.getHoodieView()
+              .getLatestFileSlicesBeforeOrOn(partition, latestCommitTime.get().getTimestamp(), true)
+              .collect(toList());
     }
     return Collections.emptyList();
   }
