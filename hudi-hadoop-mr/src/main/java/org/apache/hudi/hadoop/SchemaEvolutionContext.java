@@ -93,6 +93,10 @@ public class SchemaEvolutionContext {
         this.split = split;
         this.job = job;
         this.metaClient = metaClientOption.isPresent() ? metaClientOption.get() : setUpHoodieTableMetaClient();
+        if (this.metaClient == null) {
+            internalSchemaOption = Option.empty();
+            return;
+        }
         try {
             TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
             this.internalSchemaOption = schemaUtil.getTableInternalSchemaFromCommitMetadata();
@@ -104,10 +108,15 @@ public class SchemaEvolutionContext {
     }
 
     private HoodieTableMetaClient setUpHoodieTableMetaClient() throws IOException {
-        Path inputPath = ((FileSplit)split).getPath();
-        FileSystem fs =  inputPath.getFileSystem(job);
-        Option<Path> tablePath = TablePathUtils.getTablePath(fs, inputPath);
-        return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString()).setConf(job).build();
+        try {
+            Path inputPath = ((FileSplit)split).getPath();
+            FileSystem fs =  inputPath.getFileSystem(job);
+            Option<Path> tablePath = TablePathUtils.getTablePath(fs, inputPath);
+            return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString()).setConf(job).build();
+        } catch (Exception e) {
+            LOG.warn(String.format("Not a valid hoodie table, table path: %s", ((FileSplit)split).getPath()), e);
+            return null;
+        }
     }
 
     /**
