@@ -18,9 +18,27 @@ last_modified_at: 2022-08-17T10:30:00+05:30
 
 ## Release Highlights
 
-### Highlights1
+### Improve Hudi Cli
 
-### Highlights2
+Add command to repair deprecated partition, rename partition and trace file group through a range of commits.
+
+### Fix invalid record key stats in Parquet metadata
+
+Crux of the problem was that min/max statistics for the record keys were computed incorrectly during (Spark-specific) row-writing
+Bulk Insert operation affecting Key Range Pruning flow w/in Hoodie Bloom Index tagging sequence, resulting into updated records being incorrectly tagged
+as "inserts" and not as "updates", leading to duplicated records in the table.
+
+If all of the following is applicable to you:
+
+1. Using Spark as an execution engine
+2. Using Bulk Insert (using row-writing
+   <https://hudi.apache.org/docs/next/configurations#hoodiedatasourcewriterowwriterenable>,
+   enabled *by default*)
+3. Using Bloom Index (with range-pruning
+   <https://hudi.apache.org/docs/next/basic_configurations/#hoodiebloomindexprunebyranges>
+   enabled, enabled *by default*) for "UPSERT" operations
+
+Recommended to upgrading to 0.12.1 to avoid getting duplicate records in your pipeline.
 
 ### Bug fixes
 
