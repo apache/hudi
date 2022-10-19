@@ -58,12 +58,14 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     // It's very expensive to create a JobConf(ClassUtil.findContainingJar() is slow)
     val jobConf = new JobConf(hadoopConf, this.getClass)
     val pathFilter = FileInputFormat.getInputPathFilter(jobConf)
-    path: Path => {
-      val name = path.getName
-      if (name != "_SUCCESS" && name != "_temporary" && !name.startsWith(".")) {
-        pathFilter == null || pathFilter.accept(path)
-      } else {
-        false
+    new PathFilter {
+      override def accept(path: Path): Boolean = {
+        val name = path.getName
+        if (name != "_SUCCESS" && name != "_temporary" && !name.startsWith(".")) {
+          pathFilter == null || pathFilter.accept(path)
+        } else {
+          false
+        }
       }
     }
   }
