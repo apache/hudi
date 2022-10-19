@@ -69,8 +69,9 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
       }
       handle.write(recordKey, partitionPath, record);
     } catch (Throwable throwable) {
-      LOG.error("Global error thrown while trying to write records in HoodieRowDataCreateHandle", throwable);
-      throw throwable;
+      IOException ioException = new IOException("Exception happened when bulk insert.", throwable);
+      LOG.error("Global error thrown while trying to write records in HoodieRowDataCreateHandle", ioException);
+      throw ioException;
     }
   }
 
