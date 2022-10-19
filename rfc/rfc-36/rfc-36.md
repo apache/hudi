@@ -177,6 +177,83 @@ crons:
 
 There are specific requirements of the metastore server in the different scenarios. Through the storage of server is pluggable, considering the general situation of disk storage, good performance of read and write, convenience of development, RDBMS may be a better one to be chosen.
 
+
+### Hudi Catalog
+
+Currently, Hudi only implements the catalog adapter that Spark/Flink defined, and lacks a self-defined catalog specification. To support file system based metadata storage and remote server based, catalog abstraction is as the following.
+
+![hudicatalog](hudicatalog.png)
+
+`HoodieCatalog` is public way for external components to access table metadata.
+
+There are three entity manages table metadata, `TableMetaClient` covers table properties, `Timeline` and `FileSystemView` covers snapshot.
+
+For a clearer division of responsibilities, `TableMetaClient` is to do the metadata management of a table and `HoodieCatalog` is an overall one. Metadata `TableMetaClient` managed can be split into two parts, one is metadata info like `basePath, table properties and etc.`, and the other is used to writing job like `marker file and etc`. Part one belongs to metadata and should be covered by catalog.
+
+### Server Extension
+
+#### 1. Partition pruning
+
+To an SQL engine, the optimizer does partition pruning to skip reading data from unneeded partitions. Accorrding to the WHERE clauses in sql, unneeded partitions can be eliminated. The following is how the hudi metastore server does this.
+
+Read a hudi table by sql like
+
+```SQL
+select count(*) from test_db.test_table where date='20220101' and hour = '00' and ts = '0'
+```
+
+and we can get the filter `where date='20220101' and hour = '00' and ts = '0'` from the sql engine when optimizing the sql.
+
+After the partition service receiving the `filter sql`
+
+1. build an expression tree, analyze the sql and get the partition column related conditions
+
+```SQL
+where date='20220101' and hour = '00'
+```
+
+2. generate a new sql filter
+
+```SQL
+where part_key_name='date' and part_key_val='20220101'
+where part_key_name='hour' and part_key_val='00'
+```
+
+3. query the partition related table with the new sql filter to get the eligible partitions
+
+#### 2.Hive Metastore Adapter
+
+The adapter in hudi metatore will implement some commonly used API in hive metastore server to do the compatibility so that there are no changes for other engines to read the hudi table.
+
+#### 3.Lock Provider & Cocurrency Management
+
+[TBD]
+
+#### 4. Schema Evolution
+
+[TBD]
+
+#### 5. Cache
+
+Cache the frequently accessed data like table, timeline related information. For larger metadata, cache them with LRU strategy.
+
+The main points are:
+
+- what to cahe
+
+- how to cache
+
+- when to update cache data to keep consistency with the data in the storage.
+
+[TBD]
+
+#### 6. Authorization Management
+
+[TBD]
+
+
+## Implementation
+
 #### Storage Schema
 
 ##### Table
@@ -186,7 +263,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: name
 
     - | name         | type   | comment               |
-          | ------------ | ------ | --------------------- |
+                | ------------ | ------ | --------------------- |
       | db_id        | bigint | auto_increment        |
       | desc         | string | database description  |
       | location_uri | string | database storage path |
@@ -199,7 +276,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: param_key, db_id
 
     - | name        | type   | comment                  |
-          | ----------- | ------ | ------------------------ |
+                | ----------- | ------ | ------------------------ |
       | db_id       | bigint | auto_increment           |
       | param_key   | string | database parameter key   |
       | param_value | string | database parameter value |
@@ -209,7 +286,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key:  name, db_id
 
     - | name        | type      | comment                       |
-          | ----------- | --------- | ----------------------------- |
+                | ----------- | --------- | ----------------------------- |
       | tbl_id      | bigint    | auto_increment                |
       | db_id       | bigint    | database the table belongs to |
       | name        | string    | table name                    |
@@ -224,7 +301,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key:  param_key, tbl_id
 
     - | name        | type   | comment               |
-          | ----------- | ------ | --------------------- |
+                | ----------- | ------ | --------------------- |
       | tbl_id      | bigint | auto_increment        |
       | param_key   | string | table parameter key   |
       | param_value | string | table parameter value |
@@ -234,7 +311,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: name, type, version, tbl_id
 
     - | name             | type    | comment                                  |
-          | ---------------- | ------- | ---------------------------------------- |
+                | ---------------- | ------- | ---------------------------------------- |
       | col_id           | bigint  | auto_increment                           |
       | tbl_id           | bigint  | table identifier                         |
       | version          | bigint  | a completed commit identifier            |
@@ -250,7 +327,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: part_name, tbl_id
 
     - | name        | type      | comment                          |
-          | ----------- | --------- | -------------------------------- |
+                | ----------- | --------- | -------------------------------- |
       | part_id     | bigint    | auto_increment                   |
       | tbl_id      | bigint    | table the partition belongs to   |
       | part_name   | string    | partition name                   |
@@ -263,7 +340,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: param_key, part_id
 
     - | name        | type   | comment                        |
-          | ----------- | ------ | ------------------------------ |
+                | ----------- | ------ | ------------------------------ |
       | part_id     | bigint | partition identifier           |
       | tbl_id      | bigint | table the partition belongs to |
       | param_key   | string | partition parameter key        |
@@ -276,7 +353,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: part_key_name, part_id
 
     - | name          | type   | comment                        |
-          | ------------- | ------ | ------------------------------ |
+                | ------------- | ------ | ------------------------------ |
       | part_id       | bigint | partition  identifier          |
       | tbl_id        | bigint | table the partition belongs to |
       | part_key_name | string | the partition name             |
@@ -291,7 +368,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: part_key_name, part_id
 
     - | name   | type   | comment               |
-          | ------ | ------ | --------------------- |
+                | ------ | ------ | --------------------- |
       | tbl_id | bigint | table identifier      |
       | ts     | string | timestamp for instant |
 
@@ -300,7 +377,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: ts, action, tbl_id
 
     - | name       | type      | comment                                      |
-          | ---------- | --------- | -------------------------------------------- |
+                | ---------- | --------- | -------------------------------------------- |
       | instant_id | bigint    | auto_increment                               |
       | tbl_id     | bigint    | table identifier                             |
       | ts         | string    | instant timestamp                            |
@@ -314,7 +391,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: ts, action, state, tbl_id
 
     - | name      | type    | comment           |
-          | --------- | ------- | ----------------- |
+                | --------- | ------- | ----------------- |
       | commit_id | bigint  | auto_increment    |
       | tbl_id    | bigint  | table identifier  |
       | ts        | string  | instant timestamp |
@@ -331,7 +408,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: ts, action, state, tbl_id
 
     - | name            | type      | comment                                               |
-          | --------------- | --------- | ----------------------------------------------------- |
+                | --------------- | --------- | ----------------------------------------------------- |
       | tbl_id          | bigint    | table identifier                                      |
       | version         | bigint    | auto_increment                                        |
       | instant_id      | bigint    | instant identifier                                    |
@@ -344,7 +421,7 @@ There are specific requirements of the metastore server in the different scenari
     -  unique key: name, part_id
 
     - | name        | type      | comment                           |
-          | ----------- | --------- | --------------------------------- |
+                | ----------- | --------- | --------------------------------- |
       | id          | bigint    | auto_increment                    |
       | tbl_id      | bigint    | table identifier                  |
       | part_id     | bigint    | partition identifier              |
@@ -524,68 +601,7 @@ Finally, mark the completion of this commit synchronization by changing status i
 
 2. Before reading / writing the hudi table, client will get partitions from server. The server will respond to client until all completed commits of the table finish their snapshot synchronization to keep consistency.
 
-### Extension
-
-#### 1. Partition pruning
-
-To an SQL engine, the optimizer does partition pruning to skip reading data from unneeded partitions. Accorrding to the WHERE clauses in sql, unneeded partitions can be eliminated. The following is how the hudi metastore server does this.
-
-Read a hudi table by sql like
-
-```SQL
-select count(*) from test_db.test_table where date='20220101' and hour = '00' and ts = '0'
-```
-
-and we can get the filter `where date='20220101' and hour = '00' and ts = '0'` from the sql engine when optimizing the sql.
-
-After the partition service receiving the `filter sql`
-
-1. build an expression tree, analyze the sql and get the partition column related conditions
-
-```SQL
-where date='20220101' and hour = '00'
-```
-
-2. generate a new sql filter
-
-```SQL
-where part_key_name='date' and part_key_val='20220101'
-where part_key_name='hour' and part_key_val='00'
-```
-
-3. query the partition related table with the new sql filter to get the eligible partitions
-
-#### 2.Hive Metastore Adapter
-
-The adapter in hudi metatore will implement some commonly used API in hive metastore server to do the compatibility so that there are no changes for other engines to read the hudi table.
-
-#### 3.Lock Provider & Cocurrency Management
-
-[TBD]
-
-#### 4. Schema Evolution
-
-[TBD]
-
-#### 5. Cache
-
-Cache the frequently accessed data like table, timeline related information. For larger metadata, cache them with LRU strategy.
-
-The main points are:
-
-- what to cahe
-
-- how to cache
-
-- when to update cache data to keep consistency with the data in the storage.
-
-[TBD]
-
-#### 6. Authorization Management
-
-[TBD]
-
-## Implementation
+## Roadmap
 
 ### Alpha Version
 
