@@ -69,10 +69,8 @@
               <artifactSet>
                 <includes combine.children="append">
                   <include>org.apache.hudi:hudi-common</include>
-                  <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-datahub-sync</include>
-                  <include>org.apache.parquet:parquet-avro</include>
 
                   <include>io.acryl:datahub-client</include>
                   <include>com.beust:jcommander</include>
@@ -231,7 +229,7 @@
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hadoop-mr-bundle</artifactId>
+      <artifactId>hudi-sync-common</artifactId>
       <version>${project.version}</version>
     </dependency>
 
@@ -245,16 +243,14 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
-      <version>${parquet.version}</version>
-      <scope>compile</scope>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-      <version>${avro.version}</version>
-      <scope>compile</scope>
+      <scope>provided</scope>
     </dependency>
 
   </dependencies>

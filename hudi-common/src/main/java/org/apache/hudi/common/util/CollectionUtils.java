@@ -58,6 +58,10 @@ public class CollectionUtils {
     return Objects.isNull(c) || c.isEmpty();
   }
 
+  public static boolean isNullOrEmpty(Map<?, ?> m) {
+    return Objects.isNull(m) || m.isEmpty();
+  }
+
   public static boolean nonEmpty(Collection<?> c) {
     return !isNullOrEmpty(c);
   }

@@ -144,6 +144,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @AfterEach
   public void tearDown() throws IOException {
     fs.delete(partitionPath, true);
+    fs.delete(new Path(basePath), true);
   }
 
   @Test
@@ -154,6 +155,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(0, writer.getCurrentSize(), "Just created this log, size should be 0");
     assertTrue(writer.getLogFile().getFileName().startsWith("."), "Check all log files should start with a .");
     assertEquals(1, writer.getLogFile().getLogVersion(), "Version should be 1 for new log created");
+    writer.close();
   }
 
   @ParameterizedTest
@@ -697,7 +699,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     assertEquals(scannedRecords.size(), allRecords.stream().mapToLong(Collection::size).sum(),
         "Scanner records count should be the same as appended records");
-
+    scanner.close();
   }
 
   @Test
@@ -932,6 +934,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
             .collect(Collectors.toSet());
     assertEquals(originalKeys, readKeys, "CompositeAvroLogReader should return 200 records from 2 versions");
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1016,6 +1019,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
             .collect(Collectors.toSet());
     assertEquals(originalKeys, readKeys, "CompositeAvroLogReader should return 200 records from 2 versions");
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1105,6 +1109,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
             .collect(Collectors.toSet());
     assertEquals(originalKeys, readKeys, "CompositeAvroLogReader should return 200 records from 2 versions");
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1208,6 +1213,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.deleteDeltaCommit(basePath, "101", fs);
 
     readKeys.clear();
+    scanner.close();
     scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(basePath)
@@ -1242,6 +1248,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Collections.sort(firstBlockRecords);
     Collections.sort(readKeys);
     assertEquals(firstBlockRecords, readKeys, "CompositeAvroLogReader should return 150 records from 2 versions");
+    writer.close();
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1359,6 +1367,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Collections.sort(originalKeys);
     Collections.sort(readKeys);
     assertEquals(originalKeys, readKeys, "HoodieMergedLogRecordScanner should return 180 records from 4 versions");
+    writer.close();
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1446,6 +1456,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals(0, readKeys.size(), "Stream collect should return all 0 records");
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
+    writer.close();
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1512,6 +1524,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
+    writer.close();
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1567,6 +1581,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     final List<String> readKeys = new ArrayList<>(100);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals(100, readKeys.size(), "Stream collect should return all 150 records");
+    writer.close();
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1636,6 +1652,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withUseScanV2(useScanv2)
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
+    writer.close();
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1745,6 +1763,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1935,6 +1954,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(expectedBlockInstants, validBlockInstants);
     Collections.sort(readKeys);
     assertEquals(expectedRecords, readKeys, "Record keys read should be exactly same.");
+    scanner.close();
   }
 
   /*
@@ -2012,7 +2032,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
       assertEquals(Math.max(numRecordsInLog1, numRecordsInLog2), scanner.getNumMergedRecordsInLog(),
           "We would read 100 records");
-
+      scanner.close();
     } catch (Exception e) {
       e.printStackTrace();
     }
