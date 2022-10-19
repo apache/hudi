@@ -31,22 +31,25 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.FileCreateUtils;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -56,42 +59,55 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType.BITCASK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieLogRecordReader extends HoodieCommonTestHarness {
+public class TestHoodieLogRecordReader {
+
+  private static File dfsBaseDir;
+  private static MiniDFSCluster cluster;
 
   private FileSystem fs;
+  private String basePath;
   private Path partitionPath;
   private String partitionValue = "my_partition";
   private String partitionName = "partition";
 
   @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
-    MiniClusterUtil.setUp();
+    dfsBaseDir = new File("/tmp/" + UUID.randomUUID().toString());
+    FileUtil.fullyDelete(dfsBaseDir);
+    // Append is not supported in LocalFileSystem. HDFS needs to be setup.
+    Configuration conf = new Configuration();
+    // lower heartbeat interval for fast recognition of DN
+    conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, dfsBaseDir.getAbsolutePath());
+    conf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, 1000);
+    conf.setInt(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 1);
+    conf.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 3000);
+    cluster = new MiniDFSCluster.Builder(conf).checkExitOnShutdown(true).numDataNodes(4).build();
   }
 
   @AfterAll
   public static void tearDownClass() {
-    MiniClusterUtil.shutdown();
+    cluster.shutdown(true);
+    FileUtil.fullyDelete(dfsBaseDir);
   }
 
   @BeforeEach
   public void setUp() throws IOException, InterruptedException {
-    this.fs = MiniClusterUtil.fileSystem;
+    this.fs = cluster.getFileSystem();
 
-    assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
-    this.partitionPath = new Path(tempDir.toAbsolutePath().toString(), partitionValue);
-    this.basePath = tempDir.getParent().toString();
+    this.partitionPath = new Path(dfsBaseDir.toString(), partitionValue);
+    this.basePath = dfsBaseDir.toString();
   }
 
   @AfterEach
   public void tearDown() throws IOException {
-    fs.delete(partitionPath.getParent(), true);
+    fs.delete(partitionPath, true);
   }
 
   @Test
@@ -100,7 +116,7 @@ public class TestHoodieLogRecordReader extends HoodieCommonTestHarness {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), "true");
     properties.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), partitionName);
-    HoodieTestUtils.init(MiniClusterUtil.configuration, basePath, HoodieTableType.MERGE_ON_READ, properties);
+    HoodieTestUtils.init(fs.getConf(), basePath, HoodieTableType.MERGE_ON_READ, properties);
 
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     HoodieLogFormat.Writer writer =
@@ -164,6 +180,7 @@ public class TestHoodieLogRecordReader extends HoodieCommonTestHarness {
       try {
         IndexedRecord record = ((HoodieAvroPayload)s.getData()).getInsertValue(readerSchema, new Properties()).get();
         String partition = record.get(record.getSchema().getField(partitionName).pos()).toString();
+        // The value of field "partition" should be "my_partition" passed to scanner
         assertEquals(partitionValue, partition);
       } catch (IOException e) {
         throw new RuntimeException(e);
