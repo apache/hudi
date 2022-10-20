@@ -56,7 +56,7 @@ import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
-import static org.apache.hudi.common.util.BinaryUtils.generateChecksum;
+import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
 
 /**
  * This class provides a disk spillable only map implementation. All of the data is currenly written to one file,

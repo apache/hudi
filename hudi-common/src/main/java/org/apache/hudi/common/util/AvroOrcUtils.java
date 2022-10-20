@@ -54,7 +54,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.orc.TypeDescription;
 
 import static org.apache.avro.JsonProperties.NULL_VALUE;
-import static org.apache.hudi.common.util.BinaryUtils.toBytes;
+import static org.apache.hudi.common.util.BinaryUtil.toBytes;
 
 /**
  * Methods including addToVector, addUnionValue, createOrcSchema are originally from

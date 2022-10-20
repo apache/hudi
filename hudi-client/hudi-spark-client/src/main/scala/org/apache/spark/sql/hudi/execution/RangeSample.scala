@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql.hudi.execution
 
-import org.apache.hudi.common.util.BinaryUtils
+import org.apache.hudi.common.util.BinaryUtil
 import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
 import org.apache.hudi.optimize.HilbertCurveUtils
@@ -240,7 +240,7 @@ class RawDecisionBound[K : Ordering : ClassTag](ordering: Ordering[K]) extends S
 case class ByteArraySorting(b: Array[Byte]) extends Ordered[ByteArraySorting] with Serializable {
   override def compare(that: ByteArraySorting): Int = {
     val len = this.b.length
-    BinaryUtils.compareTo(this.b, 0, len, that.b, 0, len)
+    BinaryUtil.compareTo(this.b, 0, len, that.b, 0, len)
   }
 }
 
@@ -430,7 +430,7 @@ object RangeSampleSort {
             case LayoutOptimizationStrategy.HILBERT =>
               HilbertCurveUtils.indexBytes(hilbertCurve.get, values.map(_.toLong).toArray, 32)
             case LayoutOptimizationStrategy.ZORDER =>
-              BinaryUtils.interleaving(values.map(BinaryUtils.intTo8Byte(_)).toArray, 8)
+              BinaryUtil.interleaving(values.map(BinaryUtil.intTo8Byte(_)).toArray, 8)
           }
 
           Row.fromSeq(row.toSeq ++ Seq(mapValues))
@@ -525,8 +525,8 @@ object RangeSampleSort {
                 decisionBound.getBound(row, bound.asInstanceOf[Array[InternalRow]])
               }
             }
-          }.toArray.map(BinaryUtils.intTo8Byte(_))
-          val zValues = BinaryUtils.interleaving(interleaveValues, 8)
+          }.toArray.map(BinaryUtil.intTo8Byte(_))
+          val zValues = BinaryUtil.interleaving(interleaveValues, 8)
           val mutablePair = new MutablePair[InternalRow, Array[Byte]]()
 
           mutablePair.update(unsafeRow, zValues)

@@ -52,7 +52,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.BinaryUtils.toBytes;
+import static org.apache.hudi.common.util.BinaryUtil.toBytes;
 
 /**
  * Utility functions for ORC files.

@@ -34,7 +34,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.util.BinaryUtils;
+import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -460,7 +460,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     String table = props.getProperty(NAME.key());
     String database = props.getProperty(DATABASE_NAME.key(), "");
-    return BinaryUtils.generateChecksum(String.format(TABLE_CHECKSUM_FORMAT, database, table).getBytes(UTF_8));
+    return BinaryUtil.generateChecksum(String.format(TABLE_CHECKSUM_FORMAT, database, table).getBytes(UTF_8));
   }
 
   public static boolean validateChecksum(Properties props) {

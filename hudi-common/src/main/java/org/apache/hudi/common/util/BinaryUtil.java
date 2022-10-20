@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.zip.CRC32;
 
-public class BinaryUtils {
+public class BinaryUtil {
 
   /**
    * Lexicographically compare two arrays.
