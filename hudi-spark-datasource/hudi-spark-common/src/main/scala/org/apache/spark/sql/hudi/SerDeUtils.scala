@@ -33,7 +33,10 @@ object SerDeUtils {
   }
 
   def toBytes(o: Any): Array[Byte] = {
-    SERIALIZER_THREAD_LOCAL.get.serialize(o).array()
+    val bb: ByteBuffer = SERIALIZER_THREAD_LOCAL.get.serialize(o)
+    val bytes = new Array[Byte](bb.capacity())
+    bb.get(bytes)
+    bytes
   }
 
   def toObject(bytes: Array[Byte]): Any = {
