@@ -88,9 +88,6 @@
                   <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
                   <include>org.apache.htrace:htrace-core4</include>
-                  <include>org.apache.httpcomponents:fluent-hc</include>
-                  <include>org.apache.httpcomponents:httpcore</include>
-                  <include>org.apache.httpcomponents:httpclient</include>
                   <include>org.apache.httpcomponents:httpasyncclient</include>
                   <include>org.apache.httpcomponents:httpcore-nio</include>
                   <include>org.openjdk.jol:jol-core</include>

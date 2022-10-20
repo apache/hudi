@@ -90,9 +90,6 @@
                   <include>org.eclipse.jetty.websocket:*</include>
                   <include>org.jetbrains.kotlin:*</include>
                   <include>org.rocksdb:rocksdbjni</include>
-                  <include>org.apache.httpcomponents:httpclient</include>
-                  <include>org.apache.httpcomponents:httpcore</include>
-                  <include>org.apache.httpcomponents:fluent-hc</include>
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
 
@@ -149,10 +146,6 @@
                 <relocation>
                   <pattern>javax.servlet.</pattern>
                   <shadedPattern>org.apache.hudi.javax.servlet.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.http.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.http.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>
