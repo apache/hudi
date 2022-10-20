@@ -189,14 +189,14 @@ trait ProvidesHoodieConfig extends Logging {
   }
 
   /**
-   * Create the config for hoodie writer.
+   * Build the default config for mergeInto.
    */
-  def buildMergeIntoConfig(hoodieCatalogTable: HoodieCatalogTable, extraOptions: Map[String, String]): Map[String, String] = {
+  def buildMergeIntoConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
     val sparkSession: SparkSession = hoodieCatalogTable.spark
     val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
     val path = hoodieCatalogTable.tableLocation
 
-    val catalogProperties = hoodieCatalogTable.catalogProperties ++ extraOptions
+    val catalogProperties = hoodieCatalogTable.catalogProperties
     val tableConfig = hoodieCatalogTable.tableConfig
 
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
@@ -317,6 +317,7 @@ trait ProvidesHoodieConfig extends Logging {
     val hiveSyncConfig: HiveSyncConfig = new HiveSyncConfig(props)
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_ENABLED.key, enableHive.toString)
     hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key, enableHive.toString)
+    // The default value of HIVE_SYNC_MODE is HMS. Be careful when modifying
     hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, props.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, HiveSyncMode.HMS.name()))
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_PATH, hoodieCatalogTable.tableLocation)
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, hoodieCatalogTable.baseFileFormat)
