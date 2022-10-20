@@ -21,6 +21,7 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 
+import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.hadoop.conf.Configuration;
@@ -112,5 +113,17 @@ public class HoodieCatalogUtil {
           .collect(Collectors.toList());
     }
     return Collections.emptyList();
+  }
+
+  /**
+   * Returns the partition path with given {@link CatalogPartitionSpec}.
+   */
+  public static String inferPartitionPath(boolean hiveStylePartitioning, CatalogPartitionSpec catalogPartitionSpec) {
+    return catalogPartitionSpec.getPartitionSpec().entrySet()
+        .stream().map(entry ->
+            hiveStylePartitioning
+                ? String.format("%s=%s", entry.getKey(), entry.getValue())
+                : entry.getValue())
+        .collect(Collectors.joining("/"));
   }
 }

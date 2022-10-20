@@ -395,7 +395,7 @@ public class HoodieCatalog extends AbstractCatalog {
     boolean hiveStylePartitioning = Boolean.parseBoolean(options.getOrDefault(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), "false"));
     return StreamerUtil.partitionExists(
         inferTablePath(catalogPathStr, tablePath),
-        inferPartitionPath(hiveStylePartitioning, catalogPartitionSpec),
+        HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, catalogPartitionSpec),
         hadoopConf);
   }
 
@@ -419,7 +419,7 @@ public class HoodieCatalog extends AbstractCatalog {
     String tablePathStr = inferTablePath(catalogPathStr, tablePath);
     Map<String, String> options = TableOptionProperties.loadFromProperties(tablePathStr, hadoopConf);
     boolean hiveStylePartitioning = Boolean.parseBoolean(options.getOrDefault(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), "false"));
-    String partitionPathStr = inferPartitionPath(hiveStylePartitioning, catalogPartitionSpec);
+    String partitionPathStr = HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, catalogPartitionSpec);
 
     if (!StreamerUtil.partitionExists(tablePathStr, partitionPathStr, hadoopConf)) {
       if (ignoreIfNotExists) {
@@ -567,14 +567,5 @@ public class HoodieCatalog extends AbstractCatalog {
   @VisibleForTesting
   protected String inferTablePath(String catalogPath, ObjectPath tablePath) {
     return String.format("%s/%s/%s", catalogPath, tablePath.getDatabaseName(), tablePath.getObjectName());
-  }
-
-  private String inferPartitionPath(boolean hiveStylePartitioning, CatalogPartitionSpec catalogPartitionSpec) {
-    return catalogPartitionSpec.getPartitionSpec().entrySet()
-        .stream().map(entry ->
-            hiveStylePartitioning
-                ? String.format("%s=%s", entry.getKey(), entry.getValue())
-                : entry.getValue())
-        .collect(Collectors.joining("/"));
   }
 }
