@@ -147,7 +147,7 @@ object DataSourceReadOptions {
 
   val REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION: ConfigProperty[Boolean] =
     ConfigProperty.key("hoodie.datasource.read.file.index.list_lazily")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.13.0")
       .withDocumentation("When set to false, hoodie will load all partition paths and file slices when " +
         " initializing the HoodieFileIndex. When set to true, the partitions and files will be loaded after " +

@@ -97,7 +97,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   protected transient volatile long cachedFileSize = 0L;
   private transient volatile Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices = new HashMap<>();
-  private transient volatile List<PartitionPath> cachedAllPartitionPaths;
+  /**
+   * It always contains all partition paths, or null if it is not initialized yet.
+   */
+  private transient volatile List<PartitionPath> cachedAllPartitionPaths = null;
 
   private transient HoodieTableMetadata tableMetadata = null;
 
@@ -144,8 +147,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     /**
      * The `shouldListLazily` variable controls how we initialize the TableFileIndex:
-     *  - non-lazy/eager listing (shouldListLazily=true):  all partitions and file slices will be loaded eagerly during initialization.
-     *  - lazy listing (shouldListLazily=false): partitions listing will be done lazily with the knowledge from query predicate on partition
+     *  - non-lazy/eager listing (shouldListLazily=false):  all partitions and file slices will be loaded eagerly during initialization.
+     *  - lazy listing (shouldListLazily=true): partitions listing will be done lazily with the knowledge from query predicate on partition
      *        columns. And file slices fetching only happens for partitions satisfying the given filter.
      *
      * In SparkSQL, `shouldListLazily` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
@@ -244,7 +247,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
     // API.  Note that for COW table, the merging logic of two slices does not happen as there
     // is no compaction, thus there is no performance impact.
-    Map<PartitionPath, List<FileSlice>> ret = partitionFiles.keySet().stream()
+    Map<PartitionPath, List<FileSlice>> listedPartitions = partitionFiles.keySet().stream()
         .collect(Collectors.toMap(
                 Function.identity(),
                 partitionPath ->
@@ -256,27 +259,26 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             )
         );
 
-    this.cachedFileSize += ret.values().stream()
+    this.cachedFileSize += listedPartitions.values().stream()
         .flatMap(Collection::stream)
         .mapToLong(BaseHoodieTableFileIndex::fileSliceSize)
         .sum();
 
-    return ret;
+    return listedPartitions;
   }
 
   /**
    * Get partition path with the given partition value
-   * @param partitionNames partition names
-   * @param values partition values
+   * @param partitionColumnValuePairs list of pair of partition column name to the predicate value
    * @return partitions that match the given partition values
    */
-  protected List<PartitionPath> getPartitionPaths(String[] partitionNames, String[] values) {
+  protected List<PartitionPath> getPartitionPaths(List<Pair<String, String>> partitionColumnValuePairs) {
     if (cachedAllPartitionPaths != null) {
-      LOG.info("All partition paths have already loaded, use it directly");
+      LOG.debug("All partition paths have already loaded, use it directly");
       return cachedAllPartitionPaths;
     }
 
-    Pair<String, Boolean> relativeQueryPartitionPathPair = composeRelativePartitionPaths(partitionNames, values);
+    Pair<String, Boolean> relativeQueryPartitionPathPair = composeRelativePartitionPaths(partitionColumnValuePairs);
     // If the composed partition path is complete, we return it directly, to save extra DFS listing operations.
     if (relativeQueryPartitionPathPair.getRight()) {
       return Collections.singletonList(new PartitionPath(relativeQueryPartitionPathPair.getLeft(),
@@ -287,51 +289,45 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   /**
-   * Construct relative partition (i.e., partition prefix) from the given partition values
+   * Construct relative partition path (i.e., partition prefix) from the given partition values
    * @return relative partition path and a flag to indicate if the path is complete (i.e., not a prefix)
    */
-  private Pair<String, Boolean> composeRelativePartitionPaths(String[] partitionNames, String[] values) {
-    if (partitionNames.length == 0 || partitionNames.length != values.length) {
-      LOG.info("The input partition names or value is empty or invalid");
+  private Pair<String, Boolean> composeRelativePartitionPaths(List<Pair<String, String>> partitionColumnValuePairs) {
+    if (partitionColumnValuePairs.size() == 0) {
+      LOG.info("The input partition names or value is empty");
       return Pair.of("", false);
     }
 
     boolean hiveStylePartitioning = Boolean.parseBoolean(metaClient.getTableConfig().getHiveStylePartitioningEnable());
     boolean urlEncodePartitioning = Boolean.parseBoolean(metaClient.getTableConfig().getUrlEncodePartitioning());
-    Map<String, Integer> partitionNameToIdx = IntStream.range(0, partitionNames.length)
-        .mapToObj(i -> Pair.of(i, partitionNames[i]))
+    Map<String, Integer> partitionNameToIdx = IntStream.range(0, partitionColumnValuePairs.size())
+        .mapToObj(i -> Pair.of(i, partitionColumnValuePairs.get(i).getKey()))
         .collect(Collectors.toMap(Pair::getValue, Pair::getKey));
     StringBuilder queryPartitionPath = new StringBuilder();
     boolean isPartial = false;
-    for (int idx = 0; idx < partitionNames.length; ++idx) {
-      String columnNames = partitionColumns[idx];
-      if (partitionNameToIdx.containsKey(columnNames)) {
-        int k = partitionNameToIdx.get(columnNames);
-        String value =  urlEncodePartitioning ? PartitionPathEncodeUtils.escapePathName(values[k]) : values[k];
-        queryPartitionPath.append(hiveStylePartitioning ? columnNames + "=" : "").append(value).append("/");
+    for (int idx = 0; idx < partitionColumns.length; ++idx) {
+      String columnName = partitionColumns[idx];
+      if (partitionNameToIdx.containsKey(columnName)) {
+        int k = partitionNameToIdx.get(columnName);
+        String columnValue = partitionColumnValuePairs.get(k).getValue();
+        String encodedValue = urlEncodePartitioning ? PartitionPathEncodeUtils.escapePathName(columnValue) : columnValue;
+        queryPartitionPath.append(hiveStylePartitioning ? columnName + "=" : "").append(encodedValue).append("/");
       } else {
         isPartial = true;
         break;
       }
     }
     queryPartitionPath.deleteCharAt(queryPartitionPath.length() - 1);
-    return Pair.of(queryPartitionPath.toString(), !isPartial && partitionNames.length == partitionColumns.length);
+    return Pair.of(queryPartitionPath.toString(), !isPartial && partitionColumnValuePairs.size() == partitionColumns.length);
   }
 
   private List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
-    List<String> matchedPartitionPaths = relativePartitionPaths.stream()
-        .flatMap(prefix -> {
-          try {
-            // Handle wildcard specially. This will have FileIndex to query the table as non-partitioned-table
-            if (prefix.contains("*")) {
-              return Stream.empty();
-            }
-            return tableMetadata.getPartitionPathsWithPrefix(prefix).stream();
-          } catch (IOException e) {
-            throw new HoodieIOException("Error fetching partition paths with prefix: " + prefix, e);
-          }
-        })
-        .collect(Collectors.toList());
+    List<String> matchedPartitionPaths;
+    try {
+      matchedPartitionPaths = tableMetadata.getPartitionPathsWithPrefixes(relativePartitionPaths);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error fetching partition paths", e);
+    }
 
     // Convert partition's path into partition descriptor
     return matchedPartitionPaths.stream()
@@ -418,9 +414,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected boolean isAllInputFileSlicesCached() {
+    // If the partition paths is not fully initialized yet, then the file slices are also not fully initialized.
     if (cachedAllPartitionPaths == null) {
       return false;
     }
+    // Loop over partition paths to check if all partitions are initialized.
     return cachedAllPartitionPaths.stream().allMatch(p -> cachedAllInputFileSlices.containsKey(p));
   }
 

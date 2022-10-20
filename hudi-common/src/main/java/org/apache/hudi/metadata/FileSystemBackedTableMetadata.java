@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -75,10 +76,20 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, datasetBasePath);
     }
 
-    return getPartitionPathsWithPrefix("");
+    return getPartitionPathsWithPrefixes(Collections.singletonList(""));
   }
 
   @Override
+  public List<String> getPartitionPathsWithPrefixes(List<String> prefixes) throws IOException {
+    return prefixes.stream().flatMap(prefix -> {
+      try {
+        return getPartitionPathsWithPrefix(prefix).stream();
+      } catch (IOException e) {
+        throw new HoodieIOException("Error fetching partition paths with prefix: " + prefix, e);
+      }
+    }).collect(Collectors.toList());
+  }
+
   public List<String> getPartitionPathsWithPrefix(String prefix) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
     pathsToList.add(StringUtils.isNullOrEmpty(prefix) ? new Path(datasetBasePath) : new Path(datasetBasePath, prefix));

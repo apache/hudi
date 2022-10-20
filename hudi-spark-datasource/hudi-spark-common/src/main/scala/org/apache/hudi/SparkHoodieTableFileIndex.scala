@@ -196,9 +196,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     }
     if (partitionPruningPredicates.nonEmpty) {
       val equalPredicate = partitionPruningPredicates.filter(_.isInstanceOf[EqualTo])
-      val names = equalPredicate.map(_.asInstanceOf[EqualTo]).map(_.left.asInstanceOf[AttributeReference].name).toArray
-      val values = equalPredicate.map(_.asInstanceOf[EqualTo]).map(_.right.asInstanceOf[Literal].value.toString).toArray
-      val partitionPaths = getPartitionPaths(names, values).asScala
+      val partitionColumnValuePairs = equalPredicate.map(_.asInstanceOf[EqualTo]).map(predicate =>
+        org.apache.hudi.common.util.collection.Pair.of(predicate.left.asInstanceOf[AttributeReference].name,
+          predicate.right.asInstanceOf[Literal].value.toString)).toList
+      val partitionPaths = getPartitionPaths(partitionColumnValuePairs.asJava).asScala
       val predicate = partitionPruningPredicates.reduce(expressions.And)
 
       val boundPredicate = InterpretedPredicate(predicate.transform {
