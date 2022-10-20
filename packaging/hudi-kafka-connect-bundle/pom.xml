@@ -101,9 +101,6 @@
                                     <include>org.eclipse.jetty:*</include>
                                     <include>org.eclipse.jetty.websocket:*</include>
                                     <include>org.rocksdb:rocksdbjni</include>
-                                    <include>org.apache.httpcomponents:httpclient</include>
-                                    <include>org.apache.httpcomponents:httpcore</include>
-                                    <include>org.apache.httpcomponents:fluent-hc</include>
 
                                     <include>io.dropwizard.metrics:metrics-core</include>
                                     <include>io.dropwizard.metrics:metrics-graphite</include>
