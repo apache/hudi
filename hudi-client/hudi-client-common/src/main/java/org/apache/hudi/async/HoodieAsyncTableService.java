@@ -27,8 +27,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
-public abstract class HoodieAsyncTableService extends HoodieAsyncService implements RunsTableService {
+public abstract class HoodieAsyncTableService<T extends AutoCloseable> extends HoodieAsyncService implements RunsTableService {
 
   protected final Object writeConfigUpdateLock = new Object();
   protected HoodieWriteConfig writeConfig;
@@ -51,6 +52,20 @@ public abstract class HoodieAsyncTableService extends HoodieAsyncService impleme
     } else {
       this.writeConfig = writeConfig;
     }
+  }
+
+  protected T getClient(T client, Supplier<T> clientSupplier) throws Exception {
+    synchronized (writeConfigUpdateLock) {
+      // re-instantiate only for first time or if write config is updated externally
+      if (client == null || isWriteConfigUpdated.get()) {
+        if (client != null) {
+          client.close();
+        }
+        client = clientSupplier.get();
+        isWriteConfigUpdated.set(false);
+      }
+    }
+    return client;
   }
 
   @Override

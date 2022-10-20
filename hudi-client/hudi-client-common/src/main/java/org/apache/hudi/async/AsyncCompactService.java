@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.log4j.LogManager;
@@ -83,16 +84,7 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
           final HoodieInstant instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
             LOG.info("Starting Compaction for instant " + instant);
-            synchronized (writeConfigUpdateLock) {
-              // re-instantiate only for first time or if write config is updated externally
-              if (compactor == null || isWriteConfigUpdated.get()) {
-                if (compactor != null) {
-                  compactor.close();
-                }
-                compactor = createCompactor();
-                isWriteConfigUpdated.set(false);
-              }
-            }
+            compactor = (BaseCompactor) getClient(compactor, () -> createCompactor());
             compactor.compact(instant);
             LOG.info("Completed compaction for " + instant);
           }
@@ -112,7 +104,7 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
       } catch (Exception e) {
         hasError = true;
         LOG.error("Compactor executor failed", e);
-        throw e;
+        throw new HoodieException("Compactor executor failed", e);
       }
       return true;
     }, executor)).toArray(CompletableFuture[]::new)), executor);

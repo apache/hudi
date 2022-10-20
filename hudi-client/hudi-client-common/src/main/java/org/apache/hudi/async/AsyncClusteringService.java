@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.log4j.LogManager;
@@ -81,16 +82,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
           final HoodieInstant instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
             LOG.info("Starting clustering for instant " + instant);
-            synchronized (writeConfigUpdateLock) {
-              // re-instantiate only for first time or if write config is updated externally
-              if (clusteringClient == null || isWriteConfigUpdated.get()) {
-                if (clusteringClient != null) {
-                  clusteringClient.close();
-                }
-                clusteringClient = createClusteringClient();
-                isWriteConfigUpdated.set(false);
-              }
-            }
+            clusteringClient = (BaseClusterer) getClient(clusteringClient, () -> createClusteringClient());
             clusteringClient.cluster(instant);
             LOG.info("Completed Clustering for " + instant);
           }
@@ -111,7 +103,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
       } catch (Exception e) {
         hasError = true;
         LOG.error("Clustering executor failed", e);
-        throw e;
+        throw new HoodieException("Clustering executor failed", e);
       }
       return true;
     }, executor)).toArray(CompletableFuture[]::new)), executor);
