@@ -434,6 +434,10 @@
               <include>com.esotericsoftware:kryo-shaded</include>
               <include>com.esotericsoftware:minlog</include>
               <include>org.objenesis:objenesis</include>
+              <!-- org.apache.httpcomponents -->
+              <include>org.apache.httpcomponents:httpclient</include>
+              <include>org.apache.httpcomponents:httpcore</include>
+              <include>org.apache.httpcomponents:fluent-hc</include>
             </includes>
           </artifactSet>
           <relocations>
@@ -453,6 +457,11 @@
             <relocation>
               <pattern>org.objenesis.</pattern>
               <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+            </relocation>
+            <!-- org.apache.httpcomponents -->
+            <relocation>
+              <pattern>org.apache.http.</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.http.</shadedPattern>
             </relocation>
           </relocations>
         </configuration>
