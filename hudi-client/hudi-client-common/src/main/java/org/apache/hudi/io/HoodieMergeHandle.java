@@ -157,15 +157,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     return baseFileOp.get();
   }
 
-  @Override
-  public Schema getWriterSchemaWithMetaFields() {
-    return writeSchemaWithMetaFields;
-  }
-
-  public Schema getWriterSchema() {
-    return writeSchema;
-  }
-
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */

@@ -21,7 +21,6 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkConversionUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -37,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructType;
 

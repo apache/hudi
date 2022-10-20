@@ -177,6 +177,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     return writeSchemaWithMetaFields;
   }
 
+  public Schema getWriterSchema() {
+    return writeSchema;
+  }
+
   /**
    * Determines whether we can accept the incoming records, into the current file. Depending on
    * <p>

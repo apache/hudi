@@ -23,7 +23,6 @@ import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
-import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -40,7 +39,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 import org.apache.hudi.util.HoodieSparkRecordUtils;
-import org.apache.spark.sql.HoodieCatalystExpressionUtils$;
+import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
 import org.apache.spark.sql.catalyst.CatalystTypeConverters;
@@ -116,7 +115,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   }
 
   private HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation, boolean copy) {
-    super(key, data, operation);
+    super(key, data, operation, Option.empty());
 
     validateRow(data, schema);
     this.copy = copy;
@@ -197,11 +196,14 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
 
-    boolean containMetaFields = hasMetaFields(structType);
-    UTF8String[] metaFields = tryExtractMetaFields(data, structType);
+    // TODO HUDI-5281 Rewrite HoodieSparkRecord with UnsafeRowWriter
+    InternalRow rewriteRecord = HoodieInternalRowUtils.rewriteRecord(this.data, structType, targetStructType);
+    UnsafeRow unsafeRow = HoodieInternalRowUtils.getCachedUnsafeProjection(targetStructType, targetStructType).apply(rewriteRecord);
 
-    // TODO add actual rewriting
-    InternalRow finalRow = new HoodieInternalRow(metaFields, data, containMetaFields);
+    boolean containMetaFields = hasMetaFields(targetStructType);
+    UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, targetStructType);
+    HoodieInternalRow internalRow = new HoodieInternalRow(metaFields, unsafeRow, containMetaFields);
+    InternalRow finalRow = copy ? internalRow.copy() : internalRow;
 
     return new HoodieSparkRecord(getKey(), finalRow, targetStructType, getOperation(), this.currentLocation, this.newLocation, copy);
   }
@@ -211,12 +213,14 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
 
-    boolean containMetaFields = hasMetaFields(structType);
-    UTF8String[] metaFields = tryExtractMetaFields(data, structType);
+    // TODO HUDI-5281 Rewrite HoodieSparkRecord with UnsafeRowWriter
+    InternalRow rewriteRecord = HoodieInternalRowUtils.rewriteRecordWithNewSchema(this.data, structType, newStructType, renameCols);
+    UnsafeRow unsafeRow = HoodieInternalRowUtils.getCachedUnsafeProjection(newStructType, newStructType).apply(rewriteRecord);
 
-    InternalRow rewrittenRow =
-        HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, structType, newStructType, renameCols);
-    HoodieInternalRow finalRow = new HoodieInternalRow(metaFields, rewrittenRow, containMetaFields);
+    boolean containMetaFields = hasMetaFields(newStructType);
+    UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, newStructType);
+    HoodieInternalRow internalRow = new HoodieInternalRow(metaFields, unsafeRow, containMetaFields);
+    InternalRow finalRow = copy ? internalRow.copy() : internalRow;
 
     return new HoodieSparkRecord(getKey(), finalRow, newStructType, getOperation(), this.currentLocation, this.newLocation, copy);
   }
@@ -299,6 +303,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
 
   @Override
   public Option<Map<String, String>> getMetadata() {
+    // TODO HUDI-5282 support metaData
     return Option.empty();
   }
 
@@ -320,7 +325,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String orderingField = ConfigUtils.getOrderingField(props);
-    if (!HoodieCatalystExpressionUtils$.MODULE$.existField(structType, orderingField)) {
+    if (!HoodieInternalRowUtils.existField(structType, orderingField)) {
       return 0;
     } else {
       NestedFieldPath nestedFieldPath = HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
@@ -377,7 +382,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
 
   private static UTF8String[] tryExtractMetaFields(InternalRow row, StructType structType) {
     boolean containsMetaFields = hasMetaFields(structType);
-    if (containsMetaFields) {
+    if (containsMetaFields && structType.size() == 1) {
+      // Support bootstrap with RECORD_KEY_SCHEMA
+      return new UTF8String[] {row.getUTF8String(0)};
+    } else if (containsMetaFields) {
       return HoodieRecord.HOODIE_META_COLUMNS.stream()
           .map(col -> row.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(col)))
           .toArray(UTF8String[]::new);

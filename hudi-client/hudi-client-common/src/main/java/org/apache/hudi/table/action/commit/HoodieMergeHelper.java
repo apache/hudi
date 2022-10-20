@@ -132,7 +132,7 @@ public class HoodieMergeHelper<T> extends
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
       } else {
         if (needToReWriteRecord) {
-          readerIterator = new RewriteIterator(reader.getRecordIterator(), readSchema, readSchema, table.getConfig().getProps(), renameCols);
+          readerIterator = new RewriteIterator(reader.getRecordIterator(), reader.getSchema(), readSchema, table.getConfig().getProps(), renameCols);
         } else {
           readerIterator = reader.getRecordIterator(readSchema);
         }
@@ -175,10 +175,10 @@ public class HoodieMergeHelper<T> extends
     private final Properties prop;
     private final Map<String, String> renameCols;
 
-    public RewriteIterator(ClosableIterator<HoodieRecord> iter, Schema newSchema, Schema recordSchema, Properties prop, Map<String, String> renameCols) {
+    public RewriteIterator(ClosableIterator<HoodieRecord> iter, Schema recordSchema, Schema newSchema, Properties prop, Map<String, String> renameCols) {
       this.iter = iter;
-      this.newSchema = newSchema;
       this.recordSchema = recordSchema;
+      this.newSchema = newSchema;
       this.prop = prop;
       this.renameCols = renameCols;
     }
@@ -191,7 +191,8 @@ public class HoodieMergeHelper<T> extends
     @Override
     public HoodieRecord next() {
       try {
-        return iter.next().rewriteRecordWithNewSchema(recordSchema, prop, newSchema, renameCols);
+        HoodieRecord record = iter.next();
+        return record.rewriteRecordWithNewSchema(recordSchema, prop, newSchema, renameCols);
       } catch (IOException e) {
         LOG.error("Error rewrite record with new schema", e);
         throw new HoodieException(e);

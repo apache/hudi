@@ -24,6 +24,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{DataType, StructType}
+import scala.annotation.tailrec
 
 trait HoodieCatalystExpressionUtils {
 
@@ -249,10 +250,6 @@ object HoodieCatalystExpressionUtils {
         case _ => null
       }
     )
-  }
-
-  def existField(structType: StructType, name: String): Boolean = {
-    structType.getFieldIndex(name).isDefined
   }
 
   private def hasUnresolvedRefs(resolvedExpr: Expression): Boolean =

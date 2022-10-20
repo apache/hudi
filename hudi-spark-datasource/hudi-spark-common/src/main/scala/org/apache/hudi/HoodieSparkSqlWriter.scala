@@ -862,22 +862,34 @@ object HoodieSparkSqlWriter {
       case HoodieRecord.HoodieRecordType.SPARK =>
         // ut will use AvroKeyGenerator, so we need to cast it in spark record
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
-        val structType = HoodieInternalRowUtils.getCachedSchema(schema)
+        val targetStructType = HoodieInternalRowUtils.getCachedSchema(schema)
+        val sourceStructType = df.schema
+        val (processedSourceStructType, processedStructType) = if (dropPartitionColumns) {
+          (generateSparkSchemaWithoutPartitionColumns(partitionCols, sourceStructType),
+            generateSparkSchemaWithoutPartitionColumns(partitionCols, targetStructType))
+        } else {
+          (sourceStructType, targetStructType)
+        }
         df.queryExecution.toRdd.mapPartitions { iter =>
-          val projection: Function[InternalRow, InternalRow] = if (dropPartitionColumns) {
-            val newSchema = generateSparkSchemaWithoutPartitionColumns(partitionCols, structType)
-            HoodieInternalRowUtils.getCachedUnsafeProjection(structType, newSchema)
+          val dropProjection: Function[InternalRow, InternalRow] = if (dropPartitionColumns) {
+            HoodieInternalRowUtils.getCachedUnsafeProjection(sourceStructType, processedSourceStructType)
           } else {
             identity
           }
 
           iter.map { internalRow =>
-            val processedRow = projection(internalRow)
-            val recordKey = sparkKeyGenerator.getRecordKey(internalRow, structType)
-            val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structType)
+            val recordKey = sparkKeyGenerator.getRecordKey(internalRow, sourceStructType)
+            val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, sourceStructType)
             val key = new HoodieKey(recordKey.toString, partitionPath.toString)
 
-            new HoodieSparkRecord(key, processedRow, structType, false)
+            val processedRow = if (reconcileSchema) {
+              HoodieInternalRowUtils.getCachedUnsafeProjection(processedStructType, processedStructType)
+                .apply(HoodieInternalRowUtils.rewriteRecord(dropProjection(internalRow), processedSourceStructType, processedStructType))
+            } else {
+              dropProjection(internalRow)
+            }
+
+            new HoodieSparkRecord(key, processedRow, processedStructType, false)
           }
         }.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]
     }

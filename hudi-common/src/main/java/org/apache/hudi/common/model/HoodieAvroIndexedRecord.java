@@ -53,8 +53,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     super(key, data);
   }
 
-  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation) {
-    super(key, data, operation);
+  public HoodieAvroIndexedRecord(
+      HoodieKey key,
+      IndexedRecord data,
+      HoodieOperation operation,
+      Option<Map<String, String>> metaData) {
+    super(key, data, operation, metaData);
   }
 
   public HoodieAvroIndexedRecord(HoodieRecord<IndexedRecord> record) {
@@ -71,12 +75,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieAvroIndexedRecord(key, data, op);
+    return new HoodieAvroIndexedRecord(key, data, op, metaData);
   }
 
   @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key) {
-    return new HoodieAvroIndexedRecord(key, data);
+    return new HoodieAvroIndexedRecord(key, data, operation, metaData);
   }
 
   @Override
@@ -104,19 +108,19 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @Override
   public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), targetSchema);
-    return new HoodieAvroIndexedRecord(record);
+    return new HoodieAvroIndexedRecord(key, record, operation, metaData);
   }
 
   @Override
   public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException {
-    GenericRecord genericRecord = HoodieAvroUtils.rewriteRecord((GenericRecord) data, targetSchema);
-    return new HoodieAvroIndexedRecord(genericRecord);
+    GenericRecord record = HoodieAvroUtils.rewriteRecord((GenericRecord) data, targetSchema);
+    return new HoodieAvroIndexedRecord(key, record, operation, metaData);
   }
 
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException {
-    GenericRecord genericRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(data, newSchema, renameCols);
-    return new HoodieAvroIndexedRecord(genericRecord);
+    GenericRecord record = HoodieAvroUtils.rewriteRecordWithNewSchema(data, newSchema, renameCols);
+    return new HoodieAvroIndexedRecord(key, record, operation, metaData);
   }
 
   @Override
@@ -127,7 +131,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       }
     });
 
-    return new HoodieAvroIndexedRecord(data);
+    return new HoodieAvroIndexedRecord(key, data, operation, metaData);
   }
 
   @Override

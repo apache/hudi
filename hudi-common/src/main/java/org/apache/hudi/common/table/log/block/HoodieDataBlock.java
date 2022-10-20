@@ -61,7 +61,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   private final boolean enablePointLookups;
 
-  protected final Schema readerSchema;
+  protected Schema readerSchema;
 
   protected InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
 

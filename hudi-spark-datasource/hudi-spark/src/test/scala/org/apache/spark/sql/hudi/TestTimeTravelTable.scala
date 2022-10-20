@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   test("Test Insert and Update Record with time travel") {
     if (HoodieSparkUtils.gteqSpark3_2) {
-      withTempDir { tmp =>
+      withRecordType()(withTempDir { tmp =>
         val tableName1 = generateTableName
         spark.sql(
           s"""
@@ -62,13 +62,13 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
           s"select id, name, price, ts from $tableName1 TIMESTAMP AS OF '$instant1'")(
           Seq(1, "a1", 10.0, 1000)
         )
-      }
+      })
     }
   }
 
   test("Test Insert Into Records with time travel To new Table") {
     if (HoodieSparkUtils.gteqSpark3_2) {
-      withTempDir { tmp =>
+      withRecordType()(withTempDir { tmp =>
         // Create Non-Partitioned table
         val tableName1 = generateTableName
         spark.sql(
@@ -137,13 +137,13 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 10.0, 1000, "2022-02-14"),
           Seq(2, "a2", 10.0, 1000, "2022-02-15")
         )
-      }
+      })
     }
   }
 
   test("Test Two Table's Union Join with time travel") {
     if (HoodieSparkUtils.gteqSpark3_2) {
-      withTempDir { tmp =>
+      withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
 
@@ -235,25 +235,25 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
             Seq(4, "a4", 20.0, 1000)
           )
         }
-      }
+      })
     }
   }
 
   test("Test Unsupported syntax can be parsed") {
     if (HoodieSparkUtils.gteqSpark3_2) {
       checkAnswer("select 1 distribute by 1")(Seq(1))
-      withTempDir { dir =>
+      withRecordType()(withTempDir { dir =>
         val path = dir.toURI.getPath
         spark.sql(s"insert overwrite local directory '$path' using parquet select 1")
         // Requires enable hive support, so didn't test it
         // spark.sql(s"insert overwrite local directory '$path' stored as orc select 1")
-      }
+      })
     }
   }
 
   test("Test Select Record with time travel and Repartition") {
     if (HoodieSparkUtils.gteqSpark3_2) {
-      withTempDir { tmp =>
+      withRecordType()(withTempDir { tmp =>
         val tableName = generateTableName
         spark.sql(
           s"""
@@ -291,13 +291,13 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
           s"select id, name, price, ts from $tableName TIMESTAMP AS OF '$instant' distribute by cast(rand() * 2 as int)")(
           Seq(1, "a1", 10.0, 1000)
         )
-      }
+      })
     }
   }
 
   test("Test Time Travel With Schema Evolution") {
     if (HoodieSparkUtils.gteqSpark3_2) {
-      withTempDir { tmp =>
+      withRecordType()(withTempDir { tmp =>
         spark.sql("set hoodie.schema.on.read.enable=true")
         val tableName = generateTableName
         spark.sql(
@@ -350,7 +350,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 1000, null),
           Seq(2, "a2", 1100, "hudi")
         )
-      }
+      })
     }
   }
 }
