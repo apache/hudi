@@ -125,6 +125,15 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
+   * Get the schema from the Hudi table on storage.
+   *
+   * @param includeMetadataField true if to include metadata fields in the schema
+   */
+  default MessageType getStorageSchema(boolean includeMetadataField) {
+    return null;
+  }
+
+  /**
    * Update schema for the table in the metastore.
    */
   default void updateTableSchema(String tableName, MessageType newSchema) {
