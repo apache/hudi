@@ -570,7 +570,6 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       // Recompute averageRecordSize before writing a new block and update existing value with
       // avg of new and old
       LOG.info("Flush log block to disk, the current avgRecordSize => " + averageRecordSize);
-      averageRecordSize = (averageRecordSize + sizeEstimator.sizeEstimate(record)) / 2;
       // Delete blocks will be appended after appending all the data blocks.
       appendDataAndDeleteBlocks(header, appendDeleteBlocks);
       estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
