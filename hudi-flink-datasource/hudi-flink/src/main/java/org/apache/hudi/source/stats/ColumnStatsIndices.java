@@ -42,8 +42,6 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.table.types.logical.TimeType;
-import org.apache.flink.table.types.logical.TimestampType;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -273,29 +271,6 @@ public class ColumnStatsIndices {
       Object rawVal,
       LogicalType logicalType,
       Map<LogicalType, AvroToRowDataConverters.AvroToRowDataConverter> converters) {
-    // fix time unit
-    switch (logicalType.getTypeRoot()) {
-      case TIME_WITHOUT_TIME_ZONE:
-        TimeType timeType = (TimeType) logicalType;
-        if (timeType.getPrecision() == 3) {
-          // the precision in HoodieMetadata is 6
-          rawVal = ((Long) rawVal) / 1000;
-        } else if (timeType.getPrecision() == 9) {
-          rawVal = ((Long) rawVal) * 1000;
-        }
-        break;
-      case TIMESTAMP_WITHOUT_TIME_ZONE:
-        TimestampType timestampType = (TimestampType) logicalType;
-        if (timestampType.getPrecision() == 3) {
-          // the precision in HoodieMetadata is 6
-          rawVal = ((Long) rawVal) / 1000;
-        } else if (timestampType.getPrecision() == 9) {
-          rawVal = ((Long) rawVal) * 1000;
-        }
-        break;
-      default:
-        // no operation
-    }
     AvroToRowDataConverters.AvroToRowDataConverter converter =
         converters.computeIfAbsent(logicalType, k -> AvroToRowDataConverters.createConverter(logicalType));
     return converter.convert(rawVal);

@@ -72,8 +72,14 @@ public class TimelineDiffHelper {
               && instantPair.getValue().isCompleted())
           .map(Pair::getKey).collect(Collectors.toList());
 
-      newT.getInstants().filter(instant -> !oldTimelineInstants.contains(instant)).forEach(newInstants::add);
-      return new TimelineDiffResult(newInstants, finishedCompactionInstants, true);
+      newTimeline.getInstants().filter(instant -> !oldTimelineInstants.contains(instant)).forEach(newInstants::add);
+
+      List<Pair<HoodieInstant, HoodieInstant>> logCompactionInstants = getPendingLogCompactionTransitions(oldTimeline, newTimeline);
+      List<HoodieInstant> finishedOrRemovedLogCompactionInstants = logCompactionInstants.stream()
+          .filter(instantPair -> !instantPair.getKey().isCompleted()
+              && (instantPair.getValue() == null || instantPair.getValue().isCompleted()))
+          .map(Pair::getKey).collect(Collectors.toList());
+      return new TimelineDiffResult(newInstants, finishedCompactionInstants, finishedOrRemovedLogCompactionInstants, true);
     } else {
       // One or more timelines is empty
       LOG.warn("One or more timelines is empty");
@@ -81,6 +87,35 @@ public class TimelineDiffHelper {
     }
   }
 
+  /**
+   * Getting pending log compaction transitions.
+   */
+  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingLogCompactionTransitions(HoodieTimeline oldTimeline,
+                                                                                          HoodieTimeline newTimeline) {
+    Set<HoodieInstant> newTimelineInstants = newTimeline.getInstants().collect(Collectors.toSet());
+
+    return oldTimeline.filterPendingLogCompactionTimeline().getInstants().map(instant -> {
+      if (newTimelineInstants.contains(instant)) {
+        return Pair.of(instant, instant);
+      } else {
+        HoodieInstant logCompacted =
+            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instant.getTimestamp());
+        if (newTimelineInstants.contains(logCompacted)) {
+          return Pair.of(instant, logCompacted);
+        }
+        HoodieInstant inflightLogCompacted =
+            new HoodieInstant(State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, instant.getTimestamp());
+        if (newTimelineInstants.contains(inflightLogCompacted)) {
+          return Pair.of(instant, inflightLogCompacted);
+        }
+        return Pair.<HoodieInstant, HoodieInstant>of(instant, null);
+      }
+    }).collect(Collectors.toList());
+  }
+
+  /**
+   * Getting pending compaction transitions.
+   */
   private static List<Pair<HoodieInstant, HoodieInstant>> getPendingCompactionTransitions(HoodieTimeline oldTimeline,
       HoodieTimeline newTimeline) {
     Set<HoodieInstant> newTimelineInstants = newTimeline.getInstants().collect(Collectors.toSet());
@@ -94,6 +129,11 @@ public class TimelineDiffHelper {
         if (newTimelineInstants.contains(compacted)) {
           return Pair.of(instant, compacted);
         }
+        HoodieInstant inflightCompacted =
+            new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, instant.getTimestamp());
+        if (newTimelineInstants.contains(inflightCompacted)) {
+          return Pair.of(instant, inflightCompacted);
+        }
         return Pair.<HoodieInstant, HoodieInstant>of(instant, null);
       }
     }).collect(Collectors.toList());
@@ -106,14 +146,17 @@ public class TimelineDiffHelper {
 
     private final List<HoodieInstant> newlySeenInstants;
     private final List<HoodieInstant> finishedCompactionInstants;
+    private final List<HoodieInstant> finishedOrRemovedLogCompactionInstants;
     private final boolean canSyncIncrementally;
 
-    public static final TimelineDiffResult UNSAFE_SYNC_RESULT = new TimelineDiffResult(null, null, false);
+    public static final TimelineDiffResult UNSAFE_SYNC_RESULT =
+        new TimelineDiffResult(null, null, null, false);
 
     public TimelineDiffResult(List<HoodieInstant> newlySeenInstants, List<HoodieInstant> finishedCompactionInstants,
-        boolean canSyncIncrementally) {
+                              List<HoodieInstant> finishedOrRemovedLogCompactionInstants, boolean canSyncIncrementally) {
       this.newlySeenInstants = newlySeenInstants;
       this.finishedCompactionInstants = finishedCompactionInstants;
+      this.finishedOrRemovedLogCompactionInstants = finishedOrRemovedLogCompactionInstants;
       this.canSyncIncrementally = canSyncIncrementally;
     }
 
@@ -125,14 +168,22 @@ public class TimelineDiffHelper {
       return finishedCompactionInstants;
     }
 
+    public List<HoodieInstant> getFinishedOrRemovedLogCompactionInstants() {
+      return finishedOrRemovedLogCompactionInstants;
+    }
+
     public boolean canSyncIncrementally() {
       return canSyncIncrementally;
     }
 
     @Override
     public String toString() {
-      return "TimelineDiffResult{newlySeenInstants=" + newlySeenInstants + ", finishedCompactionInstants="
-          + finishedCompactionInstants + ", canSyncIncrementally=" + canSyncIncrementally + '}';
+      return "TimelineDiffResult{"
+          + "newlySeenInstants=" + newlySeenInstants
+          + ", finishedCompactionInstants=" + finishedCompactionInstants
+          + ", finishedOrRemovedLogCompactionInstants=" + finishedOrRemovedLogCompactionInstants
+          + ", canSyncIncrementally=" + canSyncIncrementally
+          + '}';
     }
   }
 }

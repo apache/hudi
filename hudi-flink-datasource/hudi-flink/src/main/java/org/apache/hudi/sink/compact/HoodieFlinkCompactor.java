@@ -44,7 +44,6 @@ import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -264,7 +263,7 @@ public class HoodieFlinkCompactor {
           .map(timestamp -> {
             try {
               return Pair.of(timestamp, CompactionUtils.getCompactionPlan(table.getMetaClient(), timestamp));
-            } catch (IOException e) {
+            } catch (Exception e) {
               throw new HoodieException("Get compaction plan at instant " + timestamp + " error", e);
             }
           })
