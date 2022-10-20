@@ -160,6 +160,43 @@ However, if you had intentionally named your partition as `default`, you can byp
 - Flink 1.14 will continue to be supported via `hudi-flink1.14-bundle`.
 - Flink 1.13 will continue to be supported via `hudi-flink1.13-bundle`.
 
+## Known Regressions:
+
+We discovered a regression in Hudi 0.12 release related to Bloom
+Index metadata persisted w/in Parquet footers [HUDI-4992](https://issues.apache.org/jira/browse/HUDI-4992).
+
+Crux of the problem was that min/max statistics for the record keys were
+computed incorrectly during (Spark-specific) [row-writing](https://hudi.apache.org/docs/next/configurations#hoodiedatasourcewriterowwriterenable)
+Bulk Insert operation affecting [Key Range Pruning flow](https://hudi.apache.org/docs/next/basic_configurations/#hoodiebloomindexprunebyranges)
+w/in [Hoodie Bloom Index](https://hudi.apache.org/docs/next/faq/#how-do-i-configure-bloom-filter-when-bloomglobal_bloom-index-is-used)
+tagging sequence, resulting into updated records being incorrectly tagged
+as "inserts" and not as "updates", leading to duplicated records in the
+table.
+
+[PR#6883](https://github.com/apache/hudi/pull/6883) addressing the problem is incorporated into
+Hudi 0.12.1 release.*
+
+If all of the following is applicable to you:
+
+1. Using Spark as an execution engine
+2. Using Bulk Insert (using [row-writing](https://hudi.apache.org/docs/next/configurations#hoodiedatasourcewriterowwriterenable),
+   enabled *by default*)
+3. Using Bloom Index (with [range-pruning](https://hudi.apache.org/docs/next/basic_configurations/#hoodiebloomindexprunebyranges)
+   enabled, enabled *by default*) for "UPSERT" operations
+   - Note: Default index type is SIMPLE. So, unless you have over-ridden the index type, you may not hit this issue. 
+
+Please consider one of the following potential remediations to avoid
+getting duplicate records in your pipeline:
+
+- [Disabling Bloom Index range-pruning](https://hudi.apache.org/docs/next/basic_configurations/#hoodiebloomindexprunebyranges)
+  flow (might
+  affect performance of upsert operations)
+- Upgrading to 0.12.1. 
+- Making sure that the [fix](https://github.com/apache/hudi/pull/6883) is
+  included in your custom artifacts (if you're building and using ones)
+
+Sorry about the inconvenience caused. 
+
 ## Raw Release Notes
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12351209).
