@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.model;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -199,5 +203,31 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
     return Option.of(this);
+  }
+
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
+  @SuppressWarnings("unchecked")
+  @Override
+  protected final void writeRecordPayload(IndexedRecord payload, Kryo kryo, Output output) {
+    // NOTE: We're leveraging Spark's default [[GenericAvroSerializer]] to serialize Avro
+    Serializer<GenericRecord> avroSerializer = kryo.getSerializer(GenericRecord.class);
+
+    kryo.writeObjectOrNull(output, payload, avroSerializer);
+  }
+
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
+  @SuppressWarnings("unchecked")
+  @Override
+  protected final IndexedRecord readRecordPayload(Kryo kryo, Input input) {
+    // NOTE: We're leveraging Spark's default [[GenericAvroSerializer]] to serialize Avro
+    Serializer<GenericRecord> avroSerializer = kryo.getSerializer(GenericRecord.class);
+
+    return kryo.readObjectOrNull(input, GenericRecord.class, avroSerializer);
   }
 }

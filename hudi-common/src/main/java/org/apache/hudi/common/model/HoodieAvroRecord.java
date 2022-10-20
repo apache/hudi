@@ -19,6 +19,9 @@
 
 package org.apache.hudi.common.model;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -192,5 +195,18 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     } else {
       return Option.empty();
     }
+  }
+
+  @Override
+  protected final void writeRecordPayload(T payload, Kryo kryo, Output output) {
+    // NOTE: Since [[orderingVal]] is polymorphic we have to write out its class
+    //       to be able to properly deserialize it
+    kryo.writeClassAndObject(output, payload);
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  protected final T readRecordPayload(Kryo kryo, Input input) {
+    return (T) kryo.readClassAndObject(input);
   }
 }

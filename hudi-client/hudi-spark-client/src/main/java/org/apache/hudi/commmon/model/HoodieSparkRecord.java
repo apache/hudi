@@ -18,6 +18,10 @@
 
 package org.apache.hudi.commmon.model;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.SparkAdapterSupport$;
@@ -70,9 +74,8 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
  *       need to be updated (ie serving as an overlay layer on top of [[UnsafeRow]])</li>
  * </ul>
  *
-
  */
-public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
+public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements KryoSerializable {
 
   /**
    * Record copy operation to avoid double copying. InternalRow do not need to copy twice.
@@ -80,41 +83,58 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   private boolean copy;
 
   /**
-   * We should use this construction method when we read internalRow from file.
-   * The record constructed by this method must be used in iter.
+   * NOTE: {@code HoodieSparkRecord} is holding the schema only in cases when it would have
+   *       to execute {@link UnsafeProjection} so that the {@link InternalRow} it's holding to
+   *       could be projected into {@link UnsafeRow} and be efficiently serialized subsequently
+   *       (by Kryo)
    */
-  public HoodieSparkRecord(InternalRow data) {
+  private final transient StructType schema;
+
+  public HoodieSparkRecord(UnsafeRow data) {
+    this(data, null);
+  }
+
+  public HoodieSparkRecord(InternalRow data, StructType schema) {
     super(null, data);
-    validateRow(data);
+
+    validateRow(data, schema);
     this.copy = false;
+    this.schema = schema;
   }
 
-  public HoodieSparkRecord(HoodieKey key, InternalRow data, boolean copy) {
+  public HoodieSparkRecord(HoodieKey key, UnsafeRow data, boolean copy) {
+    this(key, data, null, copy);
+  }
+
+  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, boolean copy) {
     super(key, data);
-    validateRow(data);
+
+    validateRow(data, schema);
     this.copy = copy;
+    this.schema = schema;
   }
 
-  private HoodieSparkRecord(HoodieKey key, InternalRow data, HoodieOperation operation, boolean copy) {
+  private HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation, boolean copy) {
     super(key, data, operation);
-    validateRow(data);
 
+    validateRow(data, schema);
     this.copy = copy;
+    this.schema = schema;
   }
 
   @Override
   public HoodieSparkRecord newInstance() {
-    return new HoodieSparkRecord(this.key, this.data, this.operation, this.copy);
+    return new HoodieSparkRecord(this.key, this.data, this.schema, this.operation, this.copy);
   }
 
   @Override
   public HoodieSparkRecord newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieSparkRecord(key, this.data, op, this.copy);
+    return new HoodieSparkRecord(key, this.data, this.schema, op, this.copy);
   }
 
   @Override
   public HoodieSparkRecord newInstance(HoodieKey key) {
-    return new HoodieSparkRecord(key, this.data, this.operation, this.copy);
+    return new HoodieSparkRecord(key, this.data, this.schema, this.operation, this.copy);
   }
 
   @Override
@@ -155,7 +175,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     InternalRow mergeRow = new JoinedRow(data, (InternalRow) other.getData());
     UnsafeProjection projection =
         HoodieInternalRowUtils.getCachedUnsafeProjection(targetStructType, targetStructType);
-    return new HoodieSparkRecord(getKey(), projection.apply(mergeRow), getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), projection.apply(mergeRow), targetStructType, getOperation(), copy);
   }
 
   @Override
@@ -169,7 +189,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     // TODO add actual rewriting
     InternalRow finalRow = new HoodieInternalRow(metaFields, data, containMetaFields);
 
-    return new HoodieSparkRecord(getKey(), finalRow, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), finalRow, targetStructType, getOperation(), copy);
   }
 
   @Override
@@ -184,7 +204,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
         HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, structType, newStructType, renameCols);
     HoodieInternalRow finalRow = new HoodieInternalRow(metaFields, rewrittenRow, containMetaFields);
 
-    return new HoodieSparkRecord(getKey(), finalRow, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), finalRow, newStructType, getOperation(), copy);
   }
 
   @Override
@@ -199,7 +219,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       }
     });
 
-    return new HoodieSparkRecord(getKey(), updatableRow, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), copy);
   }
 
   @Override
@@ -264,7 +284,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       partition = data.get(HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal(), StringType).toString();
     }
     HoodieKey hoodieKey = new HoodieKey(key, partition);
-    return new HoodieSparkRecord(hoodieKey, data, getOperation(), copy);
+    return new HoodieSparkRecord(hoodieKey, data, structType, getOperation(), copy);
   }
 
   @Override
@@ -297,6 +317,42 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       Comparable<?> value = (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
       return value;
     }
+  }
+
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
+  @Override
+  protected final void writeRecordPayload(InternalRow payload, Kryo kryo, Output output) {
+    // NOTE: [[payload]] could be null if record has already been deflated
+    UnsafeRow unsafeRow = convertToUnsafeRow(payload, schema);
+
+    kryo.writeObjectOrNull(output, unsafeRow, UnsafeRow.class);
+  }
+
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
+  @Override
+  protected final InternalRow readRecordPayload(Kryo kryo, Input input) {
+    // NOTE: After deserialization every object is allocated on the heap, therefore
+    //       we annotate this object as being copied
+    this.copy = true;
+
+    return kryo.readObjectOrNull(input, UnsafeRow.class);
+  }
+
+  private static UnsafeRow convertToUnsafeRow(InternalRow payload, StructType schema) {
+    if (payload == null) {
+      return null;
+    } else if (payload instanceof UnsafeRow) {
+      return (UnsafeRow) payload;
+    }
+
+    UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, schema);
+    return unsafeProjection.apply(payload);
   }
 
   private static HoodieInternalRow wrapIntoUpdatableOverlay(InternalRow data, StructType structType) {
@@ -351,14 +407,21 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
     HoodieOperation operation = withOperationField
         ? HoodieOperation.fromName(getNullableValAsString(structType, record.data, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
-    return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), record.data, operation, record.copy);
+    return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), record.data, structType, operation, record.copy);
   }
 
-  private static void validateRow(InternalRow data) {
+  private static void validateRow(InternalRow data, StructType schema) {
     // NOTE: [[HoodieSparkRecord]] is expected to hold either
     //          - Instance of [[UnsafeRow]] or
     //          - Instance of [[HoodieInternalRow]] or
     //          - Instance of [[ColumnarBatchRow]]
-    ValidationUtils.checkState(data instanceof UnsafeRow || data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
+    //
+    //       In case provided row is anything but [[UnsafeRow]], it's expected that the
+    //       corresponding schema has to be provided as well so that it could be properly
+    //       serialized (in case it would need to be)
+    boolean isValid = data instanceof UnsafeRow
+        || schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
+
+    ValidationUtils.checkState(isValid);
   }
 }

@@ -18,10 +18,12 @@
 
 package org.apache.hudi.common.model;
 
-import java.util.Collections;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -29,18 +31,19 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
  * A Single Record managed by Hoodie.
  */
-public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterface, Serializable {
+public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterface, KryoSerializable, Serializable {
 
   public static final String COMMIT_TIME_METADATA_FIELD = HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName();
   public static final String COMMIT_SEQNO_METADATA_FIELD = HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD.getFieldName();
@@ -158,8 +161,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.sealed = record.sealed;
   }
 
-  public HoodieRecord() {
-  }
+  public HoodieRecord() {}
 
   public abstract HoodieRecord<T> newInstance();
 
@@ -280,6 +282,45 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     if (sealed) {
       throw new UnsupportedOperationException("Not allowed to modify after sealed");
     }
+  }
+
+  protected abstract void writeRecordPayload(T payload, Kryo kryo, Output output);
+
+  protected abstract T readRecordPayload(Kryo kryo, Input input);
+
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
+  @Override
+  public final void write(Kryo kryo, Output output) {
+    kryo.writeObjectOrNull(output, key, HoodieKey.class);
+    kryo.writeObjectOrNull(output, operation, HoodieOperation.class);
+    // NOTE: We have to write actual class along with the object here,
+    //       since [[HoodieRecordLocation]] has inheritors
+    kryo.writeClassAndObject(output, currentLocation);
+    kryo.writeClassAndObject(output, newLocation);
+    // NOTE: Writing out actual record payload is relegated to the actual
+    //       implementation
+    writeRecordPayload(data, kryo, output);
+  }
+
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
+  @Override
+  public final void read(Kryo kryo, Input input) {
+    this.key = kryo.readObjectOrNull(input, HoodieKey.class);
+    this.operation = kryo.readObjectOrNull(input, HoodieOperation.class);
+    this.currentLocation = (HoodieRecordLocation) kryo.readClassAndObject(input);
+    this.newLocation = (HoodieRecordLocation) kryo.readClassAndObject(input);
+    // NOTE: Reading out actual record payload is relegated to the actual
+    //       implementation
+    this.data = readRecordPayload(kryo, input);
+
+    // NOTE: We're always seal object after deserialization
+    this.sealed = true;
   }
 
   /**

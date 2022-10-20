@@ -18,11 +18,13 @@
 
 package org.apache.hudi.common.model;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.Schema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Map;
@@ -30,8 +32,8 @@ import java.util.Properties;
 
 public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
 
-  private final HoodieRecordType type;
-  private final Comparable<?> orderingVal;
+  private HoodieRecordType type;
+  private Comparable<?> orderingVal;
 
   public HoodieEmptyRecord(HoodieKey key, HoodieRecordType type) {
     super(key, null);
@@ -151,5 +153,29 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   @Override
   public Option<Map<String, String>> getMetadata() {
     return Option.empty();
+  }
+
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
+  @Override
+  protected final void writeRecordPayload(T payload, Kryo kryo, Output output) {
+    kryo.writeObject(output, type);
+    // NOTE: Since [[orderingVal]] is polymorphic we have to write out its class
+    //       to be able to properly deserialize it
+    kryo.writeClassAndObject(output, orderingVal);
+  }
+
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
+  @Override
+  protected final T readRecordPayload(Kryo kryo, Input input) {
+    this.type = kryo.readObject(input, HoodieRecordType.class);
+    this.orderingVal = (Comparable<?>) kryo.readClassAndObject(input);
+    // NOTE: [[EmptyRecord]]'s payload is always null
+    return null;
   }
 }
