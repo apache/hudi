@@ -66,6 +66,8 @@ import org.apache.flink.table.catalog.exceptions.TablePartitionedException;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
+import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -399,8 +401,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     Schema latestTableSchema = StreamerUtil.getLatestTableSchema(path, hiveConf);
     org.apache.flink.table.api.Schema schema;
     if (latestTableSchema != null) {
-      org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder()
-          .fromRowDataType(AvroSchemaConverter.convertToDataType(latestTableSchema));
+      org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder();
       String pkConstraintName = parameters.get(PK_CONSTRAINT_NAME);
       String pkColumns = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());
       if (!StringUtils.isNullOrEmpty(pkConstraintName)) {
@@ -409,6 +410,22 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       } else if (pkColumns != null) {
         builder.primaryKey(StringUtils.split(pkColumns, ","));
       }
+      DataType dataType = AvroSchemaConverter.convertToDataType(latestTableSchema);
+
+      // pk column to not null data type
+      final List<DataType> fieldDataTypes = dataType.getChildren();
+      final List<String> fieldNames = ((RowType) dataType.getLogicalType()).getFieldNames();
+      if (pkColumns != null) {
+        List<String> pkColumnList = StringUtils.split(pkColumns, ",");
+        for (int i = 0; i < fieldNames.size(); i++) {
+          if (pkColumnList.contains(fieldNames.get(i))) {
+            DataType primaryDatatype = fieldDataTypes.get(i).notNull();
+            fieldDataTypes.set(i, primaryDatatype);
+          }
+        }
+      }
+
+      builder.fromRowDataType(dataType);
       schema = builder.build();
     } else {
       LOG.warn("{} does not have any hoodie schema, and use hive table schema to infer the table schema", tablePath);
