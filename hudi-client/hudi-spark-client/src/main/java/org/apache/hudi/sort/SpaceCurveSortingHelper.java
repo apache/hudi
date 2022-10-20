@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sort;
 
-import org.apache.hudi.common.util.BinaryUtil;
+import org.apache.hudi.common.util.BinaryUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.optimize.HilbertCurveUtils;
@@ -158,7 +158,7 @@ public class SpaceCurveSortingHelper {
         .toArray(byte[][]::new);
 
       // Interleave received bytes to produce Z-curve ordinal
-      byte[] zOrdinalBytes = BinaryUtil.interleaving(zBytes, 8);
+      byte[] zOrdinalBytes = BinaryUtils.interleaving(zBytes, 8);
       return appendToRow(row, zOrdinalBytes);
     })
       .sortBy(f -> new ByteArraySorting((byte[]) f.get(fieldNum)), true, fileNum);
@@ -206,30 +206,30 @@ public class SpaceCurveSortingHelper {
   @Nonnull
   private static byte[] mapColumnValueTo8Bytes(Row row, int index, DataType dataType) {
     if (dataType instanceof LongType) {
-      return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getLong(index));
+      return BinaryUtils.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getLong(index));
     } else if (dataType instanceof DoubleType) {
-      return BinaryUtil.doubleTo8Byte(row.isNullAt(index) ? Double.MAX_VALUE : row.getDouble(index));
+      return BinaryUtils.doubleTo8Byte(row.isNullAt(index) ? Double.MAX_VALUE : row.getDouble(index));
     } else if (dataType instanceof IntegerType) {
-      return BinaryUtil.intTo8Byte(row.isNullAt(index) ? Integer.MAX_VALUE : row.getInt(index));
+      return BinaryUtils.intTo8Byte(row.isNullAt(index) ? Integer.MAX_VALUE : row.getInt(index));
     } else if (dataType instanceof FloatType) {
-      return BinaryUtil.doubleTo8Byte(row.isNullAt(index) ? Float.MAX_VALUE : row.getFloat(index));
+      return BinaryUtils.doubleTo8Byte(row.isNullAt(index) ? Float.MAX_VALUE : row.getFloat(index));
     } else if (dataType instanceof StringType) {
-      return BinaryUtil.utf8To8Byte(row.isNullAt(index) ? "" : row.getString(index));
+      return BinaryUtils.utf8To8Byte(row.isNullAt(index) ? "" : row.getString(index));
     } else if (dataType instanceof DateType) {
-      return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getDate(index).getTime());
+      return BinaryUtils.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getDate(index).getTime());
     } else if (dataType instanceof TimestampType) {
-      return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getTimestamp(index).getTime());
+      return BinaryUtils.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getTimestamp(index).getTime());
     } else if (dataType instanceof ByteType) {
-      return BinaryUtil.byteTo8Byte(row.isNullAt(index) ? Byte.MAX_VALUE : row.getByte(index));
+      return BinaryUtils.byteTo8Byte(row.isNullAt(index) ? Byte.MAX_VALUE : row.getByte(index));
     } else if (dataType instanceof ShortType) {
-      return BinaryUtil.intTo8Byte(row.isNullAt(index) ? Short.MAX_VALUE : row.getShort(index));
+      return BinaryUtils.intTo8Byte(row.isNullAt(index) ? Short.MAX_VALUE : row.getShort(index));
     } else if (dataType instanceof DecimalType) {
-      return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getDecimal(index).longValue());
+      return BinaryUtils.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getDecimal(index).longValue());
     } else if (dataType instanceof BooleanType) {
       boolean value = row.isNullAt(index) ? false : row.getBoolean(index);
-      return BinaryUtil.intTo8Byte(value ? 1 : 0);
+      return BinaryUtils.intTo8Byte(value ? 1 : 0);
     } else if (dataType instanceof BinaryType) {
-      return BinaryUtil.paddingTo8Byte(row.isNullAt(index) ? new byte[] {0} : (byte[]) row.get(index));
+      return BinaryUtils.paddingTo8Byte(row.isNullAt(index) ? new byte[] {0} : (byte[]) row.get(index));
     }
 
     throw new UnsupportedOperationException(String.format("Unsupported data-type (%s)", dataType.typeName()));
@@ -245,13 +245,13 @@ public class SpaceCurveSortingHelper {
     } else if (dataType instanceof FloatType) {
       return row.isNullAt(index) ? Long.MAX_VALUE : Double.doubleToLongBits((double) row.getFloat(index));
     } else if (dataType instanceof StringType) {
-      return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtil.convertStringToLong(row.getString(index));
+      return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtils.convertStringToLong(row.getString(index));
     } else if (dataType instanceof DateType) {
       return row.isNullAt(index) ? Long.MAX_VALUE : row.getDate(index).getTime();
     } else if (dataType instanceof TimestampType) {
       return row.isNullAt(index) ? Long.MAX_VALUE : row.getTimestamp(index).getTime();
     } else if (dataType instanceof ByteType) {
-      return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtil.convertBytesToLong(new byte[] {row.getByte(index)});
+      return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtils.convertBytesToLong(new byte[] {row.getByte(index)});
     } else if (dataType instanceof ShortType) {
       return row.isNullAt(index) ? Long.MAX_VALUE : (long) row.getShort(index);
     } else if (dataType instanceof DecimalType) {
@@ -260,7 +260,7 @@ public class SpaceCurveSortingHelper {
       boolean value = row.isNullAt(index) ? false : row.getBoolean(index);
       return value ? Long.MAX_VALUE : 0;
     } else if (dataType instanceof BinaryType) {
-      return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtil.convertBytesToLong((byte[]) row.get(index));
+      return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtils.convertBytesToLong((byte[]) row.get(index));
     }
 
     throw new UnsupportedOperationException(String.format("Unsupported data-type (%s)", dataType.typeName()));

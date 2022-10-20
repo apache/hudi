@@ -35,7 +35,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNullableValAsString;
-import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
+import static org.apache.hudi.common.util.BinaryUtils.generateChecksum;
 
 /**
  * A utility class supports spillable map.
