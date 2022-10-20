@@ -593,8 +593,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // it will write out >1 cdc log files due to rollover.
     assert(cdcLogFiles2.size > 1)
     // with a small value for 'hoodie.logfile.data.block.max.size',
-    // it will write out >1 cdc data blocks in one single cdc log file.
-    assert(getCDCBlocks(cdcLogFiles2.head, cdcSchema).size > 1)
+    // it will write out >= 1 cdc data blocks in one single cdc log file.
+    assert(getCDCBlocks(cdcLogFiles2.head, cdcSchema).size >= 1)
 
     // check cdc data
     val cdcDataFromCDCLogFile2 = cdcLogFiles2.flatMap(readCDCLogFile(_, cdcSchema))
