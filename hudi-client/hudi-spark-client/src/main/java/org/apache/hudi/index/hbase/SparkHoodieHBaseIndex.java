@@ -88,7 +88,7 @@ import scala.Tuple2;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION;
 import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_QUORUM;
 import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_ZNODE_PARENT;
-import static org.apache.hadoop.hbase.HConstants.CLIENT_ZOOKEEPER_CLIENT_PORT;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_CLIENT_PORT;
 import static org.apache.hadoop.hbase.security.SecurityConstants.MASTER_KRB_PRINCIPAL;
 import static org.apache.hadoop.hbase.security.SecurityConstants.REGIONSERVER_KRB_PRINCIPAL;
 import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_AUTHORIZATION_CONF_KEY;
@@ -160,7 +160,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
       hbaseConfig.set(ZOOKEEPER_ZNODE_PARENT, zkZnodeParent);
     }
     String port = String.valueOf(config.getHbaseZkPort());
-    hbaseConfig.set(CLIENT_ZOOKEEPER_CLIENT_PORT, port);
+    hbaseConfig.set(ZOOKEEPER_CLIENT_PORT, port);
 
     try {
       String authentication = config.getHBaseIndexSecurityAuthentication();
