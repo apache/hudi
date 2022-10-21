@@ -43,10 +43,10 @@ import org.apache.hudi.timeline.service.handlers.TimelineHandler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.javalin.BadRequestResponse;
-import io.javalin.Context;
-import io.javalin.Handler;
 import io.javalin.Javalin;
+import io.javalin.http.BadRequestResponse;
+import io.javalin.http.Context;
+import io.javalin.http.Handler;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -63,7 +63,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 
 /**
- *  Main REST Handler class that handles and delegates calls to timeline relevant handlers.
+ * Main REST Handler class that handles and delegates calls to timeline relevant handlers.
  */
 public class RequestHandler {
 
@@ -77,7 +77,7 @@ public class RequestHandler {
   private final FileSliceHandler sliceHandler;
   private final BaseFileHandler dataFileHandler;
   private final MarkerHandler markerHandler;
-  private Registry metricsRegistry = Registry.getRegistry("TimelineService");
+  private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
 
   public RequestHandler(Javalin app, Configuration conf, TimelineService.Config timelineServiceConfig,
@@ -98,6 +98,38 @@ public class RequestHandler {
     if (timelineServiceConfig.async) {
       asyncResultService = Executors.newSingleThreadScheduledExecutor();
     }
+  }
+
+  /**
+   * Serializes the result into JSON String.
+   *
+   * @param ctx             Javalin context
+   * @param obj             object to serialize
+   * @param metricsRegistry {@code Registry} instance for storing metrics
+   * @param objectMapper    JSON object mapper
+   * @param logger          {@code Logger} instance
+   * @return JSON String from the input object
+   * @throws JsonProcessingException
+   */
+  public static String jsonifyResult(
+      Context ctx, Object obj, Registry metricsRegistry, ObjectMapper objectMapper, Logger logger)
+      throws JsonProcessingException {
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    boolean prettyPrint = ctx.queryParam("pretty") != null;
+    String result =
+        prettyPrint ? objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj)
+            : objectMapper.writeValueAsString(obj);
+    final long jsonifyTime = timer.endTimer();
+    metricsRegistry.add("WRITE_VALUE_CNT", 1);
+    metricsRegistry.add("WRITE_VALUE_TIME", jsonifyTime);
+    if (logger.isDebugEnabled()) {
+      logger.debug("Jsonify TimeTaken=" + jsonifyTime);
+    }
+    return result;
+  }
+
+  private static boolean isRefreshCheckDisabledInQuery(Context ctxt) {
+    return Boolean.parseBoolean(ctxt.queryParam(RemoteHoodieTableFileSystemView.REFRESH_OFF));
   }
 
   public void register() {
@@ -121,8 +153,8 @@ public class RequestHandler {
   private boolean isLocalViewBehind(Context ctx) {
     String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
     String lastKnownInstantFromClient =
-        ctx.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, HoodieTimeline.INVALID_INSTANT_TS);
-    String timelineHashFromClient = ctx.queryParam(RemoteHoodieTableFileSystemView.TIMELINE_HASH, "");
+        ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
+    String timelineHashFromClient = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.TIMELINE_HASH, String.class).getOrDefault("");
     HoodieTimeline localTimeline =
         viewManager.getFileSystemView(basePath).getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
     if (LOG.isDebugEnabled()) {
@@ -151,8 +183,7 @@ public class RequestHandler {
   private boolean syncIfLocalViewBehind(Context ctx) {
     if (isLocalViewBehind(ctx)) {
       String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
-      String lastKnownInstantFromClient =
-          ctx.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, HoodieTimeline.INVALID_INSTANT_TS);
+      String lastKnownInstantFromClient = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
       SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
       synchronized (view) {
         if (isLocalViewBehind(ctx)) {
@@ -176,41 +207,13 @@ public class RequestHandler {
     }
   }
 
-  /**
-   * Serializes the result into JSON String.
-   *
-   * @param ctx Javalin context
-   * @param obj object to serialize
-   * @param metricsRegistry {@code Registry} instance for storing metrics
-   * @param objectMapper JSON object mapper
-   * @param logger {@code Logger} instance
-   * @return JSON String from the input object
-   * @throws JsonProcessingException
-   */
-  public static String jsonifyResult(
-      Context ctx, Object obj, Registry metricsRegistry, ObjectMapper objectMapper, Logger logger)
-      throws JsonProcessingException {
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    boolean prettyPrint = ctx.queryParam("pretty") != null;
-    String result =
-        prettyPrint ? objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj)
-            : objectMapper.writeValueAsString(obj);
-    final long jsonifyTime = timer.endTimer();
-    metricsRegistry.add("WRITE_VALUE_CNT", 1);
-    metricsRegistry.add("WRITE_VALUE_TIME", jsonifyTime);
-    if (logger.isDebugEnabled()) {
-      logger.debug("Jsonify TimeTaken=" + jsonifyTime);
-    }
-    return result;
-  }
-
   private void writeValueAsStringSync(Context ctx, Object obj) throws JsonProcessingException {
     String result = jsonifyResult(ctx, obj, metricsRegistry, OBJECT_MAPPER, LOG);
     ctx.result(result);
   }
 
   private void writeValueAsStringAsync(Context ctx, Object obj) {
-    ctx.result(CompletableFuture.supplyAsync(() -> {
+    ctx.future(CompletableFuture.supplyAsync(() -> {
       try {
         return jsonifyResult(ctx, obj, metricsRegistry, OBJECT_MAPPER, LOG);
       } catch (JsonProcessingException e) {
@@ -225,15 +228,13 @@ public class RequestHandler {
   private void registerTimelineAPI() {
     app.get(RemoteHoodieTableFileSystemView.LAST_INSTANT, new ViewHandler(ctx -> {
       metricsRegistry.add("LAST_INSTANT", 1);
-      List<InstantDTO> dtos = instantHandler
-          .getLastInstant(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getValue());
+      List<InstantDTO> dtos = instantHandler.getLastInstant(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).get());
       writeValueAsString(ctx, dtos);
     }, false));
 
     app.get(RemoteHoodieTableFileSystemView.TIMELINE, new ViewHandler(ctx -> {
       metricsRegistry.add("TIMELINE", 1);
-      TimelineDTO dto = instantHandler
-          .getTimeline(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getValue());
+      TimelineDTO dto = instantHandler.getTimeline(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).get());
       writeValueAsString(ctx, dto);
     }, false));
   }
@@ -245,59 +246,60 @@ public class RequestHandler {
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_DATA_FILES_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_PARTITION_DATA_FILES", 1);
       List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFiles(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
+
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_DATA_FILE_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_PARTITION_DATA_FILE", 1);
       List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFile(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.FILEID_PARAM).getOrThrow());
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.FILEID_PARAM, String.class).getOrThrow(e -> new HoodieException("FILEID is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_ALL_DATA_FILES, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_ALL_DATA_FILES", 1);
-      List<BaseFileDTO> dtos = dataFileHandler
-          .getLatestDataFiles(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+      List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFiles(
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_DATA_FILES_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_DATA_FILES_BEFORE_ON_INSTANT", 1);
       List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFilesBeforeOrOn(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM).getOrThrow());
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrThrow(e -> new HoodieException("MAX_INSTANT_PARAM is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_DATA_FILE_ON_INSTANT_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_DATA_FILE_ON_INSTANT", 1);
       List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFileOn(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.INSTANT_PARAM),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.FILEID_PARAM).getOrThrow());
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_PARAM, String.class).get(),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.FILEID_PARAM, String.class).getOrThrow(e -> new HoodieException("FILEID is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.ALL_DATA_FILES, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_DATA_FILES", 1);
       List<BaseFileDTO> dtos = dataFileHandler.getAllDataFiles(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_DATA_FILES_RANGE_INSTANT_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_DATA_FILES_RANGE_INSTANT", 1);
       List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFilesInRange(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(), Arrays
-              .asList(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.INSTANTS_PARAM).getOrThrow().split(",")));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          Arrays.asList(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANTS_PARAM, String.class).getOrThrow(e -> new HoodieException("INSTANTS_PARAM is invalid")).split(",")));
       writeValueAsString(ctx, dtos);
     }, true));
   }
@@ -309,124 +311,124 @@ public class RequestHandler {
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICES_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_PARTITION_SLICES", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlices(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICE_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_PARTITION_SLICE", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlice(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.FILEID_PARAM).getOrThrow());
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.FILEID_PARAM, String.class).getOrThrow(e -> new HoodieException("FILEID is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_UNCOMPACTED_SLICES_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_PARTITION_UNCOMPACTED_SLICES", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestUnCompactedFileSlices(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.ALL_SLICES_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_SLICES", 1);
       List<FileSliceDTO> dtos = sliceHandler.getAllFileSlices(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_SLICES_RANGE_INSTANT_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_SLICE_RANGE_INSTANT", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSliceInRange(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(), Arrays
-              .asList(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.INSTANTS_PARAM).getOrThrow().split(",")));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          Arrays.asList(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANTS_PARAM, String.class).getOrThrow(e -> new HoodieException("INSTANTS_PARAM is invalid")).split(",")));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_SLICES_MERGED_BEFORE_ON_INSTANT", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestMergedFileSlicesBeforeOrOn(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM).getOrThrow());
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrThrow(e -> new HoodieException("MAX_INSTANT_PARAM is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_SLICES_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_SLICES_BEFORE_ON_INSTANT", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlicesBeforeOrOn(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM).getOrThrow(),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrThrow(e -> new HoodieException("MAX_INSTANT_PARAM is invalid")),
           Boolean.parseBoolean(
-              ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM)
-                  .getOrThrow()));
+              ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM, String.class)
+                  .getOrThrow(e -> new HoodieException("INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM is invalid"))));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.PENDING_COMPACTION_OPS, new ViewHandler(ctx -> {
       metricsRegistry.add("PEDING_COMPACTION_OPS", 1);
       List<CompactionOpDTO> dtos = sliceHandler.getPendingCompactionOperations(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.PENDING_LOG_COMPACTION_OPS, new ViewHandler(ctx -> {
       metricsRegistry.add("PEDING_LOG_COMPACTION_OPS", 1);
       List<CompactionOpDTO> dtos = sliceHandler.getPendingLogCompactionOperations(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.ALL_FILEGROUPS_FOR_PARTITION_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_FILEGROUPS_FOR_PARTITION", 1);
       List<FileGroupDTO> dtos = sliceHandler.getAllFileGroups(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.post(RemoteHoodieTableFileSystemView.REFRESH_TABLE, new ViewHandler(ctx -> {
       metricsRegistry.add("REFRESH_TABLE", 1);
       boolean success = sliceHandler
-          .refreshTable(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+          .refreshTable(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")));
       writeValueAsString(ctx, success);
     }, false));
 
     app.get(RemoteHoodieTableFileSystemView.ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON", 1);
       List<FileGroupDTO> dtos = sliceHandler.getReplacedFileGroupsBeforeOrOn(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM,""),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.ALL_REPLACED_FILEGROUPS_BEFORE, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_REPLACED_FILEGROUPS_BEFORE", 1);
       List<FileGroupDTO> dtos = sliceHandler.getReplacedFileGroupsBefore(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM,""),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.ALL_REPLACED_FILEGROUPS_PARTITION, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_REPLACED_FILEGROUPS_PARTITION", 1);
       List<FileGroupDTO> dtos = sliceHandler.getAllReplacedFileGroups(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.PENDING_CLUSTERING_FILEGROUPS, new ViewHandler(ctx -> {
       metricsRegistry.add("PENDING_CLUSTERING_FILEGROUPS", 1);
       List<ClusteringOpDTO> dtos = sliceHandler.getFileGroupsInPendingClustering(
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
   }
@@ -435,42 +437,49 @@ public class RequestHandler {
     app.get(MarkerOperation.ALL_MARKERS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_MARKERS", 1);
       Set<String> markers = markerHandler.getAllMarkers(
-          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
+          ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, markers);
     }, false));
 
     app.get(MarkerOperation.CREATE_AND_MERGE_MARKERS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("CREATE_AND_MERGE_MARKERS", 1);
       Set<String> markers = markerHandler.getCreateAndMergeMarkers(
-          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
+          ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, markers);
     }, false));
 
     app.get(MarkerOperation.MARKERS_DIR_EXISTS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("MARKERS_DIR_EXISTS", 1);
       boolean exist = markerHandler.doesMarkerDirExist(
-          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
+          ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, exist);
     }, false));
 
     app.post(MarkerOperation.CREATE_MARKER_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("CREATE_MARKER", 1);
-      ctx.result(markerHandler.createMarker(
+      ctx.future(markerHandler.createMarker(
           ctx,
-          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""),
-          ctx.queryParam(MarkerOperation.MARKER_NAME_PARAM, "")));
+          ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(MarkerOperation.MARKER_NAME_PARAM, String.class).getOrDefault("")));
     }, false));
 
     app.post(MarkerOperation.DELETE_MARKER_DIR_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("DELETE_MARKER_DIR", 1);
       boolean success = markerHandler.deleteMarkers(
-          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
+          ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, success);
     }, false));
   }
 
-  private static boolean isRefreshCheckDisabledInQuery(Context ctxt) {
-    return Boolean.parseBoolean(ctxt.queryParam(RemoteHoodieTableFileSystemView.REFRESH_OFF));
+  /**
+   * Determine whether to throw an exception when local view of table's timeline is behind that of client's view.
+   */
+  private boolean shouldThrowExceptionIfLocalViewBehind(HoodieTimeline localTimeline, String timelineHashFromClient) {
+    Option<HoodieInstant> lastInstant = localTimeline.lastInstant();
+    // When performing async clean, we may have one more .clean.completed after lastInstantTs.
+    // In this case, we do not need to throw an exception.
+    return !lastInstant.isPresent() || !lastInstant.get().getAction().equals(HoodieTimeline.CLEAN_ACTION)
+        || !localTimeline.findInstantsBefore(lastInstant.get().getTimestamp()).getTimelineHash().equals(timelineHashFromClient);
   }
 
   /**
@@ -511,17 +520,16 @@ public class RequestHandler {
         if (refreshCheck) {
           long beginFinalCheck = System.currentTimeMillis();
           if (isLocalViewBehind(context)) {
-            String lastKnownInstantFromClient = context.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS,
-                HoodieTimeline.INVALID_INSTANT_TS);
-            String timelineHashFromClient = context.queryParam(RemoteHoodieTableFileSystemView.TIMELINE_HASH, "");
+            String lastKnownInstantFromClient = context.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
+            String timelineHashFromClient = context.queryParamAsClass(RemoteHoodieTableFileSystemView.TIMELINE_HASH, String.class).getOrDefault("");
             HoodieTimeline localTimeline =
                 viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM)).getTimeline();
             if (shouldThrowExceptionIfLocalViewBehind(localTimeline, timelineHashFromClient)) {
               String errMsg =
-                      "Last known instant from client was "
-                              + lastKnownInstantFromClient
-                              + " but server has the following timeline "
-                              + localTimeline.getInstants().collect(Collectors.toList());
+                  "Last known instant from client was "
+                      + lastKnownInstantFromClient
+                      + " but server has the following timeline "
+                      + localTimeline.getInstants().collect(Collectors.toList());
               throw new BadRequestResponse(errMsg);
             }
           }
@@ -546,26 +554,11 @@ public class RequestHandler {
         metricsRegistry.add("TOTAL_API_CALLS", 1);
 
         LOG.debug(String.format(
-                "TimeTakenMillis[Total=%d, Refresh=%d, handle=%d, Check=%d], "
-                    + "Success=%s, Query=%s, Host=%s, synced=%s",
-                timeTakenMillis, refreshCheckTimeTaken, handleTimeTaken, finalCheckTimeTaken, success,
-                context.queryString(), context.host(), synced));
+            "TimeTakenMillis[Total=%d, Refresh=%d, handle=%d, Check=%d], "
+                + "Success=%s, Query=%s, Host=%s, synced=%s",
+            timeTakenMillis, refreshCheckTimeTaken, handleTimeTaken, finalCheckTimeTaken, success,
+            context.queryString(), context.host(), synced));
       }
-    }
-  }
-
-  /**
-   * Determine whether to throw an exception when local view of table's timeline is behind that of client's view.
-   */
-  private boolean shouldThrowExceptionIfLocalViewBehind(HoodieTimeline localTimeline, String timelineHashFromClient) {
-    Option<HoodieInstant> lastInstant = localTimeline.lastInstant();
-    // When performing async clean, we may have one more .clean.completed after lastInstantTs.
-    // In this case, we do not need to throw an exception.
-    if (lastInstant.isPresent() && lastInstant.get().getAction().equals(HoodieTimeline.CLEAN_ACTION)
-          && localTimeline.findInstantsBefore(lastInstant.get().getTimestamp()).getTimelineHash().equals(timelineHashFromClient)) {
-      return false;
-    } else {
-      return true;
     }
   }
 }

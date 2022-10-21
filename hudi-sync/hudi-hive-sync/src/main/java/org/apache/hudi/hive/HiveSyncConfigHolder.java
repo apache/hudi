@@ -103,6 +103,11 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.create_managed_table")
       .defaultValue(false)
       .withDocumentation("Whether to sync the table as managed table.");
+  public static final ConfigProperty<Boolean> HIVE_SYNC_OMIT_METADATA_FIELDS = ConfigProperty
+      .key("hoodie.datasource.hive_sync.omit_metadata_fields")
+      .defaultValue(false)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Whether to omit the hoodie metadata fields in the target table.");
   public static final ConfigProperty<Integer> HIVE_BATCH_SYNC_PARTITION_NUM = ConfigProperty
       .key("hoodie.datasource.hive_sync.batch_num")
       .defaultValue(1000)
