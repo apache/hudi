@@ -31,7 +31,7 @@ import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssert
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode, SparkSession, SparkSessionExtensions, functions}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -317,10 +317,11 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
         appendData(fifthSchema, fifthBatch)
       }
     } else {
-      // TODO this should actually fail
-      //assertThrows(classOf[SchemaCompatibilityException]) {
-      //  appendData(fifthSchema, fifthBatch)
-      //}
+      appendData(fifthSchema, fifthBatch)
+
+      // TODO(SPARK-40876) this is disabled, until primitive-type promotions are properly supported
+      //                   w/in Spark's vectorized reader
+      //val (latestTableSchema, rows) = loadTable()
     }
 
     //
