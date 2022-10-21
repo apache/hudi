@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.common.util.BinaryUtil
 import org.apache.spark.SparkConf
 import org.apache.spark.serializer.{KryoSerializer, SerializerInstance}
 
@@ -34,7 +35,7 @@ object SerDeUtils {
 
   def toBytes(o: Any): Array[Byte] = {
     val buf = SERIALIZER_THREAD_LOCAL.get.serialize(o)
-    toBytes(buf)
+    BinaryUtil.toBytes(buf)
   }
 
   def toObject(bytes: Array[Byte]): Any = {
