@@ -54,7 +54,6 @@ import org.apache.hudi.exception.CorruptedLogFileException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
