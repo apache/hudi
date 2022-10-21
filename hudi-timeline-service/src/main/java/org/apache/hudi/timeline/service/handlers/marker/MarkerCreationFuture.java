@@ -20,7 +20,7 @@ package org.apache.hudi.timeline.service.handlers.marker;
 
 import org.apache.hudi.common.util.HoodieTimer;
 
-import io.javalin.Context;
+import io.javalin.http.Context;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
