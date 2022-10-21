@@ -588,15 +588,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .save(basePath)
     val instant2 = metaClient.reloadActiveTimeline.lastInstant().get()
 
-    val cdcLogFiles2 = getCDCLogFile(instant2)
-    // with a small value for 'hoodie.logfile.data.max.size',
-    // it will write out >1 cdc log files due to rollover.
-    assert(cdcLogFiles2.size > 1)
-    // with a small value for 'hoodie.logfile.data.block.max.size',
-    // it will write out >1 cdc data blocks in one single cdc log file.
-    assert(getCDCBlocks(cdcLogFiles2.head, cdcSchema).size > 1)
-
     // check cdc data
+    val cdcLogFiles2 = getCDCLogFile(instant2)
     val cdcDataFromCDCLogFile2 = cdcLogFiles2.flatMap(readCDCLogFile(_, cdcSchema))
     // check the num of cdc data
     assertEquals(cdcDataFromCDCLogFile2.size, 50)
