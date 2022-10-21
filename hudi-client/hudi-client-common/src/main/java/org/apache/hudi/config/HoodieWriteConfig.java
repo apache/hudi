@@ -92,6 +92,7 @@ import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.queue.ExecutorType.BOUNDED_IN_MEMORY;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 
 /**
@@ -136,11 +137,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
-      .defaultValue("BOUNDED_IN_MEMORY")
+      .defaultValue(BOUNDED_IN_MEMORY.name())
       .withDocumentation("Set executor which orchestrates concurrent producers and consumers communicating through a message queue."
           + "default value is BOUNDED_IN_MEMORY which use a bounded in-memory queue using LinkedBlockingQueue."
           + "Also users could use DISRUPTOR, which use disruptor as a lock free message queue "
-          + "to gain better writing performance. Although DISRUPTOR_EXECUTOR is still an experimental feature.");
+          + "to gain better writing performance if lock was the bottleneck. Although DISRUPTOR_EXECUTOR is still an experimental feature.");
 
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.type")

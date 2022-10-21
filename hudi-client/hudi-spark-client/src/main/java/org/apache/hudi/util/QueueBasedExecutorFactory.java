@@ -34,8 +34,8 @@ public class QueueBasedExecutorFactory {
   /**
    * Create a new hoodie executor instance on demand.
    */
-  public static HoodieExecutor create(HoodieWriteConfig hoodieConfig, Iterator inputItr, IteratorBasedQueueConsumer consumer,
-                                      Function transformFunction, Runnable preExecuteRunnable) {
+  public static <I, O, E> HoodieExecutor create(HoodieWriteConfig hoodieConfig, Iterator<I> inputItr, IteratorBasedQueueConsumer<O, E> consumer,
+                                             Function<I, O> transformFunction, Runnable preExecuteRunnable) {
     ExecutorType executorType = hoodieConfig.getExecutorType();
 
     switch (executorType) {

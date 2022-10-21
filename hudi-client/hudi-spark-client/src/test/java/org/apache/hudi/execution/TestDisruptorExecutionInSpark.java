@@ -107,7 +107,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
 
       // collect all records and assert that consumed records are identical to produced ones
       // assert there's no tampering, and that the ordering is preserved
-      assertEquals(hoodieRecords.size(), consumedRecords.size());
+      assertEquals(hoodieRecords, consumedRecords);
       for (int i = 0; i < hoodieRecords.size(); i++) {
         assertEquals(hoodieRecords.get(i), consumedRecords.get(i));
       }
