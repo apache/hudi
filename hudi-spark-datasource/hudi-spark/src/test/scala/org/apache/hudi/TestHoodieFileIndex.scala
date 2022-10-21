@@ -303,6 +303,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       filesAfterPrune2.length)
     val readDF2 = spark.read.format("hudi")
       .option(HoodieMetadataConfig.ENABLE.key, useMetaFileList)
+      .option(DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.key(), false)
       .load(basePath)
 
     assertEquals(10, readDF2.count())

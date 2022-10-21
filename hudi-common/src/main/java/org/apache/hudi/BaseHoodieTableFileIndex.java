@@ -57,7 +57,6 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.hadoop.CachingPath.createPathUnsafe;
 
@@ -205,6 +204,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
           .collect(Collectors.toList());
 
       this.cachedAllPartitionPaths = listPartitionPaths(queryRelativePartitionPaths);
+      // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
+      // This normally happens for default partition case or non-encoded partition value.
+      this.queryAsNonePartitionedTable = cachedAllPartitionPaths.stream().anyMatch(p -> p.values.length == 0);
     }
 
     return cachedAllPartitionPaths;
@@ -279,6 +281,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
 
     Pair<String, Boolean> relativeQueryPartitionPathPair = composeRelativePartitionPaths(partitionColumnValuePairs);
+    // Fallback to eager list if there is no predicate on partition columns (i.e., the input partitionColumnValuePairs list is empty)
+    if (relativeQueryPartitionPathPair.getLeft().isEmpty()) {
+      return getAllQueryPartitionPaths();
+    }
+
     // If the composed partition path is complete, we return it directly, to save extra DFS listing operations.
     if (relativeQueryPartitionPathPair.getRight()) {
       return Collections.singletonList(new PartitionPath(relativeQueryPartitionPathPair.getLeft(),
@@ -398,9 +405,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // Refresh the partitions & file slices
     this.cachedAllInputFileSlices = loadFileSlicesForPartitions(getAllQueryPartitionPaths());
-    // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
-    // This normally happens for default partition case.
-    this.queryAsNonePartitionedTable = getAllQueryPartitionPaths().stream().anyMatch(p -> p.values.length == 0);
 
     LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), timer.endTimer()));
   }

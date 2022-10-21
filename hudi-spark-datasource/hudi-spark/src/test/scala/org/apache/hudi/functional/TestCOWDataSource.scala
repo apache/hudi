@@ -636,6 +636,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     writer.partitionBy("driver", "rider")
       .save(basePath)
     recordsReadDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.key(), false)
       .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit(DEFAULT_PARTITION_PATH)).count() == 0)
   }

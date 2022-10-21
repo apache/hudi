@@ -22,6 +22,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.lib.input.FileSplit
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -109,7 +110,9 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val isCaseSensitive = sqlConf.caseSensitiveAnalysis
 
     (file: PartitionedFile) => {
-      assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
+      assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size,
+        "File (" + file.filePath + ") partition value does not match partition schema, consider set " +
+          DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.key() + " to false")
 
       val fileSplit =
         new FileSplit(new Path(new URI(file.filePath)), file.start, file.length, Array.empty)

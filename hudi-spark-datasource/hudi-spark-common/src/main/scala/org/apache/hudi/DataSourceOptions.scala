@@ -151,7 +151,8 @@ object DataSourceReadOptions {
       .sinceVersion("0.13.0")
       .withDocumentation("When set to false, hoodie will load all partition paths and file slices when " +
         " initializing the HoodieFileIndex. When set to true, the partitions and files will be loaded after " +
-        " the partition pruning. Set it to false when the query has partition condition.")
+        " the partition pruning. NOTE: if the table has default partition or non-encoded partition value " +
+        "containing slash, the config should be set to false to obtain correct result.")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")

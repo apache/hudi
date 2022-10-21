@@ -21,6 +21,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
@@ -132,7 +133,9 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val isCaseSensitive = sqlConf.caseSensitiveAnalysis
 
     (file: PartitionedFile) => {
-      assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
+      assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size,
+        "File (" + file.filePath + ") partition value does not match partition schema, consider set " +
+          DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.key() + " to false")
 
       val filePath = new Path(new URI(file.filePath))
       val split =
