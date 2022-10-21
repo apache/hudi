@@ -27,7 +27,7 @@ import org.apache.spark.sql.SaveMode
 
 class TestRepairTable extends HoodieSparkSqlTestBase {
 
-  test("Test msck repair table") {
+  test("Test msck repair non-partitioned table") {
     Seq("true", "false").foreach { hiveStylePartitionEnable =>
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -38,9 +38,38 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
              |  id int,
              |  name string,
              |  ts long,
-             |  dt string
+             |  dt string,
+             |  hh string
              | ) using hudi
-             | partitioned by (dt)
+             | location '$basePath'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable'
+             | )
+        """.stripMargin)
+
+        checkExceptionContain(s"msck repair table $tableName")(
+          s"Operation not allowed")
+      }
+    }
+  }
+
+  test("Test msck repair partitioned table") {
+    Seq("true", "false").foreach { hiveStylePartitionEnable =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  ts long,
+             |  dt string,
+             |  hh string
+             | ) using hudi
+             | partitioned by (dt, hh)
              | location '$basePath'
              | tblproperties (
              |  primaryKey = 'id',
@@ -51,23 +80,25 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
         val table = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
 
         import spark.implicits._
-        val df = Seq((1, "a1", 1000, "2022-10-06")).toDF("id", "name", "ts", "dt")
+        val df = Seq((1, "a1", 1000, "2022-10-06", "11"), (2, "a2", 1001, "2022-10-06", "12"))
+          .toDF("id", "name", "ts", "dt", "hh")
         df.write.format("hudi")
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "dt")
+          .option(PARTITIONPATH_FIELD.key, "dt, hh")
           .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
           .mode(SaveMode.Append)
           .save(basePath)
 
-        assertResult(Array())(spark.sessionState.catalog.listPartitionNames(table).toArray)
+        assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
         spark.sql(s"msck repair table $tableName")
-        assertResult(Array("dt=2022-10-06"))(spark.sessionState.catalog.listPartitionNames(table).toArray)
+        spark.sql(s"msck repair table $tableName")
+        assertResult(Seq("dt=2022-10-06/hh=11", "dt=2022-10-06/hh=12"))(spark.sessionState.catalog.listPartitionNames(table))
       }
     }
   }
 
-  test("Test msck repair table add/drop/sync partitions") {
+  test("Test msck repair partitioned table [add/drop/sync] partitions") {
     if (HoodieSparkUtils.gteqSpark3_2) {
       Seq("true", "false").foreach { hiveStylePartitionEnable =>
         withTempDir { tmp =>
@@ -103,9 +134,9 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
             .mode(SaveMode.Append)
             .save(basePath)
 
-          assertResult(Array())(spark.sessionState.catalog.listPartitionNames(table).toArray)
+          assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
           spark.sql(s"msck repair table $tableName add partitions")
-          assertResult(Array("dt=2022-10-06"))(spark.sessionState.catalog.listPartitionNames(table).toArray)
+          assertResult(Seq("dt=2022-10-06"))(spark.sessionState.catalog.listPartitionNames(table))
 
           // test msck repair table drop partitions
           val df2 = Seq((2, "a2", 1001, "2022-10-07")).toDF("id", "name", "ts", "dt")
@@ -118,13 +149,13 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
             .mode(SaveMode.Overwrite)
             .save(basePath)
 
-          assertResult(Array("dt=2022-10-06"))(spark.sessionState.catalog.listPartitionNames(table).toArray)
+          assertResult(Seq("dt=2022-10-06"))(spark.sessionState.catalog.listPartitionNames(table))
           spark.sql(s"msck repair table $tableName drop partitions")
-          assertResult(Array())(spark.sessionState.catalog.listPartitionNames(table).toArray)
+          assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
 
           // test msck repair table sync partitions
           spark.sql(s"msck repair table $tableName sync partitions")
-          assertResult(Array("dt=2022-10-07"))(spark.sessionState.catalog.listPartitionNames(table).toArray)
+          assertResult(Seq("dt=2022-10-07"))(spark.sessionState.catalog.listPartitionNames(table))
         }
       }
     }

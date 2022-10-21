@@ -18,13 +18,12 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileStatus, FileSystem, Path, PathFilter}
+import org.apache.hadoop.fs.{FileSystem, Path, PathFilter}
 import org.apache.hadoop.mapred.{FileInputFormat, JobConf}
 
 import org.apache.hudi.common.table.HoodieTableConfig
 
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.execution.command.PartitionStatistics
@@ -33,13 +32,11 @@ import org.apache.spark.util.{SerializableConfiguration, ThreadUtils}
 
 import java.util.concurrent.TimeUnit.MILLISECONDS
 
-import scala.collection.parallel.ForkJoinTaskSupport
-import scala.collection.parallel.immutable.ParVector
 import scala.util.control.NonFatal
 
 /**
  * Command for repair hudi table's partitions.
- * Most of the code is copied from spark3.3, the main change is scanPartitions() when disable isHiveStyledPartitioning
+ * Use hoodieCatalogTable.getPartitionPaths() to get partitions instead of scanning the file system.
  */
 case class RepairHoodieTableCommand(tableName: TableIdentifier,
                                     enableAddPartitions: Boolean,
@@ -86,36 +83,33 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
 
     val root = new Path(table.location)
     logInfo(s"Recover all the partitions in $root")
-    val hadoopConf = spark.sessionState.newHadoopConf()
-    val fs = root.getFileSystem(hadoopConf)
+
+    val hoodieCatalogTable = HoodieCatalogTable(spark, table.identifier)
+    val isHiveStyledPartitioning = hoodieCatalogTable.catalogProperties.
+      getOrElse(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true").equals("true")
+    val partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)] = hoodieCatalogTable.getPartitionPaths.map(partitionPath => {
+      var values = partitionPath.split('/')
+      if (isHiveStyledPartitioning) {
+        values = values.map(_.split('=')(1))
+      }
+      (table.partitionColumnNames.zip(values).toMap, new Path(root, partitionPath))
+    })
 
     val droppedAmount = if (enableDropPartitions) {
-      dropPartitions(catalog, fs)
+      dropPartitions(catalog, partitionSpecsAndLocs)
     } else 0
     val addedAmount = if (enableAddPartitions) {
-      val threshold = spark.sparkContext.conf.getInt("spark.rdd.parallelListingThreshold", 10)
+      val hadoopConf = spark.sessionState.newHadoopConf()
+      val fs = root.getFileSystem(hadoopConf)
       val pathFilter = getPathFilter(hadoopConf)
-
-      val evalPool = ThreadUtils.newForkJoinPool("RepairTableCommand", 8)
-      val hoodieCatalogTable = HoodieCatalogTable(spark, table)
-      val isHiveStyledPartitioning = hoodieCatalogTable.catalogProperties.getOrElse(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true")
-      val partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)] =
-        try {
-          scanPartitions(spark, fs, pathFilter, root, Map(), table.partitionColumnNames, threshold,
-            spark.sessionState.conf.resolver, new ForkJoinTaskSupport(evalPool), isHiveStyledPartitioning.equals("true")).seq
-        } finally {
-          evalPool.shutdown()
-        }
+      val threshold = spark.sparkContext.conf.getInt("spark.rdd.parallelListingThreshold", 10)
       val total = partitionSpecsAndLocs.length
-      logInfo(s"Found $total partitions in $root")
-
       val partitionStats = if (spark.sqlContext.conf.gatherFastStats) {
         gatherPartitionStats(spark, partitionSpecsAndLocs, fs, pathFilter, threshold)
       } else {
         Map.empty[String, PartitionStatistics]
       }
       logInfo(s"Finished to gather the fast stats for all $total partitions.")
-
       addPartitions(spark, table, partitionSpecsAndLocs, partitionStats)
       total
     } else 0
@@ -134,58 +128,6 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     }
     logInfo(s"Recovered all partitions: added ($addedAmount), dropped ($droppedAmount).")
     Seq.empty[Row]
-  }
-
-  private def scanPartitions(spark: SparkSession,
-                             fs: FileSystem,
-                             filter: PathFilter,
-                             path: Path,
-                             spec: TablePartitionSpec,
-                             partitionNames: Seq[String],
-                             threshold: Int,
-                             resolver: Resolver,
-                             evalTaskSupport: ForkJoinTaskSupport,
-                             isHiveStyledPartitioning: Boolean): Seq[(TablePartitionSpec, Path)] = {
-    if (partitionNames.isEmpty) {
-      return Seq(spec -> path)
-    }
-
-    val statuses = fs.listStatus(path, filter)
-    val statusPar: Seq[FileStatus] =
-      if (partitionNames.length > 1 && statuses.length > threshold || partitionNames.length > 2) {
-        // parallelize the list of partitions here, then we can have better parallelism later.
-        val parArray = new ParVector(statuses.toVector)
-        parArray.tasksupport = evalTaskSupport
-        parArray.seq
-      } else {
-        statuses
-      }
-    statusPar.flatMap { st =>
-      val name = st.getPath.getName
-      (st.isDirectory, isHiveStyledPartitioning, name.contains("=")) match {
-        case (true, true, true) =>
-          val ps = name.split("=", 2)
-          val columnName = ExternalCatalogUtils.unescapePathName(ps(0))
-          // TODO: Validate the value
-          val value = ExternalCatalogUtils.unescapePathName(ps(1))
-          if (resolver(columnName, partitionNames.head)) {
-            scanPartitions(spark, fs, filter, st.getPath, spec ++ Map(partitionNames.head -> value),
-              partitionNames.drop(1), threshold, resolver, evalTaskSupport, isHiveStyledPartitioning)
-          } else {
-            logWarning(
-              s"expected partition column ${partitionNames.head}, but got ${ps(0)}, ignoring it")
-            Seq.empty
-          }
-        case (true, false, _) =>
-          // TODO: Validate the value
-          val value = ExternalCatalogUtils.unescapePathName(name)
-          scanPartitions(spark, fs, filter, st.getPath, spec ++ Map(partitionNames.head -> value),
-            partitionNames.drop(1), threshold, resolver, evalTaskSupport, isHiveStyledPartitioning)
-        case _ =>
-          logWarning(s"ignore ${new Path(path, name)}")
-          Seq.empty
-      }
-    }
   }
 
   private def gatherPartitionStats(spark: SparkSession,
@@ -256,14 +198,14 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     }
   }
 
-  // Drops the partitions that do not exist in the file system
-  private def dropPartitions(catalog: SessionCatalog, fs: FileSystem): Int = {
+  // Drops the partitions that do not exist in partitionSpecsAndLocs
+  private def dropPartitions(catalog: SessionCatalog, partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)]): Int = {
     val dropPartSpecs = ThreadUtils.parmap(
       catalog.listPartitions(tableName),
       "RepairTableCommand: non-existing partitions",
       maxThreads = 8) { partition =>
       partition.storage.locationUri.flatMap { uri =>
-        if (fs.exists(new Path(uri))) None else Some(partition.spec)
+        if (partitionSpecsAndLocs.map(_._2).contains(new Path(uri))) None else Some(partition.spec)
       }
     }.flatten
     catalog.dropPartitions(
