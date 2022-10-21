@@ -30,6 +30,7 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -67,7 +68,6 @@ import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -399,33 +399,23 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     String path = hiveTable.getSd().getLocation();
     Map<String, String> parameters = hiveTable.getParameters();
     Schema latestTableSchema = StreamerUtil.getLatestTableSchema(path, hiveConf);
+    String pkColumnsStr = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());
+    List<String> pkColumns = StringUtils.isNullOrEmpty(pkColumnsStr)
+        ? null : StringUtils.split(pkColumnsStr, ",");
     org.apache.flink.table.api.Schema schema;
     if (latestTableSchema != null) {
-      org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder();
+      // if the table is initialized from spark, the write schema is nullable for pk columns.
+      DataType tableDataType = DataTypeUtils.ensureColumnsAsNonNullable(
+          AvroSchemaConverter.convertToDataType(latestTableSchema), pkColumns);
+      org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder()
+          .fromRowDataType(tableDataType);
       String pkConstraintName = parameters.get(PK_CONSTRAINT_NAME);
-      String pkColumns = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());
       if (!StringUtils.isNullOrEmpty(pkConstraintName)) {
         // pkColumns expect not to be null
-        builder.primaryKeyNamed(pkConstraintName, StringUtils.split(pkColumns, ","));
+        builder.primaryKeyNamed(pkConstraintName, pkColumns);
       } else if (pkColumns != null) {
-        builder.primaryKey(StringUtils.split(pkColumns, ","));
+        builder.primaryKey(pkColumns);
       }
-      DataType dataType = AvroSchemaConverter.convertToDataType(latestTableSchema);
-
-      // pk column to not null data type
-      final List<DataType> fieldDataTypes = dataType.getChildren();
-      final List<String> fieldNames = ((RowType) dataType.getLogicalType()).getFieldNames();
-      if (pkColumns != null) {
-        List<String> pkColumnList = StringUtils.split(pkColumns, ",");
-        for (int i = 0; i < fieldNames.size(); i++) {
-          if (pkColumnList.contains(fieldNames.get(i))) {
-            DataType primaryDatatype = fieldDataTypes.get(i).notNull();
-            fieldDataTypes.set(i, primaryDatatype);
-          }
-        }
-      }
-
-      builder.fromRowDataType(dataType);
       schema = builder.build();
     } else {
       LOG.warn("{} does not have any hoodie schema, and use hive table schema to infer the table schema", tablePath);
