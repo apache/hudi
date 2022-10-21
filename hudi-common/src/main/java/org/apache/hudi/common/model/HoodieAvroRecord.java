@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
@@ -145,11 +146,17 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+    if (!(data instanceof HoodieAvroInsertValuePayload) && !(data instanceof RewriteAvroPayload)) {
+      throw new HoodieException("We should deserialization before calling isDelete");
+    }
     return !getData().getInsertValue(recordSchema, props).isPresent();
   }
 
   @Override
   public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
+    if (!(data instanceof HoodieAvroInsertValuePayload) && !(data instanceof RewriteAvroPayload)) {
+      throw new HoodieException("We should deserialization before calling shouldIgnore");
+    }
     Option<IndexedRecord> insertRecord = getData().getInsertValue(recordSchema, props);
     // just skip the ignored record
     if (insertRecord.isPresent() && insertRecord.get().equals(SENTINEL)) {
@@ -195,6 +202,16 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     } else {
       return Option.empty();
     }
+  }
+
+  @Override
+  public HoodieRecord deserialization(Schema recordSchema, Properties props) throws IOException {
+    if (this.data instanceof RewriteAvroPayload || this.data instanceof HoodieAvroInsertValuePayload) {
+      return this;
+    }
+    Option<IndexedRecord> data = this.data.getInsertValue(recordSchema, props);
+    deflate();
+    return new HoodieAvroRecord<>(getKey(), new HoodieAvroInsertValuePayload(data), getOperation());
   }
 
   @Override

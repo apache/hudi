@@ -92,6 +92,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
         throw new HoodieUpsertException("Insert/Update not in sorted order");
       }
       try {
+        hoodieRecord = hoodieRecord.deserialization(newSchema, config.getProps());
         writeRecord(hoodieRecord, Option.of(hoodieRecord), newSchema, config.getProps());
         insertRecordsWritten++;
         writtenRecordKeys.add(keyToPreWrite);
@@ -112,8 +113,10 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
         HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
           if (useWriterSchemaForCompaction) {
+            hoodieRecord = hoodieRecord.deserialization(tableSchemaWithMetaFields, config.getProps());
             writeRecord(hoodieRecord, Option.of(hoodieRecord), tableSchemaWithMetaFields, config.getProps());
           } else {
+            hoodieRecord = hoodieRecord.deserialization(tableSchema, config.getProps());
             writeRecord(hoodieRecord, Option.of(hoodieRecord), tableSchema, config.getProps());
           }
           insertRecordsWritten++;

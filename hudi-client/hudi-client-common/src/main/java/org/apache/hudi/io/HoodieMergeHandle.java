@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -284,6 +285,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema) throws IOException {
+    newRecord = newRecord.deserialization(schema, config.getProps());
     // just skip the ignored record
     if (newRecord.shouldIgnore(schema, config.getProps())) {
       return;
@@ -346,8 +348,14 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       try {
         Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
         Schema combineRecordSchema = mergeResult.map(Pair::getRight).orElse(null);
-        Option<HoodieRecord> combinedRecord = mergeResult.map(Pair::getLeft);
-
+        Option<HoodieRecord> combinedRecord = mergeResult.map(Pair::getLeft)
+            .map(record -> {
+              try {
+                return record.deserialization(combineRecordSchema, props);
+              } catch (IOException e) {
+                throw new HoodieException(e);
+              }
+            });
         if (combinedRecord.isPresent() && combinedRecord.get().shouldIgnore(combineRecordSchema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;

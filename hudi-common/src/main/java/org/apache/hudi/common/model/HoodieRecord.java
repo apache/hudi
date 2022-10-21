@@ -368,6 +368,11 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
 
   public abstract Option<Map<String, String>> getMetadata();
 
+  @Override
+  public HoodieRecord deserialization(Schema recordSchema, Properties props) throws IOException {
+    return this;
+  }
+
   public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
     return instantTime + "_" + partitionId + "_" + recordIndex;
   }
