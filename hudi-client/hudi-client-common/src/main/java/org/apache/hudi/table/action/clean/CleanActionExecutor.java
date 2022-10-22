@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -206,10 +207,15 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       } else {
         inflightInstant = cleanInstant;
       }
-
-      List<HoodieCleanStat> cleanStats = clean(context, cleanerPlan);
-      if (cleanStats.isEmpty()) {
-        return HoodieCleanMetadata.newBuilder().build();
+      List<HoodieCleanStat> cleanStats;
+      boolean needsClean = ((cleanerPlan.getFilePathsToBeDeletedPerPartition() != null)
+          && !cleanerPlan.getFilePathsToBeDeletedPerPartition().isEmpty()
+          && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0);
+      if (needsClean) {
+        cleanStats = clean(context, cleanerPlan);
+      } else {
+        LOG.info("No need to run the cleaner");
+        cleanStats = CollectionUtils.createImmutableList();
       }
 
       table.getMetaClient().reloadActiveTimeline();
@@ -224,7 +230,9 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       writeTableMetadata(metadata, inflightInstant.getTimestamp());
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));
-      LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");
+      if (needsClean) {
+        LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");
+      }
       return metadata;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to clean up after commit", e);
