@@ -266,6 +266,13 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       pendingCleanInstants.forEach(hoodieInstant -> {
         if (table.getCleanTimeline().isEmpty(hoodieInstant)) {
           table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
+          // if the empty commit is inflight, check if request commit is empty too and delete it
+          if (hoodieInstant.getState() == HoodieInstant.State.INFLIGHT) {
+            HoodieInstant requestInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, hoodieInstant.getAction(), hoodieInstant.getTimestamp());
+            if (table.getCleanTimeline().isEmpty(requestInstant)) {
+              table.getActiveTimeline().deleteEmptyInstantIfExists(requestInstant);
+            }
+          }
         } else {
           LOG.info("Finishing previously unfinished cleaner instant=" + hoodieInstant);
           try {
