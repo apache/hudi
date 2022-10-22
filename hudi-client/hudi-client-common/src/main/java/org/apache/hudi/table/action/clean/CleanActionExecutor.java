@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -207,23 +208,27 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       } else {
         inflightInstant = cleanInstant;
       }
-      List<HoodieCleanStat> cleanStats;
       boolean needsClean = ((cleanerPlan.getFilePathsToBeDeletedPerPartition() != null)
           && !cleanerPlan.getFilePathsToBeDeletedPerPartition().isEmpty()
           && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0);
+      HoodieCleanMetadata metadata;
       if (needsClean) {
-        cleanStats = clean(context, cleanerPlan);
+        List<HoodieCleanStat> cleanStats = clean(context, cleanerPlan);
+        table.getMetaClient().reloadActiveTimeline();
+        metadata = CleanerUtils.convertCleanMetadata(
+            inflightInstant.getTimestamp(),
+            Option.of(timer.endTimer()),
+            cleanStats
+        );
       } else {
         LOG.info("No need to run the cleaner");
-        cleanStats = CollectionUtils.createImmutableList();
+        HoodieActionInstant actionInstant = cleanerPlan.getEarliestInstantToRetain();
+        HoodieInstant earliestCommitToRetain = actionInstant != null ? new HoodieInstant(
+            HoodieInstant.State.valueOf(actionInstant.getState()), actionInstant.getAction(), actionInstant.getTimestamp()) : null;
+        metadata = new HoodieCleanMetadata(inflightInstant.getTimestamp(), Option.of(timer.endTimer()).orElseGet(() -> -1L), 0, earliestCommitToRetain.toString(),
+            cleanerPlan.getLastCompletedCommitTimestamp(), CollectionUtils.createImmutableMap(), CleanMetadataV2MigrationHandler.VERSION, CollectionUtils.createImmutableMap());
       }
 
-      table.getMetaClient().reloadActiveTimeline();
-      HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
-          inflightInstant.getTimestamp(),
-          Option.of(timer.endTimer()),
-          cleanStats
-      );
       if (!skipLocking) {
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
