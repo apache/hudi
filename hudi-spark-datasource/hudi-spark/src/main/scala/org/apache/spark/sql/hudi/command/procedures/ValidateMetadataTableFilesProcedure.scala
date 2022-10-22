@@ -73,7 +73,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     val fsMetaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
       fsConfig, basePath, "/tmp")
 
-    val timer = new HoodieTimer().startTimer
+    val timer = HoodieTimer.start
     val metadataPartitions = metadataReader.getAllPartitionPaths
     logDebug("Listing partitions Took " + timer.endTimer + " ms")
     val fsPartitions = fsMetaReader.getAllPartitionPaths

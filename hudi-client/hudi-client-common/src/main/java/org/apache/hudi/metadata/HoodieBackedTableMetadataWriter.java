@@ -382,7 +382,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected <T extends SpecificRecordBase> void initializeIfNeeded(HoodieTableMetaClient dataMetaClient,
                                                                    Option<T> actionMetadata,
                                                                    Option<String> inflightInstantTimestamp) throws IOException {
-    HoodieTimer timer = HoodieTimer.start().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
 
     boolean exists = metadataTableExists(dataMetaClient, actionMetadata);
 

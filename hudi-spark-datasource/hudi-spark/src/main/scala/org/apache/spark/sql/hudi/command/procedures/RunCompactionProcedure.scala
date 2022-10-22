@@ -28,7 +28,6 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
 import java.util.function.Supplier
-
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -107,8 +106,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
           logInfo(s"No need to compaction on $basePath")
         } else {
           logInfo(s"Run compaction at instants: [${willCompactionInstants.mkString(",")}] on $basePath")
-          val timer = new HoodieTimer
-          timer.startTimer()
+          val timer = HoodieTimer.start
           willCompactionInstants.foreach { compactionInstant =>
             val writeResponse = client.compact(compactionInstant)
             handleResponse(writeResponse.getCommitMetadata.get())

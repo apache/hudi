@@ -156,7 +156,7 @@ public class DirectWriteMarkers extends WriteMarkers {
   }
 
   private Option<Path> create(Path markerPath, boolean checkIfExists) {
-    HoodieTimer timer = HoodieTimer.start().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     Path dirPath = markerPath.getParent();
     try {
       if (!fs.exists(dirPath)) {

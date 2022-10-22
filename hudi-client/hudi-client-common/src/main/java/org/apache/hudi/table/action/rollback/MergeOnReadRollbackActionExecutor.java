@@ -62,7 +62,6 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
   @Override
   protected List<HoodieRollbackStat> executeRollback(HoodieRollbackPlan hoodieRollbackPlan) {
     HoodieTimer rollbackTimer = HoodieTimer.start();
-    rollbackTimer.startTimer();
 
     LOG.info("Rolling back instant " + instantToRollback);
 

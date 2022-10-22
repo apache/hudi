@@ -129,7 +129,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
 
   @Override
   protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
-    HoodieTimer timer = HoodieTimer.start().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     String markerFileName = getMarkerFileName(dataFileName, type);
 
     Map<String, String> paramsMap = new HashMap<>();
