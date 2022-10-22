@@ -1662,7 +1662,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder()
         .withClusteringMaxNumGroups(10).withClusteringTargetPartitions(0)
         .withClusteringUpdatesStrategy("org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy")
-        .withRollbackPendingClustering(rollbackPendingClustering)
+        .withRollbackPendingClusteringOnConflict(rollbackPendingClustering)
         .withInlineClustering(true).withInlineClusteringNumCommits(1).build();
 
     // start clustering, but don't commit keep it inflight
@@ -1687,7 +1687,49 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // verify inflight clustering was rolled back
     metaClient.reloadActiveTimeline();
     pendingClusteringPlans = ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
-    assertEquals(config.isRollbackPendingClustering() ? 0 : 1, pendingClusteringPlans.size());
+    assertEquals(config.isRollbackPendingClusteringOnConflict() ? 0 : 1, pendingClusteringPlans.size());
+  }
+
+  @Test
+  public void testInflightClusteringRollback() throws Exception {
+    // setup clustering config with update strategy to allow updates during ingestion
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder()
+        .withClusteringMaxNumGroups(10).withClusteringTargetPartitions(0)
+        .withClusteringUpdatesStrategy("org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy")
+        .withInlineClustering(true).withInlineClusteringNumCommits(1).build();
+
+    // start clustering, but don't commit keep it inflight
+    List<HoodieRecord> allRecords = testInsertAndClustering(clusteringConfig, true, false);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    List<Pair<HoodieInstant, HoodieClusteringPlan>> pendingClusteringPlans =
+        ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
+    assertEquals(1, pendingClusteringPlans.size());
+    HoodieInstant pendingClusteringInstant = pendingClusteringPlans.get(0).getLeft();
+    assertEquals(pendingClusteringInstant.getState(), INFLIGHT);
+
+    // setup clustering config with rollback pending set to true, but clustering disabled.
+    HoodieClusteringConfig clusteringConfig1 = HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(1)
+        .withClusteringUpdatesStrategy("org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy")
+        .withRollbackPendingClustering(true).build();
+
+    // make an update to a filegroup within the partition that is pending clustering
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(EAGER).withAutoCommit(false);
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
+    cfgBuilder.withClusteringConfig(clusteringConfig1);
+    HoodieWriteConfig config = cfgBuilder.build();
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    allRecords.addAll(dataGen.generateUpdates(commitTime, 200));
+
+    client.startCommitWithTime(commitTime);
+    JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(allRecords, 2);
+    JavaRDD<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime);
+    client.commit(commitTime, statuses);
+
+    // verify inflight clustering was rolled back
+    metaClient.reloadActiveTimeline();
+    pendingClusteringPlans = ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
+    assertEquals(0, pendingClusteringPlans.size());
   }
 
   @Test
