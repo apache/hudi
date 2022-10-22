@@ -90,6 +90,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -216,7 +217,7 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test Clean-By-Versions using insert/upsert API.
    */
-  @Test
+  // @Test
   public void testInsertAndCleanByVersions() throws Exception {
     testInsertAndCleanByVersions(SparkRDDWriteClient::insert, SparkRDDWriteClient::upsert, false);
   }
@@ -224,7 +225,7 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test Clean-Failed-Writes when Cleaning policy is by VERSIONS using insert/upsert API.
    */
-  @Test
+  // @Test
   public void testInsertAndCleanFailedWritesByVersions() throws Exception {
     testInsertAndCleanFailedWritesByVersions(SparkRDDWriteClient::insert, false);
   }
@@ -232,7 +233,7 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test Clean-By-Versions using prepped versions of insert/upsert API.
    */
-  @Test
+  // @Test
   public void testInsertPreppedAndCleanByVersions() throws Exception {
     testInsertAndCleanByVersions(SparkRDDWriteClient::insertPreppedRecords, SparkRDDWriteClient::upsertPreppedRecords,
         true);
@@ -241,7 +242,7 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test Clean-By-Versions using bulk-insert/upsert API.
    */
-  @Test
+  // @Test
   public void testBulkInsertAndCleanByVersions() throws Exception {
     testInsertAndCleanByVersions(SparkRDDWriteClient::bulkInsert, SparkRDDWriteClient::upsert, false);
   }
@@ -249,7 +250,7 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test Clean-By-Versions using prepped versions of bulk-insert/upsert API.
    */
-  @Test
+  // @Test
   public void testBulkInsertPreppedAndCleanByVersions() throws Exception {
     testInsertAndCleanByVersions(
         (client, recordRDD, instantTime) -> client.bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty()),
@@ -260,7 +261,7 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Tests no more than 1 clean is scheduled if hoodie.clean.allow.multiple config is set to false.
    */
-  @Test
+  // @Test
   public void testMultiClean() {
     HoodieWriteConfig writeConfig = getConfigBuilder()
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
@@ -462,16 +463,28 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test Clean-By-Commits using insert/upsert API.
    */
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testInsertAndCleanByCommits(boolean isAsync) throws Exception {
-    testInsertAndCleanByCommits(SparkRDDWriteClient::insert, SparkRDDWriteClient::upsert, false, isAsync);
+  //  @ParameterizedTest
+  //  @ValueSource(booleans = {true, false})
+  //  public void testInsertAndCleanByCommits(boolean isAsync) throws Exception {
+  //    testInsertAndCleanByCommits(SparkRDDWriteClient::insert, SparkRDDWriteClient::upsert, false, isAsync);
+  //  }
+
+  @RepeatedTest(3)
+  public void testDebug1() throws Exception {
+    LOG.warn("XXX Starting test Clean1");
+    testInsertAndCleanByCommits(SparkRDDWriteClient::insert, SparkRDDWriteClient::upsert, false, false);
+  }
+
+  @RepeatedTest(3)
+  public void testDebug2() throws Exception {
+    LOG.warn("XXX Starting test Clean2");
+    testInsertAndCleanByCommits(SparkRDDWriteClient::insert, SparkRDDWriteClient::upsert, false, true);
   }
 
   /**
    * Test Clean-By-Commits using insert/upsert API.
    */
-  @Test
+  // @Test
   public void testFailedInsertAndCleanByCommits() throws Exception {
     testFailedInsertAndCleanByCommits(SparkRDDWriteClient::insert, false);
   }
@@ -479,7 +492,7 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test Clean-By-Commits using prepped version of insert/upsert API.
    */
-  @Test
+  // @Test
   public void testInsertPreppedAndCleanByCommits() throws Exception {
     testInsertAndCleanByCommits(SparkRDDWriteClient::insertPreppedRecords, SparkRDDWriteClient::upsertPreppedRecords,
         true, false);
@@ -488,7 +501,7 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test Clean-By-Commits using prepped versions of bulk-insert/upsert API.
    */
-  @Test
+  // @Test
   public void testBulkInsertPreppedAndCleanByCommits() throws Exception {
     testInsertAndCleanByCommits(
         (client, recordRDD, instantTime) -> client.bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty()),
@@ -498,7 +511,7 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test Clean-By-Commits using bulk-insert/upsert API.
    */
-  @Test
+  // @Test
   public void testBulkInsertAndCleanByCommits() throws Exception {
     testInsertAndCleanByCommits(SparkRDDWriteClient::bulkInsert, SparkRDDWriteClient::upsert, false, false);
   }
@@ -535,6 +548,11 @@ public class TestCleaner extends HoodieClientTestBase {
 
     insertFirstBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+
+    //    // check metadata table is created and has 1 delta commit atleast.
+    //    HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(cfg.getBasePath()+"/.hoodie/metadata").setConf(hadoopConf).build();
+    //    HoodieTimeline mdtTmeline = new HoodieActiveTimeline(mdtMetaClient).getCommitTimeline();
+    //    assertTrue(mdtTmeline.countInstants() > 0);
 
     // Keep doing some writes and clean inline. Make sure we have expected number of files remaining.
     for (int i = 0; i < 8; i++) {
