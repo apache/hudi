@@ -85,7 +85,9 @@ import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -539,6 +541,13 @@ public class TestCleaner extends HoodieClientTestBase {
       String newCommitTime = makeNewCommitTime();
       try {
         client.startCommitWithTime(newCommitTime);
+
+        RemoteIterator<LocatedFileStatus> locatedFileStatusRemoteIterator =
+            FSUtils.getFs(cfg.getBasePath(), client.getEngineContext().getHadoopConf().get()).listFiles(new Path(cfg.getBasePath(), ".hoodie"), true);
+        LOG.warn(" -- check commit " + newCommitTime + ": ");
+        while (locatedFileStatusRemoteIterator.hasNext()) {
+          LOG.warn(" * " + locatedFileStatusRemoteIterator.next().getPath().toString());
+        }
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newCommitTime, 100);
 
         List<WriteStatus> statuses = upsertFn.apply(client, jsc.parallelize(records, 1), newCommitTime).collect();
