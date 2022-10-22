@@ -68,6 +68,8 @@ import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.SerializablePath;
 
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
@@ -616,23 +618,24 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @return Map of partition names to a list of FileStatus for all the files in the partition
    */
   private List<DirectoryInfo> listAllPartitions(HoodieTableMetaClient datasetMetaClient) {
-    List<Path> pathsToList = new LinkedList<>();
-    pathsToList.add(new Path(dataWriteConfig.getBasePath()));
+    List<SerializablePath> pathsToList = new LinkedList<>();
+    pathsToList.add(new SerializablePath(new CachingPath(dataWriteConfig.getBasePath())));
 
     List<DirectoryInfo> partitionsToBootstrap = new LinkedList<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     SerializableConfiguration conf = new SerializableConfiguration(datasetMetaClient.getHadoopConf());
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
     final String datasetBasePath = datasetMetaClient.getBasePath();
+    SerializablePath serializableBasePath = new SerializablePath(new CachingPath(datasetBasePath));
 
     while (!pathsToList.isEmpty()) {
       // In each round we will list a section of directories
       int numDirsToList = Math.min(fileListingParallelism, pathsToList.size());
       // List all directories in parallel
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToList.subList(0, numDirsToList), path -> {
-        FileSystem fs = path.getFileSystem(conf.get());
-        String relativeDirPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), path);
-        return new DirectoryInfo(relativeDirPath, fs.listStatus(path));
+        FileSystem fs = path.get().getFileSystem(conf.get());
+        String relativeDirPath = FSUtils.getRelativePartitionPath(serializableBasePath.get(), path.get());
+        return new DirectoryInfo(relativeDirPath, fs.listStatus(path.get()));
       }, numDirsToList);
 
       pathsToList = new LinkedList<>(pathsToList.subList(numDirsToList, pathsToList.size()));
@@ -656,7 +659,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           partitionsToBootstrap.add(dirInfo);
         } else {
           // Add sub-dirs to the queue
-          pathsToList.addAll(dirInfo.getSubDirectories());
+          pathsToList.addAll(dirInfo.getSubDirectories().stream()
+              .map(path -> new SerializablePath(new CachingPath(path.toUri())))
+              .collect(Collectors.toList()));
         }
       }
     }
