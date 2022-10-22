@@ -291,7 +291,7 @@ public class TestCleaner extends HoodieClientTestBase {
     cleanInstantTime = "00" + index++;
     HoodieTable table = HoodieSparkTable.create(writeConfig, context);
     Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, cleanInstantTime, Option.empty());
-    assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition).size(), 1);
+    assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition).size(), 2);
     assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().countInstants(), 1);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
@@ -560,7 +560,6 @@ public class TestCleaner extends HoodieClientTestBase {
           acceptableCommits
               .removeAll(activeTimeline.findInstantsInRange("000", earliestRetainedCommit.get().getTimestamp())
                   .getInstants().collect(Collectors.toSet()));
-          acceptableCommits.add(earliestRetainedCommit.get());
         }
 
         TableFileSystemView fsView = table1.getFileSystemView();
@@ -1193,14 +1192,14 @@ public class TestCleaner extends HoodieClientTestBase {
         .build();
     // Deletions:
     // . FileId Base Logs Total Retained Commits
-    // FileId7 5 10 15 009, 011
+    // FileId7 6 12 18 011
     // FileId6 5 10 15 009
     // FileId5 3 6 9 005
     // FileId4 2 4 6 003
     // FileId3 1 2 3 001
     // FileId2 0 0 0 000
     // FileId1 0 0 0 000
-    testPendingCompactions(config, 48, 18, false);
+    testPendingCompactions(config, 51, 18, false);
   }
 
   /**
