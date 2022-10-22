@@ -333,18 +333,18 @@ public class DeltaSync implements Serializable, Closeable {
     // Refresh Timeline
     refreshTimeline();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitTimelineOpt);
+    ReadResult readResult = readFromSource(commitTimelineOpt);
 
-    if (null != srcRecordsWithCkpt) {
+    if (null != readResult) {
       // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
       // compactor
       if (null == writeClient) {
-        this.schemaProvider = srcRecordsWithCkpt.getKey();
+        this.schemaProvider = readResult.getSchemaProvider();
         // Setup HoodieWriteClient and compaction now that we decided on schema
         setupWriteClient();
       } else {
-        Schema newSourceSchema = srcRecordsWithCkpt.getKey().getSourceSchema();
-        Schema newTargetSchema = srcRecordsWithCkpt.getKey().getTargetSchema();
+        Schema newSourceSchema = readResult.getSchemaProvider().getSourceSchema();
+        Schema newTargetSchema = readResult.getSchemaProvider().getTargetSchema();
         if (!(processedSchema.isSchemaPresent(newSourceSchema))
             || !(processedSchema.isSchemaPresent(newTargetSchema))) {
           LOG.info("Seeing new schema. Source :" + newSourceSchema.toString(true)
@@ -364,8 +364,8 @@ public class DeltaSync implements Serializable, Closeable {
         }
       }
 
-      result = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
-          srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
+      result = writeToSink(readResult.getRecordJavaRDD(),
+          readResult.getCheckpointStr(), readResult.isSourceRddEmpty(), metrics, overallTimerContext);
     }
 
     metrics.updateDeltaStreamerSyncMetrics(System.currentTimeMillis());
@@ -388,11 +388,11 @@ public class DeltaSync implements Serializable, Closeable {
    * Read from Upstream Source and apply transformation if needed.
    *
    * @param commitTimelineOpt Timeline with completed commits
-   * @return Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> Input data read from upstream source, consists
-   * of schemaProvider, checkpointStr and hoodieRecord
+   * @return ReadResult Input data read from upstream source, consists
+   * of schemaProvider, checkpointStr and hoodieRecord and whether rdd is Empty
    * @throws Exception in case of any Exception
    */
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(Option<HoodieTimeline> commitTimelineOpt) throws IOException {
+  public ReadResult readFromSource(Option<HoodieTimeline> commitTimelineOpt) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitTimelineOpt.isPresent()) {
@@ -426,7 +426,7 @@ public class DeltaSync implements Serializable, Closeable {
 
     int maxRetryCount = cfg.retryOnSourceFailures ? cfg.maxRetryCount : 1;
     int curRetryCount = 0;
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> sourceDataToSync = null;
+    ReadResult sourceDataToSync = null;
     while (curRetryCount++ < maxRetryCount && sourceDataToSync == null) {
       try {
         sourceDataToSync = fetchFromSource(resumeCheckpointStr);
@@ -446,7 +446,7 @@ public class DeltaSync implements Serializable, Closeable {
     return sourceDataToSync;
   }
 
-  private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchFromSource(Option<String> resumeCheckpointStr) {
+  private ReadResult fetchFromSource(Option<String> resumeCheckpointStr) {
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
     SchemaProvider schemaProvider;
@@ -513,7 +513,7 @@ public class DeltaSync implements Serializable, Closeable {
     jssc.setJobGroup(this.getClass().getSimpleName(), "Checking if input is empty");
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
       LOG.info("No new data, perform empty commit.");
-      return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
+      return new ReadResult(schemaProvider, checkpointStr, jssc.emptyRDD(), true);
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
@@ -529,7 +529,7 @@ public class DeltaSync implements Serializable, Closeable {
       return new HoodieAvroRecord<>(keyGenerator.getKey(record), payload);
     });
 
-    return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
+    return new ReadResult(schemaProvider, checkpointStr, records, false);
   }
 
   /**
@@ -598,6 +598,7 @@ public class DeltaSync implements Serializable, Closeable {
    * @return Option Compaction instant if one is scheduled
    */
   private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
+                                                                 boolean isSourceRddEmpty,
                                                                  HoodieDeltaStreamerMetrics metrics,
                                                                  Timer.Context overallTimerContext) {
     Option<String> scheduledCompactionInstant = Option.empty();
@@ -606,7 +607,8 @@ public class DeltaSync implements Serializable, Closeable {
       records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig());
     }
 
-    boolean isEmpty = records.isEmpty();
+    // when cfg.filterDupes is true, there are chances that entire rdd will be empty after dropping duplicates. if not, we can reuse value from isSourceRddEmpty
+    boolean isEmpty = cfg.filterDupes ? records.isEmpty() : isSourceRddEmpty;
 
     // try to start a new commit
     String instantTime = startCommit();
@@ -991,5 +993,35 @@ public class DeltaSync implements Serializable, Closeable {
   private Set<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
     String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
     return Arrays.stream(partitionColumns.split(",")).collect(Collectors.toSet());
+  }
+
+  class ReadResult {
+    private final SchemaProvider schemaProvider;
+    private final String checkpointStr;
+    private final JavaRDD<HoodieRecord> recordJavaRDD;
+    private final boolean isSourceRddEmpty;
+
+    ReadResult(SchemaProvider schemaProvider, String checkpointStr, JavaRDD<HoodieRecord> recordJavaRDD, boolean isSourceRddEmpty) {
+      this.schemaProvider = schemaProvider;
+      this.checkpointStr = checkpointStr;
+      this.recordJavaRDD = recordJavaRDD;
+      this.isSourceRddEmpty = isSourceRddEmpty;
+    }
+
+    public SchemaProvider getSchemaProvider() {
+      return schemaProvider;
+    }
+
+    public String getCheckpointStr() {
+      return checkpointStr;
+    }
+
+    public JavaRDD<HoodieRecord> getRecordJavaRDD() {
+      return recordJavaRDD;
+    }
+
+    public boolean isSourceRddEmpty() {
+      return isSourceRddEmpty;
+    }
   }
 }
