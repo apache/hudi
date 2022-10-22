@@ -24,33 +24,25 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
 import org.apache.hudi.common.config.SerializableSchema;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -170,21 +162,6 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
    * Transform IndexedRecord into HoodieRecord.
    */
   private HoodieRecord<T> transform(IndexedRecord indexedRecord) {
-    GenericRecord record = (GenericRecord) indexedRecord;
-    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (!getWriteConfig().populateMetaFields()) {
-      try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getWriteConfig().getProps())));
-      } catch (IOException e) {
-        throw new HoodieIOException("Only BaseKeyGenerators are supported when meta columns are disabled ", e);
-      }
-    }
-    String key = KeyGenUtils.getRecordKeyFromGenericRecord(record, keyGeneratorOpt);
-    String partition = KeyGenUtils.getPartitionPathFromGenericRecord(record, keyGeneratorOpt);
-    HoodieKey hoodieKey = new HoodieKey(key, partition);
-
-    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
-    return hoodieRecord;
+    return ExecutionStrategyUtil.transform(indexedRecord, getWriteConfig());
   }
 }
