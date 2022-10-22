@@ -20,7 +20,12 @@ package org.apache.spark
 
 import com.esotericsoftware.kryo.Kryo
 import org.apache.avro.util.Utf8
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordGlobalLocation, HoodieRecordLocation, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.client.bootstrap.BootstrapRecordPayload
+import org.apache.hudi.client.model.HoodieInternalRow
+import org.apache.hudi.commmon.model.HoodieSparkRecord
+import org.apache.hudi.common.HoodieJsonPayload
+import org.apache.hudi.common.model.debezium.{MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
+import org.apache.hudi.common.model.{AWSDmsAvroPayload, DefaultHoodieRecordPayload, EventTimeAvroPayload, HoodieAvroIndexedRecord, HoodieAvroPayload, HoodieAvroRecord, HoodieEmptyRecord, HoodieRecord, HoodieRecordGlobalLocation, HoodieRecordLocation, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload, RewriteAvroPayload}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.spark.internal.config.Kryo.KRYO_USER_REGISTRATORS
@@ -31,15 +36,32 @@ class HoodieKryoRegistrar extends KryoRegistrator {
     // TODO elaborate (order couldn't change)
     kryo.register(classOf[HoodieWriteConfig])
 
-    // TODO add serializer
-    kryo.register(classOf[Utf8])
+    kryo.register(classOf[HoodieAvroRecord[_]])
+    kryo.register(classOf[HoodieAvroIndexedRecord])
+    kryo.register(classOf[HoodieSparkRecord])
+    kryo.register(classOf[HoodieEmptyRecord[_]])
+
+    kryo.register(classOf[HoodieInternalRow])
 
     kryo.register(classOf[HoodieRecordLocation])
     kryo.register(classOf[HoodieRecordGlobalLocation])
 
     kryo.register(classOf[OverwriteWithLatestAvroPayload])
     kryo.register(classOf[DefaultHoodieRecordPayload])
+    kryo.register(classOf[OverwriteNonDefaultsWithLatestAvroPayload])
+    kryo.register(classOf[RewriteAvroPayload])
+    kryo.register(classOf[EventTimeAvroPayload])
+    kryo.register(classOf[PartialUpdateAvroPayload])
+    kryo.register(classOf[MySqlDebeziumAvroPayload])
+    kryo.register(classOf[PostgresDebeziumAvroPayload])
+    kryo.register(classOf[BootstrapRecordPayload])
+    kryo.register(classOf[AWSDmsAvroPayload])
+    kryo.register(classOf[HoodieAvroPayload])
+    kryo.register(classOf[HoodieJsonPayload])
     kryo.register(classOf[HoodieMetadataPayload])
+
+    // TODO add serializer
+    kryo.register(classOf[Utf8])
   }
 }
 
