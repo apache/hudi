@@ -776,31 +776,33 @@ public class TestCleaner extends HoodieClientTestBase {
       HoodieTestTable.of(metaClient).addCommit(commitTime);
     }
 
-    List<HoodieCleanStat> cleanStats = runCleaner(config);
+    int currentInstant = startInstant;
+
+    List<HoodieCleanStat> cleanStats = runCleaner(config, currentInstant++, false);
     HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
 
     assertEquals(0, cleanStats.size(), "Must not clean any files");
+    assertEquals(2, timeline.getTimelineOfActions(
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().countInstants());
     assertEquals(1, timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().countInstants());
-    assertEquals(0, timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflights().countInstants());
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflights().countInstants());
     assertEquals(--cleanCount, timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
     assertTrue(timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--instantClean, "%09d")));
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--instantClean, "%09d")));
 
-    cleanStats = runCleaner(config);
+    cleanStats = runCleaner(config, currentInstant, false);
     timeline = metaClient.reloadActiveTimeline();
 
     assertEquals(0, cleanStats.size(), "Must not clean any files");
-    assertEquals(1, timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().countInstants());
-    assertEquals(0, timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflights().countInstants());
+    assertEquals(3, timeline.getTimelineOfActions(
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().countInstants());
+    assertEquals(2, timeline.getTimelineOfActions(
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflights().countInstants());
     assertEquals(--cleanCount, timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
     assertTrue(timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--instantClean, "%09d")));
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--instantClean, "%09d")));
   }
   
   @Test
