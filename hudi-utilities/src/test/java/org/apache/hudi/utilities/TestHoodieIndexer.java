@@ -47,6 +47,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -77,10 +78,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkProvider {
 
-  private static transient SparkSession spark;
-  private static transient SQLContext sqlContext;
-  private static transient JavaSparkContext jsc;
-  private static transient HoodieSparkEngineContext context;
+  private static SparkSession spark;
+  private static SQLContext sqlContext;
+  private static JavaSparkContext jsc;
+  private static HoodieSparkEngineContext context;
   private static int colStatsFileGroupCount;
 
   @BeforeEach
@@ -98,6 +99,16 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     }
     initPath();
     initMetaClient();
+  }
+
+  @AfterAll
+  public static void cleanup() {
+    if (spark != null) {
+      spark.close();
+    }
+    if (jsc != null) {
+      jsc.close();
+    }
   }
 
   protected void initMetaClient() throws IOException {
