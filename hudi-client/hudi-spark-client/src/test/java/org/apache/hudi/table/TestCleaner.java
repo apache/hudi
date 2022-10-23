@@ -779,30 +779,37 @@ public class TestCleaner extends HoodieClientTestBase {
     int currentInstant = startInstant;
 
     List<HoodieCleanStat> cleanStats = runCleaner(config, currentInstant++, false);
+    cleanCount++;
     HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+    timeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
 
     assertEquals(0, cleanStats.size(), "Must not clean any files");
-    assertEquals(2, timeline.getTimelineOfActions(
+    // the last clean commits should be deleted because they are empty
+    assertEquals(0, timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().countInstants());
-    assertEquals(1, timeline.getTimelineOfActions(
+    assertEquals(0, timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflights().countInstants());
+    assertFalse(timeline.getTimelineOfActions(
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).containsInstant(makeNewCommitTime(--instantClean, "%09d")));
+    // the completed clean count should be 20 (19 manual commits and 1 for the cleaner)
     assertEquals(--cleanCount, timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
-    assertTrue(timeline.getTimelineOfActions(
-        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--instantClean, "%09d")));
 
     cleanStats = runCleaner(config, currentInstant, false);
     timeline = metaClient.reloadActiveTimeline();
 
     assertEquals(0, cleanStats.size(), "Must not clean any files");
-    assertEquals(3, timeline.getTimelineOfActions(
+    // no new inflight or request commits
+    assertEquals(0, timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().countInstants());
-    assertEquals(2, timeline.getTimelineOfActions(
+    assertEquals(0, timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflights().countInstants());
-    assertEquals(--cleanCount, timeline.getTimelineOfActions(
+    // the last clean should be skipped because there is no commit between it and the last commit
+    assertEquals(cleanCount, timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
+    // the last clean commits should not be deleted because they are not empty
     assertTrue(timeline.getTimelineOfActions(
-        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--instantClean, "%09d")));
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(41, "%09d")));
   }
   
   @Test
