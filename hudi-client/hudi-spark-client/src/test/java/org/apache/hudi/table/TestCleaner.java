@@ -699,48 +699,39 @@ public class TestCleaner extends HoodieClientTestBase {
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
     HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
-    // make 4 commits, each with 1 file in a different partition
+    // make 3 commits, each with 1 file in a different partition
     String file1P1C1 = UUID.randomUUID().toString();
     String file2P2C2 = UUID.randomUUID().toString();
     String file3P3C3 = UUID.randomUUID().toString();
-    String file4P3C4 = UUID.randomUUID().toString();
     String p1 = "2020/01/01";
     String p2 = "2020/01/02";
     String p3 = "2020/01/03";
-    String p4 = "2020/01/04";
     String c1 = makeNewCommitTime(1, "%014d");
-    String c2 = makeNewCommitTime(2, "%014d");
-    String c3 = makeNewCommitTime(4, "%014d");
-    String c4 = makeNewCommitTime(5, "%014d");
+    String c2 = makeNewCommitTime(3, "%014d");
+    String c3 = makeNewCommitTime(5, "%014d");
 
     testTable.addCommit(c1).withBaseFilesInPartition(p1, file1P1C1);
     List<HoodieCleanStat> cleanStats = runCleaner(config, 2, true);
-    // no need to clean: cleanStats should be empty and no clean commit
-    assertEquals(0, cleanStats.size());
-    assertEquals(0, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants());
-
-    testTable.addCommit(c2).withBaseFilesInPartition(p2, file2P2C2);
-    cleanStats = runCleaner(config, 3, true);
-    // nothing to clean: cleanStats should be empty but a clean commit should be created
+    // nothing to clean: cleanStats should be empty but a clean commit should be created with brute force S3 files listing
     assertEquals(0, cleanStats.size());
     assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants());
     assertTrue(metaClient.getActiveTimeline().reload().getTimelineOfActions(
-        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(3, "%014d")));
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(2, "%014d")));
 
-
-    testTable.addCommit(c3).withBaseFilesInPartition(p3, file3P3C3);
-    cleanStats = runCleaner(config, 5, true);
-    // no need to clean: cleanStats should be empty and no clean commit
-    assertEquals(0, cleanStats.size());
-    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants());
-    assertFalse(metaClient.getActiveTimeline().reload().getTimelineOfActions(
-        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(5, "%014d")));
-
-    testTable.addCommit(c4).withBaseFilesInPartition(p4, file4P3C4);
-    cleanStats = runCleaner(config, 6, true);
+    testTable.addCommit(c2).withBaseFilesInPartition(p2, file2P2C2);
+    cleanStats = runCleaner(config, 4, true);
     // nothing to clean: cleanStats should be empty but a clean commit should be created, and the last clean should be used to list the files to clean without errors
     assertEquals(0, cleanStats.size());
     assertEquals(2, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants());
+    assertTrue(metaClient.getActiveTimeline().reload().getTimelineOfActions(
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(4, "%014d")));
+
+
+    testTable.addCommit(c3).withBaseFilesInPartition(p3, file3P3C3);
+    cleanStats = runCleaner(config, 6, true);
+    // nothing to clean: cleanStats should be empty but a clean commit should be created, and the last clean should be used to list the files to clean without errors
+    assertEquals(0, cleanStats.size());
+    assertEquals(3, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants());
     assertTrue(metaClient.getActiveTimeline().reload().getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(6, "%014d")));
   }
