@@ -86,7 +86,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     if (strategy == CleaningTriggerStrategy.NUM_COMMITS) {
       int numberOfCommits = getCommitsSinceLastCleaning();
       int maxInlineCommitsForNextClean = config.getCleaningMaxCommits();
-      return numberOfCommits >= maxInlineCommitsForNextClean;
+      return numberOfCommits > maxInlineCommitsForNextClean;
     } else {
       throw new HoodieException("Unsupported cleaning trigger strategy: " + config.getCleaningTriggerStrategy());
     }
