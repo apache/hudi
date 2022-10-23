@@ -185,4 +185,10 @@ public interface HoodieData<T> extends Serializable {
         .reduceByKey((value1, value2) -> value1, parallelism)
         .values();
   }
+
+  /**
+   * Fetch {@link HoodieData}'s unique identifer as determined by the engine context.
+   * @return the unique identifier.
+   */
+  int getId();
 }

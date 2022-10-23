@@ -37,10 +37,12 @@ import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils}
+import org.apache.spark.sql
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, concat, lit, udf}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
+import org.apache.spark.storage.StorageLevel
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
@@ -1061,5 +1063,24 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
     assertEquals(false, Metrics.isInitialized, "Metrics should be shutdown")
+  }
+
+  @Test def testAutoUnpersistRdds() {
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    val inputDfCloned : sql.DataFrame = spark.createDataFrame(inputDF.rdd, inputDF.schema)
+    inputDfCloned.rdd.persist(StorageLevel.MEMORY_ONLY)
+    System.out.print("Cloned RDD id " + inputDfCloned.rdd.id)
+    inputDF.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option("hoodie.metadata.enable","false")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    // spark.sparkContext.getPersistentRDDs.values.map(rdd => System.out.print("Persisted rdd " + rdd.id))
+    // assertEquals(spark.sparkContext.getPersistentRDDs.values.filter())
   }
 }

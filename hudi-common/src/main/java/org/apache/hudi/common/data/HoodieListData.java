@@ -184,4 +184,9 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   public List<T> collectAsList() {
     return super.collectAsList();
   }
+
+  @Override
+  public int getId() {
+    return 0;
+  }
 }

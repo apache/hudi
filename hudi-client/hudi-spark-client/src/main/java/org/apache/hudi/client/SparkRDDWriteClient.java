@@ -40,7 +40,9 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -69,6 +71,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -581,12 +585,26 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected void releaseResources() {
+  protected void releaseResources(String instantTime) {
     // If we do not explicitly release the resource, spark will automatically manage the resource and clean it up automatically
     // see: https://spark.apache.org/docs/latest/rdd-programming-guide.html#removing-data
     if (config.areReleaseResourceEnabled()) {
-      ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
-          .forEach(JavaRDD::unpersist);
+      String persistedIdsStr = CommitUtils.getPersistedRddIds(config.getBasePath(), instantTime);
+      if (!StringUtils.isNullOrEmpty(persistedIdsStr)) {
+        String[] ids = persistedIdsStr.split(",");
+        List<Integer> persistedIds = Arrays.stream(ids).map(id -> Integer.parseInt(id)).collect(Collectors.toList());
+        LOG.warn("XXX List of persisted IDs(release resources) " + Arrays.toString(ids));
+        List<Integer> unpersistedIds = new ArrayList<>();
+        ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
+            .stream().filter(rdd -> persistedIds.contains(rdd.id()))
+            .forEach(rdd -> {
+              unpersistedIds.add(rdd.id());
+              rdd.unpersist();
+            });
+        LOG.warn("XXX List of Unpersisted IDs(release resources) " + Arrays.toString(ids));
+      } else {
+        LOG.warn("XXX No persisted IDs found for " + config.getBasePath() + ", " + instantTime);
+      }
     }
   }
 }
