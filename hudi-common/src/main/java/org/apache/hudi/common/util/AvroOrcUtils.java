@@ -54,6 +54,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.orc.TypeDescription;
 
 import static org.apache.avro.JsonProperties.NULL_VALUE;
+import static org.apache.hudi.common.util.BinaryUtil.toBytes;
 
 /**
  * Methods including addToVector, addUnionValue, createOrcSchema are originally from
@@ -221,8 +222,7 @@ public class AvroOrcUtils {
           binaryBytes = ((GenericData.Fixed)value).bytes();
         } else if (value instanceof ByteBuffer) {
           final ByteBuffer byteBuffer = (ByteBuffer) value;
-          binaryBytes = new byte[byteBuffer.remaining()];
-          byteBuffer.get(binaryBytes);
+          binaryBytes = toBytes(byteBuffer);
         } else if (value instanceof byte[]) {
           binaryBytes = (byte[]) value;
         } else {
