@@ -57,8 +57,8 @@ public class ExecutionStrategyUtil {
         keyGeneratorOpt = Option.of((BaseKeyGenerator)
             HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
       } catch (IOException e) {
-         throw new HoodieIOException(
-             "Only BaseKeyGenerators are supported when meta columns are disabled ", e);
+        throw new HoodieIOException(
+            "Only BaseKeyGenerators are supported when meta columns are disabled ", e);
       }
     }
 
