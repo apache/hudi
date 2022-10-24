@@ -273,7 +273,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
    *
    */
   @Test
-  public void testRemoveFailedCompactionAction() {
+  public void testShowFailedCommits() {
     HoodieCLI.conf = hadoopConf();
 
     Configuration conf = HoodieCLI.conf;
@@ -296,7 +296,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     try {
       appender.start();
       logger.addAppender(appender);
-      Object result = shell.evaluate(() -> "repair cleanup empty commit metadata");
+      Object result = shell.evaluate(() -> "repair show empty commit metadata");
       assertTrue(ShellEvaluationResultUtil.isSuccess(result));
       final List<LogEvent> log = appender.getLog();
       assertEquals(log.size(),4);

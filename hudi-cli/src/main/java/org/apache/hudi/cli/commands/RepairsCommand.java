@@ -205,8 +205,8 @@ public class RepairsCommand {
     });
   }
 
-  @ShellMethod(key = "repair cleanup empty commit metadata", value = "remove failed compaction from metadata")
-  public void removeFailedCompaction() {
+  @ShellMethod(key = "repair show empty commit metadata", value = "show failed commits")
+  public void showFailedCommits() {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
     activeTimeline.filterCompletedInstants().getInstants().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> LOG.warn("Empty Commit: " + hoodieInstant.toString()));
