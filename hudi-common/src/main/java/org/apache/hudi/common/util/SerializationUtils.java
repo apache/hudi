@@ -129,7 +129,7 @@ public class SerializationUtils {
    * NOTE: This {@link Serializer} could deserialize instance of {@link Utf8} serialized
    *       by implicitly generated Kryo serializer (based on {@link com.esotericsoftware.kryo.serializers.FieldSerializer}
    */
-  private static class AvroUtf8Serializer extends Serializer<Utf8> {
+  public static class AvroUtf8Serializer extends Serializer<Utf8> {
 
     @SuppressWarnings("unchecked")
     @Override
