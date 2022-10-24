@@ -21,8 +21,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
@@ -134,7 +132,7 @@ public class TestHiveTableSchemaEvolution {
         } else {
             // mot table
             RealtimeSplit realtimeSplit = (RealtimeSplit) split;
-            RecordReader<NullWritable, ArrayWritable> recordReader;
+            RecordReader recordReader;
             // for log only split, set the parquet reader as empty.
             if (FSUtils.isLogFile(realtimeSplit.getPath())) {
                 recordReader = new HoodieRealtimeRecordReader(realtimeSplit, jobConf, new HoodieEmptyRecordReader(realtimeSplit, jobConf));
