@@ -1607,10 +1607,6 @@
       <id>confluent</id>
       <url>https://packages.confluent.io/maven/</url>
     </repository>
-    <repository>
-      <id>Spark-3.3.1</id>
-      <url>https://repository.apache.org/content/repositories/orgapachespark-1430</url>
-    </repository>
   </repositories>
 
   <profiles>
