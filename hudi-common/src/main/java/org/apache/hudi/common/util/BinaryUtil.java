@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.zip.CRC32;
 
@@ -115,6 +116,15 @@ public class BinaryUtil {
       return a;
     }
     return (byte) (a ^ (1 << (7 - apos)));
+  }
+
+  /**
+   * Copies {@link ByteBuffer} into allocated {@code byte[]} array
+   */
+  public static byte[] toBytes(ByteBuffer buffer) {
+    byte[] bytes = new byte[buffer.remaining()];
+    buffer.get(bytes);
+    return bytes;
   }
 
   public static byte[] toBytes(int val) {
