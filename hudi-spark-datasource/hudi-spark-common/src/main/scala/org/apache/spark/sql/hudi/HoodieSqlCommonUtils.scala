@@ -78,14 +78,18 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala
   }
 
-  def getFilesInPartitions(spark: SparkSession, table: CatalogTable, partitionPaths: Seq[String]): Map[String, Array[FileStatus]] = {
+  def getFilesInPartitions(spark: SparkSession,
+                           table: CatalogTable,
+                           partitionPaths: Seq[String]): Map[String, Array[FileStatus]] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
       val properties = new Properties()
-      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
+      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++
+        table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
-    FSUtils.getFilesInPartitions(sparkEngine, metadataConfig, getTableLocation(table, spark), partitionPaths.toArray).asScala.toMap
+    FSUtils.getFilesInPartitions(sparkEngine, metadataConfig, getTableLocation(table, spark),
+      partitionPaths.toArray).asScala.toMap
   }
 
   /**

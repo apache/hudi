@@ -160,12 +160,6 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   def getPartitionPaths: Seq[String] = getAllPartitionPaths(spark, table)
 
   /**
-   * All the files in partition paths
-   */
-  def getFilesInPartitions(partitionPaths: Seq[String]): Map[String, Array[FileStatus]] = HoodieSqlCommonUtils.
-    getFilesInPartitions(spark, table, partitionPaths)
-
-  /**
    * Check if table is a partitioned table
    */
   def isPartitionedTable: Boolean = table.partitionColumnNames.nonEmpty

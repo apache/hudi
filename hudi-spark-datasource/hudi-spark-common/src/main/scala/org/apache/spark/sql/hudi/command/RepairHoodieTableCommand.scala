@@ -25,6 +25,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.execution.command.PartitionStatistics
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.util.ThreadUtils
 
@@ -33,7 +34,8 @@ import scala.util.control.NonFatal
 
 /**
  * Command for repair hudi table's partitions.
- * Use the methods in hoodieCatalogTable to obtain partitions and stats instead of scanning the file system.
+ * Use the methods in HoodieSqlCommonUtils to obtain partitions and stats
+ * instead of scanning the file system.
  */
 case class RepairHoodieTableCommand(tableName: TableIdentifier,
                                     enableAddPartitions: Boolean,
@@ -68,13 +70,14 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     val isHiveStyledPartitioning = hoodieCatalogTable.catalogProperties.
       getOrElse(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true").toBoolean
 
-    val partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)] = hoodieCatalogTable.getPartitionPaths.map(partitionPath => {
+    val partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)] = hoodieCatalogTable.
+      getPartitionPaths.map(partitionPath => {
       var values = partitionPath.split('/')
-      if (isHiveStyledPartitioning) {
+        if (isHiveStyledPartitioning) {
         values = values.map(_.split('=')(1))
-      }
-      (table.partitionColumnNames.zip(values).toMap, new Path(root, partitionPath))
-    })
+        }
+        (table.partitionColumnNames.zip(values).toMap, new Path(root, partitionPath))
+      })
 
     val droppedAmount = if (enableDropPartitions) {
       dropPartitions(catalog, partitionSpecsAndLocs)
@@ -82,7 +85,8 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     val addedAmount = if (enableAddPartitions) {
       val total = partitionSpecsAndLocs.length
       val partitionStats = if (spark.sqlContext.conf.gatherFastStats) {
-        hoodieCatalogTable.getFilesInPartitions(partitionSpecsAndLocs.map(_._2.toString))
+        HoodieSqlCommonUtils.getFilesInPartitions(spark, table, partitionSpecsAndLocs
+          .map(_._2.toString))
           .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLen).sum))
       } else {
         Map.empty[String, PartitionStatistics]
@@ -143,7 +147,8 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
   }
 
   // Drops the partitions that do not exist in partitionSpecsAndLocs
-  private def dropPartitions(catalog: SessionCatalog, partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)]): Int = {
+  private def dropPartitions(catalog: SessionCatalog,
+                             partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)]): Int = {
     val dropPartSpecs = ThreadUtils.parmap(
       catalog.listPartitions(tableName),
       "RepairTableCommand: non-existing partitions",
