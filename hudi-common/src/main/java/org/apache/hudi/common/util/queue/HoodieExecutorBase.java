@@ -26,9 +26,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -51,7 +51,7 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
   public final Runnable preExecuteRunnable;
 
-  public List<Future<Boolean>> producerTasks;
+  public CompletableFuture<Void> producerFuture;
 
   public HoodieExecutorBase(List<HoodieProducer<I>> producers, Option<IteratorBasedQueueConsumer<O, E>> consumer,
                             Runnable preExecuteRunnable) {
@@ -59,10 +59,35 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
     this.consumer = consumer;
     this.preExecuteRunnable = preExecuteRunnable;
     // Ensure fixed thread for each producer thread
-    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new HoodieDaemonThreadFactory("producer", preExecuteRunnable));
+    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new HoodieDaemonThreadFactory("executor-queue-producer", preExecuteRunnable));
     // Ensure single thread for consumer
-    this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("consumer"));
+    this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("executor-queue-consumer"));
   }
+
+  /**
+   * Start all Producers.
+   */
+  public abstract CompletableFuture<Void> startProducers();
+
+  /**
+   * Start consumer.
+   */
+  protected abstract CompletableFuture<E> startConsumer();
+
+  /**
+   * Closing/cleaning up the executor's resources after consuming finished.
+   */
+  protected abstract void postAction();
+
+  /**
+   * get bounded in message queue.
+   */
+  public abstract HoodieMessageQueue<I, O> getQueue();
+
+  /**
+   * set all the resources for current HoodieExecutor before start to produce and consume records.
+   */
+  protected abstract void setup();
 
   public boolean awaitTermination() {
     // if current thread has been interrupted before awaitTermination was called, we still give
@@ -83,11 +108,15 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
     return producerTerminated && consumerTerminated;
   }
 
+  /**
+   * Shutdown all the consumers and producers.
+   */
   public void shutdownNow() {
     producerExecutorService.shutdownNow();
     consumerExecutorService.shutdownNow();
   }
 
+  @Override
   public void close() {
     producerExecutorService.shutdown();
     consumerExecutorService.shutdown();
@@ -101,8 +130,8 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
     try {
       ValidationUtils.checkState(this.consumer.isPresent());
       setup();
-      producerTasks = startProducers();
-      Future<E> future = startConsumer();
+      producerFuture = startProducers();
+      CompletableFuture<E> future = startConsumer();
       return future.get();
     } catch (InterruptedException ie) {
       shutdownNow();
@@ -114,6 +143,4 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
       postAction();
     }
   }
-
-  public void setup(){}
 }

@@ -56,21 +56,13 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   @Override
   public void insertRecord(I value) throws Exception {
     O applied = transformFunction.apply(value);
-
-    EventTranslator<HoodieDisruptorEvent> translator = new EventTranslator<HoodieDisruptorEvent>() {
-      @Override
-      public void translateTo(HoodieDisruptorEvent event, long sequence) {
-        event.set(applied);
-      }
-    };
-
+    EventTranslator<HoodieDisruptorEvent> translator = (event, sequence) -> event.set(applied);
     queue.getRingBuffer().publishEvent(translator);
   }
 
   @Override
   public Option<O> readNextRecord() {
-    // Let DisruptorMessageHandler to handle consuming logic.
-    return null;
+    throw new UnsupportedOperationException("Should not call readNextRecord here. And let DisruptorMessageHandler to handle consuming logic");
   }
 
   @Override

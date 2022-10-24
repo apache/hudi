@@ -28,7 +28,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.DisruptorMessageQueue;
-import org.apache.hudi.common.util.queue.DisruptorPublisher;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
@@ -51,7 +50,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -191,15 +190,15 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
       recs.add(pRecs);
     }
 
-    List<DisruptorPublisher> disruptorPublishers = new ArrayList<>();
+    List<HoodieProducer> producers = new ArrayList<>();
     for (int i = 0; i < recs.size(); i++) {
       final List<HoodieRecord> r = recs.get(i);
       // Alternate between pull and push based iterators
       if (i % 2 == 0) {
-        DisruptorPublisher publisher = new DisruptorPublisher<>(new IteratorBasedQueueProducer<>(r.iterator()), queue);
-        disruptorPublishers.add(publisher);
+        HoodieProducer producer = new IteratorBasedQueueProducer<>(r.iterator());
+        producers.add(producer);
       } else {
-        DisruptorPublisher publisher = new DisruptorPublisher<>(new FunctionBasedQueueProducer<>((buf) -> {
+        HoodieProducer producer = new FunctionBasedQueueProducer<>((buf) -> {
           Iterator<HoodieRecord> itr = r.iterator();
           while (itr.hasNext()) {
             try {
@@ -209,8 +208,8 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
             }
           }
           return true;
-        }), queue);
-        disruptorPublishers.add(publisher);
+        });
+        producers.add(producer);
       }
     }
 
@@ -220,9 +219,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
     Map<Integer, Integer> countMap =
         IntStream.range(0, numProducers).boxed().collect(Collectors.toMap(Function.identity(), x -> 0));
 
-
     // setup consumer and start disruptor
-
     queue.setHandlers(new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
       @Override
@@ -244,23 +241,19 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
     });
     queue.start();
 
-
     // start to produce records
-    final List<Future<Boolean>> futureList = disruptorPublishers.stream().map(disruptorPublisher -> {
-      return executorService.submit(() -> {
-        disruptorPublisher.startProduce();
+    CompletableFuture<Void> producerFuture = CompletableFuture.allOf(producers.stream().map(producer -> {
+      return CompletableFuture.supplyAsync(() -> {
+        try {
+          producer.produce(queue);
+        } catch (Throwable e) {
+          throw new HoodieException("Error producing records in disruptor executor", e);
+        }
         return true;
-      });
-    }).collect(Collectors.toList());
+      }, executorService);
+    }).toArray(CompletableFuture[]::new));
 
-    // wait for all producers finished.
-    futureList.forEach(future -> {
-      try {
-        future.get();
-      } catch (Exception e) {
-        // ignore here
-      }
-    });
+    producerFuture.get();
 
     // wait for all the records consumed.
     queue.close();

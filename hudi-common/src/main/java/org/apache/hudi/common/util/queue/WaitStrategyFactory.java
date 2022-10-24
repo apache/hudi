@@ -36,11 +36,8 @@ public class WaitStrategyFactory {
    * Build WaitStrategy for disruptor
    */
   public static WaitStrategy build(Option<String> name) {
-    if (!name.isPresent()) {
-      return new BlockingWaitStrategy();
-    }
+    DisruptorWaitStrategyType strategyType = name.isPresent() ? DisruptorWaitStrategyType.valueOf(name.get().toUpperCase()) : BLOCKING_WAIT;
 
-    DisruptorWaitStrategyType strategyType = DisruptorWaitStrategyType.valueOf(name.get().toUpperCase());
     switch (strategyType) {
       case BLOCKING_WAIT:
         return new BlockingWaitStrategy();

@@ -18,23 +18,12 @@
 
 package org.apache.hudi.common.util.queue;
 
-import java.util.List;
-import java.util.concurrent.Future;
+import java.io.Closeable;
 
 /**
  * HoodieExecutor which orchestrates concurrent producers and consumers communicating through a bounded in message queue.
  */
-public interface HoodieExecutor<I, O, E> {
-
-  /**
-   * Start all Producers.
-   */
-  List<Future<Boolean>> startProducers();
-
-  /**
-   * Start consumer.
-   */
-  Future<E> startConsumer();
+public interface HoodieExecutor<I, O, E> extends Closeable {
 
   /**
    * Main API to
@@ -47,24 +36,9 @@ public interface HoodieExecutor<I, O, E> {
   boolean isRemaining();
 
   /**
-   * Closing/cleaning up the executor's resources after consuming finished.
-   */
-  void postAction();
-
-  /**
    * Shutdown all the consumers and producers.
    */
   void shutdownNow();
 
-  /**
-   * get bounded in message queue.
-   */
-  HoodieMessageQueue<I, O> getQueue();
-
   boolean awaitTermination();
-
-  /**
-   * set all the resources for current HoodieExecutor before start to produce and consume records.
-   */
-  void setup();
 }

@@ -30,10 +30,8 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Executor which orchestrates concurrent producers and consumers communicating through 'DisruptorMessageQueue'. This
@@ -70,11 +68,10 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   /**
    * Start all Producers.
    */
-  public List<Future<Boolean>> startProducers() {
-    final ExecutorCompletionService<Boolean> completionService =
-        new ExecutorCompletionService<Boolean>(producerExecutorService);
-    return producers.stream().map(producer -> {
-      return completionService.submit(() -> {
+  @Override
+  public CompletableFuture<Void> startProducers() {
+    return CompletableFuture.allOf(producers.stream().map(producer -> {
+      return CompletableFuture.supplyAsync(() -> {
         try {
           producer.produce(queue);
         } catch (Throwable e) {
@@ -82,18 +79,18 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
           throw new HoodieException("Error producing records in disruptor executor", e);
         }
         return true;
-      });
-    }).collect(Collectors.toList());
+      }, producerExecutorService);
+    }).toArray(CompletableFuture[]::new));
   }
 
   @Override
-  public void setup() {
+  protected void setup() {
     ((DisruptorMessageQueue)queue).setHandlers(consumer.get());
     ((DisruptorMessageQueue)queue).start();
   }
 
   @Override
-  public void postAction() {
+  protected void postAction() {
     try {
       queue.close();
       super.close();
@@ -103,20 +100,16 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   }
 
   @Override
-  public Future<E> startConsumer() {
-    // consumer is already started. Here just wait for all record consumed and return the result.
-    return consumerExecutorService.submit(() -> {
-
-      // Waits for all producers finished.
-      for (Future f : producerTasks) {
-        f.get();
+  protected CompletableFuture<E> startConsumer() {
+    return producerFuture.thenApplyAsync(res -> {
+      try {
+        queue.close();
+        consumer.get().finish();
+        return consumer.get().getResult();
+      } catch (IOException e) {
+        throw new HoodieIOException("Catch Exception when closing", e);
       }
-
-      // Call disruptor queue close function which will wait until all events currently in the disruptor have been processed by all event processors
-      queue.close();
-      consumer.get().finish();
-      return consumer.get().getResult();
-    });
+    }, consumerExecutorService);
   }
 
   @Override
@@ -126,7 +119,8 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   @Override
   public void shutdownNow() {
-    super.shutdownNow();
+    producerExecutorService.shutdownNow();
+    consumerExecutorService.shutdownNow();
     try {
       queue.close();
     } catch (IOException e) {
@@ -136,6 +130,6 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   @Override
   public DisruptorMessageQueue<I, O> getQueue() {
-    return (DisruptorMessageQueue)queue;
+    return (DisruptorMessageQueue<I, O>)queue;
   }
 }

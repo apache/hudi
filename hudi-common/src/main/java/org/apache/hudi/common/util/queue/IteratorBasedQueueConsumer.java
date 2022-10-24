@@ -33,7 +33,7 @@ public abstract class IteratorBasedQueueConsumer<I, O> implements HoodieConsumer
   @Override
   public O consume(HoodieMessageQueue<?, I> queue) throws Exception {
 
-    Iterator<I> iterator = ((IteratorBasedHoodieMessageQueue) queue).iterator();
+    Iterator<I> iterator = ((HoodieIterableMessageQueue) queue).iterator();
 
     while (iterator.hasNext()) {
       consumeOneRecord(iterator.next());

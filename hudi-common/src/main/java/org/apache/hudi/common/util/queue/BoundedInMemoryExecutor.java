@@ -34,10 +34,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.Future;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Executor which orchestrates concurrent producers and consumers communicating through 'BoundedInMemoryQueue'. This
@@ -68,20 +65,19 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
                                  Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                                  final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
     super(producers, consumer, preExecuteRunnable);
-    this.queue = new BoundedInMemoryQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator);
+    this.queue = new BoundedInMemoryQueueIterable<>(bufferLimitInBytes, transformFunction, sizeEstimator);
   }
 
   /**
    * Start all producers at once.
    */
-  public List<Future<Boolean>> startProducers() {
+  @Override
+  public CompletableFuture<Void> startProducers() {
     // Latch to control when and which producer thread will close the queue
     final CountDownLatch latch = new CountDownLatch(producers.size());
-    final ExecutorCompletionService<Boolean> completionService =
-        new ExecutorCompletionService<Boolean>(producerExecutorService);
 
-    return producers.stream().map(producer -> {
-      return completionService.submit(() -> {
+    return CompletableFuture.allOf(producers.stream().map(producer -> {
+      return CompletableFuture.supplyAsync(() -> {
         try {
           preExecuteRunnable.run();
           producer.produce(queue);
@@ -94,22 +90,26 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
             latch.countDown();
             if (latch.getCount() == 0) {
               // Mark production as done so that consumer will be able to exit
-              queue.close();
+              try {
+                queue.close();
+              } catch (IOException e) {
+                throw new HoodieIOException("Catch Exception when closing BoundedInMemoryQueue.", e);
+              }
             }
           }
         }
         return true;
-      });
-    }).collect(Collectors.toList());
+      }, producerExecutorService);
+    }).toArray(CompletableFuture[]::new));
   }
 
   /**
    * Start only consumer.
    */
   @Override
-  public Future<E> startConsumer() {
+  protected CompletableFuture<E> startConsumer() {
     return consumer.map(consumer -> {
-      return consumerExecutorService.submit(() -> {
+      return CompletableFuture.supplyAsync(() -> {
         LOG.info("starting consumer thread");
         preExecuteRunnable.run();
         try {
@@ -119,23 +119,26 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
         } catch (Exception e) {
           LOG.error("error consuming records", e);
           queue.markAsFailed(e);
-          throw e;
+          throw new HoodieException(e);
         }
-      });
+      }, consumerExecutorService);
     }).orElse(CompletableFuture.completedFuture(null));
   }
 
+  @Override
   public boolean isRemaining() {
-    return ((BoundedInMemoryQueue)queue).iterator().hasNext();
+    return ((BoundedInMemoryQueueIterable)queue).iterator().hasNext();
   }
 
   @Override
-  public void postAction() {
+  protected void postAction() {
     super.close();
   }
 
+  @Override
   public void shutdownNow() {
-    super.shutdownNow();
+    producerExecutorService.shutdownNow();
+    consumerExecutorService.shutdownNow();
     // close queue to force producer stop
     try {
       queue.close();
@@ -144,7 +147,13 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
     }
   }
 
-  public BoundedInMemoryQueue<I, O> getQueue() {
-    return (BoundedInMemoryQueue)queue;
+  @Override
+  public BoundedInMemoryQueueIterable<I, O> getQueue() {
+    return (BoundedInMemoryQueueIterable<I, O>)queue;
+  }
+
+  @Override
+  protected void setup() {
+    // do nothing.
   }
 }

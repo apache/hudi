@@ -49,7 +49,7 @@ import java.util.function.Function;
  * @param <I> input payload data type
  * @param <O> output payload data type
  */
-public class BoundedInMemoryQueue<I, O> extends IteratorBasedHoodieMessageQueue<I, O> {
+public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQueue<I, O> {
 
   /** Interval used for polling records in the queue. **/
   public static final int RECORD_POLL_INTERVAL_SEC = 1;
@@ -60,7 +60,7 @@ public class BoundedInMemoryQueue<I, O> extends IteratorBasedHoodieMessageQueue<
   /** Maximum records that will be cached. **/
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
 
-  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueue.class);
+  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueueIterable.class);
 
   /**
    * It indicates number of records to cache. We will be using sampled record's average size to
@@ -116,7 +116,7 @@ public class BoundedInMemoryQueue<I, O> extends IteratorBasedHoodieMessageQueue<
    * @param memoryLimit MemoryLimit in bytes
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
    */
-  public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction) {
+  public BoundedInMemoryQueueIterable(final long memoryLimit, final Function<I, O> transformFunction) {
     this(memoryLimit, transformFunction, new DefaultSizeEstimator() {});
   }
 
@@ -127,8 +127,8 @@ public class BoundedInMemoryQueue<I, O> extends IteratorBasedHoodieMessageQueue<
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
    * @param payloadSizeEstimator Payload Size Estimator
    */
-  public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction,
-      final SizeEstimator<O> payloadSizeEstimator) {
+  public BoundedInMemoryQueueIterable(final long memoryLimit, final Function<I, O> transformFunction,
+                                      final SizeEstimator<O> payloadSizeEstimator) {
     this.memoryLimit = memoryLimit;
     this.transformFunction = transformFunction;
     this.payloadSizeEstimator = payloadSizeEstimator;
