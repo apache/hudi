@@ -248,7 +248,7 @@ public class TestHoodieHiveCatalog {
     partitionSd.setLocation(new Path(partitionSd.getLocation(), HoodieCatalogUtil.inferPartitionPath(true, partitionSpec)).toString());
     hoodieCatalog.getClient().add_partition(new Partition(Collections.singletonList("20221020"),
         tablePath.getDatabaseName(), tablePath.getObjectName(), 0, 0, partitionSd, null));
-    assertNotNull(getHivePartition(partitionSpec, hiveTable));
+    assertNotNull(getHivePartition(partitionSpec));
 
     // drop partition 'par1'
     hoodieCatalog.dropPartition(tablePath, partitionSpec, false);
@@ -257,18 +257,19 @@ public class TestHoodieHiveCatalog {
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tablePathStr, hoodieCatalog.getHiveConf());
     HoodieInstant latestInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().orElse(null);
     assertNotNull(latestInstant, "Delete partition commit should be completed");
-    HoodieCommitMetadata commitMetadata = WriteProfiles.getCommitMetadata("tb1", new org.apache.flink.core.fs.Path(tablePathStr),
+    HoodieCommitMetadata commitMetadata = WriteProfiles.getCommitMetadata(tablePath.getObjectName(), new org.apache.flink.core.fs.Path(tablePathStr),
         latestInstant, metaClient.getActiveTimeline());
     assertThat(commitMetadata, instanceOf(HoodieReplaceCommitMetadata.class));
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
     assertThat(replaceCommitMetadata.getPartitionToReplaceFileIds().size(), is(1));
-    assertThrows(NoSuchObjectException.class, () -> getHivePartition(partitionSpec, hiveTable));
+    assertThrows(NoSuchObjectException.class, () -> getHivePartition(partitionSpec));
   }
 
-  private Partition getHivePartition(CatalogPartitionSpec partitionSpec, Table hiveTable) throws Exception {
-    return hoodieCatalog.getClient().getPartition(tablePath.getDatabaseName(),
+  private Partition getHivePartition(CatalogPartitionSpec partitionSpec) throws Exception {
+    return hoodieCatalog.getClient().getPartition(
+        tablePath.getDatabaseName(),
         tablePath.getObjectName(),
-        hoodieCatalog.getOrderedFullPartitionValues(
-            partitionSpec, HiveSchemaUtils.getFieldNames(hiveTable.getPartitionKeys()), tablePath));
+        HoodieCatalogUtil.getOrderedPartitionValues(
+            hoodieCatalog.getName(), hoodieCatalog.getHiveConf(), partitionSpec, partitions, tablePath));
   }
 }

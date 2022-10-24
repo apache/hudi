@@ -787,10 +787,17 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     checkNotNull(tablePath, "Table path cannot be null");
     checkNotNull(partitionSpec, "CatalogPartitionSpec cannot be null");
 
-    HoodieFlinkWriteClient<?> writeClient = null;
+    final CatalogBaseTable table;
     try {
-      CatalogBaseTable table = getTable(tablePath);
-      writeClient = createWriteClient(tablePath, table);
+      table = getTable(tablePath);
+    } catch (TableNotExistException e) {
+      if (!ignoreIfNotExists) {
+        throw new PartitionNotExistException(getName(), tablePath, partitionSpec, e);
+      } else {
+        return;
+      }
+    }
+    try (HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, table)) {
       boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
       writeClient.deletePartitions(
           Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
@@ -804,23 +811,19 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       client.dropPartition(
           tablePath.getDatabaseName(),
           tablePath.getObjectName(),
-          getOrderedFullPartitionValues(
-              partitionSpec, HiveSchemaUtils.getFieldNames(getHiveTable(tablePath).getPartitionKeys()), tablePath),
+          HoodieCatalogUtil.getOrderedPartitionValues(
+              getName(), getHiveConf(), partitionSpec, ((CatalogTable) table).getPartitionKeys(), tablePath),
           true);
     } catch (NoSuchObjectException e) {
       if (!ignoreIfNotExists) {
         throw new PartitionNotExistException(getName(), tablePath, partitionSpec, e);
       }
-    } catch (MetaException | TableNotExistException | PartitionSpecInvalidException e) {
+    } catch (MetaException | PartitionSpecInvalidException e) {
       throw new PartitionNotExistException(getName(), tablePath, partitionSpec, e);
     } catch (Exception e) {
       throw new CatalogException(
           String.format(
               "Failed to drop partition %s of table %s", partitionSpec, tablePath));
-    } finally {
-      if (writeClient != null) {
-        writeClient.close();
-      }
     }
   }
 
@@ -832,45 +835,6 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       boolean ignoreIfNotExists)
       throws PartitionNotExistException, CatalogException {
     throw new HoodieCatalogException("Not supported.");
-  }
-
-  /**
-   * Get a list of ordered partition values by re-arranging them based on the given list of
-   * partition keys. If the partition value is null, it'll be converted into default partition
-   * name.
-   *
-   * @param partitionSpec a partition spec.
-   * @param partitionKeys a list of partition keys.
-   * @param tablePath path of the table to which the partition belongs.
-   * @return A list of partition values ordered according to partitionKeys.
-   * @throws PartitionSpecInvalidException thrown if partitionSpec and partitionKeys have
-   *     different sizes, or any key in partitionKeys doesn't exist in partitionSpec.
-   */
-  @VisibleForTesting
-  public List<String> getOrderedFullPartitionValues(
-      CatalogPartitionSpec partitionSpec, List<String> partitionKeys, ObjectPath tablePath)
-      throws PartitionSpecInvalidException {
-    Map<String, String> spec = partitionSpec.getPartitionSpec();
-    if (spec.size() != partitionKeys.size()) {
-      throw new PartitionSpecInvalidException(
-          getName(), partitionKeys, tablePath, partitionSpec);
-    }
-
-    List<String> values = new ArrayList<>(spec.size());
-    for (String key : partitionKeys) {
-      if (!spec.containsKey(key)) {
-        throw new PartitionSpecInvalidException(
-            getName(), partitionKeys, tablePath, partitionSpec);
-      } else {
-        String value = spec.get(key);
-        if (value == null) {
-          value = getHiveConf().getVar(HiveConf.ConfVars.DEFAULTPARTITIONNAME);
-        }
-        values.add(value);
-      }
-    }
-
-    return values;
   }
 
   @Override
