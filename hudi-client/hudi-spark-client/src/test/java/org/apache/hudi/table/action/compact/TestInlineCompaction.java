@@ -222,42 +222,25 @@ public class TestInlineCompaction extends CompactionTestBase {
   @Test
   public void testSuccessfulCompactionBasedOnNumAndTime() throws Exception {
     // Given: make three commits
-    HoodieWriteConfig cfg = getConfigForInlineCompaction(3, 20, CompactionTriggerStrategy.NUM_AND_TIME);
+    HoodieWriteConfig cfg = getConfigForInlineCompaction(3, 60, CompactionTriggerStrategy.NUM_AND_TIME);
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
       List<HoodieRecord> records = dataGen.generateInserts(HoodieActiveTimeline.createNewInstantTime(), 10);
       SparkRDDReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       List<String> instants = IntStream.range(0, 3).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
-
+      runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
-      List<Pair<String, HoodieCompactionPlan>> pendingCompactions = readClient.getPendingCompactions();
-      List<String> gotPendingCompactionInstants =
-          pendingCompactions.stream().map(pc -> pc.getKey()).sorted().collect(Collectors.toList());
-      assertEquals(0, gotPendingCompactionInstants.size());
 
-      // 1st delta commit
-      createNextDeltaCommit(instants.get(0), records, writeClient, metaClient, cfg, false);
-      metaClient.reloadActiveTimeline();
-      validateDeltaCommit(instants.get(0), CompactionUtils.getAllPendingCompactionOperations(metaClient), cfg);
-      // 2nd delta commit
-      createNextDeltaCommit(instants.get(1), records, writeClient, metaClient, cfg, false);
-      metaClient.reloadActiveTimeline();
-      validateDeltaCommit(instants.get(1), CompactionUtils.getAllPendingCompactionOperations(metaClient), cfg);
+      // Then: ensure no compaction is executed since there are only 3 delta commits
+      assertEquals(3, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
 
-      // ensure no compaction is executed since there are only 2 delta commits
-      assertEquals(2, metaClient.reloadActiveTimeline().getWriteTimeline().countInstants());
-
-      // 3rd delta commit, that will trigger compaction
-      metaClient.reloadActiveTimeline();
-      createNextDeltaCommit(instants.get(2), records, writeClient, metaClient, cfg, false);
-
-      // The 3rd delta commit triggers compaction
-      assertEquals(4, metaClient.reloadActiveTimeline().getWriteTimeline().countInstants());
-
-      metaClient.reloadActiveTimeline();
+      // Ensure the elapsed time > INLINE_COMPACT_TIME_DELTA_SECONDS
+      Thread.sleep(60*1000);
+      // 4th commit, that will trigger compaction
+      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       String finalInstant = HoodieActiveTimeline.createNewInstantTime(20000);
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 10), writeClient, metaClient, cfg, false);
 
-      metaClient.reloadActiveTimeline();
+      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       assertEquals(5, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
     }
   }
