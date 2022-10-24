@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.util.JsonUtils;
 
@@ -31,7 +29,6 @@ import java.util.Map;
 /**
  * Statistics about a single Hoodie write operation.
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieWriteStat implements Serializable {
 
   public static final String NULL_COMMIT = "null";
@@ -163,7 +160,6 @@ public class HoodieWriteStat implements Serializable {
   private Long maxEventTime;
 
   @Nullable
-  @JsonIgnore
   private RuntimeStats runtimeStats;
 
   public HoodieWriteStat() {

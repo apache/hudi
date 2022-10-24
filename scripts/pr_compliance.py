@@ -396,7 +396,7 @@ def make_default_validator(body, debug=False):
         "### Impact",
         {"_Describe any public API or user-facing feature change or any performance impact._"})
     risklevel = RiskLevelData("RISKLEVEL",
-        "### Risk level ",
+        "### Risk level",
         {"_If medium or high, explain what verification was done to mitigate the risks._"})
     checklist = ParseSectionData("CHECKLIST",
         "### Contributor's checklist",
