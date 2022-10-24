@@ -231,7 +231,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       assertEquals(3, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
 
       // Ensure the elapsed time > INLINE_COMPACT_TIME_DELTA_SECONDS
-      Thread.sleep(60*1000);
+      Thread.sleep(60 * 1000);
       // 4th commit, that will trigger compaction
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       String finalInstant = HoodieActiveTimeline.createNewInstantTime(20000);
