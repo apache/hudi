@@ -45,7 +45,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
-class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
+public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     implements RecordReader<NullWritable, ArrayWritable> {
 
   private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
