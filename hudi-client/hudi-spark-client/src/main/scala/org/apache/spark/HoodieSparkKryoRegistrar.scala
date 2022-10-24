@@ -19,16 +19,10 @@
 package org.apache.spark
 
 import com.esotericsoftware.kryo.Kryo
-import org.apache.avro.util.Utf8
-import org.apache.hudi.client.bootstrap.BootstrapRecordPayload
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.commmon.model.HoodieSparkRecord
-import org.apache.hudi.common.HoodieJsonPayload
-import org.apache.hudi.common.model.debezium.{MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
-import org.apache.hudi.common.model.{AWSDmsAvroPayload, DefaultHoodieRecordPayload, EventTimeAvroPayload, HoodieAvroIndexedRecord, HoodieAvroPayload, HoodieAvroRecord, HoodieEmptyRecord, HoodieRecord, HoodieRecordGlobalLocation, HoodieRecordLocation, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload, RewriteAvroPayload}
-import org.apache.hudi.common.util.SerializationUtils
+import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.spark.internal.config.Kryo.KRYO_USER_REGISTRATORS
 import org.apache.spark.serializer.KryoRegistrator
 
@@ -48,46 +42,24 @@ import org.apache.spark.serializer.KryoRegistrator
  *   or renamed (w/o correspondingly updating such usages)</li>
  * </ol>
  */
-class HoodieKryoRegistrar extends KryoRegistrator {
+class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegistrator {
   override def registerClasses(kryo: Kryo): Unit = {
     ///////////////////////////////////////////////////////////////////////////
     // NOTE: DO NOT REORDER REGISTRATIONS
     ///////////////////////////////////////////////////////////////////////////
+    super[HoodieCommonKryoRegistrar].registerClasses(kryo)
 
     kryo.register(classOf[HoodieWriteConfig])
 
-    kryo.register(classOf[HoodieAvroRecord[_]])
-    kryo.register(classOf[HoodieAvroIndexedRecord])
     kryo.register(classOf[HoodieSparkRecord])
-    kryo.register(classOf[HoodieEmptyRecord[_]])
-
-    kryo.register(classOf[OverwriteWithLatestAvroPayload])
-    kryo.register(classOf[DefaultHoodieRecordPayload])
-    kryo.register(classOf[OverwriteNonDefaultsWithLatestAvroPayload])
-    kryo.register(classOf[RewriteAvroPayload])
-    kryo.register(classOf[EventTimeAvroPayload])
-    kryo.register(classOf[PartialUpdateAvroPayload])
-    kryo.register(classOf[MySqlDebeziumAvroPayload])
-    kryo.register(classOf[PostgresDebeziumAvroPayload])
-    kryo.register(classOf[BootstrapRecordPayload])
-    kryo.register(classOf[AWSDmsAvroPayload])
-    kryo.register(classOf[HoodieAvroPayload])
-    kryo.register(classOf[HoodieJsonPayload])
-    kryo.register(classOf[HoodieMetadataPayload])
-
     kryo.register(classOf[HoodieInternalRow])
-
-    kryo.register(classOf[HoodieRecordLocation])
-    kryo.register(classOf[HoodieRecordGlobalLocation])
-
-    kryo.register(classOf[Utf8], new SerializationUtils.AvroUtf8Serializer())
   }
 }
 
-object HoodieKryoRegistrar {
+object HoodieSparkKryoRegistrar {
 
   def register(conf: SparkConf): SparkConf = {
-    conf.set(KRYO_USER_REGISTRATORS, Seq(classOf[HoodieKryoRegistrar].getName))
+    conf.set(KRYO_USER_REGISTRATORS, Seq(classOf[HoodieSparkKryoRegistrar].getName))
   }
 
 }

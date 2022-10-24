@@ -66,7 +66,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.HoodieKryoRegistrar$;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -283,7 +283,7 @@ public class UtilHelpers {
     sparkConf.set("spark.driver.allowMultipleContexts", "true");
 
     additionalConfigs.forEach(sparkConf::set);
-    HoodieKryoRegistrar$.MODULE$.register(sparkConf);
+    HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
     return sparkConf;
   }
 
@@ -298,7 +298,7 @@ public class UtilHelpers {
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
     additionalConfigs.forEach(sparkConf::set);
-    HoodieKryoRegistrar$.MODULE$.register(sparkConf);
+    HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
     return sparkConf;
   }
 

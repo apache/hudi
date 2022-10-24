@@ -59,7 +59,7 @@ import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
 import org.apache.hudi.testutils.providers.HoodieWriteClientProvider;
 import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.hudi.timeline.service.TimelineService;
-import org.apache.spark.HoodieKryoRegistrar$;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -185,7 +185,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      HoodieKryoRegistrar$.MODULE$.register(sparkConf);
+      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
