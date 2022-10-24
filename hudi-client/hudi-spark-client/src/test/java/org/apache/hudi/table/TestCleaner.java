@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.bootstrap.TestBootstrapIndex;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -84,8 +85,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -99,10 +98,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -130,21 +127,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestCleaner extends HoodieClientTestBase {
 
   private static final int BIG_BATCH_INSERT_SIZE = 500;
-  private static final Logger LOG = LogManager.getLogger(TestCleaner.class);
+  private static final int PARALLELISM = 10;
 
   /**
    * Helper method to do first batch of insert for clean by versions/commits tests.
    *
-   * @param cfg Hoodie Write Config
+   * @param context Spark engine context
+   * @param metaClient Hoodie table meta client
    * @param client Hoodie Client
    * @param recordGenFunction Function to generate records for insertion
    * @param insertFn Insertion API for testing
    * @throws Exception in case of error
    */
-  private Pair<String, JavaRDD<WriteStatus>> insertFirstBigBatchForClientCleanerTest(HoodieWriteConfig cfg, SparkRDDWriteClient client,
+  public static Pair<String, JavaRDD<WriteStatus>> insertFirstBigBatchForClientCleanerTest(
+      HoodieSparkEngineContext context,
+      HoodieTableMetaClient metaClient,
+      SparkRDDWriteClient client,
       Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
-      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> insertFn,
-      HoodieCleaningPolicy cleaningPolicy) throws Exception {
+      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> insertFn) throws Exception {
 
     /*
      * do a big insert (this is basically same as insert part of upsert, just adding it here so we can catch breakages
@@ -153,7 +153,7 @@ public class TestCleaner extends HoodieClientTestBase {
     String newCommitTime = client.startCommit();
 
     List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, BIG_BATCH_INSERT_SIZE);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 5);
+    JavaRDD<HoodieRecord> writeRecords = context.getJavaSparkContext().parallelize(records, PARALLELISM);
 
     JavaRDD<WriteStatus> statuses = insertFn.apply(client, writeRecords, newCommitTime);
     // Verify there are no errors
@@ -172,8 +172,8 @@ public class TestCleaner extends HoodieClientTestBase {
     assertTrue(table.getCompletedCleanTimeline().empty());
 
     if (client.getConfig().shouldAutoCommit()) {
-      HoodieIndex index = SparkHoodieIndexFactory.createIndex(cfg);
-      List<HoodieRecord> taggedRecords = tagLocation(index, jsc.parallelize(records, 1), table).collect();
+      HoodieIndex index = SparkHoodieIndexFactory.createIndex(client.getConfig());
+      List<HoodieRecord> taggedRecords = tagLocation(index, context, context.getJavaSparkContext().parallelize(records, PARALLELISM), table).collect();
       checkTaggedRecords(taggedRecords, newCommitTime);
     }
     return Pair.of(newCommitTime, statuses);
@@ -182,16 +182,17 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Helper method to do first batch of insert for clean by versions/commits tests.
    *
-   * @param cfg Hoodie Write Config
+   * @param context Spark engine context
    * @param client Hoodie Client
    * @param recordGenFunction Function to generate records for insertion
    * @param insertFn Insertion API for testing
    * @throws Exception in case of error
    */
-  private Pair<String, JavaRDD<WriteStatus>> insertFirstFailedBigBatchForClientCleanerTest(HoodieWriteConfig cfg, SparkRDDWriteClient client,
-                                                       Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
-                                                       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> insertFn,
-                                                       HoodieCleaningPolicy cleaningPolicy) throws Exception {
+  public static Pair<String, JavaRDD<WriteStatus>> insertFirstFailedBigBatchForClientCleanerTest(
+      HoodieSparkEngineContext context,
+      SparkRDDWriteClient client,
+      Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
+      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> insertFn) throws Exception {
 
     /*
      * do a big insert (this is basically same as insert part of upsert, just adding it here so we can catch breakages
@@ -200,7 +201,7 @@ public class TestCleaner extends HoodieClientTestBase {
     String newCommitTime = client.startCommit();
 
     List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, BIG_BATCH_INSERT_SIZE);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 5);
+    JavaRDD<HoodieRecord> writeRecords = context.getJavaSparkContext().parallelize(records, 5);
 
     JavaRDD<WriteStatus> statuses = insertFn.apply(client, writeRecords, newCommitTime);
     // Verify there are no errors
@@ -357,8 +358,7 @@ public class TestCleaner extends HoodieClientTestBase {
       final Function2<List<HoodieRecord>, String, Integer> recordUpsertGenWrappedFunction =
           generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateUniqueUpdates);
 
-      insertFirstBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
-          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
+      insertFirstBigBatchForClientCleanerTest(context, metaClient, client, recordInsertGenWrappedFunction, insertFn);
 
       Map<HoodieFileGroupId, FileSlice> compactionFileIdToLatestFileSlice = new HashMap<>();
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -459,128 +459,9 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test Clean-By-Commits using insert/upsert API.
    */
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testInsertAndCleanByCommits(boolean isAsync) throws Exception {
-    testInsertAndCleanByCommits(SparkRDDWriteClient::insert, SparkRDDWriteClient::upsert, false, isAsync);
-  }
-
-  /**
-   * Test Clean-By-Commits using insert/upsert API.
-   */
   @Test
   public void testFailedInsertAndCleanByCommits() throws Exception {
     testFailedInsertAndCleanByCommits(SparkRDDWriteClient::insert, false);
-  }
-
-  /**
-   * Test Clean-By-Commits using prepped version of insert/upsert API.
-   */
-  @Test
-  public void testInsertPreppedAndCleanByCommits() throws Exception {
-    testInsertAndCleanByCommits(SparkRDDWriteClient::insertPreppedRecords, SparkRDDWriteClient::upsertPreppedRecords,
-        true, false);
-  }
-
-  /**
-   * Test Clean-By-Commits using prepped versions of bulk-insert/upsert API.
-   */
-  @Test
-  public void testBulkInsertPreppedAndCleanByCommits() throws Exception {
-    testInsertAndCleanByCommits(
-        (client, recordRDD, instantTime) -> client.bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty()),
-        SparkRDDWriteClient::upsertPreppedRecords, true, false);
-  }
-
-  /**
-   * Test Clean-By-Commits using bulk-insert/upsert API.
-   */
-  @Test
-  public void testBulkInsertAndCleanByCommits() throws Exception {
-    testInsertAndCleanByCommits(SparkRDDWriteClient::bulkInsert, SparkRDDWriteClient::upsert, false, false);
-  }
-
-  /**
-   * Test Helper for Cleaning by versions logic from HoodieWriteClient API perspective.
-   *
-   * @param insertFn Insert API to be tested
-   * @param upsertFn Upsert API to be tested
-   * @param isPreppedAPI Flag to indicate if a prepped-version is used. If true, a wrapper function will be used during
-   *        record generation to also tag the regards (de-dupe is implicit as we use unique record-gen APIs)
-   * @throws Exception in case of errors
-   */
-  private void testInsertAndCleanByCommits(
-      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> insertFn,
-      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> upsertFn, boolean isPreppedAPI, boolean isAsync)
-      throws Exception {
-    int maxCommits = 3; // keep upto 3 commits from the past
-    HoodieWriteConfig cfg = getConfigBuilder()
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).withAsyncClean(isAsync).retainCommits(maxCommits).build())
-        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
-        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
-        .build();
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-
-    final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
-        generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
-
-    final Function2<List<HoodieRecord>, String, Integer> recordUpsertGenWrappedFunction =
-        generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateUniqueUpdates);
-
-    insertFirstBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
-
-    // Keep doing some writes and clean inline. Make sure we have expected number of files remaining.
-    for (int i = 0; i < 8; i++) {
-      String newCommitTime = makeNewCommitTime();
-      try {
-        client.startCommitWithTime(newCommitTime);
-        List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newCommitTime, 100);
-
-        List<WriteStatus> statuses = upsertFn.apply(client, jsc.parallelize(records, 1), newCommitTime).collect();
-        // Verify there are no errors
-        assertNoWriteErrors(statuses);
-
-        metaClient = HoodieTableMetaClient.reload(metaClient);
-        HoodieTable table1 = HoodieSparkTable.create(cfg, context, metaClient);
-        HoodieTimeline activeTimeline = table1.getCompletedCommitsTimeline();
-        HoodieInstant lastInstant = activeTimeline.lastInstant().get();
-        if (cfg.isAsyncClean()) {
-          activeTimeline = activeTimeline.findInstantsBefore(lastInstant.getTimestamp());
-        }
-        // NOTE: See CleanPlanner#getFilesToCleanKeepingLatestCommits. We explicitly keep one commit before earliest
-        // commit
-        Option<HoodieInstant> earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits);
-        Set<HoodieInstant> acceptableCommits = activeTimeline.getInstants().collect(Collectors.toSet());
-        if (earliestRetainedCommit.isPresent()) {
-          acceptableCommits
-              .removeAll(activeTimeline.findInstantsInRange("000", earliestRetainedCommit.get().getTimestamp())
-                  .getInstants().collect(Collectors.toSet()));
-          acceptableCommits.add(earliestRetainedCommit.get());
-        }
-
-        TableFileSystemView fsView = table1.getFileSystemView();
-        // Need to ensure the following
-        for (String partitionPath : dataGen.getPartitionPaths()) {
-          List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
-          for (HoodieFileGroup fileGroup : fileGroups) {
-            Set<String> commitTimes = new HashSet<>();
-            fileGroup.getAllBaseFiles().forEach(value -> {
-              LOG.debug("Data File - " + value);
-              commitTimes.add(value.getCommitTime());
-            });
-            if (cfg.isAsyncClean()) {
-              commitTimes.remove(lastInstant.getTimestamp());
-            }
-            assertEquals(acceptableCommits.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet()), commitTimes,
-                "Only contain acceptable versions of file should be present");
-          }
-        }
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
-      }
-    }
   }
 
   /**
@@ -609,22 +490,18 @@ public class TestCleaner extends HoodieClientTestBase {
     final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
         generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
 
-    Pair<String, JavaRDD<WriteStatus>> result = insertFirstBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+    Pair<String, JavaRDD<WriteStatus>> result = insertFirstBigBatchForClientCleanerTest(context, metaClient, client, recordInsertGenWrappedFunction, insertFn);
     client.commit(result.getLeft(), result.getRight());
 
     HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
     assertTrue(table.getCompletedCleanTimeline().empty());
 
-    insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+    insertFirstFailedBigBatchForClientCleanerTest(context, client, recordInsertGenWrappedFunction, insertFn);
 
-    insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+    insertFirstFailedBigBatchForClientCleanerTest(context, client, recordInsertGenWrappedFunction, insertFn);
 
     Pair<String, JavaRDD<WriteStatus>> ret =
-        insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+        insertFirstFailedBigBatchForClientCleanerTest(context, client, recordInsertGenWrappedFunction, insertFn);
     // Await till enough time passes such that the last failed commits heartbeats are expired
     await().atMost(10, TimeUnit.SECONDS).until(() -> client.getHeartbeatClient()
         .isHeartbeatExpired(ret.getLeft()));
@@ -1349,8 +1226,7 @@ public class TestCleaner extends HoodieClientTestBase {
       final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
           generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
 
-      Pair<String, JavaRDD<WriteStatus>> result = insertFirstBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
-          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
+      Pair<String, JavaRDD<WriteStatus>> result = insertFirstBigBatchForClientCleanerTest(context, metaClient, client, recordInsertGenWrappedFunction, insertFn);
 
       client.commit(result.getLeft(), result.getRight());
 
@@ -1358,15 +1234,12 @@ public class TestCleaner extends HoodieClientTestBase {
 
       assertTrue(table.getCompletedCleanTimeline().empty());
 
-      insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
-          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
+      insertFirstFailedBigBatchForClientCleanerTest(context, client, recordInsertGenWrappedFunction, insertFn);
 
-      insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
-          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
+      insertFirstFailedBigBatchForClientCleanerTest(context, client, recordInsertGenWrappedFunction, insertFn);
 
       Pair<String, JavaRDD<WriteStatus>> ret =
-          insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
-          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
+          insertFirstFailedBigBatchForClientCleanerTest(context, client, recordInsertGenWrappedFunction, insertFn);
 
       // Await till enough time passes such that the last failed commits heartbeats are expired
       await().atMost(10, TimeUnit.SECONDS).until(() -> client.getHeartbeatClient()
