@@ -33,7 +33,7 @@ import scala.util.control.NonFatal
 
 /**
  * Command for repair hudi table's partitions.
- * Use hoodieCatalogTable.getPartitionPaths() to get partitions instead of scanning the file system.
+ * Use the methods in hoodieCatalogTable to obtain partitions and stats instead of scanning the file system.
  */
 case class RepairHoodieTableCommand(tableName: TableIdentifier,
                                     enableAddPartitions: Boolean,
