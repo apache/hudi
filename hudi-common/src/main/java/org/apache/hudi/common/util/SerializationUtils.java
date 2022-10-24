@@ -117,8 +117,8 @@ public class SerializationUtils {
       // for hadoop
       kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
 
-      // Register serializers
-      kryo.register(Utf8.class, new AvroUtf8Serializer());
+      // Register Hudi's classes
+      new HoodieCommonKryoRegistrar().registerClasses(kryo);
 
       return kryo;
     }
