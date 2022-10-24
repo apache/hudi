@@ -81,6 +81,9 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
 
   override def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)] = {
     plan match {
+      // For Spark >= 3.2.x, AlterTableRecoverPartitionsCommand was renamed RepairTableCommand, and added two new
+      // parameters: enableAddPartitions and enableDropPartitions. By setting them to true and false, can restore
+      // AlterTableRecoverPartitionsCommand's behavior
       case c: AlterTableRecoverPartitionsCommand =>
         Some((c.tableName, true, false, c.cmd))
     }

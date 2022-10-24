@@ -17,9 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path, PathFilter}
-import org.apache.hadoop.mapred.{FileInputFormat, JobConf}
+import org.apache.hadoop.fs.Path
 
 import org.apache.hudi.common.table.HoodieTableConfig
 
@@ -28,10 +26,9 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.execution.command.PartitionStatistics
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
-import org.apache.spark.util.{SerializableConfiguration, ThreadUtils}
+import org.apache.spark.util.ThreadUtils
 
 import java.util.concurrent.TimeUnit.MILLISECONDS
-
 import scala.util.control.NonFatal
 
 /**
@@ -49,23 +46,6 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
   val NUM_FILES = "numFiles"
   val TOTAL_SIZE = "totalSize"
   val DDL_TIME = "transient_lastDdlTime"
-
-  private def getPathFilter(hadoopConf: Configuration): PathFilter = {
-    // Dummy jobconf to get to the pathFilter defined in configuration
-    // It's very expensive to create a JobConf(ClassUtil.findContainingJar() is slow)
-    val jobConf = new JobConf(hadoopConf, this.getClass)
-    val pathFilter = FileInputFormat.getInputPathFilter(jobConf)
-    new PathFilter {
-      override def accept(path: Path): Boolean = {
-        val name = path.getName
-        if (name != "_SUCCESS" && name != "_temporary" && !name.startsWith(".")) {
-          pathFilter == null || pathFilter.accept(path)
-        } else {
-          false
-        }
-      }
-    }
-  }
 
   override def run(spark: SparkSession): Seq[Row] = {
     val catalog = spark.sessionState.catalog
@@ -86,7 +66,8 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
 
     val hoodieCatalogTable = HoodieCatalogTable(spark, table.identifier)
     val isHiveStyledPartitioning = hoodieCatalogTable.catalogProperties.
-      getOrElse(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true").equals("true")
+      getOrElse(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true").toBoolean
+
     val partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)] = hoodieCatalogTable.getPartitionPaths.map(partitionPath => {
       var values = partitionPath.split('/')
       if (isHiveStyledPartitioning) {
@@ -99,13 +80,10 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
       dropPartitions(catalog, partitionSpecsAndLocs)
     } else 0
     val addedAmount = if (enableAddPartitions) {
-      val hadoopConf = spark.sessionState.newHadoopConf()
-      val fs = root.getFileSystem(hadoopConf)
-      val pathFilter = getPathFilter(hadoopConf)
-      val threshold = spark.sparkContext.conf.getInt("spark.rdd.parallelListingThreshold", 10)
       val total = partitionSpecsAndLocs.length
       val partitionStats = if (spark.sqlContext.conf.gatherFastStats) {
-        gatherPartitionStats(spark, partitionSpecsAndLocs, fs, pathFilter, threshold)
+        hoodieCatalogTable.getFilesInPartitions(partitionSpecsAndLocs.map(_._2.toString))
+          .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLen).sum))
       } else {
         Map.empty[String, PartitionStatistics]
       }
@@ -128,40 +106,6 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     }
     logInfo(s"Recovered all partitions: added ($addedAmount), dropped ($droppedAmount).")
     Seq.empty[Row]
-  }
-
-  private def gatherPartitionStats(spark: SparkSession,
-                                   partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)],
-                                   fs: FileSystem,
-                                   pathFilter: PathFilter,
-                                   threshold: Int): Map[String, PartitionStatistics] = {
-    if (partitionSpecsAndLocs.length > threshold) {
-      val hadoopConf = spark.sessionState.newHadoopConf()
-      val serializableConfiguration = new SerializableConfiguration(hadoopConf)
-      val serializedPaths = partitionSpecsAndLocs.map(_._2.toString).toArray
-
-      // Set the number of parallelism to prevent following file listing from generating many tasks
-      // in case of large #defaultParallelism.
-      val numParallelism = Math.min(serializedPaths.length,
-        Math.min(spark.sparkContext.defaultParallelism, 10000))
-      // gather the fast stats for all the partitions otherwise Hive metastore will list all the
-      // files for all the new partitions in sequential way, which is super slow.
-      logInfo(s"Gather the fast stats in parallel using $numParallelism tasks.")
-      spark.sparkContext.parallelize(serializedPaths, numParallelism)
-        .mapPartitions { paths =>
-          val pathFilter = getPathFilter(serializableConfiguration.value)
-          paths.map(new Path(_)).map { path =>
-            val fs = path.getFileSystem(serializableConfiguration.value)
-            val statuses = fs.listStatus(path, pathFilter)
-            (path.toString, PartitionStatistics(statuses.length, statuses.map(_.getLen).sum))
-          }
-        }.collectAsMap().toMap
-    } else {
-      partitionSpecsAndLocs.map { case (_, location) =>
-        val statuses = fs.listStatus(location, pathFilter)
-        (location.toString, PartitionStatistics(statuses.length, statuses.map(_.getLen).sum))
-      }.toMap
-    }
   }
 
   private def addPartitions(spark: SparkSession,

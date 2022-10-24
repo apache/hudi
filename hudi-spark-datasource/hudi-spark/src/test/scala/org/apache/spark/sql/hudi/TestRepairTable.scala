@@ -92,8 +92,8 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
 
         assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
         spark.sql(s"msck repair table $tableName")
-        spark.sql(s"msck repair table $tableName")
-        assertResult(Seq("dt=2022-10-06/hh=11", "dt=2022-10-06/hh=12"))(spark.sessionState.catalog.listPartitionNames(table))
+        assertResult(Seq("dt=2022-10-06/hh=11", "dt=2022-10-06/hh=12"))(
+          spark.sessionState.catalog.listPartitionNames(table))
       }
     }
   }
