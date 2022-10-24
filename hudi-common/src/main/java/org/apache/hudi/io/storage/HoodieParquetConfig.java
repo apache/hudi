@@ -37,7 +37,7 @@ public class HoodieParquetConfig<T> {
 
   public HoodieParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
                              int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
-    this(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize, hadoopConf, compressionRatio, false);
+    this(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize, hadoopConf, compressionRatio, true);
   }
 
   public HoodieParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
