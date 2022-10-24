@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator
-import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -41,7 +40,7 @@ import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
 import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
+import org.apache.avro.generic.{GenericData, GenericRecord, GenericRecordBuilder, IndexedRecord}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -67,10 +66,9 @@ import scala.collection.mutable
 
 /**
  * The split that will be processed by spark task.
+ * The [[changes]] should be sorted first.
  */
-case class HoodieCDCFileGroupSplit(
-    commitToChanges: Array[(HoodieInstant, HoodieCDCFileSplit)]
-)
+case class HoodieCDCFileGroupSplit(changes: Array[HoodieCDCFileSplit])
 
 /**
  * The Spark [[Partition]]'s implementation.
@@ -94,11 +92,9 @@ class HoodieCDCRDD(
 
   private val confBroadcast = spark.sparkContext.broadcast(new SerializableWritable(hadoopConf))
 
-  private val cdcSupplementalLoggingMode = HoodieCDCSupplementalLoggingMode.parse(
-    metaClient.getTableConfig.cdcSupplementalLoggingMode
-  )
+  private val cdcSupplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
 
-  private val props = HoodieFileIndex.getConfigProperties(spark, Map.empty)
+  private val props = HoodieFileIndex.getConfigProperties(spark, Map.empty, metaClient)
 
   protected val payloadProps: Properties = Option(metaClient.getTableConfig.getPreCombineField)
     .map { preCombineField =>
@@ -158,7 +154,7 @@ class HoodieCDCRDD(
         .build();
       HoodieTableState(
         pathToString(basePath),
-        split.commitToChanges.map(_._1.getTimestamp).max,
+        split.changes.last.getInstant,
         recordKeyField,
         preCombineFieldOpt,
         usesVirtualKeys = false,
@@ -201,18 +197,18 @@ class HoodieCDCRDD(
     private lazy val projection: UnsafeProjection = generateUnsafeProjection(cdcSchema, requiredCdcSchema)
 
     // Iterator on cdc file
-    private val cdcFileIter = split.commitToChanges.sortBy(_._1).iterator
+    private val cdcFileIter = split.changes.iterator
 
     // The instant that is currently being processed
-    private var currentInstant: HoodieInstant = _
+    private var currentInstant: String = _
 
     // The change file that is currently being processed
     private var currentChangeFile: HoodieCDCFileSplit = _
 
     /**
      * Two cases will use this to iterator the records:
-     * 1) extract the change data from the base file directly, including 'ADD_BASE_File' and 'REMOVE_BASE_File'.
-     * 2) when the type of cdc file is 'REPLACED_FILE_GROUP',
+     * 1) extract the change data from the base file directly, including 'BASE_FILE_INSERT' and 'BASE_FILE_DELETE'.
+     * 2) when the type of cdc file is 'REPLACE_COMMIT',
      *    use this to trace the records that are converted from the '[[beforeImageRecords]]
      */
     private var recordIter: Iterator[InternalRow] = Iterator.empty
@@ -314,16 +310,16 @@ class HoodieCDCRDD(
             case HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER =>
               recordToLoad.update(0, convertToUTF8String(String.valueOf(record.get(0))))
               val before = record.get(2).asInstanceOf[GenericRecord]
-              recordToLoad.update(2, convertToUTF8String(HoodieCDCUtils.recordToJson(before)))
+              recordToLoad.update(2, recordToJsonAsUTF8String(before))
               val after = record.get(3).asInstanceOf[GenericRecord]
-              recordToLoad.update(3, convertToUTF8String(HoodieCDCUtils.recordToJson(after)))
+              recordToLoad.update(3, recordToJsonAsUTF8String(after))
             case HoodieCDCSupplementalLoggingMode.WITH_BEFORE =>
               val row = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
               val op = row.getString(0)
               val recordKey = row.getString(1)
               recordToLoad.update(0, convertToUTF8String(op))
               val before = record.get(2).asInstanceOf[GenericRecord]
-              recordToLoad.update(2, convertToUTF8String(HoodieCDCUtils.recordToJson(before)))
+              recordToLoad.update(2, recordToJsonAsUTF8String(before))
               parse(op) match {
                 case INSERT =>
                   recordToLoad.update(3, convertRowToJsonString(afterImageRecords(recordKey)))
@@ -342,10 +338,10 @@ class HoodieCDCRDD(
                   recordToLoad.update(2, null)
                   recordToLoad.update(3, convertRowToJsonString(afterImageRecords(recordKey)))
                 case UPDATE =>
-                  recordToLoad.update(2, convertRowToJsonString(deserialize(beforeImageRecords(recordKey))))
+                  recordToLoad.update(2, recordToJsonAsUTF8String(beforeImageRecords(recordKey)))
                   recordToLoad.update(3, convertRowToJsonString(afterImageRecords(recordKey)))
                 case _ =>
-                  recordToLoad.update(2, convertRowToJsonString(deserialize(beforeImageRecords(recordKey))))
+                  recordToLoad.update(2, recordToJsonAsUTF8String(beforeImageRecords(recordKey)))
                   recordToLoad.update(3, null)
               }
           }
@@ -359,7 +355,7 @@ class HoodieCDCRDD(
     }
 
     /**
-     * Load the next log record, and judege how to convert it to cdc format.
+     * Load the next log record, and judge how to convert it to cdc format.
      */
     private def loadNextLogRecord(): Boolean = {
       var loaded = false
@@ -374,7 +370,7 @@ class HoodieCDCRDD(
         } else {
           // there is a real record deleted.
           recordToLoad.update(0, CDCRelation.CDC_OPERATION_DELETE)
-          recordToLoad.update(2, convertRowToJsonString(deserialize(existingRecordOpt.get)))
+          recordToLoad.update(2, recordToJsonAsUTF8String(existingRecordOpt.get))
           recordToLoad.update(3, null)
           loaded = true
         }
@@ -382,25 +378,24 @@ class HoodieCDCRDD(
         val existingRecordOpt = beforeImageRecords.get(key)
         if (existingRecordOpt.isEmpty) {
           // a new record is inserted.
-          val insertedRecord = convertIndexedRecordToRow(indexedRecord.get)
+          val insertedRecord = projectAvroUnsafe(indexedRecord.get)
           recordToLoad.update(0, CDCRelation.CDC_OPERATION_INSERT)
           recordToLoad.update(2, null)
-          recordToLoad.update(3, convertRowToJsonString(insertedRecord))
+          recordToLoad.update(3, recordToJsonAsUTF8String(insertedRecord))
           // insert into beforeImageRecords
-          beforeImageRecords(key) = serialize(insertedRecord)
+          beforeImageRecords(key) = insertedRecord
           loaded = true
         } else {
           // a existed record is updated.
           val existingRecord = existingRecordOpt.get
           val merged = merge(existingRecord, logRecord)
-          val mergeRow = convertIndexedRecordToRow(merged)
-          val existingRow = deserialize(existingRecord)
-          if (mergeRow != existingRow) {
+          val mergeRecord = projectAvroUnsafe(merged)
+          if (existingRecord != mergeRecord) {
             recordToLoad.update(0, CDCRelation.CDC_OPERATION_UPDATE)
-            recordToLoad.update(2, convertRowToJsonString(existingRow))
-            recordToLoad.update(3, convertRowToJsonString(mergeRow))
+            recordToLoad.update(2, recordToJsonAsUTF8String(existingRecord))
+            recordToLoad.update(3, recordToJsonAsUTF8String(mergeRecord))
             // update into beforeImageRecords
-            beforeImageRecords(key) = serialize(mergeRow)
+            beforeImageRecords(key) = mergeRecord
             loaded = true
           }
         }
@@ -409,7 +404,7 @@ class HoodieCDCRDD(
     }
 
     private def loadCdcFile(): Unit = {
-      // reset all the iterator or reader first.
+      // reset all the iterator first.
       recordIter = Iterator.empty
       logRecordIter = Iterator.empty
       beforeImageRecords.clear()
@@ -420,13 +415,13 @@ class HoodieCDCRDD(
       }
 
       if (cdcFileIter.hasNext) {
-        val pair = cdcFileIter.next()
-        currentInstant = pair._1
-        currentChangeFile = pair._2
+        val split = cdcFileIter.next()
+        currentInstant = split.getInstant
+        currentChangeFile = split
         currentChangeFile.getCdcInferCase match {
           case BASE_FILE_INSERT =>
-            assert(currentChangeFile.getCdcFile != null)
-            val absCDCPath = new Path(basePath, currentChangeFile.getCdcFile)
+            assert(currentChangeFile.getCdcFiles != null && currentChangeFile.getCdcFiles.size() == 1)
+            val absCDCPath = new Path(basePath, currentChangeFile.getCdcFiles.get(0))
             val fileStatus = fs.getFileStatus(absCDCPath)
             val pf = PartitionedFile(InternalRow.empty, absCDCPath.toUri.toString, 0, fileStatus.getLen)
             recordIter = parquetReader(pf)
@@ -434,14 +429,15 @@ class HoodieCDCRDD(
             assert(currentChangeFile.getBeforeFileSlice.isPresent)
             recordIter = loadFileSlice(currentChangeFile.getBeforeFileSlice.get)
           case LOG_FILE =>
-            assert(currentChangeFile.getCdcFile != null && currentChangeFile.getBeforeFileSlice.isPresent)
+            assert(currentChangeFile.getCdcFiles != null && currentChangeFile.getCdcFiles.size() == 1
+              && currentChangeFile.getBeforeFileSlice.isPresent)
             loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
-            val absLogPath = new Path(basePath, currentChangeFile.getCdcFile)
+            val absLogPath = new Path(basePath, currentChangeFile.getCdcFiles.get(0))
             val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(fs.getFileStatus(absLogPath))))
             val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
             logRecordIter = logFileIterator.logRecordsIterator()
           case AS_IS =>
-            assert(currentChangeFile.getCdcFile != null)
+            assert(currentChangeFile.getCdcFiles != null && !currentChangeFile.getCdcFiles.isEmpty)
             // load beforeFileSlice to beforeImageRecords
             if (currentChangeFile.getBeforeFileSlice.isPresent) {
               loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
@@ -455,8 +451,11 @@ class HoodieCDCRDD(
                 afterImageRecords.put(key, row.copy())
               }
             }
-            val absCDCPath = new Path(basePath, currentChangeFile.getCdcFile)
-            cdcLogRecordIterator = new HoodieCDCLogRecordIterator(fs, absCDCPath, cdcAvroSchema)
+
+            val cdcLogFiles = currentChangeFile.getCdcFiles.asScala.map { cdcFile =>
+              new HoodieLogFile(fs.getFileStatus(new Path(basePath, cdcFile)))
+            }.toArray
+            cdcLogRecordIterator = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcAvroSchema)
           case REPLACE_COMMIT =>
             if (currentChangeFile.getBeforeFileSlice.isPresent) {
               loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
@@ -480,23 +479,23 @@ class HoodieCDCRDD(
       recordToLoad = currentChangeFile.getCdcInferCase match {
         case BASE_FILE_INSERT =>
           InternalRow.fromSeq(Array(
-            CDCRelation.CDC_OPERATION_INSERT, convertToUTF8String(currentInstant.getTimestamp),
+            CDCRelation.CDC_OPERATION_INSERT, convertToUTF8String(currentInstant),
             null, null))
         case BASE_FILE_DELETE =>
           InternalRow.fromSeq(Array(
-            CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant.getTimestamp),
+            CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
             null, null))
         case LOG_FILE =>
           InternalRow.fromSeq(Array(
-            null, convertToUTF8String(currentInstant.getTimestamp),
+            null, convertToUTF8String(currentInstant),
             null, null))
         case AS_IS =>
           InternalRow.fromSeq(Array(
-            null, convertToUTF8String(currentInstant.getTimestamp),
+            null, convertToUTF8String(currentInstant),
             null, null))
         case REPLACE_COMMIT =>
           InternalRow.fromSeq(Array(
-            CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant.getTimestamp),
+            CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
             null, null))
       }
     }
@@ -516,7 +515,9 @@ class HoodieCDCRDD(
         val iter = loadFileSlice(fileSlice)
         iter.foreach { row =>
           val key = getRecordKey(row)
-          beforeImageRecords.put(key, serialize(row))
+          // Due to the reuse buffer mechanism of Spark serialization,
+          // we have to copy the serialized result if we need to retain its reference
+          beforeImageRecords.put(key, serialize(row, copy = true))
         }
         // reset beforeImageFiles
         beforeImageFiles.clear()
@@ -581,8 +582,17 @@ class HoodieCDCRDD(
       p.toUri.toString
     }
 
-    private def serialize(curRowRecord: InternalRow): GenericRecord = {
-      serializer.serialize(curRowRecord).asInstanceOf[GenericRecord]
+    private def serialize(curRowRecord: InternalRow, copy: Boolean = false): GenericRecord = {
+      val record = serializer.serialize(curRowRecord).asInstanceOf[GenericRecord]
+      if (copy) {
+        GenericData.get().deepCopy(record.getSchema, record)
+      } else {
+        record
+      }
+    }
+
+    private def recordToJsonAsUTF8String(record: GenericRecord): UTF8String = {
+      convertToUTF8String(HoodieCDCUtils.recordToJson(record))
     }
 
     private def getRecordKey(row: InternalRow): String = {
@@ -599,11 +609,9 @@ class HoodieCDCRDD(
       toScalaOption(record.getData.getInsertValue(avroSchema, payloadProps))
     }
 
-    private def convertIndexedRecordToRow(record: IndexedRecord): InternalRow = {
-      deserialize(
-        LogFileIterator.projectAvroUnsafe(record.asInstanceOf[GenericRecord],
-          avroSchema, reusableRecordBuilder)
-      )
+    private def projectAvroUnsafe(record: IndexedRecord): GenericRecord = {
+      LogFileIterator.projectAvroUnsafe(record.asInstanceOf[GenericRecord],
+        avroSchema, reusableRecordBuilder)
     }
 
     private def merge(curAvroRecord: GenericRecord, newRecord: HoodieRecord[_ <: HoodieRecordPayload[_]]): IndexedRecord = {

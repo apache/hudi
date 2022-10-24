@@ -21,8 +21,10 @@ package org.apache.hudi.common.util;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hudi.exception.HoodieIOException;
 
 public class JsonUtils {
 
@@ -40,5 +42,14 @@ public class JsonUtils {
 
   public static ObjectMapper getObjectMapper() {
     return MAPPER;
+  }
+
+  public static String toString(Object value) {
+    try {
+      return MAPPER.writeValueAsString(value);
+    } catch (JsonProcessingException e) {
+      throw new HoodieIOException(
+          "Fail to convert the class: " + value.getClass().getName() + " to Json String", e);
+    }
   }
 }

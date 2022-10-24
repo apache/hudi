@@ -26,6 +26,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -93,7 +94,7 @@ public class HiveSyncContext {
 
   @VisibleForTesting
   public static Properties buildSyncConfig(Configuration conf) {
-    TypedProperties props = new TypedProperties();
+    TypedProperties props = StreamerUtil.flinkConf2TypedProperties(conf);
     props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), conf.getString(FlinkOptions.PATH));
     props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), conf.getString(FlinkOptions.HIVE_SYNC_FILE_FORMAT));
     props.setPropertyIfNonNull(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");

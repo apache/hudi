@@ -68,6 +68,7 @@
           <imports>
             <!-- import avro files -->
             <import>${basedir}/src/main/avro/HoodieCommitMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieCompactionStrategy.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCompactionOperation.avsc</import>
             <import>${basedir}/src/main/avro/HoodieSavePointMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCompactionMetadata.avsc</import>

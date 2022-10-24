@@ -75,3 +75,11 @@ enum SampleEnum {
   FIRST = 0;
   SECOND = 1;
 }
+
+message WithOneOf {
+  oneof some_value {
+    int32 int = 1;
+    int64 long = 2;
+    Nested message = 3;
+  }
+}

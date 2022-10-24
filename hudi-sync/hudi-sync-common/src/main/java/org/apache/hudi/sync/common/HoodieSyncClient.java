@@ -104,6 +104,15 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     }
   }
 
+  @Override
+  public MessageType getStorageSchema(boolean includeMetadataField) {
+    try {
+      return new TableSchemaResolver(metaClient).getTableParquetSchema(includeMetadataField);
+    } catch (Exception e) {
+      throw new HoodieSyncException("Failed to read schema from storage.", e);
+    }
+  }
+
   public List<String> getWrittenPartitionsSince(Option<String> lastCommitTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in "

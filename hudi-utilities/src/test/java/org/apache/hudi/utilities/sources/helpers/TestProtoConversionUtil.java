@@ -24,6 +24,7 @@ import org.apache.hudi.utilities.test.proto.Nested;
 import org.apache.hudi.utilities.test.proto.Parent;
 import org.apache.hudi.utilities.test.proto.Sample;
 import org.apache.hudi.utilities.test.proto.SampleEnum;
+import org.apache.hudi.utilities.test.proto.WithOneOf;
 
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
@@ -36,10 +37,12 @@ import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import com.google.protobuf.util.Timestamps;
 import org.apache.avro.io.BinaryDecoder;
@@ -52,6 +55,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -63,41 +67,59 @@ import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil.toUnsignedBigInteger;
+
 public class TestProtoConversionUtil {
   private static final Random RANDOM = new Random();
+  private static final String MAX_UNSIGNED_LONG = "18446744073709551615";
+  private static final String PRIMITIVE_UNSIGNED_LONG_FIELD_NAME = "primitive_unsigned_long";
+  private static final String WRAPPED_UNSIGNED_LONG_FIELD_NAME = "wrapped_unsigned_long";
+  private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   @Test
-  public void allFieldsSet_wellKnownTypesAreNested() throws IOException {
+  public void allFieldsSet_wellKnownTypesAndTimestampsAsRecords() throws IOException {
     Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_nested.avsc"));
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
     Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, true);
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
+    Sample input = inputAndOutput.getLeft();
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema);
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
+    // assert that unsigned long is interpreted correctly
+    Schema primitiveUnsignedLongSchema = convertedSchema.getField(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME).schema();
+    assertUnsignedLongCorrectness(primitiveUnsignedLongSchema, input.getPrimitiveUnsignedLong(), (GenericFixed) actual.get(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME));
+    Schema wrappedUnsignedLongSchema = convertedSchema.getField(WRAPPED_UNSIGNED_LONG_FIELD_NAME).schema().getTypes().get(1).getField("value").schema();
+    assertUnsignedLongCorrectness(wrappedUnsignedLongSchema, input.getWrappedUnsignedLong().getValue(), (GenericFixed) ((GenericRecord) actual.get(WRAPPED_UNSIGNED_LONG_FIELD_NAME)).get("value"));
   }
 
   @Test
-  public void noFieldsSet_wellKnownTypesAreNested() throws IOException {
+  public void noFieldsSet_wellKnownTypesAndTimestampsAsRecords() throws IOException {
     Sample sample = Sample.newBuilder().build();
     Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_nested.avsc"));
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema);
     Assertions.assertEquals(createDefaultOutput(convertedSchema), actual);
   }
 
   @Test
-  public void allFieldsSet_wellKnownTypesAreFlattened() throws IOException {
+  public void allFieldsSet_defaultOptions() throws IOException {
     Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_flattened.avsc"));
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
     Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, false);
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
+    Sample input = inputAndOutput.getLeft();
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema);
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
+    // assert that unsigned long is interpreted correctly
+    Schema primitiveUnsignedLongSchema = convertedSchema.getField(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME).schema();
+    assertUnsignedLongCorrectness(primitiveUnsignedLongSchema, input.getPrimitiveUnsignedLong(), (GenericFixed) actual.get(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME));
+    Schema wrappedUnsignedLongSchema = convertedSchema.getField(WRAPPED_UNSIGNED_LONG_FIELD_NAME).schema().getTypes().get(1);
+    assertUnsignedLongCorrectness(wrappedUnsignedLongSchema, input.getWrappedUnsignedLong().getValue(), (GenericFixed) actual.get(WRAPPED_UNSIGNED_LONG_FIELD_NAME));
   }
 
   @Test
-  public void noFieldsSet_wellKnownTypesAreFlattened() throws IOException {
+  public void noFieldsSet_defaultOptions() throws IOException {
     Sample sample = Sample.newBuilder().build();
     Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_flattened.avsc"));
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema);
     Assertions.assertEquals(createDefaultOutput(convertedSchema), actual);
   }
@@ -130,10 +152,44 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals(input.getChildren(1).getRecurseField().getRecurseField(), parsedChildren2Overflow);
   }
 
+  @Test
+  public void oneOfSchema() throws IOException {
+    Schema.Parser parser = new Schema.Parser();
+    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/oneof_schema.avsc"));
+    WithOneOf input = WithOneOf.newBuilder().setLong(32L).build();
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema);
+
+    GenericData.Record expectedRecord = new GenericData.Record(convertedSchema);
+    expectedRecord.put("int", null);
+    expectedRecord.put("long", 32L);
+    expectedRecord.put("message", null);
+    Assertions.assertEquals(expectedRecord, actual);
+  }
+
+  @Test
+  public void longToUnsignedBigIntegerConversion() {
+    Assertions.assertEquals("0", toUnsignedBigInteger(0).toString());
+    Assertions.assertEquals(MAX_UNSIGNED_LONG, toUnsignedBigInteger(-1).toString());
+    Assertions.assertEquals(String.valueOf(Long.MAX_VALUE), toUnsignedBigInteger(Long.MAX_VALUE).toString());
+    Assertions.assertEquals("10", toUnsignedBigInteger(10L).toString());
+    // equivalent of lower 32 bits all set to 0 and upper 32 bits alternating 10
+    Assertions.assertEquals("12297829379609722880", toUnsignedBigInteger(-6148914694099828736L).toString());
+  }
+
+  private void assertUnsignedLongCorrectness(Schema fieldSchema, long expectedValue, GenericFixed actual) {
+    BigDecimal actualPrimitiveUnsignedLong = DECIMAL_CONVERSION.fromFixed(actual, fieldSchema,
+        fieldSchema.getLogicalType());
+    Assertions.assertEquals(Long.toUnsignedString(expectedValue), actualPrimitiveUnsignedLong.toString());
+  }
+
   private Pair<Sample, GenericRecord> createInputOutputSampleWithRandomValues(Schema schema, boolean wellKnownTypesAsRecords) {
     Schema nestedMessageSchema = schema.getField("nested_message").schema().getTypes().get(1);
     Schema listMessageSchema = schema.getField("repeated_message").schema().getElementType();
     Schema mapMessageSchema = schema.getField("map_message").schema().getElementType().getField("value").schema().getTypes().get(1);
+    Schema unsignedLongSchema = schema.getField("primitive_unsigned_long").schema();
+
+    // ensure at least one uint64 related value is above the signed long range
+    boolean primitiveUnsignedLongInUnsignedRange = RANDOM.nextBoolean();
 
     double primitiveDouble = RANDOM.nextDouble();
     float primitiveFloat = RANDOM.nextFloat();
@@ -144,7 +200,7 @@ public class TestProtoConversionUtil {
     int primitiveSignedInt = RANDOM.nextInt();
     long primitiveSignedLong = RANDOM.nextLong();
     int primitiveFixedInt = RANDOM.nextInt();
-    long primitiveFixedLong = RANDOM.nextLong();
+    long primitiveFixedLong = primitiveUnsignedLongInUnsignedRange ? Long.parseUnsignedLong(MAX_UNSIGNED_LONG) - RANDOM.nextInt(1000) : RANDOM.nextLong();
     int primitiveFixedSignedInt = RANDOM.nextInt();
     long primitiveFixedSignedLong = RANDOM.nextLong();
     boolean primitiveBoolean = RANDOM.nextBoolean();
@@ -156,7 +212,7 @@ public class TestProtoConversionUtil {
     int wrappedInt = RANDOM.nextInt();
     long wrappedLong = RANDOM.nextLong();
     int wrappedUnsignedInt = RANDOM.nextInt();
-    long wrappedUnsignedLong = RANDOM.nextLong();
+    long wrappedUnsignedLong = primitiveUnsignedLongInUnsignedRange ? RANDOM.nextLong() : Long.parseUnsignedLong(MAX_UNSIGNED_LONG) - RANDOM.nextInt(1000);
     boolean wrappedBoolean = RANDOM.nextBoolean();
     String wrappedString = randomString(10);
     byte[] wrappedBytes = randomString(10).getBytes();
@@ -217,26 +273,29 @@ public class TestProtoConversionUtil {
     Object wrappedFloatOutput;
     Object wrappedBooleanOutput;
     Object wrappedBytesOutput;
+    Object timestampOutput;
     if (wellKnownTypesAsRecords) {
       wrappedStringOutput = getWrappedRecord(schema, "wrapped_string", wrappedString);
       wrappedIntOutput = getWrappedRecord(schema, "wrapped_int", wrappedInt);
       wrappedLongOutput = getWrappedRecord(schema, "wrapped_long", wrappedLong);
       wrappedUIntOutput = getWrappedRecord(schema, "wrapped_unsigned_int", (long) wrappedUnsignedInt);
-      wrappedULongOutput = getWrappedRecord(schema, "wrapped_unsigned_long", wrappedUnsignedLong);
+      wrappedULongOutput = getWrappedRecord(schema, "wrapped_unsigned_long", unsignedLongAsGenericFixed(wrappedUnsignedLong, unsignedLongSchema));
       wrappedDoubleOutput = getWrappedRecord(schema, "wrapped_double", wrappedDouble);
       wrappedFloatOutput = getWrappedRecord(schema, "wrapped_float", wrappedFloat);
       wrappedBooleanOutput = getWrappedRecord(schema, "wrapped_boolean", wrappedBoolean);
       wrappedBytesOutput = getWrappedRecord(schema, "wrapped_bytes", ByteBuffer.wrap(wrappedBytes));
+      timestampOutput = getTimestampRecord(schema, time);
     } else {
       wrappedStringOutput = wrappedString;
       wrappedIntOutput = wrappedInt;
       wrappedLongOutput = wrappedLong;
       wrappedUIntOutput = (long) wrappedUnsignedInt;
-      wrappedULongOutput = wrappedUnsignedLong;
+      wrappedULongOutput = unsignedLongAsGenericFixed(wrappedUnsignedLong, unsignedLongSchema);
       wrappedDoubleOutput = wrappedDouble;
       wrappedFloatOutput = wrappedFloat;
       wrappedBooleanOutput = wrappedBoolean;
       wrappedBytesOutput = ByteBuffer.wrap(wrappedBytes);
+      timestampOutput = Timestamps.toMicros(time);
     }
 
     GenericData.Record expectedRecord = new GenericData.Record(schema);
@@ -245,7 +304,7 @@ public class TestProtoConversionUtil {
     expectedRecord.put("primitive_int", primitiveInt);
     expectedRecord.put("primitive_long", primitiveLong);
     expectedRecord.put("primitive_unsigned_int", (long) primitiveUnsignedInt);
-    expectedRecord.put("primitive_unsigned_long", primitiveUnsignedLong);
+    expectedRecord.put("primitive_unsigned_long", unsignedLongAsGenericFixed(primitiveUnsignedLong, unsignedLongSchema));
     expectedRecord.put("primitive_signed_int", primitiveSignedInt);
     expectedRecord.put("primitive_signed_long", primitiveSignedLong);
     expectedRecord.put("primitive_fixed_int", primitiveFixedInt);
@@ -270,20 +329,27 @@ public class TestProtoConversionUtil {
     expectedRecord.put("wrapped_boolean", wrappedBooleanOutput);
     expectedRecord.put("wrapped_bytes", wrappedBytesOutput);
     expectedRecord.put("enum", enumValue.name());
-    expectedRecord.put("timestamp", getTimestampRecord(schema, time));
+    expectedRecord.put("timestamp", timestampOutput);
 
     return Pair.of(input, expectedRecord);
   }
 
+  private GenericFixed unsignedLongAsGenericFixed(long unsignedLong, Schema unsignedLongSchema) {
+    BigDecimal bigDecimal = new BigDecimal(toUnsignedBigInteger(unsignedLong));
+    return DECIMAL_CONVERSION.toFixed(bigDecimal,
+        unsignedLongSchema, unsignedLongSchema.getLogicalType());
+  }
+
   private GenericRecord createDefaultOutput(Schema schema) {
     // all fields will have default values
+    Schema unsignedLongSchema = schema.getField("primitive_unsigned_long").schema();
     GenericData.Record expectedRecord = new GenericData.Record(schema);
     expectedRecord.put("primitive_double", 0.0);
     expectedRecord.put("primitive_float", 0.0f);
     expectedRecord.put("primitive_int", 0);
     expectedRecord.put("primitive_long", 0L);
     expectedRecord.put("primitive_unsigned_int", 0L);
-    expectedRecord.put("primitive_unsigned_long", 0L);
+    expectedRecord.put("primitive_unsigned_long", unsignedLongAsGenericFixed(0L, unsignedLongSchema));
     expectedRecord.put("primitive_signed_int", 0);
     expectedRecord.put("primitive_signed_long", 0L);
     expectedRecord.put("primitive_fixed_int", 0);

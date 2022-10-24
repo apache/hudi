@@ -30,8 +30,16 @@
     },
     {
       "name": "primitive_unsigned_long",
-      "type": "long",
-      "default": 0
+      "type": {
+        "type": "fixed",
+        "name": "unsigned_long",
+        "namespace": "org.apache.hudi.protos",
+        "size": 9,
+        "logicalType": "decimal",
+        "precision": 20,
+        "scale": 0
+      },
+      "default": "\u0000"
     },
     {
       "name": "primitive_signed_int",
@@ -285,8 +293,8 @@
           "fields": [
             {
               "name": "value",
-              "type": "long",
-              "default": 0
+              "type": "org.apache.hudi.protos.unsigned_long",
+              "default": "\u0000"
             }
           ]
         }

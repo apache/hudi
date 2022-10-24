@@ -41,7 +41,7 @@ public class HoodieIncrSource extends RowSource {
 
   private static final Logger LOG = LogManager.getLogger(HoodieIncrSource.class);
 
-  static class Config {
+  public static class Config {
 
     /**
      * {@value #HOODIE_SRC_BASE_PATH} is the base-path for the source Hoodie table.
@@ -74,15 +74,15 @@ public class HoodieIncrSource extends RowSource {
      * instant when checkpoint is not provided. This config is deprecated. Please refer to {@link #MISSING_CHECKPOINT_STRATEGY}.
      */
     @Deprecated
-    static final String READ_LATEST_INSTANT_ON_MISSING_CKPT =
+    public static final String READ_LATEST_INSTANT_ON_MISSING_CKPT =
         "hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt";
-    static final Boolean DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT = false;
+    public static final Boolean DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT = false;
 
     /**
      * {@value #MISSING_CHECKPOINT_STRATEGY} allows delta-streamer to decide the checkpoint to consume from when checkpoint is not set.
      * instant when checkpoint is not provided.
      */
-    static final String MISSING_CHECKPOINT_STRATEGY = "hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy";
+    public static final String MISSING_CHECKPOINT_STRATEGY = "hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy";
 
     /**
      * {@value #SOURCE_FILE_FORMAT} is passed to the reader while loading dataset. Default value is parquet.

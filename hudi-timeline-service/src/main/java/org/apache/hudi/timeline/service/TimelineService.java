@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
-import io.javalin.core.util.JettyServerUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -264,13 +263,12 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? JettyServerUtil.defaultServer()
-            : new Server(new QueuedThreadPool(timelineServerConf.numThreads));
+    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new Server() : new Server(new QueuedThreadPool(timelineServerConf.numThreads));
 
-    app = Javalin.create().server(() -> server);
-    if (!timelineServerConf.compress) {
-      app.disableDynamicGzip();
-    }
+    app = Javalin.create(c -> {
+      c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
+      c.server(() -> server);
+    });
 
     requestHandler = new RequestHandler(
         app, conf, timelineServerConf, context, fs, fsViewsManager);

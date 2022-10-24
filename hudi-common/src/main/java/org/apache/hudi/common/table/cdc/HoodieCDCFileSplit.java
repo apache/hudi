@@ -18,10 +18,18 @@
 
 package org.apache.hudi.common.table.cdc;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.Option;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.io.Serializable;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * This contains all the information that retrieve the change data at a single file group and
@@ -39,49 +47,73 @@ import java.io.Serializable;
  * For `cdcInferCase` = {@link HoodieCDCInferCase#REPLACE_COMMIT}, `cdcFile` is null,
  * `beforeFileSlice` is the current version of the file slice.
  */
-public class HoodieCDCFileSplit implements Serializable {
+public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFileSplit> {
+  /**
+   * The instant time at which the changes happened.
+   */
+  private final String instant;
 
   /**
-   * * the change type, which decide to how to retrieve the change data. more details see: `HoodieCDCLogicalFileType#`
+   * Flag that decides to how to retrieve the change data. More details see: `HoodieCDCLogicalFileType`.
    */
   private final HoodieCDCInferCase cdcInferCase;
 
   /**
-   * the file that the change data can be parsed from.
+   * The file that the change data can be parsed from.
    */
-  private final String cdcFile;
+  private final List<String> cdcFiles;
 
   /**
-   * the file slice that are required when retrieve the before data.
+   * THe file slice that are required when retrieving the before data.
    */
   private final Option<FileSlice> beforeFileSlice;
 
   /**
-   * the file slice that are required when retrieve the after data.
+   * The file slice that are required when retrieving the after data.
    */
   private final Option<FileSlice> afterFileSlice;
 
-  public HoodieCDCFileSplit(HoodieCDCInferCase cdcInferCase, String cdcFile) {
-    this(cdcInferCase, cdcFile, Option.empty(), Option.empty());
+  public HoodieCDCFileSplit(String instant, HoodieCDCInferCase cdcInferCase, String cdcFile) {
+    this(instant, cdcInferCase, cdcFile, Option.empty(), Option.empty());
+  }
+
+  public HoodieCDCFileSplit(String instant, HoodieCDCInferCase cdcInferCase, Collection<String> cdcFiles) {
+    this(instant, cdcInferCase, cdcFiles, Option.empty(), Option.empty());
   }
 
   public HoodieCDCFileSplit(
+      String instant,
       HoodieCDCInferCase cdcInferCase,
       String cdcFile,
       Option<FileSlice> beforeFileSlice,
       Option<FileSlice> afterFileSlice) {
+    this(instant, cdcInferCase, Collections.singletonList(cdcFile), beforeFileSlice, afterFileSlice);
+  }
+
+  public HoodieCDCFileSplit(
+      String instant,
+      HoodieCDCInferCase cdcInferCase,
+      Collection<String> cdcFiles,
+      Option<FileSlice> beforeFileSlice,
+      Option<FileSlice> afterFileSlice) {
+    this.instant = instant;
     this.cdcInferCase = cdcInferCase;
-    this.cdcFile = cdcFile;
+    this.cdcFiles = cdcFiles.stream()
+        .sorted(Comparator.comparingInt(FSUtils::getFileVersionFromLog)).collect(Collectors.toList());
     this.beforeFileSlice = beforeFileSlice;
     this.afterFileSlice = afterFileSlice;
+  }
+
+  public String getInstant() {
+    return this.instant;
   }
 
   public HoodieCDCInferCase getCdcInferCase() {
     return this.cdcInferCase;
   }
 
-  public String getCdcFile() {
-    return this.cdcFile;
+  public List<String> getCdcFiles() {
+    return this.cdcFiles;
   }
 
   public Option<FileSlice> getBeforeFileSlice() {
@@ -90,5 +122,10 @@ public class HoodieCDCFileSplit implements Serializable {
 
   public Option<FileSlice> getAfterFileSlice() {
     return this.afterFileSlice;
+  }
+
+  @Override
+  public int compareTo(@NotNull HoodieCDCFileSplit o) {
+    return this.instant.compareTo(o.instant);
   }
 }

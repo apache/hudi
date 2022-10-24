@@ -46,9 +46,9 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -630,11 +630,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Dataset<Row> sourceDf = sqlContext.read()
         .format("org.apache.hudi")
         .load(tableBasePath);
-    sourceDf.write().format("parquet").save(bootstrapSourcePath);
+    // TODO(HUDI-4944): fix the test to use a partition column with slashes (`/`) included
+    //  in the value.  Currently it fails the tests due to slash encoding.
+    sourceDf.write().format("parquet").partitionBy("rider").save(bootstrapSourcePath);
 
     String newDatasetBasePath = dfsBasePath + "/test_dataset_bootstrapped";
     cfg.runBootstrap = true;
     cfg.configs.add(String.format("hoodie.bootstrap.base.path=%s", bootstrapSourcePath));
+    cfg.configs.add(String.format("%s=%s", DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "rider"));
     cfg.configs.add(String.format("hoodie.bootstrap.keygen.class=%s", SimpleKeyGenerator.class.getName()));
     cfg.configs.add("hoodie.bootstrap.parallelism=5");
     cfg.targetBasePath = newDatasetBasePath;

@@ -72,6 +72,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -220,6 +221,36 @@ public class TestData {
           TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
       insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
+  // changelog details of test_source.data and test_source_2.data
+  public static List<RowData> DATA_SET_SOURCE_CHANGELOG = Arrays.asList(
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+          TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
+      updateAfterRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
+          TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
+      updateBeforeRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
+          TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
+      updateAfterRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
+          TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
+      updateBeforeRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
+      updateAfterRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
       insertRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
           TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
       insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
@@ -547,6 +578,25 @@ public class TestData {
       File baseFile,
       Map<String, String> expected,
       int partitions) throws IOException {
+    checkWrittenData(baseFile, expected, partitions, TestData::filterOutVariables);
+  }
+
+  /**
+   * Checks the source data set are written as expected.
+   *
+   * <p>Note: Replace it with the Flink reader when it is supported.
+   *
+   * @param baseFile   The file base to check, should be a directory
+   * @param expected   The expected results mapping, the key should be the partition path
+   *                   and value should be values list with the key partition
+   * @param partitions The expected partition number
+   * @param extractor  The fields extractor
+   */
+  public static void checkWrittenData(
+      File baseFile,
+      Map<String, String> expected,
+      int partitions,
+      Function<GenericRecord, String> extractor) throws IOException {
     assert baseFile.isDirectory();
     FileFilter filter = file -> !file.getName().startsWith(".");
     File[] partitionDirs = baseFile.listFiles(filter);
@@ -563,7 +613,7 @@ public class TestData {
       List<String> readBuffer = new ArrayList<>();
       GenericRecord nextRecord = reader.read();
       while (nextRecord != null) {
-        readBuffer.add(filterOutVariables(nextRecord));
+        readBuffer.add(extractor.apply(nextRecord));
         nextRecord = reader.read();
       }
       readBuffer.sort(Comparator.naturalOrder());
@@ -624,6 +674,22 @@ public class TestData {
   public static void checkWrittenDataCOW(
       File basePath,
       Map<String, List<String>> expected) throws IOException {
+    checkWrittenDataCOW(basePath, expected, TestData::filterOutVariables);
+  }
+
+  /**
+   * Checks the source data are written as expected.
+   *
+   * <p>Note: Replace it with the Flink reader when it is supported.
+   *
+   * @param basePath The file base to check, should be a directory
+   * @param expected The expected results mapping, the key should be the partition path
+   * @param extractor The extractor to extract the required fields from the avro row
+   */
+  public static void checkWrittenDataCOW(
+      File basePath,
+      Map<String, List<String>> expected,
+      Function<GenericRecord, String> extractor) throws IOException {
 
     // 1. init flink table
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toURI().toString());
@@ -642,7 +708,7 @@ public class TestData {
               ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(new Path(path)).build();
               GenericRecord nextRecord = reader.read();
               while (nextRecord != null) {
-                readBuffer.add(filterOutVariables(nextRecord));
+                readBuffer.add(extractor.apply(nextRecord));
                 nextRecord = reader.read();
               }
             } catch (IOException e) {
@@ -650,8 +716,11 @@ public class TestData {
             }
           });
 
-      assertTrue(partitionDataSet.size() == readBuffer.size() && partitionDataSet.containsAll(readBuffer));
-
+      assertThat("Unexpected records number under partition: " + partition,
+          readBuffer.size(), is(partitionDataSet.size()));
+      for (String record : readBuffer) {
+        assertTrue(partitionDataSet.contains(record), "Unexpected record: " + record);
+      }
     });
 
   }

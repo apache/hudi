@@ -27,10 +27,8 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -46,12 +44,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.FlinkHoodieIndexFactory;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.io.FlinkAppendHandle;
-import org.apache.hudi.io.FlinkConcatAndReplaceHandle;
-import org.apache.hudi.io.FlinkConcatHandle;
-import org.apache.hudi.io.FlinkCreateHandle;
-import org.apache.hudi.io.FlinkMergeAndReplaceHandle;
-import org.apache.hudi.io.FlinkMergeHandle;
+import org.apache.hudi.io.FlinkWriteHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.MiniBatchHandle;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
@@ -566,41 +559,12 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       String instantTime,
       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
       Iterator<HoodieRecord<T>> recordItr) {
-    final HoodieRecordLocation loc = record.getCurrentLocation();
-    final String fileID = loc.getFileId();
-    final String partitionPath = record.getPartitionPath();
-    final boolean insertClustering = config.allowDuplicateInserts();
-
-    if (bucketToHandles.containsKey(fileID)) {
-      MiniBatchHandle lastHandle = (MiniBatchHandle) bucketToHandles.get(fileID);
-      if (lastHandle.shouldReplace()) {
-        HoodieWriteHandle<?, ?, ?, ?> writeHandle = insertClustering
-            ? new FlinkConcatAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileID,
-                table.getTaskContextSupplier(), lastHandle.getWritePath())
-            : new FlinkMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileID,
-                table.getTaskContextSupplier(), lastHandle.getWritePath());
-        this.bucketToHandles.put(fileID, writeHandle); // override with new replace handle
-        return writeHandle;
-      }
-    }
-
-    final boolean isDelta = table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ);
-    final HoodieWriteHandle<?, ?, ?, ?> writeHandle;
-    if (isDelta) {
-      writeHandle = new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr,
-          table.getTaskContextSupplier());
-    } else if (loc.getInstantTime().equals("I")) {
-      writeHandle = new FlinkCreateHandle<>(config, instantTime, table, partitionPath,
-          fileID, table.getTaskContextSupplier());
-    } else {
-      writeHandle = insertClustering
-          ? new FlinkConcatHandle<>(config, instantTime, table, recordItr, partitionPath,
-              fileID, table.getTaskContextSupplier())
-          : new FlinkMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
-              fileID, table.getTaskContextSupplier());
-    }
-    this.bucketToHandles.put(fileID, writeHandle);
-    return writeHandle;
+    // caution: it's not a good practice to modify the handles internal.
+    FlinkWriteHandleFactory.Factory<T,
+        List<HoodieRecord<T>>,
+        List<HoodieKey>,
+        List<WriteStatus>> writeHandleFactory = FlinkWriteHandleFactory.getFactory(table.getMetaClient().getTableConfig(), config);
+    return writeHandleFactory.create(this.bucketToHandles, record, config, instantTime, table, recordItr);
   }
 
   public HoodieFlinkTable<T> getHoodieTable() {

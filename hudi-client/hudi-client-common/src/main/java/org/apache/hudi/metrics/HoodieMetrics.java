@@ -39,6 +39,7 @@ public class HoodieMetrics {
   public String rollbackTimerName = null;
   public String cleanTimerName = null;
   public String commitTimerName = null;
+  public String logCompactionTimerName = null;
   public String deltaCommitTimerName = null;
   public String replaceCommitTimerName = null;
   public String finalizeTimerName = null;
@@ -55,6 +56,7 @@ public class HoodieMetrics {
   private Timer deltaCommitTimer = null;
   private Timer finalizeTimer = null;
   private Timer compactionTimer = null;
+  private Timer logCompactionTimer = null;
   private Timer clusteringTimer = null;
   private Timer indexTimer = null;
   private Timer conflictResolutionTimer = null;
@@ -73,6 +75,7 @@ public class HoodieMetrics {
       this.replaceCommitTimerName = getMetricsName("timer", HoodieTimeline.REPLACE_COMMIT_ACTION);
       this.finalizeTimerName = getMetricsName("timer", "finalize");
       this.compactionTimerName = getMetricsName("timer", HoodieTimeline.COMPACTION_ACTION);
+      this.logCompactionTimerName = getMetricsName("timer", HoodieTimeline.LOG_COMPACTION_ACTION);
       this.indexTimerName = getMetricsName("timer", "index");
       this.conflictResolutionTimerName = getMetricsName("timer", "conflict_resolution");
       this.conflictResolutionSuccessCounterName = getMetricsName("counter", "conflict_resolution.success");
@@ -96,6 +99,13 @@ public class HoodieMetrics {
       compactionTimer = createTimer(commitTimerName);
     }
     return compactionTimer == null ? null : compactionTimer.time();
+  }
+
+  public Timer.Context getLogCompactionCtx() {
+    if (config.isMetricsOn() && logCompactionTimer == null) {
+      logCompactionTimer = createTimer(commitTimerName);
+    }
+    return logCompactionTimer == null ? null : logCompactionTimer.time();
   }
 
   public Timer.Context getClusteringCtx() {

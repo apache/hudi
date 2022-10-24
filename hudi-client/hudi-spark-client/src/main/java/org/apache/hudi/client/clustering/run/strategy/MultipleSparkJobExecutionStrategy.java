@@ -137,7 +137,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
 
   /**
    * Execute clustering to write inputRecords into new files based on strategyParams.
-   * Different from {@link performClusteringWithRecordsRDD}, this method take {@link Dataset<Row>}
+   * Different from {@link MultipleSparkJobExecutionStrategy#performClusteringWithRecordsRDD}, this method take {@link Dataset<Row>}
    * as inputs.
    */
   public abstract HoodieData<WriteStatus> performClusteringWithRecordsAsRow(final Dataset<Row> inputRecords,
@@ -294,6 +294,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
               .withBufferSize(config.getMaxDFSStreamBufferSize())
               .withSpillableMapBasePath(config.getSpillableMapBasePath())
               .withPartition(clusteringOp.getPartitionPath())
+              .withUseScanV2(config.useScanV2ForLogRecordReader())
               .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
               .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .build();

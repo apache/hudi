@@ -85,6 +85,11 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       .defaultValue(0.8)
       .withDocumentation("Fraction of the file system view memory, to be used for holding compaction related metadata.");
 
+  public static final ConfigProperty<Double> SPILLABLE_LOG_COMPACTION_MEM_FRACTION = ConfigProperty
+      .key("hoodie.filesystem.view.spillable.log.compaction.mem.fraction")
+      .defaultValue(0.8)
+      .withDocumentation("Fraction of the file system view memory, to be used for holding log compaction related metadata.");
+
   public static final ConfigProperty<Double> BOOTSTRAP_BASE_FILE_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.bootstrap.base.file.mem.fraction")
       .defaultValue(0.05)
@@ -203,6 +208,12 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
   public long getMaxMemoryForPendingCompaction() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
     return new Double(totalMemory * getDouble(SPILLABLE_COMPACTION_MEM_FRACTION))
+        .longValue();
+  }
+
+  public long getMaxMemoryForPendingLogCompaction() {
+    long totalMemory = getLong(SPILLABLE_MEMORY);
+    return new Double(totalMemory * getDouble(SPILLABLE_LOG_COMPACTION_MEM_FRACTION))
         .longValue();
   }
 

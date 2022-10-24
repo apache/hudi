@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.metadata.HoodieMetadataPayload
+import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
@@ -74,7 +74,7 @@ case class HoodieFileIndex(spark: SparkSession,
     spark = spark,
     metaClient = metaClient,
     schemaSpec = schemaSpec,
-    configProperties = getConfigProperties(spark, options),
+    configProperties = getConfigProperties(spark, options, metaClient),
     queryPaths = HoodieFileIndex.getQueryPaths(options),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache
@@ -254,9 +254,8 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def sizeInBytes: Long = cachedFileSize
 
-  private def isDataSkippingEnabled: Boolean =
-    options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
-      spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
+  private def isDataSkippingEnabled: Boolean = HoodieFileIndex.getBooleanConfigValue(options, spark.sessionState.conf, DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
+  "false")
 
   private def isMetadataTableEnabled: Boolean = metadataConfig.enabled()
   private def isColumnStatsIndexEnabled: Boolean = metadataConfig.isColumnStatsIndexEnabled
@@ -267,9 +266,14 @@ case class HoodieFileIndex(spark: SparkSession,
         s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled")
     }
   }
+
 }
 
 object HoodieFileIndex extends Logging {
+
+  def getBooleanConfigValue(options: Map[String, String], sqlConf: SQLConf, configKey: String, defaultValue: String) : Boolean = {
+    options.getOrElse(configKey, sqlConf.getConfString(configKey, defaultValue)).toBoolean
+  }
 
   object DataSkippingFailureMode extends Enumeration {
     val configName = "hoodie.fileIndex.dataSkippingFailureMode"
@@ -293,16 +297,20 @@ object HoodieFileIndex extends Logging {
     schema.fieldNames.filter { colName => refs.exists(r => resolver.apply(colName, r.name)) }
   }
 
-  def getConfigProperties(spark: SparkSession, options: Map[String, String]) = {
+  private def isFilesPartitionAvailable(metaClient: HoodieTableMetaClient): Boolean = {
+    metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_FILES)
+  }
+
+  def getConfigProperties(spark: SparkSession, options: Map[String, String], metaClient: HoodieTableMetaClient) = {
     val sqlConf: SQLConf = spark.sessionState.conf
     val properties = new TypedProperties()
 
     // To support metadata listing via Spark SQL we allow users to pass the config via SQL Conf in spark session. Users
     // would be able to run SET hoodie.metadata.enable=true in the spark sql session to enable metadata listing.
-    properties.setProperty(HoodieMetadataConfig.ENABLE.key(),
-      sqlConf.getConfString(HoodieMetadataConfig.ENABLE.key(),
-        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
+    val isMetadataFilesPartitionAvailable = isFilesPartitionAvailable(metaClient) &&
+      getBooleanConfigValue(options, sqlConf, HoodieMetadataConfig.ENABLE.key(), HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString)
     properties.putAll(options.filter(p => p._2 != null).asJava)
+    properties.setProperty(HoodieMetadataConfig.ENABLE.key(), String.valueOf(isMetadataFilesPartitionAvailable))
     properties
   }
 

@@ -18,15 +18,14 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
@@ -41,12 +40,6 @@ public class HoodieConfig implements Serializable {
   private static final Logger LOG = LogManager.getLogger(HoodieConfig.class);
 
   protected static final String CONFIG_VALUES_DELIMITER = ",";
-
-  public static HoodieConfig create(FSDataInputStream inputStream) throws IOException {
-    HoodieConfig config = new HoodieConfig();
-    config.props.load(inputStream);
-    return config;
-  }
 
   protected TypedProperties props;
 
