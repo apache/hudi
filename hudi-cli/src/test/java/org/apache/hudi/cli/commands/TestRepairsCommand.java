@@ -59,9 +59,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.Logger;
-import org.apache.logging.log4j.core.appender.AbstractAppender;
-
-
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -286,7 +283,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       HoodieTestCommitMetadataGenerator.createCommitFile(tablePath, timestamp, conf);
     }
 
-    metaClient.getActiveTimeline().getInstants().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.getTimestamp()) % 4 == 0).forEach(hoodieInstant ->{
+    metaClient.getActiveTimeline().getInstants().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.getTimestamp()) % 4 == 0).forEach(hoodieInstant -> {
       metaClient.getActiveTimeline().deleteInstantFileIfExists(hoodieInstant);
       metaClient.getActiveTimeline().createNewInstant(hoodieInstant);
     });
@@ -311,8 +308,6 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
 
   }
-
-
 
   @Test
   public void testRepairDeprecatedPartition() throws IOException {
