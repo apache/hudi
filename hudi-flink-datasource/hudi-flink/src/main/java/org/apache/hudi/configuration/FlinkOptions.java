@@ -370,6 +370,12 @@ public class FlinkOptions extends HoodieConfig {
           + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
           + "the dot notation eg: `a.b.c`");
 
+  public static final ConfigOption<String> BUCKET_INDEX_ENGINE_TYPE = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
+      .stringType()
+      .defaultValue("SIMPLE")
+      .withDescription("Type of bucket index engine. Available options: [SIMPLE | CONSISTENT_HASHING]");
+
   public static final ConfigOption<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigOptions
       .key(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())
       .intType()
@@ -716,6 +722,12 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(30)
       .withDescription("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30");
+
+  public static final ConfigOption<String> CLUSTERING_UPDATE_STRATEGY = ConfigOptions
+      .key("hoodie.clustering.updates.strategy")
+      .stringType()
+      .defaultValue("org.apache.hudi.sink.clustering.update.strategy.FlinkRejectUpdateStrategy")
+      .withDescription("Determine how to handle updates of file groups that are under clustering. Default strategy rejects the updates");
 
   // ------------------------------------------------------------------------
   //  Hive Sync Options

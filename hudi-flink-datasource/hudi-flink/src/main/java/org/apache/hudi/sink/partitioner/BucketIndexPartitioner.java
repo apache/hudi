@@ -19,9 +19,13 @@
 package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 
 import org.apache.flink.api.common.functions.Partitioner;
+import org.apache.flink.configuration.Configuration;
 
 /**
  * Bucket index input partitioner.
@@ -34,9 +38,9 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
   private final int bucketNum;
   private final String indexKeyFields;
 
-  public BucketIndexPartitioner(int bucketNum, String indexKeyFields) {
-    this.bucketNum = bucketNum;
-    this.indexKeyFields = indexKeyFields;
+  public BucketIndexPartitioner(Configuration conf) {
+    this.bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+    this.indexKeyFields = conf.getString(FlinkOptions.INDEX_KEY_FIELD);
   }
 
   @Override
@@ -44,5 +48,16 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
     int curBucket = BucketIdentifier.getBucketId(key, indexKeyFields, bucketNum);
     int globalHash = (key.getPartitionPath() + curBucket).hashCode() & Integer.MAX_VALUE;
     return BucketIdentifier.mod(globalHash, numPartitions);
+  }
+
+  public static Partitioner instance(Configuration conf) {
+    String bucketEngineType = conf.get(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE);
+    if (bucketEngineType.equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.SIMPLE.name())) {
+      return new BucketIndexPartitioner(conf);
+    } else if (bucketEngineType.equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name())) {
+      return new ConsistentHashingBucketIndexPartitioner(conf);
+    } else {
+      throw new HoodieException("Unknown bucket index engine type: " + bucketEngineType);
+    }
   }
 }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.JsonUtils;
 
@@ -33,6 +32,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -82,14 +82,34 @@ public class HoodieConsistentHashingMetadata implements Serializable {
    * Construct default metadata with all bucket's file group uuid initialized
    */
   public HoodieConsistentHashingMetadata(String partitionPath, int numBuckets) {
-    this((short) 0, partitionPath, HoodieTimeline.INIT_INSTANT_TS, numBuckets, 0, constructDefaultHashingNodes(numBuckets));
+    this((short) 0, partitionPath, HoodieTimeline.INIT_INSTANT_TS, numBuckets, 0, constructDefaultHashingNodes(partitionPath, numBuckets));
     this.firstCreated = true;
   }
 
-  private static List<ConsistentHashingNode> constructDefaultHashingNodes(int numBuckets) {
+  protected static List<ConsistentHashingNode> constructDefaultHashingNodes(String partitionPath, int numBuckets) {
     long step = ((long) HASH_VALUE_MASK + numBuckets - 1) / numBuckets;
+    String uuidPostfix = partitionPathToUuidPostfix(partitionPath);
     return IntStream.range(1, numBuckets + 1)
-        .mapToObj(i -> new ConsistentHashingNode((int) Math.min(step * i, HASH_VALUE_MASK), FSUtils.createNewFileIdPfx())).collect(Collectors.toList());
+        .mapToObj(i -> new ConsistentHashingNode((int) Math.min(step * i, HASH_VALUE_MASK), String.format("%08d-%s", i - 1, uuidPostfix))).collect(Collectors.toList());
+  }
+
+  /**
+   * Format partition path to simulate an UUID. E.g.,
+   *  - part2/part3       -> 0000-0000-0000-00part2part3
+   *  - part1/part2/part3 -> 0000-0000-0par-t1part2part3
+   *
+   *  @VisibleForTesting
+   */
+  protected static String partitionPathToUuidPostfix(String partitionPath) {
+    String reveredPartition = new StringBuilder(partitionPath.replace("/", ""))
+        .reverse().toString();
+    reveredPartition = reveredPartition.substring(0, Math.min(24, reveredPartition.length()));
+
+    String ret = new StringBuilder(reveredPartition)
+        .append(String.join("", Collections.nCopies(24 - reveredPartition.length(), "0")))
+        .reverse().toString();
+
+    return ret.substring(0, 4) + "-" + ret.substring(4, 8) + "-" + ret.substring(8, 12) + "-" + ret.substring(12, 24);
   }
 
   public short getVersion() {

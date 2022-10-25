@@ -29,7 +29,7 @@ import org.apache.hudi.sink.append.AppendWriteOperator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
-import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
+import org.apache.hudi.sink.bucket.BucketStreamWriteOperatorFactory;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
@@ -103,7 +103,7 @@ public class Pipelines {
       String indexKeys = conf.getString(FlinkOptions.INDEX_KEY_FIELD);
       int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
 
-      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(numBuckets, indexKeys);
+      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf);
       RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
@@ -315,10 +315,8 @@ public class Pipelines {
    */
   public static DataStream<Object> hoodieStreamWrite(Configuration conf, DataStream<HoodieRecord> dataStream) {
     if (OptionsResolver.isBucketIndexType(conf)) {
-      WriteOperatorFactory<HoodieRecord> operatorFactory = BucketStreamWriteOperator.getFactory(conf);
-      int bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
-      String indexKeyFields = conf.getString(FlinkOptions.INDEX_KEY_FIELD);
-      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(bucketNum, indexKeyFields);
+      WriteOperatorFactory<HoodieRecord> operatorFactory = BucketStreamWriteOperatorFactory.getFactory(conf);
+      Partitioner<HoodieKey> partitioner = BucketIndexPartitioner.instance(conf);
       return dataStream.partitionCustom(partitioner, HoodieRecord::getKey)
           .transform(opIdentifier("bucket_write", conf), TypeInformation.of(Object.class), operatorFactory)
           .uid("uid_bucket_write" + conf.getString(FlinkOptions.TABLE_NAME))

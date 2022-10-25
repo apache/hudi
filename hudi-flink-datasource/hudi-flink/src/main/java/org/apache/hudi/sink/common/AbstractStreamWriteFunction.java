@@ -183,6 +183,7 @@ public abstract class AbstractStreamWriteFunction<I>
     return this.confirming;
   }
 
+  @Override
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
     this.eventGateway = operatorEventGateway;
   }
@@ -230,6 +231,7 @@ public abstract class AbstractStreamWriteFunction<I>
     writeStatuses.clear();
   }
 
+  @Override
   public void handleOperatorEvent(OperatorEvent event) {
     ValidationUtils.checkArgument(event instanceof CommitAckEvent,
         "The write function can only handle CommitAckEvent");

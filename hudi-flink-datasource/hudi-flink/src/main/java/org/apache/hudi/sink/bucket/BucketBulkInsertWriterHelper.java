@@ -40,7 +40,7 @@ import java.io.IOException;
 import java.util.Map;
 
 /**
- * Helper class for bucket index bulk insert used by Flink.
+ * Helper class for SIMPLE bucket index bulk insert used by Flink.
  */
 public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
   private static final Logger LOG = LoggerFactory.getLogger(BucketBulkInsertWriterHelper.class);

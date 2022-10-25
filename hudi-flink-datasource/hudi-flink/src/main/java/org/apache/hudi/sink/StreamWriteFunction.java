@@ -19,7 +19,9 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,10 +29,12 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sink.clustering.update.strategy.BaseFlinkUpdateStrategy;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
@@ -51,6 +55,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -107,6 +112,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    */
   private transient TotalSizeTracer tracer;
 
+  private transient BaseFlinkUpdateStrategy updateStrategy;
+
   /**
    * Constructs a StreamingSinkFunction.
    *
@@ -121,6 +128,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.tracer = new TotalSizeTracer(this.config);
     initBuffer();
     initWriteFunction();
+    this.updateStrategy = (BaseFlinkUpdateStrategy) ReflectionUtils.loadClass(
+        config.get(FlinkOptions.CLUSTERING_UPDATE_STRATEGY), new Class<?>[] {HoodieEngineContext.class}, this.writeClient.getEngineContext());
   }
 
   @Override
@@ -129,6 +138,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     // it would check the validity.
     // wait for the buffer data flush out and request a new instant
     flushRemaining(false);
+    this.updateStrategy.reset();
   }
 
   @Override
@@ -147,6 +157,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   /**
    * End input action for batch source.
    */
+  @Override
   public void endInput() {
     super.endInput();
     flushRemaining(true);
@@ -419,13 +430,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     }
 
     List<HoodieRecord> records = bucket.writeBuffer();
-    ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
-    if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-      records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1, this.writeClient.getConfig().getSchema());
-    }
-    bucket.preWrite(records);
-    final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
-    records.clear();
+    final List<WriteStatus> writeStatus = writeBucket(instant, bucket, records);
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
@@ -437,6 +442,21 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.eventGateway.sendEventToCoordinator(event);
     writeStatuses.addAll(writeStatus);
     return true;
+  }
+
+  private List<WriteStatus> writeBucket(String instant, DataBucket bucket, List<HoodieRecord> records) {
+    ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
+    if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
+      records = FlinkWriteHelper.newInstance().deduplicateRecords(records, null, -1, this.writeClient.getConfig().getSchema());
+    }
+    this.updateStrategy.initialize(this.writeClient);
+    bucket.preWrite(records);
+    Pair<List<BaseFlinkUpdateStrategy.RecordsInstantPair>, Set<HoodieFileGroupId>> recordListFgPair =
+        this.updateStrategy.handleUpdate(Collections.singletonList(BaseFlinkUpdateStrategy.RecordsInstantPair.of(records, instant)));
+
+    return recordListFgPair.getKey().stream().flatMap(
+        recordsInstantPair -> writeFunction.apply(recordsInstantPair.records, recordsInstantPair.instantTime).stream()
+    ).collect(Collectors.toList());
   }
 
   @SuppressWarnings("unchecked, rawtypes")
@@ -455,12 +475,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
           .forEach(bucket -> {
             List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
-              if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-                records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1,
-                    this.writeClient.getConfig().getSchema());
-              }
-              bucket.preWrite(records);
-              writeStatus.addAll(writeFunction.apply(records, currentInstant));
+              writeStatus.addAll(writeBucket(currentInstant, bucket, records));
               records.clear();
               bucket.reset();
             }

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.cluster.strategy;
+package org.apache.hudi.table.action.cluster.update.strategy;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -33,8 +33,8 @@ import java.util.Set;
 public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> implements Serializable {
 
   protected final transient HoodieEngineContext engineContext;
-  protected final HoodieTable table;
-  protected final Set<HoodieFileGroupId> fileGroupsInPendingClustering;
+  protected HoodieTable table;
+  protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;
 
   public UpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
     this.engineContext = engineContext;
@@ -49,5 +49,4 @@ public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> implement
    * @return the recordsRDD strategy updated and a set of file groups to be updated while pending clustering.
    */
   public abstract Pair<I, Set<HoodieFileGroupId>> handleUpdate(I taggedRecordsRDD);
-
 }

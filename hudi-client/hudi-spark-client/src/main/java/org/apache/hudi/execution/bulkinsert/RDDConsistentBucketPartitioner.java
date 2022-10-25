@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
+import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.io.SingleFileHandleCreateFactory;
@@ -151,7 +152,7 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
    */
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     HoodieSparkConsistentBucketIndex index = (HoodieSparkConsistentBucketIndex) table.getIndex();
-    HoodieConsistentHashingMetadata metadata = index.loadOrCreateMetadata(this.table, partition);
+    HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table.getMetaClient(), partition, index.getNumBuckets());
     if (hashingChildrenNodes.containsKey(partition)) {
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
     }
