@@ -45,6 +45,10 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
         HoodieMetadataPayload.createColumnStatsRecords(partitionPath, Collections.singletonList(c1Metadata), false)
             .findFirst().get();
 
+    ////////////////////////////////////////////////////////////////////////
+    // Case 1: Combining proper (non-deleted) records
+    ////////////////////////////////////////////////////////////////////////
+
     // NOTE: Column Stats record will only be merged in case existing file will be modified,
     //       which could only happen on storages schemes supporting appends
     HoodieColumnRangeMetadata<Comparable> c1AppendedBlockMetadata =
@@ -72,5 +76,30 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
 
     // Assert that using legacy API yields the same value
     assertEquals(combinedMetadataPayload.getInsertValue(null), alternativelyCombinedMetadataPayloadAvro);
+
+    ////////////////////////////////////////////////////////////////////////
+    // Case 2: Combining w/ deleted records
+    ////////////////////////////////////////////////////////////////////////
+
+    HoodieColumnRangeMetadata<Comparable> c1StubbedMetadata =
+        HoodieColumnRangeMetadata.<Comparable>stub(fileName, targetColName);
+
+    HoodieRecord<HoodieMetadataPayload> deletedColumnStatsRecord =
+        HoodieMetadataPayload.createColumnStatsRecords(partitionPath, Collections.singletonList(c1StubbedMetadata), true)
+            .findFirst().get();
+
+    // NOTE: In this case, deleted (or tombstone) record will be therefore deleting
+    //       previous state of the record
+    HoodieMetadataPayload deletedCombinedMetadataPayload =
+        deletedColumnStatsRecord.getData().preCombine(columnStatsRecord.getData());
+
+    assertEquals(deletedColumnStatsRecord.getData(), deletedCombinedMetadataPayload);
+
+    // NOTE: In this case, proper incoming record will be overwriting previously deleted
+    //       record
+    HoodieMetadataPayload overwrittenCombinedMetadataPayload =
+        columnStatsRecord.getData().preCombine(deletedColumnStatsRecord.getData());
+
+    assertEquals(columnStatsRecord.getData(), overwrittenCombinedMetadataPayload);
   }
 }

@@ -625,7 +625,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     checkArgument(Objects.equals(prevColumnStats.getFileName(), newColumnStats.getFileName()));
     checkArgument(Objects.equals(prevColumnStats.getColumnName(), newColumnStats.getColumnName()));
 
-    if (newColumnStats.getIsDeleted()) {
+    // We're handling 2 cases in here
+    //  - New record is a tombstone: in this case it simply overwrites previous state
+    //  - Previous record is a tombstone: in that case new proper record would also
+    //    be simply overwriting previous state
+    if (newColumnStats.getIsDeleted() || prevColumnStats.getIsDeleted()) {
       return newColumnStats;
     }
 
