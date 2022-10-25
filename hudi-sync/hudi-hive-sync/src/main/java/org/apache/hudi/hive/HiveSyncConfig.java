@@ -58,6 +58,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<String> HIVE_SYNC_AS_DATA_SOURCE_TABLE = HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
   public static final ConfigProperty<Integer> HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD = HiveSyncConfigHolder.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD;
   public static final ConfigProperty<Boolean> HIVE_CREATE_MANAGED_TABLE = HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
+  public static final ConfigProperty<Boolean> HIVE_SYNC_OMIT_METADATA_FIELDS = HiveSyncConfigHolder.HIVE_SYNC_OMIT_METADATA_FIELDS;
   public static final ConfigProperty<Integer> HIVE_BATCH_SYNC_PARTITION_NUM = HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
   public static final ConfigProperty<String> HIVE_SYNC_MODE = HiveSyncConfigHolder.HIVE_SYNC_MODE;
   public static final ConfigProperty<Boolean> HIVE_SYNC_BUCKET_SYNC = HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
@@ -130,6 +131,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     public Boolean supportTimestamp;
     @Parameter(names = {"--managed-table"}, description = "Create a managed table")
     public Boolean createManagedTable;
+    @Parameter(names = {"--omit-metafields"}, description = "Omit metafields in schema")
+    public Boolean omitMetaFields;
     @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
     public Integer batchSyncNum;
     @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.")
@@ -167,6 +170,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key(), syncAsSparkDataSourceTable);
       props.setPropertyIfNonNull(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key(), sparkSchemaLengthThreshold);
       props.setPropertyIfNonNull(HIVE_CREATE_MANAGED_TABLE.key(), createManagedTable);
+      props.setPropertyIfNonNull(HIVE_SYNC_OMIT_METADATA_FIELDS.key(), omitMetaFields);
       props.setPropertyIfNonNull(HIVE_BATCH_SYNC_PARTITION_NUM.key(), batchSyncNum);
       props.setPropertyIfNonNull(HIVE_SYNC_BUCKET_SYNC.key(), bucketSync);
       props.setPropertyIfNonNull(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), bucketSpec);

@@ -609,7 +609,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  preCombineField = 'ts'
            | )
        """.stripMargin)
-      spark.sql("set hoodie.merge.allow.duplicate.on.inserts = true")
       // Insert data
       spark.sql(s"insert into $tableName select 1, 1, 'a1', 1, 10, '2022-08-18'")
       checkAnswer(s"select id1, id2, name, price, ts, dt from $tableName")(

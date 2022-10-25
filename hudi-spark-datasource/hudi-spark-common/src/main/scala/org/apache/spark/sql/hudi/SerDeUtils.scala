@@ -17,39 +17,28 @@
 
 package org.apache.spark.sql.hudi
 
-import java.io.ByteArrayOutputStream
-
-import com.esotericsoftware.kryo.Kryo
-import com.esotericsoftware.kryo.io.{Input, Output}
+import org.apache.hudi.common.util.BinaryUtil
 import org.apache.spark.SparkConf
-import org.apache.spark.serializer.KryoSerializer
+import org.apache.spark.serializer.{KryoSerializer, SerializerInstance}
+
+import java.nio.ByteBuffer
 
 
 object SerDeUtils {
 
-  private val kryoLocal = new ThreadLocal[Kryo] {
+  private val SERIALIZER_THREAD_LOCAL = new ThreadLocal[SerializerInstance] {
 
-    override protected def initialValue: Kryo = {
-      val serializer = new KryoSerializer(new SparkConf(true))
-      serializer.newKryo()
+    override protected def initialValue: SerializerInstance = {
+      new KryoSerializer(new SparkConf(true)).newInstance()
     }
   }
 
   def toBytes(o: Any): Array[Byte] = {
-    val outputStream = new ByteArrayOutputStream(4096 * 5)
-    val output = new Output(outputStream)
-    try {
-      kryoLocal.get.writeClassAndObject(output, o)
-      output.flush()
-    } finally {
-      output.clear()
-      output.close()
-    }
-    outputStream.toByteArray
+    val buf = SERIALIZER_THREAD_LOCAL.get.serialize(o)
+    BinaryUtil.toBytes(buf)
   }
 
   def toObject(bytes: Array[Byte]): Any = {
-    val input = new Input(bytes)
-    kryoLocal.get.readClassAndObject(input)
+    SERIALIZER_THREAD_LOCAL.get.deserialize(ByteBuffer.wrap(bytes))
   }
 }

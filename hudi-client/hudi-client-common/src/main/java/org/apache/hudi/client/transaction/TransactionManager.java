@@ -118,4 +118,7 @@ public class TransactionManager implements Serializable {
     return currentTxnOwnerInstant;
   }
 
+  public boolean isOptimisticConcurrencyControlEnabled() {
+    return isOptimisticConcurrencyControlEnabled;
+  }
 }

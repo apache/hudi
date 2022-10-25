@@ -722,9 +722,10 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
 
   public static final ConfigOption<Boolean> HIVE_SYNC_ENABLED = ConfigOptions
-      .key("hive_sync.enable")
+      .key("hive_sync.enabled")
       .booleanType()
       .defaultValue(false)
+      .withFallbackKeys("hive_sync.enable")
       .withDescription("Asynchronously sync Hive meta to HMS, default false");
 
   public static final ConfigOption<String> HIVE_SYNC_DB = ConfigOptions
