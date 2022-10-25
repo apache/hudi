@@ -117,22 +117,6 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     archiver.archiveIfRequired(context());
   }
 
-
-  @Test
-  public void testArchiving() {
-    Configuration conf = HoodieCLI.conf;
-
-    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-
-    for (int i = 1; i < 20; i++) {
-      String timestamp = String.valueOf(i);
-      // Write corrupted requested Clean File
-      HoodieTestCommitMetadataGenerator.createCommitFile(HoodieCLI.basePath, timestamp, conf);
-    }
-
-
-  }
-
   /**
    * Test for command: show archived commit stats.
    */

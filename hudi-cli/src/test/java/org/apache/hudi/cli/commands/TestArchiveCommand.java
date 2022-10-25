@@ -15,7 +15,9 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
@@ -26,7 +28,7 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
 
   @Autowired
   private Shell shell;
-  private String tablePath;
+
 
   @Test
   public void testArchiving() throws Exception {
@@ -34,7 +36,7 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
 
     // Create table and connect
     String tableName = tableName();
-    tablePath = tablePath(tableName);
+    String tablePath = tablePath(tableName);
 
     new TableCommand().createTable(
         tablePath, tableName,
@@ -54,12 +56,6 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
     // Create six commits
     for (int i = 100; i < 106; i++) {
       String timestamp = String.valueOf(i);
-      // Requested Compaction
-      HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), hadoopConf());
-      // Inflight Compaction
-      HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), hadoopConf());
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, hadoopConf());
     }
 
