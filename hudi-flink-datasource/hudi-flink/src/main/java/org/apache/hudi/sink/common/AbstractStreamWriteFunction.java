@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.common;
 
+import org.apache.flink.runtime.state.CheckpointListener;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -55,7 +56,7 @@ import java.util.Objects;
  */
 public abstract class AbstractStreamWriteFunction<I>
     extends AbstractWriteFunction<I>
-    implements CheckpointedFunction {
+    implements CheckpointedFunction, CheckpointListener {
 
   private static final Logger LOG = LoggerFactory.getLogger(AbstractStreamWriteFunction.class);
 
@@ -280,5 +281,15 @@ public abstract class AbstractStreamWriteFunction<I>
    */
   private boolean invalidInstant(String instant, boolean hasData) {
     return instant.equals(this.currentInstant) && hasData;
+  }
+
+  @Override
+  public void notifyCheckpointComplete(long l) throws Exception {
+
+  }
+
+  @Override
+  public void notifyCheckpointAborted(long checkpointId) throws Exception {
+    throw new RuntimeException("Checkpoint aborted for checkpointId [" + checkpointId + "]");
   }
 }
