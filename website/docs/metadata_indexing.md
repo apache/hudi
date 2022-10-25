@@ -45,7 +45,7 @@ hoodie.write.lock.zookeeper.base_path=<zk_base_path>
 
 ```bash
 spark-submit \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls /Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.12.0-SNAPSHOT.jar` \
+--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls /Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.12.1-SNAPSHOT.jar` \
 --props `ls /Users/home/path/to/write/config.properties` \
 --source-class org.apache.hudi.utilities.sources.ParquetDFSSource  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
 --source-ordering-field tpep_dropoff_datetime   \
@@ -91,7 +91,7 @@ Now, we can schedule indexing using `HoodieIndexer` in `schedule` mode as follow
 ```
 spark-submit \
 --class org.apache.hudi.utilities.HoodieIndexer \
-/Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.12.0-SNAPSHOT.jar \
+/Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.12.1-SNAPSHOT.jar \
 --props /Users/home/path/to/indexer.properties \
 --mode schedule \
 --base-path /tmp/hudi-ny-taxi \
@@ -110,7 +110,7 @@ To execute indexing, run the indexer in `execute` mode as below.
 ```
 spark-submit \
 --class org.apache.hudi.utilities.HoodieIndexer \
-/Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.12.0-SNAPSHOT.jar \
+/Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.12.1-SNAPSHOT.jar \
 --props /Users/home/path/to/indexer.properties \
 --mode execute \
 --base-path /tmp/hudi-ny-taxi \
@@ -165,7 +165,7 @@ To drop an index, just run the index in `dropindex` mode.
 ```
 spark-submit \
 --class org.apache.hudi.utilities.HoodieIndexer \
-/Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.12.0-SNAPSHOT.jar \
+/Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.12.1-SNAPSHOT.jar \
 --props /Users/home/path/to/indexer.properties \
 --mode dropindex \
 --base-path /tmp/hudi-ny-taxi \

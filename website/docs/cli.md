@@ -545,7 +545,7 @@ The following table shows the Hudi table versions corresponding to the Hudi rele
 
 | Hudi Table Version | Hudi Release Version(s) |
 |:-------------------|:------------------------|
-| `FIVE` or `5`      | 0.12.0 and above        |
+| `FIVE` or `5`      | 0.12.x                  |
 | `FOUR` or `4`      | 0.11.x                  |
 | `THREE` or `3`     | 0.10.x                  |
 | `TWO` or `2`       | 0.9.x                   |
