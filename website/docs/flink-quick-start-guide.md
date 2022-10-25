@@ -96,7 +96,7 @@ dependency to your project:
 <dependency>
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-flink1.13-bundle</artifactId>
-    <version>0.12.0</version>
+    <version>0.12.1</version>
 </dependency>
 ```
 
@@ -105,7 +105,7 @@ dependency to your project:
 <dependency>
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-flink1.14-bundle</artifactId>
-    <version>0.12.0</version>
+    <version>0.12.1</version>
 </dependency>
 ```
 
@@ -114,7 +114,7 @@ dependency to your project:
 <dependency>
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-flink1.15-bundle</artifactId>
-    <version>0.12.0</version>
+    <version>0.12.1</version>
 </dependency>
 ```
 
