@@ -23,7 +23,7 @@ import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.commmon.model.HoodieSparkRecord
 import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.spark.internal.config.Kryo.KRYO_USER_REGISTRATORS
+import org.apache.spark.internal.config.ConfigBuilder
 import org.apache.spark.serializer.KryoRegistrator
 
 /**
@@ -58,8 +58,12 @@ class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegist
 
 object HoodieSparkKryoRegistrar {
 
+  // NOTE: We're copying definition of the config introduced in Spark 3.0
+  //       (to stay compatible w/ Spark 2.4)
+  private val KRYO_USER_REGISTRATORS = "spark.kryo.registrator"
+
   def register(conf: SparkConf): SparkConf = {
-    conf.set(KRYO_USER_REGISTRATORS, Seq(classOf[HoodieSparkKryoRegistrar].getName))
+    conf.set(KRYO_USER_REGISTRATORS, Seq(classOf[HoodieSparkKryoRegistrar].getName).mkString(","))
   }
 
 }
