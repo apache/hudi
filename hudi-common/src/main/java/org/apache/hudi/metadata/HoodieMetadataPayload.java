@@ -639,8 +639,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     Comparable maxValue =
         (Comparable) Stream.of(
-            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMinValue()),
-            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMinValue()))
+            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMaxValue()),
+            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMaxValue()))
         .filter(Objects::nonNull)
         .max(Comparator.naturalOrder())
         .orElse(null);
@@ -656,6 +656,28 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .setTotalUncompressedSize(prevColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
         .setIsDeleted(newColumnStats.getIsDeleted())
         .build();
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other == this) {
+      return true;
+    } else if (!(other instanceof HoodieMetadataPayload)) {
+      return false;
+    }
+
+    HoodieMetadataPayload otherMetadataPayload = (HoodieMetadataPayload) other;
+
+    return this.type == otherMetadataPayload.type
+        && Objects.equals(this.key, otherMetadataPayload.key)
+        && Objects.equals(this.filesystemMetadata, otherMetadataPayload.filesystemMetadata)
+        && Objects.equals(this.bloomFilterMetadata, otherMetadataPayload.bloomFilterMetadata)
+        && Objects.equals(this.columnStatMetadata, otherMetadataPayload.columnStatMetadata);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(key, type, filesystemMetadata, bloomFilterMetadata, columnStatMetadata);
   }
 
   @Override
