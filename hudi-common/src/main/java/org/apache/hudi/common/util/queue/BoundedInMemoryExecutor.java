@@ -79,7 +79,6 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
     return CompletableFuture.allOf(producers.stream().map(producer -> {
       return CompletableFuture.supplyAsync(() -> {
         try {
-          preExecuteRunnable.run();
           producer.produce(queue);
         } catch (Throwable e) {
           LOG.error("error producing records", e);
