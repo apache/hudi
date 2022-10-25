@@ -901,4 +901,47 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test enable hoodie.merge.allow.duplicate.on.inserts when write") {
+    spark.sql("set hoodie.datasource.write.operation = insert")
+    Seq("mor", "cow").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             | ) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  type = '$tableType'
+             | )
+        """.stripMargin)
+        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a1', 10, 1000)")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10, 1000, "2021-12-25")
+        )
+        spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
+        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a2', 20, 1001)")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a2", 20, 1001, "2021-12-25")
+        )
+        spark.sql("set hoodie.merge.allow.duplicate.on.inserts = true")
+        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a3', 30, 1002)")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a2", 20, 1001, "2021-12-25"),
+          Seq(1, "a3", 30, 1002, "2021-12-25")
+        )
+      }
+    }
+    spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
+    spark.sql("set hoodie.datasource.write.operation = upsert")
+  }
 }

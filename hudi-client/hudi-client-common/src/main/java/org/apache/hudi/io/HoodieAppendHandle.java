@@ -84,6 +84,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   private static final Logger LOG = LogManager.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written
   private static final AtomicLong RECORD_COUNTER = new AtomicLong(1);
+  private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE = 100;
 
   protected final String fileId;
   // Buffer for holding records in memory before they are flushed to disk
@@ -559,12 +560,16 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
    * Checks if the number of records have reached the set threshold and then flushes the records to disk.
    */
   private void flushToDiskIfRequired(HoodieRecord record, boolean appendDeleteBlocks) {
+    if (numberOfRecords >= (int) (maxBlockSize / averageRecordSize) 
+        || numberOfRecords % NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE == 0) {
+      averageRecordSize = (long) (averageRecordSize * 0.8 + sizeEstimator.sizeEstimate(record) * 0.2);
+    }
+
     // Append if max number of records reached to achieve block size
     if (numberOfRecords >= (int) (maxBlockSize / averageRecordSize)) {
       // Recompute averageRecordSize before writing a new block and update existing value with
       // avg of new and old
-      LOG.info("AvgRecordSize => " + averageRecordSize);
-      averageRecordSize = (averageRecordSize + sizeEstimator.sizeEstimate(record)) / 2;
+      LOG.info("Flush log block to disk, the current avgRecordSize => " + averageRecordSize);
       // Delete blocks will be appended after appending all the data blocks.
       appendDataAndDeleteBlocks(header, appendDeleteBlocks);
       estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
