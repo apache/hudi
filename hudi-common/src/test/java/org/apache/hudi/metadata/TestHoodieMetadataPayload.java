@@ -23,14 +23,62 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
+import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
+
+  @Test
+  public void testFileSystemMetadataPayloadMerging() {
+    String partitionName = "2022/10/01";
+
+    Map<String, Long> firstCommitAddedFiles = createImmutableMap(
+        Pair.of("file1.parquet", 1000L),
+        Pair.of("file2.parquet", 2000L),
+        Pair.of("file3.parquet", 3000L)
+    );
+
+    HoodieRecord<HoodieMetadataPayload> firstPartitionFilesRecord =
+        HoodieMetadataPayload.createPartitionFilesRecord(partitionName, Option.of(firstCommitAddedFiles), Option.empty());
+
+    Map<String, Long> secondCommitAddedFiles = createImmutableMap(
+        // NOTE: This is an append
+        Pair.of("file3.parquet", 3333L),
+        Pair.of("file4.parquet", 4000L),
+        Pair.of("file5.parquet", 5000L)
+    );
+
+    List<String> secondCommitDeletedFiles = Collections.singletonList("file1.parquet");
+
+    HoodieRecord<HoodieMetadataPayload> secondPartitionFilesRecord =
+        HoodieMetadataPayload.createPartitionFilesRecord(partitionName, Option.of(secondCommitAddedFiles), Option.of(secondCommitDeletedFiles));
+
+    HoodieMetadataPayload combinedPartitionFilesRecordPayload =
+        secondPartitionFilesRecord.getData().preCombine(firstPartitionFilesRecord.getData());
+
+    HoodieMetadataPayload expectedCombinedPartitionedFilesRecordPayload =
+        HoodieMetadataPayload.createPartitionFilesRecord(partitionName,
+            Option.of(
+                createImmutableMap(
+                    Pair.of("file2.parquet", 2000L),
+                    Pair.of("file3.parquet", 3333L),
+                    Pair.of("file4.parquet", 4000L),
+                    Pair.of("file5.parquet", 5000L)
+                )
+            ),
+            Option.empty()
+        ).getData();
+
+    assertEquals(expectedCombinedPartitionedFilesRecordPayload, combinedPartitionFilesRecordPayload);
+  }
 
   @Test
   public void testColumnStatsPayloadMerging() throws IOException {
