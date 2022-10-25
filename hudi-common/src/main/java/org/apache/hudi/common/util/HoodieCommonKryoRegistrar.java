@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-
 import com.esotericsoftware.kryo.Kryo;
 import org.apache.avro.util.Utf8;
 import org.apache.hudi.common.HoodieJsonPayload;
