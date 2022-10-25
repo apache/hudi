@@ -23,49 +23,33 @@
 #   detect class loading issues
 
 WORKDIR=/opt/bundle-validation
-HIVE_DATA=${WORKDIR}/data/hive
-JAR_DATA=${WORKDIR}/data/jars
-UTILITIES_DATA=${WORKDIR}/data/utilities
-
-
+JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
-ln -s $JAR_DATA/hudi-spark*.jar $JAR_DATA/spark.jar
-ln -s $JAR_DATA/hudi-utilities-bundle*.jar $JAR_DATA/utilities.jar
-ln -s $JAR_DATA/hudi-utilities-slim*.jar $JAR_DATA/utilities-slim.jar
+ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
+ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
+ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 
 
 ##
 # used to test the spark bundle with hive sync
-# Inputs:
-#   HIVE_DATA: path to the directory where the files used in testing hive-sync
-#       are located
+# Env Vars:
 #   HIVE_HOME: path to the hive directory
 #   SPARK_HOME: path to the spark directory
 #   DERBY_HOME: path to the derby directory
-#   JAR_DATA: path to the directory where our bundle jars to test are located
+#   JARS_DIR: path to the directory where our bundle jars to test are located
 ##
 test_spark_bundle () {
-    echo "::warning::validate.sh setting up hive sync"
-    # put config files in correct place
-    cp $HIVE_DATA/spark-defaults.conf $SPARK_HOME/conf/
-    cp $HIVE_DATA/hive-site.xml $HIVE_HOME/conf/
-    ln -sf $HIVE_HOME/conf/hive-site.xml $SPARK_HOME/conf/hive-site.xml
-    cp $DERBY_HOME/lib/derbyclient.jar $SPARK_HOME/jars/
+    echo "::warning::validate.sh setting up hive metastore for spark bundle validation"
 
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
     $HIVE_HOME/bin/hiveserver2 &
-    echo "::warning::validate.sh hive setup complete. Testing"
-    $SPARK_HOME/bin/spark-shell --jars $JAR_DATA/spark.jar < $HIVE_DATA/validate.scala
+    echo "::warning::validate.sh hive metastore setup complete. Testing"
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark/validate.scala
     if [ "$?" -ne 0 ]; then
         echo "::error::validate.sh failed hive testing"
         exit 1
     fi
-    echo "::warning::validate.sh hive testing succesfull. Cleaning up hive sync"
-    # remove config files
-    rm -f $SPARK_HOME/jars/derbyclient.jar
-    unlink $SPARK_HOME/conf/hive-site.xml
-    rm -f $HIVE_HOME/conf/hive-site.xml
-    rm -f $SPARK_HOME/conf/spark-defaults.conf
+    echo "::warning::validate.sh spark bundle validation successful"
 }
 
 
@@ -74,13 +58,9 @@ test_spark_bundle () {
 # Used to test the utilities bundle and utilities slim bundle + spark bundle
 # Inputs:
 #   SPARK_HOME: path to the spark directory
-#   UTILITIES_DATA: path to the directory where the files used in testing the
-#       utilities bundle are located
 #   MAIN_JAR: path to the main jar to run with spark-shell or spark-submit
 #   ADDITIONAL_JARS: comma seperated list of additional jars to be used
 #   OUTPUT_DIR: directory where delta streamer will output to
-#   SHELL_ARGS: args for spark shell. These are the --conf args from the
-#       quickstart guide
 #   COMMANDS_FILE: path to file of scala commands that we will run in
 #       spark-shell to validate the delta streamer
 # Modifies: OPT_JARS, OUTPUT_SIZE, SHELL_COMMAND, LOGFILE, SHELL_RESULT
@@ -91,10 +71,10 @@ test_utilities_bundle () {
         OPT_JARS="--jars $ADDITIONAL_JARS"
     fi
     echo "::warning::validate.sh running deltastreamer"
-    $SPARK_HOME/bin/spark-submit --driver-memory 8g --executor-memory 8g \
+    $SPARK_HOME/bin/spark-submit \
     --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
     $OPT_JARS $MAIN_JAR \
-    --props $UTILITIES_DATA/stocks_schema.properties \
+    --props $WORKDIR/utilities/hoodieapp.properties \
     --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
     --source-class org.apache.hudi.utilities.sources.JsonDFSSource \
     --source-ordering-field ts --table-type MERGE_ON_READ \
@@ -113,7 +93,7 @@ test_utilities_bundle () {
     fi
 
     echo "::warning::validate.sh validating deltastreamer in spark shell"
-    SHELL_COMMAND="$SPARK_HOME/bin/spark-shell --jars $ADDITIONAL_JARS $MAIN_JAR $SHELL_ARGS -i $COMMANDS_FILE"
+    SHELL_COMMAND="$SPARK_HOME/bin/spark-shell --jars $ADDITIONAL_JARS $MAIN_JAR -i $COMMANDS_FILE"
     echo "::debug::this is the shell command: $SHELL_COMMAND"
     LOGFILE="$WORKDIR/submit.log"
     $SHELL_COMMAND >> $LOGFILE
@@ -131,26 +111,29 @@ if [ "$?" -ne 0 ]; then
     exit 1
 fi
 
-SHELL_ARGS=$(cat $UTILITIES_DATA/shell_args)
-
-echo "::warning::validate.sh testing utilities bundle"
-MAIN_JAR=$JAR_DATA/utilities.jar
-ADDITIONAL_JARS=""
-OUTPUT_DIR=/tmp/hudi-utilities-test/
-rm -rf $OUTPUT_DIR
-COMMANDS_FILE=$UTILITIES_DATA/commands.scala
-test_utilities_bundle
-if [ "$?" -ne 0 ]; then
-    exit 1
+if [[ $SPARK_HOME == *"spark-2.4"* ]] || [[  $SPARK_HOME == *"spark-3.1"* ]]
+then
+  echo "::warning::validate.sh testing utilities bundle"
+  MAIN_JAR=$JARS_DIR/utilities.jar
+  ADDITIONAL_JARS=""
+  OUTPUT_DIR=/tmp/hudi-utilities-test/
+  rm -rf $OUTPUT_DIR
+  COMMANDS_FILE=$WORKDIR/utilities/commands.scala
+  test_utilities_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done testing utilities bundle"
+else
+  echo "::warning::validate.sh skip testing utilities bundle for non-spark2.4 & non-spark3.1 build"
 fi
-echo "::warning::validate.sh done testing utilities bundle"
 
 echo "::warning::validate.sh testing utilities slim bundle"
-MAIN_JAR=$JAR_DATA/utilities-slim.jar
-ADDITIONAL_JARS=$JAR_DATA/spark.jar
+MAIN_JAR=$JARS_DIR/utilities-slim.jar
+ADDITIONAL_JARS=$JARS_DIR/spark.jar
 OUTPUT_DIR=/tmp/hudi-utilities-slim-test/
 rm -rf $OUTPUT_DIR
-COMMANDS_FILE=$UTILITIES_DATA/slimcommands.scala
+COMMANDS_FILE=$WORKDIR/utilities/slimcommands.scala
 test_utilities_bundle
 if [ "$?" -ne 0 ]; then
     exit 1
