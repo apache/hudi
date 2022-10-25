@@ -639,8 +639,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     Comparable maxValue =
         (Comparable) Stream.of(
-            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMinValue()),
-            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMinValue()))
+            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMaxValue()),
+            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMaxValue()))
         .filter(Objects::nonNull)
         .max(Comparator.naturalOrder())
         .orElse(null);
