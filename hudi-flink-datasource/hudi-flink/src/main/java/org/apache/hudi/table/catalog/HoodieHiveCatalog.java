@@ -546,7 +546,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     // because since Hive 3.x, there is validation when altering table,
     // when the metadata fields are synced through the hive sync tool,
     // a compatability issue would be reported.
-    List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table.getSchema());
+    List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table);
 
     // Table columns and partition keys
     CatalogTable catalogTable = (CatalogTable) table;
@@ -799,7 +799,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     try (HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, table)) {
       boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
       writeClient.deletePartitions(
-          Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
+              Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
               HoodieActiveTimeline.createNewInstantTime())
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {
