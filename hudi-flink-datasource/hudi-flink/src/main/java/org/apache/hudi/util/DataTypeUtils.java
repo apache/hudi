@@ -132,7 +132,7 @@ public class DataTypeUtils {
   /**
    * Ensures the give columns of the row data type are not nullable(for example, the primary keys).
    *
-   * @param dataType  The row data type
+   * @param dataType  The row data type, datatype logicaltype must be rowtype
    * @param pkColumns The primary keys
    * @return a new row data type if any column nullability is tweaked or the original data type
    */
@@ -140,17 +140,21 @@ public class DataTypeUtils {
     if (pkColumns == null || pkColumns.isEmpty()) {
       return dataType;
     }
-    RowType rowType = (RowType) dataType.getLogicalType();
-    List<DataType> oriFieldTypes = dataType.getChildren();
+    LogicalType dataTypeLogicalType = dataType.getLogicalType();
+    if (!(dataTypeLogicalType instanceof RowType)) {
+      throw new RuntimeException("The datatype to be converted must be row type");
+    }
+    RowType rowType = (RowType) dataTypeLogicalType;
+    List<DataType> originalFieldTypes = dataType.getChildren();
     List<String> fieldNames = rowType.getFieldNames();
     List<DataType> fieldTypes = new ArrayList<>();
     boolean tweaked = false;
     for (int i = 0; i < fieldNames.size(); i++) {
       if (pkColumns.contains(fieldNames.get(i)) && rowType.getTypeAt(i).isNullable()) {
-        fieldTypes.add(oriFieldTypes.get(i).notNull());
+        fieldTypes.add(originalFieldTypes.get(i).notNull());
         tweaked = true;
       } else {
-        fieldTypes.add(oriFieldTypes.get(i));
+        fieldTypes.add(originalFieldTypes.get(i));
       }
     }
     if (!tweaked) {
@@ -160,7 +164,7 @@ public class DataTypeUtils {
     for (int i = 0; i < fieldNames.size(); i++) {
       fields.add(DataTypes.FIELD(fieldNames.get(i), fieldTypes.get(i)));
     }
-    return DataTypes.ROW(fields.toArray(new DataTypes.Field[fields.size()])).notNull();
+    return DataTypes.ROW(fields.stream().toArray(DataTypes.Field[]::new)).notNull();
   }
 
 }
