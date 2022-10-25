@@ -151,8 +151,10 @@ public abstract class AbstractHoodieLogRecordReader {
   // Use scanV2 method.
   private boolean useScanV2;
 
+  // Names of partition field
   private Option<String[]> partitionFields;
-  private Option<String[]> partitionValues;
+  // Partition field name and value
+  private Map<String, String> partitionNameAndValues = new HashMap<>();
   private boolean dropPartitions = false;
   private boolean hiveStylePartition = false;
 
@@ -203,24 +205,36 @@ public abstract class AbstractHoodieLogRecordReader {
           Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
     }
     this.partitionName = partitionName;
-    this.partitionValues  = getPartitionValues();
+    this.partitionNameAndValues  = this.dropPartitions ? getPartitionValues(this.partitionFields, this.partitionName,
+        this.hiveStylePartition) : this.partitionNameAndValues;
   }
 
-  private Option<String[]> getPartitionValues() {
-    if (!this.partitionName.isPresent()) {
-      return Option.empty();
+  private static Map<String, String> getPartitionValues(
+      Option<String[]> partitionFields,
+      Option<String> partitionName,
+      boolean hiveStylePartition
+  ) {
+    Map<String, String> result =  new HashMap<>();
+    if (!partitionName.isPresent() || !partitionFields.isPresent()) {
+      return result;
     }
 
-    String[] partitionValues = this.partitionName.get().split("/");
-    if (this.hiveStylePartition) {
-      return Option.of(Arrays.stream(partitionValues)
-          .map(partition -> partition.split("="))
-          .filter(partition -> partition.length == 2)
-          .map(partition -> partition[1])
-          .toArray(String[]::new));
-    } else {
-      return Option.of(partitionValues);
+    String[] partitionField = partitionFields.get();
+    String[] partitionValue = partitionName.get().split("/");
+    if (partitionField.length != partitionValue.length) {
+      throw new HoodieException("The length of partitionField and partitionValue must be the same. "
+          + "partitionField = " + String.join(",", partitionField)
+          + " ,partitionValue = " + String.join(",", partitionValue));
     }
+    for (int i = 0; i < partitionValue.length; i++) {
+      if (hiveStylePartition) {
+        result.put(partitionField[i], partitionValue[i].substring(partitionValue[i].indexOf('=') + 1));
+      } else {
+        result.put(partitionField[i], partitionValue[i]);
+      }
+    }
+
+    return result;
   }
 
   protected String getKeyField() {
@@ -659,16 +673,12 @@ public abstract class AbstractHoodieLogRecordReader {
         IndexedRecord currentRecord = recordIterator.next();
         IndexedRecord record = schemaOption.isPresent() ? HoodieAvroUtils.rewriteRecordWithNewSchema(currentRecord, schemaOption.get(), Collections.emptyMap()) : currentRecord;
 
-        Schema schema = record.getSchema();
-        if (this.dropPartitions && this.partitionFields.isPresent() && this.partitionValues.isPresent()) {
-          String[] partitionFields = this.partitionFields.get();
-          String[] partitionValues = this.partitionValues.get();
-
-          if (partitionFields.length == partitionValues.length) {
-            for (int i = 0; i < partitionValues.length; i++) {
-              record.put(schema.getField(partitionFields[i]).pos(), partitionValues[i]);
-            }
-          }
+        if (this.dropPartitions) {
+          Schema schema = record.getSchema();
+          this.partitionNameAndValues.forEach((k, v) -> {
+            Object partitionValue = HoodieAvroUtils.convertStringToSchemaSpecifiedType(v, schema.getField(k).schema());
+            record.put(schema.getField(k).pos(), partitionValue);
+          });
         }
 
         processNextRecord(createHoodieRecord(record, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
