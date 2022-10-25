@@ -52,7 +52,7 @@ public class HoodieIncrSource extends RowSource {
      * {@value #NUM_INSTANTS_PER_FETCH} allows the max number of instants whose changes can be incrementally fetched.
      */
     static final String NUM_INSTANTS_PER_FETCH = "hoodie.deltastreamer.source.hoodieincr.num_instants";
-    static final Integer DEFAULT_NUM_INSTANTS_PER_FETCH = 1;
+    static final Integer DEFAULT_NUM_INSTANTS_PER_FETCH = 5;
 
     /**
      * {@value #HOODIE_SRC_PARTITION_FIELDS} specifies partition fields that needs to be added to source table after

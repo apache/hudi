@@ -18,14 +18,18 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -74,6 +78,7 @@ import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.InvalidOperationException;
+import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.PrincipalType;
 import org.apache.hadoop.hive.metastore.api.SerDeInfo;
@@ -488,7 +493,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
   }
 
-  private String inferTablePath(ObjectPath tablePath, CatalogBaseTable table) {
+  @VisibleForTesting
+  public String inferTablePath(ObjectPath tablePath, CatalogBaseTable table) {
     String location = table.getOptions().getOrDefault(PATH.key(), "");
     if (StringUtils.isNullOrEmpty(location)) {
       try {
@@ -777,7 +783,47 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   public void dropPartition(
       ObjectPath tablePath, CatalogPartitionSpec partitionSpec, boolean ignoreIfNotExists)
       throws PartitionNotExistException, CatalogException {
-    throw new HoodieCatalogException("Not supported.");
+    checkNotNull(tablePath, "Table path cannot be null");
+    checkNotNull(partitionSpec, "CatalogPartitionSpec cannot be null");
+
+    final CatalogBaseTable table;
+    try {
+      table = getTable(tablePath);
+    } catch (TableNotExistException e) {
+      if (!ignoreIfNotExists) {
+        throw new PartitionNotExistException(getName(), tablePath, partitionSpec, e);
+      } else {
+        return;
+      }
+    }
+    try (HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, table)) {
+      boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
+      writeClient.deletePartitions(
+          Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
+              HoodieActiveTimeline.createNewInstantTime())
+          .forEach(writeStatus -> {
+            if (writeStatus.hasErrors()) {
+              throw new HoodieMetadataException(String.format("Failed to commit metadata table records at file id %s.", writeStatus.getFileId()));
+            }
+          });
+
+      client.dropPartition(
+          tablePath.getDatabaseName(),
+          tablePath.getObjectName(),
+          HoodieCatalogUtil.getOrderedPartitionValues(
+              getName(), getHiveConf(), partitionSpec, ((CatalogTable) table).getPartitionKeys(), tablePath),
+          true);
+    } catch (NoSuchObjectException e) {
+      if (!ignoreIfNotExists) {
+        throw new PartitionNotExistException(getName(), tablePath, partitionSpec, e);
+      }
+    } catch (MetaException | PartitionSpecInvalidException e) {
+      throw new PartitionNotExistException(getName(), tablePath, partitionSpec, e);
+    } catch (Exception e) {
+      throw new CatalogException(
+          String.format(
+              "Failed to drop partition %s of table %s", partitionSpec, tablePath));
+    }
   }
 
   @Override
@@ -905,5 +951,24 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_TABLE.key(), k -> tablePath.getObjectName());
       return newOptions;
     }
+  }
+
+  private HoodieFlinkWriteClient<?> createWriteClient(
+      ObjectPath tablePath,
+      CatalogBaseTable table) throws Exception {
+    Map<String, String> options = table.getOptions();
+    // enable auto-commit though ~
+    options.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
+    return StreamerUtil.createWriteClient(
+        Configuration.fromMap(options)
+            .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
+            .set(FlinkOptions.SOURCE_AVRO_SCHEMA,
+                HoodieTableMetaClient.builder().setBasePath(inferTablePath(tablePath, table)).setConf(hiveConf).build()
+                    .getTableConfig().getTableCreateSchema().get().toString()));
+  }
+
+  @VisibleForTesting
+  public IMetaStoreClient getClient() {
+    return client;
   }
 }
