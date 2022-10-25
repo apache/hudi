@@ -92,7 +92,7 @@ interface HoodieRecordMerger {
    /**
     * The kind of merging strategy this recordMerger belongs to. A UUID represents merging strategy.
     */
-   String getMergingStrategy();
+   String getMergingStrategyId();
   
    // This method converges combineAndGetUpdateValue and precombine from HoodiePayload. 
    // It'd be associative operation: f(a, f(b, c)) = f(f(a, b), c) (which we can translate as having 3 versions A, B, C of the single record, both orders of operations applications have to yield the same result)
@@ -109,8 +109,8 @@ interface HoodieRecordMerger {
 class HoodieSparkRecordMerger implements HoodieRecordMerger {
 
   @Override
-  public String getMergingStrategy() {
-    return UUID_MERGER_STRATEGY;
+  public String getMergingStrategyId() {
+    return LATEST_RECORD_MERGING_STRATEGY;
   }
   
    @Override
@@ -130,8 +130,8 @@ class HoodieSparkRecordMerger implements HoodieRecordMerger {
 class HoodieFlinkRecordMerger implements HoodieRecordMerger {
 
    @Override
-   public String getMergingStrategy() {
-      return UUID_MERGER_STRATEGY;
+   public String getMergingStrategyId() {
+      return LATEST_RECORD_MERGING_STRATEGY;
    }
   
    @Override
@@ -147,6 +147,13 @@ class HoodieFlinkRecordMerger implements HoodieRecordMerger {
 ```
 Where user can provide their own subclass implementing such interface for the engines of interest.
 
+### Merging Strategy
+The RecordMerger is engine-aware. We provide a config called HoodieWriteConfig.MERGER_IMPLS. You can set a list of RecordMerger class name to it. And you can set HoodieWriteConfig.MERGER_STRATEGY which is UUID of RecordMerger. Hudi will pick RecordMergers in MERGER_IMPLS which has the same MERGER_STRATEGY according to the engine type at runtime.
+- Every RecordMerger implementation being engine-specific (referred to as "implementation"), implements particular merging semantic (referred to as "merging strategy")
+- Such tiering allowing us to be flexible in terms of providing implementations for the merging strategy only for engines you might be interested in
+- Merging strategy is a table property that is set once during init
+- Merging implementations could be configured for each write individually
+
 #### Migration from `HoodieRecordPayload` to `HoodieRecordMerger`
 
 To warrant backward-compatibility (BWC) on the code-level with already created subclasses of `HoodieRecordPayload` currently
@@ -159,7 +166,7 @@ full-suite of benefits of this refactoring, users will have to migrate their mer
 new `HoodieRecordMerger` implementation.
 
 Precombine is used to merge records from logs or incoming records; CombineAndGetUpdateValue is used to merge record from log file and record from base file.
-these two merge logics are unified in HoodieAvroRecordMerger as merge function. `HoodieAvroRecordMerger`'s API will look like following:
+these two merge logics are unified in HoodieRecordMerger implementation as merge function. `HoodieAvroRecordMerger`'s API will look like following:
 
 ```java
 /**
@@ -168,8 +175,8 @@ these two merge logics are unified in HoodieAvroRecordMerger as merge function. 
 class HoodieAvroRecordMerger implements HoodieRecordMerger {
 
    @Override
-   public String getMergingStrategy() {
-      return UUID_MERGER_STRATEGY;
+   public String getMergingStrategyId() {
+      return LATEST_RECORD_MERGING_STRATEGY;
    }
   
    @Override
@@ -202,11 +209,8 @@ Following major components will be refactored:
 3. `HoodieRealtimeRecordReader`s 
    1. API will be returning opaque `HoodieRecord` instead of raw Avro payload
 
-### Config for RecordMerger
-The RecordMerger is engine-aware. We provide a config called HoodieWriteConfig.MERGER_IMPLS. You can set a list of RecordMerger class name to it. And you can set HoodieWriteConfig.MERGER_STRATEGY which is UUID of RecordMerger. Hudi will pick RecordMergers in MERGER_IMPLS which has the same MERGER_STRATEGY according to the engine type at runtime.
-
 ### Public Api in HoodieRecord
-Because we implement different types of records, we need to implement functionality similar to AvroUtils in HoodieRecord for different data(avro, InternalRow, RowData).
+Because we implement different types of records, we need to implement functionality similar to AvroUtils in HoodieRecord for different engine-specific payload representations (GenericRecord, InternalRow, RowData).
 Its public API will look like following:
 
 ```java
@@ -215,9 +219,9 @@ import java.util.Properties;
 class HoodieRecord {
 
    /**
-    * Get column in record to support RDDCustomColumnsSortPartitioner
+    * Get columns in record.
     */
-   ComparableList getComparableColumnValues(Schema recordSchema, String[] columns,
+   Object[] getColumnValues(Schema recordSchema, String[] columns,
            boolean consistentLogicalTimestampEnabled);
 
    Comparable<?> getOrderingValue(Schema recordSchema, Properties props);
