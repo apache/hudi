@@ -62,7 +62,7 @@ public class TestSerializationUtils {
   public void testAvroUtf8SerDe() throws IOException {
     byte[] firstBytes = SerializationUtils.serialize(new Utf8("test"));
     // 4 byte string + 3 bytes length (Kryo uses variable-length encoding)
-    assertEquals(firstBytes.length, 7);
+    assertEquals(7, firstBytes.length);
   }
 
   @Test
