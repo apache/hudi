@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -40,6 +41,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -50,6 +52,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -58,12 +61,15 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -280,7 +286,15 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     if (useWriterSchema) {
       return hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, recordProperties);
     } else {
-      return hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
+      // if the DROP_PARTITION_COLUMNS is enabled ,remove partition fields from table schema.
+      if (Boolean.parseBoolean(recordProperties.getProperty(String.valueOf(HoodieTableConfig.DROP_PARTITION_COLUMNS.key())))) {
+        String[] partitionFields = recordProperties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",");
+        Set<String> removeFields = CollectionUtils.createSet(partitionFields);
+        Schema schema = HoodieAvroUtils.removeFields(tableSchema, removeFields);
+        return hoodieRecord.getData().getInsertValue(schema, recordProperties);
+      } else {
+        return hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
+      }
     }
   }
 
@@ -498,7 +512,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   public void write(Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
     try {
-      for (Map.Entry<String, HoodieRecord<? extends HoodieRecordPayload>> entry: recordMap.entrySet()) {
+      for (Map.Entry<String, HoodieRecord<? extends HoodieRecordPayload>> entry : recordMap.entrySet()) {
         HoodieRecord<T> record = (HoodieRecord<T>) entry.getValue();
         init(record);
         flushToDiskIfRequired(record, false);
