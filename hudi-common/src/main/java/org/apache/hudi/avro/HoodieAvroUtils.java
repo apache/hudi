@@ -719,14 +719,16 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * convert a String value to primary type
+   * convert a String value to primary type, this method is used to convert partition value
+   * extracted from path to the type defined in the schema
    * @param oldValue
    * @param newSchema
-   * @return
+   * @return value for the new schema
    */
   public static Object convertStringToSchemaSpecifiedType(String oldValue, Schema newSchema) {
     Schema oldSchema = new Schema.Field(newSchema.getName(), Schema.create(Schema.Type.STRING), null, "").schema();
-    return rewritePrimaryType(oldValue, oldSchema, newSchema);
+    // The type of the new schema can be a UNION, we should get the real schema.
+    return rewritePrimaryType(oldValue, oldSchema, getActualSchemaFromUnion(newSchema, oldValue));
   }
 
   /**
