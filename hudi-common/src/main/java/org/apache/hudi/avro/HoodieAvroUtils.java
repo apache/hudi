@@ -427,7 +427,6 @@ public class HoodieAvroUtils {
     Schema oldSchema = oldRecord.getSchema();
     Object fieldValue = oldSchema.getField(field.name()) == null ? null : oldRecord.get(field.name());
 
-
     if (fieldValue != null) {
       // In case field's value is a nested record, we have to rewrite it as well
       Object newFieldValue;
