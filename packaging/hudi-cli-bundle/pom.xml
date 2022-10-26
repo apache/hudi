@@ -27,9 +27,8 @@
     <packaging>jar</packaging>
 
     <properties>
-        <spring.shell.version>1.2.0.RELEASE</spring.shell.version>
         <checkstyle.skip>true</checkstyle.skip>
-        <jar.mainclass>org.springframework.shell.Bootstrap</jar.mainclass>
+        <jar.mainclass>org.apache.hudi.cli.Main</jar.mainclass>
         <main.basedir>${project.parent.basedir}</main.basedir>
         <skipTests>true</skipTests>
         <javax.servlet.version>3.1.0</javax.servlet.version>
@@ -84,7 +83,8 @@
                                     <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
                                     <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                                     <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
-                                    <include>org.apache.hudi:${hudi.spark.common.module}</include>
+                                    <include>org.apache.hudi:${hudi.spark.common.modules.1}</include>
+                                    <include>org.apache.hudi:${hudi.spark.common.modules.2}</include>
                                     <include>org.apache.hudi:hudi-hive-sync</include>
                                     <include>org.apache.hudi:hudi-sync-common</include>
                                     <include>org.apache.hudi:hudi-hadoop-mr</include>
@@ -251,6 +251,10 @@
                                     <pattern>com.google.common.</pattern>
                                     <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>org.openjdk.jol.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                                </relocation>
                                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
                                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
                                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
@@ -343,9 +347,6 @@
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
-            </resource>
-            <resource>
-                <directory>src/test/resources</directory>
             </resource>
         </resources>
     </build>
