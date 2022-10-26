@@ -27,6 +27,7 @@
 
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
+STOCK_DATA_DIR=/opt/bundle-validation/data/stocks/data
 # link the jar names to easier to use names
 ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
@@ -57,7 +58,7 @@ test_spark_bundle () {
 
 
 ##
-# Function to test the utilities bundle and utilities slim bundle + spark bundle.
+# Helper function to test the utilities bundle and utilities slim bundle + spark bundle.
 # It runs deltastreamer and then verifies that deltastreamer worked correctly.
 #
 # 1st arg: main jar to run with spark-submit, usually it's the utilities(-slim) bundle
@@ -65,8 +66,11 @@ test_spark_bundle () {
 #
 # env vars (defined in container):
 #   SPARK_HOME: path to the spark directory
+#   EXPECTED_SIZE: threshold that output directory must be larger than to pass
+#       the testing. If the directory is smaller than this size then deltastreamer
+#       definitely failed 
 ##
-test_utilities_bundle () {
+test_utilities_bundle_helper () {
     MAIN_JAR=$1
     printf -v EXTRA_JARS '%s,' "${@:2}"
     EXTRA_JARS="${EXTRA_JARS%,}"
@@ -74,8 +78,7 @@ test_utilities_bundle () {
     if [[ -n $EXTRA_JARS ]]; then
         OPT_JARS="--jars $EXTRA_JARS"
     fi
-    OUTPUT_DIR=/tmp/hudi-utilities-test/
-    rm -r $OUTPUT_DIR
+
     echo "::warning::validate.sh running deltastreamer"
     $SPARK_HOME/bin/spark-submit \
     --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
@@ -93,8 +96,8 @@ test_utilities_bundle () {
     echo "::warning::validate.sh done with deltastreamer"
 
     OUTPUT_SIZE=$(du -s ${OUTPUT_DIR} | awk '{print $1}')
-    if [[ -z $OUTPUT_SIZE || "$OUTPUT_SIZE" -lt "580" ]]; then
-        echo "::error::validate.sh deltastreamer output folder ($OUTPUT_SIZE) is smaller than minimum expected (580)" 
+    if [[ -z $OUTPUT_SIZE || "$OUTPUT_SIZE" -lt "$EXPECTED_SIZE" ]]; then
+        echo "::error::validate.sh deltastreamer output folder ($OUTPUT_SIZE) is smaller than minimum expected ($EXPECTED_SIZE)" 
         exit 1
     fi
 
@@ -111,6 +114,73 @@ test_utilities_bundle () {
     echo "::warning::validate.sh done validating deltastreamer in spark shell"
 }
 
+##
+# Function to test the utilities bundle and utilities slim bundle + spark bundle.
+# It runs deltastreamer and then verifies that deltastreamer worked correctly.
+#
+# 1st arg: main jar to run with spark-submit, usually it's the utilities(-slim) bundle
+# 2nd arg and beyond: any additional jars to pass to --jars option
+#
+# env vars (defined in container):
+#   SPARK_HOME: path to the spark directory
+##
+test_utilities_bundle () {
+    OUTPUT_DIR=/tmp/hudi-utilities-test/
+    rm -r $OUTPUT_DIR
+    EXPECTED_SIZE=580
+    test_utilities_bundle_helper $1 "${@:2}"
+    exit $?
+}
+
+
+##
+# Function to test the upgrading the utilities bundle and 
+# utilities slim bundle + spark bundle.
+# It runs deltastreamer and then verifies that deltastreamer worked correctly on
+# half the data. Then, using an upgraded hudi, runs deltastreamer and verifies 
+# that deltastreamer worked correctly on the rest of the data
+#
+#
+# env vars (defined in container):
+#   SPARK_HOME: path to the spark directory
+#   FIRST_MAIN_ARG: what you would put as the first arg to test_utilities_bundle
+#       and that is used for running deltastreamer on the first batch of data
+#   FIRST_ADDITIONAL_ARG: what you would put as extra args to test_utilities_bundle
+#       and that is used for running deltastreamer on the first batch of data
+#   SECOND_MAIN_ARG: what you would put as the first arg to test_utilities_bundle
+#       and that is used for running deltastreamer on the second batch of data
+#   SECOND_ADDITIONAL_ARG: what you would put as extra args to test_utilities_bundle
+#       and that is used for running deltastreamer on the second batch of data
+##
+test_upgrade_bundle () {
+    #move batch 2 away from the data folder
+    mkdir /tmp/dataholder
+    mv $STOCK_DATA_DIR/batch_2.json /tmp/datadir/
+    OUTPUT_DIR=/tmp/hudi-utilities-test/
+    rm -r $OUTPUT_DIR
+
+    #run the deltastreamer and validate
+    echo "::warning::validate.sh testing upgrade bundle on batch_1"
+    EXPECTED_SIZE=500
+    test_utilities_bundle_helper $FIRST_MAIN_ARG $FIRST_ADDITIONAL_ARG
+    if [ "$?" -ne 0 ]; then
+        exit 1
+    fi
+    echo "::warning::validate.sh done testing upgrade bundle on batch_1"
+
+    #move batch 2 back to the data folder
+    mv /tmp/datadir/batch_2.json $STOCK_DATA_DIR/
+
+    #run the deltastreamer and validate
+    echo "::warning::validate.sh testing upgrade bundle on batch_2"
+    EXPECTED_SIZE=1000
+    test_utilities_bundle_helper $SECOND_MAIN_ARG $SECOND_ADDITIONAL_ARG
+    if [ "$?" -ne 0 ]; then
+        exit 1
+    fi
+    echo "::warning::validate.sh done testing upgrade bundle on batch_2"
+}
+
 
 test_spark_bundle
 if [ "$?" -ne 0 ]; then
@@ -125,6 +195,19 @@ then
       exit 1
   fi
   echo "::warning::validate.sh done testing utilities bundle"
+
+  #example of testing upgrade with utilties bundle
+  echo "::warning::validate.sh testing upgrade from 0.11.0 to current utilities bundle"
+  FIRST_MAIN_ARG=$UTILITIES_BUNDLE_0_11_0
+  FIRST_ADDITIONAL_ARG=""
+  SECOND_MAIN_ARG=$JARS_DIR/utilities.jar
+  SECOND_ADDITIONAL_ARG=""
+  test_upgrade_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done testing upgrade from 0.11.0 to current utilities bundle"
+
 else
   echo "::warning::validate.sh skip testing utilities bundle for non-spark2.4 & non-spark3.1 build"
 fi
@@ -135,3 +218,18 @@ if [ "$?" -ne 0 ]; then
     exit 1
 fi
 echo "::warning::validate.sh done testing utilities slim bundle"
+
+#example of testing upgrade with utilties slim bundle
+echo "::warning::validate.sh testing upgrade from 0.11.0 to current utilities slim bundle"
+FIRST_MAIN_ARG=$UTILITIES_SLIM_BUNDLE_0_11_0
+FIRST_ADDITIONAL_ARG=$SPARK_BUNDLE_0_11_0
+SECOND_MAIN_ARG=$JARS_DIR/utilities-slim.jar
+SECOND_ADDITIONAL_ARG=$JARS_DIR/spark.jar
+test_upgrade_bundle
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done testing upgrade from 0.11.0 to current utilities slim bundle"
+
+
+

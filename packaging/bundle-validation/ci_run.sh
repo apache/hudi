@@ -84,6 +84,8 @@ docker build \
 --build-arg SPARK_VERSION=$SPARK_VERSION \
 --build-arg SPARK_HADOOP_VERSION=$SPARK_HADOOP_VERSION \
 --build-arg IMAGE_TAG=$IMAGE_TAG \
+--build-arg SPARK_PROFILE=$SPARK_PROFILE \
+--build-arg SCALA_VERSION=${SCALA_PROFILE#'scala-'} \
 -t hudi-ci-bundle-validation:$IMAGE_TAG \
 .
 
