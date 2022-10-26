@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -156,7 +157,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     List<HoodieCommitMetadata> metadataList = commitsToCheck
         .get().stream().map(instant -> {
           try {
-            return HoodieInputFormatUtils.getCommitMetadata(instant, commitsTimelineToReturn);
+            return TimelineUtils.getCommitMetadata(instant, commitsTimelineToReturn);
           } catch (IOException e) {
             throw new HoodieException(String.format("cannot get metadata for instant: %s", instant));
           }
