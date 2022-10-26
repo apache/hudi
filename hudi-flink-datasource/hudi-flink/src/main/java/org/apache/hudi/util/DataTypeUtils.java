@@ -142,7 +142,7 @@ public class DataTypeUtils {
     }
     LogicalType dataTypeLogicalType = dataType.getLogicalType();
     if (!(dataTypeLogicalType instanceof RowType)) {
-      throw new RuntimeException("The datatype to be converted must be row type");
+      throw new RuntimeException("The datatype to be converted must be row type, but this type is :" + dataTypeLogicalType.getClass());
     }
     RowType rowType = (RowType) dataTypeLogicalType;
     List<DataType> originalFieldTypes = dataType.getChildren();
