@@ -117,7 +117,9 @@ public class SerializationUtils {
       // ensure that kryo doesn't fail if classes are not registered with kryo.
       kryo.setRegistrationRequired(false);
       // This would be used for object initialization if nothing else works out.
-      kryo.setInstantiatorStrategy(new Kryo.DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
+      Kryo.DefaultInstantiatorStrategy instantiatorStrategy = new Kryo.DefaultInstantiatorStrategy();
+      instantiatorStrategy.setFallbackInstantiatorStrategy(new StdInstantiatorStrategy());
+      kryo.setInstantiatorStrategy(instantiatorStrategy);
       // Handle cases where we may have an odd classloader setup like with libjars
       // for hadoop
       kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
