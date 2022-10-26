@@ -18,8 +18,8 @@ FROM adoptopenjdk/openjdk8:alpine
 
 RUN apk add --no-cache --upgrade bash
 
-RUN mkdir /opt/hudi-bundles
-ENV WORKDIR=/opt/hudi-bundles
+RUN mkdir /opt/bundle-validation
+ENV WORKDIR=/opt/bundle-validation
 WORKDIR $WORKDIR
 
 ARG HADOOP_VERSION=2.7.7
@@ -47,10 +47,3 @@ RUN wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK
     && tar -xf $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -C $WORKDIR/ \
     && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz
 ENV SPARK_HOME=$WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION
-
-RUN cp $DERBY_HOME/lib/derbyclient.jar $SPARK_HOME/jars/
-COPY hive-site.xml $HIVE_HOME/conf/
-RUN ln -sf $HIVE_HOME/conf/hive-site.xml $SPARK_HOME/conf/hive-site.xml
-COPY spark-defaults.conf $SPARK_HOME/conf/
-COPY validate.scala .
-COPY validate.sh .
