@@ -108,45 +108,45 @@ public class HiveSyncConfig extends HoodieSyncConfig {
             + "instead of org.apache.hudi package. Use this when you are in the process of migrating from "
             + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
             + "org.apache.hudi input format.")
-    public Boolean usePreApacheInputFormat;
+    public boolean usePreApacheInputFormat;
     @Deprecated
     @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
-    public Boolean useJdbc;
+    public boolean useJdbc;
     @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")
     public String metastoreUris;
     @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms,glue,jdbc and hiveql")
     public String syncMode;
     @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
-    public Boolean autoCreateDatabase;
+    public boolean autoCreateDatabase;
     @Parameter(names = {"--ignore-exceptions"}, description = "Ignore hive exceptions")
-    public Boolean ignoreExceptions;
+    public boolean ignoreExceptions;
     @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
-    public Boolean skipROSuffix;
+    public boolean skipROSuffix;
     @Parameter(names = {"--table-properties"}, description = "Table properties to hive table")
     public String tableProperties;
     @Parameter(names = {"--serde-properties"}, description = "Serde properties to hive table")
     public String serdeProperties;
     @Parameter(names = {"--support-timestamp"}, description = "'INT64' with original type TIMESTAMP_MICROS is converted to hive 'timestamp' type."
         + "Disabled by default for backward compatibility.")
-    public Boolean supportTimestamp;
+    public boolean supportTimestamp;
     @Parameter(names = {"--managed-table"}, description = "Create a managed table")
-    public Boolean createManagedTable;
+    public boolean createManagedTable;
     @Parameter(names = {"--omit-metafields"}, description = "Omit metafields in schema")
-    public Boolean omitMetaFields;
+    public boolean omitMetaFields;
     @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
     public Integer batchSyncNum;
     @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.")
-    public Boolean syncAsSparkDataSourceTable;
+    public boolean syncAsSparkDataSourceTable;
     @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
     public Integer sparkSchemaLengthThreshold;
     @Parameter(names = {"--bucket-sync"}, description = "use bucket sync")
-    public Boolean bucketSync;
+    public boolean bucketSync;
     @Parameter(names = {"--bucket-spec"}, description = "bucket spec stored in metastore")
     public String bucketSpec;
     @Parameter(names = {"--sync-comment"}, description = "synchronize table comments to hive")
-    public Boolean syncComment;
+    public boolean syncComment;
     @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
-    public Boolean withOperationField; // TODO remove this as it's not used
+    public boolean withOperationField; // TODO remove this as it's not used
 
     public boolean isHelp() {
       return hoodieSyncConfigParams.isHelp();
