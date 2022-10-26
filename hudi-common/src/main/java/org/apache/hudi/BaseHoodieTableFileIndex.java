@@ -186,7 +186,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // Load all the partition path from the basePath, and filter by the query partition path.
     // TODO load files from the queryRelativePartitionPaths directly.
-    List<String> matchedPartitionPaths = getAllPartitionPathsUnchecked()
+    List<String> matchedPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, metadataConfig, basePath.toString())
         .stream()
         .filter(path -> queryRelativePartitionPaths.stream().anyMatch(path::startsWith))
         .collect(Collectors.toList());
@@ -331,14 +331,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
-  private List<String> getAllPartitionPathsUnchecked() {
-    try {
-      return isPartitionedTable() ? tableMetadata.getAllPartitionPaths() : Collections.singletonList("");
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to fetch partition paths for a table", e);
-    }
-  }
-
   private void validate(HoodieTimeline activeTimeline, Option<String> queryInstant) {
     if (shouldValidateInstant) {
       if (queryInstant.isPresent() && !activeTimeline.containsInstant(queryInstant.get())) {
@@ -364,10 +356,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       }
     }
     tableMetadata = newTableMetadata;
-  }
-
-  private boolean isPartitionedTable() {
-    return partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath.toString());
   }
 
   public static final class PartitionPath {
