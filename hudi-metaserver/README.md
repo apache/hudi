@@ -17,8 +17,8 @@
 
 # How to compile
 
-There a two ways, if there is a thrift binary in the local, please see the first one.
-If docker is more convenient for you, please see the other one.
+There are two ways, if there is a thrift binary in the local, please see the first one.
+If docker is more convenient for you, please see the other way.
 
 ### Way1: Compile with thrift binary
 

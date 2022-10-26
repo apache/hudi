@@ -36,6 +36,7 @@
         <mysql-connector-java.version>8.0.22</mysql-connector-java.version>
         <h2.version>1.4.200</h2.version>
         <!-- Thrift related properties -->
+        <thrift.home>/usr/local</thrift.home>
         <maven-thrift-plugin.version>0.1.11</maven-thrift-plugin.version>
     </properties>
 
