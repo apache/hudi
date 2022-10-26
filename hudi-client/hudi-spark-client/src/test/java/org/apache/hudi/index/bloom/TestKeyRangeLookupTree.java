@@ -38,7 +38,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestKeyRangeLookupTree {
 
   private static final Random RANDOM = new Random();
-  private final int padLength = 5;
   private KeyRangeLookupTree keyRangeLookupTree;
   private Map<String, HashSet<String>> expectedMatches;
 
@@ -208,8 +207,8 @@ public class TestKeyRangeLookupTree {
    * @param key the numeric value of the key
    * @return result of aligned numbers. For example, `1` -> `00001`.
    */
-  private String alignedNumber(long key) {
-    return String.format("%0".concat(String.valueOf(padLength)).concat("d"), key);
+  private static String alignedNumber(long key) {
+    return String.format("%0".concat(String.valueOf(5)).concat("d"), key);
   }
 
   /**
