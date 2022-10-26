@@ -17,10 +17,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
+#################################################################################################
 # NOTE: this script runs inside hudi-ci-bundle-validation container
-# $WORKDIR/jars/ is supposed to be mounted to a host directory where bundle jars are placed
-# TODO: test_spark_bundle should use more jars and try different orders to
-#   detect class loading issues
+# $WORKDIR/jars/ is to mount to a host directory where bundle jars are placed
+# $WORKDIR/data/ is to mount to a host directory where test data are placed with structures like
+#    - <dataset name>/schema.avsc
+#    - <dataset name>/data/<data files>
+#################################################################################################
 
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
@@ -31,12 +34,12 @@ ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 
 
 ##
-# used to test the spark bundle with hive sync
-# Env Vars:
+# Function to test the spark bundle with hive sync.
+#
+# env vars (defined in container):
 #   HIVE_HOME: path to the hive directory
-#   SPARK_HOME: path to the spark directory
 #   DERBY_HOME: path to the derby directory
-#   JARS_DIR: path to the directory where our bundle jars to test are located
+#   SPARK_HOME: path to the spark directory
 ##
 test_spark_bundle () {
     echo "::warning::validate.sh setting up hive metastore for spark bundle validation"
@@ -54,22 +57,25 @@ test_spark_bundle () {
 
 
 ##
-# Runs deltastreamer and then verifies that deltastreamer worked correctly
-# Used to test the utilities bundle and utilities slim bundle + spark bundle
-# Inputs:
+# Function to test the utilities bundle and utilities slim bundle + spark bundle.
+# It runs deltastreamer and then verifies that deltastreamer worked correctly.
+#
+# 1st arg: main jar to run with spark-submit, usually it's the utilities(-slim) bundle
+# 2nd arg and beyond: any additional jars to pass to --jars option
+#
+# env vars (defined in container):
 #   SPARK_HOME: path to the spark directory
-#   MAIN_JAR: path to the main jar to run with spark-shell or spark-submit
-#   ADDITIONAL_JARS: comma seperated list of additional jars to be used
-#   OUTPUT_DIR: directory where delta streamer will output to
-#   COMMANDS_FILE: path to file of scala commands that we will run in
-#       spark-shell to validate the delta streamer
-# Modifies: OPT_JARS, OUTPUT_SIZE, SHELL_COMMAND, LOGFILE, SHELL_RESULT
 ##
 test_utilities_bundle () {
+    MAIN_JAR=$1
+    printf -v EXTRA_JARS '%s,' "${@:2}"
+    EXTRA_JARS="${EXTRA_JARS%,}"
     OPT_JARS=""
-    if [[ -n $ADDITIONAL_JARS ]]; then
-        OPT_JARS="--jars $ADDITIONAL_JARS"
+    if [[ -n $EXTRA_JARS ]]; then
+        OPT_JARS="--jars $EXTRA_JARS"
     fi
+    OUTPUT_DIR=/tmp/hudi-utilities-test/
+    rm -r $OUTPUT_DIR
     echo "::warning::validate.sh running deltastreamer"
     $SPARK_HOME/bin/spark-submit \
     --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
@@ -78,7 +84,7 @@ test_utilities_bundle () {
     --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
     --source-class org.apache.hudi.utilities.sources.JsonDFSSource \
     --source-ordering-field ts --table-type MERGE_ON_READ \
-    --target-base-path file://${OUTPUT_DIR} \
+    --target-base-path ${OUTPUT_DIR} \
     --target-table utilities_tbl  --op UPSERT
     if [ "$?" -ne 0 ]; then
         echo "::error::validate.sh deltastreamer failed with exit code $?"
@@ -93,9 +99,9 @@ test_utilities_bundle () {
     fi
 
     echo "::warning::validate.sh validating deltastreamer in spark shell"
-    SHELL_COMMAND="$SPARK_HOME/bin/spark-shell --jars $ADDITIONAL_JARS $MAIN_JAR -i $COMMANDS_FILE"
+    SHELL_COMMAND="$SPARK_HOME/bin/spark-shell $OPT_JARS $MAIN_JAR -i $WORKDIR/utilities/validate.scala"
     echo "::debug::this is the shell command: $SHELL_COMMAND"
-    LOGFILE="$WORKDIR/submit.log"
+    LOGFILE="$WORKDIR/${FUNCNAME[0]}.log"
     $SHELL_COMMAND >> $LOGFILE
     if [ "$?" -ne 0 ]; then
         SHELL_RESULT=$(cat $LOGFILE | grep "Counts don't match")
@@ -114,12 +120,7 @@ fi
 if [[ $SPARK_HOME == *"spark-2.4"* ]] || [[  $SPARK_HOME == *"spark-3.1"* ]]
 then
   echo "::warning::validate.sh testing utilities bundle"
-  MAIN_JAR=$JARS_DIR/utilities.jar
-  ADDITIONAL_JARS=""
-  OUTPUT_DIR=/tmp/hudi-utilities-test/
-  rm -rf $OUTPUT_DIR
-  COMMANDS_FILE=$WORKDIR/utilities/commands.scala
-  test_utilities_bundle
+  test_utilities_bundle $JARS_DIR/utilities.jar
   if [ "$?" -ne 0 ]; then
       exit 1
   fi
@@ -129,14 +130,8 @@ else
 fi
 
 echo "::warning::validate.sh testing utilities slim bundle"
-MAIN_JAR=$JARS_DIR/utilities-slim.jar
-ADDITIONAL_JARS=$JARS_DIR/spark.jar
-OUTPUT_DIR=/tmp/hudi-utilities-slim-test/
-rm -rf $OUTPUT_DIR
-COMMANDS_FILE=$WORKDIR/utilities/slimcommands.scala
-test_utilities_bundle
+test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark.jar
 if [ "$?" -ne 0 ]; then
     exit 1
 fi
 echo "::warning::validate.sh done testing utilities slim bundle"
-

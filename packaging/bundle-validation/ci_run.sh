@@ -22,6 +22,7 @@
 # This script is to
 #  - set the corresponding variables based on CI job's build profiles
 #  - prepare Hudi bundle jars for mounting into Docker container for validation
+#  - prepare test datasets for mounting into Docker container for validation
 #
 # This is to run by GitHub Actions CI tasks from the project root directory
 # and it contains the CI environment-specific variables.
@@ -68,6 +69,12 @@ cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_
 echo 'Validating jars below:'
 ls -l $TMP_JARS_DIR
 
+# Copy test dataset
+TMP_DATA_DIR=/tmp/data/$(date +%s)
+mkdir -p $TMP_DATA_DIR/stocks/data
+cp ${GITHUB_WORKSPACE}/docker/demo/data/*.json $TMP_DATA_DIR/stocks/data/
+cp ${GITHUB_WORKSPACE}/docker/demo/config/schema.avsc $TMP_DATA_DIR/stocks/
+
 # build docker image
 cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1
 docker build \
@@ -81,4 +88,5 @@ docker build \
 .
 
 # run validation script in docker
-docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh
+docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,44 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-{
-  "type":"record",
-  "name":"stock_ticks",
-  "fields":[{
-     "name": "volume",
-     "type": "long"
-  }, {
-     "name": "ts", 
-     "type": "string"
-  }, {
-     "name": "symbol", 
-     "type": "string"
-  },{
-     "name": "year", 
-     "type": "int"
-  },{
-     "name": "month", 
-     "type": "string"
-  },{
-     "name": "high", 
-     "type": "double"
-  },{
-     "name": "low", 
-     "type": "double"
-  },{
-     "name": "key", 
-     "type": "string"
-  },{
-     "name": "date", 
-     "type":"string"
-  }, {
-     "name": "close", 
-     "type": "double"
-  }, {
-     "name": "open", 
-     "type": "double"
-  }, {
-     "name": "day", 
-     "type":"string"
-  }
-]}
+
+val hudiDf = spark.read.format("hudi").load("/tmp/hudi-utilities-test/")
+val inputDf = spark.read.format("json").load("/opt/bundle-validation/data/stocks/data")
+val hudiCount = hudiDf.select("date", "key").distinct.count
+val srcCount = inputDf.select("date", "key").distinct.count
+if (hudiCount == srcCount) System.exit(0)
+println(s"Counts don't match hudiCount: $hudiCount, srcCount: $srcCount")
+System.exit(1)
