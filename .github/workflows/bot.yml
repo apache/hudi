@@ -72,7 +72,7 @@ jobs:
         if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/spark-write-hive-sync/ci_run.sh $HUDI_VERSION
+          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
       - name: Spark SQL Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
