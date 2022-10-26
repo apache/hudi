@@ -407,6 +407,14 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         .filter(s -> !s.isCompleted())
         .firstInstant();
 
+    Option<HoodieInstant> latestCompleteCleanInstant = Option.fromJavaOptional(
+        table.getCleanTimeline().filterCompletedInstants().getReverseOrderedInstants().findFirst());
+
+    if (!latestCompleteCleanInstant.isPresent()) {
+      LOG.info("Not archiving any commits as there is no complete clean instant");
+      return Stream.empty();
+    }
+
     Option<HoodieInstant> oldestInflightCommitInstant =
         table.getActiveTimeline()
             .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
@@ -459,7 +467,10 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               oldestInstantToRetainForCompaction.map(instantToRetain ->
                       compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
                   .orElse(true)
-          );
+          ).filter(s ->
+              latestCompleteCleanInstant.map(instant ->
+                  compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp()))
+                  .orElse(false));
       return instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep);
     } else {
       return Stream.empty();

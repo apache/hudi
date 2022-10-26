@@ -825,6 +825,76 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
+  public void testArchiveBeforeLastestClean(boolean enableMetadataTable) throws Exception {
+    init();
+    HoodieWriteConfig cfg =
+        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+            .withParallelism(2, 2).forTable("test-trip-table")
+            .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).withAutoClean(false).build())
+            .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+            .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+                .withRemoteServerPort(timelineServicePort).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
+            .build();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    initWriteConfigAndMetatableWriter(cfg, enableMetadataTable);
+
+    testTable.doWriteOperation("00000000", WriteOperationType.INSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 10);
+
+    HoodieTestDataGenerator.createCommitFile(basePath, "00000001", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "00000002", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "00000003", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "00000004", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "00000005", wrapperFs.getConf());
+
+
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+
+    if (enableMetadataTable) {
+      // Simulate a compaction commit in metadata table timeline
+      // so the archival in data table can happen
+      createCompactionCommitInMetadataTable(hadoopConf, wrapperFs, basePath, "00000005");
+    }
+
+    boolean result = archiver.archiveIfRequired(context);
+
+    assertTrue(result);
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+    // If there is empty clean commits, should not archive commits though commit size exceed
+    // MAX_COMMITS_TO_KEEP
+    assertTrue(archivedTimeline.filterCompletedInstants().empty());
+
+    Map<String, Integer> cleanStats = new HashMap<>();
+    cleanStats.put("p1", 1);
+    cleanStats.put("p2", 2);
+
+    testTable.doClean("00000006", cleanStats);
+
+    metaClient.reloadActiveTimeline();
+    result = archiver.archiveIfRequired(context);
+
+    assertTrue(result);
+    archivedTimeline = metaClient.getArchivedTimeline();
+    // Should archive commits older than the clean commit
+    assertEquals(4, archivedTimeline.reload().filterCompletedInstants().countInstants());
+
+    HoodieTestDataGenerator.createCommitFile(basePath, "00000007", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "00000008", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "00000009", wrapperFs.getConf());
+    metaClient.reloadActiveTimeline();
+    result = archiver.archiveIfRequired(context);
+
+    assertTrue(result);
+    archivedTimeline = metaClient.getArchivedTimeline();
+    // Should archive commits older than the clean commit
+    assertEquals(6, archivedTimeline.reload().filterCompletedInstants().countInstants());
+    assertEquals("00000006", metaClient.getActiveTimeline().reload().filterCompletedInstants().firstInstant()
+        .map(HoodieInstant::getTimestamp).orElse("0000000"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
   public void testArchiveCommitTimeline(boolean enableMetadataTable) throws Exception {
     init();
     HoodieWriteConfig cfg =
