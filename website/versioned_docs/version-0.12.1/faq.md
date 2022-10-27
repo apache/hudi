@@ -627,6 +627,12 @@ Cloudera CDP stack, causing the conflict.  To get around the RuntimeException, y
 `hbase.defaults.for.version.skip` to `true` in the `hbase-site.xml` configuration file, e.g., overwriting the config
 within the Cloudera manager.
 
+### How can I resolve the IllegalArgumentException saying `Partitions must be in the same table` when attempting to sync to a metastore?
+
+This will occur when capital letters are used in the table name. Metastores such as Hive automatically convert table names
+to lowercase. While we allow capitalization on Hudi tables, if you would like to use a metastore you may be required to
+use all lowercase letters.
+
 ## Contributing to FAQ
 
 A good and usable FAQ should be community-driven and crowd source questions/thoughts across everyone.
