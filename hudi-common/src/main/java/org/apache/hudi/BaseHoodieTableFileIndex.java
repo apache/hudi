@@ -100,9 +100,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   //       it will hold all the file-slices residing w/in the partition
   private transient volatile Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices = new HashMap<>();
 
-  /**
-   * It always contains all partition paths, or null if it is not initialized yet.
-   */
+  // NOTE: It always contains either all partition paths, or null if it is not initialized yet
   private transient volatile List<PartitionPath> cachedAllPartitionPaths = null;
 
   private transient HoodieTableMetadata tableMetadata = null;
@@ -148,15 +146,13 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.engineContext = engineContext;
     this.fileStatusCache = fileStatusCache;
 
-    /**
-     * The `shouldListLazily` variable controls how we initialize the TableFileIndex:
-     *  - non-lazy/eager listing (shouldListLazily=false):  all partitions and file slices will be loaded eagerly during initialization.
-     *  - lazy listing (shouldListLazily=true): partitions listing will be done lazily with the knowledge from query predicate on partition
-     *        columns. And file slices fetching only happens for partitions satisfying the given filter.
-     *
-     * In SparkSQL, `shouldListLazily` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
-     * In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
-     */
+    // The `shouldListLazily` variable controls how we initialize the TableFileIndex:
+    //  - non-lazy/eager listing (shouldListLazily=false):  all partitions and file slices will be loaded eagerly during initialization.
+    //  - lazy listing (shouldListLazily=true): partitions listing will be done lazily with the knowledge from query predicate on partition
+    //        columns. And file slices fetching only happens for partitions satisfying the given filter.
+    //
+    // In SparkSQL, `shouldListLazily` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
+    // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
     if (shouldListLazily) {
       initMetadataTable();
     } else {
@@ -222,11 +218,16 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   protected Map<PartitionPath, List<FileSlice>> getAllInputFileSlices() {
     if (!areAllPartitionsCached()) {
-      // Fetching file slices for partitions that have not been cached
-      List<PartitionPath> partitions = getAllQueryPartitionPaths().stream()
-          .filter(p -> !cachedAllInputFileSlices.containsKey(p)).collect(Collectors.toList());
-      cachedAllInputFileSlices.putAll(loadFileSlicesForPartitions(partitions));
+      // Fetching file slices for partitions that have not been cached yet
+      List<PartitionPath> missingPartitions = getAllQueryPartitionPaths().stream()
+          .filter(p -> !cachedAllInputFileSlices.containsKey(p))
+          .collect(Collectors.toList());
+
+      // NOTE: Individual partitions are always cached in full, therefore if partition is cached
+      //       it will hold all the file-slices residing w/in the partition
+      cachedAllInputFileSlices.putAll(loadFileSlicesForPartitions(missingPartitions));
     }
+
     return cachedAllInputFileSlices;
   }
 
