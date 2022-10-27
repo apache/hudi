@@ -26,6 +26,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.meta.CkpMessage;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.util.StreamerUtil;
@@ -160,6 +161,9 @@ public abstract class AbstractStreamWriteFunction<I>
 
   @Override
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
+    if (this.currentInstant != null) {
+      this.ckpMetadata.startCommitInstant(this.currentInstant);
+    }
     if (inputEnded) {
       return;
     }
@@ -279,6 +283,7 @@ public abstract class AbstractStreamWriteFunction<I>
    * Returns whether the pending instant is invalid to write with.
    */
   private boolean invalidInstant(String instant, boolean hasData) {
-    return instant.equals(this.currentInstant) && hasData;
+    List<CkpMessage> messages = this.ckpMetadata.getMessages();
+    return messages.get(messages.size() - 1).getState().equals(CkpMessage.State.START_COMPLETE);
   }
 }
