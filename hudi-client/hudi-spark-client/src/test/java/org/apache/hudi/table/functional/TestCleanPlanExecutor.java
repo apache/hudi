@@ -102,9 +102,9 @@ public class TestCleanPlanExecutor extends TestCleaner {
   private static Stream<Arguments> argumentsForTestTriggerCleanEveryNCommits() {
     return Stream.of(
             Arguments.of(1),
-                Arguments.of(2),
-                Arguments.of(3),
-                Arguments.of(4)
+            Arguments.of(2),
+            Arguments.of(3),
+            Arguments.of(4)
     );
   }
 
