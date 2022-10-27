@@ -33,6 +33,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,17 +46,29 @@ public class CommitUtils {
 
   private static final Logger LOG = LogManager.getLogger(CommitUtils.class);
   private static final String NULL_SCHEMA_STR = Schema.create(Schema.Type.NULL).toString();
-  public static final ConcurrentHashMap<String, String> PERSISTED_RDD_IDS = new ConcurrentHashMap();
+  public static transient ConcurrentHashMap<String, String> PERSISTED_RDD_IDS = new ConcurrentHashMap();
 
   public static void updatePersistedRddId(String basePath, String commitTime, int id) {
     String key = basePath + "_" + commitTime;
-    if (PERSISTED_RDD_IDS.contains(key)) {
+    LOG.warn("XXX all entries in PERSISTED ID hashmap " + Arrays.toString(PERSISTED_RDD_IDS.keySet().stream().toArray()));
+    if (PERSISTED_RDD_IDS.containsKey(key)) {
       String value = PERSISTED_RDD_IDS.get(key);
       PERSISTED_RDD_IDS.put(key, value + "," + id);
     } else {
       PERSISTED_RDD_IDS.put(key, String.valueOf(id));
     }
-    LOG.warn(key + ", XXX context property " + PERSISTED_RDD_IDS.get(key));
+    LOG.warn(key + ", XXX Updated persisted RDD Ids for " + key + ": " + PERSISTED_RDD_IDS.get(key));
+  }
+
+  public static void removePersistedRddId(String basePath, String commitTime, int id) {
+    String key = basePath + "_" + commitTime;
+    if (PERSISTED_RDD_IDS.contains(key)) {
+      String value = PERSISTED_RDD_IDS.remove(key);
+      LOG.warn(key + ", XXX context property " + PERSISTED_RDD_IDS.get(key));
+    } else {
+      LOG.warn(key + ", XXX context property " + PERSISTED_RDD_IDS.get(key));
+      // PERSISTED_RDD_IDS.put(key, String.valueOf(id));
+    }
   }
 
   public static String getPersistedRddIds(String basePath, String commitTime) {

@@ -590,11 +590,16 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     // see: https://spark.apache.org/docs/latest/rdd-programming-guide.html#removing-data
     if (config.areReleaseResourceEnabled()) {
       String persistedIdsStr = CommitUtils.getPersistedRddIds(config.getBasePath(), instantTime);
+      LOG.warn("XXX List of persisted IDs from hashmap " + persistedIdsStr);
       if (!StringUtils.isNullOrEmpty(persistedIdsStr)) {
         String[] ids = persistedIdsStr.split(",");
         List<Integer> persistedIds = Arrays.stream(ids).map(id -> Integer.parseInt(id)).collect(Collectors.toList());
         LOG.warn("XXX List of persisted IDs(release resources) " + Arrays.toString(ids));
         List<Integer> unpersistedIds = new ArrayList<>();
+        List<Integer> allIds = new ArrayList<>();
+        ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
+            .stream().forEach(rdd -> allIds.add(rdd.id()));
+        LOG.warn("XXX List of ALLL persisted IDs(release resources) " + Arrays.toString(allIds.toArray()));
         ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
             .stream().filter(rdd -> persistedIds.contains(rdd.id()))
             .forEach(rdd -> {

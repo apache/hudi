@@ -1080,7 +1080,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .save(basePath)
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
-    // spark.sparkContext.getPersistentRDDs.values.map(rdd => System.out.print("Persisted rdd " + rdd.id))
+    spark.sparkContext.getPersistentRDDs.values.map(rdd => System.out.print("Persisted rdd " + rdd.id))
     // assertEquals(spark.sparkContext.getPersistentRDDs.values.filter())
   }
 }
