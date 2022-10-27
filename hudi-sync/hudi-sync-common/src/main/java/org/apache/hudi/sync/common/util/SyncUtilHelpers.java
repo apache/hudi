@@ -55,7 +55,6 @@ public class SyncUtilHelpers {
                                        String targetBasePath,
                                        String baseFileFormat) {
     try {
-      LOG.warn("VEXLER HERE58");
       instantiateMetaSyncTool(syncToolClassName, props, hadoopConfig, fs, targetBasePath, baseFileFormat).syncHoodieTable();
     } catch (Throwable e) {
       throw new HoodieException("Could not sync using the meta sync class " + syncToolClassName, e);
@@ -73,8 +72,6 @@ public class SyncUtilHelpers {
     properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), targetBasePath);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
     String tableName = properties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key());
-    LOG.warn("VEXLER HERE75");
-    LOG.warn(("VEXLER TABLE NAME IS: " + tableName));
     if (!tableName.equals(tableName.toLowerCase())) {
       LOG.warn("Table name \"" + tableName + "\" contains capital letters. Your metastore may auto convert this to lowercase and cause table not found errors.");
     }
