@@ -1069,9 +1069,9 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    // clone the df so that we can use it to validate later for persistance.
     val inputDfCloned : sql.DataFrame = spark.createDataFrame(inputDF.rdd, inputDF.schema)
     inputDfCloned.rdd.persist(StorageLevel.MEMORY_ONLY)
-    System.out.print("Cloned RDD id " + inputDfCloned.rdd.id)
     inputDF.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -1080,7 +1080,9 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .save(basePath)
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
-    spark.sparkContext.getPersistentRDDs.values.map(rdd => System.out.print("Persisted rdd " + rdd.id))
-    // assertEquals(spark.sparkContext.getPersistentRDDs.values.filter())
+    // ensure that the rdd that we persisted outside of hudi write is still persisted.
+    assertEquals(1, spark.sparkContext.getPersistentRDDs.values.filter(rdd => rdd.id == inputDfCloned.rdd.id).size)
+    // verify that there are no other persisted Rdds
+    assertEquals(1, spark.sparkContext.getPersistentRDDs.values.size)
   }
 }

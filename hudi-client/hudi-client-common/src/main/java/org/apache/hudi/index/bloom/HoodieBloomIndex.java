@@ -29,7 +29,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -102,8 +101,6 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     HoodieData<HoodieRecord<R>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records);
 
     if (config.getBloomIndexUseCaching()) {
-      // CommitUtils.removePersistedRddId(config.getBasePath(), );
-      LOG.warn("XXX Unpersisting rdd " + records.getId());
       records.unpersist();
       keyFilenamePairs.unpersist();
     }
