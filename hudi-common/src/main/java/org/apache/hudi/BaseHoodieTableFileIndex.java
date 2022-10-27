@@ -205,7 +205,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
       this.cachedAllPartitionPaths = listPartitionPaths(queryRelativePartitionPaths);
       // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
-      // This normally happens for default partition case or non-encoded partition value.
+      //
+      // NOTE: On top of handling the cases of non-partitioned tables, this is also leveraged
+      //       as a graceful degradation approach, whenever we're unable to parse the partition values
+      //       from the path (in this case table will simply be read as non-partitioned table, instead
+      //       of failing outright)
       this.queryAsNonePartitionedTable = cachedAllPartitionPaths.stream().anyMatch(p -> p.values.length == 0);
     }
 
@@ -213,7 +217,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected Map<PartitionPath, List<FileSlice>> getAllInputFileSlices() {
-    if (!isAllInputFileSlicesCached()) {
+    if (!areAllPartitionsCached()) {
       // Fetching file slices for partitions that have not been cached
       List<PartitionPath> partitions = getAllQueryPartitionPaths().stream()
           .filter(p -> !cachedAllInputFileSlices.containsKey(p)).collect(Collectors.toList());
@@ -417,11 +421,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
-  protected boolean isAllInputFileSlicesCached() {
+  protected boolean areAllPartitionsCached() {
     // If the partition paths is not fully initialized yet, then the file slices are also not fully initialized.
     if (cachedAllPartitionPaths == null) {
       return false;
     }
+
     // Loop over partition paths to check if all partitions are initialized.
     return cachedAllPartitionPaths.stream().allMatch(p -> cachedAllInputFileSlices.containsKey(p));
   }
