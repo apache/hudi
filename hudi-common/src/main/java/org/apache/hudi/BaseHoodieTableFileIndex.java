@@ -92,10 +92,14 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private final transient FileStatusCache fileStatusCache;
 
-  protected volatile boolean queryAsNonePartitionedTable = false;
+  private volatile boolean queryAsNonePartitionedTable = false;
 
-  protected transient volatile long cachedFileSize = 0L;
+  private transient volatile long cachedFileSize = 0L;
+
+  // NOTE: Individual partitions are always cached in full: meaning that if partition is cached
+  //       it will hold all the file-slices residing w/in the partition
   private transient volatile Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices = new HashMap<>();
+
   /**
    * It always contains all partition paths, or null if it is not initialized yet.
    */
@@ -419,6 +423,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         throw new HoodieIOException(String.format("Query instant (%s) not found in the timeline", queryInstant.get()));
       }
     }
+  }
+
+  protected long getTotalCachedFilesSize() {
+    return cachedFileSize;
   }
 
   protected boolean areAllPartitionsCached() {

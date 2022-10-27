@@ -251,7 +251,7 @@ case class HoodieFileIndex(spark: SparkSession,
   override def inputFiles: Array[String] =
     allFiles.map(_.getPath.toString).toArray
 
-  override def sizeInBytes: Long = cachedFileSize
+  override def sizeInBytes: Long = getTotalCachedFilesSize
 
   private def isDataSkippingEnabled: Boolean = HoodieFileIndex.getBooleanConfigValue(options, spark.sessionState.conf, DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
   "false")
