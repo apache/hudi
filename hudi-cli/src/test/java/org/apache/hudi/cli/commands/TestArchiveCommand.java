@@ -23,7 +23,6 @@ import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -52,7 +51,7 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
     new TableCommand().createTable(
         tablePath, tableName,
         "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    
+
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
     // Create six commits
