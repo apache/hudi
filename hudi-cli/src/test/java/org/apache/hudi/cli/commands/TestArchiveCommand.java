@@ -1,26 +1,41 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.hudi.cli.commands;
 
-
+import org.apache.hudi.HoodieTestCommitGenerator;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
-import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.config.HoodieArchivalConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieSparkTable;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
 @SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
@@ -28,7 +43,6 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
 
   @Autowired
   private Shell shell;
-
 
   @Test
   public void testArchiving() throws Exception {
@@ -42,37 +56,34 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
         tablePath, tableName,
         "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
-    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
-    // Generate archive
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
-        .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withRemoteServerPort(timelineServicePort).build())
-        .forTable("test-trip-table").build();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
     // Create six commits
     for (int i = 100; i < 106; i++) {
       String timestamp = String.valueOf(i);
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, hadoopConf());
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath,timestamp, hadoopConf());
     }
 
-    // Simulate a compaction commit in metadata table timeline
-    // so the archival in data table can happen
+    //need to create compaction commit or else nothing will be archived
     HoodieTestUtils.createCompactionCommitInMetadataTable(
         hadoopConf(), metaClient.getFs(), tablePath, "105");
 
+    Object cmdResult = shell.evaluate(() -> "trigger archival --minCommits 2 --maxCommits 3 --commitsRetained 1");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    // reload the timeline and get all the commits before archive
-    metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
 
-    // archive
-    HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
-    archiver.archiveIfRequired(context());
+    //get instants in the active timeline only returns the latest state of the commit
+    //therefore we expect 2 instants because minCommits is 2
+    assertEquals(2, metaClient.getActiveTimeline().getInstants().count());
+
+    //get instants in the archived timeline returns all instants in the commit
+    //therefore we expect 12 instants because 6 commits - 2 commits in active timeline = 4 in archived
+    //since each commit is completed, there are 3 instances per commit (requested, inflight, completed)
+    //and 3 instances per commit * 4 commits = 12 instances
+    metaClient.getArchivedTimeline().getInstants().forEach(u -> System.out.println("archived: " + u.toString()));
+    assertEquals(12, metaClient.getArchivedTimeline().getInstants().count());
   }
 
-
 }
+
