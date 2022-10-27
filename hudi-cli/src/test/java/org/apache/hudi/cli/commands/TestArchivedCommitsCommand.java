@@ -37,7 +37,6 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -63,9 +62,6 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
   private Shell shell;
 
   private String tablePath;
-
-
-
 
   @BeforeEach
   public void init() throws Exception {
