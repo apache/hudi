@@ -85,7 +85,9 @@ public class HiveSyncGlobalCommitParams {
 
   Properties mkGlobalHiveSyncProps(boolean forRemote) {
     TypedProperties props = new TypedProperties(loadedProps);
-    props.putAll(globalHiveSyncConfigParams.toProps());
+    globalHiveSyncConfigParams.toProps().entrySet().forEach(
+        e -> props.putIfAbsent(e.getKey(), e.getValue())
+    );
     String basePath = forRemote ? loadedProps.getProperty(REMOTE_BASE_PATH)
             : loadedProps.getProperty(LOCAL_BASE_PATH, loadedProps.getProperty(META_SYNC_BASE_PATH.key()));
     props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), basePath);

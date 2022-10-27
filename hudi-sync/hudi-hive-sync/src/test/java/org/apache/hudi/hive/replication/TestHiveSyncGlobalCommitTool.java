@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USE_JDBC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
@@ -69,6 +70,7 @@ public class TestHiveSyncGlobalCommitTool {
     params.loadedProps.setProperty(LOCAL_BASE_PATH, localCluster.tablePath(DB_NAME, TBL_NAME));
     params.loadedProps.setProperty(REMOTE_BASE_PATH, remoteCluster.tablePath(DB_NAME, TBL_NAME));
     params.loadedProps.setProperty(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key(), commitTime);
+    params.loadedProps.setProperty(HIVE_USE_JDBC.key(), "true");
     params.loadedProps.setProperty(HIVE_USER.key(), System.getProperty("user.name"));
     params.loadedProps.setProperty(HIVE_PASS.key(), "");
     params.loadedProps.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
