@@ -137,6 +137,20 @@ public class CkpMetadata implements Serializable {
    *
    * @param instant The committed instant
    */
+  public void startCommitInstant(String instant) {
+    Path path = fullPath(CkpMessage.getFileName(instant, CkpMessage.State.START_COMPLETE));
+    try {
+      fs.createNewFile(path);
+    } catch (IOException e) {
+      throw new HoodieException("Exception while adding checkpoint commit metadata for instant: " + instant, e);
+    }
+  }
+
+  /**
+   * Add a checkpoint commit message.
+   *
+   * @param instant The committed instant
+   */
   public void commitInstant(String instant) {
     Path path = fullPath(CkpMessage.getFileName(instant, CkpMessage.State.COMPLETED));
     try {
