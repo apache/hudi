@@ -192,7 +192,7 @@ public class HoodieTableSource implements
               .setParallelism(1)
               .keyBy(MergeOnReadInputSplit::getFileId)
               .transform("split_reader", typeInfo, factory)
-              .uid(readOpIdentifier("split_monitor", conf))
+              .uid(readOpIdentifier("split_reader", conf))
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
           return new DataStreamSource<>(source);
         } else {
