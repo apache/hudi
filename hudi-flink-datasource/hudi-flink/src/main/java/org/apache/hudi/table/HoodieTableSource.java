@@ -188,11 +188,11 @@ public class HoodieTableSource implements
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
-              .uid("uid_split_monitor_" + conf.getString(FlinkOptions.TABLE_NAME))
+              .uid(readOpIdentifier("split_monitor", conf))
               .setParallelism(1)
               .keyBy(MergeOnReadInputSplit::getFileId)
               .transform("split_reader", typeInfo, factory)
-              .uid("uid_split_reader_" + conf.getString(FlinkOptions.TABLE_NAME))
+              .uid(readOpIdentifier("split_monitor", conf))
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
           return new DataStreamSource<>(source);
         } else {
@@ -202,6 +202,10 @@ public class HoodieTableSource implements
         }
       }
     };
+  }
+
+  public static String readOpIdentifier(String operatorN, Configuration conf) {
+    return "uid_" + operatorN + "_" + conf.getString(FlinkOptions.TABLE_NAME);
   }
 
   @Override
