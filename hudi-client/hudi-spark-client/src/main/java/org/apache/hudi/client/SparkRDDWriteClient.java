@@ -598,6 +598,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
               rdd.unpersist();
             });
         LOG.info("List of Unpersisted RDD IDs " + Arrays.toString(unpersistedIds.toArray()));
+        CommitUtils.removePersistedRdds(config.getBasePath(), instantTime);
       } else {
         LOG.warn("No persisted RDDs found for " + config.getBasePath() + ", " + instantTime);
       }

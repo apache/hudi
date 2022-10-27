@@ -265,7 +265,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
-    CommitUtils.updatePersistedRddId(config.getBasePath(), instantTime, statuses.getId());
+    CommitUtils.updatePersistedRdds(config.getBasePath(), instantTime, statuses.getId());
     return statuses;
   }
 

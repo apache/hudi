@@ -48,7 +48,7 @@ public class CommitUtils {
   private static final String NULL_SCHEMA_STR = Schema.create(Schema.Type.NULL).toString();
   public static transient ConcurrentHashMap<String, List<Integer>> PERSISTED_RDD_IDS = new ConcurrentHashMap();
 
-  public static void updatePersistedRddId(String basePath, String commitTime, int id) {
+  public static void updatePersistedRdds(String basePath, String commitTime, int id) {
     String key = basePath + "_" + commitTime;
     if (PERSISTED_RDD_IDS.containsKey(key)) {
       List<Integer> value = PERSISTED_RDD_IDS.get(key);
@@ -63,6 +63,10 @@ public class CommitUtils {
 
   public static List<Integer> getPersistedRddIds(String basePath, String commitTime) {
     return PERSISTED_RDD_IDS.get(basePath + "_" + commitTime);
+  }
+
+  public static void removePersistedRdds(String basePath, String commitTime) {
+    PERSISTED_RDD_IDS.remove(basePath + "_" + commitTime);
   }
 
   /**

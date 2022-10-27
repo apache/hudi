@@ -156,7 +156,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     } else {
       LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
     }
-    CommitUtils.updatePersistedRddId(config.getBasePath(), instantTime, inputRDD.id());
+    CommitUtils.updatePersistedRdds(config.getBasePath(), instantTime, inputRDD.id());
 
     // Handle records update with clustering
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
@@ -266,7 +266,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
-    CommitUtils.updatePersistedRddId(config.getBasePath(), instantTime, statuses.getId());
+    CommitUtils.updatePersistedRdds(config.getBasePath(), instantTime, statuses.getId());
     return statuses;
   }
 
