@@ -632,6 +632,11 @@ Cloudera CDP stack, causing the conflict.  To get around the RuntimeException, y
 `hbase.defaults.for.version.skip` to `true` in the `hbase-site.xml` configuration file, e.g., overwriting the config
 within the Cloudera manager.
 
+### How can I find the average record size in a commit?
+The `commit showpartitons` command in [HUDI CLI](https://hudi.apache.org/docs/cli) will show both "bytes written" and 
+"records inserted." Divide the bytes written by records inserted to find the average size. Note that this answer assumes 
+metadata overhead is negligible. For a small dataset (such as 5 columns, 100 records) this will not be the case.
+
 ## Contributing to FAQ
 
 A good and usable FAQ should be community-driven and crowd source questions/thoughts across everyone.
