@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.util.CollectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.log4j.LogManager
@@ -102,10 +103,11 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
      * |          Data cleaned           |  Data exists in table |
      * +---------------------------------+-----------------------+
      */
-
-    val completedCommits = hoodieMetaClient.getCommitsTimeline.filterCompletedInstants() // C4 to C9
-    val archivedInstants = hoodieMetaClient.getArchivedTimeline.filterCompletedInstants()
-      .getInstants.distinct().toArray // C0 to C3
+    val actionType = if (tableType == HoodieTableType.COPY_ON_WRITE) HoodieTimeline.COMMIT_ACTION else HoodieTimeline.DELTA_COMMIT_ACTION
+    val completedCommits = hoodieMetaClient.getActiveTimeline
+      .getTimelineOfActions(CollectionUtils.createSet(actionType)).filterCompletedInstants() // C4 to C9
+    val archivedInstants = hoodieMetaClient.getArchivedTimeline
+      .getTimelineOfActions(CollectionUtils.createSet(actionType)).filterCompletedInstants().getInstants.distinct().toArray // C0 to C3
 
     //Anything less than 2 is a valid commit in the sense no cleanup has been done for those commit files
     val startUnarchivedCommitTs = completedCommits.nthInstant(0).get().getTimestamp //C4
