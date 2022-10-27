@@ -52,8 +52,7 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
     new TableCommand().createTable(
         tablePath, tableName,
         "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
-
-
+    
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
     // Create six commits
@@ -61,10 +60,6 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
       String timestamp = String.valueOf(i);
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath,timestamp, hadoopConf());
     }
-
-    //need to create compaction commit or else nothing will be archived
-    HoodieTestUtils.createCompactionCommitInMetadataTable(
-        hadoopConf(), metaClient.getFs(), tablePath, "105");
 
     Object cmdResult = shell.evaluate(() -> "trigger archival --minCommits 2 --maxCommits 3 --commitsRetained 1");
     assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
