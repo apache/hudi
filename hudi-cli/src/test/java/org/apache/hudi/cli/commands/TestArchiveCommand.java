@@ -18,14 +18,11 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.HoodieTestCommitGenerator;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 
 import org.junit.jupiter.api.Tag;
@@ -81,7 +78,6 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
     //therefore we expect 12 instants because 6 commits - 2 commits in active timeline = 4 in archived
     //since each commit is completed, there are 3 instances per commit (requested, inflight, completed)
     //and 3 instances per commit * 4 commits = 12 instances
-    metaClient.getArchivedTimeline().getInstants().forEach(u -> System.out.println("archived: " + u.toString()));
     assertEquals(12, metaClient.getArchivedTimeline().getInstants().count());
   }
 
