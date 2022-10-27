@@ -17,6 +17,7 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.List;
@@ -39,41 +40,36 @@ import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATO
  *
  * @param <S> string type
  */
-public class PartitionPathFormatter<S> {
+public abstract class PartitionPathFormatterBase<S> {
 
   private final Supplier<StringBuilder<S>> stringBuilderFactory;
-  private final Function<Object, S> valueConverter;
-  private final Function<S, S> encoder;
 
-  private final Function<S, S> emptyHandler;
+  private final boolean useHiveStylePartitioning;
+  private final boolean useEncoding;
 
-  private final boolean hiveStylePartitioning;
-
-  PartitionPathFormatter(Supplier<StringBuilder<S>> stringBuilderFactory,
-                         Function<Object, S> valueConverter,
-                         Function<S, S> encoder,
-                         Function<S, S> emptyHandler,
-                         boolean hiveStylePartitioning) {
+  PartitionPathFormatterBase(Supplier<StringBuilder<S>> stringBuilderFactory,
+                             boolean useHiveStylePartitioning,
+                             boolean useEncoding) {
     this.stringBuilderFactory = stringBuilderFactory;
-    this.valueConverter = valueConverter;
-    this.encoder = encoder;
-    this.emptyHandler = emptyHandler;
-    this.hiveStylePartitioning = hiveStylePartitioning;
+
+    this.useHiveStylePartitioning = useHiveStylePartitioning;
+    this.useEncoding = useEncoding;
   }
 
   public final S combine(List<String> partitionPathFields, Object... partitionPathParts) {
     checkState(partitionPathParts.length == partitionPathFields.size());
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
-    if (!hiveStylePartitioning && partitionPathParts.length == 1) {
-      return emptyHandler.apply(valueConverter.apply(partitionPathParts[0]));
+    if (!useHiveStylePartitioning && partitionPathParts.length == 1) {
+      return handleEmpty(toString(partitionPathParts[0]));
     }
 
     StringBuilder<S> sb = stringBuilderFactory.get();
     for (int i = 0; i < partitionPathParts.length; ++i) {
-      S partitionPathPartStr = encoder.apply(emptyHandler.apply(valueConverter.apply(partitionPathParts[i])));
+      S rawPartitionPathPartStr = handleEmpty(toString(partitionPathParts[i]));
+      S partitionPathPartStr = useEncoding ? encode(rawPartitionPathPartStr) : rawPartitionPathPartStr;
 
-      if (hiveStylePartitioning) {
+      if (useHiveStylePartitioning) {
         sb.appendJava(partitionPathFields.get(i))
             .appendJava("=")
             .append(partitionPathPartStr);
@@ -88,6 +84,10 @@ public class PartitionPathFormatter<S> {
 
     return sb.build();
   }
+
+  protected abstract S toString(Object o);
+  protected abstract S encode(S partitionPathPart);
+  protected abstract S handleEmpty(S partitionPathPart);
 
   /**
    * This is a generic interface closing the gap and unifying the {@link java.lang.StringBuilder} with
@@ -107,11 +107,11 @@ public class PartitionPathFormatter<S> {
     S build();
   }
 
-  static class JavaStringBuilder implements PartitionPathFormatter.StringBuilder<String> {
+  public static class JavaStringBuilder implements PartitionPathFormatterBase.StringBuilder<String> {
     private final java.lang.StringBuilder sb = new java.lang.StringBuilder();
 
     @Override
-    public PartitionPathFormatter.StringBuilder<String> appendJava(String s) {
+    public PartitionPathFormatterBase.StringBuilder<String> appendJava(String s) {
       sb.append(s);
       return this;
     }

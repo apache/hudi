@@ -23,7 +23,6 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkRowSerDe;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.log4j.LogManager;
@@ -51,7 +50,6 @@ import java.util.function.Supplier;
 import static org.apache.hudi.common.util.CollectionUtils.tail;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
-import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 
 /**
@@ -71,15 +69,14 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   private static final String COMPOSITE_KEY_FIELD_VALUE_INFIX = ":";
 
-  protected static final UTF8String HUDI_DEFAULT_PARTITION_PATH_UTF8 = UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH);
   protected static final UTF8String NULL_RECORD_KEY_PLACEHOLDER_UTF8 = UTF8String.fromString(NULL_RECORDKEY_PLACEHOLDER);
   protected static final UTF8String EMPTY_RECORD_KEY_PLACEHOLDER_UTF8 = UTF8String.fromString(EMPTY_RECORDKEY_PLACEHOLDER);
 
   protected transient volatile SparkRowConverter rowConverter;
   protected transient volatile SparkRowAccessor rowAccessor;
 
-  protected transient volatile PartitionPathFormatter<String> stringPartitionPathFormatter;
-  protected transient volatile PartitionPathFormatter<UTF8String> utf8StringPartitionPathFormatter;
+  protected transient volatile PartitionPathFormatterBase<String> stringPartitionPathFormatter;
+  protected transient volatile PartitionPathFormatterBase<UTF8String> utf8StringPartitionPathFormatter;
 
   protected BuiltinKeyGenerator(TypedProperties config) {
     super(config);
@@ -154,7 +151,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    */
   protected final String combineRecordKey(Object... recordKeyParts) {
     return combineRecordKeyInternal(
-        PartitionPathFormatter.JavaStringBuilder::new,
+        PartitionPathFormatterBase.JavaStringBuilder::new,
         BuiltinKeyGenerator::toString,
         BuiltinKeyGenerator::handleNullRecordKey,
         recordKeyParts
@@ -180,7 +177,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    */
   protected final String combineCompositeRecordKey(Object... recordKeyParts) {
     return combineCompositeRecordKeyInternal(
-        PartitionPathFormatter.JavaStringBuilder::new,
+        PartitionPathFormatterBase.JavaStringBuilder::new,
         BuiltinKeyGenerator::toString,
         BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPart,
         BuiltinKeyGenerator::isNullOrEmptyCompositeKeyPart,
@@ -203,7 +200,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   }
 
   private <S> S combineRecordKeyInternal(
-      Supplier<PartitionPathFormatter.StringBuilder<S>> builderFactory,
+      Supplier<PartitionPathFormatterBase.StringBuilder<S>> builderFactory,
       Function<Object, S> converter,
       Function<S, S> emptyKeyPartHandler,
       Object... recordKeyParts
@@ -212,7 +209,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       return emptyKeyPartHandler.apply(converter.apply(recordKeyParts[0]));
     }
 
-    PartitionPathFormatter.StringBuilder<S> sb = builderFactory.get();
+    PartitionPathFormatterBase.StringBuilder<S> sb = builderFactory.get();
     for (int i = 0; i < recordKeyParts.length; ++i) {
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
       sb.append(emptyKeyPartHandler.apply(converter.apply(recordKeyParts[i])));
@@ -226,7 +223,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   }
 
   private <S> S combineCompositeRecordKeyInternal(
-      Supplier<PartitionPathFormatter.StringBuilder<S>> builderFactory,
+      Supplier<PartitionPathFormatterBase.StringBuilder<S>> builderFactory,
       Function<Object, S> converter,
       Function<S, S> emptyKeyPartHandler,
       Predicate<S> isNullOrEmptyKeyPartPredicate,
@@ -234,7 +231,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   ) {
     boolean hasNonNullNonEmptyPart = false;
 
-    PartitionPathFormatter.StringBuilder<S> sb = builderFactory.get();
+    PartitionPathFormatterBase.StringBuilder<S> sb = builderFactory.get();
     for (int i = 0; i < recordKeyParts.length; ++i) {
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
       S convertedKeyPart = emptyKeyPartHandler.apply(converter.apply(recordKeyParts[i]));
@@ -258,16 +255,6 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
   }
 
-  private String tryEncodePartitionPath(String partitionPathPart) {
-    return encodePartitionPath ? PartitionPathEncodeUtils.escapePathName(partitionPathPart) : partitionPathPart;
-  }
-
-  private UTF8String tryEncodePartitionPathUTF8(UTF8String partitionPathPart) {
-    // NOTE: This method avoids [[UTF8String]] to [[String]] conversion (and back) unless
-    //       partition-path encoding is enabled
-    return encodePartitionPath ? UTF8String.fromString(PartitionPathEncodeUtils.escapePathName(partitionPathPart.toString())) : partitionPathPart;
-  }
-
   private void tryInitRowConverter(StructType structType) {
     if (rowConverter == null) {
       synchronized (this) {
@@ -278,16 +265,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
   }
 
-  private PartitionPathFormatter<String> getStringPartitionPathFormatter() {
+  private PartitionPathFormatterBase<String> getStringPartitionPathFormatter() {
     if (stringPartitionPathFormatter == null) {
       synchronized (this) {
         if (stringPartitionPathFormatter == null) {
-          this.stringPartitionPathFormatter = new PartitionPathFormatter<>(
-              PartitionPathFormatter.JavaStringBuilder::new,
-              BuiltinKeyGenerator::toString,
-              this::tryEncodePartitionPath,
-              BuiltinKeyGenerator::handleNullOrEmptyPartitionPathPart,
-              hiveStylePartitioning);
+          this.stringPartitionPathFormatter = new StringPartitionPathFormatter(
+              PartitionPathFormatterBase.JavaStringBuilder::new, hiveStylePartitioning, encodePartitionPath);
         }
       }
     }
@@ -295,16 +278,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     return stringPartitionPathFormatter;
   }
 
-  private PartitionPathFormatter<UTF8String> getUTF8StringPartitionPathFormatter() {
+  private PartitionPathFormatterBase<UTF8String> getUTF8StringPartitionPathFormatter() {
     if (utf8StringPartitionPathFormatter == null) {
       synchronized (this) {
         if (utf8StringPartitionPathFormatter == null) {
-          this.utf8StringPartitionPathFormatter = new PartitionPathFormatter<>(
-              UTF8StringBuilder::new,
-              BuiltinKeyGenerator::toUTF8String,
-              this::tryEncodePartitionPathUTF8,
-              BuiltinKeyGenerator::handleNullOrEmptyPartitionPathPartUTF8,
-              hiveStylePartitioning);
+          this.utf8StringPartitionPathFormatter = new UTF8StringPartitionPathFormatter(
+              UTF8StringBuilder::new, hiveStylePartitioning, encodePartitionPath);
         }
       }
     }
@@ -336,7 +315,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     return s;
   }
 
-  private static UTF8String toUTF8String(Object o) {
+  static UTF8String toUTF8String(Object o) {
     if (o == null) {
       return null;
     } else if (o instanceof UTF8String) {
@@ -384,24 +363,6 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     //       for performance reasons (it relies on the fact that we're using internalized
     //       constants)
     return keyPart == NULL_RECORD_KEY_PLACEHOLDER_UTF8 || keyPart == EMPTY_RECORD_KEY_PLACEHOLDER_UTF8;
-  }
-
-  private static String handleNullOrEmptyPartitionPathPart(Object partitionPathPart) {
-    if (partitionPathPart == null) {
-      return HUDI_DEFAULT_PARTITION_PATH;
-    } else {
-      // NOTE: [[toString]] is a no-op if key-part was already a [[String]]
-      String keyPartStr = partitionPathPart.toString();
-      return keyPartStr.isEmpty() ? HUDI_DEFAULT_PARTITION_PATH : keyPartStr;
-    }
-  }
-
-  private static UTF8String handleNullOrEmptyPartitionPathPartUTF8(UTF8String keyPart) {
-    if (keyPart == null || keyPart.numChars() == 0) {
-      return HUDI_DEFAULT_PARTITION_PATH_UTF8;
-    }
-
-    return keyPart;
   }
 
   /**
@@ -512,17 +473,17 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
   }
 
-  private static class UTF8StringBuilder implements PartitionPathFormatter.StringBuilder<UTF8String> {
+  private static class UTF8StringBuilder implements PartitionPathFormatterBase.StringBuilder<UTF8String> {
     private final org.apache.hudi.unsafe.UTF8StringBuilder sb = new org.apache.hudi.unsafe.UTF8StringBuilder();
 
     @Override
-    public PartitionPathFormatter.StringBuilder<UTF8String> appendJava(String s) {
+    public PartitionPathFormatterBase.StringBuilder<UTF8String> appendJava(String s) {
       sb.append(s);
       return this;
     }
 
     @Override
-    public PartitionPathFormatter.StringBuilder<UTF8String> append(UTF8String s) {
+    public PartitionPathFormatterBase.StringBuilder<UTF8String> append(UTF8String s) {
       sb.append(s);
       return this;
     }
