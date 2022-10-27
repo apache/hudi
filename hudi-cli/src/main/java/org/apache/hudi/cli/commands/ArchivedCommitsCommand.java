@@ -264,7 +264,6 @@ public class ArchivedCommitsCommand {
       sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
       SparkSession spark = SparkSession.builder().config(sparkConf).getOrCreate();
       jsc = new JavaSparkContext(spark.sparkContext());
-      //sc = SparkUtil.initJavaSparkContext(SparkUtil.getDefaultConf("HoodieCLI", Option.of(SparkUtil.DEFAULT_SPARK_MASTER)));
     }
   }
 }
