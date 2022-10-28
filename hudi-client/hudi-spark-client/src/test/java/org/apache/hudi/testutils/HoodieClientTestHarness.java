@@ -578,7 +578,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     }
     assertEquals(inflightCommits, testTable.inflightCommits());
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     // Partitions should match
