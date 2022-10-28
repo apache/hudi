@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi.functional;
 
 import org.apache.hadoop.fs.Path;
@@ -83,7 +84,7 @@ public class TestHiveTableSchemaEvolution {
     if (HoodieSparkUtils.gteqSpark3_1()) {
       sparkSession.sql("set hoodie.schema.on.read.enable=true");
       String path = new Path(file.getCanonicalPath()).toUri().toString();
-      sparkSession.sql("create table " + tableName + "(col0 int, col1 float, col2 string) using hudi options(type='cow', primaryKey='col0', preCombineField='col1') location '" + path +"'");
+      sparkSession.sql("create table " + tableName + "(col0 int, col1 float, col2 string) using hudi options(type='cow', primaryKey='col0', preCombineField='col1') location '" + path + "'");
       sparkSession.sql("insert into " + tableName + " values(1, 1.1, 'text')");
       sparkSession.sql("alter table " + tableName + " alter column col1 type double");
       sparkSession.sql("alter table " + tableName + " rename column col2 to aaa");
@@ -104,7 +105,7 @@ public class TestHiveTableSchemaEvolution {
     if (HoodieSparkUtils.gteqSpark3_1()) {
       sparkSession.sql("set hoodie.schema.on.read.enable=true");
       String path = new Path(file.getCanonicalPath()).toUri().toString();
-      sparkSession.sql("create table " + tableName + "(col0 int, col1 float, col2 string) using hudi options(type='cow', primaryKey='col0', preCombineField='col1') location '" + path +"'");
+      sparkSession.sql("create table " + tableName + "(col0 int, col1 float, col2 string) using hudi options(type='cow', primaryKey='col0', preCombineField='col1') location '" + path + "'");
       sparkSession.sql("insert into " + tableName + " values(1, 1.1, 'text')");
       sparkSession.sql("insert into " + tableName + " values(2, 1.2, 'text2')");
       sparkSession.sql("alter table " + tableName + " alter column col1 type double");
