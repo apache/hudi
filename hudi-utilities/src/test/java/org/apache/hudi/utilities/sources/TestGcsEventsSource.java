@@ -29,8 +29,6 @@ import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,25 +61,14 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
     UtilitiesTestBase.initTestServices(false, false);
   }
 
-  @AfterAll
-  public static void afterAll() {
-    UtilitiesTestBase.cleanupClass();
-  }
-
   @BeforeEach
   public void beforeEach() throws Exception {
-    super.setup();
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
     MockitoAnnotations.initMocks(this);
 
     props = new TypedProperties();
     props.put(GOOGLE_PROJECT_ID, "dummy-project");
     props.put(PUBSUB_SUBSCRIPTION_ID, "dummy-subscription");
-  }
-
-  @AfterEach
-  public void afterEach() throws Exception {
-    super.teardown();
   }
 
   @Test

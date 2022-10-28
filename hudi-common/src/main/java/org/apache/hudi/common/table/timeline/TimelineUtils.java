@@ -209,4 +209,22 @@ public class TimelineUtils {
     }
     return activeTimeline;
   }
+
+  /**
+   * Returns the commit metadata of the given instant.
+   *
+   * @param instant   The hoodie instant
+   * @param timeline  The timeline
+   * @return the commit metadata
+   */
+  public static HoodieCommitMetadata getCommitMetadata(
+      HoodieInstant instant,
+      HoodieTimeline timeline) throws IOException {
+    byte[] data = timeline.getInstantDetails(instant).get();
+    if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      return HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class);
+    } else {
+      return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+    }
+  }
 }

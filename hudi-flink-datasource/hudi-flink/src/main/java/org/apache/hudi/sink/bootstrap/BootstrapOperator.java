@@ -160,7 +160,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     int readyTaskNum = 1;
     while (taskNum != readyTaskNum) {
       try {
-        readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME, taskID, new BootstrapAggFunction());
+        readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME + conf.getString(FlinkOptions.TABLE_NAME), taskID, new BootstrapAggFunction());
         LOG.info("Waiting for other bootstrap tasks to complete, taskId = {}.", taskID);
 
         TimeUnit.SECONDS.sleep(5);

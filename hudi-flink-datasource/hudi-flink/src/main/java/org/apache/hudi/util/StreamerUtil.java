@@ -171,7 +171,7 @@ public class StreamerUtil {
             .withMergeAllowDuplicateOnInserts(OptionsResolver.insertClustering(conf))
             .withClusteringConfig(
                 HoodieClusteringConfig.newBuilder()
-                    .withAsyncClustering(conf.getBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED))
+                    .withAsyncClustering(conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED))
                     .withClusteringPlanStrategyClass(conf.getString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS))
                     .withClusteringPlanPartitionFilterMode(
                         ClusteringPlanPartitionFilterMode.valueOf(conf.getString(FlinkOptions.CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME)))
@@ -342,6 +342,23 @@ public class StreamerUtil {
       return fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
     } catch (IOException e) {
       throw new HoodieException("Error while checking whether table exists under path:" + basePath, e);
+    }
+  }
+
+  /**
+   * Returns whether the hoodie partition exists under given table path {@code tablePath} and partition path {@code partitionPath}.
+   *
+   * @param tablePath     Base path of the table.
+   * @param partitionPath The path of the partition.
+   * @param hadoopConf    The hadoop configuration.
+   */
+  public static boolean partitionExists(String tablePath, String partitionPath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    // Hadoop FileSystem
+    FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
+    try {
+      return fs.exists(new Path(tablePath, partitionPath));
+    } catch (IOException e) {
+      throw new HoodieException(String.format("Error while checking whether partition exists under table path [%s] and partition path [%s]", tablePath, partitionPath), e);
     }
   }
 

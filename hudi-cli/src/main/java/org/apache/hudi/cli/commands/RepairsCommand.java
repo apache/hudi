@@ -18,8 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.avro.AvroRuntimeException;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
@@ -38,6 +36,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.AvroRuntimeException;
+import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
@@ -45,7 +46,6 @@ import org.apache.spark.util.Utils;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
-import scala.collection.JavaConverters;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -54,6 +54,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
@@ -203,6 +205,13 @@ public class RepairsCommand {
         }
       }
     });
+  }
+
+  @ShellMethod(key = "repair show empty commit metadata", value = "show failed commits")
+  public void showFailedCommits() {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
+    activeTimeline.filterCompletedInstants().getInstants().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> LOG.warn("Empty Commit: " + hoodieInstant.toString()));
   }
 
   @ShellMethod(key = "repair migrate-partition-meta", value = "Migrate all partition meta file currently stored in text format "

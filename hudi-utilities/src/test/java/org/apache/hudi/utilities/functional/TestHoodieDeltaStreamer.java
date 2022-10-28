@@ -2101,6 +2101,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config downstreamCfg =
         TestHelpers.makeConfigForHudiIncrSrc(tableBasePath, downstreamTableBasePath,
             WriteOperationType.BULK_INSERT, true, null);
+    downstreamCfg.configs.add("hoodie.deltastreamer.source.hoodieincr.num_instants=1");
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
 
     insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
@@ -2112,6 +2113,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       downstreamCfg.configs = new ArrayList<>();
     }
 
+    // Remove source.hoodieincr.num_instants config
+    downstreamCfg.configs.remove(downstreamCfg.configs.size() - 1);
     downstreamCfg.configs.add(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key() + "=true");
     //Adding this conf to make testing easier :)
     downstreamCfg.configs.add("hoodie.deltastreamer.source.hoodieincr.num_instants=10");
