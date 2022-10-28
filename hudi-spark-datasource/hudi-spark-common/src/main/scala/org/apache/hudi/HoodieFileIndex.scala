@@ -164,7 +164,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
       logInfo(s"Total base files: $totalFileSize; " +
         s"candidate files after data skipping: $candidateFileSize; " +
-        s"skipping percent ${if (!areAllPartitionsCached) "is disabled" else if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+        s"skipping percent ${if (!areAllFileSlicesCached) "is disabled" else if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
 
       result
     }

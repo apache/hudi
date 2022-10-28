@@ -219,7 +219,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * Returns all listed file-slices w/in the partition paths returned by {@link #getAllQueryPartitionPaths()}
    */
   protected Map<PartitionPath, List<FileSlice>> getAllInputFileSlices() {
-    if (!areAllPartitionsCached()) {
+    if (!areAllFileSlicesCached()) {
       // Fetching file slices for partitions that have not been cached yet
       List<PartitionPath> missingPartitions = getAllQueryPartitionPaths().stream()
           .filter(p -> !cachedAllInputFileSlices.containsKey(p))
@@ -373,14 +373,18 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return cachedFileSize;
   }
 
-  protected boolean areAllPartitionsCached() {
-    // If the partition paths is not fully initialized yet, then the file slices are also not fully initialized.
-    if (cachedAllPartitionPaths == null) {
+  protected boolean areAllFileSlicesCached() {
+    if (!areAllPartitionPathsCached()) {
       return false;
     }
 
     // Loop over partition paths to check if all partitions are initialized.
     return cachedAllPartitionPaths.stream().allMatch(p -> cachedAllInputFileSlices.containsKey(p));
+  }
+
+  protected boolean areAllPartitionPathsCached() {
+    // If the partition paths is not fully initialized yet, then the file slices are also not fully initialized.
+    return cachedAllPartitionPaths != null;
   }
 
   protected boolean isPartitionedTable() {

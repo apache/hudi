@@ -231,7 +231,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   private def fetchPartitionPaths(partitionColumnNames: Seq[String], partitionPruningPredicates: Seq[Expression]) = {
-    if (areAllPartitionsCached) {
+    if (areAllPartitionPathsCached) {
       logDebug("All partition paths have already been loaded, use it directly")
       getAllQueryPartitionPaths.asScala
     } else {
