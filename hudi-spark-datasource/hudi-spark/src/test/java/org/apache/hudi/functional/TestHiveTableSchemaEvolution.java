@@ -49,106 +49,106 @@ import java.util.Date;
 @Tag("functional")
 public class TestHiveTableSchemaEvolution {
 
-    private SparkSession sparkSession = null;
+  private SparkSession sparkSession = null;
 
-    @BeforeEach
-    public void setUp() {
-        initSparkContexts("HiveSchemaEvolution");
+  @BeforeEach
+  public void setUp() {
+    initSparkContexts("HiveSchemaEvolution");
+  }
+
+  private void initSparkContexts(String appName) {
+    SparkConf sparkConf = new SparkConf();
+    if (HoodieSparkUtils.gteqSpark3_2()) {
+      sparkConf.set("spark.sql.catalog.spark_catalog",
+          "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
+    }
+    sparkSession = SparkSession.builder().appName(appName)
+        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .withExtensions(new HoodieSparkSessionExtension())
+        .config("hoodie.insert.shuffle.parallelism", "4")
+        .config("hoodie.upsert.shuffle.parallelism", "4")
+        .config("hoodie.delete.shuffle.parallelism", "4")
+        .config("hoodie.support.write.lock", "false")
+        .config("spark.sql.session.timeZone", "CTT")
+        .config("spark.sql.hive.convertMetastoreParquet", "false")
+        .config(sparkConf)
+        .master("local[1]").getOrCreate();
+    sparkSession.sparkContext().setLogLevel("ERROR");
+  }
+
+  @Test
+  public void testCopyOnWriteTableForHive() throws Exception {
+    String tableName = "huditest" + new Date().getTime();
+    File file = new File(System.getProperty("java.io.tmpdir") + tableName);
+    if (HoodieSparkUtils.gteqSpark3_1()) {
+      sparkSession.sql("set hoodie.schema.on.read.enable=true");
+      String path = new Path(file.getCanonicalPath()).toUri().toString();
+      sparkSession.sql("create table " + tableName + "(col0 int, col1 float, col2 string) using hudi options(type='cow', primaryKey='col0', preCombineField='col1') location '" + path +"'");
+      sparkSession.sql("insert into " + tableName + " values(1, 1.1, 'text')");
+      sparkSession.sql("alter table " + tableName + " alter column col1 type double");
+      sparkSession.sql("alter table " + tableName + " rename column col2 to aaa");
+
+      HoodieParquetInputFormat inputFormat = new HoodieParquetInputFormat();
+      JobConf jobConf = new JobConf();
+      inputFormat.setConf(jobConf);
+      FileInputFormat.setInputPaths(jobConf, path);
+      InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
+      assertEvolutionResult("cow", splits[0], jobConf);
+    }
+  }
+
+  @Test
+  public void testMergeOnReadTableForHive() throws Exception {
+    String tableName = "huditest" + new Date().getTime();
+    File file = new File(System.getProperty("java.io.tmpdir") + tableName);
+    if (HoodieSparkUtils.gteqSpark3_1()) {
+      sparkSession.sql("set hoodie.schema.on.read.enable=true");
+      String path = new Path(file.getCanonicalPath()).toUri().toString();
+      sparkSession.sql("create table " + tableName + "(col0 int, col1 float, col2 string) using hudi options(type='cow', primaryKey='col0', preCombineField='col1') location '" + path +"'");
+      sparkSession.sql("insert into " + tableName + " values(1, 1.1, 'text')");
+      sparkSession.sql("insert into " + tableName + " values(2, 1.2, 'text2')");
+      sparkSession.sql("alter table " + tableName + " alter column col1 type double");
+      sparkSession.sql("alter table " + tableName + " rename column col2 to aaa");
+
+      HoodieRealtimeInputFormat inputFormat = new HoodieRealtimeInputFormat();
+      JobConf jobConf = new JobConf();
+      inputFormat.setConf(jobConf);
+      FileInputFormat.setInputPaths(jobConf, path);
+      InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
+      assertEvolutionResult("mor", splits[0], jobConf);
+    }
+  }
+
+  private void assertEvolutionResult(String tableType, InputSplit split, JobConf jobConf) throws Exception {
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "col1,aaa");
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "6,7");
+    jobConf.set(serdeConstants.LIST_COLUMNS, "_hoodie_commit_time,_hoodie_commit_seqno,"
+        + "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,col0,col1,aaa");
+    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, "string,string,string,string,string,int,double,string");
+
+    SchemaEvolutionContext schemaEvolutionContext = new SchemaEvolutionContext(split, jobConf);
+    if ("cow".equals(tableType)) {
+      schemaEvolutionContext.doEvolutionForParquetFormat();
+    } else {
+      // mot table
+      RealtimeSplit realtimeSplit = (RealtimeSplit) split;
+      RecordReader recordReader;
+      // for log only split, set the parquet reader as empty.
+      if (FSUtils.isLogFile(realtimeSplit.getPath())) {
+        recordReader = new HoodieRealtimeRecordReader(realtimeSplit, jobConf, new HoodieEmptyRecordReader(realtimeSplit, jobConf));
+      } else {
+        // create a RecordReader to be used by HoodieRealtimeRecordReader
+        recordReader = new MapredParquetInputFormat().getRecordReader(realtimeSplit, jobConf, null);
+      }
+      RealtimeCompactedRecordReader realtimeCompactedRecordReader = new RealtimeCompactedRecordReader(realtimeSplit, jobConf, recordReader);
+      // mor table also run with doEvolutionForParquetFormat in HoodieParquetInputFormat
+      schemaEvolutionContext.doEvolutionForParquetFormat();
+      schemaEvolutionContext.doEvolutionForRealtimeInputFormat(realtimeCompactedRecordReader);
     }
 
-    private void initSparkContexts(String appName) {
-        SparkConf sparkConf = new SparkConf();
-        if (HoodieSparkUtils.gteqSpark3_2()) {
-            sparkConf.set("spark.sql.catalog.spark_catalog",
-                "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
-        }
-        sparkSession = SparkSession.builder().appName(appName)
-            .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-            .withExtensions(new HoodieSparkSessionExtension())
-            .config("hoodie.insert.shuffle.parallelism", "4")
-            .config("hoodie.upsert.shuffle.parallelism", "4")
-            .config("hoodie.delete.shuffle.parallelism", "4")
-            .config("hoodie.support.write.lock", "false")
-            .config("spark.sql.session.timeZone", "CTT")
-            .config("spark.sql.hive.convertMetastoreParquet", "false")
-            .config(sparkConf)
-            .master("local[1]").getOrCreate();
-        sparkSession.sparkContext().setLogLevel("ERROR");
-    }
-
-    @Test
-    public void testCopyOnWriteTableForHive() throws Exception {
-        String tableName = "huditest" + new Date().getTime();
-        File file = new File(System.getProperty("java.io.tmpdir") + tableName);
-        if (HoodieSparkUtils.gteqSpark3_1()) {
-            sparkSession.sql("set hoodie.schema.on.read.enable=true");
-            String path = new Path(file.getCanonicalPath()).toUri().toString();
-            sparkSession.sql("create table " + tableName + "(col0 int, col1 float, col2 string) using hudi options(type='cow', primaryKey='col0', preCombineField='col1') location '" + path +"'");
-            sparkSession.sql("insert into " + tableName + " values(1, 1.1, 'text')");
-            sparkSession.sql("alter table " + tableName + " alter column col1 type double");
-            sparkSession.sql("alter table " + tableName + " rename column col2 to aaa");
-
-            HoodieParquetInputFormat inputFormat = new HoodieParquetInputFormat();
-            JobConf jobConf = new JobConf();
-            inputFormat.setConf(jobConf);
-            FileInputFormat.setInputPaths(jobConf, path);
-            InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
-            assertEvolutionResult("cow", splits[0], jobConf);
-        }
-    }
-
-    @Test
-    public void testMergeOnReadTableForHive() throws Exception {
-        String tableName = "huditest" + new Date().getTime();
-        File file = new File(System.getProperty("java.io.tmpdir") + tableName);
-        if (HoodieSparkUtils.gteqSpark3_1()) {
-            sparkSession.sql("set hoodie.schema.on.read.enable=true");
-            String path = new Path(file.getCanonicalPath()).toUri().toString();
-            sparkSession.sql("create table " + tableName + "(col0 int, col1 float, col2 string) using hudi options(type='cow', primaryKey='col0', preCombineField='col1') location '" + path +"'");
-            sparkSession.sql("insert into " + tableName + " values(1, 1.1, 'text')");
-            sparkSession.sql("insert into " + tableName + " values(2, 1.2, 'text2')");
-            sparkSession.sql("alter table " + tableName + " alter column col1 type double");
-            sparkSession.sql("alter table " + tableName + " rename column col2 to aaa");
-
-            HoodieRealtimeInputFormat inputFormat = new HoodieRealtimeInputFormat();
-            JobConf jobConf = new JobConf();
-            inputFormat.setConf(jobConf);
-            FileInputFormat.setInputPaths(jobConf, path);
-            InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
-            assertEvolutionResult("mor", splits[0], jobConf);
-        }
-    }
-
-    private void assertEvolutionResult(String tableType, InputSplit split, JobConf jobConf) throws Exception {
-        jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "col1,aaa");
-        jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "6,7");
-        jobConf.set(serdeConstants.LIST_COLUMNS, "_hoodie_commit_time,_hoodie_commit_seqno,"
-            + "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,col0,col1,aaa");
-        jobConf.set(serdeConstants.LIST_COLUMN_TYPES, "string,string,string,string,string,int,double,string");
-
-        SchemaEvolutionContext schemaEvolutionContext = new SchemaEvolutionContext(split, jobConf);
-        if ("cow".equals(tableType)) {
-            schemaEvolutionContext.doEvolutionForParquetFormat();
-        } else {
-            // mot table
-            RealtimeSplit realtimeSplit = (RealtimeSplit) split;
-            RecordReader recordReader;
-            // for log only split, set the parquet reader as empty.
-            if (FSUtils.isLogFile(realtimeSplit.getPath())) {
-                recordReader = new HoodieRealtimeRecordReader(realtimeSplit, jobConf, new HoodieEmptyRecordReader(realtimeSplit, jobConf));
-            } else {
-                // create a RecordReader to be used by HoodieRealtimeRecordReader
-                recordReader = new MapredParquetInputFormat().getRecordReader(realtimeSplit, jobConf, null);
-            }
-            RealtimeCompactedRecordReader realtimeCompactedRecordReader = new RealtimeCompactedRecordReader(realtimeSplit, jobConf, recordReader);
-            // mor table also run with doEvolutionForParquetFormat in HoodieParquetInputFormat
-            schemaEvolutionContext.doEvolutionForParquetFormat();
-            schemaEvolutionContext.doEvolutionForRealtimeInputFormat(realtimeCompactedRecordReader);
-        }
-
-        assertEquals(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR), "col1,col2");
-        assertEquals(jobConf.get(serdeConstants.LIST_COLUMNS), "_hoodie_commit_time,_hoodie_commit_seqno,"
-            + "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,col0,col1,col2");
-        assertEquals(jobConf.get(serdeConstants.LIST_COLUMN_TYPES), "string,string,string,string,string,int,double,string");
-    }
+    assertEquals(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR), "col1,col2");
+    assertEquals(jobConf.get(serdeConstants.LIST_COLUMNS), "_hoodie_commit_time,_hoodie_commit_seqno,"
+        + "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,col0,col1,col2");
+    assertEquals(jobConf.get(serdeConstants.LIST_COLUMN_TYPES), "string,string,string,string,string,int,double,string");
+  }
 }
