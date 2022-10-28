@@ -191,10 +191,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     HoodieInstant[] instantsBeforeEarliestCommitToRetain = hoodieTable.getCompletedCommitsTimeline().getInstants()
         .filter(commit -> HoodieTimeline.compareTimestamps(commit.getTimestamp(), HoodieTimeline.LESSER_THAN, cleanMetadata.getEarliestCommitToRetain())).toArray(HoodieInstant[]::new);
     if (instantsBeforeEarliestCommitToRetain.length > 0) {
-      commitJustBeforeEarliestCommitToRetain = instantsBeforeEarliestCommitToRetain[instantsBeforeEarliestCommitToRetain.length - 1].toString();
+      commitJustBeforeEarliestCommitToRetain = instantsBeforeEarliestCommitToRetain[instantsBeforeEarliestCommitToRetain.length - 1].getTimestamp();
     } else {
       HoodieInstant lastArchivedCompletedInstant = hoodieTable.getMetaClient().getArchivedTimeline().filterCompletedInstants().lastInstant().get();
-      commitJustBeforeEarliestCommitToRetain = lastArchivedCompletedInstant != null ? lastArchivedCompletedInstant.toString() : null;
+      commitJustBeforeEarliestCommitToRetain = lastArchivedCompletedInstant != null ? lastArchivedCompletedInstant.getTimestamp() : null;
     }
     final String lastCheckedCommit = commitJustBeforeEarliestCommitToRetain != null ? commitJustBeforeEarliestCommitToRetain : cleanMetadata.getEarliestCommitToRetain();
     return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(
