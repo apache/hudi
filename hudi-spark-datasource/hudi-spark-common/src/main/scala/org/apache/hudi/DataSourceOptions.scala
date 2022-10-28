@@ -19,12 +19,12 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.config.{ConfigProperty, DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
+import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -35,7 +35,6 @@ import org.apache.hudi.util.JFunction
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
-import java.util.function.{Function => JavaFunction}
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 
@@ -91,7 +90,7 @@ object DataSourceReadOptions {
 
   val ENABLE_HOODIE_FILE_INDEX: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.file.index.enable")
-    .defaultValue(true)
+    .defaultValue(false)
     .deprecatedAfter("0.11.0")
     .withDocumentation("Enables use of the spark file index implementation for Hudi, "
       + "that speeds up listing of large tables.")
