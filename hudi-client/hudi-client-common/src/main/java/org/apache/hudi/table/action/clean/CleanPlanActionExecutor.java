@@ -108,6 +108,10 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
           String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
           return table.getCompletedCommitsTimeline().getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
               HoodieTimeline.LESSER_THAN, earliestTimeToRetain)).count() > 0;
+        } else if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
+          // if cleaner policy is KEEP_LATEST_BY_HOURS then
+          // we cannot decide based on the current timeline, we need to always run the clean planner
+          return true;
         }
       }
       return false;
