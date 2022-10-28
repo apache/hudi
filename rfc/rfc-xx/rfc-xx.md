@@ -39,51 +39,107 @@ JIRA: https://issues.apache.org/jira/browse/HUDI-XXX
 ## Abstract
 
 In this RFC we propose new set of higher-level Table Spec APIs that would allow
-us to up-level our current integration model with new Query Engines, enabling faster 
-turnaround for such integrations.
+us to up-level our current integration model with new Query Engines, enabling
+faster turnaround for such integrations.
 
 ## Background
 
-TBA
+[WIP] Plan
+
+- [ ] High-level capabilities API will be supporting
+- [ ] High-level overview of integration points of the query engines
+- [ ] Deep-dive into existing Spark/Flink/Trino integration points
+
+The figure below shows the read path in Spark and Presto/Trino query engines. At
+a high level, these engines support following capabilities:
+
+1. Build file splits - This is where we can make use of metadata indexes for
+   efficient listing and data skipping.
+2. Read - This is where we can merge records, push down filters and projections.
+
+![](./read_path.png)
 
 ## Implementation
 
+[WIP] Plan
+
+- [ ] Components & API pseudo-code
+- [ ] Diagram show-casing data flow and integration points
+- [ ] Example integration walk-through
+
+As we will see below, we propose two tiers of APIs:
+
+1. High level user-friendly: These APIs allow Hudi's capabilities to bypass
+   query engine interfaces (SQL, Spark DS, etc) such as Catalog, Table, etc.
+2. Mid-level engine-friendly: These APIs abstract away Hudi's internals, behind
+   simple and familiar concepts and components such as file splits, iterators,
+   statistics, etc.
+
+While the mid-level components interact with Hudi's lower level internal
+components such as file system view, log record scanner, etc, the high-level
+components sit on top of mid-level ones and can be used directly by users to
+read and write to tables.
+
+Proposed plan is to build bottom-up i.e. first build the mid-level components
+and then the high-level ones. Once the mid-level components are ready, we could
+demonstrate their utility by integrating with one of the query engines.
+
+### Components & API
+
+Open questions
+
+1. Some of the models defined here do already exist and might be representing
+   lower-level components. Do we expose them in a higher level APIs or do we
+   bifurcate and hide them as internal impl details (for ex, `HoodieFileGroup`
+   vs `HoodieInternalFileGroup`)?
+2. Do we need to implement Catalog backend? We’d be fine with just the session
+   catalog for now.
+3. What about Expressions? Wrapping is going to be hard because we need to
+   analyze expression structure which is not going to be possible if we wrap.
+
+#### Models
+
+**TableDescriptor** is used to resolve a table in catalog.
+
+```java
+class TableDescriptor {
+    final String databaseName;
+    final String tableName;
+    final String basePath;
+    final HoodieTableType tableType;
+}
 ```
-////////////////////////////////////////////////////////////////////////
-// Qs
-//
-//  1. Some of the models defined here do already exist and might be representing lower-level
-//     components. Do we expose them in a higher level APIs or do we bifurcate and hide them
-//     as internal impl details (for ex, `HoodieFileGroup` vs `HoodieInternalFileGroup`)?
-//
-////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////
-// MODELs
-////////////////////////////////////////////////////////////////////////
+**FileSlice** holds
 
-// File Slice holds
-//  - For COW: a base file
-//      - A single snapshot (version) of the batch of co-located records, persisted in a single base file)
-//  - For MOR: a base file along w/ corresponding delta-log files
-//      - A collection of snapshots (versions) comprised of
-//          a) snapshot of the initial batch of the co-located records (persisted in a single base file), along with
-//          b) subsequently updated versions of these records
+- For COW: a base file
+    - A single snapshot (version) of the batch of co-located records, persisted
+      in a single base file)
+- For MOR: a base file along with corresponding delta-log files
+    - A collection of snapshots (versions) comprised of:
+        - snapshot of the initial batch of the co-located records (persisted in
+          a single base file), along with
+        - subsequently updated versions of these records
+
+```java
 class HoodieFileSlice {
-// Id of the file-group this slice belongs to
-HoodieFileGroupId fileGroupId;
+    // Id of the file-group this slice belongs to
+    HoodieFileGroupId fileGroupId;
 
     String baseFilePath;
     List<String> logFilesPaths;
 }
+```
 
-// Represents logical grouping of the File Slices (or snapshots of the given batch of records)
-//
-// NOTE:
-//      - In case of COW set of records w/in the File Group wouldn't change
+**FileGroup** represents logical grouping of the FileSlices (or snapshots of the
+given batch of records)
+
+NOTE: In case of COW set of records within the File Group wouldn't change.
+
+```java
 class HoodieFileGroup {
-// Id of the file-group
-HoodieFileGroupId id;
+    // Id of the file-group
+    HoodieFileGroupId id;
 
     // Projection of the timeline of committed actions affecting file-slices in this group
     HoodieTimeline timeline
@@ -91,23 +147,30 @@ HoodieFileGroupId id;
     // File-slices ordered by corresponding instant they've been committed at
     TreeMap<HoodieInstant, FileSlice> fileSlices
 }
+```
 
-// Describes particular partition w/in the dataset
+**PartitionDescriptor** describes particular partition within the dataset.
+
+```java
 class PartitionDescriptor {
-// Relative partition path w/in the dataset
-String partitionPath
+    // Relative partition path within the dataset
+    String partitionPath
 
     // List of values for corresponding partition columns
     List<Object> partitionColumnValues
 }
+```
 
-// Partition Snapshot represents a state of a single table's partition at any particular
-// instant T, comprised of the file-slices that are the _latest_ (current) w/in their
-// corresponding file-groups at the instant T
-//
-// NOTE: Non-partitioned tables assumed to have 1 partition enclosing the whole table
+**PartitionSnapshot** represents a state of a single table's partition at any
+particular instant T, comprised of the file-slices that are the _latest_ (
+current) within their corresponding file-groups at the instant T.
+
+NOTE: Non-partitioned tables assumed to have 1 partition enclosing the whole
+table.
+
+```java
 class PartitionSnapshot {
-PartitionDescriptor descriptor
+    PartitionDescriptor descriptor
 
     // (Latest) Instant T as of which partition's state is represented
     HoodieInstant latestInstant
@@ -115,15 +178,20 @@ PartitionDescriptor descriptor
     // File-slices current at the instant T
     List<HoodieFileSlice> fileSlices
 }
+```
 
-// Partition Incremental Snapshot represents a state of a single table's partition at a particular
-// instant T_y, while only considering commits that occurred in the table after T_x (ie w/in the timeline T_x -> T_y)
-// comprised of the file-slices that are the _latest_ (current) w/in their corresponding file-groups
-// at instant T_y
-//
-// NOTE: Partition Snapshot is a special case of Partition Incremental Snapshot where T_x = 0
+**PartitionIncrementalSnapshot** represents a state of a single table's
+partition at a particular instant T_y, while only considering commits that
+occurred in the table after T_x (ie within the timeline T_x -> T_y)
+comprised of the file-slices that are the _latest_ (current) within their
+corresponding file-groups at instant T_y.
+
+NOTE: PartitionSnapshot is a special case of PartitionIncrementalSnapshot where
+T_x = 0.
+
+```java
 class PartitionIncrementalSnapshot {
-PartitionDescriptor descriptor
+    PartitionDescriptor descriptor
 
     // Timeline starting at T_x and ending at T_y, completed actions thereof represent state of the partition
     HoodieTimeline timeline
@@ -131,10 +199,14 @@ PartitionDescriptor descriptor
     // File-slices current at the instant T_y
     List<HoodieFileSlice> fileSlices
 }
+```
 
+**ReadingMode** represents the query type.
+
+```java
 enum ReadingMode {
-// Representing state of the table at a particular instant T
-SNAPSHOT,
+    // Representing state of the table at a particular instant T
+    SNAPSHOT,
 
     // (MOR only) Representing state of the table at a particular instant T,
     // reading exclusively base-files (ie, ignoring any delta-logs if present)
@@ -148,28 +220,34 @@ SNAPSHOT,
     // individual records
     CDC
 }
+```
 
-////////////////////////////////////////////////////////////////////////
-// APIs
-////////////////////////////////////////////////////////////////////////
+#### APIs
 
+**Snapshot Management**
+
+```java
 class Timeline {
-// Looks up latest commit instant, provide (temporal) instant T
-//
-// This method is required to resolve commit-instants by the timestamp
-HoodieInstant findLatestCompletedActionAt(Instant)
+    // Looks up latest commit instant, provide (temporal) instant T
+    //
+    // This method is required to resolve commit-instants by the timestamp
+    HoodieInstant findLatestCompletedActionAt(Instant)
 }
+```
 
+**Indexing**
+
+```java
 class RecordIndex {
-// Tags provided record-keys (PKs) w/ corresponding locations w/in the dataset;
-// in case record-key is not currently present in the dataset, no location will be provided
-HoodiePairData<HoodieKey, Option<HoodieRecordLocation>> tag(HoodieData<HoodieKey> records);
+    // Tags provided record-keys (PKs) within corresponding locations within the dataset;
+    // in case record-key is not currently present in the dataset, no location will be provided
+    HoodiePairData<HoodieKey, Option<HoodieRecordLocation>> tag(HoodieData<HoodieKey> records);
 }
 
 class FileIndex {
-// Lists files visible/reachable at the instant T
-// Equivalent to `listFilesBetween(null, instant, filters)`
-List<PartitionSnapshot> listFilesAt(HoodieInstant, Filter[])
+    // Lists files visible/reachable at the instant T
+    // Equivalent to `listFilesBetween(null, instant, filters)`
+    List<PartitionSnapshot> listFilesAt(HoodieInstant, Filter[])
 
     // Lists files added visible/reachable at the instant `to`, that were
     // added no earlier than at the instant `from`
@@ -177,7 +255,11 @@ List<PartitionSnapshot> listFilesAt(HoodieInstant, Filter[])
 
     // TODO add CDC-capable API
 }
+```
 
+**Reader**
+
+```java
 class FileSliceReader {
     // Projects output of this reader as a projection of the provided schema
     // NOTE: Provided schema could be an evolved schema
@@ -191,7 +273,108 @@ class FileSliceReader {
 
     // Produces an iterable sequence of records from the particular file-slice
     Iterator<HoodieRecord> open(HoodieFileSlice)
+}
+```
 
+**Expression** and **Predicate**
+
+```java
+interface Expression {
+    enum Operator {
+        AND,
+        OR,
+        LESS_THAN,
+        GREATER_THAN
+        // and more
+    }
+    
+    Operator op();
+}
+
+class Predicate implements Expression {
+    // Analyze expression
+    public boolean accept (Expression expression) 
+}
+```
+
+**Higher level user-friendly APIs**
+
+```java
+class Table {
+    // Gets table snapshot. Returns latest napshot by default.
+    Timeline getLatestSnapshot()
+    Timeline getSnapshot(Optional<String> instant)
+    
+    // Loads an existing Hudi table.
+    // NOTE: HoodieTable holds meta client.
+    HoodieTable of(TableDescriptor tableId)
+
+    // To perform write operations.
+    // NOTE: Only mentioned a few. These are very similar to exising HoodieTable APIs.
+    HoodieWriteMetadata upsert(
+            HoodieEngineContext context, 
+            String instantTime,
+            I records)
+    HoodieWriteMetadata bulkInsert(
+            HoodieEngineContext context,
+            String instantTime,
+            I records)
+        
+    // Delete data that match given expression. 
+    // NOTE: This could require a canonical representation of expression in Hudi.
+    delete()
+    delete(T expression)
+
+    // Table services scheduling and execution
+    Optional<HoodieCompactionPlan> scheduleCompaction(
+            HoodieEngineContext engineContext,
+            String instant,
+            Map<String, String> extraProperties)
+
+    Optional<HoodieClusteringPlan> scheduleClustering(
+            HoodieEngineContext engineContext,
+            String instant,
+            Map<String, String> extraProperties)
+
+    Optional<HoodieCleanerPlan> scheduleCleaning(
+            HoodieEngineContext engineContext,
+            String instant,
+            Map<String, String> extraProperties)
+
+    HoodieWriteMetadata compact(
+            HoodieEngineContext engineContext,
+            Optional<HoodieCompactionPlan> plan)
+
+    HoodieWriteMetadata cluster(
+            HoodieEngineContext engineContext,
+            Optional<HoodieClusteringPlan> plan)
+}
+```
+
+**HoodieCatalog** provides APIs for table's CRUD-lifecycle and abstracts away 
+particular implementation of the specific Metastore in a vendor-neutral way.
+
+```java
+class HoodieCatalog {
+    // Instantiates a HoodieTable at given basePath.
+    HoodieTable createTable(
+            TableDescriptor tableId, 
+            Optional<Schema> schema, 
+            Map<String, String> tableProperties)
+
+    // List all tables in a given database. 
+    // NOTE: This requires a metastore for catalog metadata.
+    List<TableDescriptor> showTables(String databaseName)
+
+    // Drop an existing Hudi table. 
+    // If `cascade` set to true then all files (data and metadata) are deleted.
+    void dropTable(TableDescriptor tableId, boolean cascade)
+        
+    static class CatalogBuilder {
+        String type         // the type of catalog, such as jdbc, hive metastore, etc.
+        String uri          // metastore server uri
+        String warehouse    // path to store any catalog metadata files.
+    }
 }
 ```
 
@@ -201,4 +384,8 @@ TBA
 
 ## Test Plan
 
-TBA
+- [ ] Unit tests for each API.
+- [ ] Functional tests for each component.
+- [ ] Integration tests covering end-to-end interaction between all components.
+- [ ] Validate data as well as metadata.
+- [ ] Validate query plans and results.
