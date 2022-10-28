@@ -75,8 +75,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   protected transient volatile SparkRowConverter rowConverter;
   protected transient volatile SparkRowAccessor rowAccessor;
 
-  protected transient volatile PartitionPathFormatterBase<String> stringPartitionPathFormatter;
-  protected transient volatile PartitionPathFormatterBase<UTF8String> utf8StringPartitionPathFormatter;
+  protected transient volatile StringPartitionPathFormatter stringPartitionPathFormatter;
+  protected transient volatile UTF8StringPartitionPathFormatter utf8StringPartitionPathFormatter;
 
   protected BuiltinKeyGenerator(TypedProperties config) {
     super(config);
@@ -151,7 +151,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    */
   protected final String combineRecordKey(Object... recordKeyParts) {
     return combineRecordKeyInternal(
-        PartitionPathFormatterBase.JavaStringBuilder::new,
+        StringPartitionPathFormatter.JavaStringBuilder::new,
         BuiltinKeyGenerator::toString,
         BuiltinKeyGenerator::handleNullRecordKey,
         recordKeyParts
@@ -164,7 +164,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    */
   protected final UTF8String combineRecordKeyUnsafe(Object... recordKeyParts) {
     return combineRecordKeyInternal(
-        UTF8StringBuilder::new,
+        UTF8StringPartitionPathFormatter.UTF8StringBuilder::new,
         BuiltinKeyGenerator::toUTF8String,
         BuiltinKeyGenerator::handleNullRecordKey,
         recordKeyParts
@@ -177,7 +177,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    */
   protected final String combineCompositeRecordKey(Object... recordKeyParts) {
     return combineCompositeRecordKeyInternal(
-        PartitionPathFormatterBase.JavaStringBuilder::new,
+        StringPartitionPathFormatter.JavaStringBuilder::new,
         BuiltinKeyGenerator::toString,
         BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPart,
         BuiltinKeyGenerator::isNullOrEmptyCompositeKeyPart,
@@ -191,7 +191,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    */
   protected final UTF8String combineCompositeRecordKeyUnsafe(Object... recordKeyParts) {
     return combineCompositeRecordKeyInternal(
-        UTF8StringBuilder::new,
+        UTF8StringPartitionPathFormatter.UTF8StringBuilder::new,
         BuiltinKeyGenerator::toUTF8String,
         BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPartUTF8,
         BuiltinKeyGenerator::isNullOrEmptyCompositeKeyPartUTF8,
@@ -265,12 +265,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
   }
 
-  private PartitionPathFormatterBase<String> getStringPartitionPathFormatter() {
+  private StringPartitionPathFormatter getStringPartitionPathFormatter() {
     if (stringPartitionPathFormatter == null) {
       synchronized (this) {
         if (stringPartitionPathFormatter == null) {
           this.stringPartitionPathFormatter = new StringPartitionPathFormatter(
-              PartitionPathFormatterBase.JavaStringBuilder::new, hiveStylePartitioning, encodePartitionPath);
+              StringPartitionPathFormatter.JavaStringBuilder::new, hiveStylePartitioning, encodePartitionPath);
         }
       }
     }
@@ -278,12 +278,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     return stringPartitionPathFormatter;
   }
 
-  private PartitionPathFormatterBase<UTF8String> getUTF8StringPartitionPathFormatter() {
+  private UTF8StringPartitionPathFormatter getUTF8StringPartitionPathFormatter() {
     if (utf8StringPartitionPathFormatter == null) {
       synchronized (this) {
         if (utf8StringPartitionPathFormatter == null) {
           this.utf8StringPartitionPathFormatter = new UTF8StringPartitionPathFormatter(
-              UTF8StringBuilder::new, hiveStylePartitioning, encodePartitionPath);
+              UTF8StringPartitionPathFormatter.UTF8StringBuilder::new, hiveStylePartitioning, encodePartitionPath);
         }
       }
     }
@@ -470,27 +470,6 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
         LOG.error(String.format("Failed to resolve nested field-paths (%s) in schema (%s)", fieldPaths, schema), e);
         throw new HoodieException("Failed to resolve nested field-paths", e);
       }
-    }
-  }
-
-  private static class UTF8StringBuilder implements PartitionPathFormatterBase.StringBuilder<UTF8String> {
-    private final org.apache.hudi.unsafe.UTF8StringBuilder sb = new org.apache.hudi.unsafe.UTF8StringBuilder();
-
-    @Override
-    public PartitionPathFormatterBase.StringBuilder<UTF8String> appendJava(String s) {
-      sb.append(s);
-      return this;
-    }
-
-    @Override
-    public PartitionPathFormatterBase.StringBuilder<UTF8String> append(UTF8String s) {
-      sb.append(s);
-      return this;
-    }
-
-    @Override
-    public UTF8String build() {
-      return sb.build();
     }
   }
 }

@@ -56,4 +56,25 @@ public class UTF8StringPartitionPathFormatter extends PartitionPathFormatterBase
 
     return partitionPathPart;
   }
+
+  public static class UTF8StringBuilder implements StringBuilder<UTF8String> {
+    private final org.apache.hudi.unsafe.UTF8StringBuilder sb = new org.apache.hudi.unsafe.UTF8StringBuilder();
+
+    @Override
+    public PartitionPathFormatterBase.StringBuilder<UTF8String> appendJava(String s) {
+      sb.append(s);
+      return this;
+    }
+
+    @Override
+    public PartitionPathFormatterBase.StringBuilder<UTF8String> append(UTF8String s) {
+      sb.append(s);
+      return this;
+    }
+
+    @Override
+    public UTF8String build() {
+      return sb.build();
+    }
+  }
 }

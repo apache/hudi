@@ -54,4 +54,19 @@ public class StringPartitionPathFormatter extends PartitionPathFormatterBase<Str
       return keyPartStr.isEmpty() ? HUDI_DEFAULT_PARTITION_PATH : keyPartStr;
     }
   }
+
+  public static class JavaStringBuilder implements PartitionPathFormatterBase.StringBuilder<String> {
+    private final java.lang.StringBuilder sb = new java.lang.StringBuilder();
+
+    @Override
+    public PartitionPathFormatterBase.StringBuilder<String> appendJava(String s) {
+      sb.append(s);
+      return this;
+    }
+
+    @Override
+    public String build() {
+      return sb.toString();
+    }
+  }
 }

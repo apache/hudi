@@ -283,7 +283,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val urlEncodePartitioning = metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
 
     val partitionPathFormatter = new StringPartitionPathFormatter(
-      JFunction.toJavaSupplier(() => new PartitionPathFormatterBase.JavaStringBuilder()),
+      JFunction.toJavaSupplier(() => new StringPartitionPathFormatter.JavaStringBuilder()),
       hiveStylePartitioning,
       urlEncodePartitioning
     )
