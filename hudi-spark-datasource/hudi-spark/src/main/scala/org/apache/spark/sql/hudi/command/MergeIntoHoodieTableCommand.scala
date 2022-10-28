@@ -183,8 +183,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // force to use ExpressionPayload as WRITE_PAYLOAD_CLASS_NAME in MergeIntoHoodieTableCommand
     val payloadClassName = Map(PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName)
     // Create the write parameters
-    // The payloadClassName in mergeInto cannot be overwritten, even if payloadClass has been set when table create
-    val parameters = payloadClassName ++ buildMergeIntoConfig(hoodieCatalogTable)
+    val parameters = buildMergeIntoConfig(hoodieCatalogTable) ++ payloadClassName
     executeUpsert(sourceDF, parameters)
 
     sparkSession.catalog.refreshTable(targetTableIdentify.unquotedString)
