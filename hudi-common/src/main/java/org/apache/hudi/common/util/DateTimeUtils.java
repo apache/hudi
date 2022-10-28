@@ -22,7 +22,9 @@ package org.apache.hudi.common.util;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
@@ -41,6 +43,8 @@ import java.util.stream.Collectors;
 public class DateTimeUtils {
   private static final Map<String, ChronoUnit> LABEL_TO_UNIT_MAP =
       Collections.unmodifiableMap(initMap());
+
+  public static final OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
 
   /**
    * Converts provided microseconds (from epoch) to {@link Instant}
@@ -83,6 +87,15 @@ public class DateTimeUtils {
     } catch (NumberFormatException e) {
       return Instant.parse(s);
     }
+  }
+
+  /**
+   *  Covert timestamp to unix millisecond.
+   * @param dateTime local date time.
+   * @return
+   */
+  public static Long timeStampToMillis(LocalDateTime dateTime) {
+    return ChronoUnit.MILLIS.between(EPOCH, dateTime.atOffset(ZoneOffset.UTC));
   }
 
   /**

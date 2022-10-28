@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -268,6 +269,12 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(60)// default 1 minute
       .withDescription("Check interval for streaming read of SECOND, default 1 minute");
+
+  public static final ConfigOption<String> EVENT_TIME_FIELD = ConfigOptions
+      .key(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
+      .stringType()
+      .noDefaultValue()
+      .withDescription("event time field name for flink");
 
   // this option is experimental
   public static final ConfigOption<Boolean> READ_STREAMING_SKIP_COMPACT = ConfigOptions

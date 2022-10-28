@@ -63,12 +63,6 @@ public class BulkInsertWriteFunction<I>
    * Helper class for bulk insert mode.
    */
   private transient BulkInsertWriterHelper writerHelper;
-
-  /**
-   * Config options.
-   */
-  private final Configuration config;
-
   /**
    * Table row type.
    */
@@ -105,7 +99,7 @@ public class BulkInsertWriteFunction<I>
    * @param config The config options
    */
   public BulkInsertWriteFunction(Configuration config, RowType rowType) {
-    this.config = config;
+    super(config);
     this.rowType = rowType;
   }
 
@@ -144,6 +138,7 @@ public class BulkInsertWriteFunction<I>
         .writeStatus(writeStatus)
         .lastBatch(true)
         .endInput(true)
+        .maxEventTime(this.currentTimeStamp)
         .build();
     this.eventGateway.sendEventToCoordinator(event);
   }
@@ -180,6 +175,7 @@ public class BulkInsertWriteFunction<I>
         .bootstrap(true)
         .build();
     this.eventGateway.sendEventToCoordinator(event);
+    resetEventTime();
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
   }
 

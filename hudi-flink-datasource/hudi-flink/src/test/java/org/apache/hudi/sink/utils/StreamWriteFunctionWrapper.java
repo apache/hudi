@@ -166,6 +166,9 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     ScalaCollector<HoodieRecord<?>> collector = ScalaCollector.getInstance();
     bucketAssignerFunction.processElement(hoodieRecord, null, collector);
     bucketAssignFunctionContext.setCurrentKey(hoodieRecord.getRecordKey());
+    if (writeFunction.extractTimeStampEnable()) {
+      writeFunction.extractTimestamp(collector.getVal());
+    }
     writeFunction.processElement(collector.getVal(), null, null);
   }
 

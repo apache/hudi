@@ -133,6 +133,11 @@ public class ContinuousFileSource implements ScanTableSource {
       this.checkpoints = checkpoints;
     }
 
+    public BoundedSourceFunction(Path path, List<String> dataBuffer, int checkpoints) {
+      this(path, checkpoints);
+      this.dataBuffer = dataBuffer;
+    }
+
     @Override
     public void run(SourceContext<String> context) throws Exception {
       if (this.dataBuffer == null) {

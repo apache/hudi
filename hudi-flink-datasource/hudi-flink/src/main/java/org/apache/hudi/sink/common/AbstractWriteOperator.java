@@ -23,6 +23,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 /**
  * Base class for write operator.
@@ -37,6 +38,14 @@ public abstract class AbstractWriteOperator<I>
   public AbstractWriteOperator(AbstractWriteFunction<I> function) {
     super(function);
     this.function = function;
+  }
+
+  @Override
+  public void processElement(StreamRecord<I> element) throws Exception {
+    if (this.function.extractTimeStampEnable()) {
+      this.function.extractTimestamp(element.getValue());
+    }
+    super.processElement(element);
   }
 
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
