@@ -707,33 +707,33 @@ public class TestCleaner extends HoodieClientTestBase {
     String p2 = "2020/01/02";
     String p3 = "2020/01/03";
     String c1 = makeNewCommitTime(1, "%014d");
-    String c2 = makeNewCommitTime(3, "%014d");
-    String c3 = makeNewCommitTime(5, "%014d");
+    String c2 = makeNewCommitTime(2, "%014d");
+    String c3 = makeNewCommitTime(4, "%014d");
 
     testTable.addCommit(c1).withBaseFilesInPartition(p1, file1P1C1);
     List<HoodieCleanStat> cleanStats = runCleaner(config, 2, true);
-    // nothing to clean: cleanStats should be empty but a clean commit should be created with brute force S3 files listing
+    // nothing to clean: cleanStats should be empty without any clean commit where nb of commits <= retained commits
     assertEquals(0, cleanStats.size());
-    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants());
-    assertTrue(metaClient.getActiveTimeline().reload().getTimelineOfActions(
+    assertEquals(0, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants());
+    assertFalse(metaClient.getActiveTimeline().reload().getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(2, "%014d")));
 
     testTable.addCommit(c2).withBaseFilesInPartition(p2, file2P2C2);
-    cleanStats = runCleaner(config, 4, true);
+    cleanStats = runCleaner(config, 3, true);
+    // nothing to clean: cleanStats should be empty but a clean commit should be created, and the last clean should be used to list the files to clean without errors
+    assertEquals(0, cleanStats.size());
+    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants());
+    assertTrue(metaClient.getActiveTimeline().reload().getTimelineOfActions(
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(3, "%014d")));
+
+
+    testTable.addCommit(c3).withBaseFilesInPartition(p3, file3P3C3);
+    cleanStats = runCleaner(config, 5, true);
     // nothing to clean: cleanStats should be empty but a clean commit should be created, and the last clean should be used to list the files to clean without errors
     assertEquals(0, cleanStats.size());
     assertEquals(2, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants());
     assertTrue(metaClient.getActiveTimeline().reload().getTimelineOfActions(
-        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(4, "%014d")));
-
-
-    testTable.addCommit(c3).withBaseFilesInPartition(p3, file3P3C3);
-    cleanStats = runCleaner(config, 6, true);
-    // nothing to clean: cleanStats should be empty but a clean commit should be created, and the last clean should be used to list the files to clean without errors
-    assertEquals(0, cleanStats.size());
-    assertEquals(3, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants());
-    assertTrue(metaClient.getActiveTimeline().reload().getTimelineOfActions(
-        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(6, "%014d")));
+        CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().containsInstant(makeNewCommitTime(5, "%014d")));
   }
 
   @Test
