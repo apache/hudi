@@ -75,6 +75,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Deque;
 import java.util.LinkedList;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
@@ -655,6 +656,33 @@ public class HoodieAvroUtils {
       }
     }
     return fieldValue;
+  }
+
+  public static Long getNestedFieldValAsLong(GenericRecord record, String fieldName,boolean consistentLogicalTimestampEnabled, Long defaultValue) {
+    GenericRecord valueNode = record;
+    Object fieldValue = valueNode.get(fieldName);
+    Schema fieldSchema = valueNode.getSchema().getField(fieldName).schema();
+    if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString())).toEpochDay();
+    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMillis() && consistentLogicalTimestampEnabled) {
+      return new Timestamp(Long.parseLong(fieldValue.toString())).getTime();
+    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMicros() && consistentLogicalTimestampEnabled) {
+      return new Timestamp(Long.parseLong(fieldValue.toString()) / 1000).getTime();
+    } else if (fieldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+      Decimal dc = (Decimal) fieldSchema.getLogicalType();
+      DecimalConversion decimalConversion = new DecimalConversion();
+      if (fieldSchema.getType() == Schema.Type.FIXED) {
+        return decimalConversion.fromFixed((GenericFixed) fieldValue, fieldSchema,
+          LogicalTypes.decimal(dc.getPrecision(), dc.getScale())).longValue();
+      } else if (fieldSchema.getType() == Schema.Type.BYTES) {
+        ByteBuffer byteBuffer = (ByteBuffer) fieldValue;
+        BigDecimal convertedValue = decimalConversion.fromBytes(byteBuffer, fieldSchema,
+            LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+        byteBuffer.rewind();
+        return convertedValue.longValue();
+      }
+    }
+    return Objects.isNull(fieldValue) ? defaultValue : Long.parseLong(fieldValue.toString());
   }
 
   public static Schema getNullSchema() {

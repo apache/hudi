@@ -18,14 +18,21 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
+import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.HoodiePipeline;
 import org.apache.hudi.util.StreamerUtil;
@@ -67,6 +74,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Integration test for Flink Hoodie stream sink.
@@ -107,6 +117,31 @@ public class ITTestDataStreamWrite extends TestLogger {
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     testWriteToHoodie(conf, "cow_write", 2, EXPECTED);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"BUCKET", "FLINK_STATE"})
+  public void testWriteCopyOnWriteWithEventTimeExtract(String indexType) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
+    conf.setString(FlinkOptions.INDEX_TYPE, indexType);
+    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
+    conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
+    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+    conf.setString(FlinkOptions.EVENT_TIME_FIELD, "ts");
+
+    testWriteToHoodie(conf, "cow_write", 1, EXPECTED);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(conf.getString(FlinkOptions.PATH));
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(conf.getString(FlinkOptions.PATH)).build();
+    HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
+    List<HoodieInstant> hoodieInstants = table.getFileSystemView().getTimeline().getInstants().collect(Collectors.toList());
+    assertEquals(1, hoodieInstants.size());
+    byte[] data = table.getFileSystemView().getTimeline().getInstantDetails(hoodieInstants.get(0)).get();
+    Map<String, String> extraMetadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class).getExtraMetadata();
+    if (indexType.equals("BUCKET")) {
+      assertEquals("2000", extraMetadata.get(FlinkOptions.EVENT_TIME_FIELD.key()));
+    } else {
+      assertEquals("4000", extraMetadata.get(FlinkOptions.EVENT_TIME_FIELD.key()));
+    }
   }
 
   @Test

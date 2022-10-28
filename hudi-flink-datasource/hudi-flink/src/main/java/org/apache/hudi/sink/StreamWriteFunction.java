@@ -432,6 +432,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .writeStatus(writeStatus)
         .lastBatch(false)
         .endInput(false)
+        .maxEventTime(this.currentTimeStamp)
         .build();
 
     this.eventGateway.sendEventToCoordinator(event);
@@ -475,6 +476,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .writeStatus(writeStatus)
         .lastBatch(true)
         .endInput(endInput)
+        .maxEventTime(this.currentTimeStamp)
         .build();
 
     this.eventGateway.sendEventToCoordinator(event);

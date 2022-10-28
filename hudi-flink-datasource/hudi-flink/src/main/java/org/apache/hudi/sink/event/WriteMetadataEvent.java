@@ -54,6 +54,7 @@ public class WriteMetadataEvent implements OperatorEvent {
    */
   private boolean bootstrap;
 
+  private Long maxEventTime = Long.MIN_VALUE;
   /**
    * Creates an event.
    *
@@ -79,6 +80,18 @@ public class WriteMetadataEvent implements OperatorEvent {
     this.lastBatch = lastBatch;
     this.endInput = endInput;
     this.bootstrap = bootstrap;
+  }
+
+  private WriteMetadataEvent(
+      int taskID,
+      String instantTime,
+      List<WriteStatus> writeStatuses,
+      boolean lastBatch,
+      boolean endInput,
+      boolean bootstrap,
+      Long maxEventTIme) {
+    this(taskID, instantTime, writeStatuses, lastBatch, endInput, bootstrap);
+    this.maxEventTime = maxEventTIme;
   }
 
   // default constructor for efficient serialization
@@ -140,6 +153,14 @@ public class WriteMetadataEvent implements OperatorEvent {
     this.lastBatch = lastBatch;
   }
 
+  public Long getMaxEventTime() {
+    return maxEventTime;
+  }
+
+  public void setMaxEventTime(Long maxEventTime) {
+    this.maxEventTime = maxEventTime;
+  }
+
   /**
    * Merges this event with given {@link WriteMetadataEvent} {@code other}.
    *
@@ -172,6 +193,7 @@ public class WriteMetadataEvent implements OperatorEvent {
         + ", lastBatch=" + lastBatch
         + ", endInput=" + endInput
         + ", bootstrap=" + bootstrap
+        + ", maxEventTime=" + maxEventTime
         + '}';
   }
 
@@ -209,11 +231,13 @@ public class WriteMetadataEvent implements OperatorEvent {
     private boolean endInput = false;
     private boolean bootstrap = false;
 
+    private Long maxEventTime = Long.MAX_VALUE;
+
     public WriteMetadataEvent build() {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap);
+      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap, maxEventTime);
     }
 
     public Builder taskID(int taskID) {
@@ -223,6 +247,11 @@ public class WriteMetadataEvent implements OperatorEvent {
 
     public Builder instantTime(String instantTime) {
       this.instantTime = instantTime;
+      return this;
+    }
+
+    public Builder maxEventTime(Long maxEventTime) {
+      this.maxEventTime = maxEventTime;
       return this;
     }
 

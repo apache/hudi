@@ -59,7 +59,6 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    * Table row type.
    */
   private final RowType rowType;
-
   /**
    * Constructs an AppendWriteFunction.
    *
@@ -133,6 +132,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .writeStatus(writeStatus)
         .lastBatch(true)
         .endInput(endInput)
+        .maxEventTime(this.currentTimeStamp)
         .build();
     this.eventGateway.sendEventToCoordinator(event);
     // nullify the write helper for next ckp
