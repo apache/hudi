@@ -21,19 +21,23 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, generateFieldMap, shouldValidatePartitionColumns}
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesValues, generateFieldMap, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.common.util.{PartitionPathEncodeUtils, ReflectionUtils}
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.hadoop.CachingPath.createPathUnsafe
-import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{PartitionPathFormatterBase, SparkKeyGeneratorInterface, StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EqualTo, Expression, InterpretedPredicate, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
@@ -41,7 +45,10 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.util
+import java.util.stream.{Collectors, IntStream}
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.language.implicitConversions
 
 /**
@@ -190,16 +197,18 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @return The pruned partition paths.
    */
   protected def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
-    val partitionColumnNames = partitionSchema.fields.map(_.name).toSet
+    val resolve = spark.sessionState.analyzer.resolver
+    val partitionColumnNames = partitionSchema.fieldNames.toSeq
     val partitionPruningPredicates = predicates.filter {
-      _.references.map(_.name).toSet.subsetOf(partitionColumnNames)
+      _.references.map(_.name).forall { ref =>
+        // NOTE: We're leveraging Spark's resolver here to appropriately handle case-sensitivity
+        partitionColumnNames.exists(partCol => resolve(ref, partCol))
+      }
     }
+
     if (partitionPruningPredicates.nonEmpty) {
-      val equalPredicate = partitionPruningPredicates.filter(_.isInstanceOf[EqualTo])
-      val partitionColumnValuePairs = equalPredicate.map(_.asInstanceOf[EqualTo]).map(predicate =>
-        org.apache.hudi.common.util.collection.Pair.of(predicate.left.asInstanceOf[AttributeReference].name,
-          predicate.right.asInstanceOf[Literal].value.toString)).toList
-      val partitionPaths = getPartitionPaths(partitionColumnValuePairs.asJava).asScala
+      val partitionPaths = fetchPartitionPaths(partitionColumnNames, partitionPruningPredicates)
+
       val predicate = partitionPruningPredicates.reduce(expressions.And)
 
       val boundPredicate = InterpretedPredicate(predicate.transform {
@@ -219,6 +228,69 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       logInfo(s"No partition predicate provided, total partition size is: ${getAllQueryPartitionPaths.asScala.size}")
       getAllQueryPartitionPaths.asScala;
     }
+  }
+
+  private def fetchPartitionPaths(partitionColumnNames: Seq[String], partitionPruningPredicates: Seq[Expression]) = {
+    if (areAllPartitionsCached) {
+      logDebug("All partition paths have already been loaded, use it directly")
+      getAllQueryPartitionPaths.asScala
+    } else {
+      // Static partition-path prefix is defined as a prefix of the full partition-path where only
+      // first N partition columns have proper (static) values allowing us to build such prefix (to
+      // be used in subsequent filtering)
+      val (staticPartitionPathPrefix: Option[String], staticPartitionColumnValues: Seq[Any]) = {
+        // Extract from simple predicates of the form `date = '2022-01-01'` both
+        // partition column and corresponding (literal) value
+        val staticPartitionColumnValuesMap = extractEqualityPredicatesValues(partitionPruningPredicates)
+        // Since static partition values might not be available for all columns, we compile
+        // a list of corresponding pairs partition column-name and corresponding value (if available)
+        val staticPartitionColumnValues = partitionColumnNames.map(colName =>
+          staticPartitionColumnValuesMap.get(colName).orNull).takeWhile(_ != null)
+
+        val definedStaticPartitionColumnValuePairs = partitionColumnNames.zip(staticPartitionColumnValues)
+        (composeRelativePartitionPath(definedStaticPartitionColumnValuePairs), staticPartitionColumnValues)
+      }
+
+      staticPartitionPathPrefix match {
+        case Some(relativePartitionPathPrefix) =>
+          if (staticPartitionColumnValues.length == partitionColumnNames.length) {
+            // If the composed partition path is complete, we return it directly, to avoid extra listing operation
+            Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnValues.map(_.asInstanceOf[AnyRef]).toArray))
+          } else {
+            // The input partition values (from query predicate) forms a prefix of partition path, do listing to the path only.
+            listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
+          }
+
+        case _ =>
+          // Fallback to eager list if there is no predicate on partition columns (i.e., the input partitionColumnValuePairs list is empty)
+          getAllQueryPartitionPaths.asScala
+      }
+    }
+  }
+
+  /**
+   * Construct relative partition path (i.e., partition prefix) from the given partition values
+   *
+   * @return relative partition path and a flag to indicate if the path is complete (i.e., not a prefix)
+   */
+  private def composeRelativePartitionPath(partitionColumnValuePairs: Seq[(String, Any)]): Option[String] = {
+    if (partitionColumnValuePairs.isEmpty) {
+      logDebug("Unable to compose relative partition path prefix from the predicates")
+      return None
+    }
+
+    val hiveStylePartitioning = metaClient.getTableConfig.getHiveStylePartitioningEnable.toBoolean
+    val urlEncodePartitioning = metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
+
+    val partitionPathFormatter = new StringPartitionPathFormatter(
+      JFunction.toJavaSupplier(() => new PartitionPathFormatterBase.JavaStringBuilder()),
+      hiveStylePartitioning,
+      urlEncodePartitioning
+    )
+
+    val (partitionColumnNames, partitionColumnValues) = partitionColumnValuePairs.unzip
+
+    Some(partitionPathFormatter.combine(partitionColumnNames.asJava, partitionColumnValues: _*))
   }
 
   protected def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
@@ -292,6 +364,19 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
 
 object SparkHoodieTableFileIndex {
+
+  private def extractEqualityPredicatesValues(predicates: Seq[Expression]): Map[String, Any] = {
+    // TODO support coercible expressions (ie attr-references casted to particular type), similar
+    //      to `MERGE INTO` statement
+    predicates.flatMap {
+      case EqualTo(attr: AttributeReference, e: Expression) if e.foldable =>
+        Seq((attr.name, e.eval(EmptyRow)))
+      case EqualTo(e: Expression, attr: AttributeReference) if e.foldable =>
+        Seq((attr.name, e.eval(EmptyRow)))
+
+      case _ => Seq.empty
+    }.toMap
+  }
 
   /**
    * This method unravels [[StructType]] into a [[Map]] of pairs of dot-path notation with corresponding

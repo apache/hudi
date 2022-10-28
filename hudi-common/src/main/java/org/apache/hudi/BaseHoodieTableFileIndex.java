@@ -284,66 +284,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return listedPartitions;
   }
 
-  /**
-   * Get partition path with the given partition value
-   * @param partitionColumnValuePairs list of pair of partition column name to the predicate value
-   * @return partitions that match the given partition values
-   */
-  protected List<PartitionPath> getPartitionPaths(List<Pair<String, String>> partitionColumnValuePairs) {
-    if (cachedAllPartitionPaths != null) {
-      LOG.debug("All partition paths have already loaded, use it directly");
-      return cachedAllPartitionPaths;
-    }
-
-    Pair<String, Boolean> relativeQueryPartitionPathPair = composeRelativePartitionPaths(partitionColumnValuePairs);
-    // Fallback to eager list if there is no predicate on partition columns (i.e., the input partitionColumnValuePairs list is empty)
-    if (relativeQueryPartitionPathPair.getLeft().isEmpty()) {
-      return getAllQueryPartitionPaths();
-    }
-
-    // If the composed partition path is complete, we return it directly, to save extra DFS listing operations.
-    if (relativeQueryPartitionPathPair.getRight()) {
-      return Collections.singletonList(new PartitionPath(relativeQueryPartitionPathPair.getLeft(),
-          parsePartitionColumnValues(partitionColumns, relativeQueryPartitionPathPair.getLeft())));
-    }
-    // The input partition values (from query predicate) forms a prefix of partition path, do listing to the path only.
-    return listPartitionPaths(Collections.singletonList(relativeQueryPartitionPathPair.getLeft()));
-  }
-
-  /**
-   * Construct relative partition path (i.e., partition prefix) from the given partition values
-   * @return relative partition path and a flag to indicate if the path is complete (i.e., not a prefix)
-   */
-  private Pair<String, Boolean> composeRelativePartitionPaths(List<Pair<String, String>> partitionColumnValuePairs) {
-    if (partitionColumnValuePairs.size() == 0) {
-      LOG.info("The input partition names or value is empty");
-      return Pair.of("", false);
-    }
-
-    boolean hiveStylePartitioning = Boolean.parseBoolean(metaClient.getTableConfig().getHiveStylePartitioningEnable());
-    boolean urlEncodePartitioning = Boolean.parseBoolean(metaClient.getTableConfig().getUrlEncodePartitioning());
-    Map<String, Integer> partitionNameToIdx = IntStream.range(0, partitionColumnValuePairs.size())
-        .mapToObj(i -> Pair.of(i, partitionColumnValuePairs.get(i).getKey()))
-        .collect(Collectors.toMap(Pair::getValue, Pair::getKey));
-    StringBuilder queryPartitionPath = new StringBuilder();
-    boolean isPartial = false;
-    for (int idx = 0; idx < partitionColumns.length; ++idx) {
-      String columnName = partitionColumns[idx];
-      if (partitionNameToIdx.containsKey(columnName)) {
-        int k = partitionNameToIdx.get(columnName);
-        String columnValue = partitionColumnValuePairs.get(k).getValue();
-        String encodedValue = urlEncodePartitioning ? PartitionPathEncodeUtils.escapePathName(columnValue) : columnValue;
-        queryPartitionPath.append(hiveStylePartitioning ? columnName + "=" : "").append(encodedValue).append("/");
-      } else {
-        isPartial = true;
-        break;
-      }
-    }
-    queryPartitionPath.deleteCharAt(queryPartitionPath.length() - 1);
-    return Pair.of(queryPartitionPath.toString(), !isPartial && partitionColumnValuePairs.size() == partitionColumns.length);
-  }
-
-  private List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
+  protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
     List<String> matchedPartitionPaths;
     try {
       matchedPartitionPaths = tableMetadata.getPartitionPathsWithPrefixes(relativePartitionPaths);
