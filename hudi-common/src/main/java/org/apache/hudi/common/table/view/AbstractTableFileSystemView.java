@@ -127,7 +127,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Adds the provided statuses into the file system view, and also caches it inside this object.
    */
   public List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
     timer.startTimer();
@@ -211,8 +211,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Get replaced instant for each file group by looking at all commit instants.
    */
   private void resetFileGroupsReplaced(HoodieTimeline timeline) {
-    HoodieTimer hoodieTimer = new HoodieTimer();
-    hoodieTimer.startTimer();
+    HoodieTimer hoodieTimer = HoodieTimer.start();
     // for each REPLACE instant, get map of (partitionPath -> deleteFileGroup)
     HoodieTimeline replacedTimeline = timeline.getCompletedReplaceTimeline();
     Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = replacedTimeline.getInstants().flatMap(instant -> {

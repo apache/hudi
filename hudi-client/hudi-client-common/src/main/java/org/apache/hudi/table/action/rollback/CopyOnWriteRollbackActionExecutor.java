@@ -61,8 +61,7 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
 
   @Override
   protected List<HoodieRollbackStat> executeRollback(HoodieRollbackPlan hoodieRollbackPlan) {
-    HoodieTimer rollbackTimer = new HoodieTimer();
-    rollbackTimer.startTimer();
+    HoodieTimer rollbackTimer = HoodieTimer.start();
 
     List<HoodieRollbackStat> stats = new ArrayList<>();
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
