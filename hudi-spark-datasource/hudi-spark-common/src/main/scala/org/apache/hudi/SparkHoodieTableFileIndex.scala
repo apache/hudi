@@ -290,7 +290,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
     val (partitionColumnNames, partitionColumnValues) = partitionColumnValuePairs.unzip
 
-    Some(partitionPathFormatter.combine(partitionColumnNames.asJava, partitionColumnValues: _*))
+    Some(partitionPathFormatter.combine(partitionColumnNames.asJava, partitionColumnValues.map(_.asInstanceOf[AnyRef]): _*))
   }
 
   protected def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
