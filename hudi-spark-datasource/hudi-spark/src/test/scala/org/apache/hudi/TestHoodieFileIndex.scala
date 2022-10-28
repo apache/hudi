@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions.{FILE_INDEX_LISTING_MODE_EAGER, FILE_INDEX_LISTING_MODE_LAZY, QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.HoodieJavaWriteClient
@@ -186,7 +186,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
 
   @ParameterizedTest
   @CsvSource(Array("true,true", "true,false", "false,true", "false,false"))
-  def testPartitionPruneWithPartitionEncode(partitionEncode: Boolean, refreshOnInitialization: Boolean): Unit = {
+  def testPartitionPruneWithPartitionEncode(partitionEncode: Boolean, listLazily: Boolean): Unit = {
     val props = new Properties()
     props.setProperty(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, String.valueOf(partitionEncode))
     initMetaClient(props)
@@ -201,8 +201,10 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val opts = queryOpts +
-      (DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.key -> refreshOnInitialization.toString)
+
+    val listingMode = if (listLazily) FILE_INDEX_LISTING_MODE_LAZY else FILE_INDEX_LISTING_MODE_EAGER
+
+    val opts = queryOpts + (DataSourceReadOptions.FILE_INDEX_LISTING_MODE.key -> listingMode)
     val fileIndex = HoodieFileIndex(spark, metaClient, None, opts)
 
     val partitionFilter1 = EqualTo(attribute("partition"), literal("2021/03/08"))
@@ -303,7 +305,6 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       filesAfterPrune2.length)
     val readDF2 = spark.read.format("hudi")
       .option(HoodieMetadataConfig.ENABLE.key, useMetaFileList)
-      .option(DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.key(), false)
       .load(basePath)
 
     assertEquals(10, readDF2.count())

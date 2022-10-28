@@ -145,14 +145,18 @@ object DataSourceReadOptions {
         " read from the data file (in Hudi partition columns are persisted by default)." +
         " This config is a fallback allowing to preserve existing behavior, and should not be used otherwise.")
 
-  val REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION: ConfigProperty[Boolean] =
-    ConfigProperty.key("hoodie.datasource.read.file.index.list_lazily")
-      .defaultValue(true)
+  val FILE_INDEX_LISTING_MODE_EAGER = "eager"
+  val FILE_INDEX_LISTING_MODE_LAZY = "lazy"
+
+  val FILE_INDEX_LISTING_MODE: ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.file.index.listing.mode")
+      .defaultValue(FILE_INDEX_LISTING_MODE_EAGER)
+      .withValidValues(FILE_INDEX_LISTING_MODE_LAZY, FILE_INDEX_LISTING_MODE_EAGER)
       .sinceVersion("0.13.0")
-      .withDocumentation("When set to false, hoodie will load all partition paths and file slices when " +
-        " initializing the HoodieFileIndex. When set to true, the partitions and files will be loaded after " +
-        " the partition pruning. NOTE: if the table has default partition or non-encoded partition value " +
-        "containing slash, the config should be set to false to obtain correct result.")
+      .withDocumentation("When set to 'eager', file-index will load all partition paths and file slices during " +
+        " initialization. When set to 'lazy', the partitions and files will be loaded after " +
+        " the partition pruning. Please, note that, if the table has default partition or non-encoded partition value " +
+        " containing slash, setting this to 'lazy' will be producing incorrect results.")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")

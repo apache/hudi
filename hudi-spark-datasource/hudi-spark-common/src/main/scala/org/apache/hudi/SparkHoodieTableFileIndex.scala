@@ -19,9 +19,9 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
-import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions.{FILE_INDEX_LISTING_MODE_LAZY, QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesValues, generateFieldMap, shouldValidatePartitionColumns}
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesValues, generateFieldMap, shouldListLazily, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
@@ -78,8 +78,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     false,
     false,
     SparkHoodieTableFileIndex.adapt(fileStatusCache),
-    configProperties.getBoolean(DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.key(),
-      DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.defaultValue())
+    shouldListLazily(configProperties)
   )
     with SparkAdapterSupport
     with Logging {
@@ -437,5 +436,10 @@ object SparkHoodieTableFileIndex {
   private def shouldValidatePartitionColumns(spark: SparkSession): Boolean = {
     // NOTE: We can't use helper, method nor the config-entry to stay compatible w/ Spark 2.4
     spark.sessionState.conf.getConfString("spark.sql.sources.validatePartitionColumns", "true").toBoolean
+  }
+
+  private def shouldListLazily(props: TypedProperties): Boolean = {
+    props.getString(DataSourceReadOptions.FILE_INDEX_LISTING_MODE.key,
+      DataSourceReadOptions.FILE_INDEX_LISTING_MODE.defaultValue) == FILE_INDEX_LISTING_MODE_LAZY
   }
 }
