@@ -110,14 +110,14 @@ public class HiveSyncConfig extends HoodieSyncConfig {
             + "org.apache.hudi input format.")
     public boolean usePreApacheInputFormat;
     @Deprecated
-    @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
-    public boolean useJdbc;
+    @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url", arity = 1)
+    public Boolean useJdbc = true;
     @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")
     public String metastoreUris;
     @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms,glue,jdbc and hiveql")
     public String syncMode;
-    @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
-    public boolean autoCreateDatabase;
+    @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database", arity = 1)
+    public boolean autoCreateDatabase = true;
     @Parameter(names = {"--ignore-exceptions"}, description = "Ignore hive exceptions")
     public boolean ignoreExceptions;
     @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
@@ -135,7 +135,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     public boolean omitMetaFields;
     @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
     public Integer batchSyncNum;
-    @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.")
+    @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.", arity = 1)
     public boolean syncAsSparkDataSourceTable;
     @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
     public Integer sparkSchemaLengthThreshold;

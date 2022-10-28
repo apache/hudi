@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USE_JDBC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,13 +38,15 @@ public class TestHiveSyncToolArgs {
     HiveSyncConfig.HiveSyncConfigParams params = new HiveSyncConfig.HiveSyncConfigParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
     String[] args = {"--sync-mode", "hms", "--base-path", "/table_path", "--table", "table_name",
-        "--spark-datasource"};
+        "--spark-datasource", "false"};
     cmd.parse(args);
 
     assertEquals("hms", params.toProps().getProperty(HIVE_SYNC_MODE.key()));
     assertEquals("/table_path", params.toProps().getProperty(META_SYNC_BASE_PATH.key()));
     assertEquals("table_name", params.toProps().getProperty(META_SYNC_TABLE_NAME.key()));
-    assertTrue(params.toProps().getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key()));
+    assertFalse(params.toProps().getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key()));
+    // The default value of "--use-jdbc" is true
+    assertTrue(params.toProps().getBoolean(HIVE_USE_JDBC.key()));
     assertFalse(params.toProps().getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key()));
   }
 }
