@@ -17,11 +17,9 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.List;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -86,7 +84,9 @@ public abstract class PartitionPathFormatterBase<S> {
   }
 
   protected abstract S toString(Object o);
+
   protected abstract S encode(S partitionPathPart);
+
   protected abstract S handleEmpty(S partitionPathPart);
 
   /**

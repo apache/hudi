@@ -28,7 +28,7 @@ import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
  */
 public class StringPartitionPathFormatter extends PartitionPathFormatterBase<String> {
 
-  StringPartitionPathFormatter(Supplier<StringBuilder<String>> stringBuilderFactory,
+  public StringPartitionPathFormatter(Supplier<StringBuilder<String>> stringBuilderFactory,
                                boolean useHiveStylePartitioning,
                                boolean useEncoding) {
     super(stringBuilderFactory, useHiveStylePartitioning, useEncoding);

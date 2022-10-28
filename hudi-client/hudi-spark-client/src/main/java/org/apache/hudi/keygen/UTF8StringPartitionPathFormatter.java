@@ -32,7 +32,7 @@ public class UTF8StringPartitionPathFormatter extends PartitionPathFormatterBase
 
   protected static final UTF8String HUDI_DEFAULT_PARTITION_PATH_UTF8 = UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH);
 
-  UTF8StringPartitionPathFormatter(Supplier<StringBuilder<UTF8String>> stringBuilderFactory,
+  public UTF8StringPartitionPathFormatter(Supplier<StringBuilder<UTF8String>> stringBuilderFactory,
                                    boolean useHiveStylePartitioning,
                                    boolean useEncoding) {
     super(stringBuilderFactory, useHiveStylePartitioning, useEncoding);
