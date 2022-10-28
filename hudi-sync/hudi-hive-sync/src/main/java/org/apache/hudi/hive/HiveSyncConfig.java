@@ -136,7 +136,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
     public Integer batchSyncNum;
     @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.", arity = 1)
-    public boolean syncAsSparkDataSourceTable;
+    public boolean syncAsSparkDataSourceTable = true;
     @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
     public Integer sparkSchemaLengthThreshold;
     @Parameter(names = {"--bucket-sync"}, description = "use bucket sync")
