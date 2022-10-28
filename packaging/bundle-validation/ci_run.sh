@@ -18,15 +18,16 @@
 # under the License.
 
 # Note:
-# this script is to run by GitHub Actions CI tasks from the project root directory
-# and contains environment-specific variables
+#
+# This script is to
+#  - set the corresponding variables based on CI job's build profiles
+#  - prepare Hudi bundle jars for mounting into Docker container for validation
+#  - prepare test datasets for mounting into Docker container for validation
+#
+# This is to run by GitHub Actions CI tasks from the project root directory
+# and it contains the CI environment-specific variables.
 
 HUDI_VERSION=$1
-# to store bundle jars for validation
-mkdir ${GITHUB_WORKSPACE}/jars
-cp packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar ${GITHUB_WORKSPACE}/jars
-echo 'Validating jars below:'
-ls -l ${GITHUB_WORKSPACE}/jars
 
 # choose versions based on build profiles
 if [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
@@ -59,13 +60,33 @@ elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
   IMAGE_TAG=spark330hive313
 fi
 
-cd packaging/bundle-validation/spark-write-hive-sync || exit 1
+# Copy bundle jars to temp dir for mounting
+TMP_JARS_DIR=/tmp/jars/$(date +%s)
+mkdir -p $TMP_JARS_DIR
+cp ${GITHUB_WORKSPACE}/packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+echo 'Validating jars below:'
+ls -l $TMP_JARS_DIR
+
+# Copy test dataset
+TMP_DATA_DIR=/tmp/data/$(date +%s)
+mkdir -p $TMP_DATA_DIR/stocks/data
+cp ${GITHUB_WORKSPACE}/docker/demo/data/*.json $TMP_DATA_DIR/stocks/data/
+cp ${GITHUB_WORKSPACE}/docker/demo/config/schema.avsc $TMP_DATA_DIR/stocks/
+
+# build docker image
+cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1
 docker build \
 --build-arg HADOOP_VERSION=$HADOOP_VERSION \
 --build-arg HIVE_VERSION=$HIVE_VERSION \
 --build-arg DERBY_VERSION=$DERBY_VERSION \
 --build-arg SPARK_VERSION=$SPARK_VERSION \
 --build-arg SPARK_HADOOP_VERSION=$SPARK_HADOOP_VERSION \
+--build-arg IMAGE_TAG=$IMAGE_TAG \
 -t hudi-ci-bundle-validation:$IMAGE_TAG \
 .
-docker run -v ${GITHUB_WORKSPACE}/jars:/opt/hudi-bundles/jars -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh
+
+# run validation script in docker
+docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh

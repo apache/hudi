@@ -18,8 +18,10 @@
 
 package org.apache.spark.sql
 
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
+import org.apache.spark.sql.execution.command.RepairTableCommand
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
@@ -39,4 +41,17 @@ object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
   override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema =
     ProjectionOverSchema(schema, output)
+
+  override def isRepairTable(plan: LogicalPlan): Boolean = {
+    plan.isInstanceOf[RepairTableCommand]
+  }
+
+  override def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)] = {
+    plan match {
+      case rtc: RepairTableCommand =>
+        Some((rtc.tableName, rtc.enableAddPartitions, rtc.enableDropPartitions, rtc.cmd))
+      case _ =>
+        None
+    }
+  }
 }
