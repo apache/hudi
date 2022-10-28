@@ -177,7 +177,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   /**
-   * Fetch list of latest base files and log files per partition.
+   * Lists latest file-slices (base-file along w/ delta-log files) per partition.
    *
    * @return mapping from string partition paths to its base/log files
    */
@@ -197,6 +197,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     resetTableMetadata(null);
   }
 
+  /**
+   * Returns all partition paths matching the ones explicitly provided by the query (if any)
+   */
   protected List<PartitionPath> getAllQueryPartitionPaths() {
     if (cachedAllPartitionPaths == null) {
       List<String> queryRelativePartitionPaths = queryPaths.stream()
@@ -216,6 +219,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return cachedAllPartitionPaths;
   }
 
+  /**
+   * Returns all listed file-slices w/in the partition paths returned by {@link #getAllQueryPartitionPaths()}
+   */
   protected Map<PartitionPath, List<FileSlice>> getAllInputFileSlices() {
     if (!areAllPartitionsCached()) {
       // Fetching file slices for partitions that have not been cached yet

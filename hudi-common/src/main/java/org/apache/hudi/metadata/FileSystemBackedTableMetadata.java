@@ -80,7 +80,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public List<String> getPartitionPathsWithPrefixes(List<String> prefixes) throws IOException {
+  public List<String> getPartitionPathsWithPrefixes(List<String> prefixes) {
     return prefixes.stream().flatMap(prefix -> {
       try {
         return getPartitionPathsWithPrefix(prefix).stream();
