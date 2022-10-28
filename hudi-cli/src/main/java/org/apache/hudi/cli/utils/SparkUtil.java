@@ -21,11 +21,11 @@ package org.apache.hudi.cli.utils;
 import org.apache.hudi.cli.HoodieCliSparkConfig;
 import org.apache.hudi.cli.commands.SparkEnvCommand;
 import org.apache.hudi.cli.commands.SparkMain;
-import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
@@ -116,7 +116,7 @@ public class SparkUtil {
   }
 
   public static JavaSparkContext initJavaSparkContext(SparkConf sparkConf) {
-    SparkRDDWriteClient.registerClasses(sparkConf);
+    HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     jsc.hadoopConfiguration().setBoolean(HoodieCliSparkConfig.CLI_PARQUET_ENABLE_SUMMARY_METADATA, false);
     FSUtils.prepareHadoopConf(jsc.hadoopConfiguration());

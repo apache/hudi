@@ -81,8 +81,8 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val hoodieInternalRow = new HoodieInternalRow(new Array[UTF8String](5), unsafeRow, false)
 
     Seq(
-      (unsafeRow, rowSchema, 135),
-      (hoodieInternalRow, addMetaFields(rowSchema), 175)
+      (unsafeRow, rowSchema, 87),
+      (hoodieInternalRow, addMetaFields(rowSchema), 127)
     ) foreach { case (row, schema, expectedSize) => routine(row, schema, expectedSize) }
   }
 
@@ -110,8 +110,8 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
 
     Seq(
-      (legacyRecord, 573),
-      (avroIndexedRecord, 442)
+      (legacyRecord, 527),
+      (avroIndexedRecord, 389)
     ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
   }
 
@@ -132,8 +132,8 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val key = new HoodieKey("rec-key", "part-path")
 
     Seq(
-      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 1, HoodieRecordType.AVRO), 74),
-      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 2, HoodieRecordType.SPARK), 74)
+      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 1, HoodieRecordType.AVRO), 27),
+      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 2, HoodieRecordType.SPARK), 27)
     ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
   }
 
