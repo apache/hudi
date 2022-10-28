@@ -110,9 +110,7 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val isCaseSensitive = sqlConf.caseSensitiveAnalysis
 
     (file: PartitionedFile) => {
-      assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size,
-        "File (" + file.filePath + ") partition value does not match partition schema, consider set " +
-          DataSourceReadOptions.REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION.key() + " to false")
+      assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
 
       val fileSplit =
         new FileSplit(new Path(new URI(file.filePath)), file.start, file.length, Array.empty)
