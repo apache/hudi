@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
 import org.apache.hudi.common.fs.FSUtils
@@ -76,6 +76,20 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
     FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala
+  }
+
+  def getFilesInPartitions(spark: SparkSession,
+                           table: CatalogTable,
+                           partitionPaths: Seq[String]): Map[String, Array[FileStatus]] = {
+    val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
+    val metadataConfig = {
+      val properties = new Properties()
+      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++
+        table.properties).asJava)
+      HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
+    }
+    FSUtils.getFilesInPartitions(sparkEngine, metadataConfig, getTableLocation(table, spark),
+      partitionPaths.toArray).asScala.toMap
   }
 
   /**

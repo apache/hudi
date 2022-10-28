@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -219,15 +219,9 @@ public class HoodieCDCExtractor {
                   && instantRange.isInRange(instant.getTimestamp())
                   && requiredActions.contains(instant.getAction().toLowerCase(Locale.ROOT))
           ).map(instant -> {
-            HoodieCommitMetadata commitMetadata;
+            final HoodieCommitMetadata commitMetadata;
             try {
-              if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-                commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-                    activeTimeLine.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
-              } else {
-                commitMetadata = HoodieCommitMetadata.fromBytes(
-                    activeTimeLine.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-              }
+              commitMetadata = TimelineUtils.getCommitMetadata(instant, activeTimeLine);
             } catch (IOException e) {
               throw new HoodieIOException(e.getMessage());
             }

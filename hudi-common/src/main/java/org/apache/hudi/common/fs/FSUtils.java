@@ -322,10 +322,9 @@ public class FSUtils {
   public static Map<String, FileStatus[]> getFilesInPartitions(HoodieEngineContext engineContext,
                                                                HoodieMetadataConfig metadataConfig,
                                                                String basePathStr,
-                                                               String[] partitionPaths,
-                                                               String spillableMapPath) {
+                                                               String[] partitionPaths) {
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        spillableMapPath, true)) {
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);

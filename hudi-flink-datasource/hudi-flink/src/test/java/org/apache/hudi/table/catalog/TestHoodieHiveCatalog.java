@@ -19,24 +19,34 @@
 package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.catalog.CatalogBaseTable;
+import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogTableImpl;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
+import org.apache.flink.table.catalog.exceptions.PartitionNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
+import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -53,8 +63,13 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -209,5 +224,52 @@ public class TestHoodieHiveCatalog {
     assertEquals(hoodieCatalog.getHiveTable(new ObjectPath("default", "test1")).getTableName(), "test1");
 
     hoodieCatalog.renameTable(new ObjectPath("default", "test1"), "test", false);
+  }
+
+  @Test
+  public void testDropPartition() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    CatalogTable table =
+        new CatalogTableImpl(schema, partitions, options, "hudi table");
+    hoodieCatalog.createTable(tablePath, table, false);
+
+    CatalogPartitionSpec partitionSpec = new CatalogPartitionSpec(new HashMap<String, String>() {
+      {
+        put("par1", "20221020");
+      }
+    });
+    // drop non-exist partition
+    assertThrows(PartitionNotExistException.class,
+        () -> hoodieCatalog.dropPartition(tablePath, partitionSpec, false));
+
+    Table hiveTable = hoodieCatalog.getHiveTable(tablePath);
+    StorageDescriptor partitionSd = new StorageDescriptor(hiveTable.getSd());
+    partitionSd.setLocation(new Path(partitionSd.getLocation(), HoodieCatalogUtil.inferPartitionPath(true, partitionSpec)).toString());
+    hoodieCatalog.getClient().add_partition(new Partition(Collections.singletonList("20221020"),
+        tablePath.getDatabaseName(), tablePath.getObjectName(), 0, 0, partitionSd, null));
+    assertNotNull(getHivePartition(partitionSpec));
+
+    // drop partition 'par1'
+    hoodieCatalog.dropPartition(tablePath, partitionSpec, false);
+
+    String tablePathStr = hoodieCatalog.inferTablePath(tablePath, hoodieCatalog.getTable(tablePath));
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tablePathStr, hoodieCatalog.getHiveConf());
+    HoodieInstant latestInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().orElse(null);
+    assertNotNull(latestInstant, "Delete partition commit should be completed");
+    HoodieCommitMetadata commitMetadata = WriteProfiles.getCommitMetadata(tablePath.getObjectName(), new org.apache.flink.core.fs.Path(tablePathStr),
+        latestInstant, metaClient.getActiveTimeline());
+    assertThat(commitMetadata, instanceOf(HoodieReplaceCommitMetadata.class));
+    HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
+    assertThat(replaceCommitMetadata.getPartitionToReplaceFileIds().size(), is(1));
+    assertThrows(NoSuchObjectException.class, () -> getHivePartition(partitionSpec));
+  }
+
+  private Partition getHivePartition(CatalogPartitionSpec partitionSpec) throws Exception {
+    return hoodieCatalog.getClient().getPartition(
+        tablePath.getDatabaseName(),
+        tablePath.getObjectName(),
+        HoodieCatalogUtil.getOrderedPartitionValues(
+            hoodieCatalog.getName(), hoodieCatalog.getHiveConf(), partitionSpec, partitions, tablePath));
   }
 }

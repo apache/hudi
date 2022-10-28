@@ -625,7 +625,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     checkArgument(Objects.equals(prevColumnStats.getFileName(), newColumnStats.getFileName()));
     checkArgument(Objects.equals(prevColumnStats.getColumnName(), newColumnStats.getColumnName()));
 
-    if (newColumnStats.getIsDeleted()) {
+    // We're handling 2 cases in here
+    //  - New record is a tombstone: in this case it simply overwrites previous state
+    //  - Previous record is a tombstone: in that case new proper record would also
+    //    be simply overwriting previous state
+    if (newColumnStats.getIsDeleted() || prevColumnStats.getIsDeleted()) {
       return newColumnStats;
     }
 
@@ -639,8 +643,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     Comparable maxValue =
         (Comparable) Stream.of(
-            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMinValue()),
-            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMinValue()))
+            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMaxValue()),
+            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMaxValue()))
         .filter(Objects::nonNull)
         .max(Comparator.naturalOrder())
         .orElse(null);
@@ -656,6 +660,28 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .setTotalUncompressedSize(prevColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
         .setIsDeleted(newColumnStats.getIsDeleted())
         .build();
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other == this) {
+      return true;
+    } else if (!(other instanceof HoodieMetadataPayload)) {
+      return false;
+    }
+
+    HoodieMetadataPayload otherMetadataPayload = (HoodieMetadataPayload) other;
+
+    return this.type == otherMetadataPayload.type
+        && Objects.equals(this.key, otherMetadataPayload.key)
+        && Objects.equals(this.filesystemMetadata, otherMetadataPayload.filesystemMetadata)
+        && Objects.equals(this.bloomFilterMetadata, otherMetadataPayload.bloomFilterMetadata)
+        && Objects.equals(this.columnStatMetadata, otherMetadataPayload.columnStatMetadata);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(key, type, filesystemMetadata, bloomFilterMetadata, columnStatMetadata);
   }
 
   @Override

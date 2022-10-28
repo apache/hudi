@@ -52,6 +52,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.BinaryUtil.toBytes;
+
 /**
  * Utility functions for ORC files.
  */
@@ -238,8 +240,7 @@ public class OrcUtils extends BaseFileUtils {
     try (Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf))) {
       if (reader.hasMetadataValue("orc.avro.schema")) {
         ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
-        byte[] bytes = new byte[metadataValue.remaining()];
-        metadataValue.get(bytes);
+        byte[] bytes = toBytes(metadataValue);
         return new Schema.Parser().parse(new String(bytes));
       } else {
         TypeDescription orcSchema = reader.getSchema();
