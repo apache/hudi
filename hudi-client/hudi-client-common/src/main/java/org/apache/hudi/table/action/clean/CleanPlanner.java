@@ -187,9 +187,18 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     LOG.info("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
         + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
         + ". New Instant to retain : " + newInstantToRetain);
+    String commitJustBeforeEarliestCommitToRetain = null;
+    HoodieInstant[] instantsBeforeEarliestCommitToRetain = hoodieTable.getCompletedCommitsTimeline().getInstants()
+        .filter(commit -> HoodieTimeline.compareTimestamps(commit.getTimestamp(), HoodieTimeline.LESSER_THAN, cleanMetadata.getEarliestCommitToRetain())).toArray(HoodieInstant[]::new);
+    if (instantsBeforeEarliestCommitToRetain.length > 0) {
+      commitJustBeforeEarliestCommitToRetain = instantsBeforeEarliestCommitToRetain[instantsBeforeEarliestCommitToRetain.length - 1].toString();
+    } else {
+      HoodieInstant lastArchivedCompletedInstant = hoodieTable.getMetaClient().getArchivedTimeline().filterCompletedInstants().lastInstant().get();
+      commitJustBeforeEarliestCommitToRetain = lastArchivedCompletedInstant != null ? lastArchivedCompletedInstant.toString() : null;
+    }
+    final String lastCheckedCommit = commitJustBeforeEarliestCommitToRetain != null ? commitJustBeforeEarliestCommitToRetain : cleanMetadata.getEarliestCommitToRetain();
     return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(
-        instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
-            cleanMetadata.getEarliestCommitToRetain()) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
+        instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, lastCheckedCommit) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
             HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())).flatMap(instant -> {
               try {
                 if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
@@ -486,11 +495,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     Option<HoodieInstant> earliestCommitToRetain = Option.empty();
     int commitsRetained = config.getCleanerCommitsRetained();
     int hoursRetained = config.getCleanerHoursRetained();
-    if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {
-      // earliestCommitToRetain is the instant of the first retained commits
-      // 15 instants total, 10 commits to retain, this gives 6th instant in the list
-      // 6 instants total, 10 commits to retain, this gives 1st instant in the list
-      earliestCommitToRetain = commitTimeline.nthInstant(Math.max(commitTimeline.countInstants() - commitsRetained, 0));
+    if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_COMMITS
+        && commitTimeline.countInstants() > commitsRetained) {
+      earliestCommitToRetain =
+          commitTimeline.nthInstant(commitTimeline.countInstants() - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list- commitsRetained, 0));
     } else if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
       Instant instant = Instant.now();
       ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());

@@ -24,7 +24,9 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -42,6 +44,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -86,7 +92,25 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     if (strategy == CleaningTriggerStrategy.NUM_COMMITS) {
       int numberOfCommits = getCommitsSinceLastCleaning();
       int maxInlineCommitsForNextClean = config.getCleaningMaxCommits();
-      return numberOfCommits >= maxInlineCommitsForNextClean;
+      if (numberOfCommits >= maxInlineCommitsForNextClean) {
+        // check if the number of commits created after the last clean is greater than clean.max.commits
+        int commitsRetained = config.getCleanerCommitsRetained();
+        int hoursRetained = config.getCleanerHoursRetained();
+        if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {
+          // if cleaner policy is KEEP_LATEST_COMMITS then
+          // check if the number of completed commits in the timeline is greater than cleaner.commits.retained
+          return table.getCompletedCommitsTimeline().countInstants() > commitsRetained;
+        } else if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
+          // if cleaner policy is KEEP_LATEST_BY_HOURS then
+          // check if there is a commit with timestamp older than current instant - cleaner.hours.retained
+          Instant instant = Instant.now();
+          ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
+          String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
+          return table.getCompletedCommitsTimeline().getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
+              HoodieTimeline.LESSER_THAN, earliestTimeToRetain)).count() > 0;
+        }
+      }
+      return false;
     } else {
       throw new HoodieException("Unsupported cleaning trigger strategy: " + config.getCleaningTriggerStrategy());
     }
