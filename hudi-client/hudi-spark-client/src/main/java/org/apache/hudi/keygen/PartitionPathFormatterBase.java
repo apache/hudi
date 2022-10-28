@@ -59,13 +59,12 @@ public abstract class PartitionPathFormatterBase<S> {
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
     if (!useHiveStylePartitioning && partitionPathParts.length == 1) {
-      return handleEmpty(toString(partitionPathParts[0]));
+      return tryEncode(handleEmpty(toString(partitionPathParts[0])));
     }
 
     StringBuilder<S> sb = stringBuilderFactory.get();
     for (int i = 0; i < partitionPathParts.length; ++i) {
-      S rawPartitionPathPartStr = handleEmpty(toString(partitionPathParts[i]));
-      S partitionPathPartStr = useEncoding ? encode(rawPartitionPathPartStr) : rawPartitionPathPartStr;
+      S partitionPathPartStr = tryEncode(handleEmpty(toString(partitionPathParts[i])));
 
       if (useHiveStylePartitioning) {
         sb.appendJava(partitionPathFields.get(i))
@@ -81,6 +80,10 @@ public abstract class PartitionPathFormatterBase<S> {
     }
 
     return sb.build();
+  }
+
+  private S tryEncode(S partitionPathPart) {
+    return useEncoding ? encode(partitionPathPart) : partitionPathPart;
   }
 
   protected abstract S toString(Object o);
