@@ -385,6 +385,44 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Alter Table multiple times") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  col1 string,
+               |  col2 string,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+             """.stripMargin)
+          spark.sql(s"show create table ${tableName}").show(false)
+          spark.sql(s"insert into ${tableName} values (1, 'aaa', 'bbb', 1000)")
+
+          // Rename to a previously existing column name + insert
+          spark.sql(s"alter table ${tableName} drop column col1")
+          spark.sql(s"alter table ${tableName} rename column col2 to col1")
+
+          spark.sql(s"insert into ${tableName} values (2, 'aaa', 1000)")
+          checkAnswer(spark.sql(s"select col1 from ${tableName} order by id").collect())(
+            Seq("bbb"), Seq("aaa")
+          )
+        }
+      }
+    }
+  }
+
   test("Test Alter Table complex") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
