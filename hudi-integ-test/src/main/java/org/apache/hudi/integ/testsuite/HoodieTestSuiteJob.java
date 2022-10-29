@@ -319,6 +319,9 @@ public class HoodieTestSuiteJob {
     @Parameter(names = {"--test-continuous-mode"}, description = "Tests continuous mode in deltastreamer.")
     public Boolean testContinousMode = false;
 
+    @Parameter(names = {"--enable-presto-validation"}, description = "Enables presto validation")
+    public Boolean enablePrestoValidation = false;
+
     @Parameter(names = {"--presto-jdbc-url"}, description = "Presto JDBC URL in the format jdbc:presto://<host>:<port>/<catalog>/<schema>  "
         + "e.g. URL to connect to Presto running on localhost port 8080 with the catalog `hive` and the schema `sales`: "
         + "jdbc:presto://localhost:8080/hive/sales")

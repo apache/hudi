@@ -35,25 +35,27 @@ public class PrestoQueryNode extends BaseQueryNode {
 
   @Override
   public void execute(ExecutionContext context, int curItrCount) throws Exception {
-    log.info("Executing presto query node {}", this.getName());
-    String url = context.getHoodieTestSuiteWriter().getCfg().prestoJdbcUrl;
-    if (StringUtils.isNullOrEmpty(url)) {
-      throw new IllegalArgumentException("Presto JDBC connection url not provided. Please set --presto-jdbc-url.");
-    }
-    String user = context.getHoodieTestSuiteWriter().getCfg().prestoUsername;
-    String pass = context.getHoodieTestSuiteWriter().getCfg().prestoPassword;
-    try {
-      Class.forName("com.facebook.presto.jdbc.PrestoDriver");
-    } catch (ClassNotFoundException e) {
-      throw new HoodieValidationException("Presto query validation failed due to " + e.getMessage(), e);
-    }
-    try (Connection connection = DriverManager.getConnection(url, user, pass)) {
-      Statement stmt = connection.createStatement();
-      setSessionProperties(this.config.getPrestoProperties(), stmt);
-      executeAndValidateQueries(this.config.getPrestoQueries(), stmt);
-      stmt.close();
-    } catch (Exception e) {
-      throw new HoodieValidationException("Presto query validation failed due to " + e.getMessage(), e);
+    if (context.getHoodieTestSuiteWriter().getCfg().enablePrestoValidation) {
+      log.info("Executing presto query node {}", this.getName());
+      String url = context.getHoodieTestSuiteWriter().getCfg().prestoJdbcUrl;
+      if (StringUtils.isNullOrEmpty(url)) {
+        throw new IllegalArgumentException("Presto JDBC connection url not provided. Please set --presto-jdbc-url.");
+      }
+      String user = context.getHoodieTestSuiteWriter().getCfg().prestoUsername;
+      String pass = context.getHoodieTestSuiteWriter().getCfg().prestoPassword;
+      try {
+        Class.forName("com.facebook.presto.jdbc.PrestoDriver");
+      } catch (ClassNotFoundException e) {
+        throw new HoodieValidationException("Presto query validation failed due to " + e.getMessage(), e);
+      }
+      try (Connection connection = DriverManager.getConnection(url, user, pass)) {
+        Statement stmt = connection.createStatement();
+        setSessionProperties(this.config.getPrestoProperties(), stmt);
+        executeAndValidateQueries(this.config.getPrestoQueries(), stmt);
+        stmt.close();
+      } catch (Exception e) {
+        throw new HoodieValidationException("Presto query validation failed due to " + e.getMessage(), e);
+      }
     }
   }
 }
