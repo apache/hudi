@@ -67,8 +67,7 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     logInfo(s"Recover all the partitions in $root")
 
     val hoodieCatalogTable = HoodieCatalogTable(spark, table.identifier)
-    val isHiveStyledPartitioning = hoodieCatalogTable.catalogProperties.
-      getOrElse(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true").toBoolean
+    val isHiveStyledPartitioning = hoodieCatalogTable.tableConfig.getHiveStylePartitioningEnable.toBoolean
 
     val partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)] = hoodieCatalogTable.
       getPartitionPaths.map(partitionPath => {
