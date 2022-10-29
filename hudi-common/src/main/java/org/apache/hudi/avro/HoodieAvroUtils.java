@@ -767,14 +767,14 @@ public class HoodieAvroUtils {
           Schema.Field field = fields.get(i);
           String fieldName = field.name();
           fieldNames.push(fieldName);
-          if (oldSchema.getField(field.name()) != null) {
+          if (oldSchema.getField(field.name()) != null && !renameCols.containsKey(field.name())) {
             Schema.Field oldField = oldSchema.getField(field.name());
             newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
           } else {
             String fieldFullName = createFullName(fieldNames);
             String fieldNameFromOldSchema = renameCols.getOrDefault(fieldFullName, "");
             // deal with rename
-            if (oldSchema.getField(field.name()) == null && oldSchema.getField(fieldNameFromOldSchema) != null) {
+            if (oldSchema.getField(fieldNameFromOldSchema) != null) {
               // find rename
               Schema.Field oldField = oldSchema.getField(fieldNameFromOldSchema);
               newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
