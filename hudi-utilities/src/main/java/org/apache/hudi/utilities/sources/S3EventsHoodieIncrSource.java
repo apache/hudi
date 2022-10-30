@@ -55,9 +55,9 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT;
@@ -186,7 +186,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     // Create S3 paths
     final boolean checkExists = props.getBoolean(Config.ENABLE_EXISTS_CHECK, Config.DEFAULT_ENABLE_EXISTS_CHECK);
     SerializableConfiguration serializableConfiguration = new SerializableConfiguration(sparkContext.hadoopConfiguration());
-    List<String> cloudFiles = source
+    Dataset<String> cloudFiles = source
         .filter(filter)
         .select("s3.bucket.name", "s3.object.key")
         .distinct()
@@ -216,17 +216,22 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             }
           });
           return cloudFilesPerPartition.iterator();
-        }, Encoders.STRING()).collectAsList();
+        }, Encoders.STRING());
 
     Option<Dataset<Row>> dataset = Option.empty();
+    cloudFiles.cache();
     if (!cloudFiles.isEmpty()) {
-      JavaRDD<Dataset<Row>> datasetIterator = sparkContext.parallelize(cloudFiles, cloudFiles.size()).flatMap(
-          (FlatMapFunction<String, Dataset<Row>>) cloudFile -> Collections.singletonList(getDataFromFile(cloudFile, fileFormat)).iterator());
+      JavaRDD<Dataset<Row>> datasetIterator = cloudFiles.javaRDD().flatMap(new FlatMapFunction<String, Dataset<Row>>() {
+        @Override
+        public Iterator<Dataset<Row>> call(String cloudFile) throws Exception {
+          return Collections.singletonList(getDataFromFile(cloudFile, fileFormat)).iterator();
+        }
+      });
       Dataset<Row> finalDataset = datasetIterator.fold(sparkSession.emptyDataFrame(), (Function2<Dataset<Row>, Dataset<Row>, Dataset<Row>>) (v1, v2) -> v1.union(v2));
       dataset = Option.of(finalDataset);
     }
-    LOG.debug("Extracted distinct files " + cloudFiles.size()
-        + " and some samples " + cloudFiles.stream().limit(10).collect(Collectors.toList()));
+    LOG.debug("Extracted distinct files " + cloudFiles.count()
+        + " and some samples " + cloudFiles.limit(10).collectAsList());
     return Pair.of(dataset, queryTypeAndInstantEndpts.getRight().getRight());
   }
 
