@@ -19,20 +19,17 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
-import org.apache.hudi.DataSourceReadOptions.{FILE_INDEX_LISTING_MODE_LAZY, QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesValues, generateFieldMap, shouldListLazily, shouldValidatePartitionColumns}
+import org.apache.hudi.SparkHoodieTableFileIndex._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.collection.Pair
-import org.apache.hudi.common.util.{PartitionPathEncodeUtils, ReflectionUtils}
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.hadoop.CachingPath.createPathUnsafe
-import org.apache.hudi.keygen.{PartitionPathFormatterBase, SparkKeyGeneratorInterface, StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -45,10 +42,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.util
-import java.util.stream.{Collectors, IntStream}
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 import scala.language.implicitConversions
 
 /**
@@ -191,8 +185,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * Prune the partition by the filter.This implementation is fork from
    * org.apache.spark.sql.execution.datasources.PartitioningAwareFileIndex#prunePartitions.
    *
-   * @param partitionPaths All the partition paths.
-   * @param predicates     The filter condition.
+   * @param predicates The filter condition.
    * @return The pruned partition paths.
    */
   protected def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
@@ -207,7 +200,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
     if (partitionPruningPredicates.nonEmpty) {
       val partitionPaths = fetchPartitionPaths(partitionColumnNames, partitionPruningPredicates)
-
       val predicate = partitionPruningPredicates.reduce(expressions.And)
 
       val boundPredicate = InterpretedPredicate(predicate.transform {
