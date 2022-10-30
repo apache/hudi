@@ -349,14 +349,17 @@ object HoodieFileIndex extends Logging {
   }
 
   private def getQueryPaths(options: Map[String, String]): Seq[Path] = {
-    options.get("path") match {
-      case Some(p) => Seq(new Path(p))
+    // NOTE: To make sure that globbing is appropriately handled w/in the
+    //       `path`, we first probe whether `glob.paths` was provided w/in options
+    val paths = options.get("glob.paths") match {
+      case Some(globbed) =>
+        globbed.split(",").toSeq
       case None =>
-        options.getOrElse("glob.paths",
+        val path = options.getOrElse("path",
           throw new IllegalArgumentException("'path' or 'glob paths' option required"))
-          .split(",")
-          .map(new Path(_))
-          .toSeq
+        Seq(path)
     }
+
+    paths.map(new Path(_))
   }
 }
