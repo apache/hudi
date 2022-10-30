@@ -37,6 +37,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -61,7 +62,7 @@ public class CkpMetadata implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(CkpMetadata.class);
 
-  protected static final int MAX_RETAIN_CKP_NUM = 3;
+  private static final int MAX_RETAIN_CKP_NUM = 3;
 
   // the ckp metadata directory
   private static final String CKP_META = "ckp_meta";
@@ -99,6 +100,19 @@ public class CkpMetadata implements Serializable {
     fs.mkdirs(path);
   }
 
+  /**
+   * Resets the message bus, would clean all the messages.
+   *
+   * <p>This expects to be called by the driver.
+   */
+  public void reset() {
+    Iterator<String> itr = this.instantCache.iterator();
+    while (itr.hasNext()) {
+      cleanInstant(itr.next(), true);
+      itr.remove();
+    }
+  }
+
   public void startInstant(String instant) {
     Path path = fullPath(CkpMessage.getFileName(instant, CkpMessage.State.INFLIGHT));
     try {
@@ -106,30 +120,45 @@ public class CkpMetadata implements Serializable {
     } catch (IOException e) {
       throw new HoodieException("Exception while adding checkpoint start metadata for instant: " + instant, e);
     }
+    // cache the instant
+    cache(instant);
     // cleaning
-    clean(instant);
+    clean();
   }
 
-  private void clean(String newInstant) {
+  private void cache(String newInstant) {
     if (this.instantCache == null) {
       this.instantCache = new ArrayList<>();
     }
     this.instantCache.add(newInstant);
+  }
+
+  private void clean() {
     if (instantCache.size() > MAX_RETAIN_CKP_NUM) {
-      final String instant = instantCache.get(0);
-      boolean[] error = new boolean[1];
-      CkpMessage.getAllFileNames(instant).stream().map(this::fullPath).forEach(path -> {
-        try {
-          fs.delete(path, false);
-        } catch (IOException e) {
-          error[0] = true;
-          LOG.warn("Exception while cleaning the checkpoint meta file: " + path);
-        }
-      });
-      if (!error[0]) {
+      boolean success = cleanInstant(instantCache.get(0), false);
+      if (success) {
         instantCache.remove(0);
       }
     }
+  }
+
+  private boolean cleanInstant(String instant, boolean throwsT) {
+    boolean success = true;
+    for (String fileName : CkpMessage.getAllFileNames(instant)) {
+      Path path = fullPath(fileName);
+      try {
+        fs.delete(path, false);
+      } catch (IOException ex) {
+        success = false;
+        final String errMsg = "Exception while cleaning the checkpoint meta file: " + path;
+        if (throwsT) {
+          throw new HoodieException(errMsg, ex);
+        } else {
+          LOG.warn(errMsg, ex);
+        }
+      }
+    }
+    return success;
   }
 
   /**
