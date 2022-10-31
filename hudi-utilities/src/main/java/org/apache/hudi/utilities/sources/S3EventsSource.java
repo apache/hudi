@@ -85,7 +85,6 @@ public class S3EventsSource extends RowSource implements Closeable {
   public void close() throws IOException {
     // close resource
     this.sqs.shutdown();
-
   }
 
   @Override
