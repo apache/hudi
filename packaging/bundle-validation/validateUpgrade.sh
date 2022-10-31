@@ -75,6 +75,6 @@ VERSIONS=$(curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bu
 for VERSION in "$VERSIONS[@]"
 do
     echo "Version number $VERSION"
-    upgrade_from_version $VERSION
+    #upgrade_from_version $VERSION
 done
 
