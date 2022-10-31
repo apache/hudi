@@ -74,11 +74,10 @@ apk add curl
 VERSIONS=$(curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_2.11/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -m 5 -v '-') 
 SAVEIFS=$IFS   # Save current IFS (Internal Field Separator)
 IFS=$'\n'      # Change IFS to newline char
-VERSIONS=($VERSIONS) # split the `names` string into an array by the same name
+VERSIONS=($VERSIONS) # split the `VERSIONS` string into an array by the same name
 IFS=$SAVEIFS   # Restore original IFS
 for (( i=0; i<${#VERSIONS[@]}; i++ ))
 do
-    echo "Version number ${VERSIONS[$i]}"
-    #upgrade_from_version $VERSION
+    upgrade_from_version "${VERSIONS[$i]}"
 done
 
