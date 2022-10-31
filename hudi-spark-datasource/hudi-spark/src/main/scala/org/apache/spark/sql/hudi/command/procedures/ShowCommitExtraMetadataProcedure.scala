@@ -38,6 +38,7 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
+    StructField("timestamp", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("metadata_key", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("metadata_value", DataTypes.StringType, nullable = true, Metadata.empty)
@@ -78,6 +79,7 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
     }
 
     val meta = commitMetadataOptional.get
+    val timestamp: String = hoodieInstantOption.get.getTimestamp
     val action: String = hoodieInstantOption.get.getAction
     val metadatas: util.Map[String, String] = if (metadataKey.isEmpty) {
       meta.getExtraMetadata
@@ -86,7 +88,7 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
     }
 
     val rows = new util.ArrayList[Row]
-    metadatas.foreach(r => rows.add(Row(action, r._1, r._2)))
+    metadatas.foreach(r => rows.add(Row(timestamp, action, r._1, r._2)))
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
