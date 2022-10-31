@@ -67,10 +67,6 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists)
   }
 
-  override def createLike(left: Expression, right: Expression): Expression = {
-    Like(left, right)
-  }
-
   override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
     false
   }
