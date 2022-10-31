@@ -642,7 +642,7 @@ metadata overhead is negligible. For a small dataset (such as 5 columns, 100 rec
 
 This will occur when capital letters are used in the table name. Metastores such as Hive automatically convert table names
 to lowercase. While we allow capitalization on Hudi tables, if you would like to use a metastore you may be required to
-use all lowercase letters.
+use all lowercase letters. More details on how this issue presents can be found [here](https://github.com/apache/hudi/issues/6832).
 
 
 
