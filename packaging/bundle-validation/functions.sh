@@ -82,6 +82,7 @@ test_utilities_bundle_helper () {
         echo "::error::functions.sh deltastreamer output folder ($OUTPUT_SIZE) is smaller than minimum expected ($EXPECTED_SIZE)" 
         exit 1
     fi
+    echo "::warning::functions.sh output size is $OUTPUT_SIZE"
 
     echo "::warning::functions.sh validating deltastreamer in spark shell"
     SHELL_COMMAND="$SPARK_HOME/bin/spark-shell $OPT_JARS $MAIN_JAR -i $WORKDIR/utilities/validate.scala"
