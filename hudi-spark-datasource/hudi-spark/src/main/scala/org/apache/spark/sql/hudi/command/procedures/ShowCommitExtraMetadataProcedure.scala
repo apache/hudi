@@ -38,7 +38,7 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("timestamp", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("instant_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("metadata_key", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("metadata_value", DataTypes.StringType, nullable = true, Metadata.empty)
