@@ -244,8 +244,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                   List<String> keys,
                                                                                   boolean fullKey,
                                                                                   List<Long> timings) {
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    timer.startTimer();
+    HoodieTimer timer = HoodieTimer.start();
 
     if (logRecordScanner == null) {
       timings.add(timer.endTimer());
@@ -285,8 +284,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                                              Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords,
                                                                                                              List<Long> timings,
                                                                                                              String partitionName) throws IOException {
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    timer.startTimer();
+    HoodieTimer timer = HoodieTimer.start();
 
     if (baseFileReader == null) {
       // No base file at all
@@ -304,8 +302,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     }
 
-    HoodieTimer readTimer = new HoodieTimer();
-    readTimer.startTimer();
+    HoodieTimer readTimer = HoodieTimer.start();
 
     Map<String, HoodieRecord<HoodieMetadataPayload>> records =
         fetchBaseFileRecordsByKeys(baseFileReader, keys, fullKeys, partitionName);
@@ -408,7 +405,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReaders(String partitionName, FileSlice slice) {
     try {
-      HoodieTimer timer = new HoodieTimer().startTimer();
+      HoodieTimer timer = HoodieTimer.start();
       // Open base file reader
       Pair<HoodieFileReader, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);
       HoodieFileReader baseFileReader = baseFileReaderOpenTimePair.getKey();
@@ -472,7 +469,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
                                                                              String partitionName,
                                                                              Option<Boolean> allowFullScanOverride) {
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     List<String> sortedLogFilePaths = logFiles.stream()
         .sorted(HoodieLogFile.getLogFileComparator())
         .map(o -> o.getPath().toString())

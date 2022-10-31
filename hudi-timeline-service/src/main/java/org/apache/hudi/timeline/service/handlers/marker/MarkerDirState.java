@@ -313,7 +313,7 @@ public class MarkerDirState implements Serializable {
    */
   private void flushMarkersToFile(int markerFileIndex) {
     LOG.debug("Write to " + markerDirPath + "/" + MARKERS_FILENAME_PREFIX + markerFileIndex);
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     Path markersFilePath = new Path(markerDirPath, MARKERS_FILENAME_PREFIX + markerFileIndex);
     FSDataOutputStream fsDataOutputStream = null;
     BufferedWriter bufferedWriter = null;
