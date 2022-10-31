@@ -69,6 +69,10 @@ upgrade_from_version () {
 
 apk add curl
 
-curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_2.11/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -m 5 -v '-' | while read line ; do upgrade_from_version $line ; done
-
+#curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_2.11/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -m 5 -v '-' | while read line ; do upgrade_from_version $line ; done
+VERSIONS=$(curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_2.11/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -m 5 -v '-') 
+for VERSION in "$VERSIONS[@]"
+do
+    upgrade_from_version VERSION
+done
 
