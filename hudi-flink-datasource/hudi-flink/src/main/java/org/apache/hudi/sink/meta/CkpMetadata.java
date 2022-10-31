@@ -90,7 +90,7 @@ public class CkpMetadata implements Serializable {
   // -------------------------------------------------------------------------
 
   /**
-   * Initialize the message bus, would clean all the messages and publish the last pending instant.
+   * Initialize the message bus, would clean all the messages
    *
    * <p>This expects to be called by the driver.
    */
