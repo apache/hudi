@@ -24,10 +24,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -180,19 +178,13 @@ public class HiveSchemaUtils {
 
   /**
    * Create Hive field schemas from Flink table schema including the hoodie metadata fields.
-   *
-   * @param table
    */
-  public static List<FieldSchema> toHiveFieldSchema(CatalogBaseTable table) {
-    TableSchema schema = table.getSchema();
-    Configuration configuration = Configuration.fromMap(table.getOptions());
-    Boolean changelogEnable = configuration.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
-    Collection<String> hoodieMetaColumns = HoodieRecord.HOODIE_META_COLUMNS;
-    if (changelogEnable) {
-      hoodieMetaColumns = HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION;
-    }
+  public static List<FieldSchema> toHiveFieldSchema(TableSchema schema, boolean withOperationField) {
     List<FieldSchema> columns = new ArrayList<>();
-    for (String metaField : hoodieMetaColumns) {
+    Collection<String> metaFields = withOperationField
+        ? HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION // caution that the set may break sequence
+        : HoodieRecord.HOODIE_META_COLUMNS;
+    for (String metaField : metaFields) {
       columns.add(new FieldSchema(metaField, "string", null));
     }
     columns.addAll(createHiveColumns(schema));
