@@ -108,48 +108,45 @@ public class HiveSyncConfig extends HoodieSyncConfig {
             + "instead of org.apache.hudi package. Use this when you are in the process of migrating from "
             + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
             + "org.apache.hudi input format.")
-    public boolean usePreApacheInputFormat;
+    public Boolean usePreApacheInputFormat;
     @Deprecated
     @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
-    public Boolean useJdbc = Boolean.parseBoolean(HIVE_USE_JDBC.defaultValue());
+    public Boolean useJdbc;
     @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")
     public String metastoreUris;
     @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms,glue,jdbc and hiveql")
     public String syncMode;
-    //TODO: The default value of HIVE_AUTO_CREATE_DATABASE is true, while default value of boolean parameter in JCommander is false.
-    // Setting arity = 1 can solve the problem, but this is a breaking change for users and will lead inconsistency if an option default changes from true to false.
-    // "--use-jdbc" and "--spark-datasource" have the same problem.
     @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
-    public boolean autoCreateDatabase = Boolean.parseBoolean(HIVE_AUTO_CREATE_DATABASE.defaultValue());
+    public Boolean autoCreateDatabase;
     @Parameter(names = {"--ignore-exceptions"}, description = "Ignore hive exceptions")
-    public boolean ignoreExceptions;
+    public Boolean ignoreExceptions;
     @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
-    public boolean skipROSuffix;
+    public Boolean skipROSuffix;
     @Parameter(names = {"--table-properties"}, description = "Table properties to hive table")
     public String tableProperties;
     @Parameter(names = {"--serde-properties"}, description = "Serde properties to hive table")
     public String serdeProperties;
     @Parameter(names = {"--support-timestamp"}, description = "'INT64' with original type TIMESTAMP_MICROS is converted to hive 'timestamp' type."
         + "Disabled by default for backward compatibility.")
-    public boolean supportTimestamp;
+    public Boolean supportTimestamp;
     @Parameter(names = {"--managed-table"}, description = "Create a managed table")
-    public boolean createManagedTable;
+    public Boolean createManagedTable;
     @Parameter(names = {"--omit-metafields"}, description = "Omit metafields in schema")
-    public boolean omitMetaFields;
+    public Boolean omitMetaFields;
     @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
     public Integer batchSyncNum;
     @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.")
-    public boolean syncAsSparkDataSourceTable = Boolean.parseBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE.defaultValue());;
+    public Boolean syncAsSparkDataSourceTable;
     @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
     public Integer sparkSchemaLengthThreshold;
     @Parameter(names = {"--bucket-sync"}, description = "use bucket sync")
-    public boolean bucketSync;
+    public Boolean bucketSync;
     @Parameter(names = {"--bucket-spec"}, description = "bucket spec stored in metastore")
     public String bucketSpec;
     @Parameter(names = {"--sync-comment"}, description = "synchronize table comments to hive")
-    public boolean syncComment;
+    public Boolean syncComment;
     @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
-    public boolean withOperationField; // TODO remove this as it's not used
+    public Boolean withOperationField; // TODO remove this as it's not used
 
     public boolean isHelp() {
       return hoodieSyncConfigParams.isHelp();
