@@ -30,7 +30,7 @@ import java.io.Closeable;
 public interface HoodieMessageQueue<I, O> extends Closeable {
 
   /**
-   * Get the size of inner message queue.
+   * Returns the number of elements in this queue.
    */
   long size();
 

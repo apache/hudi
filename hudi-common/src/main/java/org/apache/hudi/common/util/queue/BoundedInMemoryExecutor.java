@@ -110,7 +110,6 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
     return consumer.map(consumer -> {
       return CompletableFuture.supplyAsync(() -> {
         LOG.info("starting consumer thread");
-        preExecuteRunnable.run();
         try {
           E result = consumer.consume(queue);
           LOG.info("Queue Consumption is done; notifying producer threads");
@@ -126,7 +125,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
 
   @Override
   public boolean isRemaining() {
-    return ((BoundedInMemoryQueueIterable)queue).iterator().hasNext();
+    return getQueue().iterator().hasNext();
   }
 
   @Override

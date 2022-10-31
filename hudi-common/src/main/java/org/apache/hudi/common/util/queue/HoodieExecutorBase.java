@@ -41,17 +41,17 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
 
   private static final long TERMINATE_WAITING_TIME_SECS = 60L;
   // Executor service used for launching write thread.
-  public final ExecutorService producerExecutorService;
+  protected final ExecutorService producerExecutorService;
   // Executor service used for launching read thread.
-  public final ExecutorService consumerExecutorService;
+  protected final ExecutorService consumerExecutorService;
   // Producers
-  public final List<HoodieProducer<I>> producers;
+  protected final List<HoodieProducer<I>> producers;
   // Consumer
-  public final Option<IteratorBasedQueueConsumer<O, E>> consumer;
+  protected final Option<IteratorBasedQueueConsumer<O, E>> consumer;
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
-  public final Runnable preExecuteRunnable;
+  protected final Runnable preExecuteRunnable;
 
-  public CompletableFuture<Void> producerFuture;
+  CompletableFuture<Void> producerFuture;
 
   public HoodieExecutorBase(List<HoodieProducer<I>> producers, Option<IteratorBasedQueueConsumer<O, E>> consumer,
                             Runnable preExecuteRunnable) {
@@ -59,9 +59,9 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
     this.consumer = consumer;
     this.preExecuteRunnable = preExecuteRunnable;
     // Ensure fixed thread for each producer thread
-    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new HoodieDaemonThreadFactory("executor-queue-producer", preExecuteRunnable));
+    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new CustomizedThreadFactory("executor-queue-producer", preExecuteRunnable));
     // Ensure single thread for consumer
-    this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("executor-queue-consumer"));
+    this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("executor-queue-consumer", preExecuteRunnable));
   }
 
   /**
@@ -89,6 +89,7 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
    */
   protected abstract void setup();
 
+  @Override
   public boolean awaitTermination() {
     // if current thread has been interrupted before awaitTermination was called, we still give
     // executor a chance to proceeding. So clear the interrupt flag and reset it if needed before return.
@@ -108,18 +109,14 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
     return producerTerminated && consumerTerminated;
   }
 
-  /**
-   * Shutdown all the consumers and producers.
-   */
-  public void shutdownNow() {
-    producerExecutorService.shutdownNow();
-    consumerExecutorService.shutdownNow();
-  }
-
   @Override
   public void close() {
-    producerExecutorService.shutdown();
-    consumerExecutorService.shutdown();
+    if (!producerExecutorService.isShutdown()) {
+      producerExecutorService.shutdown();
+    }
+    if (!consumerExecutorService.isShutdown()) {
+      consumerExecutorService.shutdown();
+    }
   }
 
   /**

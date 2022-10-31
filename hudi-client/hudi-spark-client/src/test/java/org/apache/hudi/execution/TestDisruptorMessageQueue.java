@@ -45,6 +45,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -110,7 +111,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
     });
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferSize()).thenReturn(Option.of(16));
+    when(hoodieWriteConfig.getDisruptorWriteBufferSize()).thenReturn(Option.of(16));
     IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
@@ -138,7 +139,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new DisruptorExecutor(hoodieWriteConfig.getWriteBufferSize(), hoodieRecords.iterator(), consumer,
+      exec = new DisruptorExecutor(hoodieWriteConfig.getDisruptorWriteBufferSize(), hoodieRecords.iterator(), consumer,
           getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), getPreExecuteRunnable());
       int result = exec.execute();
       // It should buffer and write 100 records
@@ -220,26 +221,34 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
         IntStream.range(0, numProducers).boxed().collect(Collectors.toMap(Function.identity(), x -> 0));
 
     // setup consumer and start disruptor
-    queue.setHandlers(new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
-      @Override
-      public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
-        // Read recs and ensure we have covered all producer recs.
-        final HoodieRecord rec = payload.record;
-        Pair<Integer, Integer> producerPos = keyToProducerAndIndexMap.get(rec.getRecordKey());
-        Integer lastSeenPos = lastSeenMap.get(producerPos.getLeft());
-        countMap.put(producerPos.getLeft(), countMap.get(producerPos.getLeft()) + 1);
-        lastSeenMap.put(producerPos.getLeft(), lastSeenPos + 1);
-        // Ensure we are seeing the next record generated
-        assertEquals(lastSeenPos + 1, producerPos.getRight().intValue());
-      }
+          @Override
+          public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
+            // Read recs and ensure we have covered all producer recs.
+            final HoodieRecord rec = payload.record;
+            Pair<Integer, Integer> producerPos = keyToProducerAndIndexMap.get(rec.getRecordKey());
+            Integer lastSeenPos = lastSeenMap.get(producerPos.getLeft());
+            countMap.put(producerPos.getLeft(), countMap.get(producerPos.getLeft()) + 1);
+            lastSeenMap.put(producerPos.getLeft(), lastSeenPos + 1);
+            // Ensure we are seeing the next record generated
+            assertEquals(lastSeenPos + 1, producerPos.getRight().intValue());
+          }
 
-      @Override
-      protected Integer getResult() {
-        return 0;
-      }
-    });
-    queue.start();
+          @Override
+          protected Integer getResult() {
+            return 0;
+          }
+        };
+
+    Method setHandlersFunc = queue.getClass().getDeclaredMethod("setHandlers", IteratorBasedQueueConsumer.class);
+    setHandlersFunc.setAccessible(true);
+    setHandlersFunc.invoke(queue, consumer);
+
+    Method startFunc = queue.getClass().getDeclaredMethod("start");
+    startFunc.setAccessible(true);
+    startFunc.invoke(queue);
 
     // start to produce records
     CompletableFuture<Void> producerFuture = CompletableFuture.allOf(producers.stream().map(producer -> {

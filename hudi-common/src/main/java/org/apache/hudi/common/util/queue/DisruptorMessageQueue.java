@@ -25,10 +25,13 @@ import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
@@ -38,10 +41,13 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   private final Disruptor<HoodieDisruptorEvent> queue;
   private final Function<I, O> transformFunction;
   private final RingBuffer<HoodieDisruptorEvent> ringBuffer;
+  private final Lock closeLocker = new ReentrantLock();
+
+  private boolean isDisruptorClosed = false;
 
   public DisruptorMessageQueue(Option<Integer> bufferSize, Function<I, O> transformFunction, Option<String> waitStrategyName, int totalProducers, Runnable preExecuteRunnable) {
     WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyName);
-    HoodieDaemonThreadFactory threadFactory = new HoodieDaemonThreadFactory(preExecuteRunnable);
+    CustomizedThreadFactory threadFactory = new CustomizedThreadFactory("disruptor", true, preExecuteRunnable);
 
     this.queue = new Disruptor<>(new HoodieDisruptorEventFactory(), bufferSize.get(), threadFactory, totalProducers > 1 ? ProducerType.MULTI : ProducerType.SINGLE, waitStrategy);
     this.ringBuffer = queue.getRingBuffer();
@@ -50,7 +56,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   @Override
   public long size() {
-    return queue.getBufferSize();
+    return ringBuffer.getBufferSize() - ringBuffer.remainingCapacity();
   }
 
   @Override
@@ -71,16 +77,21 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   }
 
   @Override
-  public void close() {
-    // Waits until all events currently in the disruptor have been processed by all event processors
-    queue.shutdown();
-  }
-
   public boolean isEmpty() {
     return ringBuffer.getBufferSize() == ringBuffer.remainingCapacity();
   }
 
-  public void setHandlers(IteratorBasedQueueConsumer consumer) {
+  @Override
+  public void close() {
+    closeLocker.lock();
+    if (!isDisruptorClosed) {
+      queue.shutdown();
+      isDisruptorClosed = true;
+    }
+    closeLocker.unlock();
+  }
+
+  protected void setHandlers(IteratorBasedQueueConsumer consumer) {
     queue.handleEventsWith(new EventHandler<HoodieDisruptorEvent>() {
 
       @Override
@@ -90,7 +101,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     });
   }
 
-  public void start() {
+  protected void start() {
     queue.start();
   }
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
@@ -46,11 +45,6 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   public DisruptorExecutor(final Option<Integer> bufferSize, final Iterator<I> inputItr,
                            IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
     this(bufferSize, new IteratorBasedQueueProducer<>(inputItr), Option.of(consumer), transformFunction, waitStrategy, preExecuteRunnable);
-  }
-
-  public DisruptorExecutor(final Option<Integer> bufferSize, HoodieProducer<I> producer,
-                           Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
-    this(bufferSize, producer, consumer, transformFunction, Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), Functions.noop());
   }
 
   public DisruptorExecutor(final Option<Integer> bufferSize, HoodieProducer<I> producer,
@@ -92,8 +86,8 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   @Override
   protected void postAction() {
     try {
-      queue.close();
       super.close();
+      queue.close();
     } catch (IOException e) {
       throw new HoodieIOException("Catch IOException while closing DisruptorMessageQueue", e);
     }

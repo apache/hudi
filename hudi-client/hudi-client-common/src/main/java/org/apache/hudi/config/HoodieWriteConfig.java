@@ -244,15 +244,18 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(String.valueOf(4 * 1024 * 1024))
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
 
-  public static final ConfigProperty<Integer> WRITE_BUFFER_SIZE = ConfigProperty
+  public static final ConfigProperty<String> WRITE_DISRUPTOR_BUFFER_SIZE = ConfigProperty
       .key("hoodie.write.executor.disruptor.buffer.size")
-      .defaultValue(1024)
+      .defaultValue(String.valueOf(1024))
       .withDocumentation("The size of the Disruptor Executor ring buffer, must be power of 2");
 
   public static final ConfigProperty<String> WRITE_WAIT_STRATEGY = ConfigProperty
       .key("hoodie.write.executor.disruptor.wait.strategy")
       .defaultValue("BLOCKING_WAIT")
-      .withDocumentation("Strategy employed for making Disruptor Executor wait on a cursor.");
+      .withDocumentation("Strategy employed for making Disruptor Executor wait on a cursor. Other options are "
+          + "SLEEPING_WAIT, it attempts to be conservative with CPU usage by using a simple busy wait loop"
+          + "YIELDING_WAIT, it is designed for cases where there is the option to burn CPU cycles with the goal of improving latency"
+          + "BUSY_SPIN_WAIT, it can be used in low-latency systems, but puts the highest constraints on the deployment environment");
 
   public static final ConfigProperty<String> COMBINE_BEFORE_INSERT = ConfigProperty
       .key("hoodie.combine.before.insert")
@@ -1069,8 +1072,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return Option.of(getString(WRITE_WAIT_STRATEGY));
   }
 
-  public Option<Integer> getWriteBufferSize() {
-    return Option.of(getInt(WRITE_BUFFER_SIZE));
+  public Option<Integer> getDisruptorWriteBufferSize() {
+    return Option.of(Integer.parseInt(getStringOrDefault(WRITE_DISRUPTOR_BUFFER_SIZE)));
   }
 
   public boolean shouldCombineBeforeInsert() {
@@ -2377,7 +2380,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withWriteBufferSize(int size) {
-      writeConfig.setValue(WRITE_BUFFER_SIZE, String.valueOf(size));
+      writeConfig.setValue(WRITE_DISRUPTOR_BUFFER_SIZE, String.valueOf(size));
       return this;
     }
 

@@ -77,7 +77,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
     final List<HoodieRecord> consumedRecords = new ArrayList<>();
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferSize()).thenReturn(Option.of(8));
+    when(hoodieWriteConfig.getDisruptorWriteBufferSize()).thenReturn(Option.of(8));
     IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
@@ -97,7 +97,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new DisruptorExecutor(hoodieWriteConfig.getWriteBufferSize(), hoodieRecords.iterator(), consumer,
+      exec = new DisruptorExecutor(hoodieWriteConfig.getDisruptorWriteBufferSize(), hoodieRecords.iterator(), consumer,
           getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), getPreExecuteRunnable());
       int result = exec.execute();
       // It should buffer and write 100 records
@@ -125,7 +125,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferSize()).thenReturn(Option.of(1024));
+    when(hoodieWriteConfig.getDisruptorWriteBufferSize()).thenReturn(Option.of(1024));
     IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
@@ -145,7 +145,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
         };
 
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer>
-        executor = new DisruptorExecutor(hoodieWriteConfig.getWriteBufferSize(), hoodieRecords.iterator(), consumer,
+        executor = new DisruptorExecutor(hoodieWriteConfig.getDisruptorWriteBufferSize(), hoodieRecords.iterator(), consumer,
         getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), getPreExecuteRunnable());
 
     try {

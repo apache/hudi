@@ -43,7 +43,7 @@ public class QueueBasedExecutorFactory {
         return new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, consumer,
             transformFunction, preExecuteRunnable);
       case DISRUPTOR:
-        return new DisruptorExecutor<>(hoodieConfig.getWriteBufferSize(), inputItr, consumer,
+        return new DisruptorExecutor<>(hoodieConfig.getDisruptorWriteBufferSize(), inputItr, consumer,
             transformFunction, hoodieConfig.getWriteExecutorWaitStrategy(), preExecuteRunnable);
       default:
         throw new HoodieException("Unsupported Executor Type " + executorType);

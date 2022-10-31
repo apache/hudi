@@ -41,7 +41,7 @@ public enum ExecutorType {
   DISRUPTOR;
 
   public static List<String> getNames() {
-    List<String> names = new ArrayList<>(KeyGeneratorType.values().length);
+    List<String> names = new ArrayList<>(ExecutorType.values().length);
     Arrays.stream(KeyGeneratorType.values())
         .forEach(x -> names.add(x.name()));
     return names;

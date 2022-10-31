@@ -135,6 +135,7 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
     this.iterator = new QueueIterator();
   }
 
+  @Override
   public long size() {
     return this.queue.size();
   }
@@ -174,6 +175,7 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
    *
    * @param t Item to be queued
    */
+  @Override
   public void insertRecord(I t) throws Exception {
     // If already closed, throw exception
     if (isWriteDone.get()) {
@@ -203,6 +205,7 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
    * Reader interface but never exposed to outside world as this is a single consumer queue. Reading is done through a
    * singleton iterator for this queue.
    */
+  @Override
   public Option<O> readNextRecord() {
     if (this.isReadDone.get()) {
       return Option.empty();
@@ -237,6 +240,7 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
   /**
    * Puts an empty entry to queue to denote termination.
    */
+  @Override
   public void close() {
     // done queueing records notifying queue-reader.
     isWriteDone.set(true);
@@ -252,6 +256,7 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
   /**
    * API to allow producers and consumer to communicate termination due to failure.
    */
+  @Override
   public void markAsFailed(Throwable e) {
     this.hasFailed.set(e);
     // release the permits so that if the queueing thread is waiting for permits then it will
