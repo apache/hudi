@@ -128,7 +128,7 @@ class TestQueryTable extends HoodieSparkSqlTestBase {
 
       spark.sql(s"set hoodie.datasource.v2.read.enable=true")
 
-      val query =String.format("SELECT f.id, f.price, f.ts, f.dt, f.name FROM %s f JOIN dim d ON f.name = d.name AND d.id = 1 ORDER BY id", tableName)
+      val query = String.format("SELECT f.id, f.price, f.ts, f.dt, f.name FROM %s f JOIN dim d ON f.name = d.name AND d.id = 1 ORDER BY id", tableName)
       val output = spark.sql("EXPLAIN EXTENDED " + query).collectAsList()
       val actualFilterCount = StringUtils.countMatches(output.get(0).getString(0), "dynamicpruningexpression")
       checkAnswer(query)(
