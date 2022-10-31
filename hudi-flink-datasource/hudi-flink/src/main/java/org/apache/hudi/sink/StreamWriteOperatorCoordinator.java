@@ -63,7 +63,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
@@ -152,12 +151,6 @@ public class StreamWriteOperatorCoordinator
    * The checkpoint metadata.
    */
   private CkpMetadata ckpMetadata;
-
-  /**
-   * Counter for the failed tasks, a number within the range (0, task_num) means
-   * a partial failover.
-   */
-  private transient AtomicInteger failedCnt;
 
   /**
    * Constructs a StreamingSinkOperatorCoordinator.
@@ -301,17 +294,6 @@ public class StreamWriteOperatorCoordinator
     // reset the event
     this.eventBuffer[i] = null;
     LOG.warn("Reset the event for task [" + i + "]", throwable);
-
-    // based on the fact: the #subtaskFailed in invoked before all the failed tasks scheduling,
-    // when a sub-task event is received, we can decide whether it recovers from a partial or complete failover,
-    // then to reuse the current instant(PARTIAL) or start a new one(COMPLETE).
-
-    // reset the ckp metadata for either partial or complete failover
-    if (this.failedCnt.get() == 0) {
-      this.ckpMetadata.reset();
-    }
-    // inc the failed tasks counter
-    this.failedCnt.incrementAndGet();
   }
 
   @Override
@@ -365,14 +347,6 @@ public class StreamWriteOperatorCoordinator
 
   private void reset() {
     this.eventBuffer = new WriteMetadataEvent[this.parallelism];
-    this.failedCnt = new AtomicInteger(0);
-  }
-
-  /**
-   * Checks whether it is a PARTIAL failover.
-   */
-  private boolean isPartialFailover() {
-    return this.failedCnt.get() > 0 && this.failedCnt.get() < this.parallelism;
   }
 
   /**
@@ -436,16 +410,6 @@ public class StreamWriteOperatorCoordinator
     if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
       // start to initialize the instant.
       initInstant(event.getInstantTime());
-    } else if (isPartialFailover()) {
-      // if the bootstrap event comes from a partial failover,
-      // decrement the failed tasks by one.
-
-      // if all the failed task bootstrap events are received, send a start instant
-      // to the ckp metadata and unblock the data flushing.
-      if (this.failedCnt.decrementAndGet() <= 0) {
-        this.ckpMetadata.startInstant(this.instant);
-        this.failedCnt.set(0);
-      }
     }
   }
 
