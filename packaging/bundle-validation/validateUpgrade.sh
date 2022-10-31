@@ -76,9 +76,9 @@ SAVEIFS=$IFS   # Save current IFS (Internal Field Separator)
 IFS=$'\n'      # Change IFS to newline char
 VERSIONS=($VERSIONS) # split the `names` string into an array by the same name
 IFS=$SAVEIFS   # Restore original IFS
-for VERSION in "$VERSIONS[@]"
+for (( i=0; i<${#VERSIONS[@]}; i++ ))
 do
-    echo "Version number $VERSION"
+    echo "Version number ${VERSIONS[$i]}"
     #upgrade_from_version $VERSION
 done
 
