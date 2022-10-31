@@ -94,6 +94,8 @@ test_utilities_bundle_helper () {
         echo "::error::functions.sh $SHELL_RESULT"
         exit 1
     fi
+    echo "::debug::this is the log file":
+    
     echo "::warning::functions.sh done validating deltastreamer in spark shell"
 }
 
@@ -138,8 +140,6 @@ test_upgrade_bundle () {
     #move batch 2 away from the data folder
     mkdir /tmp/datadir
     mv $STOCK_DATA_DIR/batch_2.json /tmp/datadir/
-    echo "STOCK_DATA_DIR is"
-    ls $STOCK_DATA_DIR
     OUTPUT_DIR=/tmp/hudi-utilities-test/
     rm -r $OUTPUT_DIR
 
@@ -154,8 +154,6 @@ test_upgrade_bundle () {
 
     #move batch 2 back to the data folder
     mv /tmp/datadir/batch_2.json $STOCK_DATA_DIR/
-    echo "STOCK_DATA_DIR is"
-    ls $STOCK_DATA_DIR
 
     #run the deltastreamer and validate
     echo "::warning::functions.sh testing upgrade bundle on batch_2"

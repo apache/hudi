@@ -20,6 +20,8 @@ val hudiDf = spark.read.format("hudi").load("/tmp/hudi-utilities-test/")
 val inputDf = spark.read.format("json").load("/opt/bundle-validation/data/stocks/data")
 val hudiCount = hudiDf.select("date", "key").distinct.count
 val srcCount = inputDf.select("date", "key").distinct.count
+println(s"hudi count: $hudiCount")
+println(s"src count: $srcCount")
 if (hudiCount == srcCount) System.exit(0)
 println(s"Counts don't match hudiCount: $hudiCount, srcCount: $srcCount")
 System.exit(1)
