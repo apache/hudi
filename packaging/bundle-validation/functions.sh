@@ -94,8 +94,8 @@ test_utilities_bundle_helper () {
         echo "::error::functions.sh $SHELL_RESULT"
         exit 1
     fi
-    echo "::debug::this is the log file":
-    
+    echo "::debug::this is the log file"
+    cat $LOGFILE
     echo "::warning::functions.sh done validating deltastreamer in spark shell"
 }
 
