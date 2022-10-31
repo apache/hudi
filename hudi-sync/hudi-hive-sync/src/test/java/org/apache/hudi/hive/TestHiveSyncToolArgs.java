@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.config.TypedProperties;
+
 import com.beust.jcommander.JCommander;
 import org.junit.jupiter.api.Test;
 
@@ -41,11 +43,12 @@ public class TestHiveSyncToolArgs {
         "--spark-datasource"};
     cmd.parse(args);
 
-    assertEquals("hms", params.toProps().getProperty(HIVE_SYNC_MODE.key()));
-    assertEquals("/table_path", params.toProps().getProperty(META_SYNC_BASE_PATH.key()));
-    assertEquals("table_name", params.toProps().getProperty(META_SYNC_TABLE_NAME.key()));
-    assertFalse(params.toProps().getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key()));
-    assertTrue(params.toProps().getBoolean(HIVE_USE_JDBC.key()), "Default should be true");
-    assertFalse(params.toProps().getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key()), "Default should be false");
+    final TypedProperties props = params.toProps();
+    assertEquals("hms", props.getProperty(HIVE_SYNC_MODE.key()));
+    assertEquals("/table_path", props.getProperty(META_SYNC_BASE_PATH.key()));
+    assertEquals("table_name", props.getProperty(META_SYNC_TABLE_NAME.key()));
+    assertTrue(props.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key()), "should be true because present in args");
+    assertFalse(props.contains(HIVE_USE_JDBC.key()), "should be not present due to not in args");
+    assertFalse(props.contains(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key()), "should be not present due to not in args");
   }
 }
