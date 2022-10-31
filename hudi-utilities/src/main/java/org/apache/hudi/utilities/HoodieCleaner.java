@@ -67,6 +67,7 @@ public class HoodieCleaner {
     HoodieWriteConfig hoodieCfg = getHoodieClientConfig();
     SparkRDDWriteClient client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), hoodieCfg);
     client.clean();
+    client.close();
   }
 
   private HoodieWriteConfig getHoodieClientConfig() {
