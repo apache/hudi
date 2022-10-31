@@ -27,8 +27,6 @@ ARG HIVE_VERSION=3.1.3
 ARG DERBY_VERSION=10.14.1.0
 ARG SPARK_VERSION=3.1.3
 ARG SPARK_HADOOP_VERSION=2.7
-ARG SPARK_PROFILE=spark3.1
-ARG SCALA_VERSION=2.12
 
 RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz -P "$WORKDIR" \
     && tar -xf $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz -C $WORKDIR/ \
@@ -50,43 +48,9 @@ RUN wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK
     && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz
 ENV SPARK_HOME=$WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION
 
-
-# Utilities bundles
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_$SCALA_VERSION/0.11.0/hudi-utilities-bundle_$SCALA_VERSION-0.11.0.jar -P "$WORKDIR" 
-ENV UTILITIES_BUNDLE_0_11_0=$WORKDIR/hudi-utilities-bundle_$SCALA_VERSION-0.11.0.jar
-
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_$SCALA_VERSION/0.11.1/hudi-utilities-bundle_$SCALA_VERSION-0.11.1.jar -P "$WORKDIR" 
-ENV UTILITIES_BUNDLE_0_11_1=$WORKDIR/hudi-utilities-bundle_$SCALA_VERSION-0.11.1.jar
-
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_$SCALA_VERSION/0.12.0/hudi-utilities-bundle_$SCALA_VERSION-0.12.0.jar -P "$WORKDIR" 
-ENV UTILITIES_BUNDLE_0_12_0=$WORKDIR/hudi-utilities-bundle_$SCALA_VERSION-0.12.0.jar
-
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_$SCALA_VERSION/0.12.1/hudi-utilities-bundle_$SCALA_VERSION-0.12.1.jar -P "$WORKDIR" 
-ENV UTILITIES_BUNDLE_0_12_1=$WORKDIR/hudi-utilities-bundle_$SCALA_VERSION-0.12.1.jar
-
-
-# Utilities slim bundles
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-slim-bundle_$SCALA_VERSION/0.11.0/hudi-utilities-slim-bundle_$SCALA_VERSION-0.11.0.jar -P "$WORKDIR" 
-ENV UTILITIES_SLIM_BUNDLE_0_11_0=$WORKDIR/hudi-utilities-slim-bundle_$SCALA_VERSION-0.11.0.jar
-
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-slim-bundle_$SCALA_VERSION/0.11.1/hudi-utilities-slim-bundle_$SCALA_VERSION-0.11.1.jar -P "$WORKDIR" 
-ENV UTILITIES_SLIM_BUNDLE_0_11_1=$WORKDIR/hudi-utilities-slim-bundle_$SCALA_VERSION-0.11.1.jar
-
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-slim-bundle_$SCALA_VERSION/0.12.0/hudi-utilities-slim-bundle_$SCALA_VERSION-0.12.0.jar -P "$WORKDIR" 
-ENV UTILITIES_SLIM_BUNDLE_0_12_0=$WORKDIR/hudi-utilities-slim-bundle_$SCALA_VERSION-0.12.0.jar
-
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-slim-bundle_$SCALA_VERSION/0.12.1/hudi-utilities-slim-bundle_$SCALA_VERSION-0.12.1.jar -P "$WORKDIR" 
-ENV UTILITIES_SLIM_BUNDLE_0_12_1=$WORKDIR/hudi-utilities-slim-bundle_$SCALA_VERSION-0.12.1.jar
-
-# Spark bundles
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION/0.11.0/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION-0.11.0.jar -P "$WORKDIR"
-ENV SPARK_BUNDLE_0_11_0=$WORKDIR/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION-0.11.0.jar
-
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION/0.11.1/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION-0.11.1.jar -P "$WORKDIR"
-ENV SPARK_BUNDLE_0_11_1=$WORKDIR/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION-0.11.1.jar
-
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION/0.12.0/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION-0.12.0.jar -P "$WORKDIR"
-ENV SPARK_BUNDLE_0_12_0=$WORKDIR/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION-0.12.0.jar
-
-RUN wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION/0.12.1/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION-0.12.1.jar -P "$WORKDIR"
-ENV SPARK_BUNDLE_0_12_1=$WORKDIR/hudi-$SPARK_PROFILE-bundle_$SCALA_VERSION-0.12.1.jar
+RUN cp $DERBY_HOME/lib/derbyclient.jar $SPARK_HOME/jars/
+COPY hive-site.xml $HIVE_HOME/conf/
+RUN ln -sf $HIVE_HOME/conf/hive-site.xml $SPARK_HOME/conf/hive-site.xml
+COPY spark-defaults.conf $SPARK_HOME/conf/
+COPY validate.scala .
+COPY validate.sh .
