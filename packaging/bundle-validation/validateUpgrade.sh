@@ -32,6 +32,7 @@ ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 SCALA_VERSION=2.12
+SPARK_PROFILE=spark3.1
 source functions.sh
 
 upgrade_from_version () {
