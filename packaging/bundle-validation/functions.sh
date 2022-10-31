@@ -87,7 +87,7 @@ test_utilities_bundle_helper () {
     echo "::warning::functions.sh output size is $OUTPUT_SIZE"
 
     echo "::warning::functions.sh validating deltastreamer in spark shell"
-    SHELL_COMMAND="$SPARK_HOME/bin/spark-shell --jars $OPT_JARS $MAIN_JAR -i $WORKDIR/utilities/validate.scala"
+    SHELL_COMMAND="$SPARK_HOME/bin/spark-shell --jars $EXTRA_JARS $MAIN_JAR -i $WORKDIR/utilities/validate.scala"
     echo "::debug::this is the shell command: $SHELL_COMMAND"
     LOGFILE="$WORKDIR/${FUNCNAME[0]}.log"
     $SHELL_COMMAND >> $LOGFILE

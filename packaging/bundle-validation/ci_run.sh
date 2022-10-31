@@ -78,6 +78,7 @@ cp ${GITHUB_WORKSPACE}/docker/demo/config/schema.avsc $TMP_DATA_DIR/stocks/
 # build docker image
 cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1
 docker build \
+--no-cache \
 --build-arg HADOOP_VERSION=$HADOOP_VERSION \
 --build-arg HIVE_VERSION=$HIVE_VERSION \
 --build-arg DERBY_VERSION=$DERBY_VERSION \
