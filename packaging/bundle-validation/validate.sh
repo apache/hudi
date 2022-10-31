@@ -48,19 +48,6 @@ then
       exit 1
   fi
   echo "::warning::validate.sh done testing utilities bundle"
-
-  #example of testing upgrade with utilties bundle
-  echo "::warning::validate.sh testing upgrade from 0.11.0 to current utilities bundle"
-  FIRST_MAIN_ARG=$UTILITIES_BUNDLE_0_11_0
-  FIRST_ADDITIONAL_ARG=""
-  SECOND_MAIN_ARG=$JARS_DIR/utilities.jar
-  SECOND_ADDITIONAL_ARG=""
-  test_upgrade_bundle
-  if [ "$?" -ne 0 ]; then
-      exit 1
-  fi
-  echo "::warning::validate.sh done testing upgrade from 0.11.0 to current utilities bundle"
-
 else
   echo "::warning::validate.sh skip testing utilities bundle for non-spark2.4 & non-spark3.1 build"
 fi
@@ -72,17 +59,6 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done testing utilities slim bundle"
 
-#example of testing upgrade with utilties slim bundle
-echo "::warning::validate.sh testing upgrade from 0.11.0 to current utilities slim bundle"
-FIRST_MAIN_ARG=$UTILITIES_SLIM_BUNDLE_0_11_0
-FIRST_ADDITIONAL_ARG=$SPARK_BUNDLE_0_11_0
-SECOND_MAIN_ARG=$JARS_DIR/utilities-slim.jar
-SECOND_ADDITIONAL_ARG=$JARS_DIR/spark.jar
-test_upgrade_bundle
-if [ "$?" -ne 0 ]; then
-    exit 1
-fi
-echo "::warning::validate.sh done testing upgrade from 0.11.0 to current utilities slim bundle"
 
 
 

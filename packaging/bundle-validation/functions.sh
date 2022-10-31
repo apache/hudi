@@ -96,8 +96,6 @@ test_utilities_bundle_helper () {
         echo "::error::functions.sh $SHELL_RESULT"
         exit 1
     fi
-    echo "::debug::this is the log file"
-    cat $LOGFILE
     echo "::warning::functions.sh done validating deltastreamer in spark shell"
 }
 
@@ -159,7 +157,8 @@ test_upgrade_bundle () {
 
     #run the deltastreamer and validate
     echo "::warning::functions.sh testing upgrade bundle on batch_2"
-    EXPECTED_SIZE=1000
+    EXPECTED_SIZE=500
+    #EXPECTED_SIZE=1000
     test_utilities_bundle_helper $SECOND_MAIN_ARG $SECOND_ADDITIONAL_ARG
     if [ "$?" -ne 0 ]; then
         exit 1
