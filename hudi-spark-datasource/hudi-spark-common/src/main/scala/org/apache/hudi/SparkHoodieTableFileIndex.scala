@@ -213,7 +213,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     }
   }
 
-  protected def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
+  def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
       Array.empty

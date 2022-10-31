@@ -25,7 +25,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieLogFileWithPartition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
@@ -36,6 +36,7 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
 
@@ -213,7 +214,24 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         PartitionedFile(getPartitionColumnsAsInternalRow(file.getFileStatus), filePath, 0, file.getFileLen)
       }
 
-      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
+      if (shouldExtractPartitionValuesFromPartitionPath) {
+        val partitionColumnValues =fileIndex.parsePartitionColumnValues(partitionColumns,
+          getRelativePartitionPath(new Path(basePath), logFiles.head.getPath.getParent)).map(
+          // "String" type in schema is String
+          par => if (par.isInstanceOf[UTF8String]) {
+            String.valueOf(par)
+          } else {
+            par
+          }
+        )
+
+        val logFileWithPartition = logFiles.map(log => {
+          new HoodieLogFileWithPartition(log, partitionColumnValues)
+        })
+        HoodieMergeOnReadFileSplit(partitionedBaseFile, logFileWithPartition)
+      } else {
+        HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
+      }
     }.toList
   }
 }

@@ -107,6 +107,33 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
   }
 
+  @SuppressWarnings("unchecked")
+  protected HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+                                         String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
+                                         boolean reverseReader, int bufferSize, String spillableMapBasePath,
+                                         Option<InstantRange> instantRange,
+                                         ExternalSpillableMap.DiskMapType diskMapType,
+                                         boolean isBitCaskDiskMapCompressionEnabled,
+                                         boolean withOperationField, boolean forceFullScan,
+                                         Option<String> partitionName, InternalSchema internalSchema,
+                                         boolean useScanV2, Object[] partitionValues) {
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
+        instantRange, withOperationField,
+        forceFullScan, partitionName, internalSchema, useScanV2, partitionValues);
+    try {
+      // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
+      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
+          new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
+      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
+    } catch (IOException e) {
+      throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
+    }
+
+    if (forceFullScan) {
+      performScan();
+    }
+  }
+
   protected void performScan() {
     // Do the scan and merge
     timer.startTimer();
@@ -233,6 +260,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     // Use scanV2 method.
     private boolean useScanV2 = false;
 
+    private Object[] partitionValues;
+
     @Override
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -331,6 +360,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    public Builder withPartitionValues(Object[] partitionValues) {
+      this.partitionValues = partitionValues;
+      return this;
+    }
+
     @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
@@ -340,7 +374,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName), internalSchema, useScanV2);
+          Option.ofNullable(partitionName), internalSchema, useScanV2, partitionValues);
     }
   }
 }

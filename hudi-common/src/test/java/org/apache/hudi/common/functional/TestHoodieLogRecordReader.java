@@ -87,6 +87,7 @@ public class TestHoodieLogRecordReader {
     String partitionField1 = "partition1";
     String partitionField2 = "partition2";
     Path partitionPath = new Path(tmpDir.toString(), partitionValue1 + "/" + partitionValue2);
+    Object[] partitionValues = {"str_partition", 100};
 
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), "true");
@@ -141,6 +142,7 @@ public class TestHoodieLogRecordReader {
         .withBufferSize(4096)
         .withDiskMapType(BITCASK)
         .withPartition(partitionValue1 + "/" + partitionValue2)
+        .withPartitionValues(partitionValues)
         .build();
     assertEquals(200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
@@ -172,6 +174,7 @@ public class TestHoodieLogRecordReader {
     int partitionValue2 = 100;
     String partitionField1 = "partition1";
     String partitionField2 = "partition2";
+    Object[] partitionValues = {"str_partition", 100};
 
     String hiveStylePartitionValue = partitionField1 + "=" + partitionValue1 + "/" + partitionField2 + "=" + partitionValue2;
     Path partitionPath = new Path(tmpDir.toString(), hiveStylePartitionValue);
@@ -229,6 +232,7 @@ public class TestHoodieLogRecordReader {
         .withBufferSize(4096)
         .withDiskMapType(BITCASK)
         .withPartition(hiveStylePartitionValue)
+        .withPartitionValues(partitionValues)
         .build();
     assertEquals(200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);

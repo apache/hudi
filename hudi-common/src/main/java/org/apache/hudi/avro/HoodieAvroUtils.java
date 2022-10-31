@@ -719,19 +719,6 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * convert a String value to primary type, this method is used to convert partition value
-   * extracted from path to the type defined in the schema
-   * @param oldValue
-   * @param newSchema
-   * @return value for the new schema
-   */
-  public static Object convertStringToSchemaSpecifiedType(String oldValue, Schema newSchema) {
-    Schema oldSchema = new Schema.Field(newSchema.getName(), Schema.create(Schema.Type.STRING), null, "").schema();
-    // The type of the new schema can be a UNION, we should get the real schema.
-    return rewritePrimaryType(oldValue, oldSchema, getActualSchemaFromUnion(newSchema, oldValue));
-  }
-
-  /**
    * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the new schema.
    * support deep rewrite for nested record.
    * This particular method does the following things :
@@ -887,30 +874,21 @@ public class HoodieAvroUtils {
     switch (newSchema.getType()) {
       case NULL:
       case BOOLEAN:
-        if (oldSchema.getType() == Schema.Type.STRING) {
-          return Boolean.valueOf(oldValue.toString());
-        }
         break;
       case INT:
         if (newSchema.getLogicalType() == LogicalTypes.date() && oldSchema.getType() == Schema.Type.STRING) {
           return fromJavaDate(java.sql.Date.valueOf(oldValue.toString()));
-        } else if (oldSchema.getType() == Schema.Type.STRING) {
-          return Integer.parseInt(oldValue.toString());
         }
         break;
       case LONG:
         if (oldSchema.getType() == Schema.Type.INT) {
           return ((Integer) oldValue).longValue();
-        } else if (oldSchema.getType() == Schema.Type.STRING) {
-          return Long.parseLong(oldValue.toString());
         }
         break;
       case FLOAT:
         if ((oldSchema.getType() == Schema.Type.INT)
                 || (oldSchema.getType() == Schema.Type.LONG)) {
           return oldSchema.getType() == Schema.Type.INT ? ((Integer) oldValue).floatValue() : ((Long) oldValue).floatValue();
-        } else if (oldSchema.getType() == Schema.Type.STRING) {
-          return Float.parseFloat(oldValue.toString());
         }
         break;
       case DOUBLE:
@@ -921,8 +899,6 @@ public class HoodieAvroUtils {
           return ((Integer) oldValue).doubleValue();
         } else if (oldSchema.getType() == Schema.Type.LONG) {
           return ((Long) oldValue).doubleValue();
-        } else if (oldSchema.getType() == Schema.Type.STRING) {
-          return Double.parseDouble(oldValue.toString());
         }
         break;
       case BYTES:
