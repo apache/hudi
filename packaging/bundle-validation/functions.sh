@@ -60,6 +60,8 @@ test_utilities_bundle_helper () {
     if [[ -n $EXTRA_JARS ]]; then
         OPT_JARS="--jars $EXTRA_JARS"
     fi
+    echo "VEXLER doing ls 63"
+    ls /opt/bundle-validation/data/stocks/data
 
     echo "::warning::functions.sh running deltastreamer"
     $SPARK_HOME/bin/spark-submit \
