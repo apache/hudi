@@ -110,14 +110,17 @@ public class HiveSyncConfig extends HoodieSyncConfig {
             + "org.apache.hudi input format.")
     public boolean usePreApacheInputFormat;
     @Deprecated
-    @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url", arity = 1)
-    public Boolean useJdbc = true;
+    @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
+    public Boolean useJdbc = Boolean.parseBoolean(HIVE_USE_JDBC.defaultValue());
     @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")
     public String metastoreUris;
     @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms,glue,jdbc and hiveql")
     public String syncMode;
-    @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database", arity = 1)
-    public boolean autoCreateDatabase = true;
+    //TODO: The default value of HIVE_AUTO_CREATE_DATABASE is true, while default value of boolean parameter in JCommander is false.
+    // Setting arity = 1 can solve the problem, but this is a breaking change for users and will lead inconsistency if an option default changes from true to false.
+    // "--use-jdbc" and "--spark-datasource" have the same problem.
+    @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
+    public boolean autoCreateDatabase = Boolean.parseBoolean(HIVE_AUTO_CREATE_DATABASE.defaultValue());
     @Parameter(names = {"--ignore-exceptions"}, description = "Ignore hive exceptions")
     public boolean ignoreExceptions;
     @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
@@ -135,8 +138,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     public boolean omitMetaFields;
     @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
     public Integer batchSyncNum;
-    @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.", arity = 1)
-    public boolean syncAsSparkDataSourceTable = true;
+    @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.")
+    public boolean syncAsSparkDataSourceTable = Boolean.parseBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE.defaultValue());;
     @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
     public Integer sparkSchemaLengthThreshold;
     @Parameter(names = {"--bucket-sync"}, description = "use bucket sync")
