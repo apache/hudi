@@ -78,14 +78,17 @@ public class ArchivedCommitsCommand {
           help = "Maximum number of instants to retain in the active timeline. See hoodie.keep.max.commits",
           defaultValue = "30") int maxCommits,
       @ShellOption(value = {"--commitsRetained"}, help = "Number of commits to retain, without cleaning",
-          defaultValue = "10") int retained) {
+          defaultValue = "10") int retained,
+      @ShellOption(value = {"--enableMetadata"},
+          help = "Enable the internal metadata table which serves table metadata like level file listings",
+          defaultValue = "true") boolean enableMetadata) {
 
     initJavaSparkContext();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits,maxCommits).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(retained).build())
         .withEmbeddedTimelineServerEnabled(false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);

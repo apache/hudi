@@ -60,7 +60,7 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath,timestamp, hadoopConf());
     }
 
-    Object cmdResult = shell.evaluate(() -> "trigger archival --minCommits 2 --maxCommits 3 --commitsRetained 1");
+    Object cmdResult = shell.evaluate(() -> "trigger archival --minCommits 2 --maxCommits 3 --commitsRetained 1 --enableMetadata false");
     assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
