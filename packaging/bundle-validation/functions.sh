@@ -135,7 +135,7 @@ test_utilities_bundle () {
 ##
 test_upgrade_bundle () {
     #move batch 2 away from the data folder
-    mkdir /tmp/dataholder
+    mkdir /tmp/datadir
     mv $STOCK_DATA_DIR/batch_2.json /tmp/datadir/
     OUTPUT_DIR=/tmp/hudi-utilities-test/
     rm -r $OUTPUT_DIR

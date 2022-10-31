@@ -28,7 +28,10 @@
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 STOCK_DATA_DIR=/opt/bundle-validation/data/stocks/data
-
+ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
+ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
+ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
+SCALA_VERSION=2.12
 source functions.sh
 
 upgrade_from_version () {
@@ -64,6 +67,7 @@ upgrade_from_version () {
     echo "::warning::validateUpgrade.sh done testing upgrade with utilities slim version $BUNDLE_VERSION"
 }
 
+apk add curl
 
 curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_2.11/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -m 5 -v '-' | while read line ; do upgrade_from_version $line ; done
 
