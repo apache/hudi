@@ -154,7 +154,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Names of partition field
   private Option<String[]> partitionFields;
   // Names of partition field
-  private Object[] partitionValues;
+  private Option<Object[]> partitionValues;
   private boolean dropPartitions = false;
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
@@ -171,7 +171,7 @@ public abstract class AbstractHoodieLogRecordReader {
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField, boolean forceFullScan,
                                           Option<String> partitionName, InternalSchema internalSchema,
-                                          boolean useScanV2, Object[] partitionValues) {
+                                          boolean useScanV2, Option<Object[]> partitionValues) {
     this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, useScanV2);
     this.partitionValues = partitionValues;
@@ -653,11 +653,12 @@ public abstract class AbstractHoodieLogRecordReader {
         IndexedRecord currentRecord = recordIterator.next();
         IndexedRecord record = schemaOption.isPresent() ? HoodieAvroUtils.rewriteRecordWithNewSchema(currentRecord, schemaOption.get(), Collections.emptyMap()) : currentRecord;
 
-        if (this.dropPartitions && this.partitionFields.isPresent()) {
+        if (this.dropPartitions && this.partitionFields.isPresent() && this.partitionValues.isPresent()) {
           Schema schema = record.getSchema();
           String[] partitionFieldArray = this.partitionFields.get();
+          Object[] partitionValueArray = this.partitionValues.get();
           for (int i = 0; i < partitionFieldArray.length; i++) {
-            record.put(schema.getField(partitionFieldArray[i]).pos(), this.partitionValues[i]);
+            record.put(schema.getField(partitionFieldArray[i]).pos(), partitionValueArray[i]);
           }
         }
 

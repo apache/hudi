@@ -214,8 +214,8 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         PartitionedFile(getPartitionColumnsAsInternalRow(file.getFileStatus), filePath, 0, file.getFileLen)
       }
 
-      if (shouldExtractPartitionValuesFromPartitionPath) {
-        val partitionColumnValues =fileIndex.parsePartitionColumnValues(partitionColumns,
+      if (shouldExtractPartitionValuesFromPartitionPath && logFiles.nonEmpty) {
+        val partitionColumnValues = fileIndex.parsePartitionColumnValues(partitionColumns,
           getRelativePartitionPath(new Path(basePath), logFiles.head.getPath.getParent)).map(
           // "String" type in schema is String
           par => if (par.isInstanceOf[UTF8String]) {

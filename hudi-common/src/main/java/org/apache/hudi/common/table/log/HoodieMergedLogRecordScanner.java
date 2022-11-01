@@ -116,7 +116,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean forceFullScan,
                                          Option<String> partitionName, InternalSchema internalSchema,
-                                         boolean useScanV2, Object[] partitionValues) {
+                                         boolean useScanV2, Option<Object[]> partitionValues) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField,
         forceFullScan, partitionName, internalSchema, useScanV2, partitionValues);
@@ -374,7 +374,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName), internalSchema, useScanV2, partitionValues);
+          Option.ofNullable(partitionName), internalSchema, useScanV2, Option.ofNullable(partitionValues));
     }
   }
 }
