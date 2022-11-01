@@ -72,8 +72,11 @@ ls -l $TMP_JARS_DIR
 # Copy test dataset
 TMP_DATA_DIR=/tmp/data/$(date +%s)
 mkdir -p $TMP_DATA_DIR/stocks/data
-cp ${GITHUB_WORKSPACE}/docker/demo/data/*.json $TMP_DATA_DIR/stocks/data/
 cp ${GITHUB_WORKSPACE}/docker/demo/config/schema.avsc $TMP_DATA_DIR/stocks/
+#We want all the data before 10 in batch_1 and all the data after in batch_2
+head -n 1783 ${GITHUB_WORKSPACE}/docker/demo/data/batch_1.json > $TMP_DATA_DIR/stocks/data/batch_1.json
+tail -n +1784 ${GITHUB_WORKSPACE}/docker/demo/data/batch_1.json > $TMP_DATA_DIR/stocks/data/batch_2.json
+cat ${GITHUB_WORKSPACE}/docker/demo/data/batch_2.json >> $TMP_DATA_DIR/stocks/data/batch_2.json
 
 # build docker image
 cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1
@@ -95,5 +98,5 @@ docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bu
 
 if [[ ${BRANCH_NAME} == ci_bundle_upgrade* ]]; then
   docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-    -i hudi-ci-bundle-validation:$IMAGE_TAG bash validateUpgrade.sh ${SCALA_PROFILE#'scala-'} $SPARK_PROFILE 4
+    -i hudi-ci-bundle-validation:$IMAGE_TAG bash validateUpgrade.sh ${SCALA_PROFILE#'scala-'} $SPARK_PROFILE
 fi
