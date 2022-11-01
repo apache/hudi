@@ -49,6 +49,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -93,6 +94,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
+import static org.apache.hudi.config.HoodieWriteCommitCallbackConfig.CALLBACK_PREFIX;
 
 /**
  * Utilities for Flink stream read and write.
@@ -228,6 +230,7 @@ public class StreamerUtil {
                 .withFileSystemLockPath(StreamerUtil.getAuxiliaryPath(conf))
                 .build())
             .withPayloadConfig(getPayloadConfig(conf))
+            .withCallbackConfig(getWriteCommitCallbackConfig(conf))
             .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineService)
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
@@ -255,6 +258,18 @@ public class StreamerUtil {
         .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
         .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
         .build();
+  }
+
+  /**
+   * Returns write commit callback config with given configuration.
+   * @param conf the configuration
+   * @return a HoodieWriteCommitCallbackConfig instance
+   */
+  private static HoodieWriteCommitCallbackConfig getWriteCommitCallbackConfig(Configuration conf) {
+    Properties properties = new Properties();
+    properties.putAll(FlinkOptions.getPropertiesWithPrefix(conf.toMap(), CALLBACK_PREFIX));
+    return HoodieWriteCommitCallbackConfig.newBuilder()
+      .fromProperties(properties).build();
   }
 
   /**

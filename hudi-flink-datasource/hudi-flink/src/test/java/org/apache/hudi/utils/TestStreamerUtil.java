@@ -22,6 +22,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.util.StreamerUtil;
@@ -95,6 +97,18 @@ public class TestStreamerUtil {
         "The first argument should have newer instant time");
     // test very near instant time
     assertFalse(StreamerUtil.medianInstantTime("20211116115634", "20211116115633").isPresent());
+  }
+
+  @Test
+  public void testGetHoodieClientConfig() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    String isEnableCallback = "true";
+    String callbackClass = "org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback";
+    conf.setString(HoodieWriteCommitCallbackConfig.TURN_CALLBACK_ON.key(), isEnableCallback);
+    conf.setString(HoodieWriteCommitCallbackConfig.CALLBACK_CLASS_NAME.key(), callbackClass);
+    HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(conf, false);
+    assertThat(writeConfig.writeCommitCallbackOn(), is(Boolean.parseBoolean(isEnableCallback)));
+    assertThat(writeConfig.getCallbackClass(), is(callbackClass));
   }
 
   @Test
