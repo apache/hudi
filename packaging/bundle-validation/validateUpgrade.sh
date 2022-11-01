@@ -119,7 +119,7 @@ apk add curl
 
 if [[ $SPARK_HOME == *"spark-2.4"* ]] || [[  $SPARK_HOME == *"spark-3.1"* ]]
 then
-    VERSIONS=$(curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_${SCALA_VERSION}/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -v '-') 
+    VERSIONS=$(curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_${SCALA_VERSION}/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -m 8 -v '-') 
 
     #turn VERSIONS into an array because piping it messes with spark-shell
     SAVEIFS=$IFS   # Save current IFS (Internal Field Separator)
@@ -141,7 +141,7 @@ else
   echo "::warning::validate.sh skip testing utilities bundle for non-spark2.4 & non-spark3.1 build"
 fi
 
-VERSIONS=$(curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -v '-') 
+VERSIONS=$(curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -m 8 -v '-') 
 
 #turn VERSIONS into an array because piping it messes with spark-shell
 SAVEIFS=$IFS   # Save current IFS (Internal Field Separator)
