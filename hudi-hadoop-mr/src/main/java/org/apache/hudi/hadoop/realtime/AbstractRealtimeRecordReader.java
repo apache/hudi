@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodiePayloadProps;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -77,7 +78,7 @@ public abstract class AbstractRealtimeRecordReader {
 
   private boolean usesCustomPayload(HoodieTableMetaClient metaClient) {
     return !(metaClient.getTableConfig().getPayloadClass().contains(HoodieAvroPayload.class.getName())
-        || metaClient.getTableConfig().getPayloadClass().contains("org.apache.hudi.OverwriteWithLatestAvroPayload"));
+        || metaClient.getTableConfig().getPayloadClass().contains(OverwriteWithLatestAvroPayload.class.getName()));
   }
 
   /**
