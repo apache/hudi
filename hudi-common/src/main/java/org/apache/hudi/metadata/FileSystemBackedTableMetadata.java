@@ -62,14 +62,14 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
   @Override
   public FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException {
-    FileSystem fs = partitionPath.getFileSystem(hadoopConf.get());
+    FileSystem fs = FSUtils.getFs(partitionPath, hadoopConf.get());
     return FSUtils.getAllDataFilesInPartition(fs, partitionPath);
   }
 
   @Override
   public List<String> getAllPartitionPaths() throws IOException {
     Path basePath = new Path(datasetBasePath);
-    FileSystem fs = basePath.getFileSystem(hadoopConf.get());
+    FileSystem fs = FSUtils.getFs(basePath, hadoopConf.get());
     if (assumeDatePartitioning) {
       return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, datasetBasePath);
     }
@@ -84,7 +84,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
       // List all directories in parallel
       List<FileStatus> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
-        FileSystem fileSystem = path.getFileSystem(hadoopConf.get());
+        FileSystem fileSystem = FSUtils.getFs(path, hadoopConf.get());
         return Arrays.stream(fileSystem.listStatus(path));
       }, listingParallelism);
       pathsToList.clear();
@@ -96,7 +96,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
         // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
         // and second entry holds optionally a directory path to be processed further.
         List<Pair<Option<String>, Option<Path>>> result = engineContext.map(dirToFileListing, fileStatus -> {
-          FileSystem fileSystem = fileStatus.getPath().getFileSystem(hadoopConf.get());
+          FileSystem fileSystem = FSUtils.getFs(fileStatus.getPath(), hadoopConf.get());
           if (fileStatus.isDirectory()) {
             if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, fileStatus.getPath())) {
               return Pair.of(Option.of(FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath())), Option.empty());
@@ -131,7 +131,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
     List<Pair<String, FileStatus[]>> partitionToFiles = engineContext.map(partitionPaths, partitionPathStr -> {
       Path partitionPath = new Path(partitionPathStr);
-      FileSystem fs = partitionPath.getFileSystem(hadoopConf.get());
+      FileSystem fs = FSUtils.getFs(partitionPath, hadoopConf.get());
       return Pair.of(partitionPathStr, FSUtils.getAllDataFilesInPartition(fs, partitionPath));
     }, parallelism);
 

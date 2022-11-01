@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -79,7 +78,7 @@ public class BootstrapUtils {
       result.addAll(context.flatMap(subDirectories, directory -> {
         PathFilter pathFilter = getFilePathFilter(baseFileExtension);
         Path path = new Path(directory);
-        FileSystem fileSystem = path.getFileSystem(new Configuration());
+        FileSystem fileSystem = FSUtils.getFs(path, fs.getConf());
         RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
         List<Pair<HoodieFileStatus, Pair<Integer, String>>> res = new ArrayList<>();
         while (itr.hasNext()) {
