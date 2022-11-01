@@ -43,6 +43,7 @@ fi
 if [[ $SPARK_HOME == *"spark-2.4"* ]] || [[  $SPARK_HOME == *"spark-3.1"* ]]
 then
   echo "::warning::validate.sh testing utilities bundle"
+  TEST_NAME="utilities bundle"
   test_utilities_bundle $JARS_DIR/utilities.jar
   if [ "$?" -ne 0 ]; then
       exit 1
@@ -53,6 +54,7 @@ else
 fi
 
 echo "::warning::validate.sh testing utilities slim bundle"
+TEST_NAME="utilities slim bundle"
 test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark.jar
 if [ "$?" -ne 0 ]; then
     exit 1

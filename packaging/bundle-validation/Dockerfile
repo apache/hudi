@@ -16,12 +16,7 @@
 #
 
 ARG IMAGE_TAG=spark313hive313
-ARG SPARK_PROFILE=spark3.1
-ARG SCALA_VERSION=2.12
 FROM apachehudi/hudi-ci-bundle-validation-base:$IMAGE_TAG
-
-ENV SPARK_PROFILE=$SPARK_PROFILE
-ENV SCALA_VERSION=$SCALA_VERSION
 
 # configure the stack
 ADD . .

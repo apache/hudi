@@ -28,19 +28,38 @@
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 STOCK_DATA_DIR=/opt/bundle-validation/data/stocks/data
-ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
-ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
-ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
-SCALA_VERSION=2.12
-SPARK_PROFILE=spark3.1
+# link the jar names to easier to use names
+ln -s $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
+ln -s $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
+ln -s $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
+
+SCALA_VERSION=$1
+SPARK_PROFILE=$2
+NUM_VERSIONS=$3
 source functions.sh
 
+##
+# Function to do upgrade testing for a specific version of hudi
+#
+# 1st arg: hudi version
+#
+# env vars (defined in container):
+#   SPARK_HOME: path to the spark directory
+#   SCALA_VERSION: version of scala
+#   SPARK_PROFILE: spark+the rounded version eg. spark2.4 spark3.1 spark3.3
+##
 upgrade_from_version () {
     BUNDLE_VERSION=$1
     if [[ $SPARK_HOME == *"spark-2.4"* ]] || [[  $SPARK_HOME == *"spark-3.1"* ]]
     then
-        echo "::warning::validateUpgrade.sh testing upgrade with utilities version $BUNDLE_VERSION"
-        wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-utilities-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar -P $WORKDIR
+        TEST_NAME="upgrade utilities $BUNDLE_VERSION"
+        echo "::warning::validateUpgrade.sh starting test **$TEST_NAME**"
+        DOWNLOAD_URL="https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-utilities-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar"
+        wget $DOWNLOAD_URL -P $WORKDIR
+        if [ "$?" -ne 0 ]; then
+            echo "::error::validateUpgrade.sh **$TEST_NAME** failed to download $DOWNLOAD_URL"
+            exit 1
+        fi
         FIRST_MAIN_ARG=${WORKDIR}/hudi-utilities-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar
         FIRST_ADDITIONAL_ARG=""
         SECOND_MAIN_ARG=$JARS_DIR/utilities.jar
@@ -49,15 +68,26 @@ upgrade_from_version () {
         if [ "$?" -ne 0 ]; then
             exit 1
         fi
-        echo "::warning::validateUpgrade.sh done testing upgrade with utilities version $BUNDLE_VERSION"
+        echo "::warning::validateUpgrade.sh finished test **$TEST_NAME**"
     else
         echo "::warning::validateUpgrade.sh skip testing utilities bundle for non-spark2.4 & non-spark3.1 build"
     fi
 
-    echo "::warning::validateUpgrade.sh testing upgrade with utilities slim version $BUNDLE_VERSION"
-    wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-slim-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar -P $WORKDIR
+    TEST_NAME="upgrade utilities slim $BUNDLE_VERSION"
+    echo "::warning::validateUpgrade.sh starting test **$TEST_NAME**"
+    DOWNLOAD_URL="https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-slim-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar"
+    wget $DOWNLOAD_URL -P $WORKDIR
+    if [ "$?" -ne 0 ]; then
+        echo "::error::validateUpgrade.sh **$TEST_NAME** failed to download $DOWNLOAD_URL"
+        exit 1
+    fi
     FIRST_MAIN_ARG=${WORKDIR}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar
-    wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar -P $WORKDIR
+    DOWNLOAD_URL="https://repo1.maven.org/maven2/org/apache/hudi/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar"
+    wget $DOWNLOAD_URL -P $WORKDIR
+    if [ "$?" -ne 0 ]; then
+        echo "::error::validateUpgrade.sh **$TEST_NAME** failed to download $DOWNLOAD_URL"
+        exit 1
+    fi
     FIRST_ADDITIONAL_ARG=${WORKDIR}/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar
     SECOND_MAIN_ARG=$JARS_DIR/utilities-slim.jar
     SECOND_ADDITIONAL_ARG=$JARS_DIR/spark.jar
@@ -65,17 +95,26 @@ upgrade_from_version () {
     if [ "$?" -ne 0 ]; then
         exit 1
     fi
-    echo "::warning::validateUpgrade.sh done testing upgrade with utilities slim version $BUNDLE_VERSION"
+    echo "::warning::validateUpgrade.sh finished test **$TEST_NAME**"
 }
 
-apk add curl
 
-#curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_2.11/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -m 5 -v '-' | while read line ; do upgrade_from_version $line ; done
-VERSIONS=$(curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_2.11/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -m 5 -v '-') 
+apk add curl
+#get the last NUM_VERSIONS versions
+VERSIONS=$(curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_2.11/ | grep "<a href=\"0." | awk '{print $2}' | cut -c 7- | rev | cut -c 3- | rev |  sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | grep -m $NUM_VERSIONS -v '-') 
+
+#turn VERSIONS into an array because piping it messes with spark-shell
 SAVEIFS=$IFS   # Save current IFS (Internal Field Separator)
 IFS=$'\n'      # Change IFS to newline char
 VERSIONS=($VERSIONS) # split the `VERSIONS` string into an array by the same name
 IFS=$SAVEIFS   # Restore original IFS
+
+if [[ "${#VERSIONS[@]}" -ne "$NUM_VERSIONS" ]]; then
+    echo "::warning::validateUpgrade.sh ${#VERSIONS[@]} versions found but expected $NUM_VERSIONS"
+    exit 1
+fi
+
+#test upgrading from each version
 for (( i=0; i<${#VERSIONS[@]}; i++ ))
 do
     upgrade_from_version "${VERSIONS[$i]}"

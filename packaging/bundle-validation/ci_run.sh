@@ -85,18 +85,15 @@ docker build \
 --build-arg SPARK_VERSION=$SPARK_VERSION \
 --build-arg SPARK_HADOOP_VERSION=$SPARK_HADOOP_VERSION \
 --build-arg IMAGE_TAG=$IMAGE_TAG \
---build-arg SPARK_PROFILE=$SPARK_PROFILE \
---build-arg SCALA_VERSION=${SCALA_PROFILE#'scala-'} \
 -t hudi-ci-bundle-validation:$IMAGE_TAG \
 .
 
 # run validation script in docker
-# docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-#   -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh
+docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh
 
 
-
-if [[ ${TEST_UPGRADE} == "1" ]]; then
+if [[ ${BRANCH_NAME} == ci_bundle_upgrade* ]]; then
   docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-    -i hudi-ci-bundle-validation:$IMAGE_TAG bash validateUpgrade.sh
+    -i hudi-ci-bundle-validation:$IMAGE_TAG bash validateUpgrade.sh ${SCALA_PROFILE#'scala-'} $SPARK_PROFILE 4
 fi

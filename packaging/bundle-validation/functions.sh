@@ -47,6 +47,7 @@ test_spark_bundle () {
 # 2nd arg and beyond: any additional jars to pass to --jars option
 #
 # env vars (defined in container):
+#   TEST_NAME: name of the test
 #   SPARK_HOME: path to the spark directory
 #   EXPECTED_SIZE: threshold that output directory must be larger than to pass
 #       the testing. If the directory is smaller than this size then deltastreamer
@@ -60,10 +61,8 @@ test_utilities_bundle_helper () {
     if [[ -n $EXTRA_JARS ]]; then
         OPT_JARS="--jars $EXTRA_JARS"
     fi
-    echo "VEXLER doing ls 63"
-    ls /opt/bundle-validation/data/stocks/data
 
-    echo "::warning::functions.sh running deltastreamer"
+    echo "::warning::functions.sh **${TEST_NAME}** running deltastreamer"
     $SPARK_HOME/bin/spark-submit \
     --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
     $OPT_JARS $MAIN_JAR \
@@ -74,29 +73,29 @@ test_utilities_bundle_helper () {
     --target-base-path ${OUTPUT_DIR} \
     --target-table utilities_tbl  --op UPSERT
     if [ "$?" -ne 0 ]; then
-        echo "::error::functions.sh deltastreamer failed with exit code $?"
+        echo "::error::functions.sh **${TEST_NAME}** deltastreamer failed with exit code $?"
         exit 1
     fi
-    echo "::warning::functions.sh done with deltastreamer"
+    echo "::warning::functions.sh **${TEST_NAME}** done with deltastreamer"
 
     OUTPUT_SIZE=$(du -s ${OUTPUT_DIR} | awk '{print $1}')
     if [[ -z $OUTPUT_SIZE || "$OUTPUT_SIZE" -lt "$EXPECTED_SIZE" ]]; then
-        echo "::error::functions.sh deltastreamer output folder ($OUTPUT_SIZE) is smaller than minimum expected ($EXPECTED_SIZE)" 
+        echo "::error::functions.sh **${TEST_NAME}** deltastreamer output folder ($OUTPUT_SIZE) is smaller than minimum expected ($EXPECTED_SIZE)" 
         exit 1
     fi
-    echo "::warning::functions.sh output size is $OUTPUT_SIZE"
+    echo "::warning::functions.sh **${TEST_NAME}** output size is $OUTPUT_SIZE"
 
-    echo "::warning::functions.sh validating deltastreamer in spark shell"
+    echo "::warning::functions.sh **${TEST_NAME}** validating deltastreamer in spark shell"
     SHELL_COMMAND="$SPARK_HOME/bin/spark-shell --jars $EXTRA_JARS $MAIN_JAR -i $WORKDIR/utilities/validate.scala"
-    echo "::debug::this is the shell command: $SHELL_COMMAND"
+    echo "::debug::**${TEST_NAME}** this is the shell command: $SHELL_COMMAND"
     LOGFILE="$WORKDIR/${FUNCNAME[0]}.log"
     $SHELL_COMMAND >> $LOGFILE
     if [ "$?" -ne 0 ]; then
         SHELL_RESULT=$(cat $LOGFILE | grep "Counts don't match")
-        echo "::error::functions.sh $SHELL_RESULT"
+        echo "::error::functions.sh **${TEST_NAME}** $SHELL_RESULT"
         exit 1
     fi
-    echo "::warning::functions.sh done validating deltastreamer in spark shell"
+    echo "::warning::functions.sh **${TEST_NAME}** done validating deltastreamer in spark shell"
 }
 
 ##
@@ -126,6 +125,7 @@ test_utilities_bundle () {
 #
 #
 # env vars (defined in container):
+#   TEST_NAME: name of the test
 #   SPARK_HOME: path to the spark directory
 #   FIRST_MAIN_ARG: what you would put as the first arg to test_utilities_bundle
 #       and that is used for running deltastreamer on the first batch of data
@@ -144,25 +144,25 @@ test_upgrade_bundle () {
     rm -r $OUTPUT_DIR
 
     #run the deltastreamer and validate
-    echo "::warning::functions.sh testing upgrade bundle on batch_1"
-    EXPECTED_SIZE=500
+    echo "::warning::functions.sh **${TEST_NAME}** testing upgrade bundle on batch_1"
+    EXPECTED_SIZE=600
     test_utilities_bundle_helper $FIRST_MAIN_ARG $FIRST_ADDITIONAL_ARG
     if [ "$?" -ne 0 ]; then
         exit 1
     fi
-    echo "::warning::functions.sh done testing upgrade bundle on batch_1"
+    echo "::warning::functions.sh **${TEST_NAME}** done testing upgrade bundle on batch_1"
 
     #move batch 2 back to the data folder
     mv /tmp/datadir/batch_2.json $STOCK_DATA_DIR/
+    #!!NEED THIS OR DELTASTREAMER WILL NOT RECOGNIZE THERE IS NEW DATA!!
     touch $STOCK_DATA_DIR/batch_2.json
 
     #run the deltastreamer and validate
-    echo "::warning::functions.sh testing upgrade bundle on batch_2"
-    EXPECTED_SIZE=500
-    #EXPECTED_SIZE=1000
+    echo "::warning::functions.sh **${TEST_NAME}** testing upgrade bundle on batch_2"
+    EXPECTED_SIZE=1000
     test_utilities_bundle_helper $SECOND_MAIN_ARG $SECOND_ADDITIONAL_ARG
     if [ "$?" -ne 0 ]; then
         exit 1
     fi
-    echo "::warning::functions.sh done testing upgrade bundle on batch_2"
+    echo "::warning::functions.sh **${TEST_NAME}** done testing upgrade bundle on batch_2"
 }
