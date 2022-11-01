@@ -173,7 +173,7 @@ public abstract class AbstractHoodieLogRecordReader {
                                           Option<String> partitionName, InternalSchema internalSchema,
                                           boolean useScanV2, Object[] partitionValues) {
     this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema(), false);
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, useScanV2);
     this.partitionValues = partitionValues;
   }
 
