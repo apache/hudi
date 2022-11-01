@@ -53,6 +53,7 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
     LOG.info(String.format("Starting async clean service with instant time %s...", instantTime));
     return Pair.of(CompletableFuture.supplyAsync(() -> {
       writeClient.clean(instantTime);
+      writeClient.close();
       return true;
     }, executor), executor);
   }
