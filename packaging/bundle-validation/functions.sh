@@ -154,6 +154,7 @@ test_upgrade_bundle () {
 
     #move batch 2 back to the data folder
     mv /tmp/datadir/batch_2.json $STOCK_DATA_DIR/
+    touch $STOCK_DATA_DIR/batch_2.json
 
     #run the deltastreamer and validate
     echo "::warning::functions.sh testing upgrade bundle on batch_2"
