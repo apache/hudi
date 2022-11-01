@@ -54,16 +54,18 @@ upgrade_from_version () {
     then
         TEST_NAME="upgrade utilities $BUNDLE_VERSION"
         echo "::warning::validateUpgrade.sh starting test **$TEST_NAME**"
-        DOWNLOAD_URL="https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-utilities-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar"
-        wget $DOWNLOAD_URL -P $WORKDIR
-        if [ "$?" -ne 0 ]; then
-            echo "::error::validateUpgrade.sh **$TEST_NAME** failed to download $DOWNLOAD_URL"
-            exit 1
-        fi
         FIRST_MAIN_ARG=${WORKDIR}/hudi-utilities-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar
         FIRST_ADDITIONAL_ARG=""
         SECOND_MAIN_ARG=$JARS_DIR/utilities.jar
         SECOND_ADDITIONAL_ARG=""
+        if [ ! -f "$FIRST_MAIN_ARG" ]; then
+            DOWNLOAD_URL="https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-utilities-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar"
+            wget $DOWNLOAD_URL -P $WORKDIR
+            if [ "$?" -ne 0 ]; then
+                echo "::error::validateUpgrade.sh **$TEST_NAME** failed to download $DOWNLOAD_URL"
+                exit 1
+            fi
+        fi
         test_upgrade_bundle
         if [ "$?" -ne 0 ]; then
             exit 1
@@ -75,22 +77,27 @@ upgrade_from_version () {
 
     TEST_NAME="upgrade utilities slim $BUNDLE_VERSION"
     echo "::warning::validateUpgrade.sh starting test **$TEST_NAME**"
-    DOWNLOAD_URL="https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-slim-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar"
-    wget $DOWNLOAD_URL -P $WORKDIR
-    if [ "$?" -ne 0 ]; then
-        echo "::error::validateUpgrade.sh **$TEST_NAME** failed to download $DOWNLOAD_URL"
-        exit 1
-    fi
     FIRST_MAIN_ARG=${WORKDIR}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar
-    DOWNLOAD_URL="https://repo1.maven.org/maven2/org/apache/hudi/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar"
-    wget $DOWNLOAD_URL -P $WORKDIR
-    if [ "$?" -ne 0 ]; then
-        echo "::error::validateUpgrade.sh **$TEST_NAME** failed to download $DOWNLOAD_URL"
-        exit 1
-    fi
     FIRST_ADDITIONAL_ARG=${WORKDIR}/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar
     SECOND_MAIN_ARG=$JARS_DIR/utilities-slim.jar
     SECOND_ADDITIONAL_ARG=$JARS_DIR/spark.jar
+    if [ ! -f "$FIRST_MAIN_ARG" ]; then
+        DOWNLOAD_URL="https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-slim-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar"
+        wget $DOWNLOAD_URL -P $WORKDIR
+        if [ "$?" -ne 0 ]; then
+            echo "::error::validateUpgrade.sh **$TEST_NAME** failed to download $DOWNLOAD_URL"
+            exit 1
+        fi
+    fi
+    if [ ! -f "$FIRST_ADDITIONAL_ARG" ]; then
+        DOWNLOAD_URL="https://repo1.maven.org/maven2/org/apache/hudi/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}/${BUNDLE_VERSION}/hudi-${SPARK_PROFILE}-bundle_${SCALA_VERSION}-${BUNDLE_VERSION}.jar"
+        wget $DOWNLOAD_URL -P $WORKDIR
+        if [ "$?" -ne 0 ]; then
+            echo "::error::validateUpgrade.sh **$TEST_NAME** failed to download $DOWNLOAD_URL"
+            exit 1
+        fi
+    fi
+    
     test_upgrade_bundle
     if [ "$?" -ne 0 ]; then
         exit 1
