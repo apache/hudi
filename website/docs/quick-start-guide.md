@@ -635,7 +635,7 @@ spark.read. \
 
 spark.read. \
   format("hudi"). \
-  option("as.of.instant", "2021-07-28 14:11:000"). \
+  option("as.of.instant", "2021-07-28 14:11:08.000"). \
   load(basePath)
 
 # It is equal to "as.of.instant = 2021-07-28 00:00:00"
@@ -959,10 +959,10 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hud
 
 ## Delete data {#deletes}
 
-Apache Hudi supports two types of deletes: (1) **Soft Deletes**: retaining the record key and just nulling out the values
-for all the other fields (records with nulls in soft deletes are always persisted in storage and never removed);
-(2) **Hard Deletes**: physically removing any trace of the record from the table.  See the
-[deletion section](/docs/writing_data#deletes) of the writing data page for more details.
+Apache Hudi supports two types of deletes: <br/> 
+1.  **Soft Deletes**: This retains the record key and just nulls out the values for all the other fields. Records with nulls in soft deletes are always persisted in storage and never removed.
+2. **Hard Deletes**: This physically removes any trace of the record from the table. Check out the
+[deletion section](/docs/writing_data#deletes) for more details.
 
 ### Soft Deletes
 
@@ -1029,8 +1029,7 @@ Notice that the save mode is `Append`.
 <TabItem value="python">
 
 #### Code overview 
-Retain the record key and null out the values for all the other fields <br/>
-(records with nulls in soft deletes are always persisted in storage and never removed)<br/><br/>
+Soft deletes retain the record key and null out the values for all the other fields. For example, records with nulls in soft deletes are always persisted in storage and never removed.<br/><br/>
 
 :::note
 Notice that the save mode is `Append`.
@@ -1166,8 +1165,7 @@ delete from hudi_cow_pt_tbl where name = 'a1';
 <TabItem value="python">
 
 #### Code overview 
-Physically removing any trace of the record from the table. <br/>
-I.E. Delete records for the HoodieKeys passed in.<br/><br/>
+Hard deletes physically remove any trace of the record from the table. For example, this deletes records for the HoodieKeys passed in.<br/><br/>
 
 :::note
 Only `Append` mode is supported for delete operation.
