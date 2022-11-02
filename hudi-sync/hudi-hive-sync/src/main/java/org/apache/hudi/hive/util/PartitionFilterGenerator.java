@@ -36,7 +36,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
@@ -170,20 +169,12 @@ public class PartitionFilterGenerator {
   }
 
   private static class PartitionField {
-    private FieldSchema field;
-    private String[] values;
+    protected final FieldSchema field;
+    protected final String[] values;
 
     public PartitionField(FieldSchema field, String[] values) {
       this.field = field;
       this.values = values;
-    }
-
-    public FieldSchema getFieldSchema() {
-      return field;
-    }
-
-    public String[] getValues() {
-      return values;
     }
   }
 
