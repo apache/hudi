@@ -1079,13 +1079,14 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 # This should return (total - 2) count as two records are updated with nulls
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot where rider is not null").count()
 ```
+</TabItem>
+
 :::note
 Notice that the save mode is `Append`.
 :::
-</TabItem>
 
-</Tabs
->
+
+</Tabs>
 
 
 ### Hard Deletes
@@ -1193,10 +1194,11 @@ roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot")
 # fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
+</TabItem>
+
 :::note
 Only `Append` mode is supported for delete operation.
 :::
-</TabItem>
 
 </Tabs>
 
