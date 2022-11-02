@@ -18,22 +18,15 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.specific.SpecificData;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCommitMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.client.HoodieTimelineArchiver;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
+import org.apache.hudi.cli.utils.InputStreamConsumer;
+import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -42,16 +35,16 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieArchivalConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieSparkTable;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.specific.SpecificData;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.SparkSession;
+import org.apache.spark.launcher.SparkLauncher;
+import org.apache.spark.util.Utils;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -68,9 +61,8 @@ import java.util.stream.Collectors;
 @ShellComponent
 public class ArchivedCommitsCommand {
   private static final Logger LOG = LogManager.getLogger(ArchivedCommitsCommand.class);
-  private JavaSparkContext jsc;
   @ShellMethod(key = "trigger archival", value = "trigger archival")
-  public void triggerArchival(
+  public String triggerArchival(
       @ShellOption(value = {"--minCommits"},
         help = "Minimum number of instants to retain in the active timeline. See hoodie.keep.min.commits",
         defaultValue = "20") int minCommits,
@@ -81,23 +73,23 @@ public class ArchivedCommitsCommand {
           defaultValue = "10") int retained,
       @ShellOption(value = {"--enableMetadata"},
           help = "Enable the internal metadata table which serves table metadata like level file listings",
-          defaultValue = "true") boolean enableMetadata) {
-
-    initJavaSparkContext();
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits,maxCommits).build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(retained).build())
-        .withEmbeddedTimelineServerEnabled(false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
-        .build();
-    HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
-    HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
-    try {
-      HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
-      archiver.archiveIfRequired(context,true);
-    } catch (IOException ioe) {
-      LOG.error("Failed to archive with IOException: " + ioe);
+          defaultValue = "true") boolean enableMetadata,
+      @ShellOption(value = "--sparkMemory", defaultValue = "1G",
+          help = "Spark executor memory") final String sparkMemory,
+      @ShellOption(value = "--sparkMaster", defaultValue = "local", help = "Spark Master") String master) throws Exception {
+    String sparkPropertiesPath =
+        Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    String cmd = SparkCommand.ARCHIVE.toString();
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, Integer.toString(minCommits), Integer.toString(maxCommits),
+        Integer.toString(retained), Boolean.toString(enableMetadata), HoodieCLI.basePath);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+    if (exitCode != 0) {
+      return "Failed to trigger archival";
     }
+    return "Archival successfully triggered";
   }
 
   @ShellMethod(key = "show archived commit stats", value = "Read commits from archived files and show details")
@@ -254,21 +246,4 @@ public class ArchivedCommitsCommand {
     }
   }
 
-  private void initJavaSparkContext() {
-    if (jsc == null) {
-      SparkConf sparkConf = new SparkConf();
-      sparkConf.set("spark.app.name", getClass().getName());
-      sparkConf.set("spark.master", "local[*]");
-      sparkConf.set("spark.default.parallelism", "4");
-      sparkConf.set("spark.sql.shuffle.partitions", "4");
-      sparkConf.set("spark.driver.maxResultSize", "2g");
-      sparkConf.set("spark.hadoop.mapred.output.compress", "true");
-      sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
-      sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
-      sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
-      sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-      SparkSession spark = SparkSession.builder().config(sparkConf).getOrCreate();
-      jsc = new JavaSparkContext(spark.sparkContext());
-    }
-  }
 }
