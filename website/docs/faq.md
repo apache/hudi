@@ -637,6 +637,12 @@ The `commit showpartitons` command in [HUDI CLI](https://hudi.apache.org/docs/cl
 "records inserted." Divide the bytes written by records inserted to find the average size. Note that this answer assumes 
 metadata overhead is negligible. For a small dataset (such as 5 columns, 100 records) this will not be the case.
 
+### How can I resolve the IllegalArgumentException saying `Partitions must be in the same table` when attempting to sync to a metastore?
+
+This will occur when capital letters are used in the table name. Metastores such as Hive automatically convert table names
+to lowercase. While we allow capitalization on Hudi tables, if you would like to use a metastore you may be required to
+use all lowercase letters. More details on how this issue presents can be found [here](https://github.com/apache/hudi/issues/6832).
+
 ## Contributing to FAQ
 
 A good and usable FAQ should be community-driven and crowd source questions/thoughts across everyone.
