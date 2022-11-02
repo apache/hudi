@@ -635,7 +635,7 @@ spark.read. \
 
 spark.read. \
   format("hudi"). \
-  option("as.of.instant", "2021-07-28 14:11:08.000"). \
+  option("as.of.instant", "2021-07-28 14:11:000"). \
   load(basePath)
 
 # It is equal to "as.of.instant = 2021-07-28 00:00:00"
@@ -1028,6 +1028,14 @@ Notice that the save mode is `Append`.
 </TabItem>
 <TabItem value="python">
 
+#### Code overview 
+Retain the record key and null out the values for all the other fields <br/>
+(records with nulls in soft deletes are always persisted in storage and never removed)<br/><br/>
+
+:::note
+Notice that the save mode is `Append`.
+:::
+
 ```python
 # pyspark
 from pyspark.sql.functions import lit
@@ -1036,9 +1044,11 @@ from functools import reduce
 spark.read.format("hudi"). \
   load(basePath). \
   createOrReplaceTempView("hudi_trips_snapshot")
+
 # fetch total records count
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot where rider is not null").count()
+
 # fetch two records for soft deletes
 soft_delete_ds = spark.sql("select * from hudi_trips_snapshot").limit(2)
 
@@ -1046,6 +1056,8 @@ soft_delete_ds = spark.sql("select * from hudi_trips_snapshot").limit(2)
 meta_columns = ["_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", \
   "_hoodie_partition_path", "_hoodie_file_name"]
 excluded_columns = meta_columns + ["ts", "uuid", "partitionpath"]
+```
+```python
 nullify_columns = list(filter(lambda field: field[0] not in excluded_columns, \
   list(map(lambda field: (field.name, field.dataType), soft_delete_ds.schema.fields))))
 
@@ -1079,15 +1091,11 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 # This should return (total - 2) count as two records are updated with nulls
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot where rider is not null").count()
 ```
+
 </TabItem>
 
-:::note
-Notice that the save mode is `Append`.
-:::
-
-
-</Tabs>
-
+</Tabs
+>
 
 ### Hard Deletes
 
@@ -1156,7 +1164,14 @@ delete from hudi_cow_pt_tbl where name = 'a1';
 
 </TabItem>
 <TabItem value="python">
-Delete records for the HoodieKeys passed in.<br/>
+
+#### Code overview 
+Physically removing any trace of the record from the table. <br/>
+I.E. Delete records for the HoodieKeys passed in.<br/><br/>
+
+:::note
+Only `Append` mode is supported for delete operation.
+:::
 
 ```python
 # pyspark
@@ -1189,18 +1204,21 @@ hard_delete_df.write.format("hudi"). \
 roAfterDeleteViewDF = spark. \
   read. \
   format("hudi"). \
-  load(basePath) 
-roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot")
+  load(basePath)
+```
+
+```python
+roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot") 
+
 # fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
+
 </TabItem>
 
-:::note
-Only `Append` mode is supported for delete operation.
-:::
+</Tabs
+>
 
-</Tabs>
 
 ## Insert Overwrite
 
