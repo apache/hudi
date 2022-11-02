@@ -491,6 +491,7 @@
           <artifactId>scalatest-maven-plugin</artifactId>
           <version>1.0</version>
           <configuration>
+            <!--tagsToInclude>org.apache.hudi.FlakyTestTag</tagsToInclude-->
             <skipTests>${skipUTs}</skipTests>
             <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
             <junitxml>.</junitxml>
@@ -1841,6 +1842,48 @@
                 </goals>
                 <configuration>
                   <outputDirectory>${project.reporting.outputDirectory}/jacoco-it</outputDirectory>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>flaky-tests</id>
+      <properties>
+        <skipUTs>true</skipUTs>
+        <skipFTs>true</skipFTs>
+        <skipITs>true</skipITs>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${maven-surefire-plugin.version}</version>
+            <configuration combine.self="append">
+              <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
+              <groups>FlakyTests</groups>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+              </execution>
+              <execution>
+                <id>post-unit-tests</id>
+                <phase>test</phase>
+                <goals>
+                  <goal>report</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
                 </configuration>
               </execution>
             </executions>
