@@ -643,6 +643,11 @@ This will occur when capital letters are used in the table name. Metastores such
 to lowercase. While we allow capitalization on Hudi tables, if you would like to use a metastore you may be required to
 use all lowercase letters. More details on how this issue presents can be found [here](https://github.com/apache/hudi/issues/6832).
 
+### How can I reduce table versions created by Hudi in AWS Glue Data Catalog/ metastore?
+With each commit, Hudi creates a new table version in the metastore. This can be reduced by setting the option 
+[hoodie.datasource.meta_sync.condition.sync](https://hudi.apache.org/docs/configurations#hoodiedatasourcemeta_syncconditionsync) to true.
+This will ensure that hive sync is triggered on schema or partitions changes.
+
 ## Contributing to FAQ
 
 A good and usable FAQ should be community-driven and crowd source questions/thoughts across everyone.
