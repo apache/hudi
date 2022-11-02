@@ -782,7 +782,7 @@ public abstract class AbstractHoodieLogRecordReader {
     return withOperationField;
   }
 
-  protected Properties getPayloadProps() {
+  public Properties getPayloadProps() {
     return payloadProps;
   }
 

@@ -57,7 +57,7 @@ public abstract class AbstractRealtimeRecordReader {
   private Schema readerSchema;
   private Schema writerSchema;
   private Schema hiveSchema;
-  private HoodieTableMetaClient metaClient;
+  protected HoodieTableMetaClient metaClient;
   protected SchemaEvolutionContext schemaEvolutionContext;
 
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {

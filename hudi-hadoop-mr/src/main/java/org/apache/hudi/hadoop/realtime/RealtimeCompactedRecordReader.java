@@ -19,6 +19,8 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
@@ -32,6 +34,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -105,6 +108,37 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     }
   }
 
+  private Option<GenericRecord> buildGenericRecordwithCustomPayload(HoodieRecord record, ArrayWritable arrayWritable) throws IOException {
+    if (usesCustomPayload) {
+      GenericRecordBuilder newRecord = new GenericRecordBuilder(getWriterSchema());
+      // writable returns an array with [field1, field2, _hoodie_commit_time,
+      // _hoodie_commit_seqno]
+      Writable[] values = arrayWritable.get();
+      getWriterSchema().getFields().stream()
+          .forEach(field -> newRecord.set(field.name(), values[field.pos()]));
+
+      return createHoodieRecord((GenericRecord) newRecord).getData()
+          .preCombine(((HoodieAvroRecord) record).getData(), getWriterSchema(), this.mergedLogRecordScanner.getPayloadProps())
+          .getInsertValue(getWriterSchema(), this.mergedLogRecordScanner.getPayloadProps());
+
+    } else {
+      return ((HoodieAvroRecord) record).getData().getInsertValue(getReaderSchema(), payloadProps);
+    }
+  }
+
+  /**
+   * Create @{@link HoodieRecord} from the @{@link IndexedRecord}.
+   *
+   * @param rec   - IndexedRecord to create the HoodieRecord from
+   * @return HoodieRecord created from the IndexedRecord
+   */
+  protected HoodieAvroRecord<?> createHoodieRecord(final IndexedRecord rec) {
+    final String payloadClassFQN = this.metaClient.getTableConfig().getPayloadClass();
+    final String preCombineField = this.metaClient.getTableConfig().getPreCombineField();
+    return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, payloadClassFQN,
+        preCombineField, false);
+  }
+
   @Override
   public boolean next(NullWritable aVoid, ArrayWritable arrayWritable) throws IOException {
     // Call the underlying parquetReader.next - which may replace the passed in ArrayWritable
@@ -115,9 +149,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         if (deltaRecordMap.containsKey(key)) {
           // mark the key as handled
           this.deltaRecordKeys.remove(key);
-          // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
-          // deltaRecord may not be a full record and needs values of columns from the parquet
-          Option<GenericRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
+          Option<GenericRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key), arrayWritable);
           // If the record is not present, this is a delete record using an empty payload so skip this base record
           // and move to the next record
           if (!rec.isPresent()) {
