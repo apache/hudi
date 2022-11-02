@@ -69,7 +69,7 @@ public class ArchivedCommitsCommand {
       @ShellOption(value = {"--maxCommits"},
           help = "Maximum number of instants to retain in the active timeline. See hoodie.keep.max.commits",
           defaultValue = "30") int maxCommits,
-      @ShellOption(value = {"--commitsRetained"}, help = "Number of commits to retain, without cleaning",
+      @ShellOption(value = {"--commitsRetainedByCleaner"}, help = "Number of commits to retain, without cleaning",
           defaultValue = "10") int retained,
       @ShellOption(value = {"--enableMetadata"},
           help = "Enable the internal metadata table which serves table metadata like level file listings",
