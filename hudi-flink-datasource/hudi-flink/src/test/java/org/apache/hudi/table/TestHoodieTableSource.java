@@ -137,7 +137,7 @@ public class TestHoodieTableSource {
   @Test
   void testDataSkippingFilterShouldBeNotNullWhenTableSourceIsCopied() {
     HoodieTableSource tableSource = getEmptyStreamingSource();
-    ResolvedExpression mockExpression = CallExpression.anonymous(
+    ResolvedExpression mockExpression = new CallExpression(
         BuiltInFunctionDefinitions.IN,
         Collections.emptyList(),
         TestConfigurations.ROW_DATA_TYPE);
