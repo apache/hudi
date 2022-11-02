@@ -164,7 +164,7 @@ public class HoodieTableSource implements
     this.filters = filters == null ? Collections.emptyList() : filters;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
-    this.fileIndex = FileIndex.instance(this.path, this.conf, this.tableRowType);
+    this.fileIndex = FileIndex.instance(this.path, this.conf, this.tableRowType, this.filters);
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
   }
 
@@ -542,5 +542,10 @@ public class HoodieTableSource implements
       return new FileStatus[0];
     }
     return fileIndex.getFilesInPartitions();
+  }
+
+  @VisibleForTesting
+  FileIndex getFileIndex() {
+    return fileIndex;
   }
 }
