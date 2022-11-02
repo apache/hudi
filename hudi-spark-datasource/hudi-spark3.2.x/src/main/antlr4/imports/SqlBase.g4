@@ -709,7 +709,7 @@ identifierComment
     ;
 
 relationPrimary
-    : multipartIdentifier temporalClause?
+    : multipartIdentifier ('(' (tableArgument (',' tableArgument)*)? ')') ? temporalClause?
       sample? tableAlias                      #tableName
     | '(' query ')' sample? tableAlias        #aliasedQuery
     | '(' relation ')' sample? tableAlias     #aliasedRelation
@@ -1040,6 +1040,10 @@ alterColumnAction
     | colPosition
     | setOrDrop=(SET | DROP) NOT NULL
     ;
+
+tableArgument
+   : identifier '=' constant    #namedArgument
+   ;
 
 // When `SQL_standard_keyword_behavior=true`, there are 2 kinds of keywords in Spark SQL.
 // - Reserved keywords:
@@ -1870,6 +1874,7 @@ IDENTIFIER
 BACKQUOTED_IDENTIFIER
     : '`' ( ~'`' | '``' )* '`'
     ;
+
 
 fragment DECIMAL_DIGITS
     : DIGIT+ '.' DIGIT*

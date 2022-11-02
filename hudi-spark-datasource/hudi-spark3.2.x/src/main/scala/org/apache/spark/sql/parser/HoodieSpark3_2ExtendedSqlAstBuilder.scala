@@ -79,6 +79,18 @@ class HoodieSpark3_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
   override def visitTableName(ctx: TableNameContext): LogicalPlan = withOrigin(ctx) {
     val tableId = visitMultipartIdentifier(ctx.multipartIdentifier())
     val relation = UnresolvedRelation(tableId)
+
+    val tableArgument = ctx.tableArgument()
+    val temporalClause = ctx.temporalClause()
+    if (tableArgument != null && temporalClause != null) {
+      throw new ParseException(
+        s"Only one table parameter ${tableArgument.getText} and snapshot query ${temporalClause.getText} can exist", ctx)
+    }
+    if (tableArgument != null) {
+
+    }
+
+
     val table = mayApplyAliasPlan(
       ctx.tableAlias, relation.optionalMap(ctx.temporalClause)(withTimeTravel))
     table.optionalMap(ctx.sample)(withSample)
