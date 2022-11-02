@@ -960,11 +960,13 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hud
 ## Delete data {#deletes}
 
 Apache Hudi supports two types of deletes: <br/> 
-1.  **Soft Deletes**: This retains the record key and just nulls out the values for all the other fields. Records with nulls in soft deletes are always persisted in storage and never removed.
+1.  **Soft Deletes**: This retains the record key and just nulls out the values for all the other fields. The records with nulls in soft deletes are always persisted in storage and never removed.
 2. **Hard Deletes**: This physically removes any trace of the record from the table. Check out the
 [deletion section](/docs/writing_data#deletes) for more details.
 
 ### Soft Deletes
+#### Code overview 
+Soft deletes retain the record key and null out the values for all the other fields. For example, records with nulls in soft deletes are always persisted in storage and never removed.<br/><br/>
 
 <Tabs
 defaultValue="scala"
@@ -1027,9 +1029,6 @@ Notice that the save mode is `Append`.
 :::
 </TabItem>
 <TabItem value="python">
-
-#### Code overview 
-Soft deletes retain the record key and null out the values for all the other fields. For example, records with nulls in soft deletes are always persisted in storage and never removed.<br/><br/>
 
 :::note
 Notice that the save mode is `Append`.
@@ -1097,6 +1096,8 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot where rider is no
 >
 
 ### Hard Deletes
+#### Code overview 
+Hard deletes physically remove any trace of the record from the table. For example, this deletes records for the HoodieKeys passed in.<br/><br/>
 
 <Tabs
 defaultValue="scala"
@@ -1164,8 +1165,6 @@ delete from hudi_cow_pt_tbl where name = 'a1';
 </TabItem>
 <TabItem value="python">
 
-#### Code overview 
-Hard deletes physically remove any trace of the record from the table. For example, this deletes records for the HoodieKeys passed in.<br/><br/>
 
 :::note
 Only `Append` mode is supported for delete operation.
