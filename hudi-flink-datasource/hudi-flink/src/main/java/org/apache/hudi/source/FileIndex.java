@@ -80,12 +80,6 @@ public class FileIndex {
     return new FileIndex(path, conf, rowType);
   }
 
-  public static FileIndex instance(Path path, Configuration conf, RowType rowType, List<ResolvedExpression> filters) {
-    FileIndex fileIndex = instance(path, conf, rowType);
-    fileIndex.setFilters(filters);
-    return fileIndex;
-  }
-
   /**
    * Returns the partition path key and values as a list of map, each map item in the list
    * is a mapping of the partition key name to its actual partition value. For example, say
