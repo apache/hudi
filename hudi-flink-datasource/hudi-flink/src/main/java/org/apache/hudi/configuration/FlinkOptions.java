@@ -106,7 +106,7 @@ public class FlinkOptions extends HoodieConfig {
           + "determined by Object.compareTo(..)");
 
   public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
-      .key("write.payload.class")
+      .key("payload.class")
       .stringType()
       .defaultValue(EventTimeAvroPayload.class.getName())
       .withFallbackKeys("write.payload.class")
