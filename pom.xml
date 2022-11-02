@@ -196,6 +196,7 @@
     <trino.bundle.bootstrap.shade.prefix>org.apache.hudi.</trino.bundle.bootstrap.shade.prefix>
     <shadeSources>true</shadeSources>
     <zk-curator.version>2.7.1</zk-curator.version>
+    <jnanoid.version>2.0.0</jnanoid.version>
     <antlr.version>4.7</antlr.version>
     <aws.sdk.version>1.12.22</aws.sdk.version>
     <proto.version>3.21.5</proto.version>
@@ -1459,6 +1460,12 @@
       </dependency>
 
       <!-- Junit 5 -->
+      <dependency>
+        <groupId>com.aventrix.jnanoid</groupId>
+        <artifactId>jnanoid</artifactId>
+        <version>${jnanoid.version}</version>
+      </dependency>
+
       <dependency>
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter-api</artifactId>
