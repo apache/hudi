@@ -32,6 +32,7 @@ ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
 ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
+ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
 
 
 ##
@@ -131,26 +132,64 @@ test_utilities_bundle () {
 }
 
 
+##
+# Function to test the kafka-connect bundle.
+# It runs zookeeper, kafka broker, schema registry, and connector worker.
+# After producing and consuming data, it checks successful commit under `.hoodie/`
+#
+# 1st arg: path to the hudi-kafka-connect-bundle.jar (for writing data)
+#
+# env vars (defined in container):
+#   CONFLUENT_HOME: path to the confluent community directory
+#   KAFKA_CONNECT_PLUGIN_PATH_LIB_PATH: path to install hudi-kafka-connect-bundle.jar
+##
+test_kafka_connect_bundle() {
+    KAFKA_CONNECT_JAR=$1
+    cp $KAFKA_CONNECT_JAR $KAFKA_CONNECT_PLUGIN_PATH_LIB_PATH
+    $CONFLUENT_HOME/bin/zookeeper-server-start $CONFLUENT_HOME/etc/kafka/zookeeper.properties &
+    $CONFLUENT_HOME/bin/kafka-server-start $CONFLUENT_HOME/etc/kafka/server.properties &
+    sleep 10
+    $CONFLUENT_HOME/bin/schema-registry-start $CONFLUENT_HOME/etc/schema-registry/schema-registry.properties &
+    sleep 10
+    $CONFLUENT_HOME/bin/kafka-topics --create --topic hudi-control-topic --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092
+    $WORKDIR/kafka/produce.sh
+    $WORKDIR/kafka/consume.sh
+}
+
+
+############################
+# Execute tests
+############################
+
+echo "::warning::validate.sh validating spark & hadoop-mr bundle"
 test_spark_hadoop_mr_bundles
 if [ "$?" -ne 0 ]; then
     exit 1
 fi
+echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
 if [[ $SPARK_HOME == *"spark-2.4"* ]] || [[  $SPARK_HOME == *"spark-3.1"* ]]
 then
-  echo "::warning::validate.sh testing utilities bundle"
+  echo "::warning::validate.sh validating utilities bundle"
   test_utilities_bundle $JARS_DIR/utilities.jar
   if [ "$?" -ne 0 ]; then
       exit 1
   fi
-  echo "::warning::validate.sh done testing utilities bundle"
+  echo "::warning::validate.sh done validating utilities bundle"
 else
-  echo "::warning::validate.sh skip testing utilities bundle for non-spark2.4 & non-spark3.1 build"
+  echo "::warning::validate.sh skip validating utilities bundle for non-spark2.4 & non-spark3.1 build"
 fi
 
-echo "::warning::validate.sh testing utilities slim bundle"
+echo "::warning::validate.sh validating utilities slim bundle"
 test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark.jar
 if [ "$?" -ne 0 ]; then
     exit 1
 fi
-echo "::warning::validate.sh done testing utilities slim bundle"
+echo "::warning::validate.sh done validating utilities slim bundle"
+
+echo "::warning::validate.sh validating kafka connect bundle"
+test_kafka_connect_bundle $JARS_DIR/kafka-connect.jar
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done validating kafka connect bundle"
