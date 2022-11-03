@@ -312,13 +312,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * NOTE: DO NOT OVERRIDE THIS METHOD
    */
   override final def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
-<<<<<<< 509a45ed9a51bab0f909baabaf8b491faf19559b
     // NOTE: PLEAS READ CAREFULLY BEFORE MAKING CHANGES
     //
     //       In case list of requested columns doesn't contain the Primary Key one, we
-=======
-    // NOTE: In case list of requested columns doesn't contain the Primary Key one, we
->>>>>>> add config to control logical
     //       have to add it explicitly so that
     //          - Merging could be performed correctly
     //          - In case 0 columns are to be fetched (for ex, when doing {@code count()} on Spark's [[Dataset]],
@@ -351,7 +347,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
     } else {
-      val rdd = postOperationOnComposeRDD(composeRDD(fileSplits, partitionSchema, tableSchema, requiredSchema, filters), requiredSchema)
+      val rdd = postOperationOnComposeRDD(composeRDD(fileSplits, tableSchema, requiredSchema, targetColumns, filters), requiredSchema)
 
       // Here we rely on a type erasure, to workaround inherited API restriction and pass [[RDD[InternalRow]]] back as [[RDD[Row]]]
       // Please check [[needConversion]] scala-doc for more details

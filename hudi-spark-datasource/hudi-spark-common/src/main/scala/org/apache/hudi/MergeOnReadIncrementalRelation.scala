@@ -28,9 +28,10 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getWritePartitionPaths, listAffectedFilesForCommits}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.{Row, SQLContext}
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.codegen.GeneratePredicate
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
@@ -145,7 +146,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
   }
 
   private def setUpFilterParams(requiredSchema: HoodieTableSchema): FilterParams = {
-    val attrs = HoodieSparkUtils.toAttribute(requiredSchema.structTypeSchema)
+    val attrs = requiredSchema.structTypeSchema.map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)())
     val filterExpression = convertToExpressions(incrementalSpanRecordFilters.toArray).map { e =>
       e transform {
         case a: AttributeReference =>
