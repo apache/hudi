@@ -85,7 +85,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
           : CompactionUtils.getLogCompactionPlan(table.getMetaClient(), instantTime);
 
       // try to load internalSchema to support schema Evolution
-      HoodieWriteConfig configCopy = SerializationUtils.deserialize(SerializationUtils.serialize(config));
+      HoodieWriteConfig configCopy = config;
       Pair<Option<String>, Option<String>> schemaPair = InternalSchemaCache
           .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
       if (schemaPair.getLeft().isPresent() && schemaPair.getRight().isPresent()) {
