@@ -126,7 +126,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
       Set<String> removeFields = CollectionUtils.createSet(partitionFields);
       Schema schemaNoPartitionFields = HoodieAvroUtils.removeFields(schema, removeFields);
       return getInsertValue(schemaNoPartitionFields);
-    }else {
+    } else {
       return getInsertValue(schema);
     }
   }
