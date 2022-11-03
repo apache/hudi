@@ -22,11 +22,14 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -37,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -98,7 +102,7 @@ public class SparkMain {
     BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_SCHEDULE_AND_EXECUTE,
     COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLUSTERING_SCHEDULE,
     CLUSTERING_RUN, CLUSTERING_SCHEDULE_AND_EXECUTE, CLEAN, DELETE_MARKER, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE,
-    REPAIR_DEPRECATED_PARTITION, RENAME_PARTITION
+    REPAIR_DEPRECATED_PARTITION, RENAME_PARTITION, ARCHIVE
   }
 
   public static void main(String[] args) throws Exception {
@@ -289,6 +293,10 @@ public class SparkMain {
         case RENAME_PARTITION:
           assert (args.length == 6);
           returnCode = renamePartition(jsc, args[3], args[4], args[5]);
+          break;
+        case ARCHIVE:
+          assert (args.length == 8);
+          returnCode = archive(jsc, Integer.parseInt(args[3]), Integer.parseInt(args[4]), Integer.parseInt(args[5]), Boolean.parseBoolean(args[6]), args[7]);
           break;
         default:
           break;
@@ -645,5 +653,24 @@ public class SparkMain {
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(lazyCleanPolicy ? HoodieFailedWritesCleaningPolicy.LAZY :
             HoodieFailedWritesCleaningPolicy.EAGER).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+  }
+
+  private static int archive(JavaSparkContext jsc, int minCommits, int maxCommits, int commitsRetained, boolean enableMetadata, String basePath) {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits,maxCommits).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
+        .build();
+    HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
+    HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
+    try {
+      HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
+      archiver.archiveIfRequired(context,true);
+    } catch (IOException ioe) {
+      LOG.error("Failed to archive with IOException: " + ioe);
+      return  -1;
+    }
+    return 0;
   }
 }
