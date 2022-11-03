@@ -294,6 +294,9 @@ public class HiveAvroSerializer {
       case VARCHAR:
         HiveVarchar vc = (HiveVarchar)fieldOI.getPrimitiveJavaObject(structFieldData);
         return new Utf8(vc.getValue());
+      case STRING:
+        String string = (String)fieldOI.getPrimitiveJavaObject(structFieldData);
+        return new Utf8(string);
       case DATE:
         return DateWritable.dateToDays(((DateObjectInspector)fieldOI).getPrimitiveJavaObject(structFieldData));
       case TIMESTAMP:
