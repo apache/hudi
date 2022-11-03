@@ -47,4 +47,18 @@ object HoodieSpark31CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
         Some((c.tableName, true, false, c.cmd))
     }
   }
+
+  /**
+   * if the logical plan is a TableArgumentRelation LogicalPlan.
+   */
+  override def isRelationTableArgument(plan: LogicalPlan): Boolean = {
+    false
+  }
+
+  /**
+   * Get the member of the TableArgumentRelation LogicalPlan.
+   */
+  override def getRelationTableArgument(plan: LogicalPlan): Option[(LogicalPlan, Map[String, String])]  = {
+    throw new IllegalStateException(s"Should not call getRelationTableArgument for Spark <= 3.2.x")
+  }
 }

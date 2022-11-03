@@ -22,6 +22,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
 import org.apache.spark.sql.execution.command.RepairTableCommand
+import org.apache.spark.sql.hudi.logical.TableArgumentRelation
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
@@ -50,6 +51,25 @@ object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     plan match {
       case rtc: RepairTableCommand =>
         Some((rtc.tableName, rtc.enableAddPartitions, rtc.enableDropPartitions, rtc.cmd))
+      case _ =>
+        None
+    }
+  }
+
+  /**
+   * if the logical plan is a TableArgumentRelation LogicalPlan.
+   */
+  override def isRelationTableArgument(plan: LogicalPlan): Boolean = {
+    plan.isInstanceOf[TableArgumentRelation]
+  }
+
+  /**
+   * Get the member of the TableArgumentRelation LogicalPlan.
+   */
+  override def getRelationTableArgument(plan: LogicalPlan): Option[(LogicalPlan, Map[String, String])] = {
+    plan match {
+      case tableArg: TableArgumentRelation =>
+        Some((tableArg.table, tableArg.args))
       case _ =>
         None
     }

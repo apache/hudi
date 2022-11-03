@@ -37,6 +37,7 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.BucketSpecHelpe
 import org.apache.spark.sql.connector.catalog.TableCatalog
 import org.apache.spark.sql.connector.catalog.TableChange.ColumnPosition
 import org.apache.spark.sql.connector.expressions.{ApplyTransform, BucketTransform, DaysTransform, FieldReference, HoursTransform, IdentityTransform, LiteralValue, MonthsTransform, Transform, YearsTransform, Expression => V2Expression}
+import org.apache.spark.sql.hudi.logical.TableArgumentRelation
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
@@ -80,9 +81,52 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
   override def visitTableName(ctx: TableNameContext): LogicalPlan = withOrigin(ctx) {
     val tableId = visitMultipartIdentifier(ctx.multipartIdentifier())
     val relation = UnresolvedRelation(tableId)
-    val table = mayApplyAliasPlan(
-      ctx.tableAlias, relation.optionalMap(ctx.temporalClause)(withTimeTravel))
+
+    val tableArgumentList = ctx.tableArgumentList()
+    val temporalClause = ctx.temporalClause()
+    if (tableArgumentList != null && tableArgumentList.tableArgument().size() > 0 && temporalClause != null) {
+      throw new ParseException(
+        s"Only one table parameter ${tableArgumentList.getText} and snapshot query ${temporalClause.getText} can exist", ctx)
+    }
+    val table = if (tableArgumentList != null && tableArgumentList.tableArgument().size() > 0) {
+      mayApplyAliasPlan(
+        ctx.tableAlias, relation.optionalMap(ctx.tableArgumentList())(withTableArgument))
+    } else {
+      mayApplyAliasPlan(
+        ctx.tableAlias, relation.optionalMap(ctx.temporalClause)(withTimeTravel))
+    }
     table.optionalMap(ctx.sample)(withSample)
+  }
+
+  override def visitTableArgumentKey(key: TableArgumentKeyContext): String = {
+    if (key.STRING != null) {
+      string(key.STRING)
+    } else {
+      key.getText
+    }
+  }
+
+  override def visitTableArgumentValue(value: TableArgumentValueContext): String = {
+    if (value == null) {
+      null
+    } else if (value.STRING != null) {
+      string(value.STRING)
+    } else if (value.booleanValue != null) {
+      value.getText.toLowerCase(Locale.ROOT)
+    } else {
+      value.getText
+    }
+  }
+
+  private def withTableArgument(ctx: TableArgumentListContext, plan: LogicalPlan) = withOrigin(ctx) {
+    val args = ctx.tableArgument()
+    val argMap = args.asScala.map(arg => {
+      val key = visitTableArgumentKey(arg.key)
+      val value = visitTableArgumentValue(arg.value)
+      key -> value
+    })
+    checkDuplicateKeys(argMap, ctx)
+    TableArgumentRelation(plan, argMap.toMap)
   }
 
   private def withTimeTravel(
@@ -3279,7 +3323,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     // partition transforms for BucketSpec was moved inside parser
     // https://issues.apache.org/jira/browse/SPARK-37923
     val partitioning =
-      partitionExpressions(partTransforms, partCols, ctx) ++ bucketSpec.map(_.asTransform)
+    partitionExpressions(partTransforms, partCols, ctx) ++ bucketSpec.map(_.asTransform)
     val tableSpec = TableSpec(properties, provider, options, location, comment,
       serdeInfo, external)
 
@@ -3295,8 +3339,8 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
           "Partition column types may not be specified in Create Table As Select (CTAS)",
           ctx)
 
-        // CreateTable / CreateTableAsSelect was migrated to v2 in Spark 3.3.0
-        // https://issues.apache.org/jira/browse/SPARK-36850
+      // CreateTable / CreateTableAsSelect was migrated to v2 in Spark 3.3.0
+      // https://issues.apache.org/jira/browse/SPARK-36850
       case Some(query) =>
         CreateTableAsSelect(
           UnresolvedDBObjectName(table, isNamespace = false),

@@ -17,12 +17,12 @@
 
 package org.apache.spark.sql.hudi.logical
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{ Command, LogicalPlan}
+import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
 
 case class TableArgumentRelation(
-                               table: LogicalPlan,
-                               args: Seq[String]) extends Command {
+                                  table: LogicalPlan,
+                                  args: Map[String, String]) extends Command {
   override def children: Seq[LogicalPlan] = Seq.empty
 
   override def output: Seq[Attribute] = Nil

@@ -21,10 +21,10 @@ import org.apache.hudi.DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, SparkAdapterSupport}
-import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation, UnresolvedStar}
-import org.apache.spark.sql.catalyst.catalog.{CatalogUtils, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, GenericInternalRow, Literal, NamedExpression}
-import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
@@ -39,6 +39,7 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util
 import scala.collection.JavaConverters._
+import scala.collection.immutable.HashSet
 import scala.collection.mutable.ListBuffer
 
 object HoodieAnalysis {
@@ -133,19 +134,19 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
       // Convert to MergeIntoHoodieTableCommand
-      case m @ MergeIntoTable(target, _, _, _, _)
+      case m@MergeIntoTable(target, _, _, _, _)
         if m.resolved && sparkAdapter.isHoodieTable(target, sparkSession) =>
-          MergeIntoHoodieTableCommand(m)
+        MergeIntoHoodieTableCommand(m)
 
       // Convert to UpdateHoodieTableCommand
-      case u @ UpdateTable(table, _, _)
+      case u@UpdateTable(table, _, _)
         if u.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
-          UpdateHoodieTableCommand(u)
+        UpdateHoodieTableCommand(u)
 
       // Convert to DeleteHoodieTableCommand
-      case d @ DeleteFromTable(table, _)
+      case d@DeleteFromTable(table, _)
         if d.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
-          DeleteHoodieTableCommand(d)
+        DeleteHoodieTableCommand(d)
 
       // Convert to InsertIntoHoodieTableCommand
       case l if sparkAdapter.getCatalystPlanUtils.isInsertInto(l) =>
@@ -160,7 +161,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
       // Convert to CreateHoodieTableAsSelectCommand
       case CreateTable(table, mode, Some(query))
         if query.resolved && sparkAdapter.isHoodieTable(table) =>
-          CreateHoodieTableAsSelectCommand(table, mode, query)
+        CreateHoodieTableAsSelectCommand(table, mode, query)
 
       // Convert to CompactionHoodieTableCommand
       case CompactionTable(table, operation, options)
@@ -260,7 +261,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     // Resolve merge into
-    case mergeInto @ MergeIntoTable(target, source, mergeCondition, matchedActions, notMatchedActions)
+    case mergeInto@MergeIntoTable(target, source, mergeCondition, matchedActions, notMatchedActions)
       if sparkAdapter.isHoodieTable(target, sparkSession) && target.resolved =>
       val resolver = sparkSession.sessionState.conf.resolver
       val resolvedSource = analyzer.execute(source)
@@ -312,7 +313,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       }
 
       def resolveConditionAssignments(condition: Option[Expression],
-        assignments: Seq[Assignment]): (Option[Expression], Seq[Assignment]) = {
+                                      assignments: Seq[Assignment]): (Option[Expression], Seq[Assignment]) = {
         val resolvedCondition = condition.map(resolveExpressionFrom(resolvedSource)(_))
         val resolvedAssignments = if (isInsertOrUpdateStar(assignments)) {
           // assignments is empty means insert * or update set *
@@ -320,7 +321,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           val targetOutput = target.output.filter(attr => !HoodieSqlCommonUtils.isMetaField(attr.name))
           val resolvedSourceColumnNames = resolvedSourceOutput.map(_.name)
 
-          if(targetOutput.filter(attr => resolvedSourceColumnNames.exists(resolver(_, attr.name))).equals(targetOutput)){
+          if (targetOutput.filter(attr => resolvedSourceColumnNames.exists(resolver(_, attr.name))).equals(targetOutput)) {
             //If sourceTable's columns contains all targetTable's columns,
             //We fill assign all the source fields to the target fields by column name matching.
             targetOutput.map(targetAttr => {
@@ -335,7 +336,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           }
         } else {
           // For Spark3.2, InsertStarAction/UpdateStarAction's assignments will contain the meta fields.
-          val withoutMetaAttrs = assignments.filterNot{ assignment =>
+          val withoutMetaAttrs = assignments.filterNot { assignment =>
             if (assignment.key.isInstanceOf[Attribute]) {
               HoodieSqlCommonUtils.isMetaField(assignment.key.asInstanceOf[Attribute].name)
             } else {
@@ -370,9 +371,9 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
 
           // Get the map of target attribute to value of the update assignments.
           val target2Values = resolvedAssignments.map {
-              case Assignment(attr: AttributeReference, value) =>
-                attr.name -> value
-              case o => throw new IllegalArgumentException(s"Assignment key must be an attribute, current is: ${o.key}")
+            case Assignment(attr: AttributeReference, value) =>
+              attr.name -> value
+            case o => throw new IllegalArgumentException(s"Assignment key must be an attribute, current is: ${o.key}")
           }.toMap
 
           // Validate if there are incorrect target attributes.
@@ -395,7 +396,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
                   s" please complete all the target fields just like '...update set id = s0.id, name = s0.name ....'")
               }
               if (preCombineField.isDefined && preCombineField.get.equalsIgnoreCase(attr.name)
-                  && valueOption.isEmpty) {
+                && valueOption.isEmpty) {
                 throw new AnalysisException(s"Missing specify value for the preCombineField:" +
                   s" ${preCombineField.get} in merge-into update action. You should add" +
                   s" '... update set ${preCombineField.get} = xx....' to the when-matched clause.")
@@ -439,13 +440,13 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       val resolvedAssignments = assignments.map(assignment => {
         val resolvedKey = resolveExpressionFrom(table)(assignment.key)
         val resolvedValue = resolveExpressionFrom(table)(assignment.value)
-          Assignment(resolvedKey, resolvedValue)
+        Assignment(resolvedKey, resolvedValue)
       })
       // Return the resolved UpdateTable
       UpdateTable(table, resolvedAssignments, resolvedCondition)
 
     // Resolve Delete Table
-    case dft @ DeleteFromTable(table, condition)
+    case dft@DeleteFromTable(table, condition)
       if sparkAdapter.isHoodieTable(table, sparkSession) && table.resolved =>
       val resolveExpression = resolveExpressionFrom(table, None)(_)
       sparkAdapter.resolveDeleteFromTable(dft, resolveExpression)
@@ -506,7 +507,67 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       } else {
         l
       }
+    case rta if sparkAdapter.getCatalystPlanUtils.isRelationTableArgument(rta) =>
+      val (plan: UnresolvedRelation, queryArgs) = sparkAdapter.getCatalystPlanUtils.getRelationTableArgument(rta).get
+      val tableIdentifier: TableIdentifier = sparkAdapter.getCatalystPlanUtils.toTableIdentifier(plan)
+      if (sparkAdapter.isHoodieTable(tableIdentifier, sparkSession)) {
+        // Add a white list to the key to prevent users from adding other parameters
+        val KeyWhiteSet: HashSet[String] = HashSet(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
+          , DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL
+          , DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
+          , DataSourceReadOptions.INCREMENTAL_FORMAT_LATEST_STATE_VAL
+          , DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL
+          , DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL
+          , DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL
+          , DataSourceReadOptions.INCREMENTAL_FORMAT.key()
+          , DataSourceReadOptions.QUERY_TYPE.key()
+          , DataSourceReadOptions.REALTIME_MERGE.key()
+          , DataSourceReadOptions.READ_PATHS.key()
+          , DataSourceReadOptions.READ_PRE_COMBINE_FIELD.key()
+          , DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key()
+          , DataSourceReadOptions.BEGIN_INSTANTTIME.key()
+          , DataSourceReadOptions.END_INSTANTTIME.key()
+          , DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key()
+          , DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS.key()
+          , DataSourceReadOptions.INCR_PATH_GLOB.key()
+          , DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key()
+          , DataSourceReadOptions.ENABLE_DATA_SKIPPING.key()
+          , DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key()
+          , DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key()
+          , DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key()
+        )
+        val notAllowKey = new StringBuilder()
+        queryArgs.keySet.foreach(key => {
+          if (!KeyWhiteSet.contains(key)) {
+            if (notAllowKey.length == 0) {
+              notAllowKey.append(key)
+            } else {
+              notAllowKey.append(",").append(key)
+            }
+          }
+        })
+        if (notAllowKey.length > 0) {
+          throw new AnalysisException(
+            s"only support hudi read options,not support (${notAllowKey.toString()})")
+        }
+        val hoodieCatalogTable: HoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
+        val table: CatalogTable = hoodieCatalogTable.table
+        val pathOption: Option[(String, String)] = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
+        val dataSource: DataSource =
+          DataSource(
+            sparkSession,
+            userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
+            partitionColumns = table.partitionColumnNames,
+            bucketSpec = table.bucketSpec,
+            className = table.provider.get,
+            options = table.storage.properties ++ pathOption ++ queryArgs,
+            catalogTable = Some(table))
+        LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
+      }
 
+      else {
+        rta
+      }
     case p => p
   }
 
@@ -538,7 +599,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
     exp match {
       case Alias(_, name) if metaFields.contains(name.toLowerCase) => true
       case AttributeReference(name, _, _, _) if metaFields.contains(name.toLowerCase) => true
-      case _=> false
+      case _ => false
     }
   }
 
@@ -547,13 +608,14 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
    * 1、 Fake a a project for the expression based on the source plan
    * 2、 Resolve the fake project
    * 3、 Get the resolved expression from the faked project
-   * @param left The left source plan for the expression.
-   * @param right The right source plan for the expression.
+   *
+   * @param left       The left source plan for the expression.
+   * @param right      The right source plan for the expression.
    * @param expression The expression to resolved.
    * @return The resolved expression.
    */
   private def resolveExpressionFrom(left: LogicalPlan, right: Option[LogicalPlan] = None)
-                        (expression: Expression): Expression = {
+                                   (expression: Expression): Expression = {
     // Fake a project for the expression based on the source plan.
     val fakeProject = if (right.isDefined) {
       Project(Seq(Alias(expression, "_c0")()),
@@ -569,8 +631,14 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       case attr: UnresolvedAttribute => attr
     }
     if (unResolvedAttrs.nonEmpty) {
-      throw new AnalysisException(s"Cannot resolve ${unResolvedAttrs.mkString(",")} in " +
-        s"${expression.sql}, the input " + s"columns is: [${fakeProject.child.output.mkString(", ")}]")
+      throw new AnalysisException(s"Cannot resolve ${
+        unResolvedAttrs.mkString(",")
+      } in " +
+        s"${
+          expression.sql
+        }, the input " + s"columns is: [${
+        fakeProject.child.output.mkString(", ")
+      }]")
     }
     // Fetch the resolved expression from the fake project.
     resolvedProject.projectList.head.asInstanceOf[Alias].child
@@ -579,6 +647,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
 
 /**
  * Rule for rewrite some spark commands to hudi's implementation.
+ *
  * @param sparkSession
  */
 case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
@@ -595,25 +664,25 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       // Rewrite the AlterTableDropPartitionCommand to AlterHoodieTableDropPartitionCommand
       case AlterTableDropPartitionCommand(tableName, specs, ifExists, purge, retainData)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
-          AlterHoodieTableDropPartitionCommand(tableName, specs, ifExists, purge, retainData)
+        AlterHoodieTableDropPartitionCommand(tableName, specs, ifExists, purge, retainData)
       // Rewrite the AlterTableRenameCommand to AlterHoodieTableRenameCommand
       // Rewrite the AlterTableAddColumnsCommand to AlterHoodieTableAddColumnsCommand
       case AlterTableAddColumnsCommand(tableId, colsToAdd)
         if sparkAdapter.isHoodieTable(tableId, sparkSession) =>
-          AlterHoodieTableAddColumnsCommand(tableId, colsToAdd)
+        AlterHoodieTableAddColumnsCommand(tableId, colsToAdd)
       // Rewrite the AlterTableRenameCommand to AlterHoodieTableRenameCommand
       case AlterTableRenameCommand(oldName, newName, isView)
         if !isView && sparkAdapter.isHoodieTable(oldName, sparkSession) =>
-          AlterHoodieTableRenameCommand(oldName, newName, isView)
+        AlterHoodieTableRenameCommand(oldName, newName, isView)
       // Rewrite the AlterTableChangeColumnCommand to AlterHoodieTableChangeColumnCommand
       case AlterTableChangeColumnCommand(tableName, columnName, newColumn)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
-          AlterHoodieTableChangeColumnCommand(tableName, columnName, newColumn)
+        AlterHoodieTableChangeColumnCommand(tableName, columnName, newColumn)
       // SPARK-34238: the definition of ShowPartitionsCommand has been changed in Spark3.2.
       // Match the class type instead of call the `unapply` method.
       case s: ShowPartitionsCommand
         if sparkAdapter.isHoodieTable(s.tableName, sparkSession) =>
-          ShowHoodieTablePartitionsCommand(s.tableName, s.spec)
+        ShowHoodieTablePartitionsCommand(s.tableName, s.spec)
       // Rewrite TruncateTableCommand to TruncateHoodieTableCommand
       case TruncateTableCommand(tableName, partitionSpec)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>

@@ -709,7 +709,7 @@ identifierComment
     ;
 
 relationPrimary
-    : multipartIdentifier temporalClause?
+    : multipartIdentifier tableArgumentList? temporalClause?
       sample? tableAlias                      #tableName
     | '(' query ')' sample? tableAlias        #aliasedQuery
     | '(' relation ')' sample? tableAlias     #aliasedRelation
@@ -1039,6 +1039,25 @@ alterColumnAction
     | commentSpec
     | colPosition
     | setOrDrop=(SET | DROP) NOT NULL
+    ;
+tableArgumentList
+    : '(' (tableArgument (',' tableArgument)*)? ')'
+    ;
+
+tableArgument
+   : key=tableArgumentKey '=' value=tableArgumentValue
+   ;
+
+tableArgumentKey
+    : identifier ('.' identifier)*
+    | STRING
+    ;
+
+tableArgumentValue
+    : INTEGER_VALUE
+    | DECIMAL_VALUE
+    | booleanValue
+    | STRING
     ;
 
 // When `SQL_standard_keyword_behavior=true`, there are 2 kinds of keywords in Spark SQL.

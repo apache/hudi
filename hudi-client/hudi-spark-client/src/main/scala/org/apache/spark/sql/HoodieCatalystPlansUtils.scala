@@ -80,9 +80,20 @@ trait HoodieCatalystPlansUtils {
   def isRelationTimeTravel(plan: LogicalPlan): Boolean
 
   /**
+   * if the logical plan is a TableArgumentRelation LogicalPlan.
+   */
+  def isRelationTableArgument(plan: LogicalPlan): Boolean
+
+
+  /**
    * Get the member of the TimeTravelRelation LogicalPlan.
    */
   def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])]
+
+  /**
+   * Get the member of the TableArgumentRelation LogicalPlan.
+   */
+  def getRelationTableArgument(plan: LogicalPlan): Option[(LogicalPlan, Map[String, String])]
 
   /**
    * Create a Insert Into LogicalPlan.
