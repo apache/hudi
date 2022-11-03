@@ -18,30 +18,13 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
-import java.util.function.Function;
-
 /**
- * Buffer producer which allows custom functions to insert entries to queue.
- *
- * @param <I> Type of entry produced for queue
+ * HoodieConsumer is used to consume records/messages from hoodie inner message queue and write into DFS.
  */
-public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
+public interface HoodieConsumer<I, O> {
 
-  private static final Logger LOG = LogManager.getLogger(FunctionBasedQueueProducer.class);
-
-  private final Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction;
-
-  public FunctionBasedQueueProducer(Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction) {
-    this.producerFunction = producerFunction;
-  }
-
-  @Override
-  public void produce(HoodieMessageQueue<I, ?> queue) {
-    LOG.info("starting function which will enqueue records");
-    producerFunction.apply(queue);
-    LOG.info("finished function which will enqueue records");
-  }
+  /**
+   * Consume records from inner message queue.
+   */
+  O consume(HoodieMessageQueue<?, I> queue) throws Exception;
 }

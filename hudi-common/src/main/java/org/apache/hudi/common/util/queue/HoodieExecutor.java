@@ -18,30 +18,27 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
-import java.util.function.Function;
+import java.io.Closeable;
 
 /**
- * Buffer producer which allows custom functions to insert entries to queue.
- *
- * @param <I> Type of entry produced for queue
+ * HoodieExecutor which orchestrates concurrent producers and consumers communicating through a bounded in message queue.
  */
-public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
+public interface HoodieExecutor<I, O, E> extends Closeable {
 
-  private static final Logger LOG = LogManager.getLogger(FunctionBasedQueueProducer.class);
+  /**
+   * Main API to
+   * 1. Set up and run all the production
+   * 2. Set up and run all the consumption.
+   * 3. Shutdown and return the result.
+   */
+  E execute();
 
-  private final Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction;
+  boolean isRemaining();
 
-  public FunctionBasedQueueProducer(Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction) {
-    this.producerFunction = producerFunction;
-  }
+  /**
+   * Shutdown all the consumers and producers.
+   */
+  void shutdownNow();
 
-  @Override
-  public void produce(HoodieMessageQueue<I, ?> queue) {
-    LOG.info("starting function which will enqueue records");
-    producerFunction.apply(queue);
-    LOG.info("finished function which will enqueue records");
-  }
+  boolean awaitTermination();
 }

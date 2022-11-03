@@ -18,30 +18,17 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
-import java.util.function.Function;
-
 /**
- * Buffer producer which allows custom functions to insert entries to queue.
+ * Producer for {@link HoodieMessageQueue}. Memory Bounded Buffer supports multiple producers single consumer pattern.
  *
- * @param <I> Type of entry produced for queue
+ * @param <I> Input type for buffer items produced
  */
-public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
+public interface HoodieProducer<I> {
 
-  private static final Logger LOG = LogManager.getLogger(FunctionBasedQueueProducer.class);
-
-  private final Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction;
-
-  public FunctionBasedQueueProducer(Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction) {
-    this.producerFunction = producerFunction;
-  }
-
-  @Override
-  public void produce(HoodieMessageQueue<I, ?> queue) {
-    LOG.info("starting function which will enqueue records");
-    producerFunction.apply(queue);
-    LOG.info("finished function which will enqueue records");
-  }
+  /**
+   * API to enqueue entries to bounded queue.
+   *
+   * @param queue In Memory bounded queue
+   */
+  void produce(HoodieMessageQueue<I, ?> queue) throws Exception;
 }

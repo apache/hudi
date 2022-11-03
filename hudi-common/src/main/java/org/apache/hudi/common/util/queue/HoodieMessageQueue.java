@@ -18,30 +18,36 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
-import java.util.function.Function;
+import org.apache.hudi.common.util.Option;
+import java.io.Closeable;
 
 /**
- * Buffer producer which allows custom functions to insert entries to queue.
- *
- * @param <I> Type of entry produced for queue
+ * HoodieMessageQueue holds an internal message queue, and control the behavior of
+ * 1. insert record into internal message queue.
+ * 2. get record from internal message queue.
+ * 3. close internal message queue.
  */
-public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
+public interface HoodieMessageQueue<I, O> extends Closeable {
 
-  private static final Logger LOG = LogManager.getLogger(FunctionBasedQueueProducer.class);
+  /**
+   * Returns the number of elements in this queue.
+   */
+  long size();
 
-  private final Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction;
+  /**
+   * Insert a record into inner message queue.
+   */
+  void insertRecord(I t) throws Exception;
 
-  public FunctionBasedQueueProducer(Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction) {
-    this.producerFunction = producerFunction;
-  }
+  /**
+   * Read records from inner message queue.
+   */
+  Option<O> readNextRecord();
 
-  @Override
-  public void produce(HoodieMessageQueue<I, ?> queue) {
-    LOG.info("starting function which will enqueue records");
-    producerFunction.apply(queue);
-    LOG.info("finished function which will enqueue records");
-  }
+  /**
+   * API to allow producers and consumer to communicate termination due to failure.
+   */
+  void markAsFailed(Throwable e);
+
+  boolean isEmpty();
 }
