@@ -62,7 +62,7 @@ public class HoodieDropPartitionTest {
   @Test
   public void dropPartitionTest() throws Exception {
     HoodieDropPartitionTest cli = new HoodieDropPartitionTest();
-      cli.run();
+    cli.run();
   }
 
   private void stream(Dataset<Row> streamingInput, String operationType, String checkpointLocation) throws Exception {
