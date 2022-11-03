@@ -532,6 +532,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      releaseResources(instantTime);
       autoCleanOnCommit();
       autoArchiveOnCommit(table, acquireLockForArchival);
     } finally {

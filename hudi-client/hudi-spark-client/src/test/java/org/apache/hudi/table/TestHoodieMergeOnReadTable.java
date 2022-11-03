@@ -686,9 +686,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
   @Test
   public void testReleaseResource() throws Exception {
-    HoodieWriteConfig.Builder builder = getConfigBuilder(true);
+    HoodieWriteConfig.Builder builder = getConfigBuilder(false);
     builder.withReleaseResourceEnabled(true);
-    builder.withAutoCommit(false);
 
     setUp(builder.build().getProps());
 
@@ -699,14 +698,14 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
-
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
       writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
+
       client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
-      assertEquals(spark().sparkContext().persistentRdds().size(), 0);
+      assertEquals(spark().sparkContext().persistentRdds().size(), 1);
     }
 
     builder.withReleaseResourceEnabled(false);
