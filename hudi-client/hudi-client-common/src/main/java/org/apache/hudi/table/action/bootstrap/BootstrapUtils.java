@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -75,10 +76,11 @@ public class BootstrapUtils {
     }
 
     if (subDirectories.size() > 0) {
+      SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
       result.addAll(context.flatMap(subDirectories, directory -> {
         PathFilter pathFilter = getFilePathFilter(baseFileExtension);
         Path path = new Path(directory);
-        FileSystem fileSystem = FSUtils.getFs(path, fs.getConf());
+        FileSystem fileSystem = FSUtils.getFs(path, serializedConf.get());
         RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
         List<Pair<HoodieFileStatus, Pair<Integer, String>>> res = new ArrayList<>();
         while (itr.hasNext()) {
