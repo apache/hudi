@@ -30,6 +30,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.io.DateWritable;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
+import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.HiveDecimalUtils;
 import org.apache.hadoop.io.ArrayWritable;
@@ -54,6 +55,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.sql.Timestamp;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -176,6 +178,9 @@ public class HoodieRealtimeRecordReaderUtils {
         }
         return new IntWritable((Integer) value);
       case LONG:
+        if (schema.getLogicalType() != null && "timestamp-micros".equals(schema.getLogicalType().getName())) {
+          return new TimestampWritable(new Timestamp((Long) value));
+        }
         return new LongWritable((Long) value);
       case FLOAT:
         return new FloatWritable((Float) value);
