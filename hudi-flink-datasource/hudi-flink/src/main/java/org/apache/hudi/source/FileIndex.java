@@ -298,4 +298,9 @@ public class FileIndex {
 
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
   }
+
+  @VisibleForTesting
+  public List<ResolvedExpression> getFilters() {
+    return filters;
+  }
 }
