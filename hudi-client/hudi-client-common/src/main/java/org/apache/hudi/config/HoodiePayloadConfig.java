@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.File;
 import java.io.FileReader;
@@ -31,6 +32,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY;
 import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY;
+import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_PARTIAL_UPDATE_FIELDS_PROP_KEY;
 
 /**
  * Hoodie payload related configs.
@@ -52,6 +54,12 @@ public class HoodiePayloadConfig extends HoodieConfig {
       .defaultValue("ts")
       .withDocumentation("Table column/field name to derive timestamp associated with the records. This can"
           + "be useful for e.g, determining the freshness of the table.");
+
+  public static final ConfigProperty<String> PARTIAL_UPDATE_FIELDS = ConfigProperty
+      .key(PAYLOAD_PARTIAL_UPDATE_FIELDS_PROP_KEY)
+      .defaultValue("")
+      .sinceVersion("0.13.0")
+      .withDocumentation("hoodie partial update fields. ");
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
@@ -98,6 +106,14 @@ public class HoodiePayloadConfig extends HoodieConfig {
 
     public Builder withPayloadEventTimeField(String payloadEventTimeField) {
       payloadConfig.setValue(EVENT_TIME_FIELD, String.valueOf(payloadEventTimeField));
+      return this;
+    }
+
+    public Builder withPayloadPartialUpdateFields(String payloadPartialUpdateFieldsField) {
+      if (StringUtils.isNullOrEmpty(payloadPartialUpdateFieldsField)) {
+        return this;
+      }
+      payloadConfig.setValue(PARTIAL_UPDATE_FIELDS, String.valueOf(payloadPartialUpdateFieldsField));
       return this;
     }
 
