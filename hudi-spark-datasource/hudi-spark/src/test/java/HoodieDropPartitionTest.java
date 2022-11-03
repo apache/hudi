@@ -60,17 +60,9 @@ public class HoodieDropPartitionTest {
   private String tableType = HoodieTableType.MERGE_ON_READ.name();
 
   @Test
-  public void dropPartitionTest() {
+  public void dropPartitionTest() throws Exception {
     HoodieDropPartitionTest cli = new HoodieDropPartitionTest();
-    int errStatus = 0;
-    try {
       cli.run();
-    } catch (Exception ex) {
-      LOG.error("Got error ", ex);
-      errStatus = -1;
-    } finally {
-      System.exit(errStatus);
-    }
   }
 
   private void stream(Dataset<Row> streamingInput, String operationType, String checkpointLocation) throws Exception {

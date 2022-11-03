@@ -41,7 +41,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -52,7 +51,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -61,7 +59,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.log4j.LogManager;
@@ -286,15 +283,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     if (useWriterSchema) {
       return hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, recordProperties);
     } else {
-      // if the DROP_PARTITION_COLUMNS is enabled ,remove partition fields from table schema.
-      if (Boolean.parseBoolean(recordProperties.getProperty(String.valueOf(HoodieTableConfig.DROP_PARTITION_COLUMNS.key())))) {
-        String[] partitionFields = recordProperties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",");
-        Set<String> removeFields = CollectionUtils.createSet(partitionFields);
-        Schema schema = HoodieAvroUtils.removeFields(tableSchema, removeFields);
-        return hoodieRecord.getData().getInsertValue(schema, recordProperties);
-      } else {
-        return hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
-      }
+      return hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
     }
   }
 

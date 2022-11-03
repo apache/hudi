@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.InternalSchemaCache;
+import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
@@ -84,7 +85,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
           : CompactionUtils.getLogCompactionPlan(table.getMetaClient(), instantTime);
 
       // try to load internalSchema to support schema Evolution
-      HoodieWriteConfig configCopy = config;
+      HoodieWriteConfig configCopy = SerializationUtils.deserialize(SerializationUtils.serialize(config));
       Pair<Option<String>, Option<String>> schemaPair = InternalSchemaCache
           .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
       if (schemaPair.getLeft().isPresent() && schemaPair.getRight().isPresent()) {
