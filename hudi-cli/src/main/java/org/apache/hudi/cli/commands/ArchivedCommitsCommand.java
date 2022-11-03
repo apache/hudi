@@ -18,16 +18,14 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.specific.SpecificData;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCommitMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
+import org.apache.hudi.cli.utils.InputStreamConsumer;
+import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -37,6 +35,16 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.specific.SpecificData;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.spark.launcher.SparkLauncher;
+import org.apache.spark.util.Utils;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -52,6 +60,37 @@ import java.util.stream.Collectors;
  */
 @ShellComponent
 public class ArchivedCommitsCommand {
+  private static final Logger LOG = LogManager.getLogger(ArchivedCommitsCommand.class);
+  @ShellMethod(key = "trigger archival", value = "trigger archival")
+  public String triggerArchival(
+      @ShellOption(value = {"--minCommits"},
+        help = "Minimum number of instants to retain in the active timeline. See hoodie.keep.min.commits",
+        defaultValue = "20") int minCommits,
+      @ShellOption(value = {"--maxCommits"},
+          help = "Maximum number of instants to retain in the active timeline. See hoodie.keep.max.commits",
+          defaultValue = "30") int maxCommits,
+      @ShellOption(value = {"--commitsRetainedByCleaner"}, help = "Number of commits to retain, without cleaning",
+          defaultValue = "10") int retained,
+      @ShellOption(value = {"--enableMetadata"},
+          help = "Enable the internal metadata table which serves table metadata like level file listings",
+          defaultValue = "true") boolean enableMetadata,
+      @ShellOption(value = "--sparkMemory", defaultValue = "1G",
+          help = "Spark executor memory") final String sparkMemory,
+      @ShellOption(value = "--sparkMaster", defaultValue = "local", help = "Spark Master") String master) throws Exception {
+    String sparkPropertiesPath =
+        Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    String cmd = SparkCommand.ARCHIVE.toString();
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, Integer.toString(minCommits), Integer.toString(maxCommits),
+        Integer.toString(retained), Boolean.toString(enableMetadata), HoodieCLI.basePath);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+    if (exitCode != 0) {
+      return "Failed to trigger archival";
+    }
+    return "Archival successfully triggered";
+  }
 
   @ShellMethod(key = "show archived commit stats", value = "Read commits from archived files and show details")
   public String showArchivedCommits(
@@ -206,4 +245,5 @@ public class ArchivedCommitsCommand {
       return new Comparable[] {};
     }
   }
+
 }
