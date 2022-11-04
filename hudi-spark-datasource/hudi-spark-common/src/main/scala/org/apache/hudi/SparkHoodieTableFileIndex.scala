@@ -25,7 +25,8 @@ import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, generateField
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
+import org.apache.hudi.common.model.{FileSlice, HoodiePartitionIncrementalSnapshot, HoodiePartitionSnapshot, HoodieTableQueryType}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.hadoop.CachingPath.createPathUnsafe
@@ -41,18 +42,19 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.util
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
  *
- * @param spark spark session
- * @param metaClient Hudi table's meta-client
- * @param schemaSpec optional table's schema
- * @param configProperties unifying configuration (in the form of generic properties)
+ * @param spark                 spark session
+ * @param metaClient            Hudi table's meta-client
+ * @param schemaSpec            optional table's schema
+ * @param configProperties      unifying configuration (in the form of generic properties)
  * @param specifiedQueryInstant instant as of which table is being queried
- * @param fileStatusCache transient cache of fetched [[FileStatus]]es
+ * @param fileStatusCache       transient cache of fetched [[FileStatus]]es
  */
 class SparkHoodieTableFileIndex(spark: SparkSession,
                                 metaClient: HoodieTableMetaClient,
@@ -167,6 +169,18 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     prunedPartitions.map(partition => {
       (partition.path, cachedAllInputFileSlices.get(partition).asScala)
     }).toMap
+  }
+
+  override def listFilesAt(instant: HoodieInstant, filters: util.List[_]): util.List[HoodiePartitionSnapshot] = {
+    // TODO
+    super.listFilesAt(instant, filters)
+  }
+
+  override def listFilesBetween(from: HoodieInstant,
+                                to: HoodieInstant,
+                                filters: util.List[_]): util.List[HoodiePartitionIncrementalSnapshot] = {
+    // TODO
+    super.listFilesBetween(from, to, filters)
   }
 
   /**
@@ -291,30 +305,30 @@ object SparkHoodieTableFileIndex {
    *
    * For example, following struct
    * <pre>
-   *   StructType(
-   *     StructField("a",
-   *       StructType(
-   *          StructField("b", StringType),
-   *          StructField("c", IntType)
-   *       )
-   *     )
-   *   )
+   * StructType(
+   * StructField("a",
+   * StructType(
+   * StructField("b", StringType),
+   * StructField("c", IntType)
+   * )
+   * )
+   * )
    * </pre>
    *
    * will be converted into following mapping:
    *
    * <pre>
-   *   "a.b" -> StructField("b", StringType),
-   *   "a.c" -> StructField("c", IntType),
+   * "a.b" -> StructField("b", StringType),
+   * "a.c" -> StructField("c", IntType),
    * </pre>
    */
-  private def generateFieldMap(structType: StructType) : Map[String, StructField] = {
-    def traverse(structField: Either[StructField, StructType]) : Map[String, StructField] = {
+  private def generateFieldMap(structType: StructType): Map[String, StructField] = {
+    def traverse(structField: Either[StructField, StructType]): Map[String, StructField] = {
       structField match {
         case Right(struct) => struct.fields.flatMap(f => traverse(Left(f))).toMap
         case Left(field) => field.dataType match {
           case struct: StructType => traverse(Right(struct)).map {
-            case (key, structField)  => (s"${field.name}.$key", structField)
+            case (key, structField) => (s"${field.name}.$key", structField)
           }
           case _ => Map(field.name -> field)
         }
@@ -329,14 +343,16 @@ object SparkHoodieTableFileIndex {
       case QUERY_TYPE_SNAPSHOT_OPT_VAL => HoodieTableQueryType.SNAPSHOT
       case QUERY_TYPE_INCREMENTAL_OPT_VAL => HoodieTableQueryType.INCREMENTAL
       case QUERY_TYPE_READ_OPTIMIZED_OPT_VAL => HoodieTableQueryType.READ_OPTIMIZED
-      case _ @ qt => throw new IllegalArgumentException(s"query-type ($qt) not supported")
+      case _@qt => throw new IllegalArgumentException(s"query-type ($qt) not supported")
     }
   }
 
   private def adapt(cache: FileStatusCache): BaseHoodieTableFileIndex.FileStatusCache = {
     new BaseHoodieTableFileIndex.FileStatusCache {
       override def get(path: Path): org.apache.hudi.common.util.Option[Array[FileStatus]] = toJavaOption(cache.getLeafFiles(path))
+
       override def put(path: Path, leafFiles: Array[FileStatus]): Unit = cache.putLeafFiles(path, leafFiles)
+
       override def invalidate(): Unit = cache.invalidateAll()
     }
   }

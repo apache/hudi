@@ -25,6 +25,8 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionIncrementalSnapshot;
+import org.apache.hudi.common.model.HoodiePartitionSnapshot;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -167,6 +169,33 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return cachedAllInputFileSlices.entrySet()
         .stream()
         .collect(Collectors.toMap(e -> e.getKey().path, Map.Entry::getValue));
+  }
+
+  /**
+   * Lists files added visible/reachable at the instant `to`, that were
+   * added no earlier than at the instant `from`.
+   *
+   * @param from    start instant of incremental timeline
+   * @param to      end instant of incremental timeline
+   * @param filters any partition predicate
+   * @return
+   */
+  public List<HoodiePartitionIncrementalSnapshot> listFilesBetween(HoodieInstant from, HoodieInstant to, List<?> filters) {
+    return null;
+  }
+
+  /**
+   * Lists files visible/reachable at the given `instant`.
+   *
+   * @param instant
+   * @param filters
+   * @return
+   */
+  public List<HoodiePartitionSnapshot> listFilesAt(HoodieInstant instant, List<?> filters) {
+    return listFilesBetween(null, instant, filters)
+        .stream()
+        .map(snapshot -> new HoodiePartitionSnapshot(snapshot.getPartitionDescriptor(), instant, snapshot.getFileSlices()))
+        .collect(Collectors.toList());
   }
 
   public int getFileSlicesCount() {
