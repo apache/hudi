@@ -232,9 +232,8 @@ object HoodieSparkSqlWriter {
                       val regexPartition = "^" + partition.replace("*",".*") + "$"
                       fullPartitions.append(allPartitions.filter(_.matches(regexPartition)): _*)
                 })
-                fullPartitions.toList
               }
-
+              fullPartitions.distinct.toList
             } else {
               val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
