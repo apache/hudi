@@ -872,7 +872,7 @@ class TestHoodieSparkSqlWriter {
          |   dt string
          | ) using hudi
          | partitioned by (dt)
-         | tblproperties (
+         | options (
          |  primaryKey = 'id'
          | )
          | location '$tablePath1'
