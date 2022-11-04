@@ -45,7 +45,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -84,8 +83,10 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     dataGen = new HoodieTestDataGenerator();
   }
 
-  @Test
-  public void testWriteDuringCompaction() throws IOException {
+  @ParameterizedTest
+  @MethodSource("writePayloadTest")
+  public void testWriteDuringCompaction(String payloadClass) throws IOException {
+    Properties props = getPropertiesForKeyGen(true);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
         .withPath(basePath())
@@ -99,10 +100,8 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withLayoutConfig(HoodieLayoutConfig.newBuilder()
             .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
         .build();
-
-    Properties props = getPropertiesForKeyGen(true);
     props.putAll(config.getProps());
 
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
@@ -131,6 +130,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   @ParameterizedTest
   @MethodSource("writeLogTest")
   public void testWriteLogDuringCompaction(boolean enableMetadataTable, boolean enableTimelineServer) throws IOException {
+    Properties props = getPropertiesForKeyGen(true);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
         .withPath(basePath())
@@ -144,10 +144,8 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withLayoutConfig(HoodieLayoutConfig.newBuilder()
             .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
         .build();
-
-    Properties props = getPropertiesForKeyGen(true);
     props.putAll(config.getProps());
 
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
