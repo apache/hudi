@@ -276,6 +276,54 @@ class FileSliceReader {
 }
 ```
 
+Here `HoodieRecord` is an abstraction as defined in RFC-46 and it will provide
+APIs to implement functionality similar to `AvroUtils`. We will need to implement
+`HoodieRecord` for `ArrayWritable`. In additional to that, we will also need an
+implementation of `HoodieRecordMerger` that will handle merge functionality for `ArrayWritable`.
+
+```java
+class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
+    
+    @Override
+    public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
+        // Join this record with other
+    }
+
+    @Override
+    public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) {
+        // Rewrite record into new schema
+    }
+}
+
+class HoodieHiveRecordMerger implements HoodieRecordMerger {
+
+   @Override
+   public String getMergingStrategy() {
+      return UUID_MERGER_STRATEGY;
+   }
+  
+   @Override
+   Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
+       // HoodieArrayWritableRecord precombine and combineAndGetUpdateValue. 
+       // It'd be associative operation.
+   }
+
+   @Override
+   HoodieRecordType getRecordType() {
+      return HoodieRecordType.HIVE;
+   }
+}
+```
+
+To see how `FileSliceReader` will be used, let's take example of Presto.
+`HoodieMergedLogRecordScanner#getRecords` API will be returning
+opaque `HoodieRecord`s as returned by `FileSliceReader#open`. 
+`HoodieRealtimeRecordReader` will implement `RecordReader` APIs using the
+aforementioned log scanner API. Then, in Presto we can create `RecordCursor`
+wrapping around `RecordReader`. The key advantage here is that
+the `HoodieRealtimeRecordReader` won't have to spend cycles
+converting `ArrayWritable` to `Avro` and vice-versa as it does today.
+
 **Expression** and **Predicate**
 
 ```java
