@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.hive.ql.io.SelfDescribingInputFormatInterface;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.io.ArrayWritable;
@@ -46,8 +45,7 @@ import java.util.stream.IntStream;
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
-public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase implements
-    SelfDescribingInputFormatInterface {
+public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
   private static final Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
 
