@@ -801,7 +801,7 @@ class TestHoodieSparkSqlWriter {
     var recordsToDelete = spark.emptyDataFrame
     if (usePartitionsToDeleteConfig) {
       fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(),
-        HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH+","+HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
+        HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "," + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
     } else {
       // delete partitions contains the primary key
       recordsToDelete = df1.filter(entry => {
