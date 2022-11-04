@@ -233,7 +233,7 @@ object HoodieSparkSqlWriter {
                       fullPartitions.append(allPartitions.filter(_.matches(regexPartition)): _*)
                 })
               }
-              fullPartitions.distinct.toList
+              java.util.Arrays.asList(fullPartitions.distinct: _*)
             } else {
               val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
