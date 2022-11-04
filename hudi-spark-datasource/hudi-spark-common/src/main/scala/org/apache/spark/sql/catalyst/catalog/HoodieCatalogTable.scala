@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
-import org.apache.hudi.DataSourceWriteOptions.OPERATION
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
@@ -197,6 +197,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       }
 
       HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(tableConfigs.getOrElse(TABLE_TYPE.key, TABLE_TYPE.defaultValue()))
         .fromProperties(properties)
         .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
@@ -289,12 +290,15 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) = HoodieTableConfig.URL_ENCODE_PARTITIONING.defaultValue()
     }
 
-    if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
+    if (catalogProperties.contains(KEYGENERATOR_CLASS_NAME.key)) {
+      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
+        catalogProperties.get(KEYGENERATOR_CLASS_NAME.key).get
+    } else if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
         HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
           originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
     } else {
-      val primaryKeys = table.properties.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName).getOrElse(SQL_KEY_TABLE_PRIMARY_KEY.defaultValue.get)
+      val primaryKeys = table.properties.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName).getOrElse(RECORDKEY_FIELD.defaultValue)
       val partitions = table.partitionColumnNames.mkString(",")
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
         DataSourceOptionsHelper.inferKeyGenClazz(primaryKeys, partitions)

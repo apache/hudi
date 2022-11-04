@@ -46,14 +46,12 @@ object HoodieOptionConfig {
     .withSqlKey("primaryKey")
     .withHoodieKey(DataSourceWriteOptions.RECORDKEY_FIELD.key)
     .withTableConfigKey(HoodieTableConfig.RECORDKEY_FIELDS.key)
-    .defaultValue(DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
     .build()
 
   val SQL_KEY_TABLE_TYPE: HoodieSQLOption[String] = buildConf()
     .withSqlKey("type")
     .withHoodieKey(DataSourceWriteOptions.TABLE_TYPE.key)
     .withTableConfigKey(HoodieTableConfig.TYPE.key)
-    .defaultValue(SQL_VALUE_TABLE_TYPE_COW)
     .build()
 
   val SQL_KEY_PRECOMBINE_FIELD: HoodieSQLOption[String] = buildConf()
@@ -196,10 +194,11 @@ object HoodieOptionConfig {
     // validate primary key
     val primaryKeys = sqlOptions.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)
       .map(_.split(",").filter(_.length > 0))
-    ValidationUtils.checkArgument(primaryKeys.nonEmpty, "No `primaryKey` is specified.")
-    primaryKeys.get.foreach { primaryKey =>
-      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(primaryKey))),
-        s"Can't find primaryKey `$primaryKey` in ${schema.treeString}.")
+    if (primaryKeys.nonEmpty) {
+      primaryKeys.get.foreach { primaryKey =>
+        ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(primaryKey))),
+          s"Can't find primaryKey `$primaryKey` in ${schema.treeString}.")
+      }
     }
 
     // validate preCombine key
@@ -211,11 +210,13 @@ object HoodieOptionConfig {
 
     // validate table type
     val tableType = sqlOptions.get(SQL_KEY_TABLE_TYPE.sqlKeyName)
-    ValidationUtils.checkArgument(tableType.nonEmpty, "No `type` is specified.")
-    ValidationUtils.checkArgument(
-      tableType.get.equalsIgnoreCase(SQL_VALUE_TABLE_TYPE_COW) ||
-      tableType.get.equalsIgnoreCase(SQL_VALUE_TABLE_TYPE_MOR),
-      s"'type' must be '$SQL_VALUE_TABLE_TYPE_COW' or '$SQL_VALUE_TABLE_TYPE_MOR'")
+
+    if(tableType.nonEmpty) {
+      ValidationUtils.checkArgument(
+        tableType.get.equalsIgnoreCase(SQL_VALUE_TABLE_TYPE_COW) ||
+        tableType.get.equalsIgnoreCase(SQL_VALUE_TABLE_TYPE_MOR),
+        s"'type' must be '$SQL_VALUE_TABLE_TYPE_COW' or '$SQL_VALUE_TABLE_TYPE_MOR'")
+    }
   }
 
   def buildConf[T](): HoodieSQLOptionBuilder[T] = {

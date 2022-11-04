@@ -1014,4 +1014,86 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     checkKeyGenerator("org.apache.hudi.keygen.ComplexKeyGenerator", tableName)
     spark.sql(s"drop table $tableName")
   }
+
+  test("Test CTAS COW Table With DataFrame saveAsTable") {
+    import spark.implicits._
+    val partitionValue = "2022-11-05"
+    val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
+
+    val tableName = generateTableName
+    // Write a table by spark dataframe.saveAsTable
+    // Test default table type and key generator class
+    df.write.format("hudi")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .option(RECORDKEY_FIELD.key, "id")
+      .option(PRECOMBINE_FIELD.key, "ts")
+      .option(PARTITIONPATH_FIELD.key, "dt")
+      .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+      .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+      .partitionBy("dt")
+      .mode(SaveMode.Overwrite)
+      .saveAsTable(tableName)
+
+    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+    val tablePath = table.storage.properties("path")
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(tablePath)
+      .setConf(spark.sessionState.newHadoopConf())
+      .build()
+    val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
+    assertResult(COW_TABLE_TYPE_OPT_VAL)(tableConfig(HoodieTableConfig.TYPE.key()))
+
+    checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, dt from $tableName order by id")(
+      Seq("1", s"dt=$partitionValue", 1, "a1", 10, 1000, partitionValue)
+    )
+
+    // Test insert into
+    spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$partitionValue')")
+    checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, dt from $tableName order by id")(
+      Seq("1", s"dt=$partitionValue", 1, "a1", 10, 1000, partitionValue),
+      Seq("2", s"dt=$partitionValue", 2, "a2", 10, 1000, partitionValue)
+    )
+  }
+
+  test("Test CTAS MOR Table With DataFrame saveAsTable") {
+    import spark.implicits._
+    val partitionValue = "2022-11-05"
+    val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
+
+    val tableName = generateTableName
+    // Write a table by spark dataframe.saveAsTable
+    // Test the compatibility of table type and key generator classes in DF with SQL
+    df.write.format("hudi")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
+      .option(RECORDKEY_FIELD.key, "id")
+      .option(PRECOMBINE_FIELD.key, "ts")
+      .option(PARTITIONPATH_FIELD.key, "dt")
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+      .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+      .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+      .partitionBy("dt")
+      .mode(SaveMode.Overwrite)
+      .saveAsTable(tableName)
+
+    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+    val tablePath = table.storage.properties("path")
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(tablePath)
+      .setConf(spark.sessionState.newHadoopConf())
+      .build()
+    val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
+    assertResult(MOR_TABLE_TYPE_OPT_VAL)(tableConfig(HoodieTableConfig.TYPE.key()))
+
+    checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, dt from $tableName order by id")(
+      Seq("id:1", s"dt=$partitionValue", 1, "a1", 10, 1000, partitionValue)
+    )
+
+    // Test insert into
+    spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$partitionValue')")
+    checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, dt from $tableName order by id")(
+      Seq("id:1", s"dt=$partitionValue", 1, "a1", 10, 1000, partitionValue),
+      Seq("id:2", s"dt=$partitionValue", 2, "a2", 10, 1000, partitionValue)
+    )
+  }
 }
