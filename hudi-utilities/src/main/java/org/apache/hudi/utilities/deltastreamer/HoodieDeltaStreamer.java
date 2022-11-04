@@ -45,7 +45,6 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -84,6 +83,9 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static java.lang.String.format;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
@@ -618,7 +620,7 @@ public class HoodieDeltaStreamer implements Serializable {
     /**
      * Table Type.
      */
-    private final HoodieTableType tableType;
+    private HoodieTableType tableType;
 
     /**
      * Delta Sync.
@@ -638,32 +640,35 @@ public class HoodieDeltaStreamer implements Serializable {
           TerminationStrategyUtils.createPostWriteTerminationStrategy(properties.get(), cfg.postWriteTerminationStrategyClass);
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
-        HoodieTableMetaClient meta =
-            HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
-        tableType = meta.getTableType();
-        // This will guarantee there is no surprise with table type
-        ValidationUtils.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)),
-            "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.tableType);
+        try {
+          HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
+          tableType = meta.getTableType();
+          // This will guarantee there is no surprise with table type
+          checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)), "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.tableType);
 
-        // Load base file format
-        // This will guarantee there is no surprise with base file type
-        String baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
-        ValidationUtils.checkArgument(baseFileFormat.equals(cfg.baseFileFormat) || cfg.baseFileFormat == null,
-            "Hoodie table's base file format is of type " + baseFileFormat + " but passed in CLI argument is "
-                + cfg.baseFileFormat);
-        cfg.baseFileFormat = baseFileFormat;
-        this.cfg.baseFileFormat = baseFileFormat;
-        Map<String,String> propsToValidate = new HashMap<>();
-        properties.get().forEach((k,v) -> propsToValidate.put(k.toString(),v.toString()));
-        HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());
-      } else {
-        tableType = HoodieTableType.valueOf(cfg.tableType);
-        if (cfg.baseFileFormat == null) {
-          cfg.baseFileFormat = "PARQUET"; // default for backward compatibility
+          // Load base file format
+          // This will guarantee there is no surprise with base file type
+          String baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
+          checkArgument(baseFileFormat.equals(cfg.baseFileFormat) || cfg.baseFileFormat == null,
+              format("Hoodie table's base file format is of type %s but passed in CLI argument is %s", baseFileFormat, cfg.baseFileFormat));
+          cfg.baseFileFormat = baseFileFormat;
+          this.cfg.baseFileFormat = baseFileFormat;
+          Map<String, String> propsToValidate = new HashMap<>();
+          properties.get().forEach((k, v) -> propsToValidate.put(k.toString(), v.toString()));
+          HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());
+        } catch (HoodieIOException e) {
+          LOG.warn("Full exception msg " + e.getLocalizedMessage() + ",  msg " + e.getMessage());
+          if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
+            initializeTableTypeAndBaseFileFormat();
+          } else {
+            throw e;
+          }
         }
+      } else {
+        initializeTableTypeAndBaseFileFormat();
       }
 
-      ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != WriteOperationType.UPSERT,
+      checkArgument(!cfg.filterDupes || cfg.operation != WriteOperationType.UPSERT,
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
       this.props = properties.get();
@@ -679,6 +684,13 @@ public class HoodieDeltaStreamer implements Serializable {
     public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf)
         throws IOException {
       this(cfg, jssc, fs, conf, Option.empty());
+    }
+
+    private void initializeTableTypeAndBaseFileFormat() {
+      tableType = HoodieTableType.valueOf(cfg.tableType);
+      if (cfg.baseFileFormat == null) {
+        cfg.baseFileFormat = "PARQUET"; // default for backward compatibility
+      }
     }
 
     public DeltaSync getDeltaSync() {
@@ -824,7 +836,7 @@ public class HoodieDeltaStreamer implements Serializable {
               .setBasePath(cfg.targetBasePath)
               .setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = ClusteringUtils.getPendingClusteringInstantTimes(meta);
-          LOG.info(String.format("Found %d pending clustering instants ", pending.size()));
+          LOG.info(format("Found %d pending clustering instants ", pending.size()));
           pending.forEach(hoodieInstant -> asyncClusteringService.get().enqueuePendingAsyncServiceInstant(hoodieInstant));
           asyncClusteringService.get().start(error -> true);
           try {
