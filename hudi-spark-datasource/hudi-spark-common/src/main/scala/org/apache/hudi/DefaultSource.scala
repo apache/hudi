@@ -18,7 +18,6 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
 import org.apache.hudi.cdc.CDCRelation
@@ -29,12 +28,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
-
 import org.apache.log4j.LogManager
-
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
-import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
+import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
@@ -185,7 +182,16 @@ class DefaultSource extends RelationProvider
                             schema: Option[StructType],
                             providerName: String,
                             parameters: Map[String, String]): Source = {
-    new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
+    val offsetRangeLimit = parameters.getOrElse(START_OFFSET.key(), START_OFFSET.defaultValue()) match {
+      case offset if offset.equalsIgnoreCase("earliest") =>
+        HoodieEarliestOffsetRangeLimit
+      case offset if offset.equalsIgnoreCase("latest") =>
+        HoodieLatestOffsetRangeLimit
+      case instantTime =>
+        HoodieSpecifiedOffsetRangeLimit(instantTime)
+    }
+
+    new HoodieStreamSource(sqlContext, metadataPath, schema, parameters, offsetRangeLimit)
   }
 }
 
