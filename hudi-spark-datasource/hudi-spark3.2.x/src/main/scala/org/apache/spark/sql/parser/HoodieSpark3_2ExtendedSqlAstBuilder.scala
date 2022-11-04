@@ -125,7 +125,7 @@ class HoodieSpark3_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       key -> value
     })
     checkDuplicateKeys(argMap, ctx)
-    TableArgumentRelation(plan, argMap)
+    TableArgumentRelation(plan, argMap.toMap)
   }
 
 
