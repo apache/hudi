@@ -121,7 +121,9 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   default Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    if (Boolean.parseBoolean(properties.getProperty(String.valueOf(HoodieTableConfig.DROP_PARTITION_COLUMNS.key())))) {
+    boolean containsDropPartColKey = properties.containsKey(HoodieTableConfig.DROP_PARTITION_COLUMNS.key());
+    boolean dropPartCol = Boolean.parseBoolean(properties.getProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key()));
+    if (containsDropPartColKey && dropPartCol) {
       String[] partitionFields = properties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",");
       Set<String> removeFields = CollectionUtils.createSet(partitionFields);
       Schema schemaNoPartitionFields = HoodieAvroUtils.removeFields(schema, removeFields);
