@@ -107,9 +107,9 @@ trait ProvidesHoodieConfig extends Logging {
     val path = hoodieCatalogTable.tableLocation
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
-    val catalogProperties = hoodieCatalogTable.catalogProperties
+    val catalogProperties = hoodieCatalogTable.catalogProperties ++ extraOptions
 
-    val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf, extraOptions)
+    val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
     val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
 
     val parameters = withSparkConf(sparkSession, catalogProperties)()
@@ -281,8 +281,8 @@ trait ProvidesHoodieConfig extends Logging {
     }
   }
 
-  def getHoodieProps(catalogProperties: Map[String, String], tableConfig: HoodieTableConfig, conf: SQLConf, extraOptions: Map[String, String] = Map.empty): TypedProperties = {
-    val options: Map[String, String] = catalogProperties ++ tableConfig.getProps.asScala.toMap ++ conf.getAllConfs ++ extraOptions
+  def getHoodieProps(catalogProperties: Map[String, String], tableConfig: HoodieTableConfig, conf: SQLConf): TypedProperties = {
+    val options: Map[String, String] = catalogProperties ++ tableConfig.getProps.asScala.toMap ++ conf.getAllConfs
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(options)
     hoodieConfig.getProps
   }
