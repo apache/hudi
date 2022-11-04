@@ -25,8 +25,10 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
@@ -221,11 +223,24 @@ object HoodieSparkSqlWriter {
             // Get list of partitions to delete
             val partitionsToDelete = if (parameters.containsKey(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
-              java.util.Arrays.asList(partitionColsToDelete: _*)
+              //resolve wildcards
+              val (wildcardPartitions, fullPartitions) = java.util.Arrays.asList(partitionColsToDelete: _*).partition(partition => partition.contains("*"))
+              if (wildcardPartitions.nonEmpty) {
+                val allPartitions = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc): HoodieEngineContext,
+                  HoodieMetadataConfig.newBuilder().fromProperties(hoodieConfig.getProps).build(), basePath.toString)
+                wildcardPartitions.foreach(partition => {
+                      val regexPartition = "^" + partition.replace("*",".*") + "$"
+                      fullPartitions.append(allPartitions.filter(_.matches(regexPartition)): _*)
+                })
+                fullPartitions.toList
+              }
+
             } else {
               val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
+
+
             // Create a HoodieWriteClient & issue the delete.
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
