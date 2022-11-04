@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -277,16 +278,16 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) =
           String.valueOf(isHiveStyledPartitioning(allPartitionPaths, table))
       }
-      if (originTableConfig.contains(HoodieTableConfig.URL_ENCODE_PARTITIONING.key)) {
-        extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) =
-          originTableConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
+      if (originTableConfig.contains(URL_ENCODE_PARTITIONING.key)) {
+        extraConfig(URL_ENCODE_PARTITIONING.key) =
+          originTableConfig(URL_ENCODE_PARTITIONING.key)
       } else {
-        extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) =
+        extraConfig(URL_ENCODE_PARTITIONING.key) =
           String.valueOf(isUrlEncodeEnabled(allPartitionPaths, table))
       }
     } else {
       extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = "true"
-      extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) = HoodieTableConfig.URL_ENCODE_PARTITIONING.defaultValue()
+      extraConfig(URL_ENCODE_PARTITIONING.key) = URL_ENCODE_PARTITIONING.defaultValue()
     }
 
     if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
@@ -294,7 +295,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
           originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
     } else {
-      val primaryKeys = table.properties.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName).getOrElse(SQL_KEY_TABLE_PRIMARY_KEY.defaultValue.get)
+      val primaryKeys = table.properties.getOrElse(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName, table.storage.properties.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)).toString
       val partitions = table.partitionColumnNames.mkString(",")
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
         DataSourceOptionsHelper.inferKeyGenClazz(primaryKeys, partitions)
