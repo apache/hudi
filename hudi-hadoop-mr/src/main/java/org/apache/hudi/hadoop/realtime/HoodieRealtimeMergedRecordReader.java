@@ -7,33 +7,33 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
+import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
+import org.apache.hudi.hadoop.HoodieHiveFileSliceReader;
+import org.apache.hudi.hadoop.HoodieHiveRecord;
+import org.apache.hudi.hadoop.SchemaEvolutionContext;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
@@ -45,93 +45,122 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMergedLogRecordScanner;
 
-public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
-    implements RecordReader<NullWritable, ArrayWritable> {
+public class HoodieRealtimeMergedRecordReader implements RecordReader<NullWritable, ArrayWritable> {
+  private static final Logger LOG = LogManager.getLogger(HoodieRealtimeMergedRecordReader.class);
 
-  private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
-
-  protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
+  private final RecordReader<NullWritable, ArrayWritable> baseRecordReader;
   private final Map<String, HoodieRecord> deltaRecordMap;
-
   private final Set<String> deltaRecordKeys;
   private final HoodieMergedLogRecordScanner mergedLogRecordScanner;
-  private final HoodieRecordMerger recordMerger;
   private final int recordKeyIndex;
+  private final HoodieHiveFileSliceReader fileSliceReader;
+  private final Schema requiredSchema;
   private Iterator<String> deltaItr;
 
-  public RealtimeCompactedRecordReader(RealtimeSplit split, JobConf job,
-                                       RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
-    super(split, job);
-    this.parquetReader = realReader;
-    this.mergedLogRecordScanner = getMergedLogRecordScanner(split, job, getLogScannerReaderSchema(), schemaEvolutionContext, HoodieAvroRecordMerger.class.getName());
+  public HoodieRealtimeMergedRecordReader(RealtimeSplit split,
+                                          Option<HoodieTableMetaClient> metaClientOpt,
+                                          JobConf jobConf,
+                                          RecordReader<NullWritable, ArrayWritable> baseRecordReader) throws IOException {
+    this.baseRecordReader = baseRecordReader;
+    this.fileSliceReader = new HoodieHiveFileSliceReader(split, jobConf);
+    this.requiredSchema = fileSliceReader.useCustomPayload() ? fileSliceReader.getWriterSchema() : fileSliceReader.getReaderSchema();
+    this.mergedLogRecordScanner = getMergedLogRecordScanner(
+        split,
+        jobConf,
+        requiredSchema,
+        new SchemaEvolutionContext(
+            split,
+            jobConf,
+            metaClientOpt.or(Option.of(HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build()))),
+        HoodieAvroRecordMerger.class.getName());
     this.deltaRecordMap = mergedLogRecordScanner.getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
     this.recordKeyIndex = split.getVirtualKeyInfo()
         .map(HoodieVirtualKeyInfo::getRecordKeyFieldIndex)
         .orElse(HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
-    this.recordMerger = HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName());
   }
 
-  private Option<HoodieAvroIndexedRecord> buildGenericRecordwithCustomPayload(HoodieRecord record) throws IOException {
-    if (usesCustomPayload) {
-      return record.toIndexedRecord(getWriterSchema(), payloadProps);
-    } else {
-      return record.toIndexedRecord(getReaderSchema(), payloadProps);
-    }
+  public void init(JobConf job) {
+    String[] rawColNames = HoodieColumnProjectionUtils.getReadColumnNames(job);
+    List<Integer> rawColIds = HoodieColumnProjectionUtils.getReadColumnIDs(job);
+    List<Pair<Integer, String>> projectedColsWithIndex =
+        IntStream.range(0, rawColIds.size()).mapToObj(idx -> Pair.of(rawColIds.get(idx), rawColNames[idx]))
+            .collect(Collectors.toList());
+    // TODO: convert to Avro Schema and call project(Schema)
   }
 
   @Override
-  public boolean next(NullWritable aVoid, ArrayWritable arrayWritable) throws IOException {
+  public boolean next(NullWritable nullWritable, ArrayWritable arrayWritable) throws IOException {
     // Call the underlying parquetReader.next - which may replace the passed in ArrayWritable
     // with a new block of values
-    while (this.parquetReader.next(aVoid, arrayWritable)) {
+    while (baseRecordReader.next(nullWritable, arrayWritable)) {
       if (!deltaRecordMap.isEmpty()) {
         String key = arrayWritable.get()[recordKeyIndex].toString();
         if (deltaRecordMap.containsKey(key)) {
           // mark the key as handled
           this.deltaRecordKeys.remove(key);
-          Option<HoodieAvroIndexedRecord> rec = supportPayload ? mergeRecord(deltaRecordMap.get(key), arrayWritable) : buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
+
+          // deltaRecord may not be a full record and needs values of columns from the parquet
+          // TODO: use new `HoodieRecord` implementation for ArrayWritable to avoid Avro conversion
+          Option<HoodieAvroIndexedRecord> rec = buildGenericRecordWithCustomPayload(deltaRecordMap.get(key));
           // If the record is not present, this is a delete record using an empty payload so skip this base record
           // and move to the next record
           if (!rec.isPresent()) {
             continue;
           }
-          setUpWritable(rec, arrayWritable, key);
+          setUpWritable(deltaRecordMap.get(key), arrayWritable, key);
           return true;
         }
       }
       return true;
     }
+
     if (this.deltaItr == null) {
       this.deltaItr = this.deltaRecordKeys.iterator();
     }
+
     while (this.deltaItr.hasNext()) {
       final String key = this.deltaItr.next();
-      Option<HoodieAvroIndexedRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
+      Option<HoodieAvroIndexedRecord> rec = buildGenericRecordWithCustomPayload(deltaRecordMap.get(key));
       if (rec.isPresent()) {
-        setUpWritable(rec, arrayWritable, key);
+        setUpWritable(deltaRecordMap.get(key), arrayWritable, key);
         return true;
       }
     }
+
+    // TODO: Replace the above logic by the below one. Also, check if file index can be made use of to collect file slices,
+    //       which can then be passed to fileSliceReader#open(fileSlice) instead of fileSliceReader#open(fileSplit).
+    /*if (mergedRecordIterator == null) {
+      mergedRecordIterator = fileSliceReader.open(fileSliceReader.getSplit());
+    }*/
     return false;
   }
 
-  private void setUpWritable(Option<HoodieAvroIndexedRecord> rec, ArrayWritable arrayWritable, String key) {
-    GenericRecord recordToReturn = (GenericRecord) rec.get().getData();
-    if (usesCustomPayload) {
+  private Option<HoodieAvroIndexedRecord> buildGenericRecordWithCustomPayload(HoodieRecord record) throws IOException {
+    return record.toIndexedRecord(requiredSchema, fileSliceReader.getPayloadProps());
+  }
+
+  private void setUpWritable(HoodieRecord rec, ArrayWritable arrayWritable, String key) {
+    HoodieHiveRecord recordToReturn = (HoodieHiveRecord) rec.getData();
+    // TODO: Provide custom payload implementation for BWC. Check how usage of HoodieAvroUtils#rewriteRecord was replaced in Spark.
+    /*if (usesCustomPayload) {
       // If using a custom payload, return only the projection fields. The readerSchema is a schema derived from
       // the writerSchema with only the projection fields
-      recordToReturn = HoodieAvroUtils.rewriteRecord((GenericRecord) rec.get().getData(), getReaderSchema());
-    }
+      recordToReturn = HoodieAvroUtils.rewriteRecord((GenericRecord) rec.getData(), getReaderSchema());
+    }*/
+
     // we assume, a later safe record in the log, is newer than what we have in the map &
     // replace it. Since we want to return an arrayWritable which is the same length as the elements in the latest
     // schema, we use writerSchema to create the arrayWritable from the latest generic record
-    ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(recordToReturn, getHiveSchema());
+    ArrayWritable aWritable = recordToReturn.getData();
     Writable[] replaceValue = aWritable.get();
     if (LOG.isDebugEnabled()) {
       LOG.debug(String.format("key %s, base values: %s, log values: %s", key, HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable),
@@ -154,51 +183,29 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     }
   }
 
-  private Option<HoodieAvroIndexedRecord> mergeRecord(HoodieRecord<?> newRecord, ArrayWritable writableFromParquet) throws IOException {
-    GenericRecord oldRecord = convertArrayWritableToHoodieRecord(writableFromParquet);
-    // presto will not append partition columns to jobConf.get(serdeConstants.LIST_COLUMNS), but hive will do it. This will lead following results
-    // eg: current table: col1: int, col2: int, par: string, and column par is partition columns.
-    // for hive engine, the hiveSchema will be: col1,col2,par, and the writerSchema will be col1,col2,par
-    // for presto engine, the hiveSchema will be: col1,col2, but the writerSchema will be col1,col2,par
-    // so to be compatible with hive and presto, we should rewrite oldRecord before we call combineAndGetUpdateValue,
-    // once presto on hudi have it's own mor reader, we can remove the rewrite logical.
-    GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
-    HoodieRecord record = new HoodieAvroIndexedRecord(genericRecord);
-    Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(record,
-        genericRecord.getSchema(), newRecord, getLogScannerReaderSchema(), new TypedProperties(payloadProps));
-    return mergeResult.map(p -> (HoodieAvroIndexedRecord) p.getLeft());
-  }
-
-  private GenericRecord convertArrayWritableToHoodieRecord(ArrayWritable arrayWritable) {
-    GenericRecord record = serializer.serialize(arrayWritable, getHiveSchema());
-    return record;
-  }
-
   @Override
   public NullWritable createKey() {
-    return parquetReader.createKey();
+    return baseRecordReader.createKey();
   }
 
   @Override
   public ArrayWritable createValue() {
-    return parquetReader.createValue();
+    return baseRecordReader.createValue();
   }
 
   @Override
   public long getPos() throws IOException {
-    return parquetReader.getPos();
+    return baseRecordReader.getPos();
   }
 
   @Override
   public void close() throws IOException {
-    parquetReader.close();
-    // need clean the tmp file which created by logScanner
-    // Otherwise, for resident process such as presto, the /tmp directory will overflow
+    baseRecordReader.close();
     mergedLogRecordScanner.close();
   }
 
   @Override
   public float getProgress() throws IOException {
-    return parquetReader.getProgress();
+    return baseRecordReader.getProgress();
   }
 }

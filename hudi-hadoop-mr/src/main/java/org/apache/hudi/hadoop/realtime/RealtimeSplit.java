@@ -18,11 +18,12 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.InputSplitWithLocationInfo;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.InputSplitUtils;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.InputSplitWithLocationInfo;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -38,6 +39,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
 
   /**
    * Return Log File Paths.
+   *
    * @return
    */
   default List<String> getDeltaLogPaths() {
@@ -50,18 +52,21 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
 
   /**
    * Return Max Instant Time.
+   *
    * @return
    */
   String getMaxCommitTime();
 
   /**
    * Return Base Path of the dataset.
+   *
    * @return
    */
   String getBasePath();
 
   /**
    * Returns Virtual key info if meta fields are disabled.
+   *
    * @return
    */
   Option<HoodieVirtualKeyInfo> getVirtualKeyInfo();
@@ -73,12 +78,14 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
 
   /**
    * Update Maximum valid instant time.
+   *
    * @param maxCommitTime
    */
   void setMaxCommitTime(String maxCommitTime);
 
   /**
    * Set Base Path.
+   *
    * @param basePath
    */
   void setBasePath(String basePath);

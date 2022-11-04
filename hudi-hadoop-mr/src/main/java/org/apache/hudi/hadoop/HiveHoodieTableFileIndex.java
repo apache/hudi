@@ -18,15 +18,19 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodiePartitionIncrementalSnapshot;
+import org.apache.hudi.common.model.HoodiePartitionSnapshot;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,6 +81,16 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
     //       since Hive does partition pruning in a different way (based on the input-path being
     //       fetched by the query engine)
     return new Object[0];
+  }
+
+  @Override
+  public List<HoodiePartitionSnapshot> listFilesAt(HoodieInstant instant, List<?> filters) {
+    return super.listFilesAt(instant, filters);
+  }
+
+  @Override
+  public List<HoodiePartitionIncrementalSnapshot> listFilesBetween(HoodieInstant from, HoodieInstant to, List<?> filters) {
+    return super.listFilesBetween(from, to, filters);
   }
 
   static class NoopCache implements FileStatusCache {

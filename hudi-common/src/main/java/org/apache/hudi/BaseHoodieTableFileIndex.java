@@ -25,6 +25,9 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionDescriptor;
+import org.apache.hudi.common.model.HoodiePartitionIncrementalSnapshot;
+import org.apache.hudi.common.model.HoodiePartitionSnapshot;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -61,6 +64,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.util.CollectionUtils.combine;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 
 /**
@@ -173,6 +177,50 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    */
   public Path getBasePath() {
     return basePath;
+  }
+
+  /**
+   * Lists files added visible/reachable at the instant `to`, that were
+   * added no earlier than at the instant `from`.
+   *
+   * @param from    start instant of incremental timeline
+   * @param to      end instant of incremental timeline
+   * @param filters any partition predicate
+   * @return
+   */
+  public List<HoodiePartitionIncrementalSnapshot> listFilesBetween(HoodieInstant from, HoodieInstant to, List<?> filters) {
+    checkArgument(to != null, "to instant cannot be null");
+    HoodieTimeline timeline;
+    if (from == null) {
+      timeline = getActiveTimeline().findInstantsBefore(to.getTimestamp()).filterCompletedInstants();
+    } else {
+      timeline = getActiveTimeline().findInstantsInRange(from.getTimestamp(), to.getTimestamp()).filterCompletedInstants();
+    }
+    Set<String> commitTimestamps = timeline.getInstants().stream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+    return cachedAllInputFileSlices.entrySet()
+        .stream()
+        .map(entry -> {
+          PartitionPath partitionPath = entry.getKey();
+          List<FileSlice> fileSlices = entry.getValue();
+          HoodiePartitionDescriptor partitionDescriptor = new HoodiePartitionDescriptor(
+              partitionPath.getPath(), Arrays.asList(partitionPath.getValues()));
+          return new HoodiePartitionIncrementalSnapshot(partitionDescriptor, timeline, fileSlices);
+        })
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Lists files visible/reachable at the given `instant`.
+   *
+   * @param instant
+   * @param filters
+   * @return
+   */
+  public List<HoodiePartitionSnapshot> listFilesAt(HoodieInstant instant, List<?> filters) {
+    return listFilesBetween(null, instant, filters)
+        .stream()
+        .map(snapshot -> new HoodiePartitionSnapshot(snapshot.getPartitionDescriptor(), instant, snapshot.getFileSlices()))
+        .collect(Collectors.toList());
   }
 
   public int getFileSlicesCount() {
@@ -475,6 +523,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     public String getPath() {
       return path;
+    }
+
+    public Object[] getValues() {
+      return values;
     }
 
     @Override
