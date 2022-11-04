@@ -23,6 +23,8 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, TBL_NAME}
+import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
@@ -354,7 +356,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     writeParams += (PAYLOAD_RECORD_AVRO_SCHEMA ->
       convertStructTypeToAvroSchema(trimmedSourceDF.schema, "record", "").toString)
 
-    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, trimmedSourceDF)
+    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, trimmedSourceDF)
+    if (!success) {
+      throw new HoodieException("Merge into Hoodie table command failed")
+    }
   }
 
   private def checkUpdateAssignments(updateActions: Seq[UpdateAction]): Unit = {
