@@ -61,6 +61,7 @@ import org.apache.spark.{SPARK_VERSION, SparkContext}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
+import scala.util.matching.Regex
 
 object HoodieSparkSqlWriter {
 
@@ -223,22 +224,12 @@ object HoodieSparkSqlWriter {
             // Get list of partitions to delete
             val partitionsToDelete = if (parameters.containsKey(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
-              //resolve wildcards
-              val (wildcardPartitions, fullPartitions) = java.util.Arrays.asList(partitionColsToDelete: _*).partition(partition => partition.contains("*"))
-              if (wildcardPartitions.nonEmpty) {
-                val allPartitions = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc): HoodieEngineContext,
-                  HoodieMetadataConfig.newBuilder().fromProperties(hoodieConfig.getProps).build(), basePath.toString)
-                wildcardPartitions.foreach(partition => {
-                      val regexPartition = "^" + partition.replace("*",".*") + "$"
-                      fullPartitions.append(allPartitions.filter(_.matches(regexPartition)): _*)
-                })
-              }
-              java.util.Arrays.asList(fullPartitions.distinct: _*)
+              java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).toList, jsc,
+                hoodieConfig, basePath.toString): _*)
             } else {
               val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
-
 
             // Create a HoodieWriteClient & issue the delete.
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
@@ -355,6 +346,41 @@ object HoodieSparkSqlWriter {
 
       (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     }
+  }
+
+  /**
+   * Resolve wildcards in partitions
+   *
+   * @param partitions   list of partitions that may contain wildcards
+   * @param jsc          instance of java spark context
+   * @param cfg          hoodie config
+   * @param basePath     base path
+   * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
+   */
+  private def resolvePartitionWildcards(partitions: List[String], jsc: JavaSparkContext, cfg: HoodieConfig, basePath: String): List[String] = {
+    //find out if any of the input partitions have wildcards
+    var (wildcardPartitions, fullPartitions) = partitions.partition(partition => partition.contains("*"))
+
+    if (wildcardPartitions.nonEmpty) {
+      //get list of all partitions
+      val allPartitions = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc): HoodieEngineContext,
+        HoodieMetadataConfig.newBuilder().fromProperties(cfg.getProps).build(), basePath)
+      //go through list of partitions with wildcards and add all partitions that match to val fullPartitions
+      wildcardPartitions.foreach(partition => {
+        //turn wildcard into regex
+        //regex for start of line is ^ and end of line is $
+        //If the partitionpath was just alphanumeric we would just replace * with .*
+        //Since there could be characters that could be considered regex in the partitionpath we must
+        //prevent that from happening. Any text inbetween \\Q and \\E is considered literal
+        //So we start the string with \\Q and end with \\E and then whenever we find a * we add \\E before
+        //and \\Q after so all other characters besides .* will be enclosed between a set of \\Q \\E
+        val regexPartition = "^\\Q" + partition.replace("*", "\\E.*\\Q") + "\\E$"
+
+        //filter all partitions with the regex and append the result to the list of full partitions
+        fullPartitions = List.concat(fullPartitions,allPartitions.filter(_.matches(regexPartition)))
+      })
+    }
+    fullPartitions.distinct
   }
 
   def generateSchemaWithoutPartitionColumns(partitionParam: String, schema: Schema): Schema = {
