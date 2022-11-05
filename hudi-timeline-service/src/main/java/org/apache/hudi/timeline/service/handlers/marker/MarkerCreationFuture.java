@@ -39,7 +39,7 @@ public class MarkerCreationFuture extends CompletableFuture<String> {
 
   public MarkerCreationFuture(Context context, String markerDirPath, String markerName) {
     super();
-    this.timer = new HoodieTimer().startTimer();
+    this.timer = HoodieTimer.start();
     this.context = context;
     this.markerDirPath = markerDirPath;
     this.markerName = markerName;

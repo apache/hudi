@@ -80,6 +80,8 @@ object HoodieProcedures {
       ,(ValidateHoodieSyncProcedure.NAME, ValidateHoodieSyncProcedure.builder)
       ,(ShowInvalidParquetProcedure.NAME, ShowInvalidParquetProcedure.builder)
       ,(HiveSyncProcedure.NAME, HiveSyncProcedure.builder)
+      ,(CopyToTempView.NAME, CopyToTempView.builder)
+      ,(ShowCommitExtraMetadataProcedure.NAME, ShowCommitExtraMetadataProcedure.builder)
     )
   }
 }

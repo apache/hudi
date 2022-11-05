@@ -37,6 +37,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
@@ -126,7 +127,6 @@ public class HoodieTableSource implements
 
   private int[] requiredPos;
   private long limit;
-  private List<ResolvedExpression> filters;
 
   private List<Map<String, String>> requiredPartitions;
 
@@ -145,25 +145,26 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf,
+      @Nullable FileIndex fileIndex,
       @Nullable List<Map<String, String>> requiredPartitions,
       @Nullable int[] requiredPos,
-      @Nullable Long limit,
-      @Nullable List<ResolvedExpression> filters) {
+      @Nullable Long limit) {
     this.schema = schema;
     this.tableRowType = (RowType) schema.toPhysicalRowDataType().notNull().getLogicalType();
     this.path = path;
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
     this.conf = conf;
+    this.fileIndex = fileIndex == null
+        ? FileIndex.instance(this.path, this.conf, this.tableRowType)
+        : fileIndex;
     this.requiredPartitions = requiredPartitions;
     this.requiredPos = requiredPos == null
         ? IntStream.range(0, this.tableRowType.getFieldCount()).toArray()
         : requiredPos;
     this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
-    this.filters = filters == null ? Collections.emptyList() : filters;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
-    this.fileIndex = FileIndex.instance(this.path, this.conf, this.tableRowType);
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
   }
 
@@ -188,9 +189,11 @@ public class HoodieTableSource implements
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
+              .uid(Pipelines.opUID("split_monitor", conf))
               .setParallelism(1)
               .keyBy(MergeOnReadInputSplit::getFileId)
               .transform("split_reader", typeInfo, factory)
+              .uid(Pipelines.opUID("split_reader", conf))
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
           return new DataStreamSource<>(source);
         } else {
@@ -212,7 +215,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, requiredPartitions, requiredPos, limit, filters);
+        conf, fileIndex, requiredPartitions, requiredPos, limit);
   }
 
   @Override
@@ -222,8 +225,10 @@ public class HoodieTableSource implements
 
   @Override
   public Result applyFilters(List<ResolvedExpression> filters) {
-    this.filters = filters.stream().filter(ExpressionUtils::isSimpleCallExpression).collect(Collectors.toList());
-    this.fileIndex.setFilters(this.filters);
+    List<ResolvedExpression> callExpressionFilters = filters.stream()
+        .filter(ExpressionUtils::isSimpleCallExpression)
+        .collect(Collectors.toList());
+    this.fileIndex.setFilters(callExpressionFilters);
     // refuse all the filters now
     return SupportsFilterPushDown.Result.of(Collections.emptyList(), new ArrayList<>(filters));
   }
@@ -539,5 +544,10 @@ public class HoodieTableSource implements
       return new FileStatus[0];
     }
     return fileIndex.getFilesInPartitions();
+  }
+
+  @VisibleForTesting
+  FileIndex getFileIndex() {
+    return fileIndex;
   }
 }

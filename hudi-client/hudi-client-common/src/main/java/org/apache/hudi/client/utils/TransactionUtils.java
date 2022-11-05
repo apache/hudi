@@ -21,10 +21,10 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.client.transaction.ConcurrentOperation;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -107,19 +107,8 @@ public class TransactionUtils {
         .filterCompletedInstants().lastInstant();
     try {
       if (hoodieInstantOption.isPresent()) {
-        switch (hoodieInstantOption.get().getAction()) {
-          case HoodieTimeline.REPLACE_COMMIT_ACTION:
-            HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstantOption.get()).get(), HoodieReplaceCommitMetadata.class);
-            return Option.of(Pair.of(hoodieInstantOption.get(), replaceCommitMetadata.getExtraMetadata()));
-          case HoodieTimeline.DELTA_COMMIT_ACTION:
-          case HoodieTimeline.COMMIT_ACTION:
-            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstantOption.get()).get(), HoodieCommitMetadata.class);
-            return Option.of(Pair.of(hoodieInstantOption.get(), commitMetadata.getExtraMetadata()));
-          default:
-            throw new IllegalArgumentException("Unknown instant action" + hoodieInstantOption.get().getAction());
-        }
+        HoodieCommitMetadata commitMetadata = TimelineUtils.getCommitMetadata(hoodieInstantOption.get(), metaClient.getActiveTimeline());
+        return Option.of(Pair.of(hoodieInstantOption.get(), commitMetadata.getExtraMetadata()));
       } else {
         return Option.empty();
       }

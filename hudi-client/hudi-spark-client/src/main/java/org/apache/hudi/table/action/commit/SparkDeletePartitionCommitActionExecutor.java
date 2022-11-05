@@ -18,12 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import java.time.Duration;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
@@ -42,6 +36,14 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import org.apache.hadoop.fs.Path;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
@@ -59,7 +61,7 @@ public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     try {
-      HoodieTimer timer = new HoodieTimer().startTimer();
+      HoodieTimer timer = HoodieTimer.start();
       context.setJobStatus(this.getClass().getSimpleName(), "Gather all file ids from all deleting partitions.");
       Map<String, List<String>> partitionToReplaceFileIds =
           HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitions).distinct()

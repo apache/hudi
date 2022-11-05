@@ -88,6 +88,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
@@ -1851,6 +1852,62 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Test
   public void testParquetDFSSourceForEmptyBatch() throws Exception {
     testParquetDFSSource(false, null, true);
+  }
+
+  @Test
+  public void testDeltaStreamerRestartAfterMissingHoodieProps() throws Exception {
+    testDeltaStreamerRestartAfterMissingHoodieProps(true);
+  }
+
+  @Test
+  public void testDeltaStreamerRestartAfterMissingHoodiePropsAfterValidCommit() throws Exception {
+    testDeltaStreamerRestartAfterMissingHoodieProps(false);
+  }
+
+  private void testDeltaStreamerRestartAfterMissingHoodieProps(boolean testInitFailure) throws Exception {
+    PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFilesDfs" + testNum;
+    int parquetRecordsCount = 10;
+    boolean hasTransformer = false;
+    boolean useSchemaProvider = false;
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "0");
+
+    String tableBasePath = dfsBasePath + "/test_parquet_table" + testNum;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, testInitFailure ? TestParquetDFSSourceEmptyBatch.class.getName() : ParquetDFSSource.class.getName(),
+            null, PROPS_FILENAME_TEST_PARQUET, false,
+            useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
+    deltaStreamer.sync();
+
+    if (testInitFailure) {
+      FileStatus[] fileStatuses = dfs.listStatus(new Path(tableBasePath + "/.hoodie/"));
+      Arrays.stream(fileStatuses).filter(entry -> entry.getPath().getName().contains("commit") || entry.getPath().getName().contains("inflight")).forEach(entry -> {
+        try {
+          dfs.delete(entry.getPath());
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      });
+    }
+    // delete hoodie.properties
+    dfs.delete(new Path(tableBasePath + "/.hoodie/hoodie.properties"));
+
+    // restart the pipeline.
+    if (testInitFailure) { // should succeed.
+      deltaStreamer = new HoodieDeltaStreamer(
+          TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+              null, PROPS_FILENAME_TEST_PARQUET, false,
+              useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
+      deltaStreamer.sync();
+      TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    } else {
+      assertThrows(org.apache.hudi.exception.HoodieIOException.class, () -> new HoodieDeltaStreamer(
+          TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+              null, PROPS_FILENAME_TEST_PARQUET, false,
+              useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc));
+    }
+    testNum++;
   }
 
   @Test

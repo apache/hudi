@@ -67,6 +67,10 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
     this(new SerializableConfiguration(FlinkClientUtil.getHadoopConf()), new DefaultTaskContextSupplier());
   }
 
+  public HoodieFlinkEngineContext(org.apache.hadoop.conf.Configuration hadoopConf) {
+    this(new SerializableConfiguration(hadoopConf), new DefaultTaskContextSupplier());
+  }
+
   public HoodieFlinkEngineContext(TaskContextSupplier taskContextSupplier) {
     this(new SerializableConfiguration(FlinkClientUtil.getHadoopConf()), taskContextSupplier);
   }
