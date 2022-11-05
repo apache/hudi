@@ -28,6 +28,7 @@ ARG DERBY_VERSION=10.14.1.0
 ARG SPARK_VERSION=3.1.3
 ARG SPARK_HADOOP_VERSION=2.7
 ARG CONFLUENT_VERSION=5.5.12
+ARG KAFKA_CONNECT_HDFS_VERSION=10.1.13
 
 RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz -P "$WORKDIR" \
     && tar -xf $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz -C $WORKDIR/ \
@@ -54,9 +55,9 @@ RUN wget https://packages.confluent.io/archive/${CONFLUENT_VERSION%.*}/confluent
     && rm $WORKDIR/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz
 ENV CONFLUENT_HOME=$WORKDIR/confluent-$CONFLUENT_VERSION
 
-RUN wget https://d1i4a15mxbxib1.cloudfront.net/api/plugins/confluentinc/kafka-connect-hdfs/versions/10.1.13/confluentinc-kafka-connect-hdfs-10.1.13.zip -P "$WORKDIR" \
+RUN wget https://d1i4a15mxbxib1.cloudfront.net/api/plugins/confluentinc/kafka-connect-hdfs/versions/$KAFKA_CONNECT_HDFS_VERSION/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -P "$WORKDIR" \
     && mkdir $WORKDIR/kafka-connectors \
-    && unzip $WORKDIR/confluentinc-kafka-connect-hdfs-10.1.13.zip -d $WORKDIR/kafka-connectors/ \
-    && rm $WORKDIR/confluentinc-kafka-connect-hdfs-10.1.13.zip \
+    && unzip $WORKDIR/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -d $WORKDIR/kafka-connectors/ \
+    && rm $WORKDIR/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip \
     && printf "\nplugin.path=$WORKDIR/kafka-connectors\n" >> $CONFLUENT_HOME/etc/kafka/connect-distributed.properties
-ENV KAFKA_CONNECT_PLUGIN_PATH_LIB_PATH=$WORKDIR/kafka-connectors/confluentinc-kafka-connect-hdfs-10.1.13/lib
+ENV KAFKA_CONNECT_PLUGIN_PATH_LIB_PATH=$WORKDIR/kafka-connectors/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION/lib

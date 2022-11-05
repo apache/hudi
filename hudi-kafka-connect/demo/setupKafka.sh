@@ -64,7 +64,7 @@ numBatch=1
 recordValue=0
 recreateTopic="Y"
 
-while getopts ":n:b:t:f:k:m:r:o:l:p:s:-:" opt; do
+while getopts ":n:b:tf:k:m:r:o:l:p:s:-:" opt; do
   case $opt in
   n)
     numRecords="$OPTARG"
