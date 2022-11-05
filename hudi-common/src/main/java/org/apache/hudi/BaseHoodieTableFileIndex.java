@@ -308,7 +308,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
     // API.  Note that for COW table, the merging logic of two slices does not happen as there
     // is no compaction, thus there is no performance impact.
-    int parallelism = Integer.parseInt(String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_PARALLELISM.key(), -1)));
+    int parallelism = Integer.parseInt(String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_PARALLELISM.key(), 10)));
 
     if (parallelism > 0) {
       cachedAllInputFileSlices = buildCacheFileSlicesParallel(parallelism, partitionFiles, activeTimeline, queryInstant);
