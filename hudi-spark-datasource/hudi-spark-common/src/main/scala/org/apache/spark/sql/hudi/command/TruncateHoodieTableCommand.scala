@@ -23,6 +23,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
@@ -61,14 +62,20 @@ case class TruncateHoodieTableCommand(
 
     val basePath = hoodieCatalogTable.tableLocation
     val properties = hoodieCatalogTable.tableConfig.getProps
+    val catalogProperties = hoodieCatalogTable.catalogProperties
+    val tableConfig = hoodieCatalogTable.tableConfig
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
 
     // If we have not specified the partition, truncate will delete all the data in the table path
     if (partitionSpec.isEmpty) {
       val targetPath = new Path(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
+      engineContext.setJobStatus(this.getClass.getSimpleName, "Clean up " + basePath)
       val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
+      val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
+      val deleteParallelism = hoodieProps.getString(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key,
+        sparkSession.sparkContext.defaultParallelism.toString).toInt
+      FSUtils.deleteDir(engineContext, fs, targetPath, deleteParallelism)
 
       // ReInit hoodie.properties
       HoodieTableMetaClient.withPropertyBuilder()

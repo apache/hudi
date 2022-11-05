@@ -21,10 +21,12 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 
 /**
  * Physical plan node for dropping a table.
@@ -33,14 +35,15 @@ case class DropHoodieTableCommand(
     tableIdentifier: TableIdentifier,
     ifExists: Boolean,
     isView: Boolean,
-    purge: Boolean) extends HoodieLeafRunnableCommand {
+    purge: Boolean)
+  extends HoodieLeafRunnableCommand with ProvidesHoodieConfig {
 
   private val MOR_SNAPSHOT_TABLE_SUFFIX = "_rt"
   private val MOR_READ_OPTIMIZED_TABLE_SUFFIX = "_ro"
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"Start executing 'DROP TABLE' on ${tableIdentifier.unquotedString}" +
-      s" (ifExists=${ifExists}, purge=${purge}).")
+      s" (ifExists=$ifExists, purge=$purge).")
     if (!sparkSession.catalog.tableExists(tableIdentifier.unquotedString)) {
       sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     }
@@ -69,35 +72,41 @@ case class DropHoodieTableCommand(
     assert(table.tableType != CatalogTableType.VIEW)
 
     val basePath = hoodieCatalogTable.tableLocation
+    val catalogProperties = hoodieCatalogTable.catalogProperties
+    val tableConfig = hoodieCatalogTable.tableConfig
     val catalog = sparkSession.sessionState.catalog
+    val tableExists = hoodieCatalogTable.hoodieTableExists
 
     // Drop table in the catalog
-    if (hoodieCatalogTable.hoodieTableExists &&
-        HoodieTableType.MERGE_ON_READ == hoodieCatalogTable.tableType && purge) {
+    if (tableExists && HoodieTableType.MERGE_ON_READ == hoodieCatalogTable.tableType && purge) {
       val (rtTableOpt, roTableOpt) = getTableRTAndRO(catalog, hoodieCatalogTable)
-      rtTableOpt.foreach(table => catalog.dropTable(table.identifier, true, false))
-      roTableOpt.foreach(table => catalog.dropTable(table.identifier, true, false))
-      catalog.dropTable(table.identifier.copy(table = hoodieCatalogTable.tableName), ifExists, purge)
+      rtTableOpt.foreach(table => catalog.dropTable(table.identifier, ignoreIfNotExists = true, purge = false))
+      roTableOpt.foreach(table => catalog.dropTable(table.identifier, ignoreIfNotExists = true, purge = false))
+      catalog.dropTable(table.identifier.copy(table = hoodieCatalogTable.tableName), ifExists, purge = false)
     } else {
-      catalog.dropTable(table.identifier, ifExists, purge)
+      catalog.dropTable(table.identifier, ifExists, purge = false)
     }
 
     // Recursively delete table directories
-    if (purge) {
+    if (tableExists && purge) {
       logInfo("Clean up " + basePath)
       val targetPath = new Path(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
+      engineContext.setJobStatus(this.getClass.getSimpleName, "Clean up " + basePath)
       val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
+      val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
+      val deleteParallelism = hoodieProps.getString(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key,
+        sparkSession.sparkContext.defaultParallelism.toString).toInt
+      FSUtils.deleteDir(engineContext, fs, targetPath, deleteParallelism)
     }
   }
 
   private def getTableRTAndRO(catalog: SessionCatalog,
       hoodieTable: HoodieCatalogTable): (Option[CatalogTable], Option[CatalogTable]) = {
     val rtIdt = hoodieTable.table.identifier.copy(
-      table = s"${hoodieTable.tableName}${MOR_SNAPSHOT_TABLE_SUFFIX}")
+      table = s"${hoodieTable.tableName}$MOR_SNAPSHOT_TABLE_SUFFIX")
     val roIdt = hoodieTable.table.identifier.copy(
-      table = s"${hoodieTable.tableName}${MOR_READ_OPTIMIZED_TABLE_SUFFIX}")
+      table = s"${hoodieTable.tableName}$MOR_READ_OPTIMIZED_TABLE_SUFFIX")
 
     var rtTableOpt: Option[CatalogTable] = None
     var roTableOpt: Option[CatalogTable] = None
