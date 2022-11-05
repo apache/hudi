@@ -42,16 +42,6 @@ public class FunctionWrapper {
     };
   }
 
-  public static <I> Function<I, Boolean> throwingFilterWrapper(SerializableFunction<I, Boolean> throwingFliterFunction) {
-    return v1 -> {
-      try {
-        return throwingFliterFunction.apply(v1);
-      } catch (Exception e) {
-        throw new HoodieException("Error occurs when executing map", e);
-      }
-    };
-  }
-
   public static <I, O> Function<I, Stream<O>> throwingFlatMapWrapper(SerializableFunction<I, Stream<O>> throwingFlatMapFunction) {
     return v1 -> {
       try {

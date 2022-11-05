@@ -375,7 +375,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         .filter(Objects::nonNull)
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-//    LOG.info("Listed files in partitions from metadata: partition list =" + Arrays.toString(partitionPaths.toArray()));
+    LOG.info("Listed files in partitions from metadata: partition list =" + Arrays.toString(partitionPaths.toArray()));
 
     return partitionPathToFilesMap;
   }
