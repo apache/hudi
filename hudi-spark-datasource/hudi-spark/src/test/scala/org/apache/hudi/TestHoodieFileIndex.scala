@@ -312,6 +312,48 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     assertEquals(5, readDF2.filter("dt = '2021/03/01' and hh ='10'").count())
   }
 
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionPruneWithPartialPartitionPredicate(useMetaFileList: Boolean): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    // Test the case the partition column size is equal to the partition directory level.
+    val inputDF1 = (for (i <- 0 until 10) yield (i, s"a$i", 10 + i, 10000,
+      s"2021-03-0${i % 2 + 1}", s"${i % 3}")).toDF("id", "name", "price", "version", "dt", "hh")
+    inputDF1.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(RECORDKEY_FIELD.key, "id")
+      .option(PRECOMBINE_FIELD.key, "version")
+      .option(PARTITIONPATH_FIELD.key, "dt,hh")
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "false")
+      .option(HoodieMetadataConfig.ENABLE.key, useMetaFileList)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val fileIndex = HoodieFileIndex(spark, metaClient, None,
+      queryOpts ++ Map(HoodieMetadataConfig.ENABLE.key -> useMetaFileList.toString))
+
+    val partitionFilter1 = EqualTo(attribute("dt"), literal("2021-03-01"))
+    val partitionAndFilesAfterPrune = fileIndex.listFiles(Seq(partitionFilter1), Seq.empty)
+    assertEquals(3, partitionAndFilesAfterPrune.size)
+
+    val PartitionDirectory(partitionValues, filesAfterPrune) = partitionAndFilesAfterPrune(0)
+    // The partition prune will work for this case.
+    assertEquals(partitionValues.toSeq(Seq(StringType)).mkString(","), "2021-03-01,0")
+    assertEquals(getFileCountInPartitionPath("2021-03-01/0"), filesAfterPrune.size)
+
+    val readDF1 = spark.read.format("hudi")
+      .option(HoodieMetadataConfig.ENABLE.key(), useMetaFileList)
+      .load(basePath)
+    assertEquals(10, readDF1.count())
+    assertEquals(3, readDF1.filter("hh = '1'").count())
+    assertEquals(5, readDF1.filter("dt = '2021-03-01'").count())
+    assertEquals(1, readDF1.filter("dt = '2021-03-01' and hh = '1'").count())
+  }
+
   @ParameterizedTest
   @CsvSource(Array("true,a.b.c","false,a.b.c","true,c","false,c"))
   def testQueryPartitionPathsForNestedPartition(useMetaFileList:Boolean, partitionBy:String): Unit = {
