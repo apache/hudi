@@ -18,12 +18,14 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -34,6 +36,8 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.CachingPath;
@@ -43,6 +47,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.zookeeper.Op;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -88,6 +93,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private final HoodieTableMetaClient metaClient;
   private final HoodieEngineContext engineContext;
 
+  private final TypedProperties configProperties;
+
   private final transient FileStatusCache fileStatusCache;
 
   protected transient volatile long cachedFileSize = 0L;
@@ -119,6 +126,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                                   boolean shouldIncludePendingCommits,
                                   boolean shouldValidateInstant,
                                   FileStatusCache fileStatusCache) {
+    this.configProperties = configProperties;
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
         .orElse(new String[0]);
 
@@ -182,14 +190,22 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   protected List<PartitionPath> getAllQueryPartitionPaths() {
     List<String> queryRelativePartitionPaths = queryPaths.stream()
         .map(path -> FSUtils.getRelativePartitionPath(basePath, path))
+        .filter(relatedPath -> !StringUtils.isNullOrEmpty(relatedPath))
         .collect(Collectors.toList());
+
+    List<String> allPartitionPathsUnchecked = getAllPartitionPathsUnchecked();
 
     // Load all the partition path from the basePath, and filter by the query partition path.
     // TODO load files from the queryRelativePartitionPaths directly.
-    List<String> matchedPartitionPaths = getAllPartitionPathsUnchecked()
-        .stream()
-        .filter(path -> queryRelativePartitionPaths.stream().anyMatch(path::startsWith))
-        .collect(Collectors.toList());
+    List<String> matchedPartitionPaths;
+    if (!queryRelativePartitionPaths.isEmpty()) {
+      matchedPartitionPaths = allPartitionPathsUnchecked
+          .stream()
+          .filter(path -> queryRelativePartitionPaths.stream().anyMatch(path::startsWith))
+          .collect(Collectors.toList());
+    } else {
+      matchedPartitionPaths = allPartitionPathsUnchecked;
+    }
 
     // Convert partition's path into partition descriptor
     return matchedPartitionPaths.stream()
@@ -275,17 +291,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     resetTableMetadata(newTableMetadata);
 
     Map<PartitionPath, FileStatus[]> partitionFiles = loadPartitionPathFiles();
-    FileStatus[] allFiles = partitionFiles.values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
 
     metaClient.reloadActiveTimeline();
 
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
-
-    // TODO we can optimize the flow by:
-    //  - First fetch list of files from instants of interest
-    //  - Load FileStatus's
-    this.fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
 
     Option<String> queryInstant =
         specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
@@ -298,17 +308,13 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
     // API.  Note that for COW table, the merging logic of two slices does not happen as there
     // is no compaction, thus there is no performance impact.
-    cachedAllInputFileSlices = partitionFiles.keySet().stream()
-        .collect(Collectors.toMap(
-                Function.identity(),
-                partitionPath ->
-                    queryInstant.map(instant ->
-                            fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
-                        )
-                        .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
-                        .collect(Collectors.toList())
-            )
-        );
+    int parallelism = Integer.parseInt(String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_PARALLELISM.key(), -1)));
+
+    if (parallelism > 0) {
+      cachedAllInputFileSlices = buildCacheFileSlicesParallel(parallelism, partitionFiles, activeTimeline, queryInstant);
+    } else {
+      cachedAllInputFileSlices = buildCacheFileSlicesLocal(partitionFiles, activeTimeline, queryInstant);
+    }
 
     cachedFileSize = cachedAllInputFileSlices.values().stream()
         .flatMap(Collection::stream)
@@ -321,6 +327,51 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     long duration = System.currentTimeMillis() - startTime;
 
     LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), duration));
+  }
+
+  private Map<PartitionPath, List<FileSlice>> buildCacheFileSlicesLocal(Map<PartitionPath, FileStatus[]> partitionFiles, HoodieTimeline activeTimeline,
+                                                                        Option<String> queryInstant) {
+
+    FileStatus[] allFiles = partitionFiles.values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
+    this.fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
+
+    return partitionFiles.keySet().stream()
+        .collect(Collectors.toMap(
+            Function.identity(),
+            partitionPath ->
+                queryInstant.map(instant ->
+                    fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+                )
+                    .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
+                    .collect(Collectors.toList())
+            )
+        );
+  }
+
+  private Map<PartitionPath, List<FileSlice>> buildCacheFileSlicesParallel(int parallelism, Map<PartitionPath, FileStatus[]> partitionFiles,
+                                                                           HoodieTimeline activeTimeline, Option<String> queryInstant) {
+    HoodieTableMetaClient metaClientInternal = metaClient;
+
+    return engineContext.mapPartitionsToPair(partitionFiles.entrySet().stream(), iterator -> {
+      ArrayList<FileStatus> allFilesInternal = new ArrayList<>();
+      ArrayList<PartitionPath> partitionPaths = new ArrayList<>();
+
+      iterator.forEachRemaining(entry -> {
+        allFilesInternal.addAll(Arrays.asList(entry.getValue()));
+        partitionPaths.add(entry.getKey());
+      });
+
+      HoodieTableFileSystemView fileSystemViewInternal = new HoodieTableFileSystemView(metaClientInternal, activeTimeline, allFilesInternal.toArray(new FileStatus[0]));
+
+      return partitionPaths.stream().map(partitionPath -> {
+        List<FileSlice> filesSlices = queryInstant.map(instant ->
+            fileSystemViewInternal.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+        )
+            .orElse(fileSystemViewInternal.getLatestFileSlices(partitionPath.path))
+            .collect(Collectors.toList());
+        return Pair.of(partitionPath, filesSlices);
+      });
+    }, Math.min(parallelism, partitionFiles.size())).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
   private Map<String, FileStatus[]> getAllFilesInPartitionsUnchecked(Collection<String> fullPartitionPathsMapToFetch) {

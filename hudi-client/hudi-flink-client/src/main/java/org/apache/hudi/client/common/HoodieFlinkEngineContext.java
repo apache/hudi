@@ -121,6 +121,13 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPair(
+      Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc, int parallelism) {
+    return throwingFlatMapToPairWrapper(flatMapToPairFunc).apply(data.parallel().iterator())
+        .map(pair -> new ImmutablePair<>(pair.getKey(), pair.getValue()));
+  }
+
+  @Override
   public <I, K, V> List<V> reduceByKey(
       List<Pair<K, V>> data, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
     return data.stream().parallel()

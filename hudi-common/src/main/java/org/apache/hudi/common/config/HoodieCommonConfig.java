@@ -41,6 +41,11 @@ public class HoodieCommonConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("The query instant for time travel. Without specified this option, we query the latest snapshot.");
 
+  public static final ConfigProperty<Integer> TABLE_LOADING_PARALLELISM = ConfigProperty
+      .key("hoodie.datasource.read.loading.parallelism")
+      .defaultValue(-1)
+      .withDocumentation("");
+
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)

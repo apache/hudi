@@ -80,6 +80,9 @@ public abstract class HoodieEngineContext {
       Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
       SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
 
+  public abstract <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPair(
+      Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc, int parallelism);
+
   public abstract <I, K, V> List<V> reduceByKey(
       List<Pair<K, V>> data, SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
 
