@@ -49,11 +49,11 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   private val log = LogManager.getLogger(getClass)
   var spark: SparkSession = null
   val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key -> "4",
-    HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "4",
-    HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "4",
+    "hoodie.insert.shuffle.parallelism" -> "2",
+    "hoodie.upsert.shuffle.parallelism" -> "2",
+    HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key -> "2",
+    HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "2",
+    HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "2",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",

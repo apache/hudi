@@ -44,8 +44,8 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
   private val log = LogManager.getLogger(classOf[TestMORDataSourceStorage])
 
   val commonOpts : Map[String, String] = Map(
-        "hoodie.insert.shuffle.parallelism" -> "4",
-        "hoodie.upsert.shuffle.parallelism" -> "4",
+        "hoodie.insert.shuffle.parallelism" -> "2",
+        "hoodie.upsert.shuffle.parallelism" -> "2",
         "hoodie.bulkinsert.shuffle.parallelism" -> "2",
         "hoodie.delete.shuffle.parallelism" -> "2",
         HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "2",

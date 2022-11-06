@@ -403,7 +403,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     commonOpts.put(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key(), "2");
     commonOpts.put(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key(), "2");
     commonOpts.put(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key(), "2");
-    commonOpts.put(HoodieBootstrapConfig.PARALLELISM_VALUE.key(), "4");
+    commonOpts.put(HoodieBootstrapConfig.PARALLELISM_VALUE.key(), "2");
     commonOpts.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     commonOpts.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition");
     commonOpts.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "timestamp");
