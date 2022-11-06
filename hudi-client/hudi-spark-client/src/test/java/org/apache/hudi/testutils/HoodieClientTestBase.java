@@ -94,12 +94,12 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
 
   protected Map<String, String> getCommonOptions() {
     Map<String, String> commonOpts = new HashMap<>();
-    commonOpts.put(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key(), "4");
-    commonOpts.put(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key(), "4");
-    commonOpts.put(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key(), "4");
-    commonOpts.put(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key(), "4");
-    commonOpts.put(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key(), "4");
-    commonOpts.put(HoodieBootstrapConfig.PARALLELISM_VALUE.key(), "4");
+    commonOpts.put(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key(), "2");
+    commonOpts.put(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key(), "2");
+    commonOpts.put(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key(), "2");
+    commonOpts.put(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key(), "2");
+    commonOpts.put(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key(), "2");
+    commonOpts.put(HoodieBootstrapConfig.PARALLELISM_VALUE.key(), "2");
     commonOpts.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     commonOpts.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition");
     commonOpts.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "timestamp");
