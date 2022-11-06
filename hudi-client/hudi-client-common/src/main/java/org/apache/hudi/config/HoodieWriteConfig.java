@@ -1230,6 +1230,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCleanConfig.AUTO_CLEAN);
   }
 
+  public boolean allowEmptyCleanCommits() {
+    return getBoolean(HoodieCleanConfig.ALLOW_EMPTY_CLEAN_COMMITS);
+  }
+
   public boolean getArchiveMergeEnable() {
     return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_MERGE_ENABLE);
   }

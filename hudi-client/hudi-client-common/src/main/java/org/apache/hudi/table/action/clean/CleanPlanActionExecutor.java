@@ -179,17 +179,24 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
    */
   protected Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
     final HoodieCleanerPlan cleanerPlan = requestClean(context);
-    // Always create a cleaner plan to save a checkpoint of the checked partitions, to avoid re-checking them in the next clean if the incremental cleaner mode is enabled
-    final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
-    // Save to both aux and timeline folder
-    try {
-      table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
-      LOG.info("Requesting Cleaning with instant time " + cleanInstant);
-    } catch (IOException e) {
-      LOG.error("Got exception when saving cleaner requested file", e);
-      throw new HoodieIOException(e.getMessage(), e);
+    // Create a clean request contains the cleaner plan if:
+    // - ALLOW_EMPTY_CLEAN_COMMITS is true
+    // - or the list of the file paths to be deleted is not empty
+    if (config.allowEmptyCleanCommits() || (cleanerPlan.getFilePathsToBeDeletedPerPartition() != null
+        && !cleanerPlan.getFilePathsToBeDeletedPerPartition().isEmpty()
+        && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0)){
+      final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
+      // Save to both aux and timeline folder
+      try {
+        table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+        LOG.info("Requesting Cleaning with instant time " + cleanInstant);
+      } catch (IOException e) {
+        LOG.error("Got exception when saving cleaner requested file", e);
+        throw new HoodieIOException(e.getMessage(), e);
+      }
+      return Option.of(cleanerPlan);
     }
-    return Option.of(cleanerPlan);
+    return Option.empty();
   }
 
   @Override
