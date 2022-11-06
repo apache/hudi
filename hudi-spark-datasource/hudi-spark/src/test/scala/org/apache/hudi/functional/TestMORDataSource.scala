@@ -355,7 +355,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     // SNAPSHOT view on MOR table with parquet files only.
 
     // Overriding the partition-path field
-    val opts = commonOpts ++ Map(DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path")
+    val opts = commonOpts + (DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path")
 
     val hoodieRecords1 = dataGen.generateInserts("001", 100)
 
