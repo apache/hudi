@@ -31,9 +31,8 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
   def testWithDefaultSqlOptions(): Unit = {
     val ops1 = Map("primaryKey" -> "id")
     val with1 = HoodieOptionConfig.withDefaultSqlOptions(ops1)
-    assertTrue(with1.size == 3)
+    assertTrue(with1.size == 2)
     assertTrue(with1("primaryKey") == "id")
-    assertTrue(with1("type") == "cow")
     assertTrue(with1("payloadClass") == classOf[OverwriteWithLatestAvroPayload].getName)
 
     val ops2 = Map("primaryKey" -> "id",
@@ -106,65 +105,45 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
         StructField("dt", StringType, true))
     )
 
-    // miss primaryKey parameter
+    // primary field not found
     val sqlOptions1 = baseSqlOptions ++ Map(
+      "primaryKey" -> "xxx",
       "type" -> "mor"
     )
-
     val e1 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions1)
     }
-    assertTrue(e1.getMessage.contains("No `primaryKey` is specified."))
+    assertTrue(e1.getMessage.contains("Can't find primaryKey"))
 
-    // primary field not found
+    // preCombine field not found
     val sqlOptions2 = baseSqlOptions ++ Map(
-      "primaryKey" -> "xxx",
+      "primaryKey" -> "id",
+      "preCombineField" -> "ts",
       "type" -> "mor"
     )
     val e2 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions2)
     }
-    assertTrue(e2.getMessage.contains("Can't find primaryKey"))
-
-    // preCombine field not found
-    val sqlOptions3 = baseSqlOptions ++ Map(
-      "primaryKey" -> "id",
-      "preCombineField" -> "ts",
-      "type" -> "mor"
-    )
-    val e3 = intercept[IllegalArgumentException] {
-      HoodieOptionConfig.validateTable(spark, schema, sqlOptions3)
-    }
-    assertTrue(e3.getMessage.contains("Can't find preCombineKey"))
-
-    // miss type parameter
-    val sqlOptions4 = baseSqlOptions ++ Map(
-      "primaryKey" -> "id",
-      "preCombineField" -> "timestamp"
-    )
-    val e4 = intercept[IllegalArgumentException] {
-      HoodieOptionConfig.validateTable(spark, schema, sqlOptions4)
-    }
-    assertTrue(e4.getMessage.contains("No `type` is specified."))
+    assertTrue(e2.getMessage.contains("Can't find preCombineKey"))
 
     // type is invalid
-    val sqlOptions5 = baseSqlOptions ++ Map(
+    val sqlOptions3 = baseSqlOptions ++ Map(
       "primaryKey" -> "id",
       "preCombineField" -> "timestamp",
       "type" -> "abc"
     )
-    val e5 = intercept[IllegalArgumentException] {
-      HoodieOptionConfig.validateTable(spark, schema, sqlOptions5)
+    val e3 = intercept[IllegalArgumentException] {
+      HoodieOptionConfig.validateTable(spark, schema, sqlOptions3)
     }
-    assertTrue(e5.getMessage.contains("'type' must be 'cow' or 'mor'"))
+    assertTrue(e3.getMessage.contains("'type' must be 'cow' or 'mor'"))
 
     // right options and schema
-    val sqlOptions6 = baseSqlOptions ++ Map(
+    val sqlOptions4 = baseSqlOptions ++ Map(
       "primaryKey" -> "id",
       "preCombineField" -> "timestamp",
       "type" -> "cow"
     )
-    HoodieOptionConfig.validateTable(spark, schema, sqlOptions6)
+    HoodieOptionConfig.validateTable(spark, schema, sqlOptions4)
   }
 
 }
