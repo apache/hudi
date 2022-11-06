@@ -308,7 +308,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // is no compaction, thus there is no performance impact.
     int parallelism = Integer.parseInt(String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_PARALLELISM.key(), 10)));
 
-    if (parallelism > 0) {
+    if (parallelism > 0 && partitionFiles.size() > 1) {
       cachedAllInputFileSlices = buildCacheFileSlicesParallel(parallelism, partitionFiles, activeTimeline, queryInstant);
     } else {
       cachedAllInputFileSlices = buildCacheFileSlicesLocal(partitionFiles, activeTimeline, queryInstant);
@@ -369,7 +369,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             .collect(Collectors.toList());
         return Pair.of(partitionPath, filesSlices);
       });
-    }, parallelism).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    }, Math.min(parallelism, partitionFiles.size())).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
   private Map<String, FileStatus[]> getAllFilesInPartitionsUnchecked(Collection<String> fullPartitionPathsMapToFetch) {
