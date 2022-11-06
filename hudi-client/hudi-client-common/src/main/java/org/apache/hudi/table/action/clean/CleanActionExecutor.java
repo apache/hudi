@@ -223,9 +223,9 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       } else {
         LOG.info("No need to run the cleaner");
         HoodieActionInstant actionInstant = cleanerPlan.getEarliestInstantToRetain();
-        HoodieInstant earliestCommitToRetain = actionInstant != null ? new HoodieInstant(
-            HoodieInstant.State.valueOf(actionInstant.getState()), actionInstant.getAction(), actionInstant.getTimestamp()) : null;
-        metadata = new HoodieCleanMetadata(inflightInstant.getTimestamp(), Option.of(timer.endTimer()).orElseGet(() -> -1L), 0, earliestCommitToRetain.getTimestamp(),
+        String earliestCommitToRetainTimestamp = actionInstant != null ? new HoodieInstant(
+            HoodieInstant.State.valueOf(actionInstant.getState()), actionInstant.getAction(), actionInstant.getTimestamp()).getTimestamp() : "";
+        metadata = new HoodieCleanMetadata(inflightInstant.getTimestamp(), Option.of(timer.endTimer()).orElseGet(() -> -1L), 0, earliestCommitToRetainTimestamp,
             cleanerPlan.getLastCompletedCommitTimestamp(), CollectionUtils.createImmutableMap(), CleanMetadataV2MigrationHandler.VERSION, CollectionUtils.createImmutableMap());
       }
 
