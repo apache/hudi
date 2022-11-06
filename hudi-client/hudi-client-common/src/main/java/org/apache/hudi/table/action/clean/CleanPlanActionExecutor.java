@@ -184,7 +184,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     // - or the list of the file paths to be deleted is not empty
     if (config.allowEmptyCleanCommits() || (cleanerPlan.getFilePathsToBeDeletedPerPartition() != null
         && !cleanerPlan.getFilePathsToBeDeletedPerPartition().isEmpty()
-        && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0)){
+        && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0)) {
       final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
       try {
