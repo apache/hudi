@@ -29,6 +29,7 @@ import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.HoodiePipeline;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.AbstractHoodieTestBase;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
@@ -52,7 +53,6 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.util.TestLogger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -71,7 +71,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Integration test for Flink Hoodie stream sink.
  */
-public class ITTestDataStreamWrite extends TestLogger {
+public class ITTestDataStreamWrite extends AbstractHoodieTestBase {
 
   private static final Map<String, List<String>> EXPECTED = new HashMap<>();
   private static final Map<String, List<String>> EXPECTED_TRANSFORMER = new HashMap<>();

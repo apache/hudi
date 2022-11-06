@@ -39,6 +39,7 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.AbstractHoodieTestBase;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
@@ -69,7 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * IT cases for {@link HoodieFlinkClusteringJob}.
  */
-public class ITTestHoodieFlinkClustering {
+public class ITTestHoodieFlinkClustering extends AbstractHoodieTestBase {
 
   private static final Map<String, String> EXPECTED = new HashMap<>();
 

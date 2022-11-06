@@ -30,6 +30,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.AbstractHoodieTestBase;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
@@ -63,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * IT cases for {@link org.apache.hudi.common.model.HoodieRecord}.
  */
-public class ITTestHoodieFlinkCompactor {
+public class ITTestHoodieFlinkCompactor extends AbstractHoodieTestBase {
 
   protected static final Logger LOG = LoggerFactory.getLogger(ITTestHoodieFlinkCompactor.class);
 
@@ -155,7 +156,7 @@ public class ITTestHoodieFlinkCompactor {
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
             new ProcessOperator<>(new CompactFunction(conf)))
-        .setParallelism(compactionPlan.getOperations().size())
+        .setParallelism(4)
         .addSink(new CompactionCommitSink(conf))
         .name("clean_commits")
         .uid("uid_clean_commits")
@@ -195,6 +196,7 @@ public class ITTestHoodieFlinkCompactor {
     cfg.schedule = true;
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
     conf.setString(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+    conf.setInteger(FlinkOptions.COMPACTION_TASKS.key(), 4);
 
     HoodieFlinkCompactor.AsyncCompactionService asyncCompactionService = new HoodieFlinkCompactor.AsyncCompactionService(cfg, conf, env);
     asyncCompactionService.start(null);
