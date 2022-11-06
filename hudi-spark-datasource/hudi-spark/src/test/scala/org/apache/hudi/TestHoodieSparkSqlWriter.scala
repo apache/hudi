@@ -146,8 +146,10 @@ class TestHoodieSparkSqlWriter {
   def getCommonParams(path: java.nio.file.Path, hoodieFooTableName: String, tableType: String): Map[String, String] = {
     Map("path" -> path.toAbsolutePath.toString,
       HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1",
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "4",
+      HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key() -> "4",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
@@ -725,13 +727,17 @@ class TestHoodieSparkSqlWriter {
       df.write.format("hudi")
         .options(options)
         .option(DataSourceWriteOptions.OPERATION.key, "insert")
-        .option("hoodie.insert.shuffle.parallelism", "4")
+        .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "4")
+        .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "4")
+        .option(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key, "4")
+        .option(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key, "4")
         .mode(SaveMode.Overwrite).save(tempBasePath)
 
       df.write.format("hudi")
         .options(options)
         .option(DataSourceWriteOptions.OPERATION.key, "insert_overwrite_table")
         .option("hoodie.insert.shuffle.parallelism", "4")
+        .option(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key, "4")
         .mode(SaveMode.Append).save(tempBasePath)
 
       val currentCommits = spark.read.format("hudi").load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
@@ -749,9 +755,11 @@ class TestHoodieSparkSqlWriter {
         .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
         .option(HoodieBootstrapConfig.PARALLELISM_VALUE.key, "4")
+        .option(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key, "4")
         .mode(SaveMode.Overwrite).save(tempBasePath)
       df.write.format("hudi").options(options)
         .option(DataSourceWriteOptions.OPERATION.key, "insert_overwrite_table")
+        .option(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key, "4")
         .option("hoodie.insert.shuffle.parallelism", "4").mode(SaveMode.Append).save(tempBasePath)
       val currentCommitsBootstrap = spark.read.format("hudi").load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
       val incrementalKeyIdNumBootstrap = spark.read.format("hudi")
@@ -827,13 +835,15 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.insert.shuffle.parallelism" -> "2",
+      "hoodie.upsert.shuffle.parallelism" -> "2",
       "hoodie.metadata.enable" -> "true")
     val df = spark.range(0, 10).toDF("keyid")
       .withColumn("col3", expr("keyid"))
       .withColumn("age", expr("keyid + 1000"))
     df.write.format("hudi")
       .options(options.updated(DataSourceWriteOptions.OPERATION.key, "insert"))
+      .option(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key, "4")
       .mode(SaveMode.Overwrite).save(tempBasePath)
     // upsert same record again
     val df_update = spark.range(0, 10).toDF("keyid")
@@ -841,6 +851,7 @@ class TestHoodieSparkSqlWriter {
       .withColumn("age", expr("keyid + 2000"))
     df_update.write.format("hudi")
       .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
+      .option(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key, "4")
       .mode(SaveMode.Append).save(tempBasePath)
     assert(spark.read.format("hudi").load(tempBasePath).count() == 10)
     assert(spark.read.format("hudi").load(tempBasePath).where("age >= 2000").count() == 10)

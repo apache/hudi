@@ -56,15 +56,7 @@ class TestLayoutOptimization extends HoodieClientTestBase {
     HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
   )
 
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    "hoodie.bulkinsert.shuffle.parallelism" -> "4",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-  ) ++ metadataOpts
+  val commonOpts = getCommonOptions ++ metadataOpts
 
   @BeforeEach
   override def setUp() {

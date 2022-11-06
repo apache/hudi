@@ -243,6 +243,8 @@ public class TestBootstrap extends HoodieClientTestBase {
     HoodieWriteConfig config = getConfigBuilder(schema.toString())
         .withAutoCommit(true)
         .withSchema(schema.toString())
+        .withParallelism(4,4)
+        .withFinalizeWriteParallelism(4)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1)
             .build())
@@ -250,7 +252,7 @@ public class TestBootstrap extends HoodieClientTestBase {
             .withBootstrapBasePath(bootstrapBasePath)
             .withBootstrapKeyGenClass(keyGeneratorClass)
             .withFullBootstrapInputProvider(TestFullBootstrapDataProvider.class.getName())
-            .withBootstrapParallelism(3)
+            .withBootstrapParallelism(4)
             .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
         .build();
 

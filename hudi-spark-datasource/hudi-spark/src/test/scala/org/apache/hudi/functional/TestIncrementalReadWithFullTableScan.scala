@@ -44,16 +44,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
 
   private val perBatchSize = 100
 
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
-  )
-
+  val commonOpts = getCommonOptions()
 
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
@@ -77,7 +68,9 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
   @EnumSource(value = classOf[HoodieTableType])
   def testFailEarlyForIncrViewQueryForNonExistingFiles(tableType: HoodieTableType): Unit = {
     // Create 10 commits
+    val startTimeMs = System.currentTimeMillis()
     for (i <- 1 to 10) {
+      println("Round no " + i)
       val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), perBatchSize)).toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
       inputDF.write.format("org.apache.hudi")
@@ -86,10 +79,12 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
         .option("hoodie.cleaner.commits.retained", "3")
         .option("hoodie.keep.min.commits", "4")
         .option("hoodie.keep.max.commits", "5")
+        .option(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key, "1")
         .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
         .mode(SaveMode.Append)
         .save(basePath)
     }
+    println("After 10 commits :: " + (System.currentTimeMillis() - startTimeMs))
 
     val hoodieMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build()
     /**
@@ -120,29 +115,43 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
     assertTrue(HoodieTimeline.compareTimestamps(startOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
     assertTrue(HoodieTimeline.compareTimestamps(endOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
 
+    println("After some validation 111 :: " + (System.currentTimeMillis() - startTimeMs))
+
     // Test both start and end commits are archived
     runIncrementalQueryAndCompare(startArchivedCommitTs, endArchivedCommitTs, 1, true)
+
+    println("After Incr Query 222 :: " + (System.currentTimeMillis() - startTimeMs))
 
     // Test start commit is archived, end commit is not archived
     shouldThrowIfFallbackIsFalse(tableType,
       () => runIncrementalQueryAndCompare(startArchivedCommitTs, endUnarchivedCommitTs, 5, false))
     runIncrementalQueryAndCompare(startArchivedCommitTs, endUnarchivedCommitTs, 5, true)
 
+    println("After Incr Query 333 :: " + (System.currentTimeMillis() - startTimeMs))
+
     // Test both start commit and end commits are not archived but got cleaned
     shouldThrowIfFallbackIsFalse(tableType,
       () => runIncrementalQueryAndCompare(startUnarchivedCommitTs, endUnarchivedCommitTs, 1, false))
     runIncrementalQueryAndCompare(startUnarchivedCommitTs, endUnarchivedCommitTs, 1, true)
 
+    println("After Incr Query 444 :: " + (System.currentTimeMillis() - startTimeMs))
+
     // Test start commit is not archived, end commits is out of the timeline
     runIncrementalQueryAndCompare(startUnarchivedCommitTs, endOutOfRangeCommitTs, 5, true)
+
+    println("After Incr Query 555 :: " + (System.currentTimeMillis() - startTimeMs))
 
     // Test both start commit and end commits are out of the timeline
     runIncrementalQueryAndCompare(startOutOfRangeCommitTs, endOutOfRangeCommitTs, 0, false)
     runIncrementalQueryAndCompare(startOutOfRangeCommitTs, endOutOfRangeCommitTs, 0, true)
 
+    println("After Incr Query 666 :: " + (System.currentTimeMillis() - startTimeMs))
+
     // Test end commit is smaller than the start commit
     runIncrementalQueryAndCompare(endUnarchivedCommitTs, startUnarchivedCommitTs, 0, false)
     runIncrementalQueryAndCompare(endUnarchivedCommitTs, startUnarchivedCommitTs, 0, true)
+
+    println("After Incr Query 777 :: " + (System.currentTimeMillis() - startTimeMs))
 
     // Test both start commit and end commits is not archived and not cleaned
     val reversedCommits = completedCommits.getReverseOrderedInstants.toArray

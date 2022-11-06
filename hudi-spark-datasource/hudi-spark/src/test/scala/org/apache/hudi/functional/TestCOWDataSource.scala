@@ -60,18 +60,19 @@ import scala.collection.JavaConverters._
  */
 class TestCOWDataSource extends HoodieClientTestBase {
   var spark: SparkSession = null
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    "hoodie.bulkinsert.shuffle.parallelism" -> "2",
-    "hoodie.delete.shuffle.parallelism" -> "1",
-    HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key() -> "true",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
-  )
+  val commonOpts = getCommonOptions
+//    Map(
+//    "hoodie.insert.shuffle.parallelism" -> "4",
+//    "hoodie.upsert.shuffle.parallelism" -> "4",
+//    "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+//    "hoodie.delete.shuffle.parallelism" -> "1",
+//    HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key() -> "true",
+//    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+//    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+//    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+//    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+//    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
+//  )
 
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
@@ -119,6 +120,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val commonOptsNoPreCombine = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "2",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
