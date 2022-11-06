@@ -369,7 +369,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             .collect(Collectors.toList());
         return Pair.of(partitionPath, filesSlices);
       });
-    }, Math.min(parallelism, partitionFiles.size())).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    }, parallelism).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
   private Map<String, FileStatus[]> getAllFilesInPartitionsUnchecked(Collection<String> fullPartitionPathsMapToFetch) {
