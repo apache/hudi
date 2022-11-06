@@ -71,9 +71,12 @@ public class SyncUtilHelpers {
     properties.putAll(props);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), targetBasePath);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
-    String tableName = properties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key());
-    if (!tableName.equals(tableName.toLowerCase())) {
-      LOG.warn("Table name \"" + tableName + "\" contains capital letters. Your metastore may automatically convert this to lower case and can cause table not found errors during subsequent syncs.");
+    if (properties.containsKey(HoodieSyncConfig.META_SYNC_TABLE_NAME.key())) {
+      String tableName = properties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key());
+      if (!tableName.equals(tableName.toLowerCase())) {
+        LOG.warn(
+            "Table name \"" + tableName + "\" contains capital letters. Your metastore may automatically convert this to lower case and can cause table not found errors during subsequent syncs.");
+      }
     }
 
     if (ReflectionUtils.hasConstructor(syncToolClassName,
