@@ -47,18 +47,15 @@ abstract class HoodieCDCTestBase extends HoodieClientTestBase {
 
   var spark: SparkSession = _
 
-  val commonOpts = Map(
+  val cdcOpts = Map(
     HoodieTableConfig.CDC_ENABLED.key -> "true",
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    "hoodie.bulkinsert.shuffle.parallelism" -> "2",
-    "hoodie.delete.shuffle.parallelism" -> "1",
     RECORDKEY_FIELD.key -> "_row_key",
     PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1",
     HoodieCleanConfig.AUTO_CLEAN.key -> "false"
   )
+
+  val commonOpts = getCommonOptions ++ cdcOpts
 
   @BeforeEach override def setUp(): Unit = {
     setTableName("hoodie_test")

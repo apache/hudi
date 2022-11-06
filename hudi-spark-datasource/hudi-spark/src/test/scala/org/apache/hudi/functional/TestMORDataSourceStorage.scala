@@ -43,16 +43,17 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
   private val log = LogManager.getLogger(classOf[TestMORDataSourceStorage])
 
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    "hoodie.bulkinsert.shuffle.parallelism" -> "2",
-    "hoodie.delete.shuffle.parallelism" -> "1",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-  )
+  val commonOpts : Map[String, String] = Map(
+        "hoodie.insert.shuffle.parallelism" -> "4",
+        "hoodie.upsert.shuffle.parallelism" -> "4",
+        "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+        "hoodie.delete.shuffle.parallelism" -> "2",
+        HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "2",
+        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+        DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+        )
 
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"

@@ -37,15 +37,7 @@ import java.text.SimpleDateFormat
 
 class TestTimeTravelQuery extends HoodieClientTestBase {
   var spark: SparkSession =_
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    "hoodie.bulkinsert.shuffle.parallelism" -> "2",
-    "hoodie.delete.shuffle.parallelism" -> "1",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "version",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-  )
+  val commonOpts = getCommonOptions
 
   @BeforeEach override def setUp() {
     setTableName("hoodie_test")

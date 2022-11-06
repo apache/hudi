@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -53,6 +54,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
@@ -392,5 +394,20 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     // to avoid port reuse causing failures
     timelineServicePort = (timelineServicePort + 1 - 1024) % (65536 - 1024) + 1024;
     return timelineServicePort;
+  }
+
+  protected Map<String, String> getCommonOptions() {
+    Map<String, String> commonOpts = new HashMap<>();
+    commonOpts.put(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key(), "2");
+    commonOpts.put(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key(), "2");
+    commonOpts.put(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key(), "2");
+    commonOpts.put(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key(), "2");
+    commonOpts.put(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key(), "2");
+    commonOpts.put(HoodieBootstrapConfig.PARALLELISM_VALUE.key(), "4");
+    commonOpts.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    commonOpts.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition");
+    commonOpts.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "timestamp");
+    commonOpts.put(HoodieWriteConfig.TBL_NAME.key(), "hoodie_test");
+    return commonOpts;
   }
 }

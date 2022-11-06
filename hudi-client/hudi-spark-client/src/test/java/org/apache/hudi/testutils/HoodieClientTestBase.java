@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -47,6 +48,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import org.apache.hadoop.conf.Configuration;
@@ -88,6 +90,21 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
   @AfterEach
   public void tearDown() throws Exception {
     cleanupResources();
+  }
+
+  protected Map<String, String> getCommonOptions() {
+    Map<String, String> commonOpts = new HashMap<>();
+    commonOpts.put(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key(), "4");
+    commonOpts.put(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key(), "4");
+    commonOpts.put(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key(), "4");
+    commonOpts.put(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key(), "4");
+    commonOpts.put(HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key(), "4");
+    commonOpts.put(HoodieBootstrapConfig.PARALLELISM_VALUE.key(), "4");
+    commonOpts.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    commonOpts.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition");
+    commonOpts.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "timestamp");
+    commonOpts.put(HoodieWriteConfig.TBL_NAME.key(), "hoodie_test");
+    return commonOpts;
   }
 
   /**
