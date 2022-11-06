@@ -133,4 +133,16 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
   public void setExecutor(NonThrownExecutor executor) {
     this.executor = executor;
   }
+
+  @Override
+  public void close() throws Exception {
+    if (null != this.executor) {
+      this.executor.close();
+    }
+    if (null != this.writeClient) {
+      this.writeClient.cleanHandlesGracefully();
+      this.writeClient.close();
+      this.writeClient = null;
+    }
+  }
 }
