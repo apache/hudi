@@ -148,7 +148,7 @@ public class TypeInfoLogicalTypeVisitor extends LogicalTypeDefaultVisitor<TypeIn
   @Override
   public TypeInfo visit(LocalZonedTimestampType localZonedTimestampType) {
     int precision = localZonedTimestampType.getPrecision();
-    if(precision >= 0 && precision <= 9) {
+    if (precision >= 0 && precision <= 9) {
       return TypeInfoFactory.timestampTypeInfo;
     } else {
       return TypeInfoFactory.longTypeInfo;
