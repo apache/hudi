@@ -60,9 +60,9 @@ public class HoodiePartitionDescriptor {
 
   @Override
   public String toString() {
-    return "HoodiePartitionDescriptor{" +
-        "partitionPath='" + partitionPath + '\'' +
-        ", partitionColumnValues=" + partitionColumnValues +
-        '}';
+    return "HoodiePartitionDescriptor{"
+        + "partitionPath='" + partitionPath + '\''
+        + ", partitionColumnValues=" + partitionColumnValues
+        + '}';
   }
 }

@@ -71,10 +71,10 @@ public class HoodiePartitionIncrementalSnapshot {
 
   @Override
   public String toString() {
-    return "HoodiePartitionIncrementalSnapshot{" +
-        "partitionDescriptor=" + partitionDescriptor +
-        ", timeline=" + timeline +
-        ", fileSlices=" + fileSlices +
-        '}';
+    return "HoodiePartitionIncrementalSnapshot{"
+        + "partitionDescriptor=" + partitionDescriptor
+        + ", timeline=" + timeline
+        + ", fileSlices=" + fileSlices
+        + '}';
   }
 }

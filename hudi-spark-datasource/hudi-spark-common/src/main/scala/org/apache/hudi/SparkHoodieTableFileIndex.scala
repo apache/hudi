@@ -42,7 +42,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.util
+import java.util.List
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 
@@ -171,14 +171,14 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     }).toMap
   }
 
-  override def listFilesAt(instant: HoodieInstant, filters: util.List[_]): util.List[HoodiePartitionSnapshot] = {
+  override def listFilesAt(instant: HoodieInstant, filters: List[_]): List[HoodiePartitionSnapshot] = {
     // TODO
     super.listFilesAt(instant, filters)
   }
 
   override def listFilesBetween(from: HoodieInstant,
                                 to: HoodieInstant,
-                                filters: util.List[_]): util.List[HoodiePartitionIncrementalSnapshot] = {
+                                filters: List[_]): List[HoodiePartitionIncrementalSnapshot] = {
     // TODO
     super.listFilesBetween(from, to, filters)
   }

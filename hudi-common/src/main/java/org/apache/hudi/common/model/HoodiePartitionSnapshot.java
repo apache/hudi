@@ -60,8 +60,9 @@ public class HoodiePartitionSnapshot {
       return false;
     }
     HoodiePartitionSnapshot that = (HoodiePartitionSnapshot) o;
-    return Objects.equals(partitionDescriptor, that.partitionDescriptor) && Objects.equals(latestInstant, that.latestInstant) &&
-        Objects.equals(fileSlices, that.fileSlices);
+    return Objects.equals(partitionDescriptor, that.partitionDescriptor)
+        && Objects.equals(latestInstant, that.latestInstant)
+        && Objects.equals(fileSlices, that.fileSlices);
   }
 
   @Override
@@ -71,10 +72,10 @@ public class HoodiePartitionSnapshot {
 
   @Override
   public String toString() {
-    return "HoodiePartitionSnapshot{" +
-        "partitionDescriptor=" + partitionDescriptor +
-        ", latestInstant=" + latestInstant +
-        ", fileSlices=" + fileSlices +
-        '}';
+    return "HoodiePartitionSnapshot{"
+        + "partitionDescriptor=" + partitionDescriptor
+        + ", latestInstant=" + latestInstant
+        + ", fileSlices=" + fileSlices
+        + '}';
   }
 }
