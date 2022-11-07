@@ -279,34 +279,26 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
   protected HoodieLogFormat.Writer createLogWriter(
       Option<FileSlice> fileSlice, String baseCommitTime) throws IOException {
-    return createLogWriter(fileSlice, baseCommitTime, "");
+    return createLogWriter(fileSlice, baseCommitTime, null);
   }
 
   protected HoodieLogFormat.Writer createLogWriter(
-      Option<FileSlice> fileSlice, String baseCommitTime, String fileSuffix) throws IOException {
-    int logVersion = HoodieLogFile.LOGFILE_BASE_VERSION;
-    long logFileSize = 0L;
-    String logWriteToken = writeToken + fileSuffix;
-    String rolloverLogWriteToken = writeToken + fileSuffix;
-    if (fileSlice.isPresent()) {
-      Option<HoodieLogFile> latestLogFileOpt = fileSlice.get().getLatestLogFile();
-      if (latestLogFileOpt.isPresent()) {
-        HoodieLogFile latestLogFile = latestLogFileOpt.get();
-        logVersion = latestLogFile.getLogVersion();
-        logFileSize = latestLogFile.getFileSize();
-        logWriteToken = FSUtils.getWriteTokenFromLogPath(latestLogFile.getPath());
-      }
-    }
+      Option<FileSlice> fileSlice, String baseCommitTime, String suffix) throws IOException {
+    Option<HoodieLogFile> latestLogFile = fileSlice.isPresent()
+        ? fileSlice.get().getLatestLogFile()
+        : Option.empty();
+
     return HoodieLogFormat.newWriterBuilder()
         .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
         .withFileId(fileId)
         .overBaseCommit(baseCommitTime)
-        .withLogVersion(logVersion)
-        .withFileSize(logFileSize)
+        .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
+        .withFileSize(latestLogFile.map(HoodieLogFile::getFileSize).orElse(0L))
         .withSizeThreshold(config.getLogFileMaxSize())
         .withFs(fs)
-        .withRolloverLogWriteToken(rolloverLogWriteToken)
-        .withLogWriteToken(logWriteToken)
+        .withRolloverLogWriteToken(writeToken)
+        .withLogWriteToken(latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
+        .withSuffix(suffix)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
   }
 

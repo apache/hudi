@@ -42,6 +42,7 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.hive.serde2.typeinfo.VarcharTypeInfo;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -178,9 +179,12 @@ public class HiveSchemaUtils {
   /**
    * Create Hive field schemas from Flink table schema including the hoodie metadata fields.
    */
-  public static List<FieldSchema> toHiveFieldSchema(TableSchema schema) {
+  public static List<FieldSchema> toHiveFieldSchema(TableSchema schema, boolean withOperationField) {
     List<FieldSchema> columns = new ArrayList<>();
-    for (String metaField : HoodieRecord.HOODIE_META_COLUMNS) {
+    Collection<String> metaFields = withOperationField
+        ? HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION // caution that the set may break sequence
+        : HoodieRecord.HOODIE_META_COLUMNS;
+    for (String metaField : metaFields) {
       columns.add(new FieldSchema(metaField, "string", null));
     }
     columns.addAll(createHiveColumns(schema));

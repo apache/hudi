@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -248,6 +249,42 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(rlPath));
     assertEquals(0, FSUtils.getStageIdFromLogPath(rlPath));
     assertEquals(1, FSUtils.getTaskAttemptIdFromLogPath(rlPath));
+  }
+
+  @Test
+  public void testCdcLogFileName() {
+    String partitionPath = "2022/11/04/";
+    String fileName = UUID.randomUUID().toString();
+    String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
+    Path path = new Path(new Path(partitionPath), logFile);
+
+    assertTrue(FSUtils.isLogFile(path));
+    assertEquals("log", FSUtils.getFileExtensionFromLog(path));
+    assertEquals(fileName, FSUtils.getFileIdFromLogPath(path));
+    assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(path));
+    assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(path));
+    assertEquals("1-0-1", FSUtils.getWriteTokenFromLogPath(path));
+    assertEquals(0, FSUtils.getStageIdFromLogPath(path));
+    assertEquals(1, FSUtils.getTaskAttemptIdFromLogPath(path));
+    assertEquals(2, FSUtils.getFileVersionFromLog(path));
+  }
+
+  @Test
+  public void testArchiveLogFileName() {
+    String partitionPath = "2022/11/04/";
+    String fileName = "commits";
+    String logFile = FSUtils.makeLogFileName(fileName, ".archive", "", 2, "1-0-1");
+    Path path = new Path(new Path(partitionPath), logFile);
+
+    assertFalse(FSUtils.isLogFile(path));
+    assertEquals("archive", FSUtils.getFileExtensionFromLog(path));
+    assertEquals(fileName, FSUtils.getFileIdFromLogPath(path));
+    assertEquals("", FSUtils.getBaseCommitTimeFromLogPath(path));
+    assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(path));
+    assertEquals("1-0-1", FSUtils.getWriteTokenFromLogPath(path));
+    assertEquals(0, FSUtils.getStageIdFromLogPath(path));
+    assertEquals(1, FSUtils.getTaskAttemptIdFromLogPath(path));
+    assertEquals(2, FSUtils.getFileVersionFromLog(path));
   }
 
   /**
