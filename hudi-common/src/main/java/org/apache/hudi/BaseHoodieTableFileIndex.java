@@ -150,7 +150,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // In SparkSQL, `shouldListLazily` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
     // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
     if (shouldListLazily) {
-      initMetadataTable();
+      this.tableMetadata = createMetadataTable(engineContext, metadataConfig, basePath);
     } else {
       doRefresh();
     }
@@ -178,13 +178,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * @return mapping from string partition paths to its base/log files
    */
   public Map<String, List<FileSlice>> listFileSlices() {
-    return cachedAllInputFileSlices.entrySet()
-        .stream()
+    return getAllInputFileSlices().entrySet().stream()
         .collect(Collectors.toMap(e -> e.getKey().path, Map.Entry::getValue));
   }
 
   public int getFileSlicesCount() {
-    return cachedAllInputFileSlices.values().stream()
+    return getAllInputFileSlices().values().stream()
         .mapToInt(List::size).sum();
   }
 
@@ -236,7 +235,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   /**
    * Get input file slice for the given partition. Will use cache directly if it is computed before.
    */
-  protected List<FileSlice> getCachedInputFileSlices(PartitionPath partition) {
+  protected List<FileSlice> getInputFileSlices(PartitionPath partition) {
     return cachedAllInputFileSlices.computeIfAbsent(partition,
         p -> loadFileSlicesForPartitions(Collections.singletonList(p)).get(p));
   }
@@ -339,16 +338,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
-  private void initMetadataTable() {
-    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
-    resetTableMetadata(newTableMetadata);
-  }
-
   private void doRefresh() {
     HoodieTimer timer = HoodieTimer.start();
 
-    initMetadataTable();
+    resetTableMetadata(createMetadataTable(engineContext, metadataConfig, basePath));
 
     // Reset it to null to trigger re-loading of all partition path
     this.cachedAllPartitionPaths = null;
@@ -408,6 +401,16 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       }
     }
     tableMetadata = newTableMetadata;
+  }
+
+  private static HoodieTableMetadata createMetadataTable(
+      HoodieEngineContext engineContext,
+      HoodieMetadataConfig metadataConfig,
+      Path basePath
+  ) {
+    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    return newTableMetadata;
   }
 
   public static final class PartitionPath {

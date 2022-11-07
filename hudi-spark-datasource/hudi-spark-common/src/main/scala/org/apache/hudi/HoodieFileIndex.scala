@@ -147,7 +147,7 @@ case class HoodieFileIndex(spark: SparkSession,
       var candidateFileSize = 0
       val result = prunedPartitions.map { partition =>
         val baseFileStatuses: Seq[FileStatus] =
-          getCachedInputFileSlices(partition).asScala
+          getInputFileSlices(partition).asScala
             .map(fs => fs.getBaseFile.orElse(null))
             .filter(_ != null)
             .map(_.getFileStatus)
