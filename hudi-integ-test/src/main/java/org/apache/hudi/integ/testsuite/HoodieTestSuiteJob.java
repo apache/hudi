@@ -20,6 +20,7 @@ package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -348,6 +349,6 @@ public class HoodieTestSuiteJob {
     public String indexType = "SIMPLE";
 
     @Parameter(names = {"--enable-metadata-on-read"}, description = "Enable's metadata for queries")
-    public Boolean enableMetadataOnRead = false;
+    public Boolean enableMetadataOnRead = HoodieMetadataConfig.ENABLE.key();
   }
 }
