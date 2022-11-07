@@ -28,31 +28,50 @@
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
+ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
 ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 
 
 ##
-# Function to test the spark bundle with hive sync.
+# Function to test the spark & hadoop-mr bundles with hive sync.
 #
 # env vars (defined in container):
 #   HIVE_HOME: path to the hive directory
 #   DERBY_HOME: path to the derby directory
 #   SPARK_HOME: path to the spark directory
 ##
-test_spark_bundle () {
-    echo "::warning::validate.sh setting up hive metastore for spark bundle validation"
+test_spark_hadoop_mr_bundles () {
+    echo "::warning::validate.sh setting up hive metastore for spark & hadoop-mr bundles validation"
 
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
-    $HIVE_HOME/bin/hiveserver2 &
-    echo "::warning::validate.sh hive metastore setup complete. Testing"
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark/validate.scala
-    if [ "$?" -ne 0 ]; then
-        echo "::error::validate.sh failed hive testing"
+    $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
+    echo "::warning::validate.sh Writing sample data via Spark DataSource and run Hive Sync..."
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/write.scala
+
+    echo "::warning::validate.sh Query and validate the results using Spark SQL"
+    # save Spark SQL query results
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar \
+      -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/sparksql/trips/results"); System.exit(0)')
+    numRecordsSparkSQL=$(cat /tmp/sparksql/trips/results/*.csv | wc -l)
+    if [ "$numRecordsSparkSQL" -ne 10 ]; then
+        echo "::error::validate.sh Spark SQL validation failed."
         exit 1
     fi
-    echo "::warning::validate.sh spark bundle validation successful"
+    echo "::warning::validate.sh Query and validate the results using HiveQL"
+    # save HiveQL query results
+    hiveqlresultsdir=/tmp/hiveql/trips/results
+    mkdir -p $hiveqlresultsdir
+    $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
+      -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
+      -e 'select * from trips' >> $hiveqlresultsdir/results.csv
+    numRecordsHiveQL=$(cat $hiveqlresultsdir/*.csv | wc -l)
+    if [ "$numRecordsHiveQL" -ne 10 ]; then
+        echo "::error::validate.sh HiveQL validation failed."
+        exit 1
+    fi
+    echo "::warning::validate.sh spark & hadoop-mr bundles validation was successful."
 }
 
 
@@ -112,7 +131,7 @@ test_utilities_bundle () {
 }
 
 
-test_spark_bundle
+test_spark_hadoop_mr_bundles
 if [ "$?" -ne 0 ]; then
     exit 1
 fi
