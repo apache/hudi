@@ -245,6 +245,56 @@ to effect change and source feedback, start a new email thread with the `[DISCUS
 by a [vote](https://www.apache.org/foundation/voting) by a PMC member or others (depending on the specific scenario). 
 For technical suggestions, you can also leverage [our RFC Process](https://cwiki.apache.org/confluence/display/HUDI/RFC+Process) to outline your ideas in greater detail.
 
+### Useful Maven commands for developers. 
+Listing out some of the maven commands that could be useful for developers. 
+
+- Compile/build entire project 
+
+```shell
+mvn clean package -DskipTests 
+```
+Default profile is spark2 and scala2.11
+
+- For continuous development, you may want to build only the modules of interest. for eg, if you have been working with 
+deltastreamer, you can build using this command instead of entire project. Majority of time goes into building all different bundles we have 
+like flink bundle, presto bundle, trino bundle etc. But if you are developing something confined to hudi-utilties, you can achieve faster 
+build times.
+
+```shell
+mvn package -DskipTests -pl packaging/hudi-utilities-bundle/ -am
+```
+
+To enable multi-threaded building, you can add -T. 
+```shell
+mvn -T 2C package -DskipTests -pl packaging/hudi-utilities-bundle/ -am
+```
+This command will use 2 parallel threads to build. 
+
+You can also confine the build to just one module if need be. 
+```shell
+mvn -T 2C package -DskipTests -pl hudi-spark-datasource/hudi-spark -am
+```
+Note: "-am" will build all dependent modules as well. 
+In local laptop, entire project build can take somewhere close to 7 to 10 mins. While buildig just hudi-spark-datasource/hudi-spark
+with multi-threaded, could get your compilation in 1.5 to 2 mins. 
+
+If you wish to run any single test class in java. 
+```shell
+mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner
+```
+
+If you wish to run a single test method in java. 
+```shell
+mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner#testKeepLatestCommitsMOR 
+```
+
+To filter particular scala test:
+```shell
+mvn -Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " -Dtest=abc -DfailIfNoTests=false test -pl packaging/hudi-spark-bundle -am
+```
+-Dtest=abc will assist in skipping all java tests.
+-Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " filters for a single scala test.
+
 
 ## Releases
 
