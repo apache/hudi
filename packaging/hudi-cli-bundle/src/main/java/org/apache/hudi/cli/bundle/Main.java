@@ -19,12 +19,7 @@
 
 package org.apache.hudi.cli.bundle;
 
-import org.apache.hudi.cli.HoodieSplashScreen;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.springframework.shell.Bootstrap;
-
-import java.io.IOException;
-
 
 /**
  * A simple main class to dump all classes loaded in current classpath.
@@ -36,9 +31,9 @@ import java.io.IOException;
  */
 public class Main {
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
+        System.out.println("cli bundle main");
         ReflectionUtils.getTopLevelClassesInClasspath(Main.class).forEach(System.out::println);
-        new HoodieSplashScreen();
-        Bootstrap.main(args);
+        //SpringApplication.run(org.apache.hudi.cli.Main.class, args);
     }
 }
