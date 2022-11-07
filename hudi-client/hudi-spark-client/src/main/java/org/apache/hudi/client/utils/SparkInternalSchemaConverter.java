@@ -131,7 +131,7 @@ public class SparkInternalSchemaConverter {
       return Types.StringType.get();
     } else if (sparkType instanceof DateType) {
       return Types.DateType.get();
-      // spark 3.3.0 support TimeStampNTZ, to do support spark3.3.0
+      // TODO support spark 3.3.x as it supports TimeStampNTZ (SPARK-35662)
     } else if (sparkType instanceof TimestampType) {
       return Types.TimestampType.get();
     } else if (sparkType instanceof DecimalType) {
