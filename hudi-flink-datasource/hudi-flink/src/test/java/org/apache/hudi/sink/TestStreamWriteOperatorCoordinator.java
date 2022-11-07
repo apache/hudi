@@ -29,7 +29,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.StreamerUtil;
@@ -163,14 +162,6 @@ public class TestStreamWriteOperatorCoordinator {
         "Commits the instant with partial events anyway");
     lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
     assertThat("Commits the instant with partial events anyway", lastCompleted, is(instant));
-  }
-
-  @Test
-  public void testSubTaskFailed() {
-    coordinator.subtaskFailed(0, null);
-    assertNull(coordinator.getEventBuffer()[0], "The write meta event should be cleaned");
-    CkpMetadata ckpMetadata = CkpMetadata.getInstance(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()));
-    assertNull(ckpMetadata.lastPendingInstant(), "The pending instant should be cleaned");
   }
 
   @Test

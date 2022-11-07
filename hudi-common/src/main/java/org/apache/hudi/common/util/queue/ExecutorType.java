@@ -18,44 +18,32 @@
 
 package org.apache.hudi.common.util.queue;
 
-import java.util.Iterator;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
- * Consume entries from queue and execute callback function.
+ * Types of {@link org.apache.hudi.common.util.queue.HoodieExecutor}.
  */
-public abstract class BoundedInMemoryQueueConsumer<I, O> {
+public enum ExecutorType {
 
   /**
-   * API to de-queue entries to memory bounded queue.
-   *
-   * @param queue In Memory bounded queue
+   * Executor which orchestrates concurrent producers and consumers communicating through a bounded in-memory message queue using LinkedBlockingQueue.
    */
-  public O consume(BoundedInMemoryQueue<?, I> queue) throws Exception {
-    Iterator<I> iterator = queue.iterator();
+  BOUNDED_IN_MEMORY,
 
-    while (iterator.hasNext()) {
-      consumeOneRecord(iterator.next());
-    }
+  /**
+   * Executor which orchestrates concurrent producers and consumers communicating through disruptor as a lock free message queue
+   * to gain better writing performance. Although DisruptorExecutor is still an experimental feature.
+   */
+  DISRUPTOR;
 
-    // Notifies done
-    finish();
-
-    return getResult();
+  public static List<String> getNames() {
+    List<String> names = new ArrayList<>(ExecutorType.values().length);
+    Arrays.stream(KeyGeneratorType.values())
+        .forEach(x -> names.add(x.name()));
+    return names;
   }
-
-  /**
-   * Consumer One record.
-   */
-  protected abstract void consumeOneRecord(I record);
-
-  /**
-   * Notifies implementation that we have exhausted consuming records from queue.
-   */
-  protected abstract void finish();
-
-  /**
-   * Return result of consuming records so far.
-   */
-  protected abstract O getResult();
-
 }

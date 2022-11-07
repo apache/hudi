@@ -299,5 +299,11 @@
       <artifactId>joda-time</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <dependency>
+      <groupId>com.lmax</groupId>
+      <artifactId>disruptor</artifactId>
+      <version>${disruptor.version}</version>
+    </dependency>
   </dependencies>
 </project>

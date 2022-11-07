@@ -17,27 +17,25 @@
 
 package org.apache.hudi.functional
 
-import scala.collection.JavaConversions._
-
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieLayoutConfig, HoodieWriteConfig}
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieLayoutConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
-import org.apache.hudi.testutils.HoodieClientTestBase
-
-import org.apache.spark.sql._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner
 import org.apache.hudi.table.storage.HoodieStorageLayout
+import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.spark.sql._
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+
+import scala.collection.JavaConversions._
 
 /**
  *
  */
-class TestDataSourceForBucketIndex extends HoodieClientTestBase {
+class TestMORDataSourceWithBucketIndex extends HoodieClientTestBase {
 
   var spark: SparkSession = null
   val commonOpts = Map(

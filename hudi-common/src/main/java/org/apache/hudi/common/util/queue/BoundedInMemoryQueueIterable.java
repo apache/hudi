@@ -49,7 +49,7 @@ import java.util.function.Function;
  * @param <I> input payload data type
  * @param <O> output payload data type
  */
-public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
+public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQueue<I, O> {
 
   /** Interval used for polling records in the queue. **/
   public static final int RECORD_POLL_INTERVAL_SEC = 1;
@@ -60,7 +60,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /** Maximum records that will be cached. **/
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
 
-  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueue.class);
+  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueueIterable.class);
 
   /**
    * It indicates number of records to cache. We will be using sampled record's average size to
@@ -116,7 +116,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    * @param memoryLimit MemoryLimit in bytes
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
    */
-  public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction) {
+  public BoundedInMemoryQueueIterable(final long memoryLimit, final Function<I, O> transformFunction) {
     this(memoryLimit, transformFunction, new DefaultSizeEstimator() {});
   }
 
@@ -127,15 +127,16 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
    * @param payloadSizeEstimator Payload Size Estimator
    */
-  public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction,
-      final SizeEstimator<O> payloadSizeEstimator) {
+  public BoundedInMemoryQueueIterable(final long memoryLimit, final Function<I, O> transformFunction,
+                                      final SizeEstimator<O> payloadSizeEstimator) {
     this.memoryLimit = memoryLimit;
     this.transformFunction = transformFunction;
     this.payloadSizeEstimator = payloadSizeEstimator;
     this.iterator = new QueueIterator();
   }
 
-  public int size() {
+  @Override
+  public long size() {
     return this.queue.size();
   }
 
@@ -174,6 +175,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    *
    * @param t Item to be queued
    */
+  @Override
   public void insertRecord(I t) throws Exception {
     // If already closed, throw exception
     if (isWriteDone.get()) {
@@ -203,7 +205,8 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    * Reader interface but never exposed to outside world as this is a single consumer queue. Reading is done through a
    * singleton iterator for this queue.
    */
-  private Option<O> readNextRecord() {
+  @Override
+  public Option<O> readNextRecord() {
     if (this.isReadDone.get()) {
       return Option.empty();
     }
@@ -237,6 +240,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * Puts an empty entry to queue to denote termination.
    */
+  @Override
   public void close() {
     // done queueing records notifying queue-reader.
     isWriteDone.set(true);
@@ -252,11 +256,17 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * API to allow producers and consumer to communicate termination due to failure.
    */
+  @Override
   public void markAsFailed(Throwable e) {
     this.hasFailed.set(e);
     // release the permits so that if the queueing thread is waiting for permits then it will
     // get it.
     this.rateLimiter.release(RECORD_CACHING_LIMIT + 1);
+  }
+
+  @Override
+  public boolean isEmpty() {
+    return this.queue.size() == 0;
   }
 
   @Override

@@ -33,12 +33,24 @@ public class CustomizedThreadFactory implements ThreadFactory {
   private final String threadName;
   private final boolean daemon;
 
+  private Runnable preExecuteRunnable;
+
   public CustomizedThreadFactory() {
     this("pool-" + POOL_NUM.getAndIncrement(), false);
   }
 
   public CustomizedThreadFactory(String threadNamePrefix) {
     this(threadNamePrefix, false);
+  }
+
+  public CustomizedThreadFactory(String threadNamePrefix, Runnable preExecuteRunnable) {
+    this(threadNamePrefix, false, preExecuteRunnable);
+  }
+
+  public CustomizedThreadFactory(String threadNamePrefix, boolean daemon, Runnable preExecuteRunnable) {
+    this.threadName = threadNamePrefix + "-thread-";
+    this.daemon = daemon;
+    this.preExecuteRunnable = preExecuteRunnable;
   }
 
   public CustomizedThreadFactory(String threadNamePrefix, boolean daemon) {
@@ -48,7 +60,15 @@ public class CustomizedThreadFactory implements ThreadFactory {
 
   @Override
   public Thread newThread(@NotNull Runnable r) {
-    Thread runThread = new Thread(r);
+    Thread runThread = preExecuteRunnable == null ? new Thread(r) : new Thread(new Runnable() {
+
+      @Override
+      public void run() {
+        preExecuteRunnable.run();
+        r.run();
+      }
+    });
+
     runThread.setDaemon(daemon);
     runThread.setName(threadName + threadNum.getAndIncrement());
     return runThread;
