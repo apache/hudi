@@ -224,7 +224,7 @@ public class FileIOUtils {
     }
   }
 
-  public static boolean isRunningInYarnContainer() {
+  private static boolean isRunningInYarnContainer() {
     // These environment variables are set by YARN.
     return System.getenv("CONTAINER_ID") != null;
   }
@@ -232,7 +232,7 @@ public class FileIOUtils {
   /**
    * Get the Yarn approved local directories.
    */
-  public static String getYarnLocalDirs() {
+  private static String getYarnLocalDirs() {
     String localDirs = Option.of(System.getenv("LOCAL_DIRS")).orElse("");
 
     if (localDirs.isEmpty()) {
