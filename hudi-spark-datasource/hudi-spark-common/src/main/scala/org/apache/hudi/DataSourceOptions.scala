@@ -154,7 +154,7 @@ object DataSourceReadOptions {
 
   val INCREMENTAL_VECTORIZED_READER_ENABLE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.vectorized.reader.enable")
-    .defaultValue("false")
+    .defaultValue("true")
     .withDocumentation("Enable vectorized reader for mor table incremental query.")
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
