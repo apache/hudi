@@ -19,24 +19,7 @@
 package org.apache.hudi.table.catalog;
 
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.ArrayType;
-import org.apache.flink.table.types.logical.BigIntType;
-import org.apache.flink.table.types.logical.BooleanType;
-import org.apache.flink.table.types.logical.CharType;
-import org.apache.flink.table.types.logical.DateType;
-import org.apache.flink.table.types.logical.DecimalType;
-import org.apache.flink.table.types.logical.DoubleType;
-import org.apache.flink.table.types.logical.FloatType;
-import org.apache.flink.table.types.logical.IntType;
-import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.MapType;
-import org.apache.flink.table.types.logical.NullType;
-import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.table.types.logical.SmallIntType;
-import org.apache.flink.table.types.logical.TimestampType;
-import org.apache.flink.table.types.logical.TinyIntType;
-import org.apache.flink.table.types.logical.VarBinaryType;
-import org.apache.flink.table.types.logical.VarCharType;
+import org.apache.flink.table.types.logical.*;
 import org.apache.flink.table.types.logical.utils.LogicalTypeDefaultVisitor;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
@@ -138,6 +121,16 @@ public class TypeInfoLogicalTypeVisitor extends LogicalTypeDefaultVisitor<TypeIn
     // see org.apache.hudi.hive.util.HiveSchemaUtil#convertField for details.
     // default supports timestamp
     if (precision == 6) {
+      return TypeInfoFactory.timestampTypeInfo;
+    } else {
+      return TypeInfoFactory.longTypeInfo;
+    }
+  }
+
+  @Override
+  public TypeInfo visit(LocalZonedTimestampType localZonedTimestampType) {
+    int precision = localZonedTimestampType.getPrecision();
+    if(precision >= 0 && precision <= 9) {
       return TypeInfoFactory.timestampTypeInfo;
     } else {
       return TypeInfoFactory.longTypeInfo;
