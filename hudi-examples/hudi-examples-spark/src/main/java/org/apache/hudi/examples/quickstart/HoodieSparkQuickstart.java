@@ -210,7 +210,7 @@ public final class HoodieSparkQuickstart {
     df.write().format("org.apache.hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
         .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
-        .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "uuid")
+        .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
         .option("hoodie.datasource.write.operation", WriteOperationType.DELETE.value())
