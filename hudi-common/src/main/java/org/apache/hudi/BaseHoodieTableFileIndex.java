@@ -170,16 +170,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return basePath.toString();
   }
 
-  /**
-   * Lists latest file-slices (base-file along w/ delta-log files) per partition.
-   *
-   * @return mapping from string partition paths to its base/log files
-   */
-  public Map<String, List<FileSlice>> listFileSlices() {
-    return getAllInputFileSlices().entrySet().stream()
-        .collect(Collectors.toMap(e -> e.getKey().path, Map.Entry::getValue));
-  }
-
   public int getFileSlicesCount() {
     return getAllInputFileSlices().values().stream()
         .mapToInt(List::size).sum();

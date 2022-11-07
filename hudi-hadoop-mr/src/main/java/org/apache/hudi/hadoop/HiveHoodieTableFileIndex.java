@@ -23,6 +23,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -30,6 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of {@link BaseHoodieTableFileIndex} for Hive-based query engines
@@ -56,6 +59,16 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
         true,
         new NoopCache(),
         false);
+  }
+
+  /**
+   * Lists latest file-slices (base-file along w/ delta-log files) per partition.
+   *
+   * @return mapping from string partition paths to its base/log files
+   */
+  public Map<String, List<FileSlice>> listFileSlices() {
+    return getAllInputFileSlices().entrySet().stream()
+        .collect(Collectors.toMap(e -> e.getKey().getPath(), Map.Entry::getValue));
   }
 
   @Override
