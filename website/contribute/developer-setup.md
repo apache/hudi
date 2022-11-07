@@ -275,7 +275,7 @@ You can also confine the build to just one module if need be.
 mvn -T 2C package -DskipTests -pl hudi-spark-datasource/hudi-spark -am
 ```
 Note: "-am" will build all dependent modules as well. 
-In local laptop, entire project build can take somewhere close to 7 to 10 mins. While buildig just  hudi-spark-datasource/hudi-spark
+In local laptop, entire project build can take somewhere close to 7 to 10 mins. While buildig just hudi-spark-datasource/hudi-spark
 with multi-threaded, could get your compilation in 1.5 to 2 mins. 
 
 If you wish to run any single test class in java. 
@@ -287,6 +287,13 @@ If you wish to run a single test method in java.
 ```shell
 mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner#testKeepLatestCommitsMOR 
 ```
+
+To filter particular scala test:
+```shell
+mvn -Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " -Dtest=abc -DfailIfNoTests=false test -pl packaging/hudi-spark-bundle -am
+```
+-Dtest=abc will assist in skipping all java tests.
+-Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " filters for a single scala test.
 
 
 ## Releases
