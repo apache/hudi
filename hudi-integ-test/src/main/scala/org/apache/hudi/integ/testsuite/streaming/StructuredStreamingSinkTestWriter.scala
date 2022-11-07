@@ -25,8 +25,11 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.streaming.StreamingQueryListener.{QueryProgressEvent, QueryStartedEvent, QueryTerminatedEvent}
 import org.apache.spark.sql.streaming.{OutputMode, ProcessingTime, StreamingQueryListener}
 
+import org.apache.log4j.LogManager
+
 object StructuredStreamingSinkTestWriter {
 
+  private val log = LogManager.getLogger(getClass)
   var validationComplete: Boolean = false;
 
   def waitUntilCondition(): Unit = {
@@ -36,7 +39,7 @@ object StructuredStreamingSinkTestWriter {
   def waitUntilCondition(maxWaitTimeMs: Long, intervalTimeMs: Long): Unit = {
     var waitSoFar: Long = 0;
     while (waitSoFar < maxWaitTimeMs && !validationComplete) {
-      println("Waiting for " + intervalTimeMs + ". Total wait time " + waitSoFar)
+      log.info("Waiting for " + intervalTimeMs + ". Total wait time " + waitSoFar)
       Thread.sleep(intervalTimeMs)
       waitSoFar += intervalTimeMs
     }
@@ -47,7 +50,7 @@ object StructuredStreamingSinkTestWriter {
                        preCombineField: String): Unit = {
 
     def validate(): Unit = {
-      println("Validation starting")
+      log.info("Validation starting")
       val inputDf = spark.read.format("parquet").load(inputPath)
       val hudiDf = spark.read.format("hudi").load(hudiPath)
       inputDf.registerTempTable("inputTbl")
@@ -55,30 +58,30 @@ object StructuredStreamingSinkTestWriter {
       assert(spark.sql("select count(distinct " + partitionPathField + ", " + recordKeyField + ") from inputTbl").count ==
         spark.sql("select count(distinct " + partitionPathField + ", " + recordKeyField + ") from hudiTbl").count)
       validationComplete = true
-      println("Validation complete")
+      log.info("Validation complete")
     }
 
     def shutdownListener(spark: SparkSession) = new StreamingQueryListener() {
       override def onQueryStarted(queryStarted: QueryStartedEvent): Unit = {
-        println("Query started: " + queryStarted.id)
+        log.info("Query started: " + queryStarted.id)
       }
 
       override def onQueryTerminated(queryTerminated: QueryTerminatedEvent): Unit = {
-        println("Query terminated! " + queryTerminated.id + ". Validating input and hudi")
+        log.info("Query terminated! " + queryTerminated.id + ". Validating input and hudi")
         validate()
-        println("Data Validation complete")
+        log.info("Data Validation complete")
       }
 
       override def onQueryProgress(queryProgressEvent: QueryProgressEvent): Unit = {
         if (queryProgressEvent.progress.numInputRows == 0) {
-          println("Stopping spark structured streaming as we have reached the end")
+          log.info("Stopping spark structured streaming as we have reached the end")
           spark.streams.active.foreach(_.stop())
         }
       }
     }
 
     spark.streams.addListener(shutdownListener(spark))
-    println("Starting to consume from source and writing to hudi ")
+    log.info("Starting to consume from source and writing to hudi ")
 
     val inputDfSchema = spark.read.format("parquet").load(inputPath).schema
     val parquetdf = spark.readStream.option("spark.sql.streaming.schemaInference", "true").option("maxFilesPerTrigger", "1")
