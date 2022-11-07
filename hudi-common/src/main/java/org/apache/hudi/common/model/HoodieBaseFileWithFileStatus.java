@@ -18,61 +18,25 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.Option;
-
 import org.apache.hadoop.fs.FileStatus;
 
 /**
- * Hoodie base file - Represents metadata about Hudi file in DFS.
- * Supports APIs to get Hudi FileId, Commit Time and bootstrap file (if any).
+ * HoodieBaseFileWithFileStatus extends HoodieBaseFile
+ * only different is FileStatus in HoodieBaseFileWithFileStatus is not transient
  */
-public class HoodieBaseFile extends BaseFile {
+public class HoodieBaseFileWithFileStatus extends HoodieBaseFile {
 
-  private Option<BaseFile> bootstrapBaseFile;
+  // initial FileStatus without transient
+  private FileStatus fileStatus;
 
-  public HoodieBaseFile(HoodieBaseFile dataFile) {
+  // convert HoodieBaseFile into HoodieBaseFileWithFileStatus
+  public HoodieBaseFileWithFileStatus(HoodieBaseFile dataFile) {
     super(dataFile);
-    this.bootstrapBaseFile = dataFile.bootstrapBaseFile;
-  }
-
-  public HoodieBaseFile(FileStatus fileStatus) {
-    this(fileStatus, null);
-  }
-
-  public HoodieBaseFile(FileStatus fileStatus, BaseFile bootstrapBaseFile) {
-    super(fileStatus);
-    this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
-  }
-
-  public HoodieBaseFile(String filePath) {
-    this(filePath, null);
-  }
-
-  public HoodieBaseFile(String filePath, BaseFile bootstrapBaseFile) {
-    super(filePath);
-    this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
-  }
-
-  public String getFileId() {
-    return FSUtils.getFileId(getFileName());
-  }
-
-  public String getCommitTime() {
-    return FSUtils.getCommitTime(getFileName());
-  }
-
-  public Option<BaseFile> getBootstrapBaseFile() {
-    return bootstrapBaseFile;
-  }
-
-  public void setBootstrapBaseFile(BaseFile bootstrapBaseFile) {
-    this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
+    this.fileStatus = dataFile.getFileStatus();
   }
 
   @Override
-  public String toString() {
-    return "HoodieBaseFile{fullPath=" + getPath() + ", fileLen=" + getFileLen()
-        + ", BootstrapBaseFile=" + bootstrapBaseFile.orElse(null) + '}';
+  public FileStatus getFileStatus() {
+    return fileStatus;
   }
 }

@@ -25,6 +25,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieBaseFileWithFileStatus;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -308,7 +310,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // is no compaction, thus there is no performance impact.
     int parallelism = Integer.parseInt(String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_PARALLELISM.key(), 10)));
 
-    if (parallelism > 0 && partitionFiles.size() > 1) {
+    if (parallelism > 0 && partitionFiles.size() >= 1) {
       cachedAllInputFileSlices = buildCacheFileSlicesParallel(parallelism, partitionFiles, activeTimeline, queryInstant);
     } else {
       cachedAllInputFileSlices = buildCacheFileSlicesLocal(partitionFiles, activeTimeline, queryInstant);
@@ -366,6 +368,18 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             fileSystemViewInternal.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
         )
             .orElse(fileSystemViewInternal.getLatestFileSlices(partitionPath.path))
+            .map(fileSlice -> {
+
+              // convert HoodieBaseFile/HoodieLogFile to HoodieBaseFileWithFileStatus/HoodieLogFileWithFileStatus if necessary
+              // bcz ori one's FileStatus is transient.
+              if (!fileSlice.isEmpty()) {
+
+                HoodieBaseFile hoodieBaseFile = fileSlice.getBaseFile().isPresent() ? new HoodieBaseFileWithFileStatus(fileSlice.getBaseFile().get()) : null;
+                return new FileSlice(fileSlice.getFileGroupId(), fileSlice.getBaseInstantTime(), hoodieBaseFile, fileSlice.getRawLogFiles());
+              } else {
+                return fileSlice;
+              }
+            })
             .collect(Collectors.toList());
         return Pair.of(partitionPath, filesSlices);
       });
