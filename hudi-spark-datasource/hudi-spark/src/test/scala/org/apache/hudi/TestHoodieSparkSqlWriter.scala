@@ -826,8 +826,10 @@ class TestHoodieSparkSqlWriter {
    * @param partition the name of the partition(s) to delete
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("2015/03/*", "*5/03/1*"))
-  def testDeletePartitionsWithWildcard(partition: String): Unit = {
+  @MethodSource(Array(
+    "deletePartitionsWildcardTestParams"
+  ))
+  def testDeletePartitionsWithWildcard(partition: String, expectedPartitions: Seq[String]): Unit = {
     var (_, fooTableModifier) = deletePartitionSetup()
     fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(), partition)
     fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
@@ -838,7 +840,7 @@ class TestHoodieSparkSqlWriter {
     snapshotDF3.show()
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
-      !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+      expectedPartitions.count(p => partitionPath.equals(p)) != 1
     }).count())
   }
 
@@ -1127,4 +1129,12 @@ object TestHoodieSparkSqlWriter {
 
     java.util.Arrays.stream(targetScenarios.map(as => arguments(as.map(_.asInstanceOf[AnyRef]):_*)))
   }
+
+  def deletePartitionsWildcardTestParams(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments("2015/03/*", Seq("2016/03/15")),
+      arguments("*5/03/1*", Seq("2016/03/15")),
+      arguments("2016/03/*", Seq("2015/03/16", "2015/03/17")))
+  }
+
 }
