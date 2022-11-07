@@ -100,7 +100,7 @@ class HoodieStreamSource(
   private def getLatestOffset: Option[HoodieSourceOffset] = {
     metaClient.reloadActiveTimeline()
     metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants() match {
-      case activeInstants if activeInstants.empty() =>
+      case activeInstants if !activeInstants.empty() =>
         Some(HoodieSourceOffset(activeInstants.lastInstant().get().getTimestamp))
       case _ =>
         None
