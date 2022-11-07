@@ -90,8 +90,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private volatile boolean queryAsNonePartitionedTable = false;
 
-  private transient volatile long cachedFileSize = 0L;
-
   // NOTE: Individual partitions are always cached in full: meaning that if partition is cached
   //       it will hold all the file-slices residing w/in the partition
   private transient volatile Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices = new HashMap<>();
@@ -259,7 +257,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
     // API.  Note that for COW table, the merging logic of two slices does not happen as there
     // is no compaction, thus there is no performance impact.
-    Map<PartitionPath, List<FileSlice>> listedPartitions = partitionFiles.keySet().stream()
+    return partitionFiles.keySet().stream()
         .collect(Collectors.toMap(
                 Function.identity(),
                 partitionPath ->
@@ -270,13 +268,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                         .collect(Collectors.toList())
             )
         );
-
-    this.cachedFileSize += listedPartitions.values().stream()
-        .flatMap(Collection::stream)
-        .mapToLong(BaseHoodieTableFileIndex::fileSliceSize)
-        .sum();
-
-    return listedPartitions;
   }
 
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
@@ -343,13 +334,15 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     resetTableMetadata(createMetadataTable(engineContext, metadataConfig, basePath));
 
-    // Reset it to null to trigger re-loading of all partition path
-    this.cachedAllPartitionPaths = null;
-    this.cachedFileSize = 0;
+    // Make sure we reload active timeline
     metaClient.reloadActiveTimeline();
 
+    // Reset it to null to trigger re-loading of all partition path
+    this.cachedAllPartitionPaths = null;
+    List<PartitionPath> partitionPaths = getAllQueryPartitionPaths();
+
     // Refresh the partitions & file slices
-    this.cachedAllInputFileSlices = loadFileSlicesForPartitions(getAllQueryPartitionPaths());
+    this.cachedAllInputFileSlices = loadFileSlicesForPartitions(partitionPaths);
 
     LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), timer.endTimer()));
   }
@@ -363,7 +356,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected long getTotalCachedFilesSize() {
-    return cachedFileSize;
+    return cachedAllInputFileSlices.values().stream()
+        .flatMap(Collection::stream)
+        .mapToLong(BaseHoodieTableFileIndex::fileSliceSize)
+        .sum();
   }
 
   protected boolean areAllFileSlicesCached() {
