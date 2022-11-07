@@ -58,6 +58,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -308,13 +311,19 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
     // API.  Note that for COW table, the merging logic of two slices does not happen as there
     // is no compaction, thus there is no performance impact.
-    int parallelism = Integer.parseInt(String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_PARALLELISM.key(), 10)));
+    int parallelism = Integer.parseInt(String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_PARALLELISM.key(), HoodieCommonConfig.TABLE_LOADING_PARALLELISM.defaultValue())));
+    String mode = String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_MODE.key(), HoodieCommonConfig.TABLE_LOADING_MODE.defaultValue()));
 
-    if (parallelism > 0 && partitionFiles.size() >= 1) {
-      cachedAllInputFileSlices = buildCacheFileSlicesParallel(parallelism, partitionFiles, activeTimeline, queryInstant);
-    } else {
+    long buildCacheFileSlicesLocalStart = System.currentTimeMillis();
+    if (parallelism <= 0 || partitionFiles.size() == 0) {
       cachedAllInputFileSlices = buildCacheFileSlicesLocal(partitionFiles, activeTimeline, queryInstant);
+    } else if (mode.equalsIgnoreCase("CLUSTER")) {
+      cachedAllInputFileSlices = buildCacheFileSlicesClusterParallel(parallelism, partitionFiles, activeTimeline, queryInstant);
+    } else {
+      cachedAllInputFileSlices = buildCacheFileSlicesLocalParallel(parallelism, partitionFiles, activeTimeline, queryInstant);
     }
+    long buildCacheFileSlicesLocalEnd = System.currentTimeMillis();
+    LOG.info(String.format("Build cache file slices, spent: %d ms", buildCacheFileSlicesLocalEnd - buildCacheFileSlicesLocalStart));
 
     cachedFileSize = cachedAllInputFileSlices.values().stream()
         .flatMap(Collection::stream)
@@ -331,11 +340,63 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private Map<PartitionPath, List<FileSlice>> buildCacheFileSlicesLocal(Map<PartitionPath, FileStatus[]> partitionFiles, HoodieTimeline activeTimeline,
                                                                         Option<String> queryInstant) {
-
     FileStatus[] allFiles = partitionFiles.values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
     this.fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
 
-    return partitionFiles.keySet().stream()
+    return getCandidateFileSlices(partitionFiles, queryInstant, fileSystemView);
+  }
+
+  private Map<PartitionPath, List<FileSlice>> buildCacheFileSlicesLocalParallel(int parallelism, Map<PartitionPath, FileStatus[]> partitionFiles,
+                                                                                HoodieTimeline activeTimeline, Option<String> queryInstant) {
+    HashMap<PartitionPath, List<FileSlice>> res = new HashMap<>();
+    parallelism = Math.max(1, Math.min(parallelism, partitionFiles.size()));
+    int totalPartitions = partitionFiles.size();
+    int cursor = 0;
+    int step = totalPartitions / parallelism;
+    ArrayList<Map.Entry<PartitionPath, FileStatus[]>> entryList = new ArrayList<>(partitionFiles.entrySet());
+    ExecutorService pool =  Executors.newFixedThreadPool((parallelism + 1));
+    ArrayList<CompletableFuture<Map<PartitionPath, List<FileSlice>>>> futureList = new ArrayList<>(parallelism + 1);
+
+    while (cursor + step <= totalPartitions) {
+      List<Map.Entry<PartitionPath, FileStatus[]>> innerList = entryList.subList(cursor, cursor + step);
+      CompletableFuture<Map<PartitionPath, List<FileSlice>>> innerFuture = computeCacheFileSlices(innerList, pool, activeTimeline, queryInstant);
+      futureList.add(innerFuture);
+      cursor = cursor + step;
+    }
+
+    if (cursor < totalPartitions) {
+      List<Map.Entry<PartitionPath, FileStatus[]>> finalList = entryList.subList(cursor, totalPartitions);
+      CompletableFuture<Map<PartitionPath, List<FileSlice>>> finalFuture = computeCacheFileSlices(finalList, pool, activeTimeline, queryInstant);
+      futureList.add(finalFuture);
+    }
+
+    CompletableFuture<List<Map<PartitionPath, List<FileSlice>>>> waiter = CompletableFuture.allOf(futureList.toArray(new CompletableFuture[0]))
+        .thenApply(v -> futureList.stream().map(CompletableFuture::join).collect(Collectors.toList()));
+    waiter.join().forEach(res::putAll);
+    pool.shutdown();
+
+    return res;
+  }
+
+  private CompletableFuture<Map<PartitionPath, List<FileSlice>>> computeCacheFileSlices(List<Map.Entry<PartitionPath, FileStatus[]>> innerList, ExecutorService pool,
+                                                                                        HoodieTimeline activeTimeline, Option<String> queryInstant) {
+    return CompletableFuture.supplyAsync(() -> {
+      HashMap<PartitionPath, FileStatus[]> innerPartitionFiles = new HashMap<>();
+      innerList.forEach(entry -> {
+        PartitionPath innerPartitionPath = entry.getKey();
+        FileStatus[] innerFileStatuses = entry.getValue();
+        innerPartitionFiles.put(innerPartitionPath, innerFileStatuses);
+      });
+
+      FileStatus[] allFiles = innerPartitionFiles.values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
+      HoodieTableFileSystemView fileSystemViewInternal = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
+      return getCandidateFileSlices(innerPartitionFiles, queryInstant, fileSystemViewInternal);
+    }, pool);
+  }
+
+  private Map<PartitionPath, List<FileSlice>> getCandidateFileSlices(Map<PartitionPath, FileStatus[]> innerPartitionFiles, Option<String> queryInstant,
+                                                                     HoodieTableFileSystemView fileSystemView) {
+    return innerPartitionFiles.keySet().stream()
         .collect(Collectors.toMap(
             Function.identity(),
             partitionPath ->
@@ -348,8 +409,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         );
   }
 
-  private Map<PartitionPath, List<FileSlice>> buildCacheFileSlicesParallel(int parallelism, Map<PartitionPath, FileStatus[]> partitionFiles,
-                                                                           HoodieTimeline activeTimeline, Option<String> queryInstant) {
+  private Map<PartitionPath, List<FileSlice>> buildCacheFileSlicesClusterParallel(int parallelism, Map<PartitionPath, FileStatus[]> partitionFiles,
+                                                                                  HoodieTimeline activeTimeline, Option<String> queryInstant) {
+    parallelism = Math.max(1, Math.min(parallelism, partitionFiles.size()));
+
     HoodieTableMetaClient metaClientInternal = metaClient;
 
     return engineContext.mapPartitionsToPair(partitionFiles.entrySet().stream(), iterator -> {
@@ -383,7 +446,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             .collect(Collectors.toList());
         return Pair.of(partitionPath, filesSlices);
       });
-    }, Math.min(parallelism, partitionFiles.size())).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    }, parallelism).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
   private Map<String, FileStatus[]> getAllFilesInPartitionsUnchecked(Collection<String> fullPartitionPathsMapToFetch) {

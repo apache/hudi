@@ -127,10 +127,10 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPair(
-      Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc, int parallelism) {
+      Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> func, int parallelism) {
     return javaSparkContext.parallelize(data.collect(Collectors.toList()), parallelism)
         .mapPartitionsToPair((PairFlatMapFunction<Iterator<I>, K, V>) iterator ->
-            flatMapToPairFunc.call(iterator).collect(Collectors.toList()).stream()
+            func.call(iterator).collect(Collectors.toList()).stream()
                 .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator()
         ).map(e -> new ImmutablePair<>(e._1, e._2))
         .collect().stream();

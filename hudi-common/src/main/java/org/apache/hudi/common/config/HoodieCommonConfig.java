@@ -44,7 +44,12 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> TABLE_LOADING_PARALLELISM = ConfigProperty
       .key("hoodie.datasource.read.loading.parallelism")
       .defaultValue(-1)
-      .withDocumentation("");
+      .withDocumentation("-1 means disable parallel mode");
+
+  public static final ConfigProperty<String> TABLE_LOADING_MODE = ConfigProperty
+      .key("hoodie.datasource.read.loading.mode")
+      .defaultValue("LOCAL")
+      .withDocumentation("LOCAL + CLUSTER");
 
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
