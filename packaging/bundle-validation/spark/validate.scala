@@ -49,9 +49,9 @@ df.write.format("hudi").
 spark.sql("desc " + tableName).show
 val actual = spark.sql("select * from " + tableName).count
 if (expected == actual) {
-  System.out.println($"bundle combination passed sanity run.")
+  System.out.println(s"bundle combination passed sanity run.")
   System.exit(0)
 } else {
-  System.err.println($"bundle combination failed sanity run:\n\tshould have written $expected records in $database.$tableName")
+  System.err.println(s"bundle combination failed sanity run:\n\tshould have written $expected records in $database.$tableName")
   System.exit(1)
 }

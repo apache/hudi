@@ -55,6 +55,27 @@ test_spark_bundle () {
     echo "::warning::validate.sh spark bundle validation successful"
 }
 
+##
+# Function to test the hive table type with hive sync by CTAS in spark bundle.
+#
+# env vars (defined in container):
+#   HIVE_HOME: path to the hive directory
+#   DERBY_HOME: path to the derby directory
+#   SPARK_HOME: path to the spark directory
+##
+test_CTAS_hiveTableType () {
+    echo "::warning::validate.sh setting up hive metastore for CTAS hive table type validation"
+
+    $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
+    $HIVE_HOME/bin/hiveserver2 &
+    echo "::warning::validate.sh hive metastore setup complete. Testing"
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark/validateCtasTableType.scala
+    if [ "$?" -ne 0 ]; then
+        echo "::error::validate.sh failed validate CTAS hive table type"
+        exit 1
+    fi
+    echo "::warning::validate.sh CTAS hive table type validation successful"
+}
 
 ##
 # Function to test the utilities bundle and utilities slim bundle + spark bundle.
@@ -113,6 +134,11 @@ test_utilities_bundle () {
 
 
 test_spark_bundle
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+
+test_CTAS_hiveTableType
 if [ "$?" -ne 0 ]; then
     exit 1
 fi
