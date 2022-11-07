@@ -591,7 +591,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
       // if clustering is disabled, but we might need to rollback any inflight clustering when clustering was enabled previously.
       if (!config.inlineClusteringEnabled() && !config.isAsyncClusteringEnabled() && !config.scheduleInlineClustering()
-          && config.isRollbackPendingClustering()) {
+          && config.isRollbackPendingClusteringWhenDisabled()) {
         // rollback any pending clustering
         table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().forEach(instant -> {
           Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlan = ClusteringUtils.getClusteringPlan(table.getMetaClient(), instant);

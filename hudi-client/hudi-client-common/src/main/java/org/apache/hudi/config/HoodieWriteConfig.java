@@ -1339,8 +1339,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
   }
 
-  public boolean isRollbackPendingClustering() {
-    return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING);
+  public boolean isRollbackPendingClusteringWhenDisabled() {
+    return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_WHEN_DISABLED);
   }
 
   public int getInlineClusterMaxCommits() {

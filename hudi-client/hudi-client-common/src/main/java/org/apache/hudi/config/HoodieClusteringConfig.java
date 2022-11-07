@@ -310,8 +310,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in "
           + "rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.");
 
-  public static final ConfigProperty<String> ROLLBACK_PENDING_CLUSTERING = ConfigProperty
-      .key("hoodie.rollback.pending.clustering")
+  public static final ConfigProperty<String> ROLLBACK_PENDING_CLUSTERING_WHEN_DISABLED = ConfigProperty
+      .key("hoodie.rollback.pending.clustering.when.disabled")
       .defaultValue("false")
       .sinceVersion("0.13.0")
       .withDocumentation("After enabling clustering, if users disables clustering for any reason, and if there are any inflight clustering left in the timeline,"
@@ -587,7 +587,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder withRollbackPendingClustering(Boolean rollbackPendingClustering) {
-      clusteringConfig.setValue(ROLLBACK_PENDING_CLUSTERING, String.valueOf(rollbackPendingClustering));
+      clusteringConfig.setValue(ROLLBACK_PENDING_CLUSTERING_WHEN_DISABLED, String.valueOf(rollbackPendingClustering));
       return this;
     }
 
