@@ -234,7 +234,7 @@ public class SparkInternalSchemaConverter {
         .collectTypeChangedCols(schema, other)
         .entrySet()
         .stream()
-        .collect(Collectors.toMap(Map.Entry::getKey, e -> Pair.of(constructSparkSchemaFromType(e.getValue().getLeft()), constructSparkSchemaFromType(e.getValue().getRight()))));
+        .collect(Collectors.toMap(e -> e.getKey(), e -> Pair.of(constructSparkSchemaFromType(e.getValue().getLeft()), constructSparkSchemaFromType(e.getValue().getRight()))));
   }
 
   public static StructType constructSparkSchemaFromInternalSchema(InternalSchema schema) {
