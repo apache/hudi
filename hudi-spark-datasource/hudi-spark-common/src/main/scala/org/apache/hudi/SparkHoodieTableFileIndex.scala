@@ -233,22 +233,23 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         // Extract from simple predicates of the form `date = '2022-01-01'` both
         // partition column and corresponding (literal) value
         val staticPartitionColumnValuesMap = extractEqualityPredicatesValues(partitionPruningPredicates)
-        // Since static partition values might not be available for all columns, we compile
-        // a list of corresponding pairs partition column-name and corresponding value (if available)
         val staticPartitionColumnValues = partitionColumnNames.map(colName =>
           staticPartitionColumnValuesMap.get(colName).orNull).takeWhile(_ != null)
-
+        // Since static partition values might not be available for all columns, we compile
+        // a list of corresponding pairs of (partition column-name, corresponding value) if available
         val definedStaticPartitionColumnValuePairs = partitionColumnNames.zip(staticPartitionColumnValues)
+
         (composeRelativePartitionPath(definedStaticPartitionColumnValuePairs), staticPartitionColumnValues)
       }
 
       staticPartitionPathPrefix match {
         case Some(relativePartitionPathPrefix) =>
+          // If the composed partition path is complete, we return it directly, to avoid extra listing operation;
+          // otherwise compile extracted partition values (from query predicates) into a sub-path which is a prefix
+          // of the complete partition path, do listing for this prefix-path only
           if (staticPartitionColumnValues.length == partitionColumnNames.length) {
-            // If the composed partition path is complete, we return it directly, to avoid extra listing operation
             Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnValues.map(_.asInstanceOf[AnyRef]).toArray))
           } else {
-            // The input partition values (from query predicate) forms a prefix of partition path, do listing to the path only.
             listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
           }
 
