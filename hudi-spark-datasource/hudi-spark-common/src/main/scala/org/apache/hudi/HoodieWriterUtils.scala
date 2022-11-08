@@ -159,6 +159,13 @@ object HoodieWriterUtils {
           && datasourceKeyGen != tableConfigKeyGen) {
           diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
         }
+
+        val datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
+        val tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
+        if (null != datasourcePartitionFields && null != tableConfigPartitionFields
+          && datasourcePartitionFields != tableConfigPartitionFields) {
+          diffConfigs.append(s"PartitionPath:\t$datasourcePartitionFields\t$tableConfigPartitionFields\n")
+        }
       }
 
       if (diffConfigs.nonEmpty) {
