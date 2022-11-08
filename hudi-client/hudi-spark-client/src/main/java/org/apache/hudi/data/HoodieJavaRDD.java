@@ -119,7 +119,7 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
-    return HoodieJavaRDD.of(rddData.flatMap(func::apply));
+    return HoodieJavaRDD.of(rddData.flatMap(e -> func.apply(e)));
   }
 
   @Override
