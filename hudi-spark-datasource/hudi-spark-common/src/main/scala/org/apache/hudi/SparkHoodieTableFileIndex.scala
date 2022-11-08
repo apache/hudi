@@ -200,8 +200,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     }
 
     if (partitionPruningPredicates.isEmpty) {
-      logInfo(s"No partition predicates provided, listing full table (${getAllQueryPartitionPaths.asScala.size} partitions)")
-      getAllQueryPartitionPaths.asScala;
+      val queryPartitionPaths = getAllQueryPartitionPaths.asScala
+
+      logInfo(s"No partition predicates provided, listing full table (${queryPartitionPaths.size} partitions)")
+      queryPartitionPaths
     } else {
       val partitionPaths = listMatchingPartitionPathsInternal(partitionColumnNames, partitionPruningPredicates)
       val predicate = partitionPruningPredicates.reduce(expressions.And)
@@ -348,7 +350,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         // and the partition column size > 1, we do not know how to map the partition
         // fragments to the partition columns. So we trait it as a Non-Partitioned Table
         // for the query which do not benefit from the partition prune.
-        logWarning(s"Cannot do the partition prune for table $basePath." +
+        logWarning(s"Cannot do the partition prune for table $getBasePath." +
           s"The partitionFragments size (${partitionFragments.mkString(",")})" +
           s" is not equal to the partition columns size(${partitionColumns.mkString(",")})")
         Array.empty
@@ -367,7 +369,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
             }
         }.mkString("/")
 
-        val pathWithPartitionName = new CachingPath(basePath, createPathUnsafe(partitionWithName))
+        val pathWithPartitionName = new CachingPath(getBasePath, createPathUnsafe(partitionWithName))
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema)
 
         partitionValues.map(_.asInstanceOf[Object]).toArray
@@ -382,7 +384,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     sparkParsePartitionUtil.parsePartition(
       partitionPath,
       typeInference = false,
-      Set(basePath),
+      Set(getBasePath),
       partitionDataTypes,
       DateTimeUtils.getTimeZone(timeZoneId),
       validatePartitionValues = shouldValidatePartitionColumns(spark)
@@ -393,7 +395,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   private def arePartitionPathsUrlEncoded: Boolean =
     metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
 }
-
 
 object SparkHoodieTableFileIndex {
 

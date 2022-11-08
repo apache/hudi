@@ -83,7 +83,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
-  override def rootPaths: Seq[Path] = queryPaths.asScala
+  override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for

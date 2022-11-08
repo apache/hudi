@@ -73,15 +73,13 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   protected final HoodieMetadataConfig metadataConfig;
 
-  private final HoodieTableQueryType queryType;
   private final Option<String> specifiedQueryInstant;
-  protected final List<Path> queryPaths;
+  private final List<Path> queryPaths;
 
   private final boolean shouldIncludePendingCommits;
   private final boolean shouldValidateInstant;
 
-  private final HoodieTableType tableType;
-  protected final Path basePath;
+  private final Path basePath;
 
   private final HoodieTableMetaClient metaClient;
   private final HoodieEngineContext engineContext;
@@ -127,13 +125,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         .fromProperties(configProperties)
         .build();
 
-    this.queryType = queryType;
     this.queryPaths = queryPaths;
     this.specifiedQueryInstant = specifiedQueryInstant;
     this.shouldIncludePendingCommits = shouldIncludePendingCommits;
     this.shouldValidateInstant = shouldValidateInstant;
 
-    this.tableType = metaClient.getTableType();
     this.basePath = metaClient.getBasePathV2();
 
     this.metaClient = metaClient;
@@ -166,8 +162,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   /**
    * Returns table's base-path
    */
-  public String getBasePath() {
-    return basePath.toString();
+  public Path getBasePath() {
+    return basePath;
   }
 
   public int getFileSlicesCount() {
@@ -178,6 +174,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   @Override
   public void close() throws Exception {
     resetTableMetadata(null);
+  }
+
+  protected List<Path> getQueryPaths() {
+    return queryPaths;
   }
 
   /**
@@ -353,12 +353,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected boolean areAllFileSlicesCached() {
-    if (!areAllPartitionPathsCached()) {
-      return false;
-    }
-
     // Loop over partition paths to check if all partitions are initialized.
-    return cachedAllPartitionPaths.stream().allMatch(p -> cachedAllInputFileSlices.containsKey(p));
+    return areAllPartitionPathsCached() &&
+        cachedAllPartitionPaths.stream().allMatch(p -> cachedAllInputFileSlices.containsKey(p));
   }
 
   protected boolean areAllPartitionPathsCached() {
@@ -367,7 +364,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected boolean isPartitionedTable() {
-    return !queryAsNonePartitionedTable && (partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath.toString()));
+    return (partitionColumns.length > 0 && !queryAsNonePartitionedTable) || HoodieTableMetadata.isMetadataTable(basePath.toString());
   }
 
   private static long fileSliceSize(FileSlice fileSlice) {
