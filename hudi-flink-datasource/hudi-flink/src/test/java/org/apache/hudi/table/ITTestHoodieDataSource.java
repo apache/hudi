@@ -436,7 +436,8 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
 
-    streamTableEnv.executeSql("insert into t1 select * from source");
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
 
     List<Row> result = execSelectSql(streamTableEnv, "select * from t1", 10);
     final String expected = "["

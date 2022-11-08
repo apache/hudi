@@ -49,8 +49,8 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -124,7 +124,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     this.tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(tableSchema, config.allowOperationMetadataField());
     this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
     this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
-    this.timer = new HoodieTimer().startTimer();
+    this.timer = HoodieTimer.start();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
     this.taskContextSupplier = taskContextSupplier;

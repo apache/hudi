@@ -46,9 +46,9 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -88,6 +88,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
@@ -630,11 +631,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Dataset<Row> sourceDf = sqlContext.read()
         .format("org.apache.hudi")
         .load(tableBasePath);
-    sourceDf.write().format("parquet").save(bootstrapSourcePath);
+    // TODO(HUDI-4944): fix the test to use a partition column with slashes (`/`) included
+    //  in the value.  Currently it fails the tests due to slash encoding.
+    sourceDf.write().format("parquet").partitionBy("rider").save(bootstrapSourcePath);
 
     String newDatasetBasePath = dfsBasePath + "/test_dataset_bootstrapped";
     cfg.runBootstrap = true;
     cfg.configs.add(String.format("hoodie.bootstrap.base.path=%s", bootstrapSourcePath));
+    cfg.configs.add(String.format("%s=%s", DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "rider"));
     cfg.configs.add(String.format("hoodie.bootstrap.keygen.class=%s", SimpleKeyGenerator.class.getName()));
     cfg.configs.add("hoodie.bootstrap.parallelism=5");
     cfg.targetBasePath = newDatasetBasePath;
@@ -1851,6 +1855,62 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
+  public void testDeltaStreamerRestartAfterMissingHoodieProps() throws Exception {
+    testDeltaStreamerRestartAfterMissingHoodieProps(true);
+  }
+
+  @Test
+  public void testDeltaStreamerRestartAfterMissingHoodiePropsAfterValidCommit() throws Exception {
+    testDeltaStreamerRestartAfterMissingHoodieProps(false);
+  }
+
+  private void testDeltaStreamerRestartAfterMissingHoodieProps(boolean testInitFailure) throws Exception {
+    PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFilesDfs" + testNum;
+    int parquetRecordsCount = 10;
+    boolean hasTransformer = false;
+    boolean useSchemaProvider = false;
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "0");
+
+    String tableBasePath = dfsBasePath + "/test_parquet_table" + testNum;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, testInitFailure ? TestParquetDFSSourceEmptyBatch.class.getName() : ParquetDFSSource.class.getName(),
+            null, PROPS_FILENAME_TEST_PARQUET, false,
+            useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
+    deltaStreamer.sync();
+
+    if (testInitFailure) {
+      FileStatus[] fileStatuses = dfs.listStatus(new Path(tableBasePath + "/.hoodie/"));
+      Arrays.stream(fileStatuses).filter(entry -> entry.getPath().getName().contains("commit") || entry.getPath().getName().contains("inflight")).forEach(entry -> {
+        try {
+          dfs.delete(entry.getPath());
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      });
+    }
+    // delete hoodie.properties
+    dfs.delete(new Path(tableBasePath + "/.hoodie/hoodie.properties"));
+
+    // restart the pipeline.
+    if (testInitFailure) { // should succeed.
+      deltaStreamer = new HoodieDeltaStreamer(
+          TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+              null, PROPS_FILENAME_TEST_PARQUET, false,
+              useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
+      deltaStreamer.sync();
+      TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    } else {
+      assertThrows(org.apache.hudi.exception.HoodieIOException.class, () -> new HoodieDeltaStreamer(
+          TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+              null, PROPS_FILENAME_TEST_PARQUET, false,
+              useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc));
+    }
+    testNum++;
+  }
+
+  @Test
   public void testParquetDFSSourceWithoutSchemaProviderAndTransformer() throws Exception {
     testParquetDFSSource(false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
@@ -2098,6 +2158,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config downstreamCfg =
         TestHelpers.makeConfigForHudiIncrSrc(tableBasePath, downstreamTableBasePath,
             WriteOperationType.BULK_INSERT, true, null);
+    downstreamCfg.configs.add("hoodie.deltastreamer.source.hoodieincr.num_instants=1");
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
 
     insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
@@ -2109,6 +2170,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       downstreamCfg.configs = new ArrayList<>();
     }
 
+    // Remove source.hoodieincr.num_instants config
+    downstreamCfg.configs.remove(downstreamCfg.configs.size() - 1);
     downstreamCfg.configs.add(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key() + "=true");
     //Adding this conf to make testing easier :)
     downstreamCfg.configs.add("hoodie.deltastreamer.source.hoodieincr.num_instants=10");

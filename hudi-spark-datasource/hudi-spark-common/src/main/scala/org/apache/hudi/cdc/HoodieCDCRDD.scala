@@ -207,8 +207,8 @@ class HoodieCDCRDD(
 
     /**
      * Two cases will use this to iterator the records:
-     * 1) extract the change data from the base file directly, including 'ADD_BASE_File' and 'REMOVE_BASE_File'.
-     * 2) when the type of cdc file is 'REPLACED_FILE_GROUP',
+     * 1) extract the change data from the base file directly, including 'BASE_FILE_INSERT' and 'BASE_FILE_DELETE'.
+     * 2) when the type of cdc file is 'REPLACE_COMMIT',
      *    use this to trace the records that are converted from the '[[beforeImageRecords]]
      */
     private var recordIter: Iterator[InternalRow] = Iterator.empty
@@ -404,7 +404,7 @@ class HoodieCDCRDD(
     }
 
     private def loadCdcFile(): Unit = {
-      // reset all the iterator or reader first.
+      // reset all the iterator first.
       recordIter = Iterator.empty
       logRecordIter = Iterator.empty
       beforeImageRecords.clear()
@@ -420,8 +420,8 @@ class HoodieCDCRDD(
         currentChangeFile = split
         currentChangeFile.getCdcInferCase match {
           case BASE_FILE_INSERT =>
-            assert(currentChangeFile.getCdcFile != null)
-            val absCDCPath = new Path(basePath, currentChangeFile.getCdcFile)
+            assert(currentChangeFile.getCdcFiles != null && currentChangeFile.getCdcFiles.size() == 1)
+            val absCDCPath = new Path(basePath, currentChangeFile.getCdcFiles.get(0))
             val fileStatus = fs.getFileStatus(absCDCPath)
             val pf = PartitionedFile(InternalRow.empty, absCDCPath.toUri.toString, 0, fileStatus.getLen)
             recordIter = parquetReader(pf)
@@ -429,14 +429,15 @@ class HoodieCDCRDD(
             assert(currentChangeFile.getBeforeFileSlice.isPresent)
             recordIter = loadFileSlice(currentChangeFile.getBeforeFileSlice.get)
           case LOG_FILE =>
-            assert(currentChangeFile.getCdcFile != null && currentChangeFile.getBeforeFileSlice.isPresent)
+            assert(currentChangeFile.getCdcFiles != null && currentChangeFile.getCdcFiles.size() == 1
+              && currentChangeFile.getBeforeFileSlice.isPresent)
             loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
-            val absLogPath = new Path(basePath, currentChangeFile.getCdcFile)
+            val absLogPath = new Path(basePath, currentChangeFile.getCdcFiles.get(0))
             val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(fs.getFileStatus(absLogPath))))
             val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
             logRecordIter = logFileIterator.logRecordsIterator()
           case AS_IS =>
-            assert(currentChangeFile.getCdcFile != null)
+            assert(currentChangeFile.getCdcFiles != null && !currentChangeFile.getCdcFiles.isEmpty)
             // load beforeFileSlice to beforeImageRecords
             if (currentChangeFile.getBeforeFileSlice.isPresent) {
               loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
@@ -450,8 +451,11 @@ class HoodieCDCRDD(
                 afterImageRecords.put(key, row.copy())
               }
             }
-            val absCDCPath = new Path(basePath, currentChangeFile.getCdcFile)
-            cdcLogRecordIterator = new HoodieCDCLogRecordIterator(fs, absCDCPath, cdcAvroSchema)
+
+            val cdcLogFiles = currentChangeFile.getCdcFiles.asScala.map { cdcFile =>
+              new HoodieLogFile(fs.getFileStatus(new Path(basePath, cdcFile)))
+            }.toArray
+            cdcLogRecordIterator = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcAvroSchema)
           case REPLACE_COMMIT =>
             if (currentChangeFile.getBeforeFileSlice.isPresent) {
               loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)

@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
+import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.hadoop.RecordReaderValueIterator;
 import org.apache.hudi.hadoop.SafeParquetRecordReaderWrapper;
@@ -104,8 +104,8 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
   /**
    * Setup log and parquet reading in parallel. Both write to central buffer.
    */
-  private List<BoundedInMemoryQueueProducer<ArrayWritable>> getParallelProducers() {
-    List<BoundedInMemoryQueueProducer<ArrayWritable>> producers = new ArrayList<>();
+  private List<HoodieProducer<ArrayWritable>> getParallelProducers() {
+    List<HoodieProducer<ArrayWritable>> producers = new ArrayList<>();
     producers.add(new FunctionBasedQueueProducer<>(buffer -> {
       logRecordScanner.scan();
       return null;

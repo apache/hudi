@@ -322,10 +322,9 @@ public class FSUtils {
   public static Map<String, FileStatus[]> getFilesInPartitions(HoodieEngineContext engineContext,
                                                                HoodieMetadataConfig metadataConfig,
                                                                String basePathStr,
-                                                               String[] partitionPaths,
-                                                               String spillableMapPath) {
+                                                               String[] partitionPaths) {
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        spillableMapPath, true)) {
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
@@ -451,9 +450,13 @@ public class FSUtils {
    * Get the last part of the file name in the log file and convert to int.
    */
   public static int getFileVersionFromLog(Path logPath) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
+    return getFileVersionFromLog(logPath.getName());
+  }
+
+  public static int getFileVersionFromLog(String logFileName) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(logFileName);
     if (!matcher.find()) {
-      throw new InvalidHoodiePathException(logPath, "LogFile");
+      throw new HoodieIOException("Invalid log file name: " + logFileName);
     }
     return Integer.parseInt(matcher.group(4));
   }

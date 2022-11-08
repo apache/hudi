@@ -113,8 +113,9 @@ public class BulkInsertWriterHelper {
       }
       handle.write(recordKey, partitionPath, record);
     } catch (Throwable t) {
-      LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
-      throw t;
+      IOException ioException = new IOException("Exception happened when bulk insert.", t);
+      LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", ioException);
+      throw new IOException(ioException);
     }
   }
 
