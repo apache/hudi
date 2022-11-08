@@ -197,7 +197,8 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
             .withClusteringMaxNumGroups(10)
             .withClusteringTargetPartitions(0)
             .withInlineClustering(true)
-            .withInlineClusteringNumCommits(1).build())
+            .withInlineClusteringNumCommits(1)
+            .withClusteringSortColumns("_row_key").build())
         .withRollbackUsingMarkers(false);
     HoodieWriteConfig cfg = cfgBuilder.build();
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, cfg.getProps());

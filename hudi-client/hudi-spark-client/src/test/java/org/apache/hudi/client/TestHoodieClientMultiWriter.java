@@ -590,7 +590,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     SparkRDDWriteClient client3 = getHoodieWriteClient(cfg3);
     // schedule clustering
     Option<String> clusterInstant = client3.scheduleTableService(Option.empty(), TableServiceType.CLUSTER);
-    assertTrue(clusterInstant.isPresent());
+    // only one file ,will not generate clusterInstant
+    assertFalse(clusterInstant.isPresent());
     // Attempt to commit the inflight commit 003
     try {
       client1.commit("003", result1);

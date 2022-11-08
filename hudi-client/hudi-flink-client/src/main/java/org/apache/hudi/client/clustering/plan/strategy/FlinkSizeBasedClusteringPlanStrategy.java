@@ -69,9 +69,12 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
       // check if max size is reached and create new group, if needed.
       // in now, every clustering group out put is 1 file group.
       if (totalSizeSoFar >= writeConfig.getClusteringTargetFileMaxBytes() && !currentGroup.isEmpty()) {
-        LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size());
-        fileSliceGroups.add(Pair.of(currentGroup, 1));
+        if (currentGroup.size() > 1 || writeConfig.isClusteringSortEnabled()) {
+          int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
+          LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
+                  + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size());
+          fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
+        }
         currentGroup = new ArrayList<>();
         totalSizeSoFar = 0;
       }
@@ -82,7 +85,9 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
       totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
     }
 
-    if (!currentGroup.isEmpty()) {
+    if (currentGroup.size() > 1 || (writeConfig.isClusteringSortEnabled() && currentGroup.size() == 1)) {
+      LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
+              + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size());
       fileSliceGroups.add(Pair.of(currentGroup, 1));
     }
 
@@ -106,8 +111,11 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
   @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
     return super.getFileSlicesEligibleForClustering(partition)
-        // Only files that have basefile size smaller than small file size are eligible.
+        // Only files that have base file size smaller than small file size are eligible.
         .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L) < getWriteConfig().getClusteringSmallFileLimit());
   }
 
+  private int getNumberOfOutputFileGroups(long groupSize, long targetFileSize) {
+    return (int) Math.ceil(groupSize / (double) targetFileSize);
+  }
 }
