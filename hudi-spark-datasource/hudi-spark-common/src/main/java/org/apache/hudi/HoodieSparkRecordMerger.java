@@ -38,6 +38,11 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
   }
 
   @Override
+  public boolean useSortedMerge(TypedProperties props) {
+    return false;
+  }
+
+  @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);

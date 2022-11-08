@@ -43,6 +43,17 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   }
 
   @Override
+  public boolean useSortedMerge(TypedProperties props) {
+    String payloadClass = "";
+    if (props.containsKey("hoodie.datasource.write.payload.class")) {
+      payloadClass = props.getString("hoodie.datasource.write.payload.class");
+    } else if (props.containsKey("payload.class")) {
+      payloadClass = props.getString("payload.class");
+    }
+    return OverwriteWithLatestPartialUpdatesAvroPayload.class.getCanonicalName().equals(payloadClass);
+  }
+
+  @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     return combineAndGetUpdateValue(older, newer, newSchema, props)
         .map(r -> Pair.of(new HoodieAvroIndexedRecord(r), r.getSchema()));
