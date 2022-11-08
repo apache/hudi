@@ -199,7 +199,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       }
     }
 
-    if (partitionPruningPredicates.nonEmpty) {
+    if (partitionPruningPredicates.isEmpty) {
+      logInfo(s"No partition predicates provided, listing full table (${getAllQueryPartitionPaths.asScala.size} partitions)")
+      getAllQueryPartitionPaths.asScala;
+    } else {
       val partitionPaths = listMatchingPartitionPathsInternal(partitionColumnNames, partitionPruningPredicates)
       val predicate = partitionPruningPredicates.reduce(expressions.And)
 
@@ -213,26 +216,19 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.values))
       }
 
-      logInfo(s"Total partition size is: ${partitionPaths.size}," +
-        s" after partition prune size is: ${prunedPartitionPaths.size}")
+      logInfo(s"Using provided predicates to prune number of partitions listed: pruned from" +
+        s" ${partitionPaths.size} to ${prunedPartitionPaths.size}")
+
       prunedPartitionPaths
-    } else {
-      logInfo(s"No partition predicate provided, total partition size is: ${getAllQueryPartitionPaths.asScala.size}")
-      getAllQueryPartitionPaths.asScala;
     }
   }
 
   private def listMatchingPartitionPathsInternal(partitionColumnNames: Seq[String],
                                                  partitionColumnPredicates: Seq[Expression]): Seq[PartitionPath] = {
-    // TODO handle the cases:
-    //    - When url-encoding is enabled (in that case we can't do prefix-based listing)
-    //    - When table has path containing non-encoded '/' (slash) values
-
-    // NOTE: Here we try to to achieve efficiency in avoiding unnecessary and avoidable file-listings, by
-    //       carefully analyzing provided partition predicates:
+    // NOTE: Here we try to to achieve efficiency in avoiding necessity to recursively list deep folder structures of
+    //       partitioned tables w/ multiple partition columns, by carefully analyzing provided partition predicates:
     //
     //       In cases when partition-predicates have
-    //
     //         - The form of equality predicates w/ static literals (for ex, like `date = '2022-01-01'`)
     //         - Fully specified proper prefix of the partition schema (ie fully binding first N columns
     //           of the partition schema adhering to hereby described rules)
@@ -240,10 +236,28 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     //       And the table does NOT
     //         - Have non-encoded slash ('/') chars in its partition-paths
     //
-    // In that case we will try to exploit this specific structure, and try to reduce the scope of a
-    // necessary file-listing of partitions of the table to particular sub-folder being identified by
-    // the partition-path prefix derived from the partition-path predicates
-    if (areAllPartitionPathsCached) {
+    // We will try to exploit this specific structure, and try to reduce the scope of a
+    // necessary file-listings of partitions of the table to just the sub-folder under relative prefix
+    // of the partition-path derived from the partition-column predicates. For ex, consider following
+    // scenario:
+    //
+    // Table's partition schema (in-order):
+    //
+    //    country_code: string (for ex, 'us')
+    //    date: string (for ex, '2022-01-01')
+    //
+    // Table's folder structure:
+    //    us/
+    //     |- 2022-01-01/
+    //     |- 2022-01-02/
+    //     ...
+    //
+    // In case we have incoming query specifies following predicates:
+    //
+    //    `... WHERE country_code = 'us' AND date = '2022-01-01'`
+    //
+    // We can deduce full partition-path w/o doing a single listing: `us/2022-01-01`
+    if (areAllPartitionPathsCached || !shouldUsePartitionPathPrefixAnalysis(configProperties)) {
       logDebug("All partition paths have already been loaded, use it directly")
       getAllQueryPartitionPaths.asScala
     } else {
@@ -271,7 +285,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
           // In case composed partition path is complete, we can return it directly avoiding extra listing operation
           Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2.asInstanceOf[AnyRef]).toArray))
-        } else if (arePartitionPathUrlEncoded) {
+        } else if (arePartitionPathsUrlEncoded) {
           // Otherwise, if table's partition-path are URL-encoded we unfortunately can't leverage our pruning
           // technique, hence listing all of the partitions
           getAllQueryPartitionPaths.asScala
@@ -301,7 +315,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val partitionPathFormatter = new StringPartitionPathFormatter(
       JFunction.toJavaSupplier(() => new StringPartitionPathFormatter.JavaStringBuilder()),
       hiveStylePartitioning,
-      arePartitionPathUrlEncoded
+      arePartitionPathsUrlEncoded
     )
 
     partitionPathFormatter.combine(staticPartitionColumnNames.asJava,
@@ -376,7 +390,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       .toSeq(partitionSchema)
   }
 
-  private def arePartitionPathUrlEncoded: Boolean =
+  private def arePartitionPathsUrlEncoded: Boolean =
     metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
 }
 
@@ -463,5 +477,10 @@ object SparkHoodieTableFileIndex {
   private def shouldListLazily(props: TypedProperties): Boolean = {
     props.getString(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key,
       DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.defaultValue) == FILE_INDEX_LISTING_MODE_LAZY
+  }
+
+  private def shouldUsePartitionPathPrefixAnalysis(props: TypedProperties): Boolean = {
+    props.getBoolean(DataSourceReadOptions.FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED.key,
+      DataSourceReadOptions.FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED.defaultValue)
   }
 }

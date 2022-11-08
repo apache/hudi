@@ -158,7 +158,19 @@ object DataSourceReadOptions {
         " prior to partition-pruning kicking in, meaning that all partitions will be listed including ones that might be " +
         " subsequently pruned out; when set to 'lazy', partitions and file-slices w/in them will be listed" +
         " lazily (ie when they actually accessed, instead of when file-index is initialized) allowing partition pruning" +
-        " to occur before that, only listing partitions that has already been pruned.")
+        " to occur before that, only listing partitions that has already been pruned. Please note that, this config" +
+        " is provided purely to allow to fallback to behavior existing prior to 0.13.0 release, and will be deprecated" +
+        " soon after.")
+
+  val FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.datasource.read.file.index.listing.partition-path-prefix.analysis.enabled")
+      .defaultValue(false)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Controls whether partition-path prefix analysis is enabled w/in the file-index, allowing" +
+        " to avoid necessity to recursively list deep folder structures of partitioned tables w/ multiple partition columns," +
+        " by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from " +
+        " them. Please note, that this technique will not work properly in cases when partitions' folder-names can contain" +
+        " non-encoded slashes ('/') and should be kept disabled in that case.")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
