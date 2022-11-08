@@ -225,8 +225,24 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
                                                  partitionColumnPredicates: Seq[Expression]): Seq[PartitionPath] = {
     // TODO handle the cases:
     //    - When url-encoding is enabled (in that case we can't do prefix-based listing)
-    //    - When table has null partition values (which will be translated into default __HIVE_DEFAULT_PARTITION__)
     //    - When table has path containing non-encoded '/' (slash) values
+
+    // NOTE: Here we try to to achieve efficiency in avoiding unnecessary and avoidable file-listings, by
+    //       carefully analyzing provided partition predicates:
+    //
+    //       In cases when partition-predicates have
+    //
+    //         - The form of equality predicates w/ static literals (for ex, like `date = '2022-01-01'`)
+    //         - Fully specified proper prefix of the partition schema (ie fully binding first N columns
+    //           of the partition schema adhering to hereby described rules)
+    //
+    //       And the table does NOT
+    //         - Leverage URL-encoding in its partition-paths
+    //         - Have non-encoded slash ('/') chars in its partition-paths
+    //
+    // In that case we will try to exploit this specific structure, and try to reduce the scope of a
+    // necessary file-listing of partitions of the table to particular sub-folder being identified by
+    // the partition-path prefix derived from the partition-path predicates
     if (areAllPartitionPathsCached) {
       logDebug("All partition paths have already been loaded, use it directly")
       getAllQueryPartitionPaths.asScala
@@ -238,10 +254,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         // Extract from simple predicates of the form `date = '2022-01-01'` both
         // partition column and corresponding (literal) value
         val staticPartitionColumnValuesMap = extractEqualityPredicatesLiteralValues(partitionColumnPredicates)
-
-        partitionColumnNames.map { colName =>
-          (colName, staticPartitionColumnValuesMap.get(colName).orNull)
-        } takeWhile(_._2 != null)
+        // NOTE: For our purposes we can only construct partition-path prefix if proper prefix of the
+        //       partition-schema has been bound by the partition-predicates
+        partitionColumnNames.takeWhile(colName => staticPartitionColumnValuesMap.contains(colName))
+          .map(colName => (colName, staticPartitionColumnValuesMap(colName).get))
       }
 
       // Based on the static partition-column name-value pairs, we'll try to compose static partition-path
@@ -363,14 +379,17 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
 object SparkHoodieTableFileIndex {
 
-  private def extractEqualityPredicatesLiteralValues(predicates: Seq[Expression]): Map[String, Any] = {
+  private def extractEqualityPredicatesLiteralValues(predicates: Seq[Expression]): Map[String, Option[Any]] = {
     // TODO support coercible expressions (ie attr-references casted to particular type), similar
     //      to `MERGE INTO` statement
+    // NOTE: To properly support predicates of the form `x = NULL`, we have to wrap result
+    //       of the folded expression into [[Some]] (to distinguish it from the case when partition-column
+    //       isn't bound to any value by the predicate)
     predicates.flatMap {
       case EqualTo(attr: AttributeReference, e: Expression) if e.foldable =>
-        Seq((attr.name, e.eval(EmptyRow)))
+        Seq((attr.name, Some(e.eval(EmptyRow))))
       case EqualTo(e: Expression, attr: AttributeReference) if e.foldable =>
-        Seq((attr.name, e.eval(EmptyRow)))
+        Seq((attr.name, Some(e.eval(EmptyRow))))
 
       case _ => Seq.empty
     }.toMap
