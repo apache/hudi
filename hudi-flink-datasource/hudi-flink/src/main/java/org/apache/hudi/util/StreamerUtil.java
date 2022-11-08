@@ -18,6 +18,14 @@
 
 package org.apache.hudi.util;
 
+import org.apache.avro.Schema;
+import org.apache.flink.api.common.functions.RuntimeContext;
+import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.util.Preconditions;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -40,7 +48,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -62,15 +69,6 @@ import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
-
-import org.apache.avro.Schema;
-import org.apache.flink.api.common.functions.RuntimeContext;
-import org.apache.flink.configuration.ConfigOption;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.util.Preconditions;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.orc.OrcFile;
 import org.apache.parquet.hadoop.ParquetFileWriter;
@@ -466,15 +464,18 @@ public class StreamerUtil {
     try {
       long high = HoodieActiveTimeline.parseDateFromInstantTime(highVal).getTime();
       long low = HoodieActiveTimeline.parseDateFromInstantTime(lowVal).getTime();
-      ValidationUtils.checkArgument(high > low,
-          "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
-      long median = low + (high - low) / 2;
-      final String instantTime = HoodieActiveTimeline.formatDate(new Date(median));
-      if (HoodieTimeline.compareTimestamps(lowVal, HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime)
-          || HoodieTimeline.compareTimestamps(highVal, HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime)) {
-        return Option.empty();
+      if (high > low) {
+        long median = low + (high - low) / 2;
+        final String instantTime = HoodieActiveTimeline.formatDate(new Date(median));
+        if (HoodieTimeline.compareTimestamps(lowVal, HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime)
+            || HoodieTimeline.compareTimestamps(highVal, HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime)) {
+          return Option.empty();
+        }
+        return Option.of(instantTime);
+      } else {
+        LOG.warn("Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
+        return Option.of(HoodieActiveTimeline.createNewInstantTime());
       }
-      return Option.of(instantTime);
     } catch (ParseException e) {
       throw new HoodieException("Get median instant time with interval [" + lowVal + ", " + highVal + "] error", e);
     }

@@ -722,6 +722,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withFs(dataMetaClient.getFs())
             .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+            .withLogSuffix(metadataWriteConfig.getWriteLogSuffix())
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
         writer.appendBlock(block);
         writer.close();

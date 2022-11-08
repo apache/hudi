@@ -246,7 +246,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
       ValidationUtils.checkArgument(lf.getLogVersion() - maxVersion > 0, "Expect new log version to be sane");
       HoodieLogFile newLogFile = new HoodieLogFile(new Path(lf.getPath().getParent(),
           FSUtils.makeLogFileName(lf.getFileId(), "." + FSUtils.getFileExtensionFromLog(lf.getPath()),
-              compactionInstant, lf.getLogVersion() - maxVersion, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
+              compactionInstant, lf.getLogVersion() - maxVersion, HoodieLogFormat.UNKNOWN_WRITE_TOKEN,
+              FSUtils.getSuffixExtensionFromLog(lf.getPath()))));
       return Pair.of(lf, newLogFile);
     }).collect(Collectors.toList());
   }
@@ -446,12 +447,14 @@ public class CompactionAdminClient extends BaseHoodieClient {
         .orElse(HoodieLogFile.LOGFILE_BASE_VERSION - 1);
     String logExtn = fileSliceForCompaction.getLogFiles().findFirst().map(lf -> "." + lf.getFileExtension())
         .orElse(HoodieLogFile.DELTA_EXTENSION);
+    String logSuffix = fileSliceForCompaction.getLogFiles().findFirst().map(HoodieLogFile::getLogSuffix)
+        .orElse(config.getWriteLogSuffix());
     String parentPath = fileSliceForCompaction.getBaseFile().map(df -> new Path(df.getPath()).getParent().toString())
         .orElse(fileSliceForCompaction.getLogFiles().findFirst().map(lf -> lf.getPath().getParent().toString()).get());
     for (HoodieLogFile toRepair : logFilesToRepair) {
       int version = maxUsedVersion + 1;
       HoodieLogFile newLf = new HoodieLogFile(new Path(parentPath, FSUtils.makeLogFileName(operation.getFileId(),
-          logExtn, operation.getBaseInstantTime(), version, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
+          logExtn, operation.getBaseInstantTime(), version, HoodieLogFormat.UNKNOWN_WRITE_TOKEN, logSuffix)));
       result.add(Pair.of(toRepair, newLf));
       maxUsedVersion = version;
     }

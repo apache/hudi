@@ -93,6 +93,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
       HoodieEngineContext context, HoodieCompactionPlan compactionPlan,
       HoodieTable table, HoodieWriteConfig config, String compactionInstantTime,
       HoodieCompactionHandler compactionHandler) {
+    LOG.info("Compactor compacting start with " + compactionInstantTime);
     if (compactionPlan == null || (compactionPlan.getOperations() == null)
         || (compactionPlan.getOperations().isEmpty())) {
       return context.emptyHoodieData();
