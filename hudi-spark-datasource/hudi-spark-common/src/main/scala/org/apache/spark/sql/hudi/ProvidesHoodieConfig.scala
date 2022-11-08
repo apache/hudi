@@ -107,9 +107,9 @@ trait ProvidesHoodieConfig extends Logging {
     val path = hoodieCatalogTable.tableLocation
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
-    val catalogProperties = hoodieCatalogTable.catalogProperties ++ extraOptions
+    val catalogProperties = hoodieCatalogTable.catalogProperties
 
-    val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
+    val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf, extraOptions)
     val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
 
     val parameters = withSparkConf(sparkSession, catalogProperties)()
@@ -171,7 +171,7 @@ trait ProvidesHoodieConfig extends Logging {
 
     logInfo(s"Insert statement use write operation type: $operation, payloadClass: $payloadClassName")
 
-    withSparkConf(sparkSession, catalogProperties) {
+    withSparkConf(sparkSession, catalogProperties ++ extraOptions) {
       Map(
         "path" -> path,
         TABLE_TYPE.key -> tableType,
@@ -281,8 +281,8 @@ trait ProvidesHoodieConfig extends Logging {
     }
   }
 
-  def getHoodieProps(catalogProperties: Map[String, String], tableConfig: HoodieTableConfig, conf: SQLConf): TypedProperties = {
-    val options: Map[String, String] = catalogProperties ++ tableConfig.getProps.asScala.toMap ++ conf.getAllConfs
+  def getHoodieProps(catalogProperties: Map[String, String], tableConfig: HoodieTableConfig, conf: SQLConf, extraOptions: Map[String, String] = Map.empty): TypedProperties = {
+    val options: Map[String, String] = catalogProperties ++ tableConfig.getProps.asScala.toMap ++ conf.getAllConfs ++ extraOptions
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(options)
     hoodieConfig.getProps
   }
