@@ -20,9 +20,9 @@ package org.apache.hudi
 import org.apache.hudi.common.config.HoodieCommonConfig
 
 /**
- * running all the UT TestHoodieFileIndex test in parallelism mode
+ * running all the UT TestHoodieFileIndex test in local parallelism mode
  */
-class TestHoodieFileIndexParalleLoad extends TestHoodieFileIndex {
+class TestHoodieFileIndexParallelLoad extends TestHoodieFileIndex {
 
   queryOpts = Map(
     DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,

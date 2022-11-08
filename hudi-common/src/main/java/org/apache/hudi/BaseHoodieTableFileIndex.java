@@ -305,14 +305,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     validate(activeTimeline, queryInstant);
 
-    // NOTE: For MOR table, when the compaction is inflight, we need to not only fetch the
-    // latest slices, but also include the base and log files of the second-last version of
-    // the file slice in the same file group as the latest file slice that is under compaction.
-    // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
-    // API.  Note that for COW table, the merging logic of two slices does not happen as there
-    // is no compaction, thus there is no performance impact.
-    int parallelism = Integer.parseInt(String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_PARALLELISM.key(), HoodieCommonConfig.TABLE_LOADING_PARALLELISM.defaultValue())));
-    String mode = String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_MODE.key(), HoodieCommonConfig.TABLE_LOADING_MODE.defaultValue()));
+    int parallelism = Integer.parseInt(String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_PARALLELISM.key(),
+        HoodieCommonConfig.TABLE_LOADING_PARALLELISM.defaultValue())));
+
+    String mode = String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_MODE.key(),
+        HoodieCommonConfig.TABLE_LOADING_MODE.defaultValue()));
 
     long buildCacheFileSlicesLocalStart = System.currentTimeMillis();
     if (parallelism <= 0 || partitionFiles.size() == 0) {
@@ -396,6 +393,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private Map<PartitionPath, List<FileSlice>> getCandidateFileSlices(Map<PartitionPath, FileStatus[]> innerPartitionFiles, Option<String> queryInstant,
                                                                      HoodieTableFileSystemView fileSystemView) {
+    // NOTE: For MOR table, when the compaction is inflight, we need to not only fetch the
+    // latest slices, but also include the base and log files of the second-last version of
+    // the file slice in the same file group as the latest file slice that is under compaction.
+    // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
+    // API.  Note that for COW table, the merging logic of two slices does not happen as there
+    // is no compaction, thus there is no performance impact.
     return innerPartitionFiles.keySet().stream()
         .collect(Collectors.toMap(
             Function.identity(),
