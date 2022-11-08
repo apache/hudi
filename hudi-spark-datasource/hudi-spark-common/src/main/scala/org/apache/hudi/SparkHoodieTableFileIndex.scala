@@ -27,6 +27,7 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.hadoop.CachingPath.createPathUnsafe
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -237,7 +238,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     //           of the partition schema adhering to hereby described rules)
     //
     //       And the table does NOT
-    //         - Leverage URL-encoding in its partition-paths
     //         - Have non-encoded slash ('/') chars in its partition-paths
     //
     // In that case we will try to exploit this specific structure, and try to reduce the scope of a
@@ -250,7 +250,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       // Static partition-path prefix is defined as a prefix of the full partition-path where only
       // first N partition columns (in-order) have proper (static) values bound in equality predicates,
       // allowing in turn to build such prefix to be used in subsequent filtering
-      val staticPartitionColumnValuePairs: Seq[(String, Any)] = {
+      val staticPartitionColumnNameValuePairs: Seq[(String, Any)] = {
         // Extract from simple predicates of the form `date = '2022-01-01'` both
         // partition column and corresponding (literal) value
         val staticPartitionColumnValuesMap = extractEqualityPredicatesLiteralValues(partitionColumnPredicates)
@@ -260,22 +260,26 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
           .map(colName => (colName, staticPartitionColumnValuesMap(colName).get))
       }
 
-      // Based on the static partition-column name-value pairs, we'll try to compose static partition-path
-      // prefix to try to reduce the scope of the required file-listing
-      composeRelativePartitionPath(staticPartitionColumnValuePairs) match {
-        case Some(relativePartitionPathPrefix) =>
-          // If the composed partition path is complete, we return it directly, to avoid extra listing operation;
-          // otherwise compile extracted partition values (from query predicates) into a sub-path which is a prefix
-          // of the complete partition path, do listing for this prefix-path only
-          if (staticPartitionColumnValuePairs.length == partitionColumnNames.length) {
-            Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnValuePairs.map(_._2.asInstanceOf[AnyRef]).toArray))
-          } else {
-            listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
-          }
+      if (staticPartitionColumnNameValuePairs.isEmpty) {
+        logDebug("Unable to compose relative partition path prefix from the predicates")
+        getAllQueryPartitionPaths.asScala
+      } else {
+        // Based on the static partition-column name-value pairs, we'll try to compose static partition-path
+        // prefix to try to reduce the scope of the required file-listing
+        val relativePartitionPathPrefix = composeRelativePartitionPath(staticPartitionColumnNameValuePairs)
 
-        case _ =>
-          // Fallback to eager list if there is no predicate on partition columns (i.e., the input partitionColumnValuePairs list is empty)
+        if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
+          // In case composed partition path is complete, we can return it directly avoiding extra listing operation
+          Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2.asInstanceOf[AnyRef]).toArray))
+        } else if (arePartitionPathUrlEncoded) {
+          // Otherwise, if table's partition-path are URL-encoded we unfortunately can't leverage our pruning
+          // technique, hence listing all of the partitions
           getAllQueryPartitionPaths.asScala
+        } else {
+          // Otherwise, compile extracted partition values (from query predicates) into a sub-path which is a prefix
+          // of the complete partition path, do listing for this prefix-path only
+          listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
+        }
       }
     }
   }
@@ -285,26 +289,23 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    *
    * @return relative partition path and a flag to indicate if the path is complete (i.e., not a prefix)
    */
-  private def composeRelativePartitionPath(staticPartitionColumnNameValuePairs: Seq[(String, Any)]): Option[String] = {
-    if (staticPartitionColumnNameValuePairs.isEmpty) {
-      logDebug("Unable to compose relative partition path prefix from the predicates")
-      return None
-    }
+  private def composeRelativePartitionPath(staticPartitionColumnNameValuePairs: Seq[(String, Any)]): String = {
+    checkState(staticPartitionColumnNameValuePairs.nonEmpty)
 
     // Since static partition values might not be available for all columns, we compile
     // a list of corresponding pairs of (partition column-name, corresponding value) if available
     val (staticPartitionColumnNames, staticPartitionColumnValues) = staticPartitionColumnNameValuePairs.unzip
 
     val hiveStylePartitioning = metaClient.getTableConfig.getHiveStylePartitioningEnable.toBoolean
-    val urlEncodePartitioning = metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
 
     val partitionPathFormatter = new StringPartitionPathFormatter(
       JFunction.toJavaSupplier(() => new StringPartitionPathFormatter.JavaStringBuilder()),
       hiveStylePartitioning,
-      urlEncodePartitioning
+      arePartitionPathUrlEncoded
     )
 
-    Some(partitionPathFormatter.combine(staticPartitionColumnNames.asJava, staticPartitionColumnValues.map(_.asInstanceOf[AnyRef]): _*))
+    partitionPathFormatter.combine(staticPartitionColumnNames.asJava,
+      staticPartitionColumnValues.map(_.asInstanceOf[AnyRef]): _*)
   }
 
   protected def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
@@ -374,6 +375,9 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     )
       .toSeq(partitionSchema)
   }
+
+  private def arePartitionPathUrlEncoded: Boolean =
+    metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
 }
 
 
