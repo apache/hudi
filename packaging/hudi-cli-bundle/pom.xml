@@ -87,11 +87,97 @@
                             </transformers>
                             <artifactSet>
                                 <includes>
-                                  <include>*:*</include>
+                                    <include>org.apache.hudi:hudi-common</include>
+                                    <include>org.apache.hudi:hudi-cli</include>
+                                    <include>org.apache.hudi:hudi-client-common</include>
+                                    <include>org.apache.hudi:hudi-spark-client</include>
+                                    <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
+                                    <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
+                                    <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
+                                    <include>org.apache.hudi:${hudi.spark.common.modules.1}</include>
+                                    <include>org.apache.hudi:${hudi.spark.common.modules.2}</include>
+                                    <include>org.apache.hudi:hudi-hive-sync</include>
+                                    <include>org.apache.hudi:hudi-sync-common</include>
+                                    <include>org.apache.hudi:hudi-hadoop-mr</include>
+                                    <include>org.apache.hudi:hudi-timeline-service</include>
+
+                                    <include>org.apache.spark:spark-core_${scala.binary.version}</include>
+                                    <include>org.apache.spark:spark-sql_${scala.binary.version}</include>
+
+                                    <include>org.apache.logging.log4j:*</include>
+                                    <include>org.scala-lang:scala-library</include>
+                                    <include>org.apache.hadoop:hadoop-common</include>
+                                    <include>org.apache.hadoop:hadoop-hdfs</include>
+                                    <include>org.apache.parquet:parquet-hadoop</include>
+
+                                    <include>javax.servlet:javax.servlet-api</include>
+                                    <include>com.beust:jcommander</include>
+                                    <include>io.javalin:javalin</include>
+                                    <!-- Spark only has mortbay jetty -->
+                                    <include>org.eclipse.jetty:*</include>
+                                    <include>org.eclipse.jetty.websocket:*</include>
+                                    <include>org.jetbrains.kotlin:*</include>
+                                    <include>org.rocksdb:rocksdbjni</include>
+                                    <include>org.apache.httpcomponents:httpclient</include>
+                                    <include>org.apache.httpcomponents:httpcore</include>
+                                    <include>org.apache.httpcomponents:fluent-hc</include>
+                                    <include>org.antlr:stringtemplate</include>
+                                    <include>org.apache.parquet:parquet-avro</include>
+
+                                    <include>com.github.davidmoten:guava-mini</include>
+                                    <include>com.github.davidmoten:hilbert-curve</include>
+                                    <include>com.github.ben-manes.caffeine:caffeine</include>
+                                    <include>com.twitter:bijection-avro_${scala.binary.version}</include>
+                                    <include>com.twitter:bijection-core_${scala.binary.version}</include>
+                                    <include>io.dropwizard.metrics:metrics-core</include>
+                                    <include>io.dropwizard.metrics:metrics-graphite</include>
+                                    <include>io.dropwizard.metrics:metrics-jmx</include>
+                                    <include>io.prometheus:simpleclient</include>
+                                    <include>io.prometheus:simpleclient_httpserver</include>
+                                    <include>io.prometheus:simpleclient_dropwizard</include>
+                                    <include>io.prometheus:simpleclient_pushgateway</include>
+                                    <include>io.prometheus:simpleclient_common</include>
+                                    <include>com.yammer.metrics:metrics-core</include>
+                                    <include>com.google.guava:guava</include>
+
+                                    <include>org.apache.hive:hive-common</include>
+                                    <include>org.apache.hive:hive-service</include>
+                                    <include>org.apache.hive:hive-service-rpc</include>
+                                    <include>org.apache.hive:hive-metastore</include>
+                                    <include>org.apache.hive:hive-jdbc</include>
+
+                                    <include>org.apache.hbase:hbase-client</include>
+                                    <include>org.apache.hbase:hbase-common</include>
+                                    <include>org.apache.hbase:hbase-hadoop-compat</include>
+                                    <include>org.apache.hbase:hbase-hadoop2-compat</include>
+                                    <include>org.apache.hbase:hbase-metrics</include>
+                                    <include>org.apache.hbase:hbase-metrics-api</include>
+                                    <include>org.apache.hbase:hbase-protocol</include>
+                                    <include>org.apache.hbase:hbase-protocol-shaded</include>
+                                    <include>org.apache.hbase:hbase-server</include>
+                                    <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+                                    <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
+                                    <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+                                    <include>org.apache.htrace:htrace-core4</include>
+                                    <include>org.apache.curator:curator-framework</include>
+                                    <include>org.apache.curator:curator-client</include>
+                                    <include>org.apache.curator:curator-recipes</include>
+                                    <include>commons-codec:commons-codec</include>
+                                    <include>commons-io:commons-io</include>
+                                    <include>org.springframework*:*</include>
+                                    <include>org.springframework.boot:*</include>
+                                    <include>org.jline:*</include>
+                                    <include>org.slf4j:slf4j-api</include>
+                                    <include>org.yaml:*</include>
+                                    <include>commons-logging:*</include>
+                                    <include>org.apache.avro:avro</include>
+                                    <include>org.hibernate.validator:hibernate-validator</include>
+                                    <include>javax.validation:validation-api</include>
+                                    <include>jakarta.validation:jakarta.validation-api</include>
+                                    <include>org.jboss.logging:jboss-logging</include>
+                                    <include>com.fasterxml:classmate</include>
+                                    <include>org.glassfish:jakarta.el</include>
                                 </includes>
-                                <excludes>
-                                    <exclude>org.apache.hbase:*</exclude>
-                                </excludes>
                             </artifactSet>
                             <relocations>
                                 <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
@@ -509,6 +595,13 @@
             <version>1.1.0.Final</version>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>org.glassfish</groupId>
+            <artifactId>jakarta.el</artifactId>
+            <version>3.0.3</version>
+            <scope>compile</scope>
+        </dependency>
+
         <!-- TODO: Reinvestigate PR 633 -->
     </dependencies>
 
