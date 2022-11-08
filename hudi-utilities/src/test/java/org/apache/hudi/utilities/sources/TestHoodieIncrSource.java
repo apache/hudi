@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -46,14 +48,12 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
@@ -83,12 +83,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
   }
 
-  private static Stream<Arguments> tableTypeParams() {
-    return Arrays.stream(new HoodieTableType[][] {{HoodieTableType.COPY_ON_WRITE}, {HoodieTableType.MERGE_ON_READ}}).map(Arguments::of);
-  }
-
   @ParameterizedTest
-  @MethodSource("tableTypeParams")
+  @EnumSource(HoodieTableType.class)
   public void testHoodieIncrSource(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());
@@ -126,6 +122,87 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
     // insert new batch and ensure the checkpoint moves
     readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 100, inserts6.getKey());
+    writeClient.close();
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testHoodieIncrSourceInflightCommitBeforeCompletedCommit(HoodieTableType tableType) throws IOException {
+    this.tableType = tableType;
+    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(3, 4).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(2).build())
+        .withCompactionConfig(
+            HoodieCompactionConfig.newBuilder()
+                .withInlineCompaction(true)
+                .withMaxNumDeltaCommitsBeforeCompaction(3)
+                .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    List<Pair<String, List<HoodieRecord>>> inserts = new ArrayList<>();
+
+    for (int i = 0; i < 6; i++) {
+      inserts.add(writeRecords(writeClient, true, null, HoodieActiveTimeline.createNewInstantTime()));
+    }
+
+    // Emulates a scenario where an inflight commit is before a completed commit
+    // The checkpoint should not go past this commit
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant4 = activeTimeline
+        .filter(instant -> instant.getTimestamp().equals(inserts.get(4).getKey())).firstInstant().get();
+    Option<byte[]> instant4CommitData = activeTimeline.getInstantDetails(instant4);
+    activeTimeline.revertToInflight(instant4);
+    metaClient.reloadActiveTimeline();
+
+    // Reads everything up to latest
+    readAndAssert(
+        IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+        Option.empty(),
+        400,
+        inserts.get(3).getKey());
+
+    // Even if the beginning timestamp is archived, full table scan should kick in, but should filter for records having commit time > first instant time
+    readAndAssert(
+        IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+        Option.of(inserts.get(0).getKey()),
+        300,
+        inserts.get(3).getKey());
+
+    // Even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
+    readAndAssert(
+        IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+        Option.of(inserts.get(2).getKey()),
+        100,
+        inserts.get(3).getKey());
+
+    // Reads just the latest
+    readAndAssert(
+        IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
+        Option.empty(),
+        100,
+        inserts.get(3).getKey());
+
+    // Ensures checkpoint does not move
+    readAndAssert(
+        IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
+        Option.of(inserts.get(3).getKey()),
+        0,
+        inserts.get(3).getKey());
+
+    activeTimeline.reload().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, instant4.getAction(), inserts.get(4).getKey()),
+        instant4CommitData);
+
+    // After the inflight commit completes, the checkpoint should move on after incremental pull
+    readAndAssert(
+        IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
+        Option.of(inserts.get(3).getKey()),
+        200,
+        inserts.get(5).getKey());
+
     writeClient.close();
   }
 
