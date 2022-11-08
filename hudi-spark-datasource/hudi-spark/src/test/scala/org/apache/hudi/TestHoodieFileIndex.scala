@@ -204,7 +204,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
 
     val listingMode = if (listLazily) FILE_INDEX_LISTING_MODE_LAZY else FILE_INDEX_LISTING_MODE_EAGER
 
-    val opts = queryOpts + (DataSourceReadOptions.FILE_INDEX_LISTING_MODE.key -> listingMode)
+    val opts = queryOpts + (DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key -> listingMode)
     val fileIndex = HoodieFileIndex(spark, metaClient, None, opts)
 
     val partitionFilter1 = EqualTo(attribute("partition"), literal("2021/03/08"))
