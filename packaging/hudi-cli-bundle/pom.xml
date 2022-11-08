@@ -108,6 +108,7 @@
                                     <include>org.scala-lang:scala-library</include>
                                     <include>org.apache.hadoop:hadoop-common</include>
                                     <include>org.apache.hadoop:hadoop-hdfs</include>
+                                    <include>org.apache.hadoop:hadoop-auth</include>
                                     <include>org.apache.parquet:parquet-hadoop</include>
 
                                     <include>javax.servlet:javax.servlet-api</include>
@@ -177,6 +178,10 @@
                                     <include>org.jboss.logging:jboss-logging</include>
                                     <include>com.fasterxml:classmate</include>
                                     <include>org.glassfish:jakarta.el</include>
+                                    <include>com.fasterxml.woodstox:woodstox-core</include>
+                                    <include>org.codehaus.woodstox:stax2-api</include>
+                                    <include>commons-collections:commons-collections</include>
+                                    <include>commons-*:commons-*</include>
                                 </includes>
                             </artifactSet>
                             <relocations>
@@ -550,7 +555,12 @@
             <artifactId>hadoop-hdfs</artifactId>
             <scope>compile</scope>
         </dependency>
-
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-auth</artifactId>
+            <version>${hadoop.version}</version>
+            <scope>compile</scope>
+        </dependency>
         <!-- Logging -->
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
