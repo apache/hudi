@@ -22,7 +22,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -60,7 +59,6 @@ import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -398,7 +396,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangesMetadataMap =
           collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath());
 
-      stat.setRecordsStats(columnRangesMetadataMap);
+      stat.putRecordsStats(columnRangesMetadataMap);
     }
 
     resetWriteCounts();
@@ -426,8 +424,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
    */
   protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header, boolean appendDeleteBlocks) {
     try {
-      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
+      header.put(HeaderMetadataType.INSTANT_TIME, instantTime);
+      header.put(HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
         String keyField = config.populateMetaFields()
@@ -501,7 +499,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   public void write(Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
     try {
-      for (Map.Entry<String, HoodieRecord<? extends HoodieRecordPayload>> entry : recordMap.entrySet()) {
+      for (Map.Entry<String, HoodieRecord<? extends HoodieRecordPayload>> entry: recordMap.entrySet()) {
         HoodieRecord<T> record = (HoodieRecord<T>) entry.getValue();
         init(record);
         flushToDiskIfRequired(record, false);
