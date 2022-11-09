@@ -38,7 +38,12 @@ public enum ExecutorType {
    * Executor which orchestrates concurrent producers and consumers communicating through disruptor as a lock free message queue
    * to gain better writing performance. Although DisruptorExecutor is still an experimental feature.
    */
-  DISRUPTOR;
+  DISRUPTOR,
+
+  /**
+   *
+   */
+  DIRECT;
 
   public static List<String> getNames() {
     List<String> names = new ArrayList<>(ExecutorType.values().length);

@@ -59,7 +59,7 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
     this.consumer = consumer;
     this.preExecuteRunnable = preExecuteRunnable;
     // Ensure fixed thread for each producer thread
-    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new CustomizedThreadFactory("executor-queue-producer", preExecuteRunnable));
+    this.producerExecutorService = Executors.newFixedThreadPool(Math.max(1, producers.size()), new CustomizedThreadFactory("executor-queue-producer", preExecuteRunnable));
     // Ensure single thread for consumer
     this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("executor-queue-consumer", preExecuteRunnable));
   }
