@@ -34,6 +34,7 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtil
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
@@ -306,38 +307,30 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
         .mode(SaveMode.Overwrite)
         .save(basePath)
 
-      fileIndex.refresh()
-
-      val partitionFilter2 = And(
-        EqualTo(attribute("dt"), literal("2021/03/01")),
-        EqualTo(attribute("hh"), literal("10"))
-      )
-
-      val partitionAndFilesNoPruning = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
-
-      // NOTE: That if file-index is in eagerly-listing and we can't parse partition values, we will
-      //       try to recourse and read the table as non-partitioned one
-      val expectedListedPartitions =
-        if (listingModeOverride == DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY) 2
-        else 1
-
-      assertEquals(expectedListedPartitions, partitionAndFilesNoPruning.size)
-      // The partition prune would not work for this case, so the partition value it
-      // returns is a InternalRow.empty.
-      assertTrue(partitionAndFilesNoPruning.forall(_.values.numFields == 0))
-      // The returned file size should equal to the whole file size in all the partition paths.
-      assertEquals(getFileCountInPartitionPaths("2021/03/01/10", "2021/03/02/10"),
-        partitionAndFilesNoPruning.flatMap(_.files).length)
-
-      val readDF = spark.read.format("hudi").options(readerOpts).load(basePath)
-
       // NOTE: That if file-index is in lazy-listing mode and we can't parse partition values, there's no way
       //       to recover from this since Spark by default have to inject partition values parsed from the partition paths.
       if (listingModeOverride == DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY) {
-        // TODO should throw more meaningful exception
-        assertThrows(classOf[Throwable]) { readDF.count() }
-        assertThrows(classOf[Throwable]) { readDF.filter("dt = '2021/03/01' and hh ='10'").count() }
+        assertThrows(classOf[HoodieException]) { fileIndex.refresh() }
       } else {
+        fileIndex.refresh()
+
+        val partitionFilter2 = And(
+          EqualTo(attribute("dt"), literal("2021/03/01")),
+          EqualTo(attribute("hh"), literal("10"))
+        )
+
+        val partitionAndFilesNoPruning = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
+
+        assertEquals(1, partitionAndFilesNoPruning.size)
+        // The partition prune would not work for this case, so the partition value it
+        // returns is a InternalRow.empty.
+        assertTrue(partitionAndFilesNoPruning.forall(_.values.numFields == 0))
+        // The returned file size should equal to the whole file size in all the partition paths.
+        assertEquals(getFileCountInPartitionPaths("2021/03/01/10", "2021/03/02/10"),
+          partitionAndFilesNoPruning.flatMap(_.files).length)
+
+        val readDF = spark.read.format("hudi").options(readerOpts).load(basePath)
+
         assertEquals(10, readDF.count())
         // There are 5 rows in the  dt = 2021/03/01 and hh = 10
         assertEquals(5, readDF.filter("dt = '2021/03/01' and hh ='10'").count())
