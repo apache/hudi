@@ -127,46 +127,43 @@ case class HoodieFileIndex(spark: SparkSession,
 
     logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
+    var totalFileSize = 0
+    var candidateFileSize = 0
+
     // Prune the partition path by the partition filters
+    // NOTE: Non-partitioned tables are assumed to consist from a single partition
+    //       encompassing the whole table
     val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
-    if (!isReadAsPartitionedTable) {
-      // Read as Non-Partitioned table
+    val listedPartitions = prunedPartitions.map { partition =>
+      val baseFileStatuses: Seq[FileStatus] =
+        getInputFileSlices(partition).asScala
+          .map(fs => fs.getBaseFile.orElse(null))
+          .filter(_ != null)
+          .map(_.getFileStatus)
+
       // Filter in candidate files based on the col-stats index lookup
-      val candidateFiles = allFiles.filter(fileStatus =>
+      val candidateFiles = baseFileStatuses.filter(fs =>
         // NOTE: This predicate is true when {@code Option} is empty
-        candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName))
-      )
+        candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
 
-      logInfo(s"Total files : ${allFiles.size}; " +
-        s"candidate files after data skipping: ${candidateFiles.size}; " +
-        s"skipping percent ${if (allFiles.nonEmpty) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
+      totalFileSize += baseFileStatuses.size
+      candidateFileSize += candidateFiles.size
+      PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
+    }
 
-      Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
+    val skippingRatio =
+      if (!areAllFileSlicesCached) -1
+      else if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble
+      else 0
+
+    logInfo(s"Total base files: $totalFileSize; " +
+      s"candidate files after data skipping: $candidateFileSize; " +
+      s"skipping percentage $skippingRatio")
+
+    if (shouldReadAsPartitionedTable()) {
+      listedPartitions
     } else {
-      var totalFileSize = 0
-      var candidateFileSize = 0
-      val result = prunedPartitions.map { partition =>
-        val baseFileStatuses: Seq[FileStatus] =
-          getInputFileSlices(partition).asScala
-            .map(fs => fs.getBaseFile.orElse(null))
-            .filter(_ != null)
-            .map(_.getFileStatus)
-
-        // Filter in candidate files based on the col-stats index lookup
-        val candidateFiles = baseFileStatuses.filter(fs =>
-          // NOTE: This predicate is true when {@code Option} is empty
-          candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
-
-        totalFileSize += baseFileStatuses.size
-        candidateFileSize += candidateFiles.size
-        PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
-      }
-
-      logInfo(s"Total base files: $totalFileSize; " +
-        s"candidate files after data skipping: $candidateFileSize; " +
-        s"skipping percent ${if (!areAllFileSlicesCached) "is disabled" else if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
-
-      result
+      Seq(PartitionDirectory(InternalRow.empty, listedPartitions.flatMap(_.files)))
     }
   }
 
