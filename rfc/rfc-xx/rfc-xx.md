@@ -46,16 +46,23 @@ faster turnaround for such integrations.
 
 [WIP] Plan
 
-- [ ] High-level capabilities API will be supporting
+- [x] High-level capabilities API will be supporting
 - [ ] High-level overview of integration points of the query engines
 - [ ] Deep-dive into existing Spark/Flink/Trino integration points
 
 The figure below shows the read path in Spark and Presto/Trino query engines. At
-a high level, these engines support following capabilities:
+a high level, integration with these engines require providing of the following capabilities:
 
-1. Build file splits - This is where we can make use of metadata indexes for
-   efficient listing and data skipping.
-2. Read - This is where we can merge records, push down filters and projections.
+1. **Listing**: this stage requires enumerating of all of the data files w/in a table representing particular 
+snapshot of its state, that will be subsequently scanned to fetch the date requested by the target query. All query engines
+expect output of this stage in the form of balanced out file "splits" that way allowing to even out any skew in 
+file sizes. This stage is where various _pruning_ techniques such as partition-pruning, file-level column 
+statistics filtering are applied.
+
+2. **Reading**: this stage transforms every file-split (identified in a previous stage) into an iterator over 
+the records persisted in it. This stage is where actual data shaping to suit the needs of particular query takes 
+place: records are projected into a schema expected by the query, corresponding filters are pushed down to 
+reduce amount of data fetched from storage, schema evolution is handled, delayed operations are reconciled (merging/deleting) 
 
 ![](./read_path.png)
 
