@@ -1013,6 +1013,24 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
        """.stripMargin)
     checkKeyGenerator("org.apache.hudi.keygen.ComplexKeyGenerator", tableName)
     spark.sql(s"drop table $tableName")
+
+    import spark.implicits._
+    val partitionValue = "2022-11-05"
+    val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
+
+    // Test key generator class with composite keys by spark dataframe.saveAsTable
+    df.write.format("hudi")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .option(RECORDKEY_FIELD.key, "id,name")
+      .option(PRECOMBINE_FIELD.key, "ts")
+      .option(PARTITIONPATH_FIELD.key, "dt")
+      .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+      .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+      .partitionBy("dt")
+      .mode(SaveMode.Overwrite)
+      .saveAsTable(tableName)
+    checkKeyGenerator("org.apache.hudi.keygen.ComplexKeyGenerator", tableName)
+    spark.sql(s"drop table $tableName")
   }
 
   test("Test CTAS COW Table With DataFrame saveAsTable") {
