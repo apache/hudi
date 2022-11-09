@@ -153,10 +153,10 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
     if (inputRDD.getStorageLevel() == StorageLevel.NONE()) {
       inputRDD.persist(StorageLevel.MEMORY_AND_DISK_SER());
+      CommitUtils.updatePersistedRdds(config.getBasePath(), instantTime, inputRDD.id());
     } else {
       LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
     }
-    CommitUtils.updatePersistedRdds(config.getBasePath(), instantTime, inputRDD.id());
 
     // Handle records update with clustering
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);

@@ -167,7 +167,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
    */
   @Test
   public void testTagLocationAfterInsert() throws Exception {
-    testTagLocation(getConfig(), SparkRDDWriteClient::insert, SparkRDDWriteClient::upsert, false);
+    testTagLocation(getConfigWithoutEmbeddedTimelineServer(), SparkRDDWriteClient::insert, SparkRDDWriteClient::upsert, false);
   }
 
   /**
@@ -175,7 +175,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
    */
   @Test
   public void testTagLocationAfterInsertPrepped() throws Exception {
-    testTagLocation(getConfig(), SparkRDDWriteClient::insertPreppedRecords, SparkRDDWriteClient::upsertPreppedRecords,
+    testTagLocation(getConfigWithoutEmbeddedTimelineServer(), SparkRDDWriteClient::insertPreppedRecords, SparkRDDWriteClient::upsertPreppedRecords,
         true);
   }
 
@@ -184,7 +184,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
    */
   @Test
   public void testTagLocationAfterBulkInsert() throws Exception {
-    testTagLocation(getConfigBuilder().withBulkInsertParallelism(1).build(), SparkRDDWriteClient::bulkInsert,
+    testTagLocation(getConfigBuilder().withEmbeddedTimelineServerEnabled(false).withBulkInsertParallelism(1).build(), SparkRDDWriteClient::bulkInsert,
         SparkRDDWriteClient::upsert, false);
   }
 
@@ -194,7 +194,9 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
   @Test
   public void testTagLocationAfterBulkInsertPrepped() throws Exception {
     testTagLocation(
-        getConfigBuilder().withBulkInsertParallelism(1).build(), (writeClient, recordRDD, instantTime) -> writeClient
+        getConfigBuilder().withEmbeddedTimelineServerEnabled(false)
+            .withBulkInsertParallelism(1).build(),
+        (writeClient, recordRDD, instantTime) -> writeClient
             .bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty()),
         SparkRDDWriteClient::upsertPreppedRecords, true);
   }

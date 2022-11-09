@@ -99,6 +99,15 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     return getConfigBuilder().build();
   }
 
+  /**
+   * Get Default HoodieWriteConfig for tests.
+   *
+   * @return Default Hoodie Write Config for tests
+   */
+  public HoodieWriteConfig getConfigWithoutEmbeddedTimelineServer() {
+    return getConfigBuilder().withEmbeddedTimelineServerEnabled(false).build();
+  }
+
   public HoodieWriteConfig getConfig(IndexType indexType) {
     return getConfigBuilder(indexType).build();
   }
