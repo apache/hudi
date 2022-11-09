@@ -424,8 +424,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
    */
   protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header, boolean appendDeleteBlocks) {
     try {
-      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
+      header.put(HeaderMetadataType.INSTANT_TIME, instantTime);
+      header.put(HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
         String keyField = config.populateMetaFields()

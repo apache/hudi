@@ -21,7 +21,11 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -30,6 +34,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * Every Hoodie table has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which depend on record specific logic.
@@ -116,7 +121,15 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   default Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    return getInsertValue(schema);
+    boolean dropPartCol = Boolean.parseBoolean(properties.getProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key()));
+    if (dropPartCol) {
+      String[] partitionFields = properties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",");
+      Set<String> removeFields = CollectionUtils.createSet(partitionFields);
+      Schema schemaNoPartitionFields = HoodieAvroUtils.removeFields(schema, removeFields);
+      return getInsertValue(schemaNoPartitionFields);
+    } else {
+      return getInsertValue(schema);
+    }
   }
 
   /**
