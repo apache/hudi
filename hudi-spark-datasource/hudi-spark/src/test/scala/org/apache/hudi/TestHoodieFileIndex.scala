@@ -315,7 +315,13 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
 
       val partitionAndFilesNoPruning = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
 
-      assertEquals(2, partitionAndFilesNoPruning.size)
+      // NOTE: That if file-index is in eagerly-listing and we can't parse partition values, we will
+      //       try to recourse and read the table as non-partitioned one
+      val expectedListedPartitions =
+        if (listingModeOverride == DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY) 2
+        else 1
+
+      assertEquals(expectedListedPartitions, partitionAndFilesNoPruning.size)
       // The partition prune would not work for this case, so the partition value it
       // returns is a InternalRow.empty.
       assertTrue(partitionAndFilesNoPruning.forall(_.values.numFields == 0))
@@ -328,6 +334,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
       // NOTE: That if file-index is in lazy-listing mode and we can't parse partition values, there's no way
       //       to recover from this since Spark by default have to inject partition values parsed from the partition paths.
       if (listingModeOverride == DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY) {
+        // TODO should throw more meaningful exception
         assertThrows(classOf[Throwable]) { readDF.count() }
         assertThrows(classOf[Throwable]) { readDF.filter("dt = '2021/03/01' and hh ='10'").count() }
       } else {
