@@ -44,7 +44,7 @@ public class SparkAllowUpdateStrategy<T extends HoodieRecordPayload<T>> extends 
   public Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> handleUpdate(HoodieData<HoodieRecord<T>> taggedRecordsRDD) {
     List<HoodieFileGroupId> fileGroupIdsWithRecordUpdate = getGroupIdsWithUpdate(taggedRecordsRDD);
     Set<HoodieFileGroupId> fileGroupIdsWithUpdatesAndPendingClustering = fileGroupIdsWithRecordUpdate.stream()
-        .filter(f -> fileGroupsInPendingClustering.contains(f))
+        .filter(fileGroupsInPendingClustering::contains)
         .collect(Collectors.toSet());
     return Pair.of(taggedRecordsRDD, fileGroupIdsWithUpdatesAndPendingClustering);
   }
