@@ -356,8 +356,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   protected boolean areAllFileSlicesCached() {
     // Loop over partition paths to check if all partitions are initialized.
-    return areAllPartitionPathsCached() &&
-        cachedAllPartitionPaths.stream().allMatch(p -> cachedAllInputFileSlices.containsKey(p));
+    return areAllPartitionPathsCached()
+        && cachedAllPartitionPaths.stream().allMatch(p -> cachedAllInputFileSlices.containsKey(p));
   }
 
   protected boolean areAllPartitionPathsCached() {
