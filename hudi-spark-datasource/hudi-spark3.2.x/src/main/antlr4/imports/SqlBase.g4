@@ -709,7 +709,7 @@ identifierComment
     ;
 
 relationPrimary
-    : multipartIdentifier temporalClause?
+    : multipartIdentifier tableArgumentList? temporalClause?
       sample? tableAlias                      #tableName
     | '(' query ')' sample? tableAlias        #aliasedQuery
     | '(' relation ')' sample? tableAlias     #aliasedRelation

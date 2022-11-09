@@ -80,27 +80,25 @@ class HoodieSpark3_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
   override def visitTableName(ctx: TableNameContext): LogicalPlan = withOrigin(ctx) {
     val tableId = visitMultipartIdentifier(ctx.multipartIdentifier())
     val relation = UnresolvedRelation(tableId)
+    val tableArgumentList = ctx.tableArgumentList()
+    val temporalClause = ctx.temporalClause()
 
-//    val tableArgumentList = ctx.tableArgumentList()
-//    val temporalClause = ctx.temporalClause()
-//    if (tableArgumentList != null && tableArgumentList.tableArgument().size() > 0 && temporalClause != null) {
-//      throw new ParseException(
-//        s"Only one table parameter ${tableArgumentList.getText} and snapshot query ${temporalClause.getText} can exist", ctx)
-//    }
-//    println(s"visitTableName table:${relation.tableName}  txt:${ctx.getText}")
-//
-//    if (tableArgumentList != null && tableArgumentList.tableArgument().size() > 0) {
-//      println(s"visitTableName table:${relation.tableName}  args:${tableArgumentList.tableArgument().get(0).getText}")
-//    }
-//    val table = if (tableArgumentList != null && tableArgumentList.tableArgument().size() > 0) {
-//      mayApplyAliasPlan(
-//        ctx.tableAlias, relation.optionalMap(ctx.tableArgumentList())(withTableArgument))
-//    } else {
-//      mayApplyAliasPlan(
-//        ctx.tableAlias, relation.optionalMap(ctx.temporalClause)(withTimeTravel))
-//    }
-    val table =  mayApplyAliasPlan(
-          ctx.tableAlias, relation.optionalMap(ctx.temporalClause)(withTimeTravel))
+    if (tableArgumentList != null && tableArgumentList.tableArgument().size() > 0 && temporalClause != null) {
+      throw new ParseException(
+        s"Only one table parameter ${tableArgumentList.getText} and snapshot query ${temporalClause.getText} can exist", ctx)
+    }
+    println(s"visitTableName table:${relation.tableName}  txt:${ctx.getText}")
+
+    if (tableArgumentList != null && tableArgumentList.tableArgument().size() > 0) {
+      println(s"visitTableName table:${relation.tableName}  args:${tableArgumentList.tableArgument().get(0).getText}")
+    }
+    val table = if (tableArgumentList != null && tableArgumentList.tableArgument().size() > 0) {
+      mayApplyAliasPlan(
+        ctx.tableAlias, relation.optionalMap(ctx.tableArgumentList())(withTableArgument))
+    } else {
+      mayApplyAliasPlan(
+        ctx.tableAlias, relation.optionalMap(ctx.temporalClause)(withTimeTravel))
+    }
     table.optionalMap(ctx.sample)(withSample)
   }
 
