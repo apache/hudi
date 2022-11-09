@@ -553,7 +553,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     // because since Hive 3.x, there is validation when altering table,
     // when the metadata fields are synced through the hive sync tool,
     // a compatability issue would be reported.
-    List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table.getSchema());
+    boolean withOperationField = Boolean.parseBoolean(table.getOptions().getOrDefault(FlinkOptions.CHANGELOG_ENABLED.key(), "false"));
+    List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table.getSchema(), withOperationField);
 
     // Table columns and partition keys
     CatalogTable catalogTable = (CatalogTable) table;

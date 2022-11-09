@@ -612,9 +612,6 @@ object DataSourceWriteOptions {
   val RECORDKEY_FIELD_OPT_KEY = KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()
   /** @deprecated Use {@link RECORDKEY_FIELD} and its methods instead */
   @Deprecated
-  val DEFAULT_RECORDKEY_FIELD_OPT_VAL = RECORDKEY_FIELD.defaultValue()
-  /** @deprecated Use {@link PARTITIONPATH_FIELD} and its methods instead */
-  @Deprecated
   val PARTITIONPATH_FIELD_OPT_KEY = KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()
   /** @deprecated Use {@link PARTITIONPATH_FIELD} and its methods instead */
   @Deprecated
@@ -794,7 +791,7 @@ object DataSourceOptionsHelper {
 
   def inferKeyGenClazz(props: TypedProperties): String = {
     val partitionFields = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), null)
-    val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
+    val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), null)
     inferKeyGenClazz(recordsKeyFields, partitionFields)
   }
 

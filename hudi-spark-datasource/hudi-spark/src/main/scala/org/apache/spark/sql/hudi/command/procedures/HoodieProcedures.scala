@@ -82,6 +82,7 @@ object HoodieProcedures {
       ,(HiveSyncProcedure.NAME, HiveSyncProcedure.builder)
       ,(CopyToTempView.NAME, CopyToTempView.builder)
       ,(ShowCommitExtraMetadataProcedure.NAME, ShowCommitExtraMetadataProcedure.builder)
+      ,(ShowTablePropertiesProcedure.NAME, ShowTablePropertiesProcedure.builder)
     )
   }
 }

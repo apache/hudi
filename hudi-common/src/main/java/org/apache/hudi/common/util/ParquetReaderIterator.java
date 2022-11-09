@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueue;
+import org.apache.hudi.common.util.queue.BoundedInMemoryQueueIterable;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.parquet.hadoop.ParquetReader;
@@ -27,7 +27,7 @@ import java.io.IOException;
 
 /**
  * This class wraps a parquet reader and provides an iterator based api to read from a parquet file. This is used in
- * {@link BoundedInMemoryQueue}
+ * {@link BoundedInMemoryQueueIterable}
  */
 public class ParquetReaderIterator<T> implements ClosableIterator<T> {
 

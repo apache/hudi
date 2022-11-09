@@ -18,17 +18,46 @@
 
 package org.apache.hudi.common.util.queue;
 
+import java.util.Iterator;
+
 /**
- * Producer for {@link BoundedInMemoryQueue}. Memory Bounded Buffer supports multiple producers single consumer pattern.
- *
- * @param <I> Input type for buffer items produced
+ * Consume entries from queue and execute callback function.
  */
-public interface BoundedInMemoryQueueProducer<I> {
+public abstract class IteratorBasedQueueConsumer<I, O> implements HoodieConsumer<I, O> {
 
   /**
-   * API to enqueue entries to memory bounded queue.
+   * API to de-queue entries to memory bounded queue.
    *
    * @param queue In Memory bounded queue
    */
-  void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception;
+  @Override
+  public O consume(HoodieMessageQueue<?, I> queue) throws Exception {
+
+    Iterator<I> iterator = ((HoodieIterableMessageQueue) queue).iterator();
+
+    while (iterator.hasNext()) {
+      consumeOneRecord(iterator.next());
+    }
+
+    // Notifies done
+    finish();
+
+    return getResult();
+  }
+
+  /**
+   * Consumer One record.
+   */
+  public abstract void consumeOneRecord(I record);
+
+  /**
+   * Notifies implementation that we have exhausted consuming records from queue.
+   */
+  public void finish(){}
+
+  /**
+   * Return result of consuming records so far.
+   */
+  protected abstract O getResult();
+
 }
