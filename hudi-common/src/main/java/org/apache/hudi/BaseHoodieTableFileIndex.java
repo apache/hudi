@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableQueryType;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -78,6 +77,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private final boolean shouldIncludePendingCommits;
   private final boolean shouldValidateInstant;
+  private final boolean shouldListLazily;
 
   private final Path basePath;
 
@@ -85,8 +85,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private final HoodieEngineContext engineContext;
 
   private final transient FileStatusCache fileStatusCache;
-
-  private volatile boolean queryAsNonePartitionedTable = false;
 
   // NOTE: Individual partitions are always cached in full: meaning that if partition is cached
   //       it will hold all the file-slices residing w/in the partition
@@ -129,6 +127,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.specifiedQueryInstant = specifiedQueryInstant;
     this.shouldIncludePendingCommits = shouldIncludePendingCommits;
     this.shouldValidateInstant = shouldValidateInstant;
+    this.shouldListLazily = shouldListLazily;
 
     this.basePath = metaClient.getBasePathV2();
 
@@ -190,13 +189,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
           .collect(Collectors.toList());
 
       this.cachedAllPartitionPaths = listPartitionPaths(queryRelativePartitionPaths);
-      // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
-      //
-      // NOTE: On top of handling the cases of non-partitioned tables, this is also leveraged
-      //       as a graceful degradation approach, whenever we're unable to parse the partition values
-      //       from the path (in this case table will simply be read as non-partitioned table, instead
-      //       of failing outright)
-      this.queryAsNonePartitionedTable = cachedAllPartitionPaths.stream().anyMatch(p -> p.values.length == 0);
     }
 
     return cachedAllPartitionPaths;
@@ -345,6 +337,16 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
+  private boolean canParsePartitionValues() {
+    // If we failed to parse partition-values from the partition-path partition value will be
+    // represented as {@code InternalRow.empty}. In that case we try to recourse to query table
+    // as a non-partitioned one instead of failing
+    //
+    // NOTE: In case of lazy listing, we can't validate upfront whether we'd be able to parse
+    //       partition-values and such fallback unfortunately won't be functional
+    return shouldListLazily || cachedAllPartitionPaths.stream().allMatch(p -> p.values.length > 0);
+  }
+
   protected long getTotalCachedFilesSize() {
     return cachedAllInputFileSlices.values().stream()
         .flatMap(Collection::stream)
@@ -364,7 +366,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected boolean isPartitionedTable() {
-    return (partitionColumns.length > 0 && !queryAsNonePartitionedTable) || HoodieTableMetadata.isMetadataTable(basePath.toString());
+    return (partitionColumns.length > 0 && canParsePartitionValues()) || HoodieTableMetadata.isMetadataTable(basePath.toString());
   }
 
   private static long fileSliceSize(FileSlice fileSlice) {
