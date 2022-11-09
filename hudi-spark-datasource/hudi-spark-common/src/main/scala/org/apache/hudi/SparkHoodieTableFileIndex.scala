@@ -206,22 +206,34 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       queryPartitionPaths
     } else {
       val partitionPaths = listMatchingPartitionPathsInternal(partitionColumnNames, partitionPruningPredicates)
-      val predicate = partitionPruningPredicates.reduce(expressions.And)
 
-      val boundPredicate = InterpretedPredicate(predicate.transform {
-        case a: AttributeReference =>
-          val index = partitionSchema.indexWhere(a.name == _.name)
-          BoundReference(index, partitionSchema(index).dataType, nullable = true)
-      })
+      // NOTE: In some cases, like for ex, when non-encoded slash '/' is used w/in the partition column's value,
+      //       we might not be able to properly parse partition-values from the listed partition-paths.
+      //       In that case, we simply could not apply partition pruning and will have to regress to scanning
+      //       the whole table
+      val parsedPartitionValues = partitionPaths.forall(_.values.length > 0)
+      if (parsedPartitionValues) {
+        val predicate = partitionPruningPredicates.reduce(expressions.And)
+        val boundPredicate = InterpretedPredicate(predicate.transform {
+          case a: AttributeReference =>
+            val index = partitionSchema.indexWhere(a.name == _.name)
+            BoundReference(index, partitionSchema(index).dataType, nullable = true)
+        })
 
-      val prunedPartitionPaths = partitionPaths.filter {
-        partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.values))
+        val prunedPartitionPaths = partitionPaths.filter {
+          partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.values))
+        }
+
+        logInfo(s"Using provided predicates to prune number of target table's partitions scanned from" +
+          s" ${partitionPaths.size} to ${prunedPartitionPaths.size}")
+
+        prunedPartitionPaths
+      } else {
+        logWarning(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
+          s" following path(s): ${partitionPaths.filter(_.values.length == 0).head.path}")
+
+        partitionPaths
       }
-
-      logInfo(s"Using provided predicates to prune number of partitions listed: pruned from" +
-        s" ${partitionPaths.size} to ${prunedPartitionPaths.size}")
-
-      prunedPartitionPaths
     }
   }
 
