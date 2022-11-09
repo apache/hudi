@@ -43,7 +43,7 @@ public enum ExecutorType {
   /**
    *
    */
-  DIRECT;
+  SIMPLE;
 
   public static List<String> getNames() {
     List<String> names = new ArrayList<>(ExecutorType.values().length);

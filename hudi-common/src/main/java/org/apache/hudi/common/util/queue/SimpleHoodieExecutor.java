@@ -33,15 +33,15 @@ import java.util.function.Function;
 /**
  *
  */
-public class DirectConsumeExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
+public class SimpleHoodieExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
-  private static final Logger LOG = LogManager.getLogger(DirectConsumeExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(SimpleHoodieExecutor.class);
   private final HoodieMessageQueue<I, O> queue;
 
-  public DirectConsumeExecutor(final Iterator<I> inputItr, IteratorBasedQueueConsumer<O, E> consumer,
-                               Function<I, O> transformFunction, Runnable preExecuteRunnable) {
+  public SimpleHoodieExecutor(final Iterator<I> inputItr, IteratorBasedQueueConsumer<O, E> consumer,
+                              Function<I, O> transformFunction, Runnable preExecuteRunnable) {
     super(new ArrayList<>(), Option.of(consumer), preExecuteRunnable);
-    this.queue = new IteratorMessageQueue<>(inputItr, transformFunction);
+    this.queue = new SimpleHoodieQueueIterable<>(inputItr, transformFunction);
   }
 
   /**
@@ -100,8 +100,8 @@ public class DirectConsumeExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> 
   }
 
   @Override
-  public IteratorMessageQueue<I, O> getQueue() {
-    return (IteratorMessageQueue<I, O>) queue;
+  public SimpleHoodieQueueIterable<I, O> getQueue() {
+    return (SimpleHoodieQueueIterable<I, O>) queue;
   }
 
   @Override

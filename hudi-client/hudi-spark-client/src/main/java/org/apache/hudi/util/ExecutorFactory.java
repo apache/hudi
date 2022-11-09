@@ -19,7 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
-import org.apache.hudi.common.util.queue.DirectConsumeExecutor;
+import org.apache.hudi.common.util.queue.SimpleHoodieExecutor;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
 import org.apache.hudi.common.util.queue.ExecutorType;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
@@ -46,8 +46,8 @@ public class ExecutorFactory {
       case DISRUPTOR:
         return new DisruptorExecutor<>(hoodieConfig.getDisruptorWriteBufferSize(), inputItr, consumer,
             transformFunction, hoodieConfig.getWriteExecutorWaitStrategy(), preExecuteRunnable);
-      case DIRECT:
-        return new DirectConsumeExecutor<>(inputItr, consumer, transformFunction, preExecuteRunnable);
+      case SIMPLE:
+        return new SimpleHoodieExecutor<>(inputItr, consumer, transformFunction, preExecuteRunnable);
       default:
         throw new HoodieException("Unsupported Executor Type " + executorType);
     }
