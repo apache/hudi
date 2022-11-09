@@ -511,8 +511,10 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
     case rta if sparkAdapter.getCatalystPlanUtils.isRelationTableArgument(rta) =>
       val (plan: UnresolvedRelation, queryArgs) = sparkAdapter.getCatalystPlanUtils.getRelationTableArgument(rta).get
       val tableIdentifier: TableIdentifier = sparkAdapter.getCatalystPlanUtils.toTableIdentifier(plan)
-      if (sparkAdapter.isHoodieTable(tableIdentifier, sparkSession)) {
-        // Add a white list to the key to prevent users from adding other parameters
+      if (sparkAdapter.isHoodieTable(tableIdentifier, sparkSession) && queryArgs.nonEmpty) {
+        //
+        assert(queryArgs.contains(DataSourceReadOptions.QUERY_TYPE.key()), s"When using sql to query the hudi table, you must specify the 'hoodie.datasource.query.type' parameter")
+        // Add a white list to the key to prevent users adding other parameters
         val KeyWhiteSet: HashSet[String] = HashSet(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
           , DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL
           , DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
@@ -540,17 +542,19 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
         val notAllowKey = new StringBuilder()
         queryArgs.keySet.foreach(key => {
           if (!KeyWhiteSet.contains(key)) {
-            if (notAllowKey.length == 0) {
+            if (notAllowKey.isEmpty) {
               notAllowKey.append(key)
             } else {
               notAllowKey.append(",").append(key)
             }
           }
         })
-        if (notAllowKey.length > 0) {
+        if (notAllowKey.nonEmpty) {
           throw new AnalysisException(
             s"only support hudi read options,not support (${notAllowKey.toString()})")
         }
+
+
         val hoodieCatalogTable: HoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
         val table: CatalogTable = hoodieCatalogTable.table
         val pathOption: Option[(String, String)] = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))

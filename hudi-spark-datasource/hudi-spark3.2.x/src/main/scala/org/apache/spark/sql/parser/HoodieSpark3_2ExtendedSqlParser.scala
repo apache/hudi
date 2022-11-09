@@ -46,7 +46,8 @@ class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInt
     val substitutionSql = substitutor.substitute(sqlText)
     if (isHoodieCommand(substitutionSql)) {
       parse(substitutionSql) { parser =>
-        builder.visit(parser.singleStatement()) match {
+        val res: AnyRef = builder.visit(parser.singleStatement())
+        res match {
           case plan: LogicalPlan => plan
           case _ => delegate.parsePlan(sqlText)
         }
@@ -80,7 +81,7 @@ class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInt
     parser.addParseListener(PostProcessor)
     parser.removeErrorListeners()
     parser.addErrorListener(ParseErrorListener)
-//    parser.legacy_setops_precedence_enabled = conf.setOpsPrecedenceEnforced
+    //    parser.legacy_setops_precedence_enabled = conf.setOpsPrecedenceEnforced
     parser.legacy_exponent_literal_as_decimal_enabled = conf.exponentLiteralAsDecimalEnabled
     parser.SQL_standard_keyword_behavior = conf.ansiEnabled
 
@@ -121,20 +122,28 @@ class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInt
     normalized.contains("system_time as of") ||
       normalized.contains("timestamp as of") ||
       normalized.contains("system_version as of") ||
-      normalized.contains("version as of")
+      normalized.contains("version as of") ||
+      normalized.contains("hoodie.datasource.query.type")
+
   }
 }
 
 /**
-  * Fork from `org.apache.spark.sql.catalyst.parser.UpperCaseCharStream`.
-  */
+ * Fork from `org.apache.spark.sql.catalyst.parser.UpperCaseCharStream`.
+ */
 class UpperCaseCharStream(wrapped: CodePointCharStream) extends CharStream {
   override def consume(): Unit = wrapped.consume
+
   override def getSourceName(): String = wrapped.getSourceName
+
   override def index(): Int = wrapped.index
+
   override def mark(): Int = wrapped.mark
+
   override def release(marker: Int): Unit = wrapped.release(marker)
+
   override def seek(where: Int): Unit = wrapped.seek(where)
+
   override def size(): Int = wrapped.size
 
   override def getText(interval: Interval): String = {
@@ -149,9 +158,10 @@ class UpperCaseCharStream(wrapped: CodePointCharStream) extends CharStream {
       ""
     }
   }
+
   // scalastyle:off
   override def LA(i: Int): Int = {
-  // scalastyle:on
+    // scalastyle:on
     val la = wrapped.LA(i)
     if (la == 0 || la == IntStream.EOF) la
     else Character.toUpperCase(la)
@@ -159,8 +169,8 @@ class UpperCaseCharStream(wrapped: CodePointCharStream) extends CharStream {
 }
 
 /**
-  * Fork from `org.apache.spark.sql.catalyst.parser.PostProcessor`.
-  */
+ * Fork from `org.apache.spark.sql.catalyst.parser.PostProcessor`.
+ */
 case object PostProcessor extends HoodieSqlBaseBaseListener {
 
   /** Remove the back ticks from an Identifier. */
@@ -178,9 +188,9 @@ case object PostProcessor extends HoodieSqlBaseBaseListener {
   }
 
   private def replaceTokenByIdentifier(
-       ctx: ParserRuleContext,
-       stripMargins: Int)(
-       f: CommonToken => CommonToken = identity): Unit = {
+                                        ctx: ParserRuleContext,
+                                        stripMargins: Int)(
+                                        f: CommonToken => CommonToken = identity): Unit = {
     val parent = ctx.getParent
     parent.removeLastChild()
     val token = ctx.getChild(0).getPayload.asInstanceOf[Token]
