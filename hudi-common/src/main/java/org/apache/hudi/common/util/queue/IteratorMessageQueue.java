@@ -17,7 +17,6 @@ public class IteratorMessageQueue<I, O> extends HoodieIterableMessageQueue<I, O>
   private final Iterator<I> inputItr;
   private final InnerIterator innerIterator;
   private final Function<I, O> transformFunction;
-  private final AtomicReference<Throwable> hasFailed = new AtomicReference<>(null);
   private final AtomicBoolean isWriteDone = new AtomicBoolean(false);
   private final AtomicInteger count = new AtomicInteger(0);
 
@@ -38,6 +37,18 @@ public class IteratorMessageQueue<I, O> extends HoodieIterableMessageQueue<I, O>
   }
 
   @Override
+  public boolean isEmpty() {
+    return innerIterator.hasNext();
+  }
+
+  @Override
+  public void close() throws IOException {
+    while (!isWriteDone.get()) {
+      isWriteDone.compareAndSet(false, true);
+    }
+  }
+
+  @Override
   public void insertRecord(I t) throws Exception {
     // no action is needed here.
   }
@@ -49,19 +60,7 @@ public class IteratorMessageQueue<I, O> extends HoodieIterableMessageQueue<I, O>
 
   @Override
   public void markAsFailed(Throwable e) {
-    this.hasFailed.set(e);
-  }
-
-  @Override
-  public boolean isEmpty() {
-    return innerIterator.hasNext();
-  }
-
-  @Override
-  public void close() throws IOException {
-    while (!isWriteDone.get()) {
-      isWriteDone.compareAndSet(false, true);
-    }
+    // do nothing.
   }
 
   /**
