@@ -349,6 +349,6 @@ public class HoodieTestSuiteJob {
     public String indexType = "SIMPLE";
 
     @Parameter(names = {"--enable-metadata-on-read"}, description = "Enable's metadata for queries")
-    public Boolean enableMetadataOnRead = HoodieMetadataConfig.ENABLE.key();
+    public Boolean enableMetadataOnRead = HoodieMetadataConfig.ENABLE.defaultValue();
   }
 }
