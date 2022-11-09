@@ -138,7 +138,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @return
    */
   def dataSchema: StructType = {
-    val partitionColumns = partitionSchema.fields.map(_.name).toSet
+    val partitionColumns = partitionSchema.fieldNames
     StructType(schema.fields.filterNot(f => partitionColumns.contains(f.name)))
   }
 
@@ -382,6 +382,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         }.mkString("/")
 
         val pathWithPartitionName = new CachingPath(getBasePath, createPathUnsafe(partitionWithName))
+        val partitionSchema = StructType(schema.fields.filterNot(f => partitionColumns.contains(f.name)))
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema)
 
         partitionValues.map(_.asInstanceOf[Object]).toArray
