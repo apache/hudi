@@ -266,9 +266,7 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
       LOG.warn("Consistent bucket does not support global sort mode, the sort will only be done within each data partition");
     }
 
-    Comparator<HoodieKey> comparator = (Comparator<HoodieKey> & Serializable) (t1, t2) -> {
-      return t1.getRecordKey().compareTo(t2.getRecordKey());
-    };
+    Comparator<HoodieKey> comparator = (Comparator<HoodieKey> & Serializable) (t1, t2) -> t1.getRecordKey().compareTo(t2.getRecordKey());
 
     return records.mapToPair(record -> new Tuple2<>(record.getKey(), record))
         .repartitionAndSortWithinPartitions(partitioner, comparator)
