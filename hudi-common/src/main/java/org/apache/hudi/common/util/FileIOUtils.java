@@ -204,4 +204,40 @@ public class FileIOUtils {
   public static Option<byte[]> readDataFromPath(FileSystem fileSystem, org.apache.hadoop.fs.Path detailPath) {
     return readDataFromPath(fileSystem, detailPath, false);
   }
+
+  /**
+   * Return the configured local directories where hudi can write files. This
+   * method does not create any directories on its own, it only encapsulates the
+   * logic of locating the local directories according to deployment mode.
+   */
+  public static String[] getConfiguredLocalDirs() {
+    if (isRunningInYarnContainer()) {
+      // If we are in yarn mode, systems can have different disk layouts so we must set it
+      // to what Yarn on this system said was available. Note this assumes that Yarn has
+      // created the directories already, and that they are secured so that only the
+      // user has access to them.
+      return getYarnLocalDirs().split(",");
+    } else if (System.getProperty("java.io.tmpdir") != null) {
+      return System.getProperty("java.io.tmpdir").split(",");
+    } else {
+      return null;
+    }
+  }
+
+  private static boolean isRunningInYarnContainer() {
+    // These environment variables are set by YARN.
+    return System.getenv("CONTAINER_ID") != null;
+  }
+
+  /**
+   * Get the Yarn approved local directories.
+   */
+  private static String getYarnLocalDirs() {
+    String localDirs = Option.of(System.getenv("LOCAL_DIRS")).orElse("");
+
+    if (localDirs.isEmpty()) {
+      throw new HoodieIOException("Yarn Local dirs can't be empty");
+    }
+    return localDirs;
+  }
 }
