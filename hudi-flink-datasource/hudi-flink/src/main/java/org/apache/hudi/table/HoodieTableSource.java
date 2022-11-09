@@ -136,7 +136,7 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf) {
-    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, null);
+    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, null, null);
   }
 
   public HoodieTableSource(
@@ -148,7 +148,8 @@ public class HoodieTableSource implements
       @Nullable FileIndex fileIndex,
       @Nullable List<Map<String, String>> requiredPartitions,
       @Nullable int[] requiredPos,
-      @Nullable Long limit) {
+      @Nullable Long limit,
+      @Nullable HoodieTableMetaClient metaClient) {
     this.schema = schema;
     this.tableRowType = (RowType) schema.toPhysicalRowDataType().notNull().getLogicalType();
     this.path = path;
@@ -164,7 +165,7 @@ public class HoodieTableSource implements
         : requiredPos;
     this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
+    this.metaClient = metaClient == null ? StreamerUtil.metaClientForReader(conf, hadoopConf) : metaClient;
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
   }
 
@@ -215,7 +216,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, fileIndex, requiredPartitions, requiredPos, limit);
+        conf, fileIndex, requiredPartitions, requiredPos, limit, metaClient);
   }
 
   @Override
