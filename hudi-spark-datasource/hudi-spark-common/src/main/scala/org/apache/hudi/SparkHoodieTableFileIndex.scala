@@ -247,9 +247,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     //         - Fully specified proper prefix of the partition schema (ie fully binding first N columns
     //           of the partition schema adhering to hereby described rules)
     //
-    //       And the table does NOT
-    //         - Have non-encoded slash ('/') chars in its partition-paths
-    //
     // We will try to exploit this specific structure, and try to reduce the scope of a
     // necessary file-listings of partitions of the table to just the sub-folder under relative prefix
     // of the partition-path derived from the partition-column predicates. For ex, consider following
@@ -272,7 +269,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     //
     // We can deduce full partition-path w/o doing a single listing: `us/2022-01-01`
     if (areAllPartitionPathsCached || !shouldUsePartitionPathPrefixAnalysis(configProperties)) {
-      logDebug("All partition paths have already been loaded, use it directly")
+      logDebug("All partition paths have already been cached, use it directly")
       getAllQueryPartitionPaths.asScala
     } else {
       // Static partition-path prefix is defined as a prefix of the full partition-path where only
@@ -299,10 +296,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
           // In case composed partition path is complete, we can return it directly avoiding extra listing operation
           Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2.asInstanceOf[AnyRef]).toArray))
-        } else if (arePartitionPathsUrlEncoded) {
-          // Otherwise, if table's partition-path are URL-encoded we unfortunately can't leverage our pruning
-          // technique, hence listing all of the partitions
-          getAllQueryPartitionPaths.asScala
         } else {
           // Otherwise, compile extracted partition values (from query predicates) into a sub-path which is a prefix
           // of the complete partition path, do listing for this prefix-path only

@@ -164,13 +164,12 @@ object DataSourceReadOptions {
 
   val FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED: ConfigProperty[Boolean] =
     ConfigProperty.key("hoodie.datasource.read.file.index.listing.partition-path-prefix.analysis.enabled")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.13.0")
       .withDocumentation("Controls whether partition-path prefix analysis is enabled w/in the file-index, allowing" +
         " to avoid necessity to recursively list deep folder structures of partitioned tables w/ multiple partition columns," +
         " by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from " +
-        " them. Please note, that this technique will not work properly in cases when partitions' folder-names can contain" +
-        " non-encoded slashes ('/') and should be kept disabled in that case.")
+        " them (if possible).")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
