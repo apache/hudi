@@ -70,7 +70,7 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
 
   public I combineOnCondition(
       boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table) {
-    return condition ? deduplicateRecords(records, table, parallelism) : records;
+    return condition ? deduplicateRecords(records, table, parallelism) : repartitionRecords(records, parallelism);
   }
 
   /**
@@ -87,4 +87,8 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
 
   public abstract I deduplicateRecords(
       I records, HoodieIndex<?, ?> index, int parallelism, String schema);
+
+  public I repartitionRecords(I records, int parallelism) {
+    return records;
+  }
 }

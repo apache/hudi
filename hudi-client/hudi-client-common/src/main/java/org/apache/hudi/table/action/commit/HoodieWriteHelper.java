@@ -73,4 +73,9 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
     }, reduceParallelism).map(Pair::getRight);
   }
 
+  @Override
+  public HoodieData<HoodieRecord<T>> repartitionRecords(HoodieData<HoodieRecord<T>> records, int parallelism) {
+    return records.repartition(parallelism);
+  }
+
 }
