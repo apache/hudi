@@ -126,7 +126,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     writeSchemaToTmpFile(schemaPath);
 
     Object result2 = shell.evaluate(() ->
-            String.format("compaction run --parallelism %s --schemaFilePath %s --sparkMaster %s",
+            String.format("compaction run --parallelism %s --schemaFilePath %s --sparkMaster %s --hoodieConfigs hoodie.embed.timeline.server=false",
             2, schemaPath, "local"));
 
     assertAll("Command run failed",
