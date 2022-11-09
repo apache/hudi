@@ -146,7 +146,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @VisibleForTesting
    */
   def partitionSchema: StructType = {
-    if (!isPartitionedTable) {
+    if (!isReadAsPartitionedTable) {
       // If we read it as Non-Partitioned table, we should not
       // return the partition schema.
       new StructType()
@@ -191,7 +191,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    */
   protected def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
     val resolve = spark.sessionState.analyzer.resolver
-    val partitionColumnNames = partitionSchema.fieldNames.toSeq
+    val partitionColumnNames = getPartitionColumns
     val partitionPruningPredicates = predicates.filter {
       _.references.map(_.name).forall { ref =>
         // NOTE: We're leveraging Spark's resolver here to appropriately handle case-sensitivity
@@ -201,18 +201,27 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
     if (partitionPruningPredicates.isEmpty) {
       val queryPartitionPaths = getAllQueryPartitionPaths.asScala
-
       logInfo(s"No partition predicates provided, listing full table (${queryPartitionPaths.size} partitions)")
       queryPartitionPaths
     } else {
-      val partitionPaths = listMatchingPartitionPathsInternal(partitionColumnNames, partitionPruningPredicates)
+      // NOTE: We fallback to already cached partition-paths only in cases when we can subsequently
+      //       rely on partition-pruning to eliminate not matching provided predicates (that requires
+      //       partition-values to be successfully recovered from the partition-paths)
+      val partitionPaths = if (areAllPartitionPathsCached && haveProperPartitionValues(getAllQueryPartitionPaths.asScala)) {
+        logDebug("All partition paths have already been cached, using these directly")
+        getAllQueryPartitionPaths.asScala
+      } else if (!shouldUsePartitionPathPrefixAnalysis(configProperties)) {
+        logInfo("Partition path prefix analysis is disabled; falling back to fetching all partitions")
+        getAllQueryPartitionPaths.asScala
+      } else {
+        tryListByPartitionPathPrefix(partitionColumnNames, partitionPruningPredicates)
+      }
 
       // NOTE: In some cases, like for ex, when non-encoded slash '/' is used w/in the partition column's value,
       //       we might not be able to properly parse partition-values from the listed partition-paths.
       //       In that case, we simply could not apply partition pruning and will have to regress to scanning
       //       the whole table
-      val parsedPartitionValues = partitionPaths.forall(_.values.length > 0)
-      if (parsedPartitionValues) {
+      if (haveProperPartitionValues(partitionPaths)) {
         val predicate = partitionPruningPredicates.reduce(expressions.And)
         val boundPredicate = InterpretedPredicate(predicate.transform {
           case a: AttributeReference =>
@@ -237,70 +246,64 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     }
   }
 
-  private def listMatchingPartitionPathsInternal(partitionColumnNames: Seq[String],
-                                                 partitionColumnPredicates: Seq[Expression]): Seq[PartitionPath] = {
-    // NOTE: Here we try to to achieve efficiency in avoiding necessity to recursively list deep folder structures of
-    //       partitioned tables w/ multiple partition columns, by carefully analyzing provided partition predicates:
-    //
-    //       In cases when partition-predicates have
-    //         - The form of equality predicates w/ static literals (for ex, like `date = '2022-01-01'`)
-    //         - Fully specified proper prefix of the partition schema (ie fully binding first N columns
-    //           of the partition schema adhering to hereby described rules)
-    //
-    // We will try to exploit this specific structure, and try to reduce the scope of a
-    // necessary file-listings of partitions of the table to just the sub-folder under relative prefix
-    // of the partition-path derived from the partition-column predicates. For ex, consider following
-    // scenario:
-    //
-    // Table's partition schema (in-order):
-    //
-    //    country_code: string (for ex, 'us')
-    //    date: string (for ex, '2022-01-01')
-    //
-    // Table's folder structure:
-    //    us/
-    //     |- 2022-01-01/
-    //     |- 2022-01-02/
-    //     ...
-    //
-    // In case we have incoming query specifies following predicates:
-    //
-    //    `... WHERE country_code = 'us' AND date = '2022-01-01'`
-    //
-    // We can deduce full partition-path w/o doing a single listing: `us/2022-01-01`
-    if (areAllPartitionPathsCached || !shouldUsePartitionPathPrefixAnalysis(configProperties)) {
-      logDebug("All partition paths have already been cached, use it directly")
+  // NOTE: Here we try to to achieve efficiency in avoiding necessity to recursively list deep folder structures of
+  //       partitioned tables w/ multiple partition columns, by carefully analyzing provided partition predicates:
+  //
+  //       In cases when partition-predicates have
+  //         - The form of equality predicates w/ static literals (for ex, like `date = '2022-01-01'`)
+  //         - Fully specified proper prefix of the partition schema (ie fully binding first N columns
+  //           of the partition schema adhering to hereby described rules)
+  //
+  // We will try to exploit this specific structure, and try to reduce the scope of a
+  // necessary file-listings of partitions of the table to just the sub-folder under relative prefix
+  // of the partition-path derived from the partition-column predicates. For ex, consider following
+  // scenario:
+  //
+  // Table's partition schema (in-order):
+  //
+  //    country_code: string (for ex, 'us')
+  //    date: string (for ex, '2022-01-01')
+  //
+  // Table's folder structure:
+  //    us/
+  //     |- 2022-01-01/
+  //     |- 2022-01-02/
+  //     ...
+  //
+  // In case we have incoming query specifies following predicates:
+  //
+  //    `... WHERE country_code = 'us' AND date = '2022-01-01'`
+  //
+  // We can deduce full partition-path w/o doing a single listing: `us/2022-01-01`
+  private def tryListByPartitionPathPrefix(partitionColumnNames: Seq[String], partitionColumnPredicates: Seq[Expression]) = {
+    // Static partition-path prefix is defined as a prefix of the full partition-path where only
+    // first N partition columns (in-order) have proper (static) values bound in equality predicates,
+    // allowing in turn to build such prefix to be used in subsequent filtering
+    val staticPartitionColumnNameValuePairs: Seq[(String, Any)] = {
+      // Extract from simple predicates of the form `date = '2022-01-01'` both
+      // partition column and corresponding (literal) value
+      val staticPartitionColumnValuesMap = extractEqualityPredicatesLiteralValues(partitionColumnPredicates)
+      // NOTE: For our purposes we can only construct partition-path prefix if proper prefix of the
+      //       partition-schema has been bound by the partition-predicates
+      partitionColumnNames.takeWhile(colName => staticPartitionColumnValuesMap.contains(colName))
+        .map(colName => (colName, staticPartitionColumnValuesMap(colName).get))
+    }
+
+    if (staticPartitionColumnNameValuePairs.isEmpty) {
+      logDebug("Unable to compose relative partition path prefix from the predicates; falling back to fetching all partitions")
       getAllQueryPartitionPaths.asScala
     } else {
-      // Static partition-path prefix is defined as a prefix of the full partition-path where only
-      // first N partition columns (in-order) have proper (static) values bound in equality predicates,
-      // allowing in turn to build such prefix to be used in subsequent filtering
-      val staticPartitionColumnNameValuePairs: Seq[(String, Any)] = {
-        // Extract from simple predicates of the form `date = '2022-01-01'` both
-        // partition column and corresponding (literal) value
-        val staticPartitionColumnValuesMap = extractEqualityPredicatesLiteralValues(partitionColumnPredicates)
-        // NOTE: For our purposes we can only construct partition-path prefix if proper prefix of the
-        //       partition-schema has been bound by the partition-predicates
-        partitionColumnNames.takeWhile(colName => staticPartitionColumnValuesMap.contains(colName))
-          .map(colName => (colName, staticPartitionColumnValuesMap(colName).get))
-      }
+      // Based on the static partition-column name-value pairs, we'll try to compose static partition-path
+      // prefix to try to reduce the scope of the required file-listing
+      val relativePartitionPathPrefix = composeRelativePartitionPath(staticPartitionColumnNameValuePairs)
 
-      if (staticPartitionColumnNameValuePairs.isEmpty) {
-        logDebug("Unable to compose relative partition path prefix from the predicates")
-        getAllQueryPartitionPaths.asScala
+      if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
+        // In case composed partition path is complete, we can return it directly avoiding extra listing operation
+        Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2.asInstanceOf[AnyRef]).toArray))
       } else {
-        // Based on the static partition-column name-value pairs, we'll try to compose static partition-path
-        // prefix to try to reduce the scope of the required file-listing
-        val relativePartitionPathPrefix = composeRelativePartitionPath(staticPartitionColumnNameValuePairs)
-
-        if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
-          // In case composed partition path is complete, we can return it directly avoiding extra listing operation
-          Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2.asInstanceOf[AnyRef]).toArray))
-        } else {
-          // Otherwise, compile extracted partition values (from query predicates) into a sub-path which is a prefix
-          // of the complete partition path, do listing for this prefix-path only
-          listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
-        }
+        // Otherwise, compile extracted partition values (from query predicates) into a sub-path which is a prefix
+        // of the complete partition path, do listing for this prefix-path only
+        listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
       }
     }
   }
@@ -404,6 +407,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 }
 
 object SparkHoodieTableFileIndex {
+
+  private def haveProperPartitionValues(partitionPaths: Seq[PartitionPath]) = {
+    partitionPaths.forall(_.values.length > 0)
+  }
 
   private def extractEqualityPredicatesLiteralValues(predicates: Seq[Expression]): Map[String, Option[Any]] = {
     // TODO support coercible expressions (ie attr-references casted to particular type), similar

@@ -129,7 +129,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
     // Prune the partition path by the partition filters
     val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
-    if (!isPartitionedTable) {
+    if (!isReadAsPartitionedTable) {
       // Read as Non-Partitioned table
       // Filter in candidate files based on the col-stats index lookup
       val candidateFiles = allFiles.filter(fileStatus =>

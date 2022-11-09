@@ -175,6 +175,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     resetTableMetadata(null);
   }
 
+  protected String[] getPartitionColumns() {
+    return partitionColumns;
+  }
+
   protected List<Path> getQueryPaths() {
     return queryPaths;
   }
@@ -376,7 +380,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return cachedAllPartitionPaths != null;
   }
 
-  protected boolean isPartitionedTable() {
+  protected boolean isReadAsPartitionedTable() {
     return (partitionColumns.length > 0 && canParsePartitionValues()) || HoodieTableMetadata.isMetadataTable(basePath.toString());
   }
 
