@@ -343,7 +343,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // as a non-partitioned one instead of failing
     //
     // NOTE: In case of lazy listing, we can't validate upfront whether we'd be able to parse
-    //       partition-values and such fallback unfortunately won't be functional
+    //       partition-values and such fallback unfortunately won't be functional.
+    //       This method has to return stable response once corresponding file index is initialized,
+    //       and can't change its value afterwards
     return shouldListLazily || cachedAllPartitionPaths.stream().allMatch(p -> p.values.length > 0);
   }
 
