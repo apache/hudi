@@ -64,7 +64,7 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
