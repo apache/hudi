@@ -24,8 +24,10 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -43,20 +45,29 @@ import java.util.Properties;
  */
 public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
+  private transient Schema schema;
+
   public HoodieHiveRecord(HoodieRecord<ArrayWritable> record) {
     super(record);
   }
 
   public HoodieHiveRecord(ArrayWritable arrayWritable) {
+    this(arrayWritable, null);
+  }
+
+  public HoodieHiveRecord(ArrayWritable arrayWritable, Schema schema) {
     super(null, arrayWritable);
+    this.schema = schema;
   }
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable arrayWritable) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable arrayWritable, Schema schema) {
     super(key, arrayWritable);
+    this.schema = schema;
   }
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable arrayWritable, HoodieOperation operation) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable arrayWritable, HoodieOperation operation, Schema schema) {
     super(key, arrayWritable, operation);
+    this.schema = schema;
   }
 
   public HoodieHiveRecord() {
@@ -69,17 +80,23 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public HoodieRecord<ArrayWritable> newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieHiveRecord(key, data, op);
+    return new HoodieHiveRecord(key, this.data, op, this.schema);
   }
 
   @Override
   public HoodieRecord<ArrayWritable> newInstance(HoodieKey key) {
-    return new HoodieHiveRecord(key, data);
+    return new HoodieHiveRecord(key, this.data, this.schema);
   }
 
   @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
-    return null;
+    String orderingField = ConfigUtils.getOrderingField(props);
+    if (recordSchema.getField(orderingField) == null) {
+      return 0;
+    }
+    // TODO: handle nested fields
+    int index = recordSchema.getField(orderingField).pos();
+    return String.valueOf(data.get()[index]);
   }
 
   @Override
@@ -97,7 +114,15 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public String getRecordKey(Schema recordSchema, String keyFieldName) {
-    return null;
+    if (key != null) {
+      return getRecordKey();
+    }
+    if (recordSchema.getField(keyFieldName) == null) {
+      throw new HoodieException(String.format("Record key field: %s not present in schema: %s", keyFieldName, recordSchema));
+    }
+    // TODO: handle nested fields
+    int index = recordSchema.getField(keyFieldName).pos();
+    return String.valueOf(data.get()[index]);
   }
 
   @Override
