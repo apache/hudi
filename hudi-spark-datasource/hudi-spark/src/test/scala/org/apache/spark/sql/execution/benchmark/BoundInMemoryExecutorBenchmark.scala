@@ -32,7 +32,7 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
 
   protected val spark: SparkSession = getSparkSession
 
-  val recordNumber = 10000
+  val recordNumber = 1000000
 
   def getSparkSession: SparkSession = SparkSession.builder()
     .master("local[*]")
