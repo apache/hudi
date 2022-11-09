@@ -31,7 +31,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 /**
+ * Single Writer and Single Reader mode. Also this SimpleHoodieExecutor has no inner message queue and no inner lock.
+ * Consuming and writing records from iterator directly.
  *
+ * So that there is no need for additional memory and cpu resources due to lock or multithreading.
  */
 public class SimpleHoodieExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
@@ -53,7 +56,7 @@ public class SimpleHoodieExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   }
 
   /**
-   * Start only consumer.
+   * Start only consumer. And consume from SimpleHoodieQueueIterable which is a wrapper of input records iterator directly
    */
   @Override
   protected CompletableFuture<E> startConsumer() {

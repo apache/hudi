@@ -41,7 +41,10 @@ public enum ExecutorType {
   DISRUPTOR,
 
   /**
-   *
+   * Executor with no inner message queue and no inner lock. Consuming and writing records from iterator directly.
+   * The advantage is that there is no need for additional memory and cpu resources due to lock or multithreading.
+   * The disadvantage is that the executor is a single-write-single-read model, cannot support functions such as speed limit
+   * and can not de-coupe the network read (shuffle read) and network write (writing objects/files to storage) anymore.
    */
   SIMPLE;
 

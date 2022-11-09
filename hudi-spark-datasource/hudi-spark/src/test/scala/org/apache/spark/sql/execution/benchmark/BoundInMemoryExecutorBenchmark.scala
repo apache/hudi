@@ -122,7 +122,7 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
           .save(new Path(f.getCanonicalPath, finalTableName).toUri.toString)
       }
 
-      benchmark.addCase("DirectConsume Executor") { _ =>
+      benchmark.addCase("Simple Executor") { _ =>
         val finalTableName = tableName + Random.nextInt(10000)
         df.write.format("hudi")
           .mode(SaveMode.Overwrite)
@@ -138,7 +138,7 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
           .option("hoodie.bulkinsert.shuffle.parallelism", "1")
           .option("hoodie.upsert.shuffle.parallelism", "2")
           .option("hoodie.delete.shuffle.parallelism", "2")
-          .option("hoodie.write.executor.type", "DIRECT")
+          .option("hoodie.write.executor.type", "SIMPLE")
           .option("hoodie.populate.meta.fields", "false")
           .option("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator")
 

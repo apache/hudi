@@ -28,6 +28,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
+/**
+ * Wrapper of input records iterator
+ */
 public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<I, O> {
 
   private static final Logger LOG = LogManager.getLogger(SimpleHoodieQueueIterable.class);
