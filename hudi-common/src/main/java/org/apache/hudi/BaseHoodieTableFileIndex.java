@@ -149,7 +149,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
-  protected abstract Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath);
+  protected abstract Object[] doParsePartitionColumnValues(String[] partitionColumns, String partitionPath);
 
   /**
    * Returns latest completed instant as seen by this instance of the file-index
@@ -287,6 +287,15 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     } else {
       return timeline.filterCompletedAndCompactionInstants();
     }
+  }
+
+  private Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath) {
+    Object[] partitionColumnValues = doParsePartitionColumnValues(partitionColumns, partitionPath);
+    if (shouldListLazily && partitionColumnValues.length != partitionColumns.length) {
+      throw new HoodieException("Failed to parse partition column values from the partition-path");
+    }
+
+    return partitionColumnValues;
   }
 
   /**

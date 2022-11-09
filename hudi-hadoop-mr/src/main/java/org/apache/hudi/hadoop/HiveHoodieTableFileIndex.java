@@ -72,7 +72,7 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
   }
 
   @Override
-  public Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath) {
+  public Object[] doParsePartitionColumnValues(String[] partitionColumns, String partitionPath) {
     // NOTE: Parsing partition path into partition column values isn't required on Hive,
     //       since Hive does partition pruning in a different way (based on the input-path being
     //       fetched by the query engine)

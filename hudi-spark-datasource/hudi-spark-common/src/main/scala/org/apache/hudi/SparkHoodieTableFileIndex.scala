@@ -336,7 +336,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       staticPartitionColumnValues.map(_.asInstanceOf[AnyRef]): _*)
   }
 
-  protected def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
+  protected def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
       Array.empty
@@ -360,11 +360,12 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         partitionColumns.length > 1) {
         // If the partition column size is not equal to the partition fragments size
         // and the partition column size > 1, we do not know how to map the partition
-        // fragments to the partition columns. So we trait it as a Non-Partitioned Table
-        // for the query which do not benefit from the partition prune.
-        logWarning(s"Cannot do the partition prune for table $getBasePath." +
-          s"The partitionFragments size (${partitionFragments.mkString(",")})" +
-          s" is not equal to the partition columns size(${partitionColumns.mkString(",")})")
+        // fragments to the partition columns and therefore return an empty tuple. We don't
+        // fail outright so that in some cases we can fallback to reading the table as non-partitioned
+        // one
+        logWarning(s"Failed to parse partition values: found partition fragments" +
+          s" (${partitionFragments.mkString(",")}) are not aligned with expected partition columns" +
+          s" (${partitionColumns.mkString(",")})")
         Array.empty
       } else {
         // If partitionSeqs.length == partitionSchema.fields.length
