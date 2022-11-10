@@ -32,9 +32,7 @@
 
 ## Status
 
-JIRA: https://issues.apache.org/jira/browse/HUDI-XXX
-
-> Please keep the status updated in `rfc/README.md`.
+JIRA: [HUDI-4141](https://issues.apache.org/jira/browse/HUDI-4141)
 
 ## Abstract
 
