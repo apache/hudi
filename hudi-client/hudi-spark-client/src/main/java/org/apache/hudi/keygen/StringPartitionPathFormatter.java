@@ -36,7 +36,7 @@ public class StringPartitionPathFormatter extends PartitionPathFormatterBase<Str
 
   @Override
   protected String toString(Object o) {
-    return o.toString();
+    return o == null ? null : o.toString();
   }
 
   @Override
