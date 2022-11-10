@@ -115,7 +115,7 @@ class HoodieSparkRecordMerger implements HoodieRecordMerger {
   
    @Override
    Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
-     // HoodieSparkRecord precombine and combineAndGetUpdateValue. It'd be associative operation.
+     // Implements particular merging semantic natively for Spark row representation encapsulated wrapped around in HoodieSparkRecord.
    }
 
    @Override
@@ -136,7 +136,7 @@ class HoodieFlinkRecordMerger implements HoodieRecordMerger {
   
    @Override
    Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
-      // HoodieFlinkRecord precombine and combineAndGetUpdateValue. It'd be associative operation.
+      // Implements particular merging semantic natively for Flink row representation encapsulated wrapped around in HoodieFlinkRecord.
    }
 
    @Override
@@ -165,8 +165,12 @@ benefit of this refactoring, since it would unavoidably have to perform conversi
 full-suite of benefits of this refactoring, users will have to migrate their merging logic out of `HoodieRecordPayload` subclass and into
 new `HoodieRecordMerger` implementation.
 
-Precombine is used to merge records from logs or incoming records; CombineAndGetUpdateValue is used to merge record from log file and record from base file.
-these two merge logics are unified in HoodieRecordMerger implementation as merge function. `HoodieAvroRecordMerger`'s API will look like following:
+Previously, we used to have separate methods for merging:
+
+  - `preCombine` was used to either deduplicate records in a batch or merge ones coming from delta-logs, while
+  - `combineAndGetUpdateValue` was used to combine incoming record w/ the one persisted in storage
+
+Now both of these methods semantics are unified in a single `merge` API w/in the `RecordMerger`, which is required to be _associative_ operation to be able to take on semantics of both `preCombine` and `combineAndGetUpdateValue`. `HoodieAvroRecordMerger`'s API will look like following:
 
 ```java
 /**
@@ -214,8 +218,6 @@ Because we implement different types of records, we need to implement functional
 Its public API will look like following:
 
 ```java
-import java.util.Properties;
-
 class HoodieRecord {
 
    /**
