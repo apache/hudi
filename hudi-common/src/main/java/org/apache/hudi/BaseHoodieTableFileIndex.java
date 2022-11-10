@@ -296,7 +296,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath) {
     Object[] partitionColumnValues = doParsePartitionColumnValues(partitionColumns, partitionPath);
     if (shouldListLazily && partitionColumnValues.length != partitionColumns.length) {
-      throw new HoodieException("Failed to parse partition column values from the partition-path");
+      throw new HoodieException("Failed to parse partition column values from the partition-path:"
+          + " likely non-encoded slashes being used in partition column's values. You can try to"
+          + " work this around by switching listing mode to eager");
     }
 
     return partitionColumnValues;
