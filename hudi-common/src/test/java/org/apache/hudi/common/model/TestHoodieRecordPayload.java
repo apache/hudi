@@ -51,13 +51,11 @@ public class TestHoodieRecordPayload {
         new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
         new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false)
     ));
-
     props = new Properties();
     props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
     props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "ts");
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "id");
     props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition");
-
   }
 
   @ParameterizedTest
