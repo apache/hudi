@@ -346,9 +346,8 @@ class TestQueryTableWithArgs extends HoodieSparkSqlTestBase {
         )
 
         val sql = s"select id, name, price, ts from $tableName1 ['hoodie.datasource.query.type'=>'snapshot','hoodie.log.compaction.inline'=>'true']";
-        spark.sql(sql)
 
-        // checkExceptionContain()("mismatched input '[' expecting")
+        checkExceptionContain(sql)("only support hudi read options,not support (hoodie.log.compaction.inline)")
 
       }
     }
