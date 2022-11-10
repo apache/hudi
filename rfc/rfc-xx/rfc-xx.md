@@ -70,26 +70,44 @@ reduce amount of data fetched from storage, schema evolution is handled, delayed
 
 [WIP] Plan
 
-- [ ] Components & API pseudo-code
-- [ ] Diagram show-casing data flow and integration points
+- [x] Components & API pseudo-code
+- [x] Diagram show-casing data flow and integration points
 - [ ] Example integration walk-through
 
-As we will see below, we propose two tiers of APIs:
+With this RFC, we aim to achieve following:
 
-1. High level user-friendly: These APIs allow Hudi's capabilities to bypass
-   query engine interfaces (SQL, Spark DS, etc) such as Catalog, Table, etc.
-2. Mid-level engine-friendly: These APIs abstract away Hudi's internals, behind
-   simple and familiar concepts and components such as file splits, iterators,
-   statistics, etc.
+ - Up-level our current integration model with Query Engines, abstracting away Hudi's lower-level components,
+ instead providing simple and eloquent abstractions providing necessary capabilities (for listing, reading)
 
-While the mid-level components interact with Hudi's lower level internal
-components such as file system view, log record scanner, etc, the high-level
-components sit on top of mid-level ones and can be used directly by users to
+ - Make sure Hudi's APIs are high-level enough to be useful in providing programmatic access to the data 
+ for users willing to access it directly
+
+To achieve that, we propose to introduce two tiers of APIs:
+
+1. **Mid-level** (engine-friendly): these APIs will be abstracting away Hudi's internals, behind
+    simple and familiar concepts and components such as file splits, iterators,
+    statistics, etc.
+
+2. **High-level** (user-friendly): these APIs will provide programmatic access to Hudi's capabilities
+    bypassing query engine interfaces (like SQL, Spark DS, etc)
+
+Following classic [layer-cake architecture](https://cs.uwaterloo.ca/~m2nagapp/courses/CS446/1195/Arch_Design_Activity/Layered.pdf) 
+would allow us to abstract away complexity of the lower levels components and APIs from
+Query Engines (on the *querying* side) as well as from the end users:
+
+ - Mid-level components will internally leverage Hudi's core building blocks (such as
+`FileSystemView`, `FileIndex`, `MergedLogRecordScanner`, `FileReader` etc), while exposing APIs
+providing capabilities expected by the Query Engines (listed above)
+
+ - High-level components will be stacked on top of mid-level ones and can be used directly by users to
 read and write to tables.
 
-Proposed plan is to build bottom-up i.e. first build the mid-level components
-and then the high-level ones. Once the mid-level components are ready, we could
+These APIs will be built bottoms-up, initially focusing on the mid-level 
+components, then higher-level ones. Once the mid-level components are ready, we could
 demonstrate their utility by integrating with one of the query engines.
+
+In the initial phase of this project we will be focusing the effort on the read-side of the integration,
+shifting focus to the write-side in the subsequent phase.
 
 ### Components & API
 
@@ -362,7 +380,7 @@ class Table {
     
     // Loads an existing Hudi table.
     // NOTE: HoodieTable holds meta client.
-    HoodieTable of(TableDescriptor tableId)
+    HoodieTable of(TableId tableId)
 
     // To perform write operations.
     // NOTE: Only mentioned a few. These are very similar to exising HoodieTable APIs.
