@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -86,7 +86,9 @@ public class IncrSourceHelper {
     // before a completed commit.
     final Option<HoodieInstant> firstIncompleteCommit = srcMetaClient.getCommitsTimeline()
         .filterInflightsAndRequested()
-        .filter(instant -> !TimelineUtils.isClusteringCommit(srcMetaClient, instant))
+        .filter(instant ->
+            !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())
+                || !ClusteringUtils.getClusteringPlan(srcMetaClient, instant).isPresent())
         .firstInstant();
     final HoodieTimeline completedCommitTimeline =
         srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
