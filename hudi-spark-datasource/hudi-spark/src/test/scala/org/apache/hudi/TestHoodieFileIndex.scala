@@ -286,7 +286,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
       assertEquals("2021-03-01,10", partitionValues.toSeq(Seq(StringType)).mkString(","))
       assertEquals(getFileCountInPartitionPath("2021-03-01/10"), filesAfterPrune.size)
 
-      val readDF = spark.read.format("hudi").options(readerOpts).load(basePath)
+      val readDF = spark.read.format("hudi").options(readerOpts).load()
 
       assertEquals(10, readDF.count())
       assertEquals(5, readDF.filter("dt = '2021-03-01' and hh = '10'").count())
@@ -329,7 +329,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
         assertEquals(getFileCountInPartitionPaths("2021/03/01/10", "2021/03/02/10"),
           partitionAndFilesNoPruning.flatMap(_.files).length)
 
-        val readDF = spark.read.format("hudi").options(readerOpts).load(basePath)
+        val readDF = spark.read.format("hudi").options(readerOpts).load()
 
         assertEquals(10, readDF.count())
         // There are 5 rows in the  dt = 2021/03/01 and hh = 10
@@ -364,7 +364,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
       assertEquals("2021/03/01,10", partitionValues.toSeq(Seq(StringType)).mkString(","))
       assertEquals(getFileCountInPartitionPath("2021%2F03%2F01/10"), filesAfterPrune.size)
 
-      val readDF = spark.read.format("hudi").options(readerOpts).load(basePath)
+      val readDF = spark.read.format("hudi").options(readerOpts).load()
 
       assertEquals(10, readDF.count())
       assertEquals(5, readDF.filter("dt = '2021/03/01' and hh = '10'").count())
@@ -421,7 +421,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
 
     assertEquals(expectedListedFiles, perPartitionFilesSeq.map(_.size).sum)
 
-    val readDF = spark.read.format("hudi").options(readerOpts).load(basePath)
+    val readDF = spark.read.format("hudi").options(readerOpts).load()
 
     assertEquals(10, readDF.count())
     assertEquals(3, readDF.filter("hh = '1'").count())
