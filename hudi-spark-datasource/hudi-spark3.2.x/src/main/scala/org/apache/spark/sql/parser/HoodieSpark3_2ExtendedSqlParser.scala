@@ -46,8 +46,7 @@ class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInt
     val substitutionSql = substitutor.substitute(sqlText)
     if (isHoodieCommand(substitutionSql)) {
       parse(substitutionSql) { parser =>
-        val res: AnyRef = builder.visit(parser.singleStatement())
-        res match {
+        builder.visit(parser.singleStatement()) match {
           case plan: LogicalPlan => plan
           case _ => delegate.parsePlan(sqlText)
         }
@@ -124,7 +123,6 @@ class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInt
       normalized.contains("system_version as of") ||
       normalized.contains("version as of") ||
       normalized.contains("hoodie.datasource.query.type")
-
   }
 }
 
@@ -133,17 +131,11 @@ class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInt
  */
 class UpperCaseCharStream(wrapped: CodePointCharStream) extends CharStream {
   override def consume(): Unit = wrapped.consume
-
   override def getSourceName(): String = wrapped.getSourceName
-
   override def index(): Int = wrapped.index
-
   override def mark(): Int = wrapped.mark
-
   override def release(marker: Int): Unit = wrapped.release(marker)
-
   override def seek(where: Int): Unit = wrapped.seek(where)
-
   override def size(): Int = wrapped.size
 
   override def getText(interval: Interval): String = {
@@ -158,7 +150,6 @@ class UpperCaseCharStream(wrapped: CodePointCharStream) extends CharStream {
       ""
     }
   }
-
   // scalastyle:off
   override def LA(i: Int): Int = {
     // scalastyle:on
