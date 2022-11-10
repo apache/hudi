@@ -255,7 +255,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket."
           + "Possible options are [SIMPLE | CONSISTENT_HASHING]."
           + "Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size "
-          + "issues of the SIMPLE hashing engine.");
+          + "issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables, only use simple hashing on COW tables.");
 
   /**
    * Bucket num equals file groups num in each partition.
