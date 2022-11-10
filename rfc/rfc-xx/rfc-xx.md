@@ -124,53 +124,75 @@ Open questions
 
 #### Models
 
-**TableDescriptor** is used to resolve a table in catalog.
+We define following models as core building blocks of the new mid-/high-level APIs/
+
+**TableId** is used to identify individual table (for ex, w/in catalog)
 
 ```java
-class TableDescriptor {
-    final String databaseName;
-    final String tableName;
-    final String basePath;
-    final HoodieTableType tableType;
+class TableId {
+  final String databaseName;
+  final String tableName;
 }
 ```
 
-**FileSlice** holds
-
-- For COW: a base file
-    - A single snapshot (version) of the batch of co-located records, persisted
-      in a single base file)
-- For MOR: a base file along with corresponding delta-log files
-    - A collection of snapshots (versions) comprised of:
-        - snapshot of the initial batch of the co-located records (persisted in
-          a single base file), along with
-        - subsequently updated versions of these records
+**TableMeta** captures basic meta information of the table
 
 ```java
+class TableMeta {
+    final TableId tableId;
+
+    // Table's base path
+    final String basePath;
+    // Table's type (COW, MOR) 
+    final HoodieTableType tableType;
+    
+    // ...
+}
+```
+
+##### File Group/Slice
+
+In Hudi's glossary, following terms could be observed frequently:
+ 
+ - File Group: collection of snapshots (or versions) of the group of records, where individual snapshot
+  is called *file slice*
+ - File Slice: individual snapshot(s) of the group of records
+
+Physically file slice is usually represented as 
+
+- For COW: a *base file*, representing a single snapshot (version) of the group of records,
+  co-located in a single columnar-based file)
+
+- For MOR: a *base file* and corresponding delta-log files. For MOR, unlike COW, *file slice* actually 
+constitutes collection of snapshots (versions) of the group of records where:
+  - Base file represents initial snapshot/version of the group of records
+  - Delta-log files encode updated versions of the records stored in the base file
+
+```java
+// NOTE: This model is the same as an existing one (ref'd here for notational purposes)
 class HoodieFileSlice {
     // Id of the file-group this slice belongs to
     HoodieFileGroupId fileGroupId;
-
+    // Base file's path
     String baseFilePath;
-    List<String> logFilesPaths;
+    // Ordered list of the delta-log files 
+    TreeSet<HoodieLogFile> logFilesPaths;
+    // ...
 }
 ```
-
-**FileGroup** represents logical grouping of the FileSlices (or snapshots of the
-given batch of records)
 
 NOTE: In case of COW set of records within the File Group wouldn't change.
 
 ```java
+// NOTE: This model is the same as an existing one (ref'd here for notational purposes)
 class HoodieFileGroup {
     // Id of the file-group
     HoodieFileGroupId id;
-
     // Projection of the timeline of committed actions affecting file-slices in this group
-    HoodieTimeline timeline
-
+    HoodieTimeline timeline;
     // File-slices ordered by corresponding instant they've been committed at
-    TreeMap<HoodieInstant, FileSlice> fileSlices
+    TreeMap<HoodieInstant, FileSlice> fileSlices;
+    // ...
 }
 ```
 
@@ -179,10 +201,9 @@ class HoodieFileGroup {
 ```java
 class PartitionDescriptor {
     // Relative partition path within the dataset
-    String partitionPath
-
-    // List of values for corresponding partition columns
-    List<Object> partitionColumnValues
+    String partitionPath;
+    // List of values for corresponding partition columns (partition values)
+    List<Object> partitionColumnValues;
 }
 ```
 
@@ -195,34 +216,31 @@ table.
 
 ```java
 class PartitionSnapshot {
-    PartitionDescriptor descriptor
-
+    PartitionDescriptor descriptor;
     // (Latest) Instant T as of which partition's state is represented
-    HoodieInstant latestInstant
-
+    HoodieInstant latestInstant;
     // File-slices current at the instant T
-    List<HoodieFileSlice> fileSlices
+    List<HoodieFileSlice> fileSlices;
 }
 ```
 
 **PartitionIncrementalSnapshot** represents a state of a single table's
-partition at a particular instant T_y, while only considering commits that
-occurred in the table after T_x (ie within the timeline T_x -> T_y)
+partition at a particular instant T2, while only considering commits that
+occurred in the table after T1 (ie within the timeline T1 -> T2)
 comprised of the file-slices that are the _latest_ (current) within their
-corresponding file-groups at instant T_y.
+corresponding file-groups at instant T2.
 
-NOTE: PartitionSnapshot is a special case of PartitionIncrementalSnapshot where
-T_x = 0.
+NOTE: `PartitionSnapshot` is a special case of `PartitionIncrementalSnapshot` where
+T1 = 0.
 
 ```java
 class PartitionIncrementalSnapshot {
-    PartitionDescriptor descriptor
-
-    // Timeline starting at T_x and ending at T_y, completed actions thereof represent state of the partition
-    HoodieTimeline timeline
-
+    PartitionDescriptor descriptor;
+    // Timeline starting at T1 and ending at T2, completed actions thereof 
+    // represent state of the partition
+    HoodieTimeline timeline;
     // File-slices current at the instant T_y
-    List<HoodieFileSlice> fileSlices
+    List<HoodieFileSlice> fileSlices;
 }
 ```
 
@@ -232,15 +250,12 @@ class PartitionIncrementalSnapshot {
 enum ReadingMode {
     // Representing state of the table at a particular instant T
     SNAPSHOT,
-
     // (MOR only) Representing state of the table at a particular instant T,
     // reading exclusively base-files (ie, ignoring any delta-logs if present)
     SNAPSHOT_READ_OPTIMIZED,
-
     // Representing state of the table at a particular instant T_y assuming,
     // as an initial instant Tx (snapshot is a specification of this mode, where T_x = 0)
     INCREMENTAL,
-
     // Representing state of the table as a stream of CRUD operations on
     // individual records
     CDC
@@ -256,7 +271,7 @@ class Timeline {
     // Looks up latest commit instant, provide (temporal) instant T
     //
     // This method is required to resolve commit-instants by the timestamp
-    HoodieInstant findLatestCompletedActionAt(Instant)
+    HoodieInstant findLatestCompletedActionAt(Instant);
 }
 ```
 
