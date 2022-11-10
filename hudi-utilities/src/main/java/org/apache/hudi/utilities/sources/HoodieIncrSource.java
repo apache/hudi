@@ -148,7 +148,9 @@ public class HoodieIncrSource extends RowSource {
           .load(srcPath)
           // add filtering so that only interested records are returned.
           .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              queryTypeAndInstantEndpts.getRight().getLeft()));
+              queryTypeAndInstantEndpts.getRight().getLeft()))
+          .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+              queryTypeAndInstantEndpts.getRight().getRight()));
     }
 
     /*
