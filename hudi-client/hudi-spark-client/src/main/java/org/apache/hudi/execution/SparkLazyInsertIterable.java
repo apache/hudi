@@ -93,6 +93,7 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
         insertHandler.consumeOneRecord(transformed);
       }
 
+      insertHandler.finish();
       return insertHandler.getResult();
     } catch (Exception e) {
       throw new HoodieException(e);
