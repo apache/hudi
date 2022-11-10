@@ -15,7 +15,7 @@
  limitations under the License.
 -->
 
-# [WIP] RFC-XX: New Hudi Table Spec API for Query Integrations
+# RFC-64: New Hudi Table Spec API for Query Integrations
 
 ## Proposers
 
@@ -24,7 +24,7 @@
 
 ## Approvers
 
-- @xiarixiao
+- @xiarixiaoyao
 - @danny0405
 - @vinothchandar
 - @prasanna
@@ -95,7 +95,7 @@ Query Engines (on the *querying* side) as well as from the end users:
 
  - Mid-level components will internally leverage Hudi's core building blocks (such as
 `FileSystemView`, `FileIndex`, `MergedLogRecordScanner`, `FileReader` etc), while exposing APIs
-providing capabilities expected by the Query Engines (listed above)
+providing capabilities expected by the Query Engines (listed above).
 
  - High-level components will be stacked on top of mid-level ones and can be used directly by users to
 read and write to tables.
@@ -497,7 +497,7 @@ class HoodieHiveRecordMerger implements HoodieRecordMerger {
   
    @Override
    Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
-       // HoodieArrayWritableRecord precombine and combineAndGetUpdateValue. 
+       // HoodieHiveRecord precombine and combineAndGetUpdateValue. 
        // It'd be associative operation.
    }
 
