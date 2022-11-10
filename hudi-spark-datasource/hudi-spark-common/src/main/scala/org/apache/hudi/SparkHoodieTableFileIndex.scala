@@ -379,7 +379,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         }.mkString("/")
 
         val pathWithPartitionName = new CachingPath(getBasePath, createPathUnsafe(partitionWithName))
-        val partitionSchema = StructType(schema.fields.filterNot(f => partitionColumns.contains(f.name)))
+        val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema)
 
         partitionValues.map(_.asInstanceOf[Object]).toArray
