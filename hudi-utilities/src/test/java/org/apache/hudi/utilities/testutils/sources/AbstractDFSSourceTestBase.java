@@ -37,8 +37,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,20 +63,10 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
     UtilitiesTestBase.initTestServices(true, false, false);
   }
 
-  @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
-  }
-
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
-  }
-
-  @AfterEach
-  public void teardown() throws Exception {
-    super.teardown();
   }
 
   /**

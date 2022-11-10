@@ -369,7 +369,15 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withClusteringConfig(clusteringConfig)
-        .withRollbackUsingMarkers(rollbackUsingMarkers);
+        .withRollbackUsingMarkers(rollbackUsingMarkers)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .withLockWaitTimeInMillis(100L)
+            .withNumRetries(5)
+            .withRetryWaitTimeInMillis(100L)
+            .withClientNumRetries(5)
+            .withClientRetryWaitTimeInMillis(100L)
+            .build());
   }
 
   protected Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema) {
