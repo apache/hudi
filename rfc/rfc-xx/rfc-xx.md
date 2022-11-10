@@ -148,11 +148,13 @@ class TableId {
 **TableMeta** captures basic meta information of the table
 
 ```java
-class TableMeta {
+class TableDef {
     final TableId tableId;
 
     // Table's base path
     final String basePath;
+    // Table's latest schema
+    final InternalSchema schema;
     // Table's type (COW, MOR) 
     final HoodieTableType tableType;
     
@@ -306,7 +308,7 @@ class Predicate {
 }
 ```
 
-#### Components & APIs
+#### Mid-level (engine-friendly) APIs
 
 **TimelineView** interface will be providing lightweight view of Hudi's timeline to be
 able to correlate timestamps to w/ actions on Hudi's timeline
@@ -383,18 +385,14 @@ the `HoodieRealtimeRecordReader` won't have to spend cycles
 converting `ArrayWritable` to `Avro` and vice-versa as it does today.
 
 
-**Higher level user-friendly APIs**
+#### Higher-level (user-friendly) APIs
 
 ```java
 class Table {
-    // Gets table snapshot. Returns latest napshot by default.
+    // Gets table snapshot. Returns latest snapshot by default.
     Timeline getLatestSnapshot();
     Timeline getSnapshot(Optional<String> instant);
     
-    // Loads an existing Hudi table.
-    // NOTE: HoodieTable holds meta client.
-    HoodieTable of(TableId tableId);
-
     // To perform write operations.
     // NOTE: Only mentioned a few. These are very similar to exising HoodieTable APIs.
     HoodieWriteMetadata upsert(
@@ -437,30 +435,22 @@ class Table {
 }
 ```
 
-**HoodieCatalog** provides APIs for table's CRUD-lifecycle and abstracts away 
+**HoodieCatalog** provides APIs for table's create/lookup/delete-lifecycle and abstracts away 
 particular implementation of the specific Metastore in a vendor-neutral way.
 
 ```java
-class HoodieCatalog {
-    // Instantiates a HoodieTable at given basePath.
-    HoodieTable createTable(
-            TableDescriptor tableId, 
-            Optional<Schema> schema, 
-            Map<String, String> tableProperties)
+// NOTE: Implementation requires Metastore to persists tables' metadata into catalog
+interface HoodieCatalog {
+    // Instantiates a Hudi table (returning `HoodieTable` object that could 
+    // handle subsequent operations w/ this table)
+    HoodieTable createTable(TableDescriptor tableDescriptor);
 
-    // List all tables in a given database. 
-    // NOTE: This requires a metastore for catalog metadata.
-    List<TableDescriptor> showTables(String databaseName)
+    // Loads the table 
+    HoodieTable loadTable(TableId tableId);
 
     // Drop an existing Hudi table. 
     // If `cascade` set to true then all files (data and metadata) are deleted.
-    void dropTable(TableDescriptor tableId, boolean cascade)
-        
-    static class CatalogBuilder {
-        String type         // the type of catalog, such as jdbc, hive metastore, etc.
-        String uri          // metastore server uri
-        String warehouse    // path to store any catalog metadata files.
-    }
+    void dropTable(TableId tableId, boolean cascade);
 }
 ```
 
