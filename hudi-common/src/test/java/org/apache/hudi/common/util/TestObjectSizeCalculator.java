@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.Schema;
@@ -73,7 +74,8 @@ public class TestObjectSizeCalculator {
     assertEquals(32, getObjectSize(emptyClass));
     assertEquals(40, getObjectSize(stringClass));
     assertEquals(40, getObjectSize(payloadClass));
-    assertEquals(1240, getObjectSize(Schema.create(Schema.Type.STRING)));
+    assertEquals(HoodieAvroUtils.gteqAvro1_10() ? 1320 : 1240,
+        getObjectSize(Schema.create(Schema.Type.STRING)));
     assertEquals(104, getObjectSize(person));
   }
 

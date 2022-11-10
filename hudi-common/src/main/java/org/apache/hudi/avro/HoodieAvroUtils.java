@@ -54,6 +54,8 @@ import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 
+import org.apache.hadoop.util.VersionUtil;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -89,6 +91,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
  */
 public class HoodieAvroUtils {
 
+  public static final String AVRO_VERSION = Schema.class.getPackage().getImplementationVersion();
   private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
   private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
 
@@ -1031,5 +1034,9 @@ public class HoodieAvroUtils {
 
   public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema) {
     return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP);
+  }
+
+  public static boolean gteqAvro1_10() {
+    return VersionUtil.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
 }
