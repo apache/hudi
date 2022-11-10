@@ -306,10 +306,10 @@ class RecordIndex {
 class FileIndex {
     // Lists files visible/reachable at the instant T
     // Equivalent to `listFilesBetween(null, instant, filters)`
-    List<PartitionSnapshot> listFilesAt(HoodieInstant instant, Filter[] filters);
+    List<PartitionSnapshot> listFilesAt(HoodieInstant instant, Predicate[] filters);
     // Lists files added visible/reachable at the instant `to`, that were
     // added no earlier than at the instant `from`
-    List<PartitionIncrementalSnapshot> listFilesBetween(HoodieInstant from, HoodieInstant to, Filter[] filters);
+    List<PartitionIncrementalSnapshot> listFilesBetween(HoodieInstant from, HoodieInstant to, Predicate[] filters);
     
     // TODO add CDC-capable API
 }
@@ -317,13 +317,20 @@ class FileIndex {
 
 ##### Reading
 
+Reading capability will be provided by `FileSliceReader` allowing for:
+
+ - Data filters push-down
+ - Schema projections (for columnar-based formats)
+ - Schema evolution handling
+ - Producing records in different modes (snapshot/incremental/CDC)
+
 ```java
 class FileSliceReader {
     // Projects output of this reader as a projection of the provided schema
     // NOTE: Provided schema could be an evolved schema
     FileSliceReader project(InternalSchema schema);
     // Pushes down filters to low-level file-format readers (if supported)
-    FileSliceReader pushDownFilters(Filter[] filters);
+    FileSliceReader pushDownFilters(Predicate[] filters);
     // Specifies reading mode for this reader
     FileSliceReader readingMode(ReadingMode mode);
     // Produces an iterable sequence of records from the particular file-slice
@@ -331,49 +338,11 @@ class FileSliceReader {
 }
 ```
 
-Here `HoodieRecord` is an abstraction as defined in RFC-46 and it will provide
-APIs to implement functionality similar to `AvroUtils`. We will need to implement
-`HoodieRecord` for `ArrayWritable`. In additional to that, we will also need an
-implementation of `HoodieRecordMerger` that will handle merge functionality for `ArrayWritable`.
+To see how `FileSliceReader` will be used, let's take example of Presto:
 
-```java
-class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
-    
-    @Override
-    public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
-        // Join this record with other
-    }
-
-    @Override
-    public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) {
-        // Rewrite record into new schema
-    }
-}
-
-class HoodieHiveRecordMerger implements HoodieRecordMerger {
-
-   @Override
-   public String getMergingStrategy() {
-      return UUID_MERGER_STRATEGY;
-   }
-  
-   @Override
-   Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
-       // HoodieArrayWritableRecord precombine and combineAndGetUpdateValue. 
-       // It'd be associative operation.
-   }
-
-   @Override
-   HoodieRecordType getRecordType() {
-      return HoodieRecordType.HIVE;
-   }
-}
-```
-
-To see how `FileSliceReader` will be used, let's take example of Presto.
-`HoodieMergedLogRecordScanner#getRecords` API will be returning
-opaque `HoodieRecord`s as returned by `FileSliceReader#open`. 
-`HoodieRealtimeRecordReader` will implement `RecordReader` APIs using the
+1. `HoodieMergedLogRecordScanner#getRecords` API will be returning
+opaque `HoodieRecord`s as returned by `FileSliceReader#open`.
+2. `HoodieRealtimeRecordReader` will implement Presto's `RecordReader` APIs using the
 aforementioned log scanner API. Then, in Presto we can create `RecordCursor`
 wrapping around `RecordReader`. The key advantage here is that
 the `HoodieRealtimeRecordReader` won't have to spend cycles
@@ -492,3 +461,44 @@ TBA
 - [ ] Integration tests covering end-to-end interaction between all components.
 - [ ] Validate data as well as metadata.
 - [ ] Validate query plans and results.
+
+## Appendix A: Hive-specific HoodieRecord implementation
+
+Here `HoodieRecord` is an abstraction as defined in RFC-46 and it will provide
+APIs to implement functionality similar to `AvroUtils`. We will need to implement
+`HoodieRecord` for `ArrayWritable`. In additional to that, we will also need an
+implementation of `HoodieRecordMerger` that will handle merge functionality for `ArrayWritable`.
+
+```java
+class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
+    
+    @Override
+    public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
+        // Join this record with other
+    }
+
+    @Override
+    public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) {
+        // Rewrite record into new schema
+    }
+}
+
+class HoodieHiveRecordMerger implements HoodieRecordMerger {
+
+   @Override
+   public String getMergingStrategy() {
+      return UUID_MERGER_STRATEGY;
+   }
+  
+   @Override
+   Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
+       // HoodieArrayWritableRecord precombine and combineAndGetUpdateValue. 
+       // It'd be associative operation.
+   }
+
+   @Override
+   HoodieRecordType getRecordType() {
+      return HoodieRecordType.HIVE;
+   }
+}
+```
