@@ -390,52 +390,52 @@ class Predicate implements Expression {
 ```java
 class Table {
     // Gets table snapshot. Returns latest napshot by default.
-    Timeline getLatestSnapshot()
-    Timeline getSnapshot(Optional<String> instant)
+    Timeline getLatestSnapshot();
+    Timeline getSnapshot(Optional<String> instant);
     
     // Loads an existing Hudi table.
     // NOTE: HoodieTable holds meta client.
-    HoodieTable of(TableId tableId)
+    HoodieTable of(TableId tableId);
 
     // To perform write operations.
     // NOTE: Only mentioned a few. These are very similar to exising HoodieTable APIs.
     HoodieWriteMetadata upsert(
             HoodieEngineContext context, 
-            String instantTime,
-            I records)
+            HoodieInstant instantTime,
+            HoodieData<HoodieRecord> records);
     HoodieWriteMetadata bulkInsert(
             HoodieEngineContext context,
-            String instantTime,
-            I records)
+            HoodieInstant instantTime,
+            HoodieData<HoodieRecord> records);
         
     // Delete data that match given expression. 
     // NOTE: This could require a canonical representation of expression in Hudi.
-    delete()
-    delete(T expression)
+    delete();
+    delete(T expression);
 
     // Table services scheduling and execution
     Optional<HoodieCompactionPlan> scheduleCompaction(
             HoodieEngineContext engineContext,
-            String instant,
-            Map<String, String> extraProperties)
+            HoodieInstant instant,
+            Map<String, String> extraProperties);
 
     Optional<HoodieClusteringPlan> scheduleClustering(
             HoodieEngineContext engineContext,
-            String instant,
-            Map<String, String> extraProperties)
+            HoodieInstant instant,
+            Map<String, String> extraProperties);
 
     Optional<HoodieCleanerPlan> scheduleCleaning(
             HoodieEngineContext engineContext,
-            String instant,
-            Map<String, String> extraProperties)
+            HoodieInstant instant,
+            Map<String, String> extraProperties);
 
     HoodieWriteMetadata compact(
             HoodieEngineContext engineContext,
-            Optional<HoodieCompactionPlan> plan)
+            Optional<HoodieCompactionPlan> plan);
 
     HoodieWriteMetadata cluster(
             HoodieEngineContext engineContext,
-            Optional<HoodieClusteringPlan> plan)
+            Optional<HoodieClusteringPlan> plan);
 }
 ```
 
