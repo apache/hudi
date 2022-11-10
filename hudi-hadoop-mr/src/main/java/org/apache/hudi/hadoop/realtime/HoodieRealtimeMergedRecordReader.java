@@ -19,16 +19,11 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.HoodieHiveRecord;
-import org.apache.hudi.hadoop.HoodieHiveRecordMerger;
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
@@ -46,6 +41,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMergedLogRecordScanner;
+
 public class HoodieRealtimeMergedRecordReader extends AbstractRealtimeRecordReader
     implements RecordReader<NullWritable, ArrayWritable> {
   private static final Logger LOG = LogManager.getLogger(HoodieRealtimeMergedRecordReader.class);
@@ -60,31 +57,12 @@ public class HoodieRealtimeMergedRecordReader extends AbstractRealtimeRecordRead
   public HoodieRealtimeMergedRecordReader(RealtimeSplit split, JobConf job, RecordReader<NullWritable, ArrayWritable> baseRecordReader) {
     super(split, job);
     this.baseRecordReader = baseRecordReader;
-    this.mergedLogRecordScanner = getMergedLogRecordScanner();
+    this.mergedLogRecordScanner = getMergedLogRecordScanner(split, job, usesCustomPayload ? getWriterSchema() : getReaderSchema());
     this.deltaRecordMap = mergedLogRecordScanner.getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
     this.recordKeyIndex = split.getVirtualKeyInfo()
         .map(HoodieVirtualKeyInfo::getRecordKeyFieldIndex)
         .orElse(HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
-  }
-
-  private HoodieMergedLogRecordScanner getMergedLogRecordScanner() {
-    return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(FSUtils.getFs(split.getPath().toString(), jobConf))
-        .withBasePath(split.getBasePath())
-        .withLogFilePaths(split.getDeltaLogPaths())
-        .withReaderSchema(usesCustomPayload ? getWriterSchema() : getReaderSchema())
-        .withLatestInstantTime(split.getMaxCommitTime())
-        .withMaxMemorySizeInBytes(HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf))
-        .withReadBlocksLazily(Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
-        .withReverseReader(false)
-        .withBufferSize(jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
-        .withSpillableMapBasePath(jobConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
-        .withDiskMapType(jobConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue()))
-        .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
-            HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieHiveRecordMerger.class.getName()))
-        .build();
   }
 
   @Override

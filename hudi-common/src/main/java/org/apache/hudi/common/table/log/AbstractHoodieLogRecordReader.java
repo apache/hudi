@@ -37,19 +37,19 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.InternalSchemaCache;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -64,10 +64,10 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.COMMAND_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
  * Implements logic to scan log blocks and expose valid and deleted log records to subclass implementation. Subclass is
@@ -441,7 +441,7 @@ public abstract class AbstractHoodieLogRecordReader {
    *
    * @param hoodieRecord Hoodie Record to process
    */
-  protected abstract <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception;
+  public abstract <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception;
 
   /**
    * Process next deleted record.
