@@ -111,16 +111,26 @@ shifting focus to the write-side in the subsequent phase.
 
 ### Components & API
 
-Open questions
+Open Qs
 
-1. Some of the models defined here do already exist and might be representing
+1. ~~Some of the models defined here do already exist and might be representing
    lower-level components. Do we expose them in a higher level APIs or do we
    bifurcate and hide them as internal impl details (for ex, `HoodieFileGroup`
-   vs `HoodieInternalFileGroup`)?
-2. Do we need to implement Catalog backend? We’d be fine with just the session
+   vs `HoodieInternalFileGroup`)?~~
+   1. *We'll be re-using existing models abstracting them behind projected interfaces 
+   exposing only necessary functionality, hiding away complexity of the whole impl*
+2. ~~What about Expressions? Wrapping is going to be hard because we need to
+   analyze expression structure which is not going to be possible if we wrap.~~
+   1. We will need to introduce our own Expression hierarchy supporting a *superset*
+   of the commonly used expressions. While this requires quite some heavy-lifting 
+   initially this unfortunately is the only option, provided that we need to 
+   have deep introspections into these expression tress (in the analyses we run
+   w/in Column Stats Index, Partition Pruning, etc)
+   2. However, we won't be implementing an Expression Execution Engine: for execution
+   we will continue to rely on execution engine machinery simply relaying from
+   our own representation into the engine-specific one
+3. Do we need to implement Catalog backend? We’d be fine with just the session
    catalog for now.
-3. What about Expressions? Wrapping is going to be hard because we need to
-   analyze expression structure which is not going to be possible if we wrap.
 
 #### Models
 
@@ -262,20 +272,29 @@ enum ReadingMode {
 }
 ```
 
-#### APIs
+#### Components & APIs
 
-**Snapshot Management**
+**TimelineView** interface will be providing lightweight view of Hudi's timeline to be
+able to correlate timestamps to w/ actions on Hudi's timeline
 
 ```java
-class Timeline {
-    // Looks up latest commit instant, provide (temporal) instant T
-    //
+interface TimelineView {
+    // Looks up latest commit instant, provide (temporal) instant T;
     // This method is required to resolve commit-instants by the timestamp
-    HoodieInstant findLatestCompletedActionAt(Instant);
+    HoodieInstant findLatestCompletedActionAt(Instant instant);
+    
+    // ...
 }
 ```
 
-**Indexing**
+##### File Listing
+
+To provide for *listing* capability described above we will be introducing following facades:
+ 
+ - **RecordIndex**: to be able to resolve records against the file-groups where such records
+are persisted (*required for writing*)
+ - **FileIndex**: to be able to list file(-slices) constituting *partition snapshot*, satisfying 
+pushed-down data-filters (validated t/h Partition Pruning, Files' Columns Stats filtering, etc)
 
 ```java
 class RecordIndex {
@@ -287,32 +306,28 @@ class RecordIndex {
 class FileIndex {
     // Lists files visible/reachable at the instant T
     // Equivalent to `listFilesBetween(null, instant, filters)`
-    List<PartitionSnapshot> listFilesAt(HoodieInstant, Filter[])
-
+    List<PartitionSnapshot> listFilesAt(HoodieInstant instant, Filter[] filters);
     // Lists files added visible/reachable at the instant `to`, that were
     // added no earlier than at the instant `from`
-    List<PartitionIncrementalSnapshot> listFilesBetween(HoodieInstant from, HoodieInstant to, Filter[])
-
+    List<PartitionIncrementalSnapshot> listFilesBetween(HoodieInstant from, HoodieInstant to, Filter[] filters);
+    
     // TODO add CDC-capable API
 }
 ```
 
-**Reader**
+##### Reading
 
 ```java
 class FileSliceReader {
     // Projects output of this reader as a projection of the provided schema
     // NOTE: Provided schema could be an evolved schema
-    FileSliceReader project(InternalSchema)
-
+    FileSliceReader project(InternalSchema schema);
     // Pushes down filters to low-level file-format readers (if supported)
-    FileSliceReader pushDownFilters(Filter[])
-
+    FileSliceReader pushDownFilters(Filter[] filters);
     // Specifies reading mode for this reader
-    FileSliceReader readingMode(ReadingMode)
-
+    FileSliceReader readingMode(ReadingMode mode);
     // Produces an iterable sequence of records from the particular file-slice
-    Iterator<HoodieRecord> open(HoodieFileSlice)
+    Iterator<HoodieRecord> open(HoodieFileSlice fileSlice);
 }
 ```
 
