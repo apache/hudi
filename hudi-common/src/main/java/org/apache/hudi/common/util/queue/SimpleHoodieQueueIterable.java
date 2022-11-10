@@ -25,6 +25,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 /**
@@ -37,6 +38,7 @@ public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<
   private final InnerIterator innerIterator;
   private final Function<I, O> transformFunction;
   private final AtomicBoolean isWriteDone = new AtomicBoolean(false);
+  private final AtomicInteger count = new AtomicInteger(0);
 
   public SimpleHoodieQueueIterable(Iterator<I> inputItr, Function<I, O> transformFunction) {
     this.inputItr = inputItr;
@@ -47,6 +49,11 @@ public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<
   @Override
   public Iterator<O> iterator() {
     return innerIterator;
+  }
+
+  @Override
+  public long size() {
+    return count.get();
   }
 
   @Override
@@ -76,12 +83,6 @@ public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<
     // do nothing.
   }
 
-  @Override
-  public long size() {
-    return 0;
-    // no need for this
-  }
-
   /**
    * Iterator for the memory bounded queue.
    */
@@ -98,6 +99,7 @@ public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<
         throw new IllegalStateException("Queue closed for getting new entries");
       }
 
+      count.incrementAndGet();
       return transformFunction.apply(inputItr.next());
     }
   }
