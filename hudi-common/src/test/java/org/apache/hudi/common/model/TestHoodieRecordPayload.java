@@ -17,7 +17,9 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
+/**
+ * Unit tests {@link TestHoodieRecordPayload}.
+ */
 public class TestHoodieRecordPayload {
   private Schema tableSchema;
   private Schema recordSchema;
