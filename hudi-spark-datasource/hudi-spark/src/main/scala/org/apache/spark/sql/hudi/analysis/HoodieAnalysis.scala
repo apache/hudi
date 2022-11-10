@@ -512,7 +512,6 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       val (plan: UnresolvedRelation, queryArgs) = sparkAdapter.getCatalystPlanUtils.getRelationTableArgument(rta).get
       val tableIdentifier: TableIdentifier = sparkAdapter.getCatalystPlanUtils.toTableIdentifier(plan)
       if (sparkAdapter.isHoodieTable(tableIdentifier, sparkSession) && queryArgs.nonEmpty) {
-        //
         assert(queryArgs.contains(DataSourceReadOptions.QUERY_TYPE.key()), s"When using sql to query the hudi table, you must specify the 'hoodie.datasource.query.type' parameter")
         // Add a white list to the key to prevent users adding other parameters
         val KeyWhiteSet: HashSet[String] = HashSet(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL

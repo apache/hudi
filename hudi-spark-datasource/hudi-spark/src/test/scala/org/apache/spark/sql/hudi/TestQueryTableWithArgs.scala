@@ -317,6 +317,43 @@ class TestQueryTableWithArgs extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test query table with not support args") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        val tableName1 = generateTableName
+        println(HoodieSparkUtils.getSparkVersion)
+        spark.sql(
+          s"""
+             |create table $tableName1 (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName1'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
+
+        checkAnswer(
+          s"select id, name, price, ts from $tableName1")(
+          Seq(1, "a1", 10.0, 1000)
+        )
+
+        val sql = s"select id, name, price, ts from $tableName1 ['hoodie.datasource.query.type'=>'snapshot','hoodie.log.compaction.inline'=>'true']";
+        spark.sql(sql)
+
+        // checkExceptionContain()("mismatched input '[' expecting")
+
+      }
+    }
+  }
+
   test("Test query table with query args and time travel") {
     if (HoodieSparkUtils.gteqSpark3_2) {
       withTempDir { tmp =>
