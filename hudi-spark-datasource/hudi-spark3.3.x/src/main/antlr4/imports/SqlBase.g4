@@ -1041,11 +1041,11 @@ alterColumnAction
     | setOrDrop=(SET | DROP) NOT NULL
     ;
 tableArgumentList
-    : '(' (tableArgument (',' tableArgument)*)? ')'
+    : '[' (tableArgument (',' tableArgument)*)? ']'
     ;
 
 tableArgument
-   : key=tableArgumentKey '=' value=tableArgumentValue
+   : key=tableArgumentKey '=>' value=tableArgumentValue
    ;
 
 tableArgumentKey

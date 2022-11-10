@@ -19,9 +19,9 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 
 class TestQueryTableWithArgs extends HoodieSparkSqlTestBase {
+
   test("Test query table with snapshot args") {
     if (HoodieSparkUtils.gteqSpark3_2) {
       withTempDir { tmp =>
@@ -65,7 +65,7 @@ class TestQueryTableWithArgs extends HoodieSparkSqlTestBase {
         // 'Project ['id, 'name, 'price, 'ts]
         //+- 'TableArgumentRelation 'UnresolvedRelation [h0], [], false, [hoodie.datasource.query.type=snapshot, as.of.instant=$instant1]
         val querySql =
-        s"select id, name, price, ts from $tableName1 ['hoodie.datasource.query.type'='snapshot','as.of.instant'='$instant1']"
+        s"select id, name, price, ts from $tableName1 ['hoodie.datasource.query.type'=>'snapshot','as.of.instant'=>'$instant1']"
 
         checkAnswer(querySql)(
           Seq(1, "a1", 10.0, 1000)
@@ -74,6 +74,183 @@ class TestQueryTableWithArgs extends HoodieSparkSqlTestBase {
         checkAnswer(
           s"select id, name, price, ts from $tableName1 TIMESTAMP AS OF '$instant1'")(
           Seq(1, "a1", 10.0, 1000)
+        )
+
+      }
+    }
+  }
+
+  test("Test query table with incremental args") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        val tableName1 = generateTableName
+        println(HoodieSparkUtils.getSparkVersion)
+        spark.sql(
+          s"""
+             |create table $tableName1 (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName1'
+       """.stripMargin)
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(s"${tmp.getCanonicalPath}/$tableName1")
+          .setConf(spark.sessionState.newHadoopConf())
+          .build()
+
+        // instant1 : insert a row
+        spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
+
+
+        metaClient.reloadActiveTimeline()
+        val instant1 = metaClient.getActiveTimeline.getAllCommitsTimeline
+          .lastInstant().get().getTimestamp
+
+        // instant2 : insert a row
+        spark.sql(s"insert into $tableName1 values(1, 'a2', 20, 2000)")
+
+        checkAnswer(s"select id, name, price, ts from $tableName1")(
+          Seq(1, "a2", 20.0, 2000)
+        )
+
+        metaClient.reloadActiveTimeline()
+        val instant2 = metaClient.getActiveTimeline.getAllCommitsTimeline
+          .lastInstant().get().getTimestamp
+
+        // instant3 : insert a row
+        spark.sql(s"insert into $tableName1 values(1, 'a3', 30, 3000)")
+
+        metaClient.reloadActiveTimeline()
+        val instant3 = metaClient.getActiveTimeline.getAllCommitsTimeline
+          .lastInstant().get().getTimestamp
+
+        assert(metaClient.getActiveTimeline.getAllCommitsTimeline.lastInstant().get().getAction.equals("deltacommit"))
+        checkAnswer(s"select id, name, price, ts from $tableName1")(
+          Seq(1, "a3", 30.0, 3000)
+        )
+        // query incremental data in (instant1 instant2]
+        val querySql =
+          s"""select id, name, price, ts from $tableName1
+             |[
+             |'hoodie.datasource.query.type'=>'incremental',
+             |'hoodie.datasource.read.begin.instanttime'=>'$instant1',
+             |'hoodie.datasource.read.end.instanttime'=>'$instant2'
+             |]""".stripMargin
+        checkAnswer(querySql)(
+          Seq(1, "a2", 20.0, 2000)
+        )
+
+        println(s"instan1:$instant1,instant2:$instant2,instant3:$instant3")
+
+        val querySqlWithSkipMerge =
+          s"""select id, name, price, ts from $tableName1
+             |[
+             |'hoodie.datasource.query.type'=>'snapshot',
+             |'hoodie.datasource.merge.type'=>'skip_merge'
+             |]""".stripMargin
+        checkAnswer(querySqlWithSkipMerge)(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(1, "a3", 30.0, 3000)
+        )
+
+
+        // query incremental data in [instant1 instant3] with skip_merge
+        val querySqlWithSkipMerge1 =
+          s"""select id, name, price, ts from $tableName1
+             |[
+             |'hoodie.datasource.query.type'=>'incremental',
+             |'hoodie.datasource.read.begin.instanttime'=>'${instant1.toLong - 1}',
+             |'hoodie.datasource.read.end.instanttime'=>'$instant3',
+             |'hoodie.datasource.merge.type'=>'skip_merge'
+             |]""".stripMargin
+        checkAnswer(querySqlWithSkipMerge1)(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(1, "a3", 30.0, 3000)
+        )
+      }
+    }
+  }
+
+  test("Test query mor table with read_optimized args") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        val tableName1 = generateTableName
+        println(HoodieSparkUtils.getSparkVersion)
+        spark.sql(
+          s"""
+             |create table $tableName1 (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.compact.inline='true',
+             |  hoodie.compact.inline.max.delta.commits='3'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName1'
+       """.stripMargin)
+
+        // first step : insert a row
+        spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
+
+        val querySqlWithRo =
+          s"""select id, name, price, ts from $tableName1
+             | ['hoodie.datasource.query.type'=>'read_optimized']
+             | """.stripMargin
+
+        val querySqlWithRt =
+          s"""select id, name, price, ts from $tableName1
+             | ['hoodie.datasource.query.type'=>'snapshot']
+             | """.stripMargin
+
+        checkAnswer(querySqlWithRo)(
+          Seq(1, "a1", 10.0, 1000)
+        )
+
+        checkAnswer(querySqlWithRt)(
+          Seq(1, "a1", 10.0, 1000)
+        )
+
+        // second step : insert a row
+        spark.sql(s"insert into $tableName1 values(1, 'a2', 20, 2000)")
+
+        checkAnswer(querySqlWithRo)(
+          Seq(1, "a1", 10.0, 1000)
+        )
+        checkAnswer(querySqlWithRt)(
+          Seq(1, "a2", 20.0, 2000)
+        )
+        // third step : insert a row ,trigger compaction
+        spark.sql(s"insert into $tableName1 values(1, 'a3', 30, 3000)")
+
+        val metaClient1 = HoodieTableMetaClient.builder()
+          .setBasePath(s"${tmp.getCanonicalPath}/$tableName1")
+          .setConf(spark.sessionState.newHadoopConf())
+          .build()
+
+        val instant = metaClient1.getActiveTimeline.getAllCommitsTimeline
+          .lastInstant().get()
+
+        // check the last commit action is compaction
+        assert("commit".equals(instant.getAction))
+
+        checkAnswer(querySqlWithRo)(
+          Seq(1, "a3", 30.0, 3000)
+        )
+
+        checkAnswer(querySqlWithRt)(
+          Seq(1, "a3", 30.0, 3000)
         )
 
       }
@@ -190,14 +367,13 @@ class TestQueryTableWithArgs extends HoodieSparkSqlTestBase {
 
         // time travel from instant1 with table args
 
-        val errorMsg = s"Only one table parameter ['hoodie.datasource.query.type'='snapshot','as.of.instant'='$instant1'] and snapshot query TIMESTAMPASOF'$instant1' can exist("
+        val errorMsg = s"Only one table parameter ['hoodie.datasource.query.type'=>'snapshot','as.of.instant'=>'$instant1'] and snapshot query TIMESTAMPASOF'$instant1' can exist("
 
         checkExceptionContain(
-          s"select id, name, price, ts from $tableName1 ['hoodie.datasource.query.type'='snapshot','as.of.instant'='$instant1'] TIMESTAMP AS OF '$instant1'")(errorMsg)
+          s"select id, name, price, ts from $tableName1 ['hoodie.datasource.query.type'=>'snapshot','as.of.instant'=>'$instant1'] TIMESTAMP AS OF '$instant1'")(errorMsg)
       }
     }
   }
-
 
   test("Test Insert Into Records with snapshot args To new Table") {
     if (HoodieSparkUtils.gteqSpark3_2) {
@@ -248,34 +424,131 @@ class TestQueryTableWithArgs extends HoodieSparkSqlTestBase {
        """.stripMargin)
 
         // Insert into dynamic partition
-
-//        == Parsed Logical Plan ==
-//        'InsertIntoStatement 'UnresolvedRelation [h1], [], false, false, false
-//        +- 'Project ['id, 'name, 'price, 'ts, 2022-02-14 AS dt#43]
-//        +- 'TableArgumentRelation 'UnresolvedRelation [h0], [], false, [hoodie.datasource.query.type=snapshot, as.of.instant=20221109081017574]
-
-//        spark.sql(
-//          s"""
-//             | insert into $tableName2
-//             | select id, name, price, ts, '2022-02-14' as dt
-//             | from $tableName1 ['hoodie.datasource.query.type'='snapshot','as.of.instant'='$instant1']
-//        """.stripMargin).explain(ExtendedMode.name)
-
-
-        println("before read")
-        // Insert into static partition
-//        == Parsed Logical Plan ==
-//        'InsertIntoStatement 'UnresolvedRelation [h1], [], false, [dt=Some(2022-02-15)], false, false
-//        +- 'Project [2 AS id#88, a2 AS name#89, 'price, 'ts]
-//        +- 'UnresolvedRelation [h0], [], false
-
         spark.sql(
           s"""
-             | insert into $tableName2 partition (dt='2022-02-15')
-             |  select 2 as id, 'a2' as name, price, ts
-             |  from $tableName1 timestamp as of $instant1
-        """.stripMargin).explain(ExtendedMode.name)
+             | insert into $tableName2
+             | select id, name, price, ts, '2022-02-14' as dt
+             | from $tableName1 ['hoodie.datasource.query.type'=>'snapshot','as.of.instant'=>'$instant1']
+        """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, dt from $tableName2")(
+          Seq(1, "a1", 10.0, 1000, "2022-02-14")
+        )
 
+        // Insert into static partition
+        spark.sql(
+          s"""
+             | insert into $tableName2 partition(dt = '2022-02-15')
+             | select 2 as id, 'a2' as name, price, ts
+             | from $tableName1 ['hoodie.datasource.query.type'=>'snapshot','as.of.instant'=>'$instant1']
+        """.stripMargin)
+        checkAnswer(
+          s"select id, name, price, ts, dt from $tableName2")(
+          Seq(1, "a1", 10.0, 1000, "2022-02-14"),
+          Seq(2, "a2", 10.0, 1000, "2022-02-15")
+        )
+      }
+    }
+  }
+
+  test("Test Select Record with snapshot args and Repartition") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(s"${tmp.getCanonicalPath}/$tableName")
+          .setConf(spark.sessionState.newHadoopConf())
+          .build()
+
+        val instant = metaClient.getActiveTimeline.getAllCommitsTimeline
+          .lastInstant().get().getTimestamp
+        spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+
+        checkAnswer(s"select id, name, price, ts from $tableName distribute by cast(rand() * 2 as int)")(
+          Seq(1, "a2", 20.0, 2000)
+        )
+
+        // time travel from instant
+        checkAnswer(
+          s"select id, name, price, ts from $tableName  ['hoodie.datasource.query.type'=>'snapshot','as.of.instant'=>'$instant'] distribute by cast(rand() * 2 as int)")(
+          Seq(1, "a1", 10.0, 1000)
+        )
+      }
+    }
+  }
+
+  test("Test Time Travel With Schema Evolution") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        spark.sql("set hoodie.schema.on.read.enable=true")
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(s"${tmp.getCanonicalPath}/$tableName")
+          .setConf(spark.sessionState.newHadoopConf())
+          .build()
+        val instant1 = metaClient.reloadActiveTimeline().getAllCommitsTimeline
+          .lastInstant().get().getTimestamp
+
+        // add column
+        spark.sql(s"alter table $tableName add columns (company string)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 11, 1100, 'hudi')")
+        val instant2 = metaClient.reloadActiveTimeline().getAllCommitsTimeline
+          .lastInstant().get().getTimestamp
+
+        // drop column
+        spark.sql(s"alter table $tableName drop column price")
+
+        val result1 = spark.sql(s"select * from ${tableName}  ['hoodie.datasource.query.type'=>'snapshot','as.of.instant'=>'$instant1'] order by id")
+          .drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name").collect()
+        checkAnswer(result1)(Seq(1, "a1", 10.0, 1000))
+
+        val result2 = spark.sql(s"select * from ${tableName}  ['hoodie.datasource.query.type'=>'snapshot','as.of.instant'=>'$instant2'] order by id")
+          .drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name").collect()
+        checkAnswer(result2)(
+          Seq(1, "a1", 10.0, 1000, null),
+          Seq(2, "a2", 11.0, 1100, "hudi")
+        )
+
+        val result3 = spark.sql(s"select * from ${tableName} order by id")
+          .drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name").collect()
+        checkAnswer(result3)(
+          Seq(1, "a1", 1000, null),
+          Seq(2, "a2", 1100, "hudi")
+        )
       }
     }
   }

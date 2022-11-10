@@ -1046,7 +1046,7 @@ tableArgumentList
     ;
 
 tableArgument
-   : key=tableArgumentKey '=' value=tableArgumentValue
+   : key=tableArgumentKey '=>' value=tableArgumentValue
    ;
 
 tableArgumentKey
@@ -1889,7 +1889,6 @@ IDENTIFIER
 BACKQUOTED_IDENTIFIER
     : '`' ( ~'`' | '``' )* '`'
     ;
-
 
 fragment DECIMAL_DIGITS
     : DIGIT+ '.' DIGIT*

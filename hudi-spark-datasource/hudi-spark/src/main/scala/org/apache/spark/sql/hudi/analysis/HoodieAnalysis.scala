@@ -516,12 +516,6 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
         assert(queryArgs.contains(DataSourceReadOptions.QUERY_TYPE.key()), s"When using sql to query the hudi table, you must specify the 'hoodie.datasource.query.type' parameter")
         // Add a white list to the key to prevent users adding other parameters
         val KeyWhiteSet: HashSet[String] = HashSet(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
-          , DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL
-          , DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
-          , DataSourceReadOptions.INCREMENTAL_FORMAT_LATEST_STATE_VAL
-          , DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL
-          , DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL
-          , DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL
           , DataSourceReadOptions.INCREMENTAL_FORMAT.key()
           , DataSourceReadOptions.QUERY_TYPE.key()
           , DataSourceReadOptions.REALTIME_MERGE.key()
@@ -553,8 +547,6 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           throw new AnalysisException(
             s"only support hudi read options,not support (${notAllowKey.toString()})")
         }
-
-
         val hoodieCatalogTable: HoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
         val table: CatalogTable = hoodieCatalogTable.table
         val pathOption: Option[(String, String)] = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))

@@ -87,11 +87,6 @@ class HoodieSpark3_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       throw new ParseException(
         s"Only one table parameter ${tableArgumentList.getText} and snapshot query ${temporalClause.getText} can exist", ctx)
     }
-    println(s"visitTableName table:${relation.tableName}  txt:${ctx.getText}")
-
-    if (tableArgumentList != null && tableArgumentList.tableArgument().size() > 0) {
-      println(s"visitTableName table:${relation.tableName}  args:${tableArgumentList.tableArgument().get(0).getText}")
-    }
     val table = if (tableArgumentList != null && tableArgumentList.tableArgument().size() > 0) {
       mayApplyAliasPlan(
         ctx.tableAlias, relation.optionalMap(ctx.tableArgumentList())(withTableArgument))
@@ -158,9 +153,6 @@ class HoodieSpark3_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
 
   // ============== The following code is fork from org.apache.spark.sql.catalyst.parser.AstBuilder
   override def visitSingleStatement(ctx: SingleStatementContext): LogicalPlan = withOrigin(ctx) {
-    println(s"visitSingleStatement : ${ctx.statement.getClass} ${ctx.statement().toStringTree}")
-    println(s"visitSingleStatement : ${ctx.statement.children.get(0).getClass} ${ctx.statement.children.get(0).getText}")
-
     visit(ctx.statement).asInstanceOf[LogicalPlan]
   }
 
@@ -391,7 +383,6 @@ class HoodieSpark3_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     val cols = Option(ctx.identifierList()).map(visitIdentifierList).getOrElse(Nil)
     val partitionKeys = Option(ctx.partitionSpec).map(visitPartitionSpec).getOrElse(Map.empty)
 
-    println(s"visitInsertIntoTable dt:$partitionKeys table:${ctx.multipartIdentifier().getText}")
     if (ctx.EXISTS != null) {
       operationNotAllowed("INSERT INTO ... IF NOT EXISTS", ctx)
     }
