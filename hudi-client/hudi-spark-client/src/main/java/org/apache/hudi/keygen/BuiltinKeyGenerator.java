@@ -69,6 +69,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   private static final String COMPOSITE_KEY_FIELD_VALUE_INFIX = ":";
 
+  protected static final String FIELDS_SEP = ",";
+
   protected static final UTF8String NULL_RECORD_KEY_PLACEHOLDER_UTF8 = UTF8String.fromString(NULL_RECORDKEY_PLACEHOLDER);
   protected static final UTF8String EMPTY_RECORD_KEY_PLACEHOLDER_UTF8 = UTF8String.fromString(EMPTY_RECORDKEY_PLACEHOLDER);
 
