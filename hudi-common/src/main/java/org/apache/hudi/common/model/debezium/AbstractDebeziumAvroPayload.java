@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model.debezium;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.Option;
 
@@ -76,7 +77,12 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     boolean delete = false;
     if (insertRecord instanceof GenericRecord) {
       GenericRecord record = (GenericRecord) insertRecord;
-      Object value = record.get(DebeziumConstants.FLATTENED_OP_COL_NAME);
+      Object value;
+      try {
+        value = record.get(DebeziumConstants.FLATTENED_OP_COL_NAME);
+      } catch (AvroRuntimeException e) {
+        value = null;
+      }
       delete = value != null && value.toString().equalsIgnoreCase(DebeziumConstants.DELETE_OP);
     }
 

@@ -493,32 +493,31 @@ public class HoodieAvroUtils {
     String[] parts = fieldName.split("\\.");
     GenericRecord valueNode = record;
     int i = 0;
-    try {
-      for (; i < parts.length; i++) {
-        String part = parts[i];
-        Object val = valueNode.get(part);
-        if (val == null) {
-          break;
-        }
 
-        // return, if last part of name
-        if (i == parts.length - 1) {
-          Schema fieldSchema = valueNode.getSchema().getField(part).schema();
-          return convertValueForSpecificDataTypes(fieldSchema, val, consistentLogicalTimestampEnabled);
-        } else {
-          // VC: Need a test here
-          if (!(val instanceof GenericRecord)) {
-            throw new HoodieException("Cannot find a record at part value :" + part);
-          }
-          valueNode = (GenericRecord) val;
-        }
+    for (; i < parts.length; i++) {
+      String part = parts[i];
+      Object val;
+      try {
+        val = valueNode.get(part);
+      } catch (AvroRuntimeException e) {
+        // Since avro 1.10, arvo will throw AvroRuntimeException("Not a valid schema field: " + key)
+        // rather than return null like the previous version if record doesn't contain this key.
+        val = null;
       }
-    } catch (AvroRuntimeException e) {
-      // Since avro 1.10, arvo will throw AvroRuntimeException("Not a valid schema field: " + key)
-      // rather than return null like the previous version if if record doesn't contain this key.
-      // So when returnNullIfNotFound is true, catch this exception.
-      if (!returnNullIfNotFound) {
-        throw e;
+      if (val == null) {
+        break;
+      }
+
+      // return, if last part of name
+      if (i == parts.length - 1) {
+        Schema fieldSchema = valueNode.getSchema().getField(part).schema();
+        return convertValueForSpecificDataTypes(fieldSchema, val, consistentLogicalTimestampEnabled);
+      } else {
+        // VC: Need a test here
+        if (!(val instanceof GenericRecord)) {
+          throw new HoodieException("Cannot find a record at part value :" + part);
+        }
+        valueNode = (GenericRecord) val;
       }
     }
 
