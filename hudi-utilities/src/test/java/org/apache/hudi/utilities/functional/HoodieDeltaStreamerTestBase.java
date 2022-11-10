@@ -104,14 +104,14 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(true, true);
-    PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
-    ORC_SOURCE_ROOT = dfsBasePath + "/orcFiles";
-    JSON_KAFKA_SOURCE_ROOT = dfsBasePath + "/jsonKafkaFiles";
+    UtilitiesTestBase.initTestServices(false, true, true);
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFiles";
+    ORC_SOURCE_ROOT = basePath + "/orcFiles";
+    JSON_KAFKA_SOURCE_ROOT = basePath + "/jsonKafkaFiles";
     testUtils = new KafkaTestUtils();
     testUtils.setup();
     topicName = "topic" + testNum;
-    prepareInitialConfigs(dfs, dfsBasePath, testUtils.brokerAddress());
+    prepareInitialConfigs(fs, basePath, testUtils.brokerAddress());
 
     prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
     prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
