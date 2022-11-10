@@ -39,6 +39,7 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
@@ -56,6 +57,7 @@ import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -69,6 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * IT cases for {@link HoodieFlinkClusteringJob}.
  */
+@ExtendWith(FlinkMiniCluster.class)
 public class ITTestHoodieFlinkClustering {
 
   private static final Map<String, String> EXPECTED = new HashMap<>();
