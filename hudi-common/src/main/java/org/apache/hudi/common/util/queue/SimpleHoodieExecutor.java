@@ -34,7 +34,9 @@ import java.util.function.Function;
  * Single Writer and Single Reader mode. Also this SimpleHoodieExecutor has no inner message queue and no inner lock.
  * Consuming and writing records from iterator directly.
  *
- * So that there is no need for additional memory and cpu resources due to lock or multithreading.
+ * Compared with queue based Executor
+ * Advantages: there is no need for additional memory and cpu resources due to lock or multithreading.
+ * Disadvantages: lost some benefits such as speed limit. And maybe lower throughput.
  */
 public class SimpleHoodieExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
