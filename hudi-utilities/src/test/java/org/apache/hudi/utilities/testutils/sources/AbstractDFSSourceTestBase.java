@@ -62,7 +62,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices(true, false, false);
   }
 
   @AfterAll
@@ -117,7 +117,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    */
   @Test
   public void testReadingFromSource() throws IOException {
-    dfs.mkdirs(new Path(dfsRoot));
+    fs.mkdirs(new Path(dfsRoot));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource());
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
@@ -125,7 +125,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
         sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     // Test respecting sourceLimit
     int sourceLimit = 10;
-    RemoteIterator<LocatedFileStatus> files = dfs.listFiles(generateOneFile("1", "000", 100), true);
+    RemoteIterator<LocatedFileStatus> files = fs.listFiles(generateOneFile("1", "000", 100), true);
     FileStatus file1Status = files.next();
     assertTrue(file1Status.getLen() > sourceLimit);
     assertEquals(Option.empty(),
