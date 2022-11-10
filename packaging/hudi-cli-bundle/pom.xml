@@ -101,14 +101,8 @@
                                     <include>org.apache.hudi:hudi-hadoop-mr</include>
                                     <include>org.apache.hudi:hudi-timeline-service</include>
 
-                                    <include>org.apache.spark:spark-core_${scala.binary.version}</include>
-                                    <include>org.apache.spark:spark-sql_${scala.binary.version}</include>
-
                                     <include>org.apache.logging.log4j:*</include>
                                     <include>org.scala-lang:scala-library</include>
-                                    <include>org.apache.hadoop:hadoop-common</include>
-                                    <include>org.apache.hadoop:hadoop-hdfs</include>
-                                    <include>org.apache.hadoop:hadoop-auth</include>
                                     <include>org.apache.parquet:parquet-hadoop</include>
 
                                     <include>javax.servlet:javax.servlet-api</include>
@@ -181,7 +175,11 @@
                                     <include>com.fasterxml.woodstox:woodstox-core</include>
                                     <include>org.codehaus.woodstox:stax2-api</include>
                                     <include>commons-collections:commons-collections</include>
-                                    <include>commons-*:commons-*</include>
+                                    <include>commons-configuration:*</include>
+                                    <include>commons-lang:*</include>
+                                    <include>com.google.code.gson:gson</include>
+                                    <include>org.fusesource.jansi:jansi</include>
+                                    <include>net.java.dev.jna:jna</include>
                                 </includes>
                             </artifactSet>
                             <relocations>
@@ -546,17 +544,6 @@
 
         <dependency>
             <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-common</artifactId>
-            <scope>compile</scope>
-
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-hdfs</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-auth</artifactId>
             <version>${hadoop.version}</version>
             <scope>compile</scope>
@@ -584,22 +571,6 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.spark</groupId>
-            <artifactId>spark-core_${scala.binary.version}</artifactId>
-            <scope>compile</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>javax.validation</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.spark</groupId>
-            <artifactId>spark-sql_${scala.binary.version}</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
             <groupId>javax.validation</groupId>
             <artifactId>validation-api</artifactId>
             <version>1.1.0.Final</version>
@@ -609,6 +580,36 @@
             <groupId>org.glassfish</groupId>
             <artifactId>jakarta.el</artifactId>
             <version>3.0.3</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.woodstox</groupId>
+            <artifactId>woodstox-core</artifactId>
+            <scope>compile</scope>
+            <version>5.0.3</version>
+        </dependency>
+        <dependency>
+            <groupId>org.codehaus.woodstox</groupId>
+            <artifactId>stax2-api</artifactId>
+            <scope>compile</scope>
+            <version>3.1.4</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
+            <version>3.21.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jline</groupId>
+            <artifactId>jline-terminal-jna</artifactId>
+            <version>3.21.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.fusesource.jansi</groupId>
+            <artifactId>jansi</artifactId>
+            <version>2.4.0</version>
             <scope>compile</scope>
         </dependency>
 
