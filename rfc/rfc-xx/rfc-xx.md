@@ -456,15 +456,18 @@ interface HoodieCatalog {
 
 ## Rollout/Adoption Plan
 
-TBA
+To validate proof-of-concept of proposed (mid-level) APIs we're planning to prototype new 
+integrations for Spark and Presto on top of then.
+
+Such new integrations will be treated as experimental in 0.13, will be placed behind a 
+feature-flag disabled by default. Based on its operational experience we will flip this 
+feature-flag to be enabled by default and eliminate it in one of the subsequent releases. 
 
 ## Test Plan
 
-- [ ] Unit tests for each API.
-- [ ] Functional tests for each component.
-- [ ] Integration tests covering end-to-end interaction between all components.
-- [ ] Validate data as well as metadata.
-- [ ] Validate query plans and results.
+- [ ] Comprehensive UTs/FTs for new components
+- [ ] Existing integration tests covering end-to-end interaction between all components
+- [ ] Performance evaluation
 
 ## Appendix A: Hive-specific HoodieRecord implementation
 
