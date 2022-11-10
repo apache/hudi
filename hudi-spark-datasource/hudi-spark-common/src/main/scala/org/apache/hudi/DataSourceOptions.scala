@@ -380,7 +380,7 @@ object DataSourceWriteOptions {
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")
     .noDefaultValue()
-    .withDocumentation("Comma separated list of partitions to delete")
+    .withDocumentation("Comma separated list of partitions to delete. Allows use of wildcard *")
 
   val STREAMING_RETRY_CNT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.retry.count")
