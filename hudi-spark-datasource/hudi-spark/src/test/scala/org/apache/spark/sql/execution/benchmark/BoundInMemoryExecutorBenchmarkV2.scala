@@ -28,7 +28,7 @@ import org.apache.spark.sql.{DataFrame, RowFactory, SaveMode, SparkSession}
 
 import scala.util.Random
 
-object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
+object BoundInMemoryExecutorBenchmarkV2 extends HoodieBenchmarkBase {
 
   protected val spark: SparkSession = getSparkSession
 
