@@ -180,6 +180,8 @@
                                     <include>com.google.code.gson:gson</include>
                                     <include>org.fusesource.jansi:jansi</include>
                                     <include>net.java.dev.jna:jna</include>
+                                    <include>com.jakewharton.fliptables:fliptables</include>
+                                    <include>com.google.re2j:re2j</include>
                                 </includes>
                             </artifactSet>
                             <relocations>
