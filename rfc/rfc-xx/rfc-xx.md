@@ -272,6 +272,40 @@ enum ReadingMode {
 }
 ```
 
+**Expression** (**Predicate**)
+
+We will need to introduce our own Expression hierarchy supporting a *superset* of the 
+commonly used expressions for the following reasons:
+1. We need to do deep introspections into these expression trees (in the analyses we
+   run w/in Column Stats Index for ex)
+2. However, we won't be implementing an *Expression Execution Engine*: for execution
+   we will continue to rely on query engine's machinery simply relaying expression-trees from
+   our own representation into the engine-specific ones
+
+```java
+interface Expression {
+  Expression[] children();
+}
+
+// Unary expressions like NOT, CAST, common single argument functions like sin, abs, etc,
+interface UnaryExpression {
+  Expression child();
+}
+
+// Binary expressions like AND, OR, GT, etc
+interface BinaryExpression {
+  Expresion left();
+  Expression right();
+}
+
+// TODO clarify if we need this delineation 
+// Simplified representation of the more expansive `Expression` tree structure (for ex, 
+// used for filter push-down)
+class Predicate {
+  // ...
+}
+```
+
 #### Components & APIs
 
 **TimelineView** interface will be providing lightweight view of Hudi's timeline to be
@@ -348,26 +382,6 @@ wrapping around `RecordReader`. The key advantage here is that
 the `HoodieRealtimeRecordReader` won't have to spend cycles
 converting `ArrayWritable` to `Avro` and vice-versa as it does today.
 
-**Expression** and **Predicate**
-
-```java
-interface Expression {
-    enum Operator {
-        AND,
-        OR,
-        LESS_THAN,
-        GREATER_THAN
-        // and more
-    }
-    
-    Operator op();
-}
-
-class Predicate implements Expression {
-    // Analyze expression
-    public boolean accept (Expression expression) 
-}
-```
 
 **Higher level user-friendly APIs**
 
