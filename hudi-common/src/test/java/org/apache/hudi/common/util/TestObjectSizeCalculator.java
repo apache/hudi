@@ -74,7 +74,9 @@ public class TestObjectSizeCalculator {
     assertEquals(32, getObjectSize(emptyClass));
     assertEquals(40, getObjectSize(stringClass));
     assertEquals(40, getObjectSize(payloadClass));
-    assertEquals(HoodieAvroUtils.gteqAvro1_10() ? 1320 : 1240,
+    // Since avro 1.9, Schema use ConcurrentHashMap instead of LinkedHashMap to
+    // implement props, which will change the size of the object.
+    assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1320 : 1240,
         getObjectSize(Schema.create(Schema.Type.STRING)));
     assertEquals(104, getObjectSize(person));
   }

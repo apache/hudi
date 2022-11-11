@@ -2347,7 +2347,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           new HashMap<HoodieLogBlockType, Integer>() {{
             put(HoodieLogBlockType.AVRO_DATA_BLOCK, 0); // not supported
             put(HoodieLogBlockType.HFILE_DATA_BLOCK, 0); // not supported
-            put(HoodieLogBlockType.PARQUET_DATA_BLOCK, HoodieAvroUtils.gteqAvro1_10() ? 2593 : 2605);
+            put(HoodieLogBlockType.PARQUET_DATA_BLOCK, HoodieAvroUtils.gteqAvro1_9() ? 2593 : 2605);
           }};
 
       List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
