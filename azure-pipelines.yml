@@ -26,9 +26,11 @@ parameters:
     type: object
     default:
       - 'hudi-common'
+      - 'hudi-flink-datasource'
       - 'hudi-flink-datasource/hudi-flink'
       - 'hudi-flink-datasource/hudi-flink1.13.x'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
+      - 'hudi-flink-datasource/hudi-flink1.15.x'
   - name: job2Modules
     type: object
     default:
@@ -36,23 +38,14 @@ parameters:
   - name: job3Modules
     type: object
     default:
-      - 'hudi-cli'
-      - 'hudi-client/hudi-client-common'
-      - 'hudi-client/hudi-flink-client'
-      - 'hudi-client/hudi-java-client'
-      - 'hudi-sync/hudi-adb-sync'
-      - 'hudi-sync/hudi-datahub-sync'
-      - 'hudi-sync/hudi-hive-sync'
-      - 'hudi-sync/hudi-sync-common'
-      - 'hudi-utilities'
+      - 'hudi-spark-datasource'
+      - 'hudi-spark-datasource/hudi-spark'
+      - 'hudi-spark-datasource/hudi-spark2'
+      - 'hudi-spark-datasource/hudi-spark2-common'
+      - 'hudi-spark-datasource/hudi-spark-common'
   - name: job4Modules
     type: object
     default:
-      - '!hudi-cli'
-      - '!hudi-client'
-      - '!hudi-client/hudi-client-common'
-      - '!hudi-client/hudi-flink-client'
-      - '!hudi-client/hudi-java-client'
       - '!hudi-client/hudi-spark-client'
       - '!hudi-common'
       - '!hudi-examples'
@@ -64,12 +57,12 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink'
       - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
-      - '!hudi-sync'
-      - '!hudi-sync/hudi-adb-sync'
-      - '!hudi-sync/hudi-datahub-sync'
-      - '!hudi-sync/hudi-hive-sync'
-      - '!hudi-sync/hudi-sync-common'
-      - '!hudi-utilities'
+      - '!hudi-flink-datasource/hudi-flink1.15.x'
+      - '!hudi-spark-datasource'
+      - '!hudi-spark-datasource/hudi-spark'
+      - '!hudi-spark-datasource/hudi-spark2'
+      - '!hudi-spark-datasource/hudi-spark2-common'
+      - '!hudi-spark-datasource/hudi-spark-common'
 
 variables:
   BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.14'
@@ -91,7 +84,7 @@ stages:
         displayName: UT FT common & flink & UT client/spark-client
         timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@4
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
@@ -99,7 +92,7 @@ stages:
               options: $(MVN_OPTS_INSTALL)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
+          - task: Maven@4
             displayName: UT common flink client/spark-client
             inputs:
               mavenPomFile: 'pom.xml'
@@ -108,7 +101,7 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
-          - task: Maven@3
+          - task: Maven@4
             displayName: FT common flink
             inputs:
               mavenPomFile: 'pom.xml'
@@ -124,7 +117,7 @@ stages:
         displayName: FT client/spark-client
         timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@4
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
@@ -132,7 +125,7 @@ stages:
               options: $(MVN_OPTS_INSTALL)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
+          - task: Maven@4
             displayName: FT client/spark-client
             inputs:
               mavenPomFile: 'pom.xml'
@@ -145,10 +138,10 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
-        displayName: UT FT clients & cli & utilities & sync
+        displayName: UT FT spark-datasource
         timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@4
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
@@ -156,8 +149,8 @@ stages:
               options: $(MVN_OPTS_INSTALL)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
-            displayName: UT clients & cli & utilities & sync
+          - task: Maven@4
+            displayName: UT spark-datasource
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -165,8 +158,8 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
-          - task: Maven@3
-            displayName: FT clients & cli & utilities & sync
+          - task: Maven@4
+            displayName: FT spark-datasource
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -181,7 +174,7 @@ stages:
         displayName: UT FT other modules
         timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@4
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
@@ -189,7 +182,7 @@ stages:
               options: $(MVN_OPTS_INSTALL)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
+          - task: Maven@4
             displayName: UT other modules
             inputs:
               mavenPomFile: 'pom.xml'
@@ -198,7 +191,7 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
-          - task: Maven@3
+          - task: Maven@4
             displayName: FT other modules
             inputs:
               mavenPomFile: 'pom.xml'
@@ -214,7 +207,7 @@ stages:
         displayName: IT modules
         timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@4
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
@@ -222,7 +215,7 @@ stages:
               options: $(MVN_OPTS_INSTALL) -Pintegration-tests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
+          - task: Maven@4
             displayName: UT integ-test
             inputs:
               mavenPomFile: 'pom.xml'
