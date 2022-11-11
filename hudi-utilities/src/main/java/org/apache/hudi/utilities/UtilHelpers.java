@@ -280,8 +280,6 @@ public class UtilHelpers {
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
     sparkConf.set("spark.driver.allowMultipleContexts", "true");
-    sparkConf.set("spark.sql.shuffle.partitions", "4");
-    sparkConf.set("spark.default.parallelism", "4");
 
     additionalConfigs.forEach(sparkConf::set);
     return SparkRDDWriteClient.registerClasses(sparkConf);
