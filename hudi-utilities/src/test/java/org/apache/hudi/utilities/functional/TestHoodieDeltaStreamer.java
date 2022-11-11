@@ -762,7 +762,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     if (!useSchemaPostProcessor) {
       expectedSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source_evolved.avsc")));
     } else {
-      expectedSchema = new Schema.Parser().parse(dfs.open(new Path(dfsBasePath + "/source_evolved_post_processed.avsc")));
+      expectedSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source_evolved_post_processed.avsc")));
     }
     assertEquals(expectedSchema, tableSchema);
 
