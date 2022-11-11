@@ -23,13 +23,14 @@ is the interface for KeyGenerator in Hudi for your reference.
 Before diving into different types of key generators, let’s go over some of the common configs required to be set for
 key generators.
 
-| Config        | Meaning/purpose|        
-| ------------- |:-------------:| 
-| ```hoodie.datasource.write.recordkey.field```     | Refers to record key field. This is a mandatory field. | 
-| ```hoodie.datasource.write.partitionpath.field```     | Refers to partition path field. This is a mandatory field. | 
-| ```hoodie.datasource.write.keygenerator.class``` | Refers to Key generator class(including full path). Could refer to any of the available ones or user defined one. This is a mandatory field. | 
-| ```hoodie.datasource.write.partitionpath.urlencode```| When set to true, partition path will be url encoded. Default value is false. |
-| ```hoodie.datasource.write.hive_style_partitioning```| When set to true, uses hive style partitioning. Partition field name will be prefixed to the value. Format: “<partition_path_field_name>=<partition_path_value>”. Default value is false.|
+| Config        |                                                                                                                                                  Meaning/purpose                                                                                                                                                   |        
+| ------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:| 
+| ```hoodie.datasource.write.recordkey.field```     |                                                                                                                               Refers to record key field. This is a mandatory field.                                                                                                                               | 
+| ```hoodie.datasource.write.partitionpath.field```     |                                                                                                                             Refers to partition path field. This is a mandatory field.                                                                                                                             | 
+| ```hoodie.datasource.write.keygenerator.class``` |                                                                                    Refers to Key generator class(including full path). Could refer to any of the available ones or user defined one. This is a mandatory field.                                                                                    | 
+| ```hoodie.datasource.write.partitionpath.urlencode```|                                                                                                                   When set to true, partition path will be url encoded. Default value is false.                                                                                                                    |
+| ```hoodie.datasource.write.hive_style_partitioning```|                                                             When set to true, uses hive style partitioning. Partition field name will be prefixed to the value. Format: “<partition_path_field_name>=<partition_path_value>”. Default value is false.                                                              |
+| ```hoodie.datasource.hive_sync.partition_value_extractor```|                 This config is used to extract and transform partition value during Hive sync. Its default is MultiPartKeysValueExtractor. If you relied on the default vaule before 0.12.2, you are required to set the config to ```org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor```                  |
 
 There are few more configs involved if you are looking for TimestampBasedKeyGenerator. Will cover those in the respective section.
 
@@ -104,12 +105,12 @@ field name.  Users are expected to set few more configs to use this KeyGenerator
 
 Configs to be set:
 
-| Config        | Meaning/purpose |       
-| ------------- | -------------|
+| Config                                                        | Meaning/purpose |       
+|---------------------------------------------------------------| -------------|
 | ```hoodie.deltastreamer.keygen.timebased.timestamp.type```    | One of the timestamp types supported(UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR) |
-| ```hoodie.deltastreamer.keygen.timebased.output.dateformat```| Output date format | 
-| ```hoodie.deltastreamer.keygen.timebased.timezone```| Timezone of the data format| 
-| ```oodie.deltastreamer.keygen.timebased.input.dateformat```| Input date format |
+| ```hoodie.deltastreamer.keygen.timebased.output.dateformat``` | Output date format | 
+| ```hoodie.deltastreamer.keygen.timebased.timezone```          | Timezone of the data format| 
+| ```hoodie.deltastreamer.keygen.timebased.input.dateformat```  | Input date format |
 
 Let's go over some example values for TimestampBasedKeyGenerator.
 

@@ -111,6 +111,8 @@ Configs to be set:
 | ```hoodie.deltastreamer.keygen.timebased.timezone```| Timezone of the data format| 
 | ```oodie.deltastreamer.keygen.timebased.input.dateformat```| Input date format |
 
+```hoodie.datasource.write.hive_style_partitioning``` must be set to true if your output date format contains ```/``` character.
+
 Let's go over some example values for TimestampBasedKeyGenerator.
 
 #### Timestamp is GMT
