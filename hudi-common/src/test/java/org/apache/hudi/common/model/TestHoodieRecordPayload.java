@@ -26,6 +26,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -58,10 +59,15 @@ public class TestHoodieRecordPayload {
     props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition");
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = true)
-  public void testGetInsertValueWithoutPartitionFields(boolean dropPartitionFields) throws IOException {
-    props.setProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), String.valueOf(dropPartitionFields));
+  /**
+   * test case:
+   * when set hoodie.datasource.write.drop.partition.columns =true,
+   * the records have been removed partition fields by {@link 'HoodieSparkSqlWriter'$write}
+   * the table schema obtained from latest commit info and always contains partition fields
+   */
+  @Test
+  public void testGetInsertValueWithoutPartitionFields() throws IOException {
+    props.setProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), String.valueOf(true));
     recordSchema = Schema.createRecord(Arrays.asList(
         new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
         new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
@@ -75,10 +81,15 @@ public class TestHoodieRecordPayload {
     assertEquals(hoodieAvroPayload.getInsertValue(tableSchema, props), recordOption);
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = false)
-  public void testGetInsertValueWithPartitionFields(boolean dropPartitionFields) throws IOException {
-    props.setProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), String.valueOf(dropPartitionFields));
+  /**
+   * test case:
+   * when set hoodie.datasource.write.drop.partition.columns =false,
+   * the records contains partition fields
+   * the table schema obtained from latest commit info and always contains partition fields
+   */
+  @Test
+  public void testGetInsertValueWithPartitionFields() throws IOException {
+    props.setProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), String.valueOf(false));
     recordSchema = Schema.createRecord(Arrays.asList(
         new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
         new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", null),
@@ -94,6 +105,10 @@ public class TestHoodieRecordPayload {
     assertEquals(hoodieAvroPayload.getInsertValue(tableSchema, props), recordOption);
   }
 
+  /**
+   * for non-partition table
+   * @param dropPartitionFields if hoodie.datasource.write.drop.partition.columns = false & true
+   */
   @ParameterizedTest
   @ValueSource(booleans = {true,false})
   public void testGetInsertValueWithNonPartitionTable(boolean dropPartitionFields) throws IOException {
