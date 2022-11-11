@@ -139,7 +139,10 @@ and more importantly also try to improve the process along the way as well.
  - Sending a Pull Request
    - Format commit and the pull request title like `[HUDI-XXX] Fixes bug in Spark Datasource`, 
      where you replace `HUDI-XXX` with the appropriate JIRA issue. 
+   - Pull request titles must have either `[HUDI-XXX]` or `[MINOR]` in their title. Note the brackets and capitalization.
    - Please ensure your commit message body is descriptive of the change. Bulleted summary would be appreciated.
+   - You must follow the instructions in the template and fill out all fields to pass our compliance checks.
+   - Do not remove or modify any headings in the template.
    - Push your commit to your own fork/branch & create a pull request (PR) against the Hudi repo.
    - If you don't hear back within 3 days on the PR, please send an email to the dev @ mailing list.
    - Address code review comments & keep pushing changes to your fork/branch, which automatically updates the PR
