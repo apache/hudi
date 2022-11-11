@@ -62,12 +62,12 @@ field name.  Users are expected to set few more configs to use this KeyGenerator
 
 Configs to be set:
 
-| Config        | Meaning/purpose |       
-| ------------- | -------------|
+| Config                                                        | Meaning/purpose |       
+|---------------------------------------------------------------| -------------|
 | ```hoodie.deltastreamer.keygen.timebased.timestamp.type```    | One of the timestamp types supported(UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR) |
-| ```hoodie.deltastreamer.keygen.timebased.output.dateformat```| Output date format | 
-| ```hoodie.deltastreamer.keygen.timebased.timezone```| Timezone of the data format| 
-| ```oodie.deltastreamer.keygen.timebased.input.dateformat```| Input date format |
+| ```hoodie.deltastreamer.keygen.timebased.output.dateformat``` | Output date format | 
+| ```hoodie.deltastreamer.keygen.timebased.timezone```          | Timezone of the data format| 
+| ```hoodie.deltastreamer.keygen.timebased.input.dateformat```  | Input date format |
 
 Let's go over some example values for TimestampBasedKeyGenerator.
 
