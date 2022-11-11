@@ -28,7 +28,6 @@ Various python packages may also need to be installed so you should get pip and 
 ```bash
 export SPARK_HOME=/path/to/spark/home
 export PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
-export PYSPARK_SUBMIT_ARGS="--master local[*]"
 export PYTHONPATH=$SPARK_HOME/python/:$PYTHONPATH
 export PYTHONPATH=$SPARK_HOME/python/lib/*.zip:$PYTHONPATH
 ```
