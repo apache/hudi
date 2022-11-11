@@ -81,13 +81,8 @@ public class InternalSchemaCache {
    * @return internalSchema
    */
   public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient, boolean cacheEnable) {
-    Option<InternalSchema> candidateSchema = getSchemaByReadingCommitFile(versionID, metaClient);
-    if (candidateSchema.isPresent()) {
-      return candidateSchema.get();
-    }
     if (!cacheEnable) {
-      // parse history schema and return directly
-      return InternalSchemaUtils.searchSchema(versionID, getHistoricalSchemas(metaClient));
+      getInternalSchemaByVersionId(versionID, metaClient);
     }
     String tablePath = metaClient.getBasePath();
     // use segment lock to reduce competition.
@@ -117,22 +112,6 @@ public class InternalSchemaCache {
     return result;
   }
 
-  private static Option<InternalSchema> getSchemaByReadingCommitFile(long versionID, HoodieTableMetaClient metaClient) {
-    try {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(f -> f.getTimestamp().equals(String.valueOf(versionID))).collect(Collectors.toList());
-      if (instants.isEmpty()) {
-        return Option.empty();
-      }
-      byte[] data = timeline.getInstantDetails(instants.get(0)).get();
-      HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
-      String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
-      return SerDeHelper.fromJson(latestInternalSchemaStr);
-    } catch (Exception e) {
-      throw new HoodieException("Failed to read schema from commit metadata", e);
-    }
-  }
-
   /**
    * Get internalSchema and avroSchema for compaction/cluster operation.
    *
@@ -142,24 +121,36 @@ public class InternalSchemaCache {
    */
   public static Pair<Option<String>, Option<String>> getInternalSchemaAndAvroSchemaForClusteringAndCompaction(HoodieTableMetaClient metaClient, String compactionAndClusteringInstant) {
     // try to load internalSchema to support Schema Evolution
-    HoodieTimeline timelineBeforeCurrentCompaction = metaClient.getCommitsAndCompactionTimeline().findInstantsBefore(compactionAndClusteringInstant).filterCompletedInstants();
+    HoodieTimeline timelineBeforeCurrentCompaction = metaClient.getActiveTimeline()
+        .getCommitsTimeline().filterCompletedAndCompactionInstants().findInstantsBefore(compactionAndClusteringInstant);
     Option<HoodieInstant> lastInstantBeforeCurrentCompaction =  timelineBeforeCurrentCompaction.lastInstant();
     if (lastInstantBeforeCurrentCompaction.isPresent()) {
       // try to find internalSchema
-      byte[] data = timelineBeforeCurrentCompaction.getInstantDetails(lastInstantBeforeCurrentCompaction.get()).get();
       HoodieCommitMetadata metadata;
       try {
+        byte[] data = timelineBeforeCurrentCompaction.getInstantDetails(lastInstantBeforeCurrentCompaction.get()).get();
         metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot read metadata from commit: %s", lastInstantBeforeCurrentCompaction.get()), e);
       }
       String internalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
-      if (internalSchemaStr != null) {
-        String existingSchemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
-        return Pair.of(Option.of(internalSchemaStr), Option.of(existingSchemaStr));
+      String avroSchemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
+      if (!StringUtils.isNullOrEmpty(internalSchemaStr)) {
+        return Pair.of(Option.of(internalSchemaStr), Option.of(avroSchemaStr));
       }
+      LOG.info(String.format("Schema evolution has not occurred before compaction commit: %s", compactionAndClusteringInstant));
+      Schema avroSchemaWithMeta = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(avroSchemaStr));
+      internalSchemaStr = SerDeHelper.toJson(AvroInternalSchemaConverter.convert(avroSchemaWithMeta));
+      return Pair.of(Option.of(internalSchemaStr), Option.of(avroSchemaWithMeta.toString()));
     }
-    return Pair.of(Option.empty(), Option.empty());
+    LOG.warn(String.format("cannot find any valid completed commits before current cluster/compaction instantTime: %s", compactionAndClusteringInstant));
+    // if a commits before compaction is cleaned, try to find internalSchema by search
+    Option<InternalSchema> oldInternalSchemaOpt = Option.of(InternalSchemaUtils.searchSchema(Long.parseLong(compactionAndClusteringInstant), getHistoricalSchemas(metaClient)));
+    if (oldInternalSchemaOpt.get().isEmptySchema()) {
+      throw new HoodieException(String.format("failed get internalSchema for compaction/clustering instant: %s", compactionAndClusteringInstant));
+    }
+    return Pair.of(oldInternalSchemaOpt.map(SerDeHelper::toJson),
+        oldInternalSchemaOpt.map(f -> AvroInternalSchemaConverter.convert(f, metaClient.getTableConfig().getTableName()).toString()));
   }
 
   /**
@@ -226,9 +217,9 @@ public class InternalSchemaCache {
   }
 
   public static InternalSchema getInternalSchemaByVersionId(long versionId, HoodieTableMetaClient metaClient) {
-    String validCommitLists = metaClient
+    String validCommitFiles = metaClient
         .getCommitsAndCompactionTimeline().filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getFileName).collect(Collectors.joining(","));
-    return getInternalSchemaByVersionId(versionId, metaClient.getBasePathV2().toString(), metaClient.getHadoopConf(), validCommitLists);
+    return getInternalSchemaByVersionId(versionId, metaClient.getBasePathV2().toString(), metaClient.getHadoopConf(), validCommitFiles);
   }
 }
 

@@ -40,7 +40,6 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -53,25 +52,23 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.SCHEMA_COMMIT
 public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchemaStorageManager {
   private static final Logger LOG = LogManager.getLogger(FileBasedInternalSchemaStorageManager.class);
 
-  public static final String SCHEMA_NAME = ".schema";
   private final Path baseSchemaPath;
   private final Configuration conf;
   private HoodieTableMetaClient metaClient;
 
   public FileBasedInternalSchemaStorageManager(Configuration conf, Path baseTablePath) {
-    Path metaPath = new Path(baseTablePath, ".hoodie");
-    this.baseSchemaPath = new Path(metaPath, SCHEMA_NAME);
+    Path metaPath = new Path(baseTablePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    this.baseSchemaPath = new Path(metaPath, HoodieTableMetaClient.SCHEMA_FOLDER_NAME);
     this.conf = conf;
   }
 
   public FileBasedInternalSchemaStorageManager(HoodieTableMetaClient metaClient) {
-    Path metaPath = new Path(metaClient.getBasePath(), ".hoodie");
-    this.baseSchemaPath = new Path(metaPath, SCHEMA_NAME);
+    Path metaPath = new Path(metaClient.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME);
+    this.baseSchemaPath = new Path(metaPath, HoodieTableMetaClient.SCHEMA_FOLDER_NAME);
     this.conf = metaClient.getHadoopConf();
     this.metaClient = metaClient;
   }
 
-  // make metaClient build lazy
   private HoodieTableMetaClient getMetaClient() {
     if (metaClient == null) {
       metaClient = HoodieTableMetaClient.builder().setBasePath(baseSchemaPath.getParent().getParent().toString()).setConf(conf).build();
@@ -102,7 +99,9 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
         // clean residual files
         residualSchemaFiles.forEach(f -> {
           try {
-            fs.delete(new Path(getMetaClient().getSchemaFolderName(), f));
+            Path residualFile = new Path(getMetaClient().getSchemaFolderName(), f);
+            fs.delete(residualFile);
+            LOG.info(String.format("clean residual schema file: %s", residualFile));
           } catch (IOException o) {
             throw new HoodieException(o);
           }
@@ -116,13 +115,16 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public void cleanOldFiles(List<String> validateCommits) {
     try {
       FileSystem fs = baseSchemaPath.getFileSystem(conf);
-      if (fs.exists(baseSchemaPath)) {
+      if (fs.exists(baseSchemaPath) && validateCommits.size() > 0) {
         List<String> candidateSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath)).filter(f -> f.isFile())
             .map(file -> file.getPath().getName()).collect(Collectors.toList());
         List<String> validateSchemaFiles = candidateSchemaFiles.stream().filter(f -> validateCommits.contains(f.split("\\.")[0])).collect(Collectors.toList());
         for (int i = 0; i < validateSchemaFiles.size(); i++) {
-          fs.delete(new Path(validateSchemaFiles.get(i)));
+          Path cleanFile = new Path(getMetaClient().getSchemaFolderName(), validateSchemaFiles.get(i));
+          fs.delete(cleanFile);
+          LOG.info(String.format("clean schema file: %s", cleanFile));
         }
+        LOG.info(String.format("finish clean old history schema files: %s", String.join(",", validateSchemaFiles)));
       }
     } catch (IOException e) {
       throw new HoodieException(e);
@@ -136,7 +138,35 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   @Override
   public String getHistorySchemaStr() {
-    return getHistorySchemaStrByGivenValidCommits(Collections.EMPTY_LIST);
+    try {
+      FileSystem fs = FSUtils.getFs(baseSchemaPath.toString(), conf);
+      if (fs.exists(baseSchemaPath)) {
+        List<String> historySchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath))
+            .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
+            .map(file -> file.getPath().getName()).sorted().collect(Collectors.toList());
+        if (!historySchemaFiles.isEmpty()) {
+          // no need to fetch the latest historySchemaFile, since we will get latest table schema from commit/deltacommit file.
+          // this function will be called, only when we cannot fetch schema from commit file(eg: archived)
+          String schemaFile = historySchemaFiles.get(historySchemaFiles.size() > 1 ? historySchemaFiles.size() - 2 : historySchemaFiles.size() - 1);
+          return readSchemaFromFile(fs, new Path(baseSchemaPath, schemaFile));
+        }
+      }
+    } catch (IOException io) {
+      throw new HoodieException(io);
+    }
+    LOG.error("failed to read history schema");
+    return "";
+  }
+
+  private String readSchemaFromFile(FileSystem fs, Path filePath) throws HoodieIOException {
+    byte[] content;
+    try (FSDataInputStream is = fs.open(filePath)) {
+      content = FileIOUtils.readAsByteArray(is);
+      LOG.info(String.format("read history schema success from file : %s", filePath));
+      return new String(content, StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not read history schema from " + filePath, e);
+    }
   }
 
   @Override
@@ -149,22 +179,14 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
             .map(file -> file.getPath().getName()).filter(f -> commitList.contains(f.split("\\.")[0])).sorted().collect(Collectors.toList());
         if (!validaSchemaFiles.isEmpty()) {
-          Path latestFilePath = new Path(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));
-          byte[] content;
-          try (FSDataInputStream is = fs.open(latestFilePath)) {
-            content = FileIOUtils.readAsByteArray(is);
-            LOG.info(String.format("read history schema success from file : %s", latestFilePath));
-            return new String(content, StandardCharsets.UTF_8);
-          } catch (IOException e) {
-            throw new HoodieIOException("Could not read history schema from " + latestFilePath, e);
-          }
+          return readSchemaFromFile(fs, new Path(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1)));
         }
       }
     } catch (IOException io) {
       throw new HoodieException(io);
     }
-    LOG.info("failed to read history schema");
-    return "";
+    LOG.error(String.format("unable to verify the validity of historical schema files by given commits: %s", String.join(",", validCommits)));
+    return getHistorySchemaStr();
   }
 
   @Override

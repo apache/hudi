@@ -52,6 +52,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -810,13 +811,13 @@ public abstract class AbstractHoodieLogRecordReader {
     }
 
     long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
-    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime,
-        hoodieTableMetaClient, false);
+
+    InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(currentInstantTime, hoodieTableMetaClient);
     InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false).mergeSchema();
     Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, readerSchema.getFullName());
 
-    return Option.of((record) -> rewriteRecordWithNewSchema(record, mergedAvroSchema, Collections.emptyMap()));
+    return Option.of((record) -> rewriteRecordWithNewSchema(record, mergedAvroSchema, InternalSchemaUtils.collectRenameCols(fileSchema, internalSchema)));
   }
 
   /**
