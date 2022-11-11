@@ -36,11 +36,6 @@ public class HoodieParquetConfig<T> {
   private final boolean dictionaryEnabled;
 
   public HoodieParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
-                             int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
-    this(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize, hadoopConf, compressionRatio, true);
-  }
-
-  public HoodieParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
                              int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio, boolean dictionaryEnabled) {
     this.writeSupport = writeSupport;
     this.compressionCodecName = compressionCodecName;

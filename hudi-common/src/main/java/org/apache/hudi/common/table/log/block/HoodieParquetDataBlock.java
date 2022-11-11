@@ -54,6 +54,8 @@ import java.util.Map;
 public class HoodieParquetDataBlock extends HoodieDataBlock {
 
   private final Option<CompressionCodecName> compressionCodecName;
+  private final Option<Double> expectedCompressionRatio;
+  private final Option<Boolean> useDictionaryEncoding;
 
   public HoodieParquetDataBlock(FSDataInputStream inputStream,
                                 Option<byte[]> content,
@@ -66,17 +68,22 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
 
     this.compressionCodecName = Option.empty();
+    this.expectedCompressionRatio = Option.empty();
+    this.useDictionaryEncoding = Option.empty();
   }
 
-  public HoodieParquetDataBlock(
-      @Nonnull List<IndexedRecord> records,
-      @Nonnull Map<HeaderMetadataType, String> header,
-      @Nonnull String keyField,
-      @Nonnull CompressionCodecName compressionCodecName
+  public HoodieParquetDataBlock(List<IndexedRecord> records,
+                                Map<HeaderMetadataType, String> header,
+                                String keyField,
+                                CompressionCodecName compressionCodecName,
+                                double expectedCompressionRatio,
+                                boolean useDictionaryEncoding
   ) {
     super(records, header, new HashMap<>(), keyField);
 
     this.compressionCodecName = Option.of(compressionCodecName);
+    this.expectedCompressionRatio = Option.of(expectedCompressionRatio);
+    this.useDictionaryEncoding = Option.of(useDictionaryEncoding);
   }
 
   @Override
@@ -103,7 +110,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
             ParquetWriter.DEFAULT_PAGE_SIZE,
             1024 * 1024 * 1024,
             new Configuration(),
-            Double.parseDouble(String.valueOf(0.1)));//HoodieStorageConfig.PARQUET_COMPRESSION_RATIO.defaultValue()));
+            expectedCompressionRatio.get(),
+            useDictionaryEncoding.get());
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
