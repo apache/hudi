@@ -295,19 +295,12 @@ public class TestHoodieAvroUtils {
     assertNull(rowKeyNotExist);
 
     // Field does not exist
-    try {
-      HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false, false);
-    } catch (Exception e) {
-      assertEquals("fake_key(Part -fake_key) field not found in record. Acceptable fields were :[timestamp, _row_key, non_pii_col, pii_col]",
-          e.getMessage());
-    }
+    assertEquals("fake_key(Part -fake_key) field not found in record. Acceptable fields were :[timestamp, _row_key, non_pii_col, pii_col]",
+        assertThrows(HoodieException.class, () ->
+            HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false, false)).getMessage());
 
-    // Field exist while value not
-    try {
-      HoodieAvroUtils.getNestedFieldVal(rec, "timestamp", false, false);
-    } catch (Exception e) {
-      assertEquals("The value of timestamp can not be null", e.getMessage());
-    }
+    // Field exists while value not
+    assertNull(HoodieAvroUtils.getNestedFieldVal(rec, "timestamp", false, false));
   }
 
   @Test

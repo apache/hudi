@@ -547,7 +547,11 @@ public class HoodieAvroUtils {
         }
       } else {
         if (!(val instanceof GenericRecord)) {
-          throw new HoodieException("Cannot find a record at part value :" + part);
+          if (returnNullIfNotFound) {
+            return null;
+          } else {
+            throw new HoodieException("Cannot find a record at part value :" + part);
+          }
         } else {
           valueNode = (GenericRecord) val;
         }
