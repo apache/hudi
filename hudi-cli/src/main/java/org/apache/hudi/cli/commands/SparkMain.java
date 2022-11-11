@@ -151,7 +151,7 @@ public class SparkMain {
           }
           configs = new ArrayList<>();
           if (args.length > 10) {
-            configs.addAll(Arrays.asList(args).subList(9, args.length));
+            configs.addAll(Arrays.asList(args).subList(10, args.length));
           }
           returnCode = compact(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[7],
               Integer.parseInt(args[8]), HoodieCompactor.EXECUTE, propsFilePath, configs);
