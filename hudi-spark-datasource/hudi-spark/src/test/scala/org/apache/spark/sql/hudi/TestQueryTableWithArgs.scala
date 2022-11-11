@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.spark.sql.catalyst.parser.ParseException
 
 class TestQueryTableWithArgs extends HoodieSparkSqlTestBase {
 
@@ -285,7 +286,10 @@ class TestQueryTableWithArgs extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 10.0, 1000)
         )
 
-        checkExceptionContain(s"select id, name, price, ts from $tableName1 []")("mismatched input '[' expecting")
+        // Use Spark's default sql parser to throw syntax parsing exceptions
+        // spark 3.3.x throw org.apache.spark.sql.catalyst.parser.ParseException: Syntax error at or near '['(line 1, pos 35)
+        // spark 3.2.x throw org.apache.spark.sql.catalyst.parser.ParseException: mismatched input '[' expecting
+        checkExceptionClass(s"select id, name, price, ts from $tableName1 []")(classOf[ParseException])
 
         val metaClient1 = HoodieTableMetaClient.builder()
           .setBasePath(s"${tmp.getCanonicalPath}/$tableName1")
@@ -585,6 +589,104 @@ class TestQueryTableWithArgs extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 1000, null),
           Seq(2, "a2", 1100, "hudi")
         )
+      }
+    }
+  }
+
+  test("Test Two Table's Union Join with snapshot args") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+
+          val basePath = tmp.getCanonicalPath
+          val tableName1 = tableName + "_1"
+          val tableName2 = tableName + "_2"
+          val path1 = s"$basePath/$tableName1"
+          val path2 = s"$basePath/$tableName2"
+
+          spark.sql(
+            s"""
+               |create table $tableName1 (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+               | location '$path1'
+       """.stripMargin)
+
+          spark.sql(
+            s"""
+               |create table $tableName2 (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+               | location '$path2'
+       """.stripMargin)
+
+          spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
+          spark.sql(s"insert into $tableName1 values(2, 'a2', 20, 1000)")
+
+          checkAnswer(s"select id, name, price, ts from $tableName1")(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(2, "a2", 20.0, 1000)
+          )
+
+          checkAnswer(s"select id, name, price, ts from $tableName1")(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(2, "a2", 20.0, 1000)
+          )
+
+          spark.sql(s"insert into $tableName2 values(3, 'a3', 10, 1000)")
+          spark.sql(s"insert into $tableName2 values(4, 'a4', 20, 1000)")
+
+          checkAnswer(s"select id, name, price, ts from $tableName2")(
+            Seq(3, "a3", 10.0, 1000),
+            Seq(4, "a4", 20.0, 1000)
+          )
+
+          val metaClient1 = HoodieTableMetaClient.builder()
+            .setBasePath(path1)
+            .setConf(spark.sessionState.newHadoopConf())
+            .build()
+
+          val metaClient2 = HoodieTableMetaClient.builder()
+            .setBasePath(path2)
+            .setConf(spark.sessionState.newHadoopConf())
+            .build()
+
+          val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
+            .lastInstant().get().getTimestamp
+
+          val instant2 = metaClient2.getActiveTimeline.getAllCommitsTimeline
+            .lastInstant().get().getTimestamp
+
+          val sql =
+            s"""
+               |select id, name, price, ts from $tableName1 ['hoodie.datasource.query.type'=>'snapshot','as.of.instant'=>'$instant1'] where id=1
+               |union
+               |select id, name, price, ts from $tableName2 ['hoodie.datasource.query.type'=>'snapshot','as.of.instant'=>'$instant2'] where id>1
+               |""".stripMargin
+
+          checkAnswer(sql)(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(3, "a3", 10.0, 1000),
+            Seq(4, "a4", 20.0, 1000)
+          )
+        }
       }
     }
   }

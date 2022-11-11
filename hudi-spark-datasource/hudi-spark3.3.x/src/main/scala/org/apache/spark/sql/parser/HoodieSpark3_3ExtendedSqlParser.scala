@@ -125,7 +125,8 @@ class HoodieSpark3_3ExtendedSqlParser(session: SparkSession, delegate: ParserInt
     normalized.contains("system_time as of") ||
       normalized.contains("timestamp as of") ||
       normalized.contains("system_version as of") ||
-      normalized.contains("version as of")
+      normalized.contains("version as of") ||
+      normalized.contains("hoodie.datasource.query.type")
   }
 }
 
