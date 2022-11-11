@@ -80,7 +80,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
         val table = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
 
         import spark.implicits._
-        val df = Seq((1, "a1", 1000, "2022-10-06", "11"), (2, "a2", 1001, "2022-10-06", "12"))
+        val df = Seq((1, "a1", 1000L, "2022-10-06", "11"), (2, "a2", 1001L, "2022-10-06", "12"))
           .toDF("id", "name", "ts", "dt", "hh")
         df.write.format("hudi")
           .option(RECORDKEY_FIELD.key, "id")
