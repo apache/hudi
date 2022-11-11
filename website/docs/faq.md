@@ -91,6 +91,22 @@ As of September 2019, Hudi can support Spark 2.1+, Hive 2.x, Hadoop 2.7+ (not Ha
 
 At a high level, Hudi is based on MVCC design that writes data to versioned parquet/base files and log files that contain changes to the base file. All the files are stored under a partitioning scheme for the dataset, which closely resembles how Apache Hive tables are laid out on DFS. Please refer [here](https://hudi.apache.org/docs/concepts/) for more details.
 
+### How Hudi handles partition evolution requirements ?
+Hudi recommends keeping coarse grained top level partition paths e.g date(ts) and within each such partition do clustering in a flexible way to z-order, sort data based on interested columns. This provides excellent performance by  : minimzing the number of files in each partition, while still packing data that will be queried together physically closer (what partitioning aims to achieve).
+
+Let's take an example of a table, where we store log_events with two fields `ts` (time at which event was produced) and `cust_id` (user for which event was produced) and a common option is to partition by both date(ts) and cust_id.
+Some users may want to start granular with hour(ts) and then later evolve to new partitioning scheme say date(ts). But this means, the number of partitions in the table could be very high - 365 days x 1K customers = at-least 365K potentially small parquet files, that can significantly slow down queries, facing throttling issues on the actual S3/DFS reads.
+
+For the afore mentioned reasons, we don't recommend mixing different partitioning schemes within the same table, since it adds operational complexity, and unpredictable performance. 
+Old data stays in old partitions and only new data gets into newer evolved partitions. If you want to tidy up the table, one has to rewrite all partition/data anwyay! This is where we suggest start with coarse grained partitions
+and lean on clustering techniques to optimize for query performance.
+
+We find that most datasets have at-least one high fidelity field, that can be used as a coarse partition. Clustering strategies in Hudi provide a lot of power - you can alter which partitions to cluster, and which fields to cluster each by etc.
+Unlike Hive partitioning, Hudi does not remove the partition field from the data files i.e if you write new partition paths, it does not mean old partitions need to be rewritten. 
+Partitioning by itself is a relic of the Hive era; Hudi is working on replacing partitioning with database like indexing schemes/functions, 
+for even more flexibility and get away from Hive-style partition evol route.
+
+
 ## Using Hudi
 
 ### What are some ways to write a Hudi dataset?
