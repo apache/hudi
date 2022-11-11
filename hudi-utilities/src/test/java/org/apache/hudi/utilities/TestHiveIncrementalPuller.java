@@ -24,10 +24,12 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -51,10 +53,15 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHiveIncrementalPuller {
+public class TestHiveIncrementalPuller extends UtilitiesTestBase {
 
   private HiveIncrementalPuller.Config config;
   private String targetBasePath = null;
+
+  @BeforeAll
+  public static void setupOnce() throws Exception {
+    initTestServices();
+  }
 
   @BeforeEach
   public void setup() throws HiveException, IOException, InterruptedException, MetaException {

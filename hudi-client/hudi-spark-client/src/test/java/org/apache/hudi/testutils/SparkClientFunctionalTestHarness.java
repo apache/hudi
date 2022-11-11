@@ -24,7 +24,6 @@ import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -42,7 +41,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -372,15 +370,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withClusteringConfig(clusteringConfig)
-        .withRollbackUsingMarkers(rollbackUsingMarkers)
-        .withLockConfig(HoodieLockConfig.newBuilder()
-            .withLockProvider(InProcessLockProvider.class)
-            .withLockWaitTimeInMillis(100L)
-            .withNumRetries(5)
-            .withRetryWaitTimeInMillis(100L)
-            .withClientNumRetries(5)
-            .withClientRetryWaitTimeInMillis(100L)
-            .build());
+        .withRollbackUsingMarkers(rollbackUsingMarkers);
   }
 
   protected Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema) {
