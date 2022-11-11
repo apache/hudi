@@ -60,7 +60,7 @@ public class TestHoodieRecordPayload {
 
   @ParameterizedTest
   @ValueSource(booleans = true)
-  public void testGetInsertValueAfterDropPartitionFields(boolean dropPartitionFields) throws IOException {
+  public void testGetInsertValueWithoutPartitionFields(boolean dropPartitionFields) throws IOException {
     props.setProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), String.valueOf(dropPartitionFields));
     recordSchema = Schema.createRecord(Arrays.asList(
         new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
@@ -79,6 +79,26 @@ public class TestHoodieRecordPayload {
   @ValueSource(booleans = false)
   public void testGetInsertValueWithPartitionFields(boolean dropPartitionFields) throws IOException {
     props.setProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), String.valueOf(dropPartitionFields));
+    recordSchema = Schema.createRecord(Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
+        new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", null),
+        new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
+        new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false)));
+    GenericRecord record = new GenericData.Record(recordSchema);
+    record.put("id", "1");
+    record.put("partition", "001");
+    record.put("ts", 0L);
+    record.put("_hoodie_is_deleted", false);
+    Option<GenericRecord> recordOption = Option.of(record);
+    HoodieAvroPayload hoodieAvroPayload = new HoodieAvroPayload(recordOption);
+    assertEquals(hoodieAvroPayload.getInsertValue(tableSchema, props), recordOption);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true,false})
+  public void testGetInsertValueWithNonPartitionTable(boolean dropPartitionFields) throws IOException {
+    props.setProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), String.valueOf(dropPartitionFields));
+    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     recordSchema = Schema.createRecord(Arrays.asList(
         new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
         new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", null),
