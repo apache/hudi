@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -16,15 +16,19 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+#
 
-# NOTE: this script runs inside hudi-ci-bundle-validation container
-# $WORKDIR/jars/ is supposed to be mounted to a host directory where bundle jars are placed
-# TODO: $JAR_COMBINATIONS should have different orders for different jars to detect class loading issues
+$CONFLUENT_HOME/bin/connect-distributed $CONFLUENT_HOME/etc/kafka/connect-distributed.properties &
+sleep 30
+curl -X POST -H "Content-Type:application/json" -d @/opt/bundle-validation/kafka/config-sink.json http://localhost:8083/connectors &
+sleep 30
+curl -X DELETE http://localhost:8083/connectors/hudi-sink &
+sleep 10
 
-$DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
-$HIVE_HOME/bin/hiveserver2 &
-WORKDIR=/opt/hudi-bundles
-JAR_COMBINATIONS=$(echo $WORKDIR/jars/*.jar | tr ' ' ',')
-$SPARK_HOME/bin/spark-shell --jars $JAR_COMBINATIONS < $WORKDIR/validate.scala
-
-exit $?
+# validate
+numCommits=$(ls /tmp/hudi-kafka-test/.hoodie/*.commit | wc -l)
+if [ $numCommits -gt 0 ]; then
+  exit 0
+else
+  exit 1
+fi

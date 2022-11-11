@@ -185,19 +185,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     // Create the write parameters
     val parameters = buildMergeIntoConfig(hoodieCatalogTable)
+    executeUpsert(sourceDF, parameters)
 
-    if (mergeInto.matchedActions.nonEmpty) { // Do the upsert
-      executeUpsert(sourceDF, parameters)
-    } else { // If there is no match actions in the statement, execute insert operation only.
-      val targetDF = Dataset.ofRows(sparkSession, mergeInto.targetTable)
-      val primaryKeys = hoodieCatalogTable.tableConfig.getRecordKeyFieldProp.split(",")
-      // Only records that are not included in the target table can be inserted
-      val insertSourceDF = sourceDF.join(targetDF, primaryKeys,"leftanti")
-
-      // column order changed after left anti join , we should keep column order of source dataframe
-      val cols = removeMetaFields(sourceDF).columns
-      executeInsertOnly(insertSourceDF.select(cols.head, cols.tail:_*), parameters)
-    }
     sparkSession.catalog.refreshTable(targetTableIdentify.unquotedString)
     Seq.empty[Row]
   }
@@ -299,6 +288,20 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * expressions to the ExpressionPayload#getInsertValue.
    */
   private def executeUpsert(sourceDF: DataFrame, parameters: Map[String, String]): Unit = {
+    val operation = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, ""))) {
+      INSERT_OPERATION_OPT_VAL
+    } else {
+      UPSERT_OPERATION_OPT_VAL
+    }
+
+    // Append the table schema to the parameters. In the case of merge into, the schema of sourceDF
+    // may be different from the target table, because the are transform logical in the update or
+    // insert actions.
+    var writeParams = parameters +
+      (OPERATION.key -> operation) +
+      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString) +
+      (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
+
     val updateActions = mergeInto.matchedActions.filter(_.isInstanceOf[UpdateAction])
       .map(_.asInstanceOf[UpdateAction])
     // Check for the update actions
@@ -308,25 +311,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       .map(_.asInstanceOf[DeleteAction])
     assert(deleteActions.size <= 1, "Should be only one delete action in the merge into statement.")
     val deleteAction = deleteActions.headOption
-
-    val insertActions =
-      mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction])
-
-    // Check for the insert actions
-    checkInsertAssignments(insertActions)
-
-    // Append the table schema to the parameters. In the case of merge into, the schema of sourceDF
-    // may be different from the target table, because the are transform logical in the update or
-    // insert actions.
-    val operation = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, ""))) {
-      INSERT_OPERATION_OPT_VAL
-    } else {
-      UPSERT_OPERATION_OPT_VAL
-    }
-    var writeParams = parameters +
-      (OPERATION.key -> operation) +
-      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString) +
-      (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
     // Map of Condition -> Assignments
     val updateConditionToAssignments =
@@ -352,28 +336,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       writeParams += (PAYLOAD_DELETE_CONDITION -> serializedDeleteCondition)
     }
 
-    // Serialize the Map[InsertCondition, InsertAssignments] to base64 string
-    writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
-      serializedInsertConditionAndExpressions(insertActions))
+    val insertActions =
+      mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction])
 
-    // Remove the meta fields from the sourceDF as we do not need these when writing.
-    val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
-    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
-  }
-
-  /**
-   * If there are not matched actions, we only execute the insert operation.
-   * @param sourceDF
-   * @param parameters
-   */
-  private def executeInsertOnly(sourceDF: DataFrame, parameters: Map[String, String]): Unit = {
-    val insertActions = mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction])
+    // Check for the insert actions
     checkInsertAssignments(insertActions)
 
-    var writeParams = parameters +
-      (OPERATION.key -> INSERT_OPERATION_OPT_VAL) +
-      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString)
-
+    // Serialize the Map[InsertCondition, InsertAssignments] to base64 string
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions))
 

@@ -114,7 +114,7 @@ public class RequestHandler {
   public static String jsonifyResult(
       Context ctx, Object obj, Registry metricsRegistry, ObjectMapper objectMapper, Logger logger)
       throws JsonProcessingException {
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     boolean prettyPrint = ctx.queryParam("pretty") != null;
     String result =
         prettyPrint ? objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj)

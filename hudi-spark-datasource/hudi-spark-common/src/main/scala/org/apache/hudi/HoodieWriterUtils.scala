@@ -58,7 +58,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(TABLE_TYPE)
     hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
     hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
-    hoodieConfig.setDefaultValue(RECORDKEY_FIELD)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
     hoodieConfig.setDefaultValue(COMMIT_METADATA_KEYPREFIX)
@@ -159,6 +158,13 @@ object HoodieWriterUtils {
         if (null != datasourceKeyGen && null != tableConfigKeyGen
           && datasourceKeyGen != tableConfigKeyGen) {
           diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
+        }
+
+        val datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
+        val tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
+        if (null != datasourcePartitionFields && null != tableConfigPartitionFields
+          && datasourcePartitionFields != tableConfigPartitionFields) {
+          diffConfigs.append(s"PartitionPath:\t$datasourcePartitionFields\t$tableConfigPartitionFields\n")
         }
       }
 

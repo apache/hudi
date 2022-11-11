@@ -104,8 +104,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
 
   @Override
   public Option<HoodieIndexCommitMetadata> execute() {
-    HoodieTimer indexTimer = new HoodieTimer();
-    indexTimer.startTimer();
+    HoodieTimer indexTimer = HoodieTimer.start();
 
     HoodieInstant indexInstant = validateAndGetIndexInstant();
     // read HoodieIndexPlan
