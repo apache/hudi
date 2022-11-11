@@ -122,7 +122,8 @@
     <trino.version>390</trino.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
-    <orc.version>1.6.0</orc.version>
+    <orc.spark.version>1.6.0</orc.spark.version>
+    <orc.flink.version>1.5.6</orc.flink.version>
     <airlift.version>0.16</airlift.version>
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
@@ -834,7 +835,7 @@
       <dependency>
         <groupId>org.apache.orc</groupId>
         <artifactId>orc-core</artifactId>
-        <version>${orc.version}</version>
+        <version>${orc.spark.version}</version>
         <scope>compile</scope>
       </dependency>
 
@@ -2085,7 +2086,7 @@
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
-        <orc.version>1.7.4</orc.version>
+        <orc.spark.version>1.7.4</orc.spark.version>
         <avro.version>1.11.1</avro.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
@@ -2126,7 +2127,7 @@
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.10.1</parquet.version>
-        <orc.version>1.5.13</orc.version>
+        <orc.spark.version>1.5.13</orc.spark.version>
         <avro.version>1.8.2</avro.version>
         <antlr.version>4.8-1</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2167,7 +2168,7 @@
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
-        <orc.version>1.6.12</orc.version>
+        <orc.spark.version>1.6.12</orc.spark.version>
         <avro.version>1.10.2</avro.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2209,7 +2210,7 @@
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
-        <orc.version>1.7.4</orc.version>
+        <orc.spark.version>1.7.4</orc.spark.version>
         <avro.version>1.11.1</avro.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
@@ -2235,6 +2236,9 @@
 
     <profile>
       <id>flink1.15</id>
+      <properties>
+        <orc.flink.version>1.5.6</orc.flink.version>
+      </properties>
       <activation>
         <property>
           <name>flink1.15</name>
@@ -2247,6 +2251,7 @@
         <flink.version>${flink1.14.version}</flink.version>
         <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
         <flink.bundle.version>1.14</flink.bundle.version>
+        <orc.flink.version>1.5.6</orc.flink.version>
         <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
         <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
         <flink.parquet.artifactId>flink-parquet_${scala.binary.version}</flink.parquet.artifactId>
@@ -2269,6 +2274,7 @@
         <flink.version>${flink1.13.version}</flink.version>
         <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
         <flink.bundle.version>1.13</flink.bundle.version>
+        <orc.flink.version>1.5.6</orc.flink.version>
         <flink.runtime.artifactId>flink-runtime_${scala.binary.version}</flink.runtime.artifactId>
         <flink.table.runtime.artifactId>flink-table-runtime-blink_${scala.binary.version}</flink.table.runtime.artifactId>
         <flink.table.planner.artifactId>flink-table-planner-blink_${scala.binary.version}</flink.table.planner.artifactId>
