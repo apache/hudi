@@ -158,7 +158,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
 
           // test msck repair table add partitions
           import spark.implicits._
-          val df1 = Seq((1, "a1", 1000, "2022-10-06")).toDF("id", "name", "ts", "dt")
+          val df1 = Seq((1, "a1", 1000L, "2022-10-06")).toDF("id", "name", "ts", "dt")
           df1.write.format("hudi")
             .option(TBL_NAME.key(), tableName)
             .option(RECORDKEY_FIELD.key, "id")
@@ -173,7 +173,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
           assertResult(Seq("dt=2022-10-06"))(spark.sessionState.catalog.listPartitionNames(table))
 
           // test msck repair table drop partitions
-          val df2 = Seq((2, "a2", 1001, "2022-10-07")).toDF("id", "name", "ts", "dt")
+          val df2 = Seq((2, "a2", 1001L, "2022-10-07")).toDF("id", "name", "ts", "dt")
           df2.write.format("hudi")
             .option(TBL_NAME.key(), tableName)
             .option(RECORDKEY_FIELD.key, "id")
