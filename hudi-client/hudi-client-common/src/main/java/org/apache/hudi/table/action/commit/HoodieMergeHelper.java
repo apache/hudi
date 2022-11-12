@@ -81,27 +81,31 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
     Schema readerSchema = reader.getSchema();
 
-    // Check whether the writer schema is simply a projection of the file's one
-    boolean isProjection = isProjectionOf(readerSchema, writerSchema);
-    // Check whether we will need to rewrite target (already merged) records into the
-    // writer's schema
-    boolean shouldRewriteInWriterSchema = writeConfig.shouldUseExternalSchemaTransformation()
-        || !isProjection
-        || baseFile.getBootstrapBaseFile().isPresent();
-
     // In case Advanced Schema Evolution is enabled we might need to rewrite currently
     // persisted records to adhere to an evolved schema
     Option<Function<GenericRecord, GenericRecord>> schemaEvolutionTransformerOpt =
         composeSchemaEvolutionTransformer(writerSchema, baseFile, writeConfig, table.getMetaClient());
 
+    // Check whether the writer schema is simply a projection of the file's one, ie
+    //   - Its field-set is a proper subset (of the reader schema)
+    //   - There's no schema evolution transformation necessary
+    boolean isPureProjection = isProjectionOf(readerSchema, writerSchema)
+        && !schemaEvolutionTransformerOpt.isPresent();
+    // Check whether we will need to rewrite target (already merged) records into the
+    // writer's schema
+    boolean shouldRewriteInWriterSchema = writeConfig.shouldUseExternalSchemaTransformation()
+        || !isPureProjection
+        || baseFile.getBootstrapBaseFile().isPresent();
+
     HoodieExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
+
     try {
       Iterator<GenericRecord> recordIterator;
 
       // In case writer's schema is simply a projection of the reader's one we can read
       // the records in the projected schema directly
       ClosableIterator<GenericRecord> baseFileRecordIterator =
-          reader.getRecordIterator(isProjection ? writerSchema : readerSchema);
+          reader.getRecordIterator(isPureProjection ? writerSchema : readerSchema);
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
         recordIterator = getMergingIterator(table, mergeHandle, bootstrapFilePath, baseFileRecordIterator);
