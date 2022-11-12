@@ -84,7 +84,13 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
         } else {
-          return Pipelines.dummySink(pipeline);
+          // If the partition success file sink enabled, add a success file sink as next operator,
+          // else add a dummy sink.
+          if (OptionsResolver.isPartitionSuccessFileWriteEnable(conf)) {
+            return Pipelines.successFileSink(pipeline, conf);
+          } else {
+            return Pipelines.dummySink(pipeline);
+          }
         }
       }
 

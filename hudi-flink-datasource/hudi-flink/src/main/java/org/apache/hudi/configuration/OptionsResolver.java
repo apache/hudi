@@ -226,4 +226,11 @@ public class OptionsResolver {
     }
     return options;
   }
+
+  /**
+   * Returns whether enable to write success file to finished partition.
+   */
+  public static boolean isPartitionSuccessFileWriteEnable(Configuration conf) {
+    return conf.get(FlinkOptions.PARTITION_WRITE_SUCCESS_FILE_ENABLE);
+  }
 }
