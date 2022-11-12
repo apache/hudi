@@ -1179,11 +1179,12 @@ object TestHoodieSparkSqlWriter {
     val parquetScenarios = scenarios.map { _ :+ "parquet" }
     val orcScenarios = scenarios.map { _ :+ "orc" }
 
-    // TODO(HUDI-4496) Fix Orc support in Spark 3.x
+    // NOTE: Hudi doesn't support Orc in Spark < 3.0
+    //       Please check HUDI-4496 for more details
     val targetScenarios = if (gteqSpark3_0) {
-      parquetScenarios
-    } else {
       parquetScenarios ++ orcScenarios
+    } else {
+      parquetScenarios
     }
 
     java.util.Arrays.stream(targetScenarios.map(as => arguments(as.map(_.asInstanceOf[AnyRef]):_*)))
