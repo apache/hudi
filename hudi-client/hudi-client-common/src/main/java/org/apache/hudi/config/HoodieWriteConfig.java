@@ -1002,7 +1002,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public ExecutorType getExecutorType() {
-    return ExecutorType.valueOf(getString(EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
+    return ExecutorType.valueOf(getStringOrDefault(EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
   }
 
   public boolean isCDCEnabled() {
