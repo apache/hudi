@@ -210,7 +210,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       return this;
     }
     Option<IndexedRecord> data = this.data.getInsertValue(recordSchema, props);
-    deflate();
     return new HoodieAvroRecord<>(getKey(), new HoodieAvroInsertValuePayload(data), getOperation());
   }
 

@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
@@ -234,6 +235,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         }
         recordsWritten++;
       } else {
+        finalRecord = Option.empty();
         recordsDeleted++;
       }
 
@@ -362,7 +364,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       updateWriteStatus(stat, result);
     }
 
-    if (config.isMetadataColumnStatsIndexEnabled()) {
+    // TODO MetadataColumnStatsIndex for spark record
+    if (config.isMetadataColumnStatsIndexEnabled() && recordMerger.getRecordType() == HoodieRecordType.AVRO) {
       final List<Schema.Field> fieldsToIndex;
       // If column stats index is enabled but columns not configured then we assume that
       // all columns should be indexed
