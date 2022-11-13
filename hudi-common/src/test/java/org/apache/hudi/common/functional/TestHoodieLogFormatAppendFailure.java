@@ -148,6 +148,7 @@ public class TestHoodieLogFormatAppendFailure {
     writer.appendBlock(new HoodieCommandBlock(header));
     // The log version should be different for this new writer
     assertNotEquals(writer.getLogFile().getLogVersion(), logFileVersion);
+    writer.close();
   }
 
 }

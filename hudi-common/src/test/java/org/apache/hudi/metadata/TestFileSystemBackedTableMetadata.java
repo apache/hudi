@@ -54,6 +54,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
   @AfterEach
   public void tearDown() throws IOException {
     metaClient.getFs().delete(new Path(metaClient.getBasePath()), true);
+    cleanMetaClient();
   }
 
   /**
