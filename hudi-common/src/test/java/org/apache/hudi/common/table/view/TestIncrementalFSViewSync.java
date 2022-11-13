@@ -55,6 +55,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -103,11 +104,17 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     refreshFsView();
   }
 
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanMetaClient();
+  }
+
   @Test
   public void testEmptyPartitionsAndTimeline() throws IOException {
     SyncableFileSystemView view = getFileSystemView(metaClient);
     assertFalse(view.getLastInstant().isPresent());
     partitions.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
+    view.close();
   }
 
   @Test
@@ -163,6 +170,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     // Finish Compaction
     instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("19"), false, "19", 2,
         Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "24"))));
+    view.close();
   }
 
   @Test
@@ -203,6 +211,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     // Clean instants.
     testCleans(view, Arrays.asList("21", "22"), instantsToFiles, Arrays.asList("18", "19"), 0, 0);
+
+    newView.close();
+    view.close();
   }
 
   @Test
@@ -250,6 +261,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     // Clean instants.
     testCleans(view, Arrays.asList("21", "22"), instantsToFiles, Arrays.asList("18", "19"), NUM_FILE_IDS_PER_PARTITION, 1);
+
+    newView.close();
+    view.close();
   }
 
   private void testMultipleReplaceSteps(Map<String, List<String>> instantsToFiles, SyncableFileSystemView view, List<String> instants,
@@ -265,6 +279,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         // 1 fileId is replaced for every partition, so subtract partitions.size()
         expectedSlicesPerPartition = expectedSlicesPerPartition + fileIdsPerPartition.size()  -  1;
         areViewsConsistent(view, newView, expectedSlicesPerPartition * partitions.size());
+        newView.close();
       } catch (IOException e) {
         throw new HoodieIOException("unable to test replace", e);
       }
@@ -402,6 +417,13 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       v.sync();
       areViewsConsistent(v, view1, partitions.size() * fileIdsPerPartition.size() * 3);
     });
+
+    view1.close();
+    view2.close();
+    view3.close();
+    view4.close();
+    view5.close();
+    view6.close();
   }
 
   /*
@@ -463,6 +485,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         metaClient.reloadActiveTimeline();
         SyncableFileSystemView newView = getFileSystemView(metaClient);
         areViewsConsistent(view, newView, expTotalFileSlicesPerPartition * partitions.size());
+        newView.close();
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -518,6 +541,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         metaClient.reloadActiveTimeline();
         SyncableFileSystemView newView = getFileSystemView(metaClient);
         areViewsConsistent(view, newView, expTotalFileSlicesPerPartition * partitions.size());
+        newView.close();
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -640,6 +664,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
     SyncableFileSystemView newView = getFileSystemView(metaClient);
     areViewsConsistent(view, newView, initialExpTotalFileSlices + partitions.size() * fileIdsPerPartition.size());
+    newView.close();
   }
 
   /**
@@ -751,6 +776,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       metaClient.reloadActiveTimeline();
       SyncableFileSystemView newView = getFileSystemView(metaClient);
       areViewsConsistent(view, newView, fileIdsPerPartition.size() * partitions.size() * multiple);
+      newView.close();
       instantToFiles.put(instant, filePaths);
       if (!deltaCommit) {
         multiple++;

@@ -91,6 +91,12 @@ public class HoodieCommonTestHarness {
     basePath = metaClient.getBasePath();
   }
 
+  protected void cleanMetaClient() {
+    if (metaClient != null) {
+      metaClient = null;
+    }
+  }
+
   protected void refreshFsView() throws IOException {
     metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
   }

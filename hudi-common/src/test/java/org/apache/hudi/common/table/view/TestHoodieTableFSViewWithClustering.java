@@ -66,6 +66,12 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
     refreshFsView();
   }
 
+  @AfterEach
+  public void tearDown() throws Exception {
+    closeFsView();
+    cleanMetaClient();
+  }
+
   protected void refreshFsView() throws IOException {
     super.refreshFsView();
     closeFsView();
