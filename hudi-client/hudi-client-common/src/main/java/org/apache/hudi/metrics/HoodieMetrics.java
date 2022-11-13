@@ -168,6 +168,7 @@ public class HoodieMetrics {
     Metrics.registerGauge(getMetricsName(actionType, "totalRecordsWritten"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalRecordsDeleted"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalBytesWritten"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalScanTime"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalCreateTime"), 0);
@@ -175,7 +176,6 @@ public class HoodieMetrics {
     Metrics.registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesSize"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalRecordsDeleted"), 0);
   }
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
@@ -188,6 +188,7 @@ public class HoodieMetrics {
       long totalRecordsWritten = metadata.fetchTotalRecordsWritten();
       long totalUpdateRecordsWritten = metadata.fetchTotalUpdateRecordsWritten();
       long totalInsertRecordsWritten = metadata.fetchTotalInsertRecordsWritten();
+      long totalRecordsDeleted = metadata.getTotalRecordsDeleted();
       long totalBytesWritten = metadata.fetchTotalBytesWritten();
       long totalTimeTakenByScanner = metadata.getTotalScanTime();
       long totalTimeTakenForInsert = metadata.getTotalCreateTime();
@@ -195,7 +196,6 @@ public class HoodieMetrics {
       long totalCompactedRecordsUpdated = metadata.getTotalCompactedRecordsUpdated();
       long totalLogFilesCompacted = metadata.getTotalLogFilesCompacted();
       long totalLogFilesSize = metadata.getTotalLogFilesSize();
-      long totalRecordsDeleted = metadata.getTotalRecordsDeleted();
       Metrics.registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), totalPartitionsWritten);
       Metrics.registerGauge(getMetricsName(actionType, "totalFilesInsert"), totalFilesInsert);
       Metrics.registerGauge(getMetricsName(actionType, "totalFilesUpdate"), totalFilesUpdate);
