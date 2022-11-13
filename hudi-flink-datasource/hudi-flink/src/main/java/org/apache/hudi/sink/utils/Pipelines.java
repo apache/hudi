@@ -505,29 +505,26 @@ public class Pipelines {
     // The partition keys.
     private List<String> partitionKeys;
     // The partitions on writing currently.
-    private Set<String> activePartitions;
+    private final Set<String> activePartitions;
     // The partitions write finished.
-    private Set<String> finishedPartitions;
+    private final Set<String> finishedPartitions;
     // The operator state to store active partitions.
     private ListState<String> activePartitionsState;
     // The operator state to store finished partitions.
     private ListState<String> finishedPartitionsState;
     // The configured time delay to write success file.
     private Duration partitionSuccessFileDelay;
-    // The checkpoint lock
-    private Object checkpointLock;
 
     PartitionSuccessFileWriteSink(Configuration conf) {
       this.conf = conf;
+      activePartitions = new TreeSet<>();
+      finishedPartitions = new TreeSet<>();
     }
 
     @Override
     public void open(Configuration config) throws Exception {
-      activePartitions = new TreeSet<>();
-      finishedPartitions = new TreeSet<>();
       tablePath = conf.get(FlinkOptions.PATH);
       fileSystem = FileSystem.get(URI.create(tablePath));
-      checkpointLock = new Object();
       String[] partitionFields = conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",");
       partitionKeys = Arrays.asList(partitionFields);
       partitionSuccessFileDelay = conf.get(FlinkOptions.PARTITION_WRITE_SUCCESS_FILE_DELAY);
@@ -565,23 +562,19 @@ public class Pipelines {
         // minimum timestamp in the streaming data is beyond the partition max timestamp, so add the partition
         // path to the finished partitions set and remove it from active partitions set.
         if (partitionTimestamp + partitionSuccessFileDelay.toMillis() < watermark) {
-          synchronized (checkpointLock) {
-            finishedPartitions.add(partitionPath);
-            it.remove();
-          }
+          finishedPartitions.add(partitionPath);
+          it.remove();
         }
       }
     }
 
     @Override
     public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
-      synchronized (checkpointLock) {
-        // Save the partition path of active & finished partition path to state.
-        Preconditions.checkNotNull(activePartitions);
-        Preconditions.checkNotNull(finishedPartitions);
-        activePartitionsState.update(new ArrayList<>(activePartitions));
-        finishedPartitionsState.update(new ArrayList<>(finishedPartitions));
-      }
+      // Save the partition path of active & finished partition path to state.
+      Preconditions.checkNotNull(activePartitions);
+      Preconditions.checkNotNull(finishedPartitions);
+      activePartitionsState.update(new ArrayList<>(activePartitions));
+      finishedPartitionsState.update(new ArrayList<>(finishedPartitions));
     }
 
     @Override
@@ -593,17 +586,12 @@ public class Pipelines {
               new ListStateDescriptor<>(FINISHED_PARTITION_STATE_NAME, String.class);
       finishedPartitionsState = context.getOperatorStateStore().getListState(finishedPartitionStateDesc);
       if (context.isRestored()) {
-        activePartitions = new TreeSet<>();
-        finishedPartitions = new TreeSet<>();
         for (String p : activePartitionsState.get()) {
           activePartitions.add(p);
         }
         for (String p : finishedPartitionsState.get()) {
           finishedPartitions.add(p);
         }
-      } else {
-        activePartitions = new TreeSet<>();
-        finishedPartitions = new TreeSet<>();
       }
     }
 
@@ -611,14 +599,12 @@ public class Pipelines {
     public void notifyCheckpointComplete(long l) throws Exception {
       Iterator<String> it = finishedPartitions.iterator();
       //Iterate the finished partitions set, and write success file to the path of partition.
-      synchronized (checkpointLock) {
-        while (it.hasNext()) {
-          String partitionPath = it.next();
-          partitionPath = tablePath + "/" + partitionPath;
-          fileSystem.create(new Path(partitionPath, SUCCESS_FILE_NAME), FileSystem.WriteMode.OVERWRITE).close();
-          LOG.info("Write success file to partition {}", partitionPath);
-          it.remove();
-        }
+      while (it.hasNext()) {
+        String partitionPath = it.next();
+        partitionPath = tablePath + "/" + partitionPath;
+        fileSystem.create(new Path(partitionPath, SUCCESS_FILE_NAME), FileSystem.WriteMode.OVERWRITE).close();
+        LOG.info("Write success file to partition {}", partitionPath);
+        it.remove();
       }
     }
 

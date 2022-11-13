@@ -418,7 +418,7 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-files</artifactId>
             <version>${flink.version}</version>
-            <scope>test</scope>
+            <scope>provided</scope>
         </dependency>
         <!-- Hive dependencies -->
         <dependency>
