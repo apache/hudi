@@ -31,7 +31,7 @@ import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.sql.avro.{AvroSerializer, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.hudi.SerDeUtils
+import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, SerDeUtils}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{getEvaluator, getMergedSchema, setWriteSchema}
 import org.apache.spark.sql.types.{StructField, StructType}
 
@@ -73,7 +73,9 @@ class ExpressionPayload(record: GenericRecord,
   override def combineAndGetUpdateValue(targetRecord: IndexedRecord,
                                         schema: Schema, properties: Properties): HOption[IndexedRecord] = {
     val sourceRecord = bytesToAvro(recordBytes, schema)
-    val joinSqlRecord = new SqlTypedRecord(joinRecord(sourceRecord, targetRecord))
+    val allowOperationMetadataField = properties.getProperty(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(),
+      HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.defaultValue().toString).toBoolean
+    val joinSqlRecord = new SqlTypedRecord(joinRecord(sourceRecord, targetRecord, allowOperationMetadataField))
     processMatchedRecord(joinSqlRecord, Some(targetRecord), properties)
   }
 
@@ -224,7 +226,7 @@ class ExpressionPayload(record: GenericRecord,
    *
    * @return
    */
-  private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord): IndexedRecord = {
+  private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord, allowOperationMetadataField: Boolean): IndexedRecord = {
     val leftSchema = sourceRecord.getSchema
     val joinSchema = getMergedSchema(leftSchema, targetRecord.getSchema)
 
@@ -233,7 +235,7 @@ class ExpressionPayload(record: GenericRecord,
       val value = if (i < leftSchema.getFields.size()) {
         sourceRecord.get(i)
       } else { // skip meta field
-        targetRecord.get(i - leftSchema.getFields.size() + HoodieRecord.HOODIE_META_COLUMNS.size())
+        targetRecord.get(i - leftSchema.getFields.size() + HoodieSqlCommonUtils.getMetaFields(allowOperationMetadataField).length)
       }
       values += value
     }

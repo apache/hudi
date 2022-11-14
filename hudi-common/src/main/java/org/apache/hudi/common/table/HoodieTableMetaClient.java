@@ -762,6 +762,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String metadataPartitions;
     private String inflightMetadataPartitions;
     private String secondaryIndexesMetadata;
+    private Boolean allowOperationMetadataField;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -911,6 +912,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setAllowOperationMetadataField(Boolean allowOperationMetadataField) {
+      this.allowOperationMetadataField = allowOperationMetadataField;
+      return this;
+    }
+
     private void set(String key, Object value) {
       if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
         this.others.put(key, value);
@@ -1026,6 +1032,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.SECONDARY_INDEXES_METADATA)) {
         setSecondaryIndexesMetadata(hoodieConfig.getString(HoodieTableConfig.SECONDARY_INDEXES_METADATA));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD)) {
+        setAllowOperationMetadataField(hoodieConfig.getBoolean(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD));
+      }
       return this;
     }
 
@@ -1124,6 +1133,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != secondaryIndexesMetadata) {
         tableConfig.setValue(HoodieTableConfig.SECONDARY_INDEXES_METADATA, secondaryIndexesMetadata);
+      }
+      if (null != allowOperationMetadataField) {
+        tableConfig.setValue(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
       }
       return tableConfig.getProps();
     }

@@ -257,6 +257,13 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("The metadata of secondary indexes");
 
+  public static final ConfigProperty<Boolean> ALLOW_OPERATION_METADATA_FIELD = ConfigProperty
+          .key("hoodie.allow.operation.metadata.field")
+          .defaultValue(false)
+          .sinceVersion("0.9.0")
+          .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "
+                  + "Once enabled, all the changes of a record are persisted to the delta log directly without merge");
+
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
@@ -645,6 +652,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Boolean shouldDropPartitionColumns() {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
+  }
+
+  public Boolean allowOperationMetadataField() {
+    return getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD);
   }
 
   /**

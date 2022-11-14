@@ -135,7 +135,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * The schema without hoodie meta fields
    */
-  lazy val tableSchemaWithoutMetaFields: StructType = removeMetaFields(tableSchema)
+  lazy val tableSchemaWithoutMetaFields: StructType = removeMetaFields(tableSchema, allowOperationMetadataField)
 
   /**
    * The schema of data fields
@@ -147,12 +147,14 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * The schema of data fields not including hoodie meta fields
    */
-  lazy val dataSchemaWithoutMetaFields: StructType = removeMetaFields(dataSchema)
+  lazy val dataSchemaWithoutMetaFields: StructType = removeMetaFields(dataSchema, allowOperationMetadataField)
 
   /**
    * The schema of partition fields
    */
   lazy val partitionSchema: StructType = StructType(tableSchema.filter(f => partitionFields.contains(f.name)))
+
+  lazy val allowOperationMetadataField = tableConfig.allowOperationMetadataField()
 
   /**
    * All the partition paths
@@ -235,7 +237,9 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         val schema = if (schemaFromMetaOpt.nonEmpty) {
           schemaFromMetaOpt.get
         } else if (table.schema.nonEmpty) {
-          addMetaFields(table.schema)
+          val allowOperationMetadataField = options.getOrElse(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.key(),
+            HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.defaultValue().toString).toBoolean
+          addMetaFields(table.schema, allowOperationMetadataField)
         } else {
           throw new AnalysisException(
             s"Missing schema fields when applying CREATE TABLE clause for ${catalogTableName}")
@@ -248,7 +252,9 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         val schema = table.schema
         val options = extraTableConfig(tableExists = false, globalTableConfigs) ++
           HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions)
-        (addMetaFields(schema), options)
+        val allowOperationMetadataField = options.getOrElse(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.key(),
+          HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.defaultValue().toString).toBoolean
+        (addMetaFields(schema, allowOperationMetadataField), options)
 
       case (CatalogTableType.MANAGED, true) =>
         throw new AnalysisException(s"Can not create the managed table('$catalogTableName')" +
@@ -288,6 +294,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     } else {
       extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = "true"
       extraConfig(URL_ENCODE_PARTITIONING.key) = URL_ENCODE_PARTITIONING.defaultValue()
+      extraConfig(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.key) = String.valueOf(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.defaultValue())
     }
 
     if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {

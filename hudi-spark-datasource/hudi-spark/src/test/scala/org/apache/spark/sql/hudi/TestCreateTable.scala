@@ -1014,4 +1014,120 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     checkKeyGenerator("org.apache.hudi.keygen.ComplexKeyGenerator", tableName)
     spark.sql(s"drop table $tableName")
   }
+
+  test("Test create table with allowOperationMetadataField true from Existing Hoodie Table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      import spark.implicits._
+      val partitionValue = "2022-11-14"
+      val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
+      // Write a table by spark dataframe.
+      df.write.format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+        .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(PRECOMBINE_FIELD.key, "ts")
+        .option(PARTITIONPATH_FIELD.key, "dt")
+        .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+        .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.key, true)
+        .mode(SaveMode.Overwrite)
+        .save(tablePath)
+
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tablePath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val tableConfig = metaClient.getTableConfig
+      assertResult(true)(tableConfig.allowOperationMetadataField())
+
+      // Create a managed table
+      spark.sql(
+        s"""
+           |create table $tableName using hudi
+           | location '$tablePath'
+       """.stripMargin)
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (2, 'a2', 10, 1000, '$partitionValue')
+              """.stripMargin)
+      checkAnswer(s"select _hoodie_operation, id, name, value, ts, dt from $tableName order by id")(
+        Seq(null, 1, "a1", 10, 1000, partitionValue),
+        Seq(null, 2, "a2", 10, 1000, partitionValue)
+      )
+    }
+  }
+
+  test("Test create table with allowOperationMetadataField true") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      val partitionValue = "2022-11-14"
+
+      // Create a managed table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  value double,
+           |  ts long,
+           |  dt string
+           |) using hudi
+           | partitioned by (dt)
+           | options (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  type = 'cow',
+           |  'hoodie.allow.operation.metadata.field' = true
+           | )
+           | location '$tablePath'
+       """.stripMargin)
+
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tablePath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val tableConfig = metaClient.getTableConfig
+      assertResult(true)(tableConfig.allowOperationMetadataField())
+
+      // Test insert
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1', 10, 1000, '$partitionValue'),
+           | (2, 'a2', 10, 1000, '$partitionValue')
+              """.stripMargin)
+      checkAnswer(s"select _hoodie_operation, id, name, value, ts, dt from $tableName order by id")(
+        Seq(null, 1, "a1", 10, 1000, partitionValue),
+        Seq(null, 2, "a2", 10, 1000, partitionValue)
+      )
+      // Test merge into
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '$partitionValue' as dt) s0
+           |on h0.id = s0.id
+           |when matched then update set *
+           |""".stripMargin)
+      checkAnswer(s"select _hoodie_operation, id, name, value, ts, dt from $tableName order by id")(
+        Seq(null, 1, "a1", 11, 1001, partitionValue),
+        Seq(null, 2, "a2", 10, 1000, partitionValue)
+      )
+      // Test update
+      spark.sql(s"update $tableName set value = value + 1 where id = 2")
+      checkAnswer(s"select _hoodie_operation, id, name, value, ts, dt from $tableName order by id")(
+        Seq(null, 1, "a1", 11, 1001, partitionValue),
+        Seq(null, 2, "a2", 11, 1000, partitionValue)
+      )
+      // Test delete
+      spark.sql(s"delete from $tableName where id = 1")
+      checkAnswer(s"select _hoodie_operation, id, name, value, ts, dt from $tableName order by id")(
+        Seq(null, 2, "a2", 11, 1000, partitionValue)
+      )
+    }
+  }
 }

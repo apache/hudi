@@ -29,10 +29,11 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, DataSourceReadOptions, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.Resolver
+import org.apache.spark.sql.catalyst.analysis.{Resolver, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
@@ -41,7 +42,7 @@ import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.{Locale, Properties}
 import scala.collection.JavaConverters._
-import scala.collection.immutable.Map
+import scala.collection.mutable
 
 object HoodieSqlCommonUtils extends SparkAdapterSupport {
   // NOTE: {@code SimpleDataFormat} is NOT thread-safe
@@ -144,32 +145,45 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
    * @param schema
    * @return
    */
-  def addMetaFields(schema: StructType): StructType = {
-    val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala
+  def addMetaFields(schema: StructType, allowOperationMetadataField: Boolean): StructType = {
+    val metaFields = getMetaFields(allowOperationMetadataField)
     // filter the meta field to avoid duplicate field.
     val dataFields = schema.fields.filterNot(f => metaFields.contains(f.name))
     val fields = metaFields.map(StructField(_, StringType)) ++ dataFields
     StructType(fields)
   }
 
-  private lazy val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet
+  private lazy val metaColumns = HoodieRecord.HOODIE_META_COLUMNS.asScala
+
+  private lazy val metaColumnsWithOperation = HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.asScala.toBuffer
+
+  def getMetaFields(allowOperationMetadataField: Boolean): mutable.Buffer[String] = {
+    if (allowOperationMetadataField) metaColumnsWithOperation else metaColumns
+  }
+
+  def getMetaFields(sparkSession :SparkSession, table: LogicalPlan): mutable.Buffer[String] = {
+    val tableId = sparkAdapter.getTableIdentifier(table)
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableId)
+    val allowOperationMetadataField = hoodieCatalogTable.allowOperationMetadataField
+    getMetaFields(allowOperationMetadataField)
+  }
 
   /**
    * Remove the meta fields from the schema.
    * @param schema
    * @return
    */
-  def removeMetaFields(schema: StructType): StructType = {
-    StructType(schema.fields.filterNot(f => isMetaField(f.name)))
+  def removeMetaFields(schema: StructType, allowOperationMetadataField: Boolean): StructType = {
+    StructType(schema.fields.filterNot(f => isMetaField(f.name, allowOperationMetadataField)))
   }
 
-  def isMetaField(name: String): Boolean = {
-    metaFields.contains(name)
+  def isMetaField(name: String, allowOperationMetadataField: Boolean): Boolean = {
+      getMetaFields(allowOperationMetadataField).contains(name)
   }
 
-  def removeMetaFields(df: DataFrame): DataFrame = {
+  def removeMetaFields(df: DataFrame, allowOperationMetadataField: Boolean): DataFrame = {
     val withoutMetaColumns = df.logicalPlan.output
-      .filterNot(attr => isMetaField(attr.name))
+      .filterNot(attr => isMetaField(attr.name, allowOperationMetadataField))
       .map(new Column(_))
     if (withoutMetaColumns.length != df.logicalPlan.output.size) {
       df.select(withoutMetaColumns: _*)
@@ -178,8 +192,8 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     }
   }
 
-  def removeMetaFields(attrs: Seq[Attribute]): Seq[Attribute] = {
-    attrs.filterNot(attr => isMetaField(attr.name))
+  def removeMetaFields(attrs: Seq[Attribute], allowOperationMetadataField: Boolean): Seq[Attribute] = {
+    attrs.filterNot(attr => isMetaField(attr.name, allowOperationMetadataField))
   }
 
   /**

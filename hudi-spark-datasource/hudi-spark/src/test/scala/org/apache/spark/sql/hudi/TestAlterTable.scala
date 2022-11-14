@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.catalyst.TableIdentifier
 
@@ -83,7 +82,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         spark.sql(s"alter table $newTableName add columns(ext0 string)")
         catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName))
         assertResult(Seq("id", "name", "price", "ts", "ext0")) {
-          HoodieSqlCommonUtils.removeMetaFields(catalogTable.schema).fields.map(_.name)
+          HoodieSqlCommonUtils.removeMetaFields(catalogTable.schema, false).fields.map(_.name)
         }
         checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
           Seq(1, "a1", 10.0, 1000, null)

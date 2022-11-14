@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
-import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation, UnresolvedStar}
@@ -29,7 +28,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, DataSource, LogicalRelation}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableIdentifier, removeMetaFields}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getMetaFields, getTableIdentifier, removeMetaFields}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
@@ -38,7 +37,7 @@ import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util
-import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 object HoodieAnalysis {
@@ -273,7 +272,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           throw ae
       }
 
-      def isInsertOrUpdateStar(assignments: Seq[Assignment]): Boolean = {
+      def isInsertOrUpdateStar(assignments: Seq[Assignment], allowOperationMetadataField: Boolean): Boolean = {
         if (assignments.isEmpty) {
           true
         } else {
@@ -299,7 +298,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
                 attr.name
               case _ => ""
             }.toArray
-            val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala
+            val metaFields = getMetaFields(allowOperationMetadataField)
             if (assignmentFieldNames.take(metaFields.length).mkString(",").startsWith(metaFields.mkString(","))) {
               true
             } else {
@@ -312,12 +311,12 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       }
 
       def resolveConditionAssignments(condition: Option[Expression],
-        assignments: Seq[Assignment]): (Option[Expression], Seq[Assignment]) = {
+        assignments: Seq[Assignment], allowOperationMetadataField: Boolean): (Option[Expression], Seq[Assignment]) = {
         val resolvedCondition = condition.map(resolveExpressionFrom(resolvedSource)(_))
-        val resolvedAssignments = if (isInsertOrUpdateStar(assignments)) {
+        val resolvedAssignments = if (isInsertOrUpdateStar(assignments, allowOperationMetadataField)) {
           // assignments is empty means insert * or update set *
-          val resolvedSourceOutput = resolvedSource.output.filter(attr => !HoodieSqlCommonUtils.isMetaField(attr.name))
-          val targetOutput = target.output.filter(attr => !HoodieSqlCommonUtils.isMetaField(attr.name))
+          val resolvedSourceOutput = resolvedSource.output.filter(attr => !HoodieSqlCommonUtils.isMetaField(attr.name, allowOperationMetadataField))
+          val targetOutput = target.output.filter(attr => !HoodieSqlCommonUtils.isMetaField(attr.name, allowOperationMetadataField))
           val resolvedSourceColumnNames = resolvedSourceOutput.map(_.name)
 
           if(targetOutput.filter(attr => resolvedSourceColumnNames.exists(resolver(_, attr.name))).equals(targetOutput)){
@@ -337,7 +336,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           // For Spark3.2, InsertStarAction/UpdateStarAction's assignments will contain the meta fields.
           val withoutMetaAttrs = assignments.filterNot{ assignment =>
             if (assignment.key.isInstanceOf[Attribute]) {
-              HoodieSqlCommonUtils.isMetaField(assignment.key.asInstanceOf[Attribute].name)
+              HoodieSqlCommonUtils.isMetaField(assignment.key.asInstanceOf[Attribute].name, allowOperationMetadataField)
             } else {
               false
             }
@@ -353,17 +352,19 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
 
       // Resolve the merge condition
       val resolvedMergeCondition = resolveExpressionFrom(resolvedSource, Some(target))(mergeCondition)
+      val targetTableId = getMergeIntoTargetTableId(mergeInto)
+      val targetTable =
+        sparkSession.sessionState.catalog.getTableMetadata(targetTableId)
 
+      val hoodieCatalogTable = HoodieCatalogTable(sparkSession, targetTable)
+      val allowOperationMetadataField = hoodieCatalogTable.allowOperationMetadataField
       // Resolve the matchedActions
       val resolvedMatchedActions = matchedActions.map {
         case UpdateAction(condition, assignments) =>
           val (resolvedCondition, resolvedAssignments) =
-            resolveConditionAssignments(condition, assignments)
+            resolveConditionAssignments(condition, assignments, allowOperationMetadataField)
 
           // Get the target table type and pre-combine field.
-          val targetTableId = getMergeIntoTargetTableId(mergeInto)
-          val targetTable =
-            sparkSession.sessionState.catalog.getTableMetadata(targetTableId)
           val tblProperties = targetTable.storage.properties ++ targetTable.properties
           val targetTableType = HoodieOptionConfig.getTableType(tblProperties)
           val preCombineField = HoodieOptionConfig.getPreCombineField(tblProperties)
@@ -375,8 +376,9 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
               case o => throw new IllegalArgumentException(s"Assignment key must be an attribute, current is: ${o.key}")
           }.toMap
 
+
           // Validate if there are incorrect target attributes.
-          val targetColumnNames = removeMetaFields(target.output).map(_.name)
+          val targetColumnNames = removeMetaFields(target.output, allowOperationMetadataField).map(_.name)
           val unKnowTargets = target2Values.keys
             .filterNot(name => targetColumnNames.exists(resolver(_, name)))
           if (unKnowTargets.nonEmpty) {
@@ -385,7 +387,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
 
           // Fill the missing target attribute in the update action for COW table to support partial update.
           // e.g. If the update action missing 'id' attribute, we fill a "id = target.id" to the update action.
-          val newAssignments = removeMetaFields(target.output)
+          val newAssignments = removeMetaFields(target.output, allowOperationMetadataField)
             .map(attr => {
               val valueOption = target2Values.find(f => resolver(f._1, attr.name))
               // TODO support partial update for MOR.
@@ -410,20 +412,20 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           // SPARK-34962:  use UpdateStarAction as the explicit representation of * in UpdateAction.
           // So match and covert this in Spark3.2 env.
           val (resolvedCondition, resolvedAssignments) =
-            resolveConditionAssignments(action.condition, Seq.empty)
+            resolveConditionAssignments(action.condition, Seq.empty, allowOperationMetadataField)
           UpdateAction(resolvedCondition, resolvedAssignments)
       }
       // Resolve the notMatchedActions
       val resolvedNotMatchedActions = notMatchedActions.map {
         case InsertAction(condition, assignments) =>
           val (resolvedCondition, resolvedAssignments) =
-            resolveConditionAssignments(condition, assignments)
+            resolveConditionAssignments(condition, assignments, allowOperationMetadataField)
           InsertAction(resolvedCondition, resolvedAssignments)
         case action: MergeAction =>
           // SPARK-34962:  use InsertStarAction as the explicit representation of * in InsertAction.
           // So match and covert this in Spark3.2 env.
           val (resolvedCondition, resolvedAssignments) =
-            resolveConditionAssignments(action.condition, Seq.empty)
+            resolveConditionAssignments(action.condition, Seq.empty, allowOperationMetadataField)
           InsertAction(resolvedCondition, resolvedAssignments)
       }
       // Return the resolved MergeIntoTable
@@ -455,11 +457,10 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
     case l if sparkAdapter.getCatalystPlanUtils.isInsertInto(l) =>
       val (table, partition, query, overwrite, ifPartitionNotExists) =
         sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(l).get
-
       if (sparkAdapter.isHoodieTable(table, sparkSession) && query.resolved &&
         !containUnResolvedStar(query) &&
-        !checkAlreadyAppendMetaField(query)) {
-        val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala.map(
+        !checkAlreadyAppendMetaField(query, getMetaFields(sparkSession, table))) {
+        val metaFields = getMetaFields(sparkSession, table).map(
           Alias(Literal.create(null, StringType), _)()).toArray[NamedExpression]
         val newQuery = query match {
           case project: Project =>
@@ -524,17 +525,16 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
    * @param query
    * @return
    */
-  private def checkAlreadyAppendMetaField(query: LogicalPlan): Boolean = {
-    query.output.take(HoodieRecord.HOODIE_META_COLUMNS.size())
-      .filter(isMetaField)
+  private def checkAlreadyAppendMetaField(query: LogicalPlan, metaFields: mutable.Buffer[String]): Boolean = {
+    query.output.take(metaFields.length)
+      .filter(isMetaField(_, metaFields))
       .map {
         case AttributeReference(name, _, _, _) => name.toLowerCase
         case other => throw new IllegalArgumentException(s"$other should not be a hoodie meta field")
-      }.toSet == HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet
+      }.toBuffer == metaFields
   }
 
-  private def isMetaField(exp: Expression): Boolean = {
-    val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet
+  private def isMetaField(exp: Expression, metaFields: mutable.Buffer[String]): Boolean = {
     exp match {
       case Alias(_, name) if metaFields.contains(name.toLowerCase) => true
       case AttributeReference(name, _, _, _) if metaFields.contains(name.toLowerCase) => true
