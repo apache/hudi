@@ -180,10 +180,10 @@ class ExpressionPayload(record: GenericRecord,
 
   override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
     var incomingRecord:GenericRecord = null
-    val dropPartCol: Boolean = (properties.getProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key)).asInstanceOf[Boolean]
+    val dropPartCol = properties.getProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key).asInstanceOf[Boolean]
     if (dropPartCol) {
-      val partitionFields: Array[String] = properties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key).split(",")
-      val removeFields: util.Set[String] = CollectionUtils.createSet(partitionFields)
+      val partitionFields = properties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key).split(",")
+      val removeFields = partitionFields.toSet.asJava
       val schemaNoPartitionFields: Schema = HoodieAvroUtils.removeFields(schema, removeFields)
        incomingRecord = bytesToAvro(recordBytes, schemaNoPartitionFields)
     }
