@@ -65,8 +65,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<String> HIVE_SYNC_BUCKET_SYNC_SPEC = HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
   public static final ConfigProperty<String> HIVE_SYNC_COMMENT = HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 
-  public static final ConfigProperty<Boolean> HIVE_SYNC_FILTER_PUSHDOWN_ENABLE = ConfigProperty
-      .key("hoodie.datasource.hive_sync.filter_pushdown_enable")
+  public static final ConfigProperty<Boolean> HIVE_SYNC_FILTER_PUSHDOWN_ENABLED = ConfigProperty
+      .key("hoodie.datasource.hive_sync.filter_pushdown_enabled")
       .defaultValue(false)
       .withDocumentation("Whether to enable push down partitions by filter");
 

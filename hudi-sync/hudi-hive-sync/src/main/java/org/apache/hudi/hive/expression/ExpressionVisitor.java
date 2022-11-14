@@ -18,36 +18,18 @@
 
 package org.apache.hudi.hive.expression;
 
-import java.util.List;
+/**
+ * Visitor used to travers the expression.
+ */
+public interface ExpressionVisitor<T> {
 
-public abstract class Expression {
+  T visitAnd(Expression left, Expression right);
 
-  public enum Operator {
-    AND("AND", "&&"),
-    OR("OR", "||"),
-    GT(">", ">"),
-    LT("<", "<"),
-    EQ("=", "="),
-    GT_EQ(">=", ">="),
-    LT_EQ("<=", "<=");
+  T visitOr(Expression left, Expression right);
 
-    public final String sqlOperator;
-    public final String symbol;
+  T visitBinaryComparator(Expression left, Expression.Operator operator, Expression right);
 
-    Operator(String sqlOperator, String symbol) {
-      this.sqlOperator = sqlOperator;
-      this.symbol = symbol;
-    }
-  }
+  T visitLiteral(LeafExpression.Literal literal);
 
-  private final List<Expression> children;
-
-  public Expression(List<Expression> children) {
-    this.children = children;
-  }
-
-  /**
-   * Traverses the expression with the provided {@link ExpressionVisitor}
-   */
-  public abstract <T> T accept(ExpressionVisitor<T> exprVisitor);
+  T visitAttribute(LeafExpression.AttributeReferenceExpression attribute);
 }

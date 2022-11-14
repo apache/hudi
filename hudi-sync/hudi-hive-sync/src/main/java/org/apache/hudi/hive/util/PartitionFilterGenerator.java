@@ -55,6 +55,13 @@ public class PartitionFilterGenerator {
     Expression visitElement(T element);
   }
 
+  /**
+   * Build expression from the Partition list.
+   *
+   * ex. partitionSchema(date, hour) [Partition(2022-09-01, 12), Partition(2022-09-02, 13)] =>
+   *     Or(And(Equal(Attribute(date), Literal(2022-09-01)), Equal(Attribute(hour), Literal(12))),
+   *     And(Equal(Attribute(date), Literal(2022-09-02)), Equal(Attribute(hour), Literal(13))))
+   */
   private static class PartitionExpressionBuilder implements ExpressionBuilder<Partition> {
 
     private final List<FieldSchema> partitionFields;
@@ -71,7 +78,7 @@ public class PartitionFilterGenerator {
       for (int i = 0; i < partitionFields.size(); i++) {
         FieldSchema field = partitionFields.get(i);
         String value = partitionValues.get(i);
-        BinaryOperator.EqualTo exp = new BinaryOperator.EqualTo(new LeafExpression.NameExpression(field.getName()),
+        BinaryOperator.EqualTo exp = new BinaryOperator.EqualTo(new LeafExpression.AttributeReferenceExpression(field.getName()),
             new LeafExpression.Literal(value, field.getType()));
         if (root != null) {
           root = new BinaryOperator.And(root, exp);
@@ -99,6 +106,13 @@ public class PartitionFilterGenerator {
     }
   }
 
+  /**
+   * Build expression from {@link PartitionField}, this builder will extract the min value
+   * and the max value of each field, and construct GreatThanOrEqual and LessThanOrEqual to
+   * build the expression.
+   *
+   * This builder can reduce the Expression tree level a lot if each field has too many values.
+   */
   private static class MinMaxPartitionExpressionBuilder implements ExpressionBuilder<PartitionField> {
 
     public MinMaxPartitionExpressionBuilder() {}
@@ -154,16 +168,16 @@ public class PartitionFilterGenerator {
     @Override
     public Expression visitElement(PartitionField partitionField) {
       if (partitionField.values.length == 1) {
-        return new BinaryOperator.EqualTo(new LeafExpression.NameExpression(partitionField.field.getName()),
+        return new BinaryOperator.EqualTo(new LeafExpression.AttributeReferenceExpression(partitionField.field.getName()),
             new LeafExpression.Literal(partitionField.values[0], partitionField.field.getType()));
       }
       Arrays.sort(partitionField.values, new ValueComparator(partitionField.field.getType()));
       return new BinaryOperator.And(
           new BinaryOperator.GreatThanOrEqual(
-              new LeafExpression.NameExpression(partitionField.field.getName()),
+              new LeafExpression.AttributeReferenceExpression(partitionField.field.getName()),
               new LeafExpression.Literal(partitionField.values[0], partitionField.field.getType())),
           new BinaryOperator.LessThanOrEqual(
-              new LeafExpression.NameExpression(partitionField.field.getName()),
+              new LeafExpression.AttributeReferenceExpression(partitionField.field.getName()),
               new LeafExpression.Literal(partitionField.values[partitionField.values.length - 1], partitionField.field.getType())));
     }
   }
@@ -184,12 +198,12 @@ public class PartitionFilterGenerator {
 
     List<Partition> partitions = writtenPartitions.stream().map(s -> {
       List<String> values = partitionValueExtractor.extractPartitionValuesInPath(s);
-      
+
       if (values.size() != partitionFields.size()) {
         throw new HoodieHiveSyncException("Partition fields and values should be same length"
             + ", but got partitionFields: " + partitionFields + " with values: " + values);
       }
-      
+
       return new Partition(values, null);
     }).collect(Collectors.toList());
 
@@ -213,76 +227,7 @@ public class PartitionFilterGenerator {
     return generateFilterString(filter);
   }
 
-  private static String makeBinaryOperatorString(String left, BinaryOperator exp, String right) {
-    return String.format("%s %s %s", left, exp.getOperator(), right);
-  }
-
-  private static String quoteStringLiteral(String value) {
-    if (!value.contains("\"")) {
-      return "\"" + value + "\"";
-    } else if (!value.contains("'")) {
-      return "'" + value + "'";
-    } else {
-      throw new UnsupportedOperationException("Cannot pushdown filters if \" and ' both exist");
-    }
-  }
-
-  private static String extractLiteralValue(LeafExpression.Literal literalExp) {
-    switch (literalExp.getType().toLowerCase(Locale.ROOT)) {
-      case HiveSchemaUtil.STRING_TYPE_NAME:
-        return quoteStringLiteral(literalExp.getValue());
-      case HiveSchemaUtil.INT_TYPE_NAME:
-      case HiveSchemaUtil.BIGINT_TYPE_NAME:
-      case HiveSchemaUtil.DATE_TYPE_NAME:
-        return literalExp.getValue();
-      default:
-        return "";
-    }
-  }
-
   private static String generateFilterString(Expression filter) {
-    if (filter instanceof BinaryOperator.Or) {
-      BinaryOperator.Or orOperator = (BinaryOperator.Or)filter;
-      String leftResult = generateFilterString(orOperator.getLeft());
-      String rightResult = generateFilterString(orOperator.getRight());
-      if (!leftResult.isEmpty() && !rightResult.isEmpty()) {
-        return "(" + makeBinaryOperatorString(leftResult, orOperator, rightResult) + ")";
-      }
-      return "";
-    }
-
-    if (filter instanceof BinaryOperator.And) {
-      BinaryOperator.And andOperator = (BinaryOperator.And)filter;
-      String leftResult = generateFilterString(andOperator.getLeft());
-      String rightResult = generateFilterString(andOperator.getRight());
-      if (leftResult.isEmpty() && rightResult.isEmpty()) {
-        return "";
-      }
-
-      if (!leftResult.isEmpty() && rightResult.isEmpty()) {
-        return leftResult;
-      }
-
-      if (leftResult.isEmpty()) {
-        return rightResult;
-      }
-
-      return "(" + makeBinaryOperatorString(leftResult, andOperator, rightResult) + ")";
-    }
-
-    if (filter instanceof BinaryOperator.BinaryComparator) {
-      BinaryOperator.BinaryComparator binaryComparator = (BinaryOperator.BinaryComparator) filter;
-      if (binaryComparator.getLeft() instanceof LeafExpression.NameExpression
-          && binaryComparator.getRight() instanceof LeafExpression.Literal) {
-        LeafExpression.NameExpression nameExp = (LeafExpression.NameExpression) binaryComparator.getLeft();
-        LeafExpression.Literal valueExp = (LeafExpression.Literal) binaryComparator.getRight();
-        String literalValue = extractLiteralValue(valueExp);
-        if (!literalValue.isEmpty()) {
-          return makeBinaryOperatorString(nameExp.getName(), binaryComparator, literalValue);
-        }
-      }
-    }
-
-    return "";
+    return filter.accept(new FilterGenVisitor());
   }
 }

@@ -47,7 +47,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_ENABLE;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_OMIT_METADATA_FIELDS;
@@ -316,7 +316,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    * too many unnecessary partitions.
    */
   private List<Partition> getTablePartitions(String tableName, List<String> writtenPartitionsSince) {
-    if (!config.getBooleanOrDefault(HIVE_SYNC_FILTER_PUSHDOWN_ENABLE)) {
+    if (!config.getBooleanOrDefault(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED)) {
       return syncClient.getAllPartitions(tableName);
     }
 

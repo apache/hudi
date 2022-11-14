@@ -44,18 +44,28 @@ public abstract class LeafExpression extends Expression {
     public String getType() {
       return type;
     }
+
+    @Override
+    public <T> T accept(ExpressionVisitor<T> exprVisitor) {
+      return exprVisitor.visitLiteral(this);
+    }
   }
 
-  public static class NameExpression extends LeafExpression {
+  public static class AttributeReferenceExpression extends LeafExpression {
 
     private final String name;
 
-    public NameExpression(String name) {
+    public AttributeReferenceExpression(String name) {
       this.name = name;
     }
 
     public String getName() {
       return name;
+    }
+
+    @Override
+    public <T> T accept(ExpressionVisitor<T> exprVisitor) {
+      return exprVisitor.visitAttribute(this);
     }
   }
 }
