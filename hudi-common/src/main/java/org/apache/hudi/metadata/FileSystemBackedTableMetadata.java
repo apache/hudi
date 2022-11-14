@@ -90,7 +90,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
     }).collect(Collectors.toList());
   }
 
-  public List<String> getPartitionPathsWithPrefix(String prefix) throws IOException {
+  private List<String> getPartitionPathsWithPrefix(String prefix) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
     pathsToList.add(StringUtils.isNullOrEmpty(prefix) ? new Path(datasetBasePath) : new Path(datasetBasePath, prefix));
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
