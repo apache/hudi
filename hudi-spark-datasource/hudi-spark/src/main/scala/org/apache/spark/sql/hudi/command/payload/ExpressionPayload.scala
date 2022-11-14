@@ -34,9 +34,9 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{getEvaluator, getMergedSchema, setWriteSchema}
 import org.apache.spark.sql.types.{StructField, StructType}
+
 import java.util.{Base64, Properties}
 import java.util.function.Function
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
