@@ -195,10 +195,12 @@ object HoodieOptionConfig {
     // validate primary key
     val primaryKeys = sqlOptions.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)
       .map(_.split(",").filter(_.length > 0))
-    ValidationUtils.checkArgument(primaryKeys.nonEmpty, "No `primaryKey` is specified.")
-    primaryKeys.get.foreach { primaryKey =>
-      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(primaryKey))),
-        s"Can't find primaryKey `$primaryKey` in ${schema.treeString}.")
+    // ValidationUtils.checkArgument(primaryKeys.nonEmpty, "No `primaryKey` is specified.")
+    if (primaryKeys.nonEmpty) {
+      primaryKeys.get.foreach { primaryKey =>
+        ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(primaryKey))),
+          s"Can't find primaryKey `$primaryKey` in ${schema.treeString}.")
+      }
     }
 
     // validate preCombine key

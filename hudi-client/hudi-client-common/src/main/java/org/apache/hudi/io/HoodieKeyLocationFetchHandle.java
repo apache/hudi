@@ -53,6 +53,7 @@ public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O
   }
 
   public Stream<Pair<HoodieKey, HoodieRecordLocation>> locations() {
+    System.out.println(String.format(">>> Fetching locations: %s, keygen: %s", partitionPathBaseFilePair, keyGeneratorOpt));
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
     BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
     List<HoodieKey> hoodieKeyList = new ArrayList<>();
@@ -61,6 +62,7 @@ public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O
     } else {
       hoodieKeyList = baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
     }
+    System.out.println(String.format(">>> Key list: %s", hoodieKeyList));
     return hoodieKeyList.stream()
         .map(entry -> Pair.of(entry,
             new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId())));

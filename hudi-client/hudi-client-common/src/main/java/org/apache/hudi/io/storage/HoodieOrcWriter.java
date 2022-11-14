@@ -164,4 +164,9 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
 
     writer.close();
   }
+
+  @Override
+  public long getWrittenRecordCount() {
+    return RECORD_INDEX.get();
+  }
 }

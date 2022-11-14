@@ -186,4 +186,9 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     writer.close();
     writer = null;
   }
+
+  @Override
+  public long getWrittenRecordCount() {
+    return recordIndex.get();
+  }
 }

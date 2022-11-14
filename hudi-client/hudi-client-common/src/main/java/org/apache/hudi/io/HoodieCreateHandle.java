@@ -18,13 +18,10 @@
 
 package org.apache.hudi.io;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -39,6 +36,11 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -141,6 +143,10 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
           return;
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
+        String seqId = HoodieRecord.generateSequenceId(instantTime, taskContextSupplier.getPartitionIdSupplier().get(), fileWriter.getWrittenRecordCount());
+        HoodieKey key = new HoodieKey(seqId, record.getPartitionPath());
+        record.unseal();
+        record.setKey(key);
         if (preserveMetadata) {
           fileWriter.writeAvro(record.getRecordKey(),
               rewriteRecordWithMetadata((GenericRecord) avroRecord.get(), path.getName()));
@@ -148,7 +154,6 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
           fileWriter.writeAvroWithMetadata(record.getKey(), rewriteRecord((GenericRecord) avroRecord.get()));
         }
         // update the new location of record, so we know where to find it next
-        record.unseal();
         record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
         record.seal();
         recordsWritten++;

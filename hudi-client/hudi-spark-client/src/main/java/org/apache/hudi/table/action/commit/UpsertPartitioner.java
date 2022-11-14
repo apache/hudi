@@ -51,6 +51,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -345,9 +346,14 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
       String partitionPath = keyLocation._1().getPartitionPath();
       List<InsertBucketCumulativeWeightPair> targetBuckets = partitionPathToInsertBucketInfos.get(partitionPath);
       // pick the target bucket to use based on the weights.
-      final long totalInserts = Math.max(1, profile.getWorkloadStat(partitionPath).getNumInserts());
-      final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", keyLocation._1().getRecordKey());
-      final double r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
+      double r;
+      if (Objects.nonNull(keyLocation._1().getRecordKey())) {
+        final long totalInserts = Math.max(1, profile.getWorkloadStat(partitionPath).getNumInserts());
+        final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", keyLocation._1().getRecordKey());
+        r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
+      } else {
+        r = random.nextDouble();
+      }
 
       int index = Collections.binarySearch(targetBuckets, new InsertBucketCumulativeWeightPair(new InsertBucket(), r));
 

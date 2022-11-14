@@ -81,7 +81,7 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
     writtenRecordCount.incrementAndGet();
   }
 
-  protected long getWrittenRecordCount() {
+  public long getWrittenRecordCount() {
     return writtenRecordCount.get();
   }
 }

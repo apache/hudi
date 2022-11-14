@@ -136,7 +136,7 @@ trait ProvidesHoodieConfig extends Logging {
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
-    val hasPrecombineColumn = hoodieCatalogTable.preCombineKey.nonEmpty
+    val hasPrecombineColumn = true
     val operation =
       (enableBulkInsert, isOverwrite, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
         case (true, _, _, false, _) =>

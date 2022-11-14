@@ -175,6 +175,10 @@ public abstract class HoodieRecord<T> implements Serializable {
     return this.currentLocation != null;
   }
 
+  public void setKey(HoodieKey key) {
+    this.key = key;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {

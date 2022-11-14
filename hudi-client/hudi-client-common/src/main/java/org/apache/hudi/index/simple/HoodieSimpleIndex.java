@@ -109,14 +109,18 @@ public class HoodieSimpleIndex
 
     HoodiePairData<HoodieKey, HoodieRecord<R>> keyedInputRecords =
         inputRecords.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
+    //System.out.println(String.format(">>> existingLocationsOnTable: %s", keyedInputRecords.keys().collectAsList()));
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingLocationsOnTable =
         fetchRecordLocationsForAffectedPartitions(keyedInputRecords.keys(), context, hoodieTable,
             config.getSimpleIndexParallelism());
+    //System.out.println(String.format(">>> existingLocationsOnTable: %s", existingLocationsOnTable.collectAsList()));
 
     HoodieData<HoodieRecord<R>> taggedRecords =
         keyedInputRecords.leftOuterJoin(existingLocationsOnTable).map(entry -> {
           final HoodieRecord<R> untaggedRecord = entry.getRight().getLeft();
+          System.out.println(String.format(">>> untaggedRecord: %s", untaggedRecord));
           final Option<HoodieRecordLocation> location = Option.ofNullable(entry.getRight().getRight().orElse(null));
+          System.out.println(String.format(">>> location: %s", location));
           return HoodieIndexUtils.getTaggedRecord(untaggedRecord, location);
         });
 

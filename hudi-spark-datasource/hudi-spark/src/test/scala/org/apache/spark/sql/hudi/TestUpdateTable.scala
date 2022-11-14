@@ -23,7 +23,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test Update Table") {
     withTempDir { tmp =>
-      Seq("cow", "mor").foreach {tableType =>
+      Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         // create table
         spark.sql(
@@ -65,7 +65,8 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test Update Table On Non-PK Condition") {
     withTempDir { tmp =>
-      Seq("cow", "mor").foreach {tableType =>
+      Seq("cow", "mor").foreach { tableType =>
+
         /** non-partitioned table */
         val tableName = generateTableName
         // create table
@@ -166,7 +167,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test ignoring case for Update Table") {
     withTempDir { tmp =>
-      Seq("cow", "mor").foreach {tableType =>
+      Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         // create table
         spark.sql(

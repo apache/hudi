@@ -21,13 +21,17 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
+
 import org.apache.spark.Partitioner;
+
+import java.util.Random;
 
 /**
  * Packs incoming records to be inserted into buckets (1 bucket = 1 RDD partition).
  */
 public abstract class SparkHoodiePartitioner<T extends HoodieRecordPayload<T>> extends Partitioner
     implements org.apache.hudi.table.action.commit.Partitioner {
+  private static final long RANDOM_SEED = 9038412832L;
 
   /**
    * Stat for the current workload. Helps in determining inserts, upserts etc.
@@ -36,9 +40,12 @@ public abstract class SparkHoodiePartitioner<T extends HoodieRecordPayload<T>> e
 
   protected final HoodieTable table;
 
+  protected final Random random;
+
   public SparkHoodiePartitioner(WorkloadProfile profile, HoodieTable table) {
     this.profile = profile;
     this.table = table;
+    this.random = new Random(RANDOM_SEED);
   }
 
   @Override

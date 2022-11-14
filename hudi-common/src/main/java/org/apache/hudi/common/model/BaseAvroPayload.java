@@ -19,7 +19,6 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -48,8 +47,8 @@ public abstract class BaseAvroPayload implements Serializable {
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
     this.recordBytes = record != null ? HoodieAvroUtils.avroToBytes(record) : new byte[0];
     this.orderingVal = orderingVal;
-    if (orderingVal == null) {
+    /*if (orderingVal == null) {
       throw new HoodieException("Ordering value is null for record: " + record);
-    }
+    }*/
   }
 }
