@@ -23,6 +23,9 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
+import org.apache.hudi.hadoop.HoodieHiveFileSliceReader;
 import org.apache.hudi.hadoop.HoodieHiveRecord;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -38,12 +41,15 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMergedLogRecordScanner;
 
-public class HoodieRealtimeMergedRecordReader extends AbstractRealtimeRecordReader
+public class HoodieRealtimeMergedRecordReader extends HoodieHiveFileSliceReader
     implements RecordReader<NullWritable, ArrayWritable> {
   private static final Logger LOG = LogManager.getLogger(HoodieRealtimeMergedRecordReader.class);
 
@@ -57,12 +63,21 @@ public class HoodieRealtimeMergedRecordReader extends AbstractRealtimeRecordRead
   public HoodieRealtimeMergedRecordReader(RealtimeSplit split, JobConf job, RecordReader<NullWritable, ArrayWritable> baseRecordReader) {
     super(split, job);
     this.baseRecordReader = baseRecordReader;
-    this.mergedLogRecordScanner = getMergedLogRecordScanner(split, job, usesCustomPayload ? getWriterSchema() : getReaderSchema());
+    this.mergedLogRecordScanner = getMergedLogRecordScanner(split, job, useCustomPayload() ? getWriterSchema() : getReaderSchema());
     this.deltaRecordMap = mergedLogRecordScanner.getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
     this.recordKeyIndex = split.getVirtualKeyInfo()
         .map(HoodieVirtualKeyInfo::getRecordKeyFieldIndex)
         .orElse(HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
+  }
+
+  public void init(JobConf job) {
+    String[] rawColNames = HoodieColumnProjectionUtils.getReadColumnNames(job);
+    List<Integer> rawColIds = HoodieColumnProjectionUtils.getReadColumnIDs(job);
+    List<Pair<Integer, String>> projectedColsWithIndex =
+        IntStream.range(0, rawColIds.size()).mapToObj(idx -> Pair.of(rawColIds.get(idx), rawColNames[idx]))
+            .collect(Collectors.toList());
+    // TODO: convert to Avro Schema and call project(Schema)
   }
 
   @Override
@@ -108,10 +123,10 @@ public class HoodieRealtimeMergedRecordReader extends AbstractRealtimeRecordRead
   }
 
   private Option<HoodieAvroIndexedRecord> buildGenericRecordWithCustomPayload(HoodieRecord record) throws IOException {
-    if (usesCustomPayload) {
-      return record.toIndexedRecord(getWriterSchema(), payloadProps);
+    if (useCustomPayload()) {
+      return record.toIndexedRecord(getWriterSchema(), getPayloadProps());
     } else {
-      return record.toIndexedRecord(getReaderSchema(), payloadProps);
+      return record.toIndexedRecord(getReaderSchema(), getPayloadProps());
     }
   }
 

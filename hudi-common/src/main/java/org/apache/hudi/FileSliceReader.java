@@ -45,6 +45,7 @@ public interface FileSliceReader extends AutoCloseable {
   /**
    * Pushes down filters to low-level file-format readers (if supported).
    */
+  // TODO: Should it take a generic type instead of string filters?
   FileSliceReader pushDownFilters(Set<String> filters);
 
   /**
