@@ -19,6 +19,8 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -30,6 +32,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * {@link HoodieRecordPayload} impl that honors ordering field in both preCombine and combineAndGetUpdateValue.
@@ -79,7 +82,16 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     if (recordBytes.length == 0) {
       return Option.empty();
     }
-    GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    GenericRecord incomingRecord;
+    boolean dropPartCol = Boolean.parseBoolean(properties.getProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key()));
+    if (dropPartCol) {
+      String[] partitionFields = properties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",");
+      Set<String> removeFields = CollectionUtils.createSet(partitionFields);
+      Schema schemaNoPartitionFields = HoodieAvroUtils.removeFields(schema, removeFields);
+      incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schemaNoPartitionFields);
+    } else {
+      incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    }
     eventTime = updateEventTime(incomingRecord, properties);
 
     return isDeleteRecord(incomingRecord) ? Option.empty() : Option.of(incomingRecord);

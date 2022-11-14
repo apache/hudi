@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
+import java.util
+
 import com.github.benmanes.caffeine.cache.Caffeine
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
@@ -25,7 +27,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
-import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
+import org.apache.hudi.common.util.{CollectionUtils, ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.hudi.sql.IExpressionEvaluator
@@ -34,9 +36,12 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{getEvaluator, getMergedSchema, setWriteSchema}
 import org.apache.spark.sql.types.{StructField, StructType}
-
-import java.util.{Base64, Properties}
+import java.util.{Base64, Properties, Set}
 import java.util.function.Function
+
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
@@ -174,7 +179,15 @@ class ExpressionPayload(record: GenericRecord,
   }
 
   override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
-    val incomingRecord = bytesToAvro(recordBytes, schema)
+    var incomingRecord:GenericRecord = null
+    val dropPartCol: Boolean = (properties.getProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key)).asInstanceOf[Boolean]
+    if (dropPartCol) {
+      val partitionFields: Array[String] = properties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key).split(",")
+      val removeFields: util.Set[String] = CollectionUtils.createSet(partitionFields)
+      val schemaNoPartitionFields: Schema = HoodieAvroUtils.removeFields(schema, removeFields)
+       incomingRecord = bytesToAvro(recordBytes, schemaNoPartitionFields)
+    }
+    else incomingRecord = bytesToAvro(recordBytes, schema)
     if (isDeleteRecord(incomingRecord)) {
       HOption.empty[IndexedRecord]()
     } else {

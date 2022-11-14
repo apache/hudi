@@ -21,10 +21,16 @@ package org.apache.hudi.common.model;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.io.IOException;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * Provides support for seamlessly applying changes captured via Amazon Database Migration Service onto S3.
@@ -69,7 +75,15 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    return getInsertValue(schema);
+    boolean dropPartCol = Boolean.parseBoolean(properties.getProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key()));
+    if (dropPartCol) {
+      String[] partitionFields = properties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",");
+      Set<String> removeFields = CollectionUtils.createSet(partitionFields);
+      Schema schemaNoPartitionFields = HoodieAvroUtils.removeFields(schema, removeFields);
+      return getInsertValue(schemaNoPartitionFields);
+    } else {
+      return getInsertValue(schema);
+    }
   }
 
   @Override

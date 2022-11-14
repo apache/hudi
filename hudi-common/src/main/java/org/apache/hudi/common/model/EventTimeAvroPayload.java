@@ -18,7 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -27,6 +31,7 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
 
@@ -69,7 +74,16 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
     if (recordBytes.length == 0) {
       return Option.empty();
     }
-    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
+    GenericRecord incomingRecord;
+    boolean dropPartCol = Boolean.parseBoolean(properties.getProperty(HoodieTableConfig.DROP_PARTITION_COLUMNS.key()));
+    if (dropPartCol) {
+      String[] partitionFields = properties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",");
+      Set<String> removeFields = CollectionUtils.createSet(partitionFields);
+      Schema schemaNoPartitionFields = HoodieAvroUtils.removeFields(schema, removeFields);
+      incomingRecord = bytesToAvro(recordBytes, schemaNoPartitionFields);
+    } else {
+      incomingRecord = bytesToAvro(recordBytes, schema);
+    }
 
     return isDeleteRecord(incomingRecord) ? Option.empty() : Option.of(incomingRecord);
   }
