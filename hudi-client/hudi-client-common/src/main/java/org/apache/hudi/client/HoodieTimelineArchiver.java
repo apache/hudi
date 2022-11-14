@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -537,15 +538,14 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
     LOG.info("Deleting instants " + archivedInstants);
 
-    List<String> pendingInstantFiles = new ArrayList<>();
-    List<String> completedInstantFiles = new ArrayList<>();
+    List<HoodieInstant> pendingInstants = new ArrayList<>();
+    List<HoodieInstant> completedInstants = new ArrayList<>();
 
     for (HoodieInstant instant : archivedInstants) {
-      String filePath = new Path(metaClient.getMetaPath(), instant.getFileName()).toString();
       if (instant.isCompleted()) {
-        completedInstantFiles.add(filePath);
+        completedInstants.add(instant);
       } else {
-        pendingInstantFiles.add(filePath);
+        pendingInstants.add(instant);
       }
     }
 
@@ -556,8 +556,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // other monitors on the timeline(such as the compaction or clustering services) would
     // mistakenly recognize the pending file as a pending operation,
     // then all kinds of weird bugs occur.
-    boolean success = deleteArchivedInstantFiles(context, true, pendingInstantFiles);
-    success &= deleteArchivedInstantFiles(context, success, completedInstantFiles);
+    boolean success = deleteArchivedInstants(context, metaClient, pendingInstants);
+    success &= deleteArchivedInstants(context, metaClient, completedInstants);
 
     // Remove older meta-data from auxiliary path too
     Option<HoodieInstant> latestCommitted = Option.fromJavaOptional(archivedInstants.stream().filter(i -> i.isCompleted() && (i.getAction().equals(HoodieTimeline.COMMIT_ACTION)
@@ -569,12 +569,24 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     return success;
   }
 
-  private boolean deleteArchivedInstantFiles(HoodieEngineContext context, boolean success, List<String> files) {
-    Map<String, Boolean> resultDeleteInstantFiles = deleteFilesParallelize(metaClient, files, context, false);
+  private boolean deleteArchivedInstants(HoodieEngineContext context,
+                                         HoodieTableMetaClient metaClient,
+                                         List<HoodieInstant> instants) {
+    if (instants.isEmpty()) {
+      return true;
+    }
 
-    for (Map.Entry<String, Boolean> result : resultDeleteInstantFiles.entrySet()) {
-      LOG.info("Archived and deleted instant file " + result.getKey() + " : " + result.getValue());
-      success &= result.getValue();
+    Map<HoodieInstant, Boolean> result = context.mapToPair(
+        instants,
+        instant -> ImmutablePair.of(
+            instant,
+            metaClient.getActiveTimeline().deleteInstantFileIfExists(instant, false)),
+        Math.min(instants.size(), config.getArchiveDeleteParallelism()));
+
+    boolean success = true;
+    for (Map.Entry<HoodieInstant, Boolean> entry : result.entrySet()) {
+      LOG.info("Archived and deleted instant " + entry.getKey().toString() + " : " + entry.getValue());
+      success &= entry.getValue();
     }
     return success;
   }
