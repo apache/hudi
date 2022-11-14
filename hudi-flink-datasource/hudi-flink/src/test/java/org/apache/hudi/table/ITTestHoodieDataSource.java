@@ -1339,6 +1339,32 @@ public class ITTestHoodieDataSource {
 
   @ParameterizedTest
   @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
+  void testParquetNullChildColumnsRowTypes(String operation) {
+    TableEnvironment tableEnv = batchTableEnv;
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_row row(f_row_f0 int, f_row_f1 varchar(10))")
+        .pkField("f_int")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, operation)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.NULL_CHILD_COLUMNS_ROW_TYPE_INSERT_T1);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[1, +I[null, abc1]], "
+        + "+I[2, +I[2, null]], "
+        + "+I[3, null]]";
+    assertRowsEquals(result, expected);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
   void testBuiltinFunctionWithCatalog(String operation) {
     TableEnvironment tableEnv = batchTableEnv;
 
