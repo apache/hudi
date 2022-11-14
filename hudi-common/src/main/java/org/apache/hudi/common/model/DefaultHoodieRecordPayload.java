@@ -132,10 +132,10 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
     Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
         orderField,
-        true, consistentLogicalTimestampEnabled);
+        false, consistentLogicalTimestampEnabled);
     Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
         orderField,
-        true, consistentLogicalTimestampEnabled);
+        false, consistentLogicalTimestampEnabled);
     return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
   }
 
