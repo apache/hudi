@@ -158,6 +158,7 @@ public class HoodieMetrics {
     Metrics.registerGauge(getMetricsName(actionType, "totalRecordsWritten"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalRecordsDeleted"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalBytesWritten"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalScanTime"), 0);
     Metrics.registerGauge(getMetricsName(actionType, "totalCreateTime"), 0);
@@ -177,6 +178,7 @@ public class HoodieMetrics {
       long totalRecordsWritten = metadata.fetchTotalRecordsWritten();
       long totalUpdateRecordsWritten = metadata.fetchTotalUpdateRecordsWritten();
       long totalInsertRecordsWritten = metadata.fetchTotalInsertRecordsWritten();
+      long totalRecordsDeleted = metadata.getTotalRecordsDeleted();
       long totalBytesWritten = metadata.fetchTotalBytesWritten();
       long totalTimeTakenByScanner = metadata.getTotalScanTime();
       long totalTimeTakenForInsert = metadata.getTotalCreateTime();
@@ -197,6 +199,7 @@ public class HoodieMetrics {
       Metrics.registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), totalCompactedRecordsUpdated);
       Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), totalLogFilesCompacted);
       Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesSize"), totalLogFilesSize);
+      Metrics.registerGauge(getMetricsName(actionType, "totalRecordsDeleted"), totalRecordsDeleted);
     }
   }
 
