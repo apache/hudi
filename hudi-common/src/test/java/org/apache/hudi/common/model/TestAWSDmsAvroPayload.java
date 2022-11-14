@@ -73,7 +73,7 @@ public class TestAWSDmsAvroPayload {
         new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
         new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", null),
         new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
-        new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false)
+        new Schema.Field("Op", Schema.create(Schema.Type.STRING), "", null)
     ));
     Properties props = new Properties();
     props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
@@ -84,11 +84,11 @@ public class TestAWSDmsAvroPayload {
     Schema recordSchema = Schema.createRecord(Arrays.asList(
         new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
         new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
-        new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false)));
+        new Schema.Field("Op", Schema.create(Schema.Type.STRING), "", null)));
     GenericRecord record = new GenericData.Record(recordSchema);
     record.put("id", "1");
     record.put("ts", 0L);
-    record.put("_hoodie_is_deleted", false);
+    record.put("Op", "I");
     Option<GenericRecord> recordOption = Option.of(record);
     AWSDmsAvroPayload awsDmsAvroPayload = new AWSDmsAvroPayload(recordOption);
     assertEquals(awsDmsAvroPayload.getInsertValue(schema, props), recordOption);
