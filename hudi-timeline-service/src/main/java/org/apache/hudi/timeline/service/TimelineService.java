@@ -18,6 +18,8 @@
 
 package org.apache.hudi.timeline.service;
 
+import io.javalin.core.JavalinConfig;
+import io.javalin.jetty.JettyServer;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -263,10 +265,12 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new Server() : new Server(new QueuedThreadPool(timelineServerConf.numThreads));
-
+    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new JettyServer(new JavalinConfig()).server() :
+            new Server(new QueuedThreadPool(timelineServerConf.numThreads));
     app = Javalin.create(c -> {
-      c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
+      if (!timelineServerConf.compress) {
+        c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
+      }
       c.server(() -> server);
     });
 
