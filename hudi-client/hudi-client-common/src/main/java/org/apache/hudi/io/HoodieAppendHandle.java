@@ -608,7 +608,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         return new HoodieHFileDataBlock(
             recordList, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()));
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(recordList, header, keyField, writeConfig.getParquetCompressionCodec());
+        return new HoodieParquetDataBlock(
+            recordList,
+            header,
+            keyField,
+            writeConfig.getParquetCompressionCodec(),
+            writeConfig.getParquetCompressionRatio(),
+            writeConfig.parquetDictionaryEnabled());
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }
