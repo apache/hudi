@@ -82,14 +82,12 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
       HoodieCompactionPlan compactionPlan = operationType.equals(WriteOperationType.COMPACT)
           ? CompactionUtils.getCompactionPlan(table.getMetaClient(), instantTime)
           : CompactionUtils.getLogCompactionPlan(table.getMetaClient(), instantTime);
-
-      // try to load internalSchema to support schema Evolution
-      HoodieWriteConfig configCopy = config;
+      // should not influence the original config, just copy it
+      HoodieWriteConfig configCopy = HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build();
+      //try to load internalSchema to support schema Evolution
       Pair<Option<String>, Option<String>> schemaPair = InternalSchemaCache
           .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
       if (schemaPair.getLeft().isPresent() && schemaPair.getRight().isPresent()) {
-        // should not influence the original config, just copy it
-        configCopy = HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build();
         configCopy.setInternalSchemaString(schemaPair.getLeft().get());
         configCopy.setSchema(schemaPair.getRight().get());
       }
@@ -97,14 +95,14 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
       HoodieData<WriteStatus> statuses = compactor.compact(
           context, compactionPlan, table, configCopy, instantTime, compactionHandler);
 
-      compactor.maybePersist(statuses, config);
-      context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
+      compactor.maybePersist(statuses, configCopy);
+      context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + configCopy.getTableName());
       List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
       for (HoodieWriteStat stat : updateStatusMap) {
         metadata.addWriteStat(stat.getPartitionPath(), stat);
       }
-      metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
+      metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, configCopy.getSchema());
       if (schemaPair.getLeft().isPresent()) {
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
         metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
