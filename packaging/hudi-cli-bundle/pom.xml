@@ -86,7 +86,7 @@
                                 </transformer>
                             </transformers>
                             <artifactSet>
-                                <includes>
+                                <includes combine.children="append">
                                     <include>org.apache.hudi:hudi-common</include>
                                     <include>org.apache.hudi:hudi-cli</include>
                                     <include>org.apache.hudi:hudi-client-common</include>
@@ -190,7 +190,7 @@
                                 <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
                                            potential classpath collisions in case users would like to also use "spark-avro" w/in
                                            their runtime, since Hudi carries some of the same classes as "spark-avro" -->
-                                <relocation>
+                                <relocation combine.children="append">
                                     <pattern>org.apache.parquet.avro.</pattern>
                                     <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
                                 </relocation>
@@ -360,6 +360,9 @@
                                         <exclude>META-INF/*.RSA</exclude>
                                         <exclude>**/*.proto</exclude>
                                         <exclude>hbase-webapps/**</exclude>
+                                        <!-- hbase-default.xml comes from hbase-common, hbase related classes used in hudi are in shaded
+                                        pattern, the default classes in hbase-default.xml can cause ClassNotFoundException. -->
+                                        <exclude>hbase-default.xml</exclude>
                                     </excludes>
                                 </filter>
                             </filters>
