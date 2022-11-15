@@ -55,15 +55,13 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
                                            HoodieInstant commitInstant,
                                            boolean deleteInstants,
                                            boolean skipTimelinePublish,
-                                           boolean useMarkerBasedStrategy,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, useMarkerBasedStrategy, skipLocking);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking);
   }
 
   @Override
   protected List<HoodieRollbackStat> executeRollback(HoodieRollbackPlan hoodieRollbackPlan) {
-    HoodieTimer rollbackTimer = new HoodieTimer();
-    rollbackTimer.startTimer();
+    HoodieTimer rollbackTimer = HoodieTimer.start();
 
     List<HoodieRollbackStat> stats = new ArrayList<>();
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();

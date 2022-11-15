@@ -22,13 +22,17 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -45,8 +49,8 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -120,7 +124,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     this.tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(tableSchema, config.allowOperationMetadataField());
     this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
     this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
-    this.timer = new HoodieTimer().startTimer();
+    this.timer = HoodieTimer.start();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
     this.taskContextSupplier = taskContextSupplier;
@@ -271,6 +275,41 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable,
       HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
     return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, taskContextSupplier);
+  }
+
+  protected HoodieLogFormat.Writer createLogWriter(
+      Option<FileSlice> fileSlice, String baseCommitTime) throws IOException {
+    return createLogWriter(fileSlice, baseCommitTime, null);
+  }
+
+  protected HoodieLogFormat.Writer createLogWriter(
+      Option<FileSlice> fileSlice, String baseCommitTime, String suffix) throws IOException {
+    Option<HoodieLogFile> latestLogFile = fileSlice.isPresent()
+        ? fileSlice.get().getLatestLogFile()
+        : Option.empty();
+
+    return HoodieLogFormat.newWriterBuilder()
+        .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+        .withFileId(fileId)
+        .overBaseCommit(baseCommitTime)
+        .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
+        .withFileSize(latestLogFile.map(HoodieLogFile::getFileSize).orElse(0L))
+        .withSizeThreshold(config.getLogFileMaxSize())
+        .withFs(fs)
+        .withRolloverLogWriteToken(writeToken)
+        .withLogWriteToken(latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
+        .withSuffix(suffix)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+  }
+
+  protected HoodieLogFormat.Writer createLogWriter(String baseCommitTime, String fileSuffix) {
+    try {
+      return createLogWriter(Option.empty(),baseCommitTime, fileSuffix);
+    } catch (IOException e) {
+      throw new HoodieException("Creating logger writer with fileId: " + fileId + ", "
+          + "base commit time: " + baseCommitTime + ", "
+          + "file suffix: " + fileSuffix + " error");
+    }
   }
 
   private static class IgnoreRecord implements GenericRecord {

@@ -47,7 +47,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
- * This class offers DDL executor backed by the HiveQL Driver.
+ * This class offers DDL executor backed by the hive.ql Driver This class preserves the old useJDBC = false way of doing things.
  */
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
@@ -91,7 +91,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     try {
       for (String sql : sqls) {
         if (hiveDriver != null) {
-          HoodieTimer timer = new HoodieTimer().startTimer();
+          HoodieTimer timer = HoodieTimer.start();
           responses.add(hiveDriver.run(sql));
           LOG.info(String.format("Time taken to execute [%s]: %s ms", sql, timer.endTimer()));
         }

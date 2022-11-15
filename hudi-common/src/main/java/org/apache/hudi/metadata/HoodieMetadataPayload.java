@@ -53,6 +53,7 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.util.Lazy;
 
@@ -80,6 +81,7 @@ import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.hadoop.CachingPath.createPathUnsafe;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionIdentifier;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
@@ -473,10 +475,22 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public FileStatus[] getFileStatuses(Configuration hadoopConf, Path partitionPath) throws IOException {
     FileSystem fs = partitionPath.getFileSystem(hadoopConf);
+    return getFileStatuses(fs, partitionPath);
+  }
+
+  /**
+   * Returns the files added as part of this record.
+   */
+  public FileStatus[] getFileStatuses(FileSystem fs, Path partitionPath) {
     long blockSize = fs.getDefaultBlockSize(partitionPath);
     return filterFileInfoEntries(false)
-        .map(e -> new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
-            null, null, null, new Path(partitionPath, e.getKey())))
+        .map(e -> {
+          // NOTE: Since we know that the Metadata Table's Payload is simply a file-name we're
+          //       creating Hadoop's Path using more performant unsafe variant
+          CachingPath filePath = new CachingPath(partitionPath, createPathUnsafe(e.getKey()));
+          return new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
+              null, null, null, filePath);
+        })
         .toArray(FileStatus[]::new);
   }
 
@@ -611,7 +625,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     checkArgument(Objects.equals(prevColumnStats.getFileName(), newColumnStats.getFileName()));
     checkArgument(Objects.equals(prevColumnStats.getColumnName(), newColumnStats.getColumnName()));
 
-    if (newColumnStats.getIsDeleted()) {
+    // We're handling 2 cases in here
+    //  - New record is a tombstone: in this case it simply overwrites previous state
+    //  - Previous record is a tombstone: in that case new proper record would also
+    //    be simply overwriting previous state
+    if (newColumnStats.getIsDeleted() || prevColumnStats.getIsDeleted()) {
       return newColumnStats;
     }
 
@@ -625,8 +643,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     Comparable maxValue =
         (Comparable) Stream.of(
-            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMinValue()),
-            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMinValue()))
+            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMaxValue()),
+            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMaxValue()))
         .filter(Objects::nonNull)
         .max(Comparator.naturalOrder())
         .orElse(null);
@@ -642,6 +660,28 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .setTotalUncompressedSize(prevColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
         .setIsDeleted(newColumnStats.getIsDeleted())
         .build();
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other == this) {
+      return true;
+    } else if (!(other instanceof HoodieMetadataPayload)) {
+      return false;
+    }
+
+    HoodieMetadataPayload otherMetadataPayload = (HoodieMetadataPayload) other;
+
+    return this.type == otherMetadataPayload.type
+        && Objects.equals(this.key, otherMetadataPayload.key)
+        && Objects.equals(this.filesystemMetadata, otherMetadataPayload.filesystemMetadata)
+        && Objects.equals(this.bloomFilterMetadata, otherMetadataPayload.bloomFilterMetadata)
+        && Objects.equals(this.columnStatMetadata, otherMetadataPayload.columnStatMetadata);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(key, type, filesystemMetadata, bloomFilterMetadata, columnStatMetadata);
   }
 
   @Override

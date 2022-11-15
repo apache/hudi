@@ -157,6 +157,13 @@ public interface TableFileSystemView {
   Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations();
 
   /**
+   * Return Pending Compaction Operations.
+   *
+   * @return Pair<Pair<InstantTime,CompactionOperation>>
+   */
+  Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations();
+
+  /**
    * Last Known Instant on which the view is built.
    */
   Option<HoodieInstant> getLastInstant();

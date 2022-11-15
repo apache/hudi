@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
@@ -126,6 +127,22 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Columns used to uniquely identify the table. Concatenated values of these fields are used as "
           + " the record key component of HoodieKey.");
+
+  public static final ConfigProperty<Boolean> CDC_ENABLED = ConfigProperty
+      .key("hoodie.table.cdc.enabled")
+      .defaultValue(false)
+      .withDocumentation("When enable, persist the change data if necessary, and can be queried as a CDC query mode.");
+
+  public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
+      .key("hoodie.table.cdc.supplemental.logging.mode")
+      .defaultValue(HoodieCDCSupplementalLoggingMode.OP_KEY.getValue())
+      .withValidValues(
+          HoodieCDCSupplementalLoggingMode.OP_KEY.getValue(),
+          HoodieCDCSupplementalLoggingMode.WITH_BEFORE.getValue(),
+          HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER.getValue())
+      .withDocumentation("When 'cdc_op_key' persist the 'op' and the record key only,"
+          + " when 'cdc_data_before' persist the additional 'before' image ,"
+          + " and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.");
 
   public static final ConfigProperty<String> CREATE_SCHEMA = ConfigProperty
       .key("hoodie.table.create.schema")
@@ -234,6 +251,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
+
+  public static final ConfigProperty<String> SECONDARY_INDEXES_METADATA = ConfigProperty
+      .key("hoodie.table.secondary.indexes.metadata")
+      .noDefaultValue()
+      .withDocumentation("The metadata of secondary indexes");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
@@ -499,11 +521,23 @@ public class HoodieTableConfig extends HoodieConfig {
     return Option.empty();
   }
 
+  public Option<String> getSecondaryIndexesMetadata() {
+    if (contains(SECONDARY_INDEXES_METADATA)) {
+      return Option.of(getString(SECONDARY_INDEXES_METADATA));
+    }
+
+    return Option.empty();
+  }
+
   /**
    * @returns the partition field prop.
+   * @deprecated please use {@link #getPartitionFields()} instead
    */
+  @Deprecated
   public String getPartitionFieldProp() {
-    return getString(PARTITION_FIELDS);
+    // NOTE: We're adding a stub returning empty string to stay compatible w/ pre-existing
+    //       behavior until this method is fully deprecated
+    return Option.ofNullable(getString(PARTITION_FIELDS)).orElse("");
   }
 
   /**
@@ -589,16 +623,24 @@ public class HoodieTableConfig extends HoodieConfig {
     return getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
+  public boolean isCDCEnabled() {
+    return getBooleanOrDefault(CDC_ENABLED);
+  }
+
+  public HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode() {
+    return HoodieCDCSupplementalLoggingMode.parse(getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE));
+  }
+
   public String getKeyGeneratorClassName() {
     return getString(KEY_GENERATOR_CLASS_NAME);
   }
 
   public String getHiveStylePartitioningEnable() {
-    return getString(HIVE_STYLE_PARTITIONING_ENABLE);
+    return getStringOrDefault(HIVE_STYLE_PARTITIONING_ENABLE);
   }
 
   public String getUrlEncodePartitioning() {
-    return getString(URL_ENCODE_PARTITIONING);
+    return getStringOrDefault(URL_ENCODE_PARTITIONING);
   }
 
   public Boolean shouldDropPartitionColumns() {

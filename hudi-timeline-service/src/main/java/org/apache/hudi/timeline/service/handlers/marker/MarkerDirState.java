@@ -273,7 +273,7 @@ public class MarkerDirState implements Serializable {
   private void writeMarkerTypeToFile() {
     Path dirPath = new Path(markerDirPath);
     try {
-      if (!fileSystem.exists(dirPath)) {
+      if (!fileSystem.exists(dirPath) || !MarkerUtils.doesMarkerTypeFileExist(fileSystem, markerDirPath)) {
         // There is no existing marker directory, create a new directory and write marker type
         fileSystem.mkdirs(dirPath);
         MarkerUtils.writeMarkerTypeToFile(MarkerType.TIMELINE_SERVER_BASED, fileSystem, markerDirPath);
@@ -313,7 +313,7 @@ public class MarkerDirState implements Serializable {
    */
   private void flushMarkersToFile(int markerFileIndex) {
     LOG.debug("Write to " + markerDirPath + "/" + MARKERS_FILENAME_PREFIX + markerFileIndex);
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     Path markersFilePath = new Path(markerDirPath, MARKERS_FILENAME_PREFIX + markerFileIndex);
     FSDataOutputStream fsDataOutputStream = null;
     BufferedWriter bufferedWriter = null;

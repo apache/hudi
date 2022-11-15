@@ -39,6 +39,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.Driver;
+import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -57,8 +58,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
@@ -86,11 +89,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHiveSyncTool {
 
   private static final List<Object> SYNC_MODES = Arrays.asList(
+      "hiveql",
       "hms",
       "jdbc");
 
   private static Iterable<Object> syncMode() {
-    return SYNC_MODES; // TODO include hiveql; skipped due to CI issue
+    return SYNC_MODES;
   }
 
   // useSchemaFromCommitMetadata, syncMode
@@ -107,7 +111,7 @@ public class TestHiveSyncTool {
   private HoodieHiveSyncClient hiveClient;
 
   @AfterAll
-  public static void cleanUpClass() {
+  public static void cleanUpClass() throws IOException {
     HiveTestUtil.shutdown();
   }
 
@@ -120,7 +124,7 @@ public class TestHiveSyncTool {
     return opts;
   }
 
-  // (useSchemaFromCommitMetadata, syncAsDataSource, syncMode)
+  // (useJdbc, useSchemaFromCommitMetadata, syncAsDataSource)
   private static Iterable<Object[]> syncDataSourceTableParams() {
     List<Object[]> opts = new ArrayList<>();
     for (Object mode : SYNC_MODES) {
@@ -165,21 +169,27 @@ public class TestHiveSyncTool {
         "The last commit that was synced should be updated in the TBLPROPERTIES");
 
     // Adding of new partitions
-    List<String> newPartition = Collections.singletonList("2050/01/01");
+    List<String> newPartition = Arrays.asList("2050/01/01", "2040/02/01");
     hiveClient.addPartitionsToTable(HiveTestUtil.TABLE_NAME, Collections.emptyList());
     assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "No new partition should be added");
     hiveClient.addPartitionsToTable(HiveTestUtil.TABLE_NAME, newPartition);
-    assertEquals(6, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+    assertEquals(7, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "New partition should be added");
 
     // Update partitions
     hiveClient.updatePartitionsToTable(HiveTestUtil.TABLE_NAME, Collections.emptyList());
-    assertEquals(6, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+    assertEquals(7, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "Partition count should remain the same");
     hiveClient.updatePartitionsToTable(HiveTestUtil.TABLE_NAME, newPartition);
-    assertEquals(6, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
-        "Partition count should remain the same");
+    List<Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    Set<String> relativePartitionPaths = hivePartitions.stream()
+        .map(p -> getRelativePartitionPath(new Path(basePath), new Path(p.getStorageLocation())))
+        .collect(Collectors.toSet());
+    // partition paths from the storage descriptor should be unique and contain the updated partitions
+    assertEquals(7, hivePartitions.size(), "Partition count should remain the same");
+    assertEquals(hivePartitions.size(), relativePartitionPaths.size());
+    assertTrue(relativePartitionPaths.containsAll(newPartition));
 
     // Alter partitions
     // Manually change a hive partition location to check if the sync will detect
@@ -187,9 +197,9 @@ public class TestHiveSyncTool {
     ddlExecutor.runSQL("ALTER TABLE `" + HiveTestUtil.TABLE_NAME
         + "` PARTITION (`datestr`='2050-01-01') SET LOCATION '/some/new/location'");
 
-    List<Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.empty());
-    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, false);
+    hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.empty());
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.UPDATE, partitionEvents.iterator().next().eventType,
         "The one partition event must of type UPDATE");
@@ -199,7 +209,7 @@ public class TestHiveSyncTool {
 
     // Sync should update the changed partition to correct path
     List<Partition> tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    assertEquals(6, tablePartitions.size(), "The one partition we wrote should be added to hive");
+    assertEquals(7, tablePartitions.size(), "The one partition we wrote should be added to hive");
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be 100");
   }
@@ -291,6 +301,7 @@ public class TestHiveSyncTool {
     hiveDriver.run("SHOW CREATE TABLE " + dbTableName);
     hiveDriver.getResults(results);
     String ddl = String.join("\n", results);
+    assertTrue(ddl.contains(String.format("ROW FORMAT SERDE \n  '%s'", ParquetHiveSerDe.class.getName())));
     assertTrue(ddl.contains("'path'='" + HiveTestUtil.basePath + "'"));
     if (syncAsDataSourceTable) {
       assertTrue(ddl.contains("'" + ConfigUtils.IS_QUERY_AS_RO_TABLE + "'='false'"));
@@ -393,6 +404,7 @@ public class TestHiveSyncTool {
       hiveDriver.run("SHOW CREATE TABLE " + dbTableName);
       hiveDriver.getResults(results);
       String ddl = String.join("\n", results);
+      assertTrue(ddl.contains(String.format("ROW FORMAT SERDE \n  '%s'", ParquetHiveSerDe.class.getName())));
       assertTrue(ddl.contains("'path'='" + HiveTestUtil.basePath + "'"));
       assertTrue(ddl.toLowerCase().contains("create external table"));
       if (syncAsDataSourceTable) {
@@ -466,10 +478,10 @@ public class TestHiveSyncTool {
 
     // Lets do the sync
     reSyncHiveTable();
-    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.of(commitTime1));
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(commitTime1));
     assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, false);
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.ADD, partitionEvents.iterator().next().eventType, "The one partition event must of type ADD");
 
@@ -745,10 +757,10 @@ public class TestHiveSyncTool {
     HiveTestUtil.addCOWPartition("2010/01/02", true, true, commitTime2);
 
     reinitHiveSyncClient();
-    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.of(instantTime));
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(instantTime));
     assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, false);
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.ADD, partitionEvents.iterator().next().eventType, "The one partition event must of type ADD");
 
@@ -775,7 +787,7 @@ public class TestHiveSyncTool {
         "Table partitions should match the number of partitions we wrote");
     assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
-    assertEquals(1, hiveClient.getPartitionsWrittenToSince(Option.of(commitTime2)).size());
+    assertEquals(1, hiveClient.getWrittenPartitionsSince(Option.of(commitTime2)).size());
   }
 
   @ParameterizedTest
@@ -845,17 +857,33 @@ public class TestHiveSyncTool {
         "Table partitions should match the number of partitions we wrote");
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
-    String partitiontoDelete = partitions.get(0).getValues().get(0).replace("-", "/");
-    // create a replace commit to delete current partitions+
-    HiveTestUtil.createReplaceCommit("101", partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true);
+    // add a partition but do not sync
+    String instantTime2 = "101";
+    String newPartition = "2010/02/01";
+    HiveTestUtil.addCOWPartition(newPartition, true, true, instantTime2);
+    HiveTestUtil.getCreatedTablesSet().add(HiveTestUtil.DB_NAME + "." + HiveTestUtil.TABLE_NAME);
+    partitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(1, partitions.size(),
+        "Table partitions should match the number of partitions we wrote");
+    assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+        "The last commit that was synced should be updated in the TBLPROPERTIES");
 
-    // sync drop partitions
+    // create two replace commits to delete current partitions, but do not sync in between
+    String partitiontoDelete = partitions.get(0).getValues().get(0).replace("-", "/");
+    String instantTime3 = "102";
+    HiveTestUtil.createReplaceCommit(instantTime3, partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true);
+    String instantTime4 = "103";
+    HiveTestUtil.createReplaceCommit(instantTime4, newPartition, WriteOperationType.DELETE_PARTITION, true, true);
+
+    // now run hive sync
     reinitHiveSyncClient();
     reSyncHiveTable();
 
     List<Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     assertEquals(0, hivePartitions.size(),
-        "Table should have 0 partition because of the drop the only one partition");
+        "Table should have no partitions");
+    assertEquals(instantTime4, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+        "The last commit that was synced should be updated in the TBLPROPERTIES");
   }
 
   @ParameterizedTest

@@ -17,18 +17,11 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -75,6 +68,14 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.util.JFunction;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -86,7 +87,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
-import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -104,6 +104,8 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import scala.Tuple2;
 
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -132,7 +134,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient ExecutorService executorService;
   protected transient HoodieTableMetaClient metaClient;
   protected transient SparkRDDWriteClient writeClient;
-  protected transient HoodieReadClient readClient;
+  protected transient SparkRDDReadClient readClient;
   protected transient HoodieTableFileSystemView tableView;
   protected transient TimelineService timelineService;
 
@@ -341,8 +343,12 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   protected Properties getPropertiesForKeyGen() {
+    return getPropertiesForKeyGen(false);
+  }
+
+  protected Properties getPropertiesForKeyGen(boolean populateMetaFields) {
     Properties properties = new Properties();
-    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
     properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
     properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
@@ -433,7 +439,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected void cleanupDFS() throws IOException {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
-      dfsCluster.shutdown();
+      dfsCluster.shutdown(true, true);
       hdfsTestService = null;
       dfsCluster = null;
       dfs = null;
@@ -477,8 +483,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     }
   }
 
-  public HoodieReadClient getHoodieReadClient(String basePath) {
-    readClient = new HoodieReadClient(context, basePath, SQLContext.getOrCreate(jsc.sc()));
+  public SparkRDDReadClient getHoodieReadClient(String basePath) {
+    readClient = new SparkRDDReadClient(context, basePath, SQLContext.getOrCreate(jsc.sc()));
     return readClient;
   }
 
@@ -506,10 +512,19 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     return tableView;
   }
 
+  /**
+   * @deprecated Use {@link #tagLocation(HoodieIndex, HoodieEngineContext, JavaRDD, HoodieTable)} instead.
+   */
+  @Deprecated
   public JavaRDD<HoodieRecord> tagLocation(
       HoodieIndex index, JavaRDD<HoodieRecord> records, HoodieTable table) {
     return HoodieJavaRDD.getJavaRDD(
         index.tagLocation(HoodieJavaRDD.of(records), context, table));
+  }
+
+  public static JavaRDD<HoodieRecord> tagLocation(
+      HoodieIndex index, HoodieEngineContext context, JavaRDD<HoodieRecord> records, HoodieTable table) {
+    return HoodieJavaRDD.getJavaRDD(index.tagLocation(HoodieJavaRDD.of(records), context, table));
   }
 
   public static Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(JavaRDD<HoodieRecord> inputRecordsRDD) {
@@ -563,7 +578,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     }
     assertEquals(inflightCommits, testTable.inflightCommits());
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     // Partitions should match
@@ -728,8 +743,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   public HoodieInstant createCleanMetadata(String instantTime, boolean inflightOnly, boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
-    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(),
-            CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
+    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", "",
+            new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
     if (inflightOnly) {
       HoodieTestTable.of(metaClient).addInflightClean(instantTime, cleanerPlan);
     } else {
@@ -739,7 +754,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
               Collections.emptyList(),
               Collections.emptyList(),
               Collections.emptyList(),
-              instantTime);
+              instantTime,
+              "");
       HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
       HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata, isEmptyForAll, isEmptyCompleted);
     }

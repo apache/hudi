@@ -149,6 +149,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
     try {
       if (lock != null) {
         hiveClient.unlock(lock.getLockid());
+        lock = null;
       }
       Hive.closeCurrent();
     } catch (Exception e) {
@@ -197,6 +198,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       // it is better to release WAITING lock, otherwise hive lock will hang forever
       if (this.lock != null && this.lock.getState() != LockState.ACQUIRED) {
         hiveClient.unlock(this.lock.getLockid());
+        lock = null;
       }
     }
   }

@@ -68,6 +68,8 @@ import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.SerializablePath;
 
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
@@ -278,6 +280,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             // by default, the HFile does not keep the metadata fields, set up as false
             // to always use the metadata of the new record.
             .withPreserveCommitMetadata(false)
+            .withLogRecordReaderScanV2(String.valueOf(writeConfig.useScanV2ForLogRecordReader()))
             .build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
@@ -294,7 +297,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     builder.withProperties(properties);
 
     if (writeConfig.isMetricsOn()) {
+      // Table Name is needed for metric reporters prefix
+      Properties commonProperties = new Properties();
+      commonProperties.put(HoodieWriteConfig.TBL_NAME.key(), tableName);
+
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
+          .fromProperties(commonProperties)
           .withReporterType(writeConfig.getMetricsReporterType().toString())
           .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
           .on(true).build());
@@ -376,7 +384,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected <T extends SpecificRecordBase> void initializeIfNeeded(HoodieTableMetaClient dataMetaClient,
                                                                    Option<T> actionMetadata,
                                                                    Option<String> inflightInstantTimestamp) throws IOException {
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
 
     boolean exists = metadataTableExists(dataMetaClient, actionMetadata);
 
@@ -610,23 +618,24 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @return Map of partition names to a list of FileStatus for all the files in the partition
    */
   private List<DirectoryInfo> listAllPartitions(HoodieTableMetaClient datasetMetaClient) {
-    List<Path> pathsToList = new LinkedList<>();
-    pathsToList.add(new Path(dataWriteConfig.getBasePath()));
+    List<SerializablePath> pathsToList = new LinkedList<>();
+    pathsToList.add(new SerializablePath(new CachingPath(dataWriteConfig.getBasePath())));
 
     List<DirectoryInfo> partitionsToBootstrap = new LinkedList<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     SerializableConfiguration conf = new SerializableConfiguration(datasetMetaClient.getHadoopConf());
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
     final String datasetBasePath = datasetMetaClient.getBasePath();
+    SerializablePath serializableBasePath = new SerializablePath(new CachingPath(datasetBasePath));
 
     while (!pathsToList.isEmpty()) {
       // In each round we will list a section of directories
       int numDirsToList = Math.min(fileListingParallelism, pathsToList.size());
       // List all directories in parallel
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToList.subList(0, numDirsToList), path -> {
-        FileSystem fs = path.getFileSystem(conf.get());
-        String relativeDirPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), path);
-        return new DirectoryInfo(relativeDirPath, fs.listStatus(path));
+        FileSystem fs = path.get().getFileSystem(conf.get());
+        String relativeDirPath = FSUtils.getRelativePartitionPath(serializableBasePath.get(), path.get());
+        return new DirectoryInfo(relativeDirPath, fs.listStatus(path.get()));
       }, numDirsToList);
 
       pathsToList = new LinkedList<>(pathsToList.subList(numDirsToList, pathsToList.size()));
@@ -650,7 +659,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           partitionsToBootstrap.add(dirInfo);
         } else {
           // Add sub-dirs to the queue
-          pathsToList.addAll(dirInfo.getSubDirectories());
+          pathsToList.addAll(dirInfo.getSubDirectories().stream()
+              .map(path -> new SerializablePath(new CachingPath(path.toUri())))
+              .collect(Collectors.toList()));
         }
       }
     }
@@ -1001,21 +1012,21 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // finish off any pending compactions if any from previous attempt.
     writeClient.runAnyPendingCompactions();
 
-    String latestDeltacommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
+    String latestDeltaCommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
         .get().getTimestamp();
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
         .findInstantsBefore(instantTime).getInstants().collect(Collectors.toList());
 
     if (!pendingInstants.isEmpty()) {
       LOG.info(String.format("Cannot compact metadata table as there are %d inflight instants before latest deltacommit %s: %s",
-          pendingInstants.size(), latestDeltacommitTime, Arrays.toString(pendingInstants.toArray())));
+          pendingInstants.size(), latestDeltaCommitTime, Arrays.toString(pendingInstants.toArray())));
       return;
     }
 
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    final String compactionInstantTime = latestDeltacommitTime + "001";
+    final String compactionInstantTime = latestDeltaCommitTime + "001";
     if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       writeClient.compact(compactionInstantTime);
     }

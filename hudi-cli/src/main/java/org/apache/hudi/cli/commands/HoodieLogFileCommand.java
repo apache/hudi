@@ -18,6 +18,12 @@
 
 package org.apache.hudi.cli.commands;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -41,18 +47,12 @@ import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
+import scala.Tuple2;
+import scala.Tuple3;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -64,26 +64,23 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import scala.Tuple2;
-import scala.Tuple3;
-
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * CLI command to display log file options.
  */
-@Component
-public class HoodieLogFileCommand implements CommandMarker {
+@ShellComponent
+public class HoodieLogFileCommand {
 
-  @CliCommand(value = "show logfile metadata", help = "Read commit metadata from log files")
+  @ShellMethod(key = "show logfile metadata", value = "Read commit metadata from log files")
   public String showLogFileCommits(
-      @CliOption(key = "logFilePathPattern", mandatory = true,
+      @ShellOption(value = "--logFilePathPattern",
           help = "Fully qualified path for the log file") final String logFilePathPattern,
-      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+              defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
     FileSystem fs = HoodieCLI.getTableMetaClient().getFs();
@@ -168,14 +165,14 @@ public class HoodieLogFileCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "show logfile records", help = "Read records from log files")
+  @ShellMethod(key = "show logfile records", value = "Read records from log files")
   public String showLogFileRecords(
-      @CliOption(key = {"limit"}, help = "Limit commits",
-          unspecifiedDefaultValue = "10") final Integer limit,
-      @CliOption(key = "logFilePathPattern", mandatory = true,
+      @ShellOption(value = {"--limit"}, help = "Limit commits",
+          defaultValue = "10") final Integer limit,
+      @ShellOption(value = "--logFilePathPattern",
           help = "Fully qualified paths for the log files") final String logFilePathPattern,
-      @CliOption(key = "mergeRecords", help = "If the records in the log files should be merged",
-          unspecifiedDefaultValue = "false") final Boolean shouldMerge)
+      @ShellOption(value = "--mergeRecords", help = "If the records in the log files should be merged",
+              defaultValue = "false") final Boolean shouldMerge)
       throws IOException {
 
     System.out.println("===============> Showing only " + limit + " records <===============");
@@ -220,6 +217,7 @@ public class HoodieLogFileCommand implements CommandMarker {
               .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue())
               .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
               .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
+              .withUseScanV2(Boolean.parseBoolean(HoodieCompactionConfig.USE_LOG_RECORD_READER_SCAN_V2.defaultValue()))
               .build();
       for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
         Option<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);

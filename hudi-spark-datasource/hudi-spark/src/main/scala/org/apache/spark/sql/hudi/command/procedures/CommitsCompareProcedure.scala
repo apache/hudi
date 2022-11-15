@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.spark.sql.Row
@@ -47,7 +48,7 @@ class CommitsCompareProcedure() extends BaseProcedure with ProcedureBuilder {
     val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
     val path = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
 
-    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, new TableIdentifier(table))
+    val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
     val source = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val target = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(path).build

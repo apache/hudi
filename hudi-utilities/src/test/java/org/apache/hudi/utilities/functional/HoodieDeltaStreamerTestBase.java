@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.Random;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
+import static org.apache.hudi.hive.testutils.HiveTestService.HS2_JDBC_URL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
@@ -103,14 +104,14 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(true, true);
-    PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
-    ORC_SOURCE_ROOT = dfsBasePath + "/orcFiles";
-    JSON_KAFKA_SOURCE_ROOT = dfsBasePath + "/jsonKafkaFiles";
+    UtilitiesTestBase.initTestServices(false, true, true);
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFiles";
+    ORC_SOURCE_ROOT = basePath + "/orcFiles";
+    JSON_KAFKA_SOURCE_ROOT = basePath + "/jsonKafkaFiles";
     testUtils = new KafkaTestUtils();
     testUtils.setup();
     topicName = "topic" + testNum;
-    prepareInitialConfigs(dfs, dfsBasePath, testUtils.brokerAddress());
+    prepareInitialConfigs(fs, basePath, testUtils.brokerAddress());
 
     prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
     prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
@@ -186,7 +187,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
 
     // Hive Configs
-    props.setProperty(HIVE_URL.key(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(HIVE_URL.key(), HS2_JDBC_URL);
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "testdb1");
     props.setProperty(META_SYNC_TABLE_NAME.key(), "hive_trips");
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
@@ -246,7 +247,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   protected static void populateCommonHiveProps(TypedProperties props) {
     // Hive Configs
-    props.setProperty(HIVE_URL.key(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(HIVE_URL.key(), HS2_JDBC_URL);
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "testdb2");
     props.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "false");
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");

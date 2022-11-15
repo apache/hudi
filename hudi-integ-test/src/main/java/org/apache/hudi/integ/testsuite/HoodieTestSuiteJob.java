@@ -20,6 +20,7 @@ package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -62,6 +63,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * This is the entry point for running a Hudi Test Suite. Although this class has similarities with {@link HoodieDeltaStreamer} this class does not extend it since do not want to create a dependency
@@ -317,5 +319,36 @@ public class HoodieTestSuiteJob {
 
     @Parameter(names = {"--test-continuous-mode"}, description = "Tests continuous mode in deltastreamer.")
     public Boolean testContinousMode = false;
+
+    @Parameter(names = {"--enable-presto-validation"}, description = "Enables presto validation")
+    public Boolean enablePrestoValidation = false;
+
+    @Parameter(names = {"--presto-jdbc-url"}, description = "Presto JDBC URL in the format jdbc:presto://<host>:<port>/<catalog>/<schema>  "
+        + "e.g. URL to connect to Presto running on localhost port 8080 with the catalog `hive` and the schema `sales`: "
+        + "jdbc:presto://localhost:8080/hive/sales")
+    public String prestoJdbcUrl = EMPTY_STRING;
+
+    @Parameter(names = {"--presto-jdbc-username"}, description = "Username to use for authentication")
+    public String prestoUsername = "test";
+
+    @Parameter(names = {"--presto-jdbc-password"}, description = "Password corresponding to the username to use for authentication")
+    public String prestoPassword;
+
+    @Parameter(names = {"--trino-jdbc-url"}, description = "Trino JDBC URL in the format jdbc:trino://<host>:<port>/<catalog>/<schema>  "
+        + "e.g. URL to connect to Trino running on localhost port 8080 with the catalog `hive` and the schema `sales`: "
+        + "jdbc:trino://localhost:8080/hive/sales")
+    public String trinoJdbcUrl = EMPTY_STRING;
+
+    @Parameter(names = {"--trino-jdbc-username"}, description = "Username to use for authentication")
+    public String trinoUsername = "test";
+
+    @Parameter(names = {"--trino-jdbc-password"}, description = "Password corresponding to the username to use for authentication")
+    public String trinoPassword;
+
+    @Parameter(names = {"--index-type"}, description = "Index type to use for writes")
+    public String indexType = "SIMPLE";
+
+    @Parameter(names = {"--enable-metadata-on-read"}, description = "Enable's metadata for queries")
+    public Boolean enableMetadataOnRead = HoodieMetadataConfig.ENABLE.defaultValue();
   }
 }

@@ -18,13 +18,21 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
+import org.apache.spark.sql.catalyst.analysis.{SimpleAnalyzer, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Like}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
-import org.apache.spark.sql.execution.command.ExplainCommand
+import org.apache.spark.sql.execution.command.{AlterTableRecoverPartitionsCommand, ExplainCommand}
+import org.apache.spark.sql.internal.SQLConf
 
 object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
+
+  def resolveOutputColumns(tableName: String,
+                           expected: Seq[Attribute],
+                           query: LogicalPlan,
+                           byName: Boolean,
+                           conf: SQLConf): LogicalPlan =
+    SimpleAnalyzer.ResolveOutputRelation.resolveOutputColumns(tableName, expected, query, byName)
 
   def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan =
     ExplainCommand(plan, extended = extended)
@@ -59,15 +67,25 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists)
   }
 
-  override def createLike(left: Expression, right: Expression): Expression = {
-    Like(left, right)
-  }
-
   override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
     false
   }
 
   override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
     throw new IllegalStateException(s"Should not call getRelationTimeTravel for spark2")
+  }
+
+  override def isRepairTable(plan: LogicalPlan): Boolean = {
+    plan.isInstanceOf[AlterTableRecoverPartitionsCommand]
+  }
+
+  override def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)] = {
+    plan match {
+      // For Spark >= 3.2.x, AlterTableRecoverPartitionsCommand was renamed RepairTableCommand, and added two new
+      // parameters: enableAddPartitions and enableDropPartitions. By setting them to true and false, can restore
+      // AlterTableRecoverPartitionsCommand's behavior
+      case c: AlterTableRecoverPartitionsCommand =>
+        Some((c.tableName, true, false, c.cmd))
+    }
   }
 }

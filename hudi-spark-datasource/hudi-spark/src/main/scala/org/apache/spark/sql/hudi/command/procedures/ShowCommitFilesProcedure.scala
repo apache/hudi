@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata, HoodieWriteStat}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
@@ -44,7 +45,7 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
     StructField("file_id", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("previous_commit", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("total_records_updated", DataTypes.LongType, nullable = true, Metadata.empty),
-    StructField("total_tecords_written", DataTypes.LongType, nullable = true, Metadata.empty),
+    StructField("total_records_written", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_bytes_written", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_errors", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("file_size", DataTypes.LongType, nullable = true, Metadata.empty)
@@ -61,7 +62,7 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
     val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
     val instantTime = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
 
-    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, new TableIdentifier(table))
+    val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val activeTimeline = metaClient.getActiveTimeline

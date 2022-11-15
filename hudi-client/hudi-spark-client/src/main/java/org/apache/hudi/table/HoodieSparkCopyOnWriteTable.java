@@ -48,7 +48,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.io.HoodieSortedMergeHandle;
+import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -250,13 +250,8 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
             + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
       }
     }
-    if (requireSortedRecords()) {
-      return new HoodieSortedMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
-    } else {
-      return new HoodieMergeHandle(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
-    }
+    return HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
+        dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
   }
 
   @Override

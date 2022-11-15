@@ -81,7 +81,7 @@ public class SparkInternalSchemaConverter {
   public static final String HOODIE_VALID_COMMITS_LIST = "hoodie.valid.commits.list";
 
   /**
-   * Converts a spark schema to an hudi internal schema. Fields without IDs are kept and assigned fallback IDs.
+   * Convert a spark schema to an hudi internal schema. Fields without IDs are kept and assigned fallback IDs.
    *
    * @param sparkSchema a spark schema
    * @return a matching internal schema for the provided spark schema
@@ -157,7 +157,7 @@ public class SparkInternalSchemaConverter {
   }
 
   /**
-   * Converts Spark schema to Hudi internal schema, and prune fields.
+   * Convert Spark schema to Hudi internal schema, and prune fields.
    * Fields without IDs are kept and assigned fallback IDs.
    *
    * @param sparkSchema a pruned spark schema

@@ -34,7 +34,6 @@ import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.CustomAvroKeyGenerator;
-import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -49,14 +48,14 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -186,8 +185,7 @@ public class KafkaConnectUtils {
    * @return partition columns Returns the partition columns separated by comma.
    */
   public static String getPartitionColumns(KeyGenerator keyGenerator, TypedProperties typedProperties) {
-
-    if (keyGenerator instanceof CustomKeyGenerator || keyGenerator instanceof CustomAvroKeyGenerator) {
+    if (keyGenerator instanceof CustomAvroKeyGenerator) {
       return ((BaseKeyGenerator) keyGenerator).getPartitionPathFields().stream().map(
           pathField -> Arrays.stream(pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX))
               .findFirst().orElse("Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
@@ -200,7 +198,6 @@ public class KafkaConnectUtils {
 
     return typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
   }
-
 
   /**
    * Get the Metadata from the latest commit file.

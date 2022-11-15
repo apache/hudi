@@ -113,6 +113,28 @@ public class TestHoodieInternalRow {
   }
 
   @Test
+  public void testNumFields() {
+    Object[] values = getRandomValue(true);
+    InternalRow row = new GenericInternalRow(values);
+    HoodieInternalRow hoodieInternalRow1 = new HoodieInternalRow(UTF8String.fromString("commitTime"),
+        UTF8String.fromString("commitSeqNo"),
+        UTF8String.fromString("recordKey"),
+        UTF8String.fromString("partitionPath"),
+        UTF8String.fromString("fileName"),
+        row,
+        true);
+    HoodieInternalRow hoodieInternalRow2 = new HoodieInternalRow(UTF8String.fromString("commitTime"),
+        UTF8String.fromString("commitSeqNo"),
+        UTF8String.fromString("recordKey"),
+        UTF8String.fromString("partitionPath"),
+        UTF8String.fromString("fileName"),
+        row,
+        false);
+    assertEquals(row.numFields(), hoodieInternalRow1.numFields());
+    assertEquals(row.numFields() + 5, hoodieInternalRow2.numFields());
+  }
+
+  @Test
   public void testIsNullCheck() {
 
     for (int i = 0; i < 16; i++) {

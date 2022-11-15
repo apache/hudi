@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -164,6 +165,12 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     this.table.getMetaClient().reloadActiveTimeline();
     this.writeClient.completeTableService(
         TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant);
+
+    // whether to clean up the input base parquet files used for clustering
+    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+      LOG.info("Running inline clean");
+      this.writeClient.clean();
+    }
   }
 
   private void reset(String instant) {

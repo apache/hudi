@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import com.google.common.cache.CacheBuilder
+import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.hudi.command.payload.SqlTypedRecord.{getAvroDeserializer, getSqlType}
 import org.apache.spark.sql.types.StructType
 
-import java.util.concurrent.Callable
+import java.util.function.Function
 
 /**
  * A sql typed record which will convert the avro field to sql typed value.
@@ -49,27 +49,24 @@ class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
 
 object SqlTypedRecord {
 
-  private val sqlTypeCache = CacheBuilder.newBuilder().build[Schema, StructType]()
+  private val sqlTypeCache = Caffeine.newBuilder()
+    .maximumSize(16).build[Schema, StructType]
 
-  private val avroDeserializerCache = CacheBuilder.newBuilder().build[Schema, HoodieAvroDeserializer]()
+  private val avroDeserializerCacheLocal = new ThreadLocal[Cache[Schema, HoodieAvroDeserializer]] {
+    override def initialValue(): Cache[Schema, HoodieAvroDeserializer] = {
+      Caffeine.newBuilder().maximumSize(16).build[Schema, HoodieAvroDeserializer]
+    }
+  }
 
   def getSqlType(schema: Schema): StructType = {
-    sqlTypeCache.get(schema, new Callable[StructType] {
-      override def call(): StructType = {
-        val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
-        sqlTypeCache.put(schema, structType)
-        structType
-      }
+    sqlTypeCache.get(schema, new Function[Schema, StructType] {
+      override def apply(t: Schema): StructType = AvroConversionUtils.convertAvroSchemaToStructType(t)
     })
   }
 
   def getAvroDeserializer(schema: Schema): HoodieAvroDeserializer= {
-    avroDeserializerCache.get(schema, new Callable[HoodieAvroDeserializer] {
-      override def call(): HoodieAvroDeserializer = {
-        val deserializer = sparkAdapter.createAvroDeserializer(schema, getSqlType(schema))
-        avroDeserializerCache.put(schema, deserializer)
-        deserializer
-      }
+    avroDeserializerCacheLocal.get().get(schema, new Function[Schema, HoodieAvroDeserializer] {
+      override def apply(t: Schema): HoodieAvroDeserializer = sparkAdapter.createAvroDeserializer(t, getSqlType(t))
     })
   }
 }

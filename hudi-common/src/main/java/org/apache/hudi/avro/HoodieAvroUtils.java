@@ -54,6 +54,8 @@ import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 
+import org.apache.hadoop.util.VersionUtil;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -64,6 +66,8 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -73,6 +77,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Deque;
 import java.util.LinkedList;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 
@@ -86,6 +91,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
  */
 public class HoodieAvroUtils {
 
+  public static final String AVRO_VERSION = Schema.class.getPackage().getImplementationVersion();
   private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
   private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
 
@@ -167,12 +173,7 @@ public class HoodieAvroUtils {
   }
 
   public static boolean isMetadataField(String fieldName) {
-    return HoodieRecord.COMMIT_TIME_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.RECORD_KEY_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.PARTITION_PATH_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.OPERATION_METADATA_FIELD.equals(fieldName);
+    return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
@@ -243,7 +244,7 @@ public class HoodieAvroUtils {
     return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
   }
 
-  public static Schema removeFields(Schema schema, List<String> fieldsToRemove) {
+  public static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {
     List<Schema.Field> filteredFields = schema.getFields()
         .stream()
         .filter(field -> !fieldsToRemove.contains(field.name()))
@@ -388,7 +389,7 @@ public class HoodieAvroUtils {
       copyOldValueOrSetDefault(genericRecord, newRecord, f);
     }
     // do not preserve FILENAME_METADATA_FIELD
-    newRecord.put(HoodieRecord.FILENAME_META_FIELD_POS, fileName);
+    newRecord.put(HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
     if (!GenericData.get().validate(newSchema, newRecord)) {
       throw new SchemaCompatibilityException(
           "Unable to validate the rewritten record " + genericRecord + " against schema " + newSchema);
@@ -400,7 +401,7 @@ public class HoodieAvroUtils {
   public static GenericRecord rewriteEvolutionRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
     GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(genericRecord, newSchema, new HashMap<>());
     // do not preserve FILENAME_METADATA_FIELD
-    newRecord.put(HoodieRecord.FILENAME_META_FIELD_POS, fileName);
+    newRecord.put(HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
     return newRecord;
   }
 
@@ -420,7 +421,7 @@ public class HoodieAvroUtils {
    * <p>
    * To better understand how it removes please check {@link #rewriteRecord(GenericRecord, Schema)}
    */
-  public static GenericRecord removeFields(GenericRecord record, List<String> fieldsToRemove) {
+  public static GenericRecord removeFields(GenericRecord record, Set<String> fieldsToRemove) {
     Schema newSchema = removeFields(record.getSchema(), fieldsToRemove);
     return rewriteRecord(record, newSchema);
   }
@@ -481,6 +482,32 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Obtain value of the provided key, which is consistent with avro before 1.10
+   */
+  public static Object getFieldVal(GenericRecord record, String key) {
+    return getFieldVal(record, key, true);
+  }
+
+  /**
+   * Obtain value of the provided key, when set returnNullIfNotFound false,
+   * it is consistent with avro after 1.10
+   */
+  public static Object getFieldVal(GenericRecord record, String key, boolean returnNullIfNotFound) {
+    if (record.getSchema().getField(key) == null) {
+      if (returnNullIfNotFound) {
+        return null;
+      } else {
+        // Since avro 1.10, arvo will throw AvroRuntimeException("Not a valid schema field: " + key)
+        // rather than return null like the previous version if record doesn't contain this key.
+        // Here we simulate this behavior.
+        throw new AvroRuntimeException("Not a valid schema field: " + key);
+      }
+    } else {
+      return record.get(key);
+    }
+  }
+
+  /**
    * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
    */
   public static String getNestedFieldValAsString(GenericRecord record, String fieldName, boolean returnNullIfNotFound, boolean consistentLogicalTimestampEnabled) {
@@ -494,44 +521,50 @@ public class HoodieAvroUtils {
   public static Object getNestedFieldVal(GenericRecord record, String fieldName, boolean returnNullIfNotFound, boolean consistentLogicalTimestampEnabled) {
     String[] parts = fieldName.split("\\.");
     GenericRecord valueNode = record;
-    int i = 0;
-    try {
-      for (; i < parts.length; i++) {
-        String part = parts[i];
-        Object val = valueNode.get(part);
-        if (val == null) {
-          break;
-        }
 
+    for (int i = 0; i < parts.length; i++) {
+      String part = parts[i];
+      Object val;
+      try {
+        val = HoodieAvroUtils.getFieldVal(valueNode, part, returnNullIfNotFound);
+      } catch (AvroRuntimeException e) {
+        if (returnNullIfNotFound) {
+          return null;
+        } else {
+          throw new HoodieException(
+              fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
+                  + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+        }
+      }
+
+      if (i == parts.length - 1) {
         // return, if last part of name
-        if (i == parts.length - 1) {
+        if (val == null) {
+          return null;
+        } else {
           Schema fieldSchema = valueNode.getSchema().getField(part).schema();
           return convertValueForSpecificDataTypes(fieldSchema, val, consistentLogicalTimestampEnabled);
-        } else {
-          // VC: Need a test here
-          if (!(val instanceof GenericRecord)) {
+        }
+      } else {
+        if (!(val instanceof GenericRecord)) {
+          if (returnNullIfNotFound) {
+            return null;
+          } else {
             throw new HoodieException("Cannot find a record at part value :" + part);
           }
+        } else {
           valueNode = (GenericRecord) val;
         }
       }
-    } catch (AvroRuntimeException e) {
-      // Since avro 1.10, arvo will throw AvroRuntimeException("Not a valid schema field: " + key)
-      // rather than return null like the previous version if if record doesn't contain this key.
-      // So when returnNullIfNotFound is true, catch this exception.
-      if (!returnNullIfNotFound) {
-        throw e;
-      }
     }
 
+    // This can only be reached if the length of parts is 0
     if (returnNullIfNotFound) {
       return null;
-    } else if (valueNode.getSchema().getField(parts[i]) == null) {
-      throw new HoodieException(
-          fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
-              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
     } else {
-      throw new HoodieException("The value of " + parts[i] + " can not be null");
+      throw new HoodieException(
+          fieldName + " field not found in record. Acceptable fields were :"
+              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
     }
   }
 
@@ -561,7 +594,6 @@ public class HoodieAvroUtils {
     }
     throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
   }
-
 
   /**
    * Get schema for the given field and write schema. Field can be nested, denoted by dot notation. e.g: a.b.c
@@ -769,14 +801,14 @@ public class HoodieAvroUtils {
           Schema.Field field = fields.get(i);
           String fieldName = field.name();
           fieldNames.push(fieldName);
-          if (oldSchema.getField(field.name()) != null) {
+          if (oldSchema.getField(field.name()) != null && !renameCols.containsKey(field.name())) {
             Schema.Field oldField = oldSchema.getField(field.name());
             newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
           } else {
             String fieldFullName = createFullName(fieldNames);
             String fieldNameFromOldSchema = renameCols.getOrDefault(fieldFullName, "");
             // deal with rename
-            if (oldSchema.getField(field.name()) == null && oldSchema.getField(fieldNameFromOldSchema) != null) {
+            if (oldSchema.getField(fieldNameFromOldSchema) != null) {
               // find rename
               Schema.Field oldField = oldSchema.getField(fieldNameFromOldSchema);
               newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
@@ -957,21 +989,28 @@ public class HoodieAvroUtils {
     throw new AvroRuntimeException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
   }
 
-  // convert days to Date
-  private static java.sql.Date toJavaDate(int days) {
-    long localMillis = Math.multiplyExact(days, MILLIS_PER_DAY);
-    int timeZoneOffset;
-    TimeZone defaultTimeZone = TimeZone.getDefault();
-    if (defaultTimeZone instanceof sun.util.calendar.ZoneInfo) {
-      timeZoneOffset = ((sun.util.calendar.ZoneInfo) defaultTimeZone).getOffsetsByWall(localMillis, null);
-    } else {
-      timeZoneOffset = defaultTimeZone.getOffset(localMillis - defaultTimeZone.getRawOffset());
-    }
-    return new java.sql.Date(localMillis - timeZoneOffset);
+  /**
+   * convert days to Date
+   *
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public static java.sql.Date toJavaDate(int days) {
+    LocalDate date = LocalDate.ofEpochDay(days);
+    ZoneId defaultZoneId = ZoneId.systemDefault();
+    ZonedDateTime zonedDateTime = date.atStartOfDay(defaultZoneId);
+    return new java.sql.Date(zonedDateTime.toInstant().toEpochMilli());
   }
 
-  // convert Date to days
-  private static int fromJavaDate(Date date) {
+  /**
+   * convert Date to days
+   *
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public static int fromJavaDate(Date date) {
     long millisUtc = date.getTime();
     long millisLocal = millisUtc + TimeZone.getDefault().getOffset(millisUtc);
     int julianDays = Math.toIntExact(Math.floorDiv(millisLocal, MILLIS_PER_DAY));
@@ -1027,5 +1066,13 @@ public class HoodieAvroUtils {
 
   public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema) {
     return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP);
+  }
+
+  public static boolean gteqAvro1_9() {
+    return VersionUtil.compareVersions(AVRO_VERSION, "1.9") >= 0;
+  }
+
+  public static boolean gteqAvro1_10() {
+    return VersionUtil.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
 }

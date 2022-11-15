@@ -91,6 +91,12 @@ public class HoodieCommonTestHarness {
     basePath = metaClient.getBasePath();
   }
 
+  protected void cleanMetaClient() {
+    if (metaClient != null) {
+      metaClient = null;
+    }
+  }
+
   protected void refreshFsView() throws IOException {
     metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
   }
@@ -104,7 +110,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) throws IOException {
-    return getFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
+    return getFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants());
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)

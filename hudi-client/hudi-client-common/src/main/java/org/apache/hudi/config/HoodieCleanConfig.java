@@ -24,6 +24,8 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 
 import javax.annotation.concurrent.Immutable;
@@ -103,6 +105,14 @@ public class HoodieCleanConfig extends HoodieConfig {
   public static final ConfigProperty<String> FAILED_WRITES_CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy.failed.writes")
       .defaultValue(HoodieFailedWritesCleaningPolicy.EAGER.name())
+      .withInferFunction(cfg -> {
+        Option<String> writeConcurrencyModeOpt = Option.ofNullable(cfg.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE));
+        if (!writeConcurrencyModeOpt.isPresent()
+            || !writeConcurrencyModeOpt.get().equals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
+          return Option.empty();
+        }
+        return Option.of(HoodieFailedWritesCleaningPolicy.LAZY.name());
+      })
       .withDocumentation("Cleaning policy for failed writes to be used. Hudi will delete any files written by "
           + "failed writes to re-claim space. Choose to perform this rollback of failed writes eagerly before "
           + "every writer starts (only supported for single writer) or lazily by the cleaner (required for multi-writers)");

@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
-import io.javalin.core.util.JettyServerUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -123,9 +122,6 @@ public class TimelineService {
     @Parameter(names = {"--marker-parallelism", "-mdp"}, description = "Parallelism to use for reading and deleting marker files")
     public int markerParallelism = 100;
 
-    @Parameter(names = {"--refreshTimelineBasedOnLatestCommit"}, description = "Refresh local timeline based on latest commit in addition to timeline hash value")
-    public boolean refreshTimelineBasedOnLatestCommit = true;
-
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
 
@@ -150,7 +146,6 @@ public class TimelineService {
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
-      private boolean refreshTimelineBasedOnLatestCommit = true;
 
       public Builder() {
       }
@@ -200,11 +195,6 @@ public class TimelineService {
         return this;
       }
 
-      public Builder refreshTimelineBasedOnLatestCommit(boolean refreshTimelineBasedOnLatestCommit) {
-        this.refreshTimelineBasedOnLatestCommit = refreshTimelineBasedOnLatestCommit;
-        return this;
-      }
-
       public Builder enableMarkerRequests(boolean enableMarkerRequests) {
         this.enableMarkerRequests = enableMarkerRequests;
         return this;
@@ -240,7 +230,6 @@ public class TimelineService {
         config.markerBatchNumThreads = this.markerBatchNumThreads;
         config.markerBatchIntervalMs = this.markerBatchIntervalMs;
         config.markerParallelism = this.markerParallelism;
-        config.refreshTimelineBasedOnLatestCommit = this.refreshTimelineBasedOnLatestCommit;
         return config;
       }
     }
@@ -274,13 +263,12 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? JettyServerUtil.defaultServer()
-            : new Server(new QueuedThreadPool(timelineServerConf.numThreads));
+    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new Server() : new Server(new QueuedThreadPool(timelineServerConf.numThreads));
 
-    app = Javalin.create().server(() -> server);
-    if (!timelineServerConf.compress) {
-      app.disableDynamicGzip();
-    }
+    app = Javalin.create(c -> {
+      c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
+      c.server(() -> server);
+    });
 
     requestHandler = new RequestHandler(
         app, conf, timelineServerConf, context, fs, fsViewsManager);

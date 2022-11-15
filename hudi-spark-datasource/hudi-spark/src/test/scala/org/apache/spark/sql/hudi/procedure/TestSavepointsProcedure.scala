@@ -17,11 +17,9 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
 
-class TestSavepointsProcedure extends HoodieSparkSqlTestBase {
-
-  test("Test Call create_savepoints Procedure") {
+  test("Test Call create_savepoint Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -49,7 +47,7 @@ class TestSavepointsProcedure extends HoodieSparkSqlTestBase {
       }
 
       val commitTime = commits.apply(0).getString(0)
-      checkAnswer(s"""call create_savepoints('$tableName', '$commitTime', 'admin', '1')""")(Seq(true))
+      checkAnswer(s"""call create_savepoint('$tableName', '$commitTime', 'admin', '1')""")(Seq(true))
     }
   }
 
@@ -83,7 +81,7 @@ class TestSavepointsProcedure extends HoodieSparkSqlTestBase {
       }
 
       val commitTime = commits.apply(1).getString(0)
-      checkAnswer(s"""call create_savepoints('$tableName', '$commitTime')""")(Seq(true))
+      checkAnswer(s"""call create_savepoint('$tableName', '$commitTime')""")(Seq(true))
 
       // show savepoints
       val savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
@@ -93,7 +91,7 @@ class TestSavepointsProcedure extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Call delete_savepoints Procedure") {
+  test("Test Call delete_savepoint Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -124,11 +122,11 @@ class TestSavepointsProcedure extends HoodieSparkSqlTestBase {
 
       // create 3 savepoints
       commits.foreach(r => {
-        checkAnswer(s"""call create_savepoints('$tableName', '${r.getString(0)}')""")(Seq(true))
+        checkAnswer(s"""call create_savepoint('$tableName', '${r.getString(0)}')""")(Seq(true))
       })
 
       // delete savepoints
-      checkAnswer(s"""call delete_savepoints('$tableName', '${commits.apply(1).getString(0)}')""")(Seq(true))
+      checkAnswer(s"""call delete_savepoint('$tableName', '${commits.apply(1).getString(0)}')""")(Seq(true))
 
       // show savepoints with only 2
       val savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
@@ -138,7 +136,7 @@ class TestSavepointsProcedure extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Call rollback_savepoints Procedure") {
+  test("Test Call rollback_to_savepoint Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -168,11 +166,11 @@ class TestSavepointsProcedure extends HoodieSparkSqlTestBase {
 
       // create 2 savepoints
       commits.foreach(r => {
-        checkAnswer(s"""call create_savepoints('$tableName', '${r.getString(0)}')""")(Seq(true))
+        checkAnswer(s"""call create_savepoint('$tableName', '${r.getString(0)}')""")(Seq(true))
       })
 
       // rollback savepoints
-      checkAnswer(s"""call rollback_savepoints('$tableName', '${commits.apply(0).getString(0)}')""")(Seq(true))
+      checkAnswer(s"""call rollback_to_savepoint('$tableName', '${commits.apply(0).getString(0)}')""")(Seq(true))
     }
   }
 }

@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -43,15 +45,17 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
@@ -88,6 +92,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
  * Utilities for Flink stream read and write.
@@ -110,10 +115,6 @@ public class StreamerUtil {
     return readConfig(
         HadoopConfigurations.getHadoopConf(cfg),
         new Path(cfg.propsFilePath), cfg.configs).getProps();
-  }
-
-  public static Schema getSourceSchema(FlinkStreamerConfig cfg) {
-    return new FilebasedSchemaProvider(FlinkStreamerConfig.toFlinkConfig(cfg)).getSourceSchema();
   }
 
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
@@ -176,14 +177,15 @@ public class StreamerUtil {
                         ClusteringPlanPartitionFilterMode.valueOf(conf.getString(FlinkOptions.CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME)))
                     .withClusteringTargetPartitions(conf.getInteger(FlinkOptions.CLUSTERING_TARGET_PARTITIONS))
                     .withClusteringMaxNumGroups(conf.getInteger(FlinkOptions.CLUSTERING_MAX_NUM_GROUPS))
-                    .withClusteringTargetFileMaxBytes(conf.getInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES))
-                    .withClusteringPlanSmallFileLimit(conf.getInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT) * 1024 * 1024L)
+                    .withClusteringTargetFileMaxBytes(conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES))
+                    .withClusteringPlanSmallFileLimit(conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT) * 1024 * 1024L)
                     .withClusteringSkipPartitionsFromLatest(conf.getInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST))
                     .withAsyncClusteringMaxCommits(conf.getInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS))
                     .build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
                 .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))
+                .cleanerNumHoursRetained(conf.getInteger(FlinkOptions.CLEAN_RETAIN_HOURS))
                 .retainFileVersions(conf.getInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS))
                 // override and hardcode to 20,
                 // actually Flink cleaning is always with parallelism 1 now
@@ -218,12 +220,14 @@ public class StreamerUtil {
                 .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
                 .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
                 .build())
-            .withPayloadConfig(HoodiePayloadConfig.newBuilder()
-                .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
-                .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
-                .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
-                .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+            .withLockConfig(HoodieLockConfig.newBuilder()
+                .withLockProvider(FileSystemBasedLockProvider.class)
+                .withLockWaitTimeInMillis(2000L) // 2s
+                .withFileSystemLockExpire(1) // 1 minute
+                .withClientNumRetries(30)
+                .withFileSystemLockPath(StreamerUtil.getAuxiliaryPath(conf))
                 .build())
+            .withPayloadConfig(getPayloadConfig(conf))
             .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineService)
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
@@ -231,6 +235,7 @@ public class StreamerUtil {
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString());
 
+    // do not configure cleaning strategy as LAZY until multi-writers is supported.
     HoodieWriteConfig writeConfig = builder.build();
     if (loadFsViewStorageConfig) {
       // do not use the builder to give a change for recovering the original fs view storage config
@@ -238,6 +243,17 @@ public class StreamerUtil {
       writeConfig.setViewStorageConfig(viewStorageConfig);
     }
     return writeConfig;
+  }
+
+  /**
+   * Returns the payload config with given configuration.
+   */
+  public static HoodiePayloadConfig getPayloadConfig(Configuration conf) {
+    return HoodiePayloadConfig.newBuilder()
+        .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+        .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
+        .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
+        .build();
   }
 
   /**
@@ -296,9 +312,12 @@ public class StreamerUtil {
           .setPreCombineField(OptionsResolver.getPreCombineField(conf))
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
-          .setKeyGeneratorClassProp(conf.getString(FlinkOptions.KEYGEN_CLASS_NAME))
+          .setKeyGeneratorClassProp(
+              conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(SimpleAvroKeyGenerator.class.getName()))
           .setHiveStylePartitioningEnable(conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING))
           .setUrlEncodePartitioning(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING))
+          .setCDCEnabled(conf.getBoolean(FlinkOptions.CDC_ENABLED))
+          .setCDCSupplementalLoggingMode(conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
           .setTimelineLayoutVersion(1)
           .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
@@ -322,6 +341,23 @@ public class StreamerUtil {
       return fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
     } catch (IOException e) {
       throw new HoodieException("Error while checking whether table exists under path:" + basePath, e);
+    }
+  }
+
+  /**
+   * Returns whether the hoodie partition exists under given table path {@code tablePath} and partition path {@code partitionPath}.
+   *
+   * @param tablePath     Base path of the table.
+   * @param partitionPath The path of the partition.
+   * @param hadoopConf    The hadoop configuration.
+   */
+  public static boolean partitionExists(String tablePath, String partitionPath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    // Hadoop FileSystem
+    FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
+    try {
+      return fs.exists(new Path(tablePath, partitionPath));
+    } catch (IOException e) {
+      throw new HoodieException(String.format("Error while checking whether partition exists under table path [%s] and partition path [%s]", tablePath, partitionPath), e);
     }
   }
 
@@ -403,7 +439,8 @@ public class StreamerUtil {
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf) throws IOException {
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
     // build the write client to start the embedded timeline server
-    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(HoodieFlinkEngineContext.DEFAULT, writeConfig);
+    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)), writeConfig);
+    writeClient.setOperationType(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
     // create the filesystem view storage properties for client
     final FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
     // rebuild the view storage config with simplified options.
@@ -412,6 +449,11 @@ public class StreamerUtil {
         .withRemoteServerHost(viewStorageConfig.getRemoteViewServerHost())
         .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort())
         .withRemoteTimelineClientTimeoutSecs(viewStorageConfig.getRemoteTimelineClientTimeoutSecs())
+        .withRemoteTimelineClientRetry(viewStorageConfig.isRemoteTimelineClientRetryEnabled())
+        .withRemoteTimelineClientMaxRetryNumbers(viewStorageConfig.getRemoteTimelineClientMaxRetryNumbers())
+        .withRemoteTimelineInitialRetryIntervalMs(viewStorageConfig.getRemoteTimelineInitialRetryIntervalMs())
+        .withRemoteTimelineClientMaxRetryIntervalMs(viewStorageConfig.getRemoteTimelineClientMaxRetryIntervalMs())
+        .withRemoteTimelineClientRetryExceptions(viewStorageConfig.getRemoteTimelineClientRetryExceptions())
         .build();
     ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt, conf);
     return writeClient;
@@ -547,5 +589,12 @@ public class StreamerUtil {
     } catch (IOException e) {
       throw new HoodieException("Exception while checking file " + path + " existence", e);
     }
+  }
+
+  /**
+   * Returns the auxiliary path.
+   */
+  public static String getAuxiliaryPath(Configuration conf) {
+    return conf.getString(FlinkOptions.PATH) + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
   }
 }

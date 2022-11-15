@@ -18,10 +18,15 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,5 +51,26 @@ public class TestHoodieFileGroup {
     assertEquals(3, fileGroup.getAllFileSlicesIncludingInflight().count());
     assertTrue(fileGroup.getLatestFileSlice().get().getBaseInstantTime().equals("001"));
     assertTrue((new HoodieFileGroup(fileGroup)).getLatestFileSlice().get().getBaseInstantTime().equals("001"));
+  }
+
+  @Test
+  public void testCommittedFileSlicesWithSavepointAndHoles() {
+    MockHoodieTimeline activeTimeline = new MockHoodieTimeline(Stream.of(
+        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
+    ).collect(Collectors.toList()));
+    HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
+    for (int i = 0; i < 7; i++) {
+      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_0" + i);
+      fileGroup.addBaseFile(baseFile);
+    }
+    List<FileSlice> allFileSlices = fileGroup.getAllFileSlices().collect(Collectors.toList());
+    assertEquals(6, allFileSlices.size());
+    assertTrue(!allFileSlices.stream().anyMatch(s -> s.getBaseInstantTime().equals("06")));
+    assertEquals(7, fileGroup.getAllFileSlicesIncludingInflight().count());
+    assertTrue(fileGroup.getLatestFileSlice().get().getBaseInstantTime().equals("05"));
   }
 }

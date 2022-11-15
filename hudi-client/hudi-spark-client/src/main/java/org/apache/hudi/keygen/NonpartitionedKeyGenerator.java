@@ -18,13 +18,13 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -41,19 +41,11 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
   public NonpartitionedKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
-        .split(",")).map(String::trim).collect(Collectors.toList());
+        .split(","))
+        .map(String::trim)
+        .collect(Collectors.toList());
     this.partitionPathFields = Collections.emptyList();
-    nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(props);
-  }
-
-  @Override
-  public String getRecordKey(GenericRecord record) {
-    return nonpartitionedAvroKeyGenerator.getRecordKey(record);
-  }
-
-  @Override
-  public String getPartitionPath(GenericRecord record) {
-    return nonpartitionedAvroKeyGenerator.getPartitionPath(record);
+    this.nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(props);
   }
 
   @Override
@@ -62,9 +54,25 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
+  public String getRecordKey(GenericRecord record) {
+    return nonpartitionedAvroKeyGenerator.getRecordKey(record);
+  }
+
+  @Override
   public String getRecordKey(Row row) {
-    buildFieldSchemaInfoIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, false);
+    tryInitRowAccessor(row.schema());
+    return combineRecordKey(rowAccessor.getRecordKeyParts(row));
+  }
+
+  @Override
+  public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
+    tryInitRowAccessor(schema);
+    return combineRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
+  }
+
+  @Override
+  public String getPartitionPath(GenericRecord record) {
+    return nonpartitionedAvroKeyGenerator.getPartitionPath(record);
   }
 
   @Override
@@ -73,8 +81,8 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
-  public String getPartitionPath(InternalRow internalRow, StructType structType) {
-    return nonpartitionedAvroKeyGenerator.getEmptyPartition();
+  public UTF8String getPartitionPath(InternalRow row, StructType schema) {
+    return UTF8String.EMPTY_UTF8;
   }
 }
 

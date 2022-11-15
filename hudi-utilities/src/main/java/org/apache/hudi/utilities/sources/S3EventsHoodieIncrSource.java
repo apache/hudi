@@ -39,8 +39,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
@@ -153,7 +155,9 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL()).load(srcPath)
           // add filtering so that only interested records are returned.
           .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              queryTypeAndInstantEndpts.getRight().getLeft()));
+              queryTypeAndInstantEndpts.getRight().getLeft()))
+          .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+              queryTypeAndInstantEndpts.getRight().getRight()));
     }
     return Pair.of(Option.of(source), queryTypeAndInstantEndpts.getRight().getRight());
   }

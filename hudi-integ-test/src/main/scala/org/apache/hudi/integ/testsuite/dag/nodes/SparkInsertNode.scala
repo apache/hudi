@@ -21,7 +21,7 @@ package org.apache.hudi.integ.testsuite.dag.nodes
 import org.apache.avro.Schema
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.common.util.collection.Pair
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats
@@ -70,7 +70,9 @@ class SparkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "test_suite_source_ordering_field")
       .option(DataSourceWriteOptions.TABLE_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.tableType)
+      .option(HoodieIndexConfig.INDEX_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.indexType)
       .option(DataSourceWriteOptions.OPERATION.key, getOperation())
+      .option(HoodieIndexConfig.INDEX_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.indexType)
       .option(HoodieWriteConfig.TBL_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .mode(SaveMode.Append)
       .save(context.getHoodieTestSuiteWriter.getWriteConfig.getBasePath)

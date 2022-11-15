@@ -20,6 +20,7 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -39,15 +40,16 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -65,6 +67,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -150,7 +153,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(cleaningPolicy).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).orcMaxFileSize(1024 * 1024).build())
-        .forTable("test-trip-table")
+        .forTable(RAW_TRIPS_TEST_NAME)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
@@ -164,18 +167,18 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     return table;
   }
 
-  public void assertPartitionMetadataForRecords(List<HoodieRecord> inputRecords, FileSystem fs) throws IOException {
+  public void assertPartitionMetadataForRecords(String basePath, List<HoodieRecord> inputRecords, FileSystem fs) throws IOException {
     Set<String> partitionPathSet = inputRecords.stream()
         .map(HoodieRecord::getPartitionPath)
         .collect(Collectors.toSet());
-    assertPartitionMetadata(partitionPathSet.stream().toArray(String[]::new), fs);
+    assertPartitionMetadata(basePath, partitionPathSet.stream().toArray(String[]::new), fs);
   }
 
-  public void assertPartitionMetadataForKeys(List<HoodieKey> inputKeys, FileSystem fs) throws IOException {
+  public void assertPartitionMetadataForKeys(String basePath, List<HoodieKey> inputKeys, FileSystem fs) throws IOException {
     Set<String> partitionPathSet = inputKeys.stream()
         .map(HoodieKey::getPartitionPath)
         .collect(Collectors.toSet());
-    assertPartitionMetadata(partitionPathSet.stream().toArray(String[]::new), fs);
+    assertPartitionMetadata(basePath, partitionPathSet.stream().toArray(String[]::new), fs);
   }
 
   /**
@@ -185,7 +188,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * @param fs File System
    * @throws IOException in case of error
    */
-  public void assertPartitionMetadata(String[] partitionPaths, FileSystem fs) throws IOException {
+  public static void assertPartitionMetadata(String basePath, String[] partitionPaths, FileSystem fs) throws IOException {
     for (String partitionPath : partitionPaths) {
       assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(fs, new Path(basePath, partitionPath)));
       HoodiePartitionMetadata pmeta = new HoodiePartitionMetadata(fs, new Path(basePath, partitionPath));
@@ -200,7 +203,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * @param taggedRecords Tagged Records
    * @param instantTime Commit Timestamp
    */
-  public void checkTaggedRecords(List<HoodieRecord> taggedRecords, String instantTime) {
+  public static void checkTaggedRecords(List<HoodieRecord> taggedRecords, String instantTime) {
     for (HoodieRecord rec : taggedRecords) {
       assertTrue(rec.isCurrentLocationKnown(), "Record " + rec + " found with no location.");
       assertEquals(rec.getCurrentLocation().getInstantTime(), instantTime,
@@ -213,7 +216,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    *
    * @param records List of Hoodie records
    */
-  public void assertNodupesWithinPartition(List<HoodieRecord<RawTripTestPayload>> records) {
+  public static void assertNodupesWithinPartition(List<HoodieRecord<RawTripTestPayload>> records) {
     Map<String, Set<String>> partitionToKeys = new HashMap<>();
     for (HoodieRecord r : records) {
       String key = r.getRecordKey();
@@ -232,29 +235,46 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * guaranteed by record-generation function itself.
    *
    * @param writeConfig       Hoodie Write Config
-   * @param recordGenFunction Records Generation function
+   * @param recordsGenFunction Records Generation function
    * @return Wrapped function
    */
-  private Function2<List<HoodieRecord>, String, Integer> wrapRecordsGenFunctionForPreppedCalls(
-      final HoodieWriteConfig writeConfig, final Function2<List<HoodieRecord>, String, Integer> recordGenFunction) {
+  public static Function2<List<HoodieRecord>, String, Integer> wrapRecordsGenFunctionForPreppedCalls(
+      final String basePath,
+      final Configuration hadoopConf,
+      final HoodieSparkEngineContext context,
+      final HoodieWriteConfig writeConfig,
+      final Function2<List<HoodieRecord>, String, Integer> recordsGenFunction) {
     return (commit, numRecords) -> {
       final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
-      List<HoodieRecord> records = recordGenFunction.apply(commit, numRecords);
+      List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords);
       final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-      JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, jsc.parallelize(records, 1), table);
+      JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, context, context.getJavaSparkContext().parallelize(records, 1), table);
       return taggedRecords.collect();
     };
   }
 
-  private Function3<List<HoodieRecord>, String, Integer, String> wrapRecordsGenFunctionForPreppedCalls(
-      final HoodieWriteConfig writeConfig, final Function3<List<HoodieRecord>, String, Integer, String> recordGenFunction) {
+  /**
+   * Helper to generate records generation function for testing Prepped version of API. Prepped APIs expect the records
+   * to be already de-duped and have location set. This wrapper takes care of record-location setting. Uniqueness is
+   * guaranteed by record-generation function itself.
+   *
+   * @param writeConfig       Hoodie Write Config
+   * @param recordsGenFunction Records Generation function (for partition)
+   * @return Wrapped function
+   */
+  public static Function3<List<HoodieRecord>, String, Integer, String> wrapPartitionRecordsGenFunctionForPreppedCalls(
+      final String basePath,
+      final Configuration hadoopConf,
+      final HoodieSparkEngineContext context,
+      final HoodieWriteConfig writeConfig,
+      final Function3<List<HoodieRecord>, String, Integer, String> recordsGenFunction) {
     return (commit, numRecords, partition) -> {
       final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
-      List<HoodieRecord> records = recordGenFunction.apply(commit, numRecords, partition);
+      List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords, partition);
       final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-      JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, jsc.parallelize(records, 1), table);
+      JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, context, context.getJavaSparkContext().parallelize(records, 1), table);
       return taggedRecords.collect();
     };
   }
@@ -268,16 +288,20 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * @param keyGenFunction Keys Generation function
    * @return Wrapped function
    */
-  private Function<Integer, List<HoodieKey>> wrapDeleteKeysGenFunctionForPreppedCalls(
-      final HoodieWriteConfig writeConfig, final Function<Integer, List<HoodieKey>> keyGenFunction) {
+  public static Function<Integer, List<HoodieKey>> wrapDeleteKeysGenFunctionForPreppedCalls(
+      final String basePath,
+      final Configuration hadoopConf,
+      final HoodieSparkEngineContext context,
+      final HoodieWriteConfig writeConfig,
+      final Function<Integer, List<HoodieKey>> keyGenFunction) {
     return (numRecords) -> {
       final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
       final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-      JavaRDD<HoodieRecord> recordsToDelete = jsc.parallelize(records, 1)
+      JavaRDD<HoodieRecord> recordsToDelete = context.getJavaSparkContext().parallelize(records, 1)
           .map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
-      JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, recordsToDelete, table);
+      JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, context, recordsToDelete, table);
       return taggedRecords.map(record -> record.getKey()).collect();
     };
   }
@@ -294,16 +318,24 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
       HoodieWriteConfig writeConfig,
       Function2<List<HoodieRecord>, String, Integer> wrapped) {
     if (isPreppedAPI) {
-      return wrapRecordsGenFunctionForPreppedCalls(writeConfig, wrapped);
+      return wrapRecordsGenFunctionForPreppedCalls(basePath, hadoopConf, context, writeConfig, wrapped);
     } else {
       return wrapped;
     }
   }
 
+  /**
+   * Generate wrapper for record generation function for testing Prepped APIs.
+   *
+   * @param isPreppedAPI Flag to indicate if this is for testing prepped-version of APIs
+   * @param writeConfig Hoodie Write Config
+   * @param wrapped Actual Records Generation function (for partition)
+   * @return Wrapped Function
+   */
   public Function3<List<HoodieRecord>, String, Integer, String> generateWrapRecordsForPartitionFn(boolean isPreppedAPI,
       HoodieWriteConfig writeConfig, Function3<List<HoodieRecord>, String, Integer, String> wrapped) {
     if (isPreppedAPI) {
-      return wrapRecordsGenFunctionForPreppedCalls(writeConfig, wrapped);
+      return wrapPartitionRecordsGenFunctionForPreppedCalls(basePath, hadoopConf, context, writeConfig, wrapped);
     } else {
       return wrapped;
     }
@@ -320,7 +352,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
   public Function<Integer, List<HoodieKey>> generateWrapDeleteKeysFn(boolean isPreppedAPI,
       HoodieWriteConfig writeConfig, Function<Integer, List<HoodieKey>> wrapped) {
     if (isPreppedAPI) {
-      return wrapDeleteKeysGenFunctionForPreppedCalls(writeConfig, wrapped);
+      return wrapDeleteKeysGenFunctionForPreppedCalls(basePath, hadoopConf, context, writeConfig, wrapped);
     } else {
       return wrapped;
     }
@@ -561,7 +593,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
       client.commit(newCommitTime, result);
     }
     // check the partition metadata is written out
-    assertPartitionMetadataForRecords(records, fs);
+    assertPartitionMetadataForRecords(basePath, records, fs);
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
@@ -633,7 +665,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     assertNoWriteErrors(statuses);
 
     // check the partition metadata is written out
-    assertPartitionMetadataForKeys(keysToDelete, fs);
+    assertPartitionMetadataForKeys(basePath, keysToDelete, fs);
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();

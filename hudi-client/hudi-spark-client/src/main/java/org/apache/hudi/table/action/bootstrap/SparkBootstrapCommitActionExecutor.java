@@ -26,6 +26,7 @@ import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.HoodieBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.HoodieSparkBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
+import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.BootstrapPartitionPathTranslator;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
@@ -47,7 +48,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -74,11 +74,15 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.client.bootstrap.BootstrapMode.FULL_RECORD;
+import static org.apache.hudi.client.bootstrap.BootstrapMode.METADATA_ONLY;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 import static org.apache.hudi.table.action.bootstrap.MetadataBootstrapHandlerFactory.getMetadataHandler;
 
@@ -93,19 +97,29 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
                                             HoodieWriteConfig config,
                                             HoodieTable table,
                                             Option<Map<String, String>> extraMetadata) {
-    super(context, new HoodieWriteConfig.Builder().withProps(config.getProps())
-        .withAutoCommit(true).withWriteStatusClass(BootstrapWriteStatus.class)
-        .withBulkInsertParallelism(config.getBootstrapParallelism())
-        .build(), table, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, WriteOperationType.BOOTSTRAP,
+    super(
+        context,
+        new HoodieWriteConfig.Builder()
+            .withProps(config.getProps())
+            .withAutoCommit(true)
+            .withWriteStatusClass(BootstrapWriteStatus.class)
+            .withBulkInsertParallelism(config.getBootstrapParallelism()).build(),
+        table,
+        HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
+        WriteOperationType.BOOTSTRAP,
         extraMetadata);
     bootstrapSourceFileSystem = FSUtils.getFs(config.getBootstrapSourceBasePath(), hadoopConf);
   }
 
   private void validate() {
-    ValidationUtils.checkArgument(config.getBootstrapSourceBasePath() != null,
+    checkArgument(config.getBootstrapSourceBasePath() != null,
         "Ensure Bootstrap Source Path is set");
-    ValidationUtils.checkArgument(config.getBootstrapModeSelectorClass() != null,
+    checkArgument(config.getBootstrapModeSelectorClass() != null,
         "Ensure Bootstrap Partition Selector is set");
+    if (METADATA_ONLY.name().equals(config.getBootstrapModeSelectorRegex())) {
+      checkArgument(!config.getBootstrapModeSelectorClass().equals(FullRecordBootstrapModeSelector.class.getCanonicalName()),
+          "FullRecordBootstrapModeSelector cannot be used with METADATA_ONLY bootstrap mode");
+    }
   }
 
   @Override
@@ -115,18 +129,16 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
       HoodieTableMetaClient metaClient = table.getMetaClient();
       Option<HoodieInstant> completedInstant =
           metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
-      ValidationUtils.checkArgument(!completedInstant.isPresent(),
+      checkArgument(!completedInstant.isPresent(),
           "Active Timeline is expected to be empty for bootstrap to be performed. "
               + "If you want to re-bootstrap, please rollback bootstrap first !!");
       Map<BootstrapMode, List<Pair<String, List<HoodieFileStatus>>>> partitionSelections = listAndProcessSourcePartitions();
 
       // First run metadata bootstrap which will auto commit
-      Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> metadataResult = metadataBootstrap(partitionSelections.get(BootstrapMode.METADATA_ONLY));
+      Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> metadataResult = metadataBootstrap(partitionSelections.get(METADATA_ONLY));
       // if there are full bootstrap to be performed, perform that too
-      Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> fullBootstrapResult = fullBootstrap(partitionSelections.get(BootstrapMode.FULL_RECORD));
-      // Delete the marker directory for the instant
-      WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
-          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> fullBootstrapResult = fullBootstrap(partitionSelections.get(FULL_RECORD));
+
       return new HoodieBootstrapWriteMetadata(metadataResult, fullBootstrapResult);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
@@ -148,17 +160,22 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     }
 
     HoodieTableMetaClient metaClient = table.getMetaClient();
+    String bootstrapInstantTime = HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
     metaClient.getActiveTimeline().createNewInstant(
-        new HoodieInstant(State.REQUESTED, metaClient.getCommitActionType(),
-            HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS));
+        new HoodieInstant(State.REQUESTED, metaClient.getCommitActionType(), bootstrapInstantTime));
 
     table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
-        metaClient.getCommitActionType(), HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS), Option.empty());
+        metaClient.getCommitActionType(), bootstrapInstantTime), Option.empty());
 
     HoodieData<BootstrapWriteStatus> bootstrapWriteStatuses = runMetadataBootstrap(partitionFilesList);
 
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     updateIndexAndCommitIfNeeded(bootstrapWriteStatuses.map(w -> w), result);
+
+    // Delete the marker directory for the instant
+    WriteMarkersFactory.get(config.getMarkersType(), table, bootstrapInstantTime)
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+
     return Option.of(result);
   }
 
@@ -265,12 +282,20 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
         (JavaRDD<HoodieRecord>) inputProvider.generateInputRecords("bootstrap_source", config.getBootstrapSourceBasePath(),
             partitionFilesList);
     // Start Full Bootstrap
-    final HoodieInstant requested = new HoodieInstant(State.REQUESTED, table.getMetaClient().getCommitActionType(),
-        HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
+    String bootstrapInstantTime = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
+    final HoodieInstant requested = new HoodieInstant(
+        State.REQUESTED, table.getMetaClient().getCommitActionType(), bootstrapInstantTime);
     table.getActiveTimeline().createNewInstant(requested);
 
     // Setup correct schema and run bulk insert.
-    return Option.of(getBulkInsertActionExecutor(HoodieJavaRDD.of(inputRecordsRDD)).execute());
+    Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> writeMetadataOption =
+        Option.of(getBulkInsertActionExecutor(HoodieJavaRDD.of(inputRecordsRDD)).execute());
+
+    // Delete the marker directory for the instant
+    WriteMarkersFactory.get(config.getMarkersType(), table, bootstrapInstantTime)
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+
+    return writeMetadataOption;
   }
 
   protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(HoodieData<HoodieRecord> inputRecordsRDD) {
@@ -296,12 +321,21 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     BootstrapModeSelector selector =
         (BootstrapModeSelector) ReflectionUtils.loadClass(config.getBootstrapModeSelectorClass(), config);
 
-    Map<BootstrapMode, List<String>> result = selector.select(folders);
+    Map<BootstrapMode, List<String>> result = new HashMap<>();
+    // for FULL_RECORD mode, original record along with metadata fields are needed
+    if (FULL_RECORD.equals(config.getBootstrapModeForRegexMatch())) {
+      if (!(selector instanceof FullRecordBootstrapModeSelector)) {
+        FullRecordBootstrapModeSelector fullRecordBootstrapModeSelector = new FullRecordBootstrapModeSelector(config);
+        result.putAll(fullRecordBootstrapModeSelector.select(folders));
+      }
+    } else {
+      result = selector.select(folders);
+    }
     Map<String, List<HoodieFileStatus>> partitionToFiles = folders.stream().collect(
         Collectors.toMap(Pair::getKey, Pair::getValue));
 
     // Ensure all partitions are accounted for
-    ValidationUtils.checkArgument(partitionToFiles.keySet().equals(
+    checkArgument(partitionToFiles.keySet().equals(
         result.values().stream().flatMap(Collection::stream).collect(Collectors.toSet())));
 
     return result.entrySet().stream().map(e -> Pair.of(e.getKey(), e.getValue().stream()
@@ -334,7 +368,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
         })
         .collect(Collectors.toList());
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Bootstrap metadata table: " + config.getTableName());
+    context.setJobStatus(this.getClass().getSimpleName(), "Run metadata-only bootstrap operation: " + config.getTableName());
     return context.parallelize(bootstrapPaths, config.getBootstrapParallelism())
         .map(partitionFsPair -> getMetadataHandler(config, table, partitionFsPair.getRight().getRight()).runMetadataBootstrap(partitionFsPair.getLeft(),
                 partitionFsPair.getRight().getLeft(), keyGenerator));

@@ -76,4 +76,9 @@ public class TableChangesHelper {
     int offset = fullColName.lastIndexOf(".");
     return offset > 0 ? fullColName.substring(0, offset) : "";
   }
+
+  public static String getLeafName(String fullColName) {
+    int offset = fullColName.lastIndexOf(".");
+    return offset > 0 ? fullColName.substring(offset + 1) : fullColName;
+  }
 }

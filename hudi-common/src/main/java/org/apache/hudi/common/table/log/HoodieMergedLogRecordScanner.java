@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -25,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -34,12 +38,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.internal.schema.InternalSchema;
-
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -47,6 +46,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -86,14 +86,16 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean forceFullScan,
-                                         Option<String> partitionName, InternalSchema internalSchema) {
+                                         Option<String> partitionName, InternalSchema internalSchema,
+                                         boolean useScanV2) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField,
-        forceFullScan, partitionName, internalSchema);
+        forceFullScan, partitionName, internalSchema, useScanV2);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
+
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
@@ -150,11 +152,15 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
       HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
       HoodieRecordPayload oldValue = oldRecord.getData();
-      HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(oldValue);
+      HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(oldValue, readerSchema, this.getPayloadProps());
       // If combinedValue is oldValue, no need rePut oldRecord
       if (combinedValue != oldValue) {
         HoodieOperation operation = hoodieRecord.getOperation();
-        records.put(key, new HoodieAvroRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
+        HoodieRecord latestHoodieRecord = new HoodieAvroRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation);
+        latestHoodieRecord.unseal();
+        latestHoodieRecord.setCurrentLocation(hoodieRecord.getCurrentLocation());
+        latestHoodieRecord.seal();
+        records.put(key, latestHoodieRecord);
       }
     } else {
       // Put the record as is
@@ -219,8 +225,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     // incremental filtering
     protected Option<InstantRange> instantRange = Option.empty();
     protected String partitionName;
+    // auto scan default true
+    private boolean autoScan = true;
     // operation field default false
     private boolean withOperationField = false;
+    // Use scanV2 method.
+    private boolean useScanV2 = false;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -236,7 +246,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
     @Override
     public Builder withLogFilePaths(List<String> logFilePaths) {
-      this.logFilePaths = logFilePaths;
+      this.logFilePaths = logFilePaths.stream()
+          .filter(p -> !p.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+          .collect(Collectors.toList());
       return this;
     }
 
@@ -313,6 +325,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
 
     @Override
+    public Builder withUseScanV2(boolean useScanV2) {
+      this.useScanV2 = useScanV2;
+      return this;
+    }
+
+    @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(new Path(basePath), new Path(this.logFilePaths.get(0)).getParent());
@@ -321,7 +339,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName), internalSchema);
+          Option.ofNullable(partitionName), internalSchema, useScanV2);
     }
   }
 }

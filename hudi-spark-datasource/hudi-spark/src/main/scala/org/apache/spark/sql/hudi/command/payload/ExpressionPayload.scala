@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import com.google.common.cache.CacheBuilder
+import com.github.benmanes.caffeine.cache.Caffeine
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.hudi.AvroConversionUtils
@@ -32,11 +32,11 @@ import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.sql.avro.{AvroSerializer, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hudi.SerDeUtils
-import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{getEvaluator, setWriteSchema, getMergedSchema}
+import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{getEvaluator, getMergedSchema, setWriteSchema}
 import org.apache.spark.sql.types.{StructField, StructType}
 
-import java.util.concurrent.Callable
 import java.util.{Base64, Properties}
+import java.util.function.Function
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
@@ -270,19 +270,19 @@ object ExpressionPayload {
    * The Map[IExpressionEvaluator, IExpressionEvaluator] is the map of the condition expression
    * to the assignments expression.
    */
-  private val cache = CacheBuilder.newBuilder()
+  private val cache = Caffeine.newBuilder()
     .maximumSize(1024)
     .build[String, Map[IExpressionEvaluator, IExpressionEvaluator]]()
 
-  private val writeSchemaCache = CacheBuilder.newBuilder().build[String, Schema]()
+  private val writeSchemaCache = Caffeine.newBuilder()
+    .maximumSize(16).build[String, Schema]()
 
   def setWriteSchema(properties: Properties): Schema = {
     ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA.key),
       s"Missing ${HoodieWriteConfig.WRITE_SCHEMA.key}")
     writeSchemaCache.get(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA.key),
-      new Callable[Schema] {
-        override def call(): Schema =
-          new Schema.Parser().parse(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA.key))
+      new Function[String, Schema] {
+        override def apply(t: String): Schema = new Schema.Parser().parse(t)
     })
   }
 
@@ -293,10 +293,9 @@ object ExpressionPayload {
   def getEvaluator(
     serializedConditionAssignments: String, writeSchema: Schema): Map[IExpressionEvaluator, IExpressionEvaluator] = {
     cache.get(serializedConditionAssignments,
-      new Callable[Map[IExpressionEvaluator, IExpressionEvaluator]] {
-
-        override def call(): Map[IExpressionEvaluator, IExpressionEvaluator] = {
-          val serializedBytes = Base64.getDecoder.decode(serializedConditionAssignments)
+      new Function[String, Map[IExpressionEvaluator, IExpressionEvaluator]] {
+        override def apply(t: String): Map[IExpressionEvaluator, IExpressionEvaluator] = {
+          val serializedBytes = Base64.getDecoder.decode(t)
           val conditionAssignments = SerDeUtils.toObject(serializedBytes)
             .asInstanceOf[Map[Expression, Seq[Expression]]]
           // Do the CodeGen for condition expression and assignment expression
@@ -316,14 +315,14 @@ object ExpressionPayload {
       })
   }
 
-  private val mergedSchemaCache = CacheBuilder.newBuilder().build[TupleSchema, Schema]()
+  private val mergedSchemaCache = Caffeine.newBuilder().maximumSize(16).build[TupleSchema, Schema]()
 
   def getMergedSchema(source: Schema, target: Schema): Schema = {
 
-    mergedSchemaCache.get(TupleSchema(source, target), new Callable[Schema] {
-      override def call(): Schema = {
-        val rightSchema = HoodieAvroUtils.removeMetadataFields(target)
-        mergeSchema(source, rightSchema)
+    mergedSchemaCache.get(TupleSchema(source, target), new Function[TupleSchema, Schema] {
+      override def apply(t: TupleSchema): Schema = {
+        val rightSchema = HoodieAvroUtils.removeMetadataFields(t.second)
+        mergeSchema(t.first, rightSchema)
       }
     })
   }

@@ -28,17 +28,17 @@ import scala.language.higherKinds
 class HdfsParquetImportProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "tableType", DataTypes.StringType, None),
-    ProcedureParameter.required(2, "srcPath", DataTypes.StringType, None),
-    ProcedureParameter.required(3, "targetPath", DataTypes.StringType, None),
-    ProcedureParameter.required(4, "rowKey", DataTypes.StringType, None),
-    ProcedureParameter.required(5, "partitionKey", DataTypes.StringType, None),
-    ProcedureParameter.required(6, "schemaFilePath", DataTypes.StringType, None),
+    ProcedureParameter.required(1, "table_type", DataTypes.StringType, None),
+    ProcedureParameter.required(2, "src_path", DataTypes.StringType, None),
+    ProcedureParameter.required(3, "target_path", DataTypes.StringType, None),
+    ProcedureParameter.required(4, "row_key", DataTypes.StringType, None),
+    ProcedureParameter.required(5, "partition_key", DataTypes.StringType, None),
+    ProcedureParameter.required(6, "schema_file_path", DataTypes.StringType, None),
     ProcedureParameter.optional(7, "format", DataTypes.StringType, "parquet"),
     ProcedureParameter.optional(8, "command", DataTypes.StringType, "insert"),
     ProcedureParameter.optional(9, "retry", DataTypes.IntegerType, 0),
     ProcedureParameter.optional(10, "parallelism", DataTypes.IntegerType, jsc.defaultParallelism),
-    ProcedureParameter.optional(11, "propsFilePath", DataTypes.StringType, "")
+    ProcedureParameter.optional(11, "props_file_path", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

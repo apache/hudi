@@ -52,6 +52,15 @@ public class HiveSyncConfigHolder {
       .withDocumentation("Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
           + "Use this when you are in the process of migrating from "
           + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format");
+  /**
+   * @deprecated Use {@link #HIVE_SYNC_MODE} instead of this config from 0.9.0
+   */
+  @Deprecated
+  public static final ConfigProperty<String> HIVE_USE_JDBC = ConfigProperty
+      .key("hoodie.datasource.hive_sync.use_jdbc")
+      .defaultValue("true")
+      .deprecatedAfter("0.9.0")
+      .withDocumentation("Use JDBC when hive synchronization is enabled");
   public static final ConfigProperty<String> METASTORE_URIS = ConfigProperty
       .key("hoodie.datasource.hive_sync.metastore.uris")
       .defaultValue("thrift://localhost:9083")
@@ -94,13 +103,18 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.create_managed_table")
       .defaultValue(false)
       .withDocumentation("Whether to sync the table as managed table.");
+  public static final ConfigProperty<Boolean> HIVE_SYNC_OMIT_METADATA_FIELDS = ConfigProperty
+      .key("hoodie.datasource.hive_sync.omit_metadata_fields")
+      .defaultValue(false)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Whether to omit the hoodie metadata fields in the target table.");
   public static final ConfigProperty<Integer> HIVE_BATCH_SYNC_PARTITION_NUM = ConfigProperty
       .key("hoodie.datasource.hive_sync.batch_num")
       .defaultValue(1000)
       .withDocumentation("The number of partitions one batch when synchronous partitions to hive.");
   public static final ConfigProperty<String> HIVE_SYNC_MODE = ConfigProperty
       .key("hoodie.datasource.hive_sync.mode")
-      .defaultValue("jdbc")
+      .noDefaultValue()
       .withDocumentation("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.");
   public static final ConfigProperty<Boolean> HIVE_SYNC_BUCKET_SYNC = ConfigProperty
       .key("hoodie.datasource.hive_sync.bucket_sync")

@@ -17,16 +17,14 @@
 
 package org.apache.hudi
 
-import java.io.IOException
-import java.time.Instant
-import java.util.{Collections, Date, UUID}
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
@@ -41,12 +39,16 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
+import org.junit.jupiter.params.provider.Arguments.arguments
+import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
+import java.io.IOException
+import java.time.Instant
+import java.util.{Collections, Date, UUID}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters
 
@@ -259,14 +261,22 @@ class TestHoodieSparkSqlWriter {
   @Test
   def testThrowExceptionAlreadyExistsWithAppendSaveMode(): Unit = {
     //create a new table
-    val fooTableModifier = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.insert.shuffle.parallelism" -> "4", "hoodie.upsert.shuffle.parallelism" -> "4")
+    val fooTableModifier = Map(
+      "path" -> tempBasePath,
+      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "uuid",
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4")
     val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, dataFrame)
 
     //on same path try append with different("hoodie_bar_tbl") table name which should throw an exception
-    val barTableModifier = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> "hoodie_bar_tbl",
-      "hoodie.insert.shuffle.parallelism" -> "4", "hoodie.upsert.shuffle.parallelism" -> "4")
+    val barTableModifier = Map(
+      "path" -> tempBasePath,
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_bar_tbl",
+      "hoodie.datasource.write.recordkey.field" -> "uuid",
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4")
     val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     val tableAlreadyExistException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, barTableModifier, dataFrame2))
     assert(tableAlreadyExistException.getMessage.contains("Config conflict"))
@@ -299,6 +309,29 @@ class TestHoodieSparkSqlWriter {
     assert(hoodieException.getMessage.contains(s"RecordKey:\tts\tuuid"))
 
     //on same path try write with different RECORDKEY_FIELD_NAME and Overwrite SaveMode should be successful.
+    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier2, dataFrame2)._1)
+  }
+
+  /**
+   * Test case for do not let the parttitonpath field change
+   */
+  @Test
+  def testChangePartitionPath(): Unit = {
+    //create a new table
+    val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "ts")
+    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
+
+    //on same path try write with different partitionpath field and Append SaveMode should throw an exception
+    val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "uuid")
+    val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
+    assert(hoodieException.getMessage.contains("Config conflict"))
+    assert(hoodieException.getMessage.contains(s"PartitionPath:\tuuid\tts"))
+
+    //on same path try write with different partitionpath and Overwrite SaveMode should be successful.
     assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier2, dataFrame2)._1)
   }
 
@@ -485,11 +518,8 @@ class TestHoodieSparkSqlWriter {
    * @param populateMetaFields Flag for populating meta fields
    */
   @ParameterizedTest
-  @CsvSource(
-    Array("COPY_ON_WRITE,parquet,true", "COPY_ON_WRITE,parquet,false", "MERGE_ON_READ,parquet,true", "MERGE_ON_READ,parquet,false",
-      "COPY_ON_WRITE,orc,true", "COPY_ON_WRITE,orc,false", "MERGE_ON_READ,orc,true", "MERGE_ON_READ,orc,false"
-    ))
-  def testDatasourceInsertForTableTypeBaseFileMetaFields(tableType: String, baseFileFormat: String, populateMetaFields: Boolean): Unit = {
+  @MethodSource(Array("testDatasourceInsert"))
+  def testDatasourceInsertForTableTypeBaseFileMetaFields(tableType: String, populateMetaFields: Boolean, baseFileFormat: String): Unit = {
     val hoodieFooTableName = "hoodie_foo_tbl"
     val fooTableModifier = Map("path" -> tempBasePath,
       HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
@@ -509,7 +539,7 @@ class TestHoodieSparkSqlWriter {
     val records = DataSourceTestUtils.generateRandomRows(100)
     val recordsSeq = convertRowListToSeq(records)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-    initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = false)
+    initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = false, initBasePath = true)
     val client = spy(DataSourceUtils.createHoodieClient(
       new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
       mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
@@ -566,7 +596,7 @@ class TestHoodieSparkSqlWriter {
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
         HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
-      initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true)
+      initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
       val client = spy(DataSourceUtils.createHoodieClient(
         new JavaSparkContext(sc),
@@ -594,7 +624,7 @@ class TestHoodieSparkSqlWriter {
     }
   }
 
-  def initializeMetaClientForBootstrap(fooTableParams : Map[String, String], tableType: String, addBootstrapPath : Boolean) : Unit = {
+  def initializeMetaClientForBootstrap(fooTableParams : Map[String, String], tableType: String, addBootstrapPath : Boolean, initBasePath: Boolean) : Unit = {
     // when metadata is enabled, directly instantiating write client using DataSourceUtils.createHoodieClient
     // will hit a code which tries to instantiate meta client for data table. if table does not exist, it fails.
     // hence doing an explicit instantiation here.
@@ -613,7 +643,9 @@ class TestHoodieSparkSqlWriter {
         tableMetaClientBuilder
           .setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))
       }
-    tableMetaClientBuilder.initTable(sc.hadoopConfiguration, tempBasePath)
+    if (initBasePath) {
+      tableMetaClientBuilder.initTable(sc.hadoopConfiguration, tempBasePath)
+    }
   }
 
   /**
@@ -754,14 +786,13 @@ class TestHoodieSparkSqlWriter {
     }
   }
 
-  /**
-   * Test case for deletion of partitions.
-   * @param usePartitionsToDeleteConfig Flag for if use partitions to delete config
-   */
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testDeletePartitionsV2(usePartitionsToDeleteConfig: Boolean): Unit = {
-    val fooTableModifier = getCommonParams(tempPath, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+/**
+ * Helper function for setting up table that has 3 different partitions
+ * Used to test deleting partitions
+ * @return dataframe to be used by testDeletePartitionsV2 and a map containing the table params
+ */
+  def deletePartitionSetup(): (DataFrame, Map[String,String]) = {
+    var fooTableModifier = getCommonParams(tempPath, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(10)
@@ -787,22 +818,60 @@ class TestHoodieSparkSqlWriter {
     val trimmedDf2 = dropMetaFields(snapshotDF2)
     // ensure 2nd batch of updates matches.
     assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
+    (df1, fooTableModifier)
+  }
+
+  /**
+   * Test case for deletion of partitions.
+   * @param usePartitionsToDeleteConfig Flag for if use partitions to delete config
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeletePartitionsV2(usePartitionsToDeleteConfig: Boolean): Unit = {
+    var (df1, fooTableModifier) = deletePartitionSetup()
+    var recordsToDelete = spark.emptyDataFrame
     if (usePartitionsToDeleteConfig) {
-      fooTableModifier.updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(), HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+      fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(),
+        HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "," + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
+    } else {
+      // delete partitions contains the primary key
+      recordsToDelete = df1.filter(entry => {
+        val partitionPath: String = entry.getString(1)
+        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH) ||
+          partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
+      })
     }
-    // delete partitions contains the primary key
-    val recordsToDelete = df1.filter(entry => {
-      val partitionPath: String = entry.getString(1)
-      partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH) ||
-        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
-    })
-    val updatedParams = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
-    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete)
+
+    fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
     val snapshotDF3 = spark.read.format("org.apache.hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
       !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
+    }).count())
+  }
+
+  /**
+   * Test case for deletion of partitions using wildcards
+   * @param partition the name of the partition(s) to delete
+   */
+  @ParameterizedTest
+  @MethodSource(Array(
+    "deletePartitionsWildcardTestParams"
+  ))
+  def testDeletePartitionsWithWildcard(partition: String, expectedPartitions: Seq[String]): Unit = {
+    var (_, fooTableModifier) = deletePartitionSetup()
+    fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(), partition)
+    fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
+    val recordsToDelete = spark.emptyDataFrame
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
+    val snapshotDF3 = spark.read.format("org.apache.hudi")
+      .load(tempBasePath + "/*/*/*/*")
+    snapshotDF3.show()
+    assertEquals(0, snapshotDF3.filter(entry => {
+      val partitionPath = entry.getString(3)
+      expectedPartitions.count(p => partitionPath.equals(p)) != 1
     }).count())
   }
 
@@ -873,7 +942,7 @@ class TestHoodieSparkSqlWriter {
       .setBasePath(tablePath1).build().getTableConfig
     assert(tableConfig1.getHiveStylePartitioningEnable == "true")
     assert(tableConfig1.getUrlEncodePartitioning == "false")
-    assert(tableConfig1.getKeyGeneratorClassName == classOf[ComplexKeyGenerator].getName)
+    assert(tableConfig1.getKeyGeneratorClassName == classOf[SimpleKeyGenerator].getName)
     df.write.format("hudi")
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
@@ -1063,9 +1132,69 @@ class TestHoodieSparkSqlWriter {
     // for sql write
     val m2 = Map(
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getName,
-      SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> classOf[SimpleKeyGenerator].getName
+      SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> classOf[SimpleKeyGenerator].getName
     )
     val kg2 = HoodieWriterUtils.getOriginKeyGenerator(m2)
     assertTrue(kg2 == classOf[SimpleKeyGenerator].getName)
   }
+
+  /**
+   *
+   * Test that you can't have consistent hashing bucket index on a COW table
+   * */
+  @Test
+  def testCOWConsistentHashing(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val options = Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
+      HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key -> "CONSISTENT_HASHING",
+      HoodieIndexConfig.INDEX_TYPE.key -> "BUCKET"
+    )
+
+    val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+    val exc = intercept[HoodieException] {
+      df.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
+        .mode(SaveMode.Overwrite).save(tablePath1)
+    }
+    assert(exc.getMessage.contains("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table."))
+  }
+}
+
+object TestHoodieSparkSqlWriter {
+  def testDatasourceInsert: java.util.stream.Stream[Arguments] = {
+    val scenarios = Array(
+      Seq("COPY_ON_WRITE", true),
+      Seq("COPY_ON_WRITE", false),
+      Seq("MERGE_ON_READ", true),
+      Seq("MERGE_ON_READ", false)
+    )
+
+    val parquetScenarios = scenarios.map { _ :+ "parquet" }
+    val orcScenarios = scenarios.map { _ :+ "orc" }
+
+    // NOTE: Hudi doesn't support Orc in Spark < 3.0
+    //       Please check HUDI-4496 for more details
+    val targetScenarios = if (gteqSpark3_0) {
+      parquetScenarios ++ orcScenarios
+    } else {
+      parquetScenarios
+    }
+
+    java.util.Arrays.stream(targetScenarios.map(as => arguments(as.map(_.asInstanceOf[AnyRef]):_*)))
+  }
+
+  def deletePartitionsWildcardTestParams(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments("2015/03/*", Seq("2016/03/15")),
+      arguments("*5/03/1*", Seq("2016/03/15")),
+      arguments("2016/03/*", Seq("2015/03/16", "2015/03/17")))
+  }
+
 }

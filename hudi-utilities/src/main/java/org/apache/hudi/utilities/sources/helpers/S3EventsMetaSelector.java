@@ -153,7 +153,9 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
       for (Map<String, Object> eventRecord : eventRecords) {
         filteredEventRecords.add(new ObjectMapper().writeValueAsString(eventRecord).replace("%3D", "="));
       }
-      return new ImmutablePair<>(filteredEventRecords, String.valueOf(newCheckpointTime));
+      // Return the old checkpoint if no messages to consume from queue.
+      String newCheckpoint = newCheckpointTime == 0 ? lastCheckpointStr.orElse(null) : String.valueOf(newCheckpointTime);
+      return new ImmutablePair<>(filteredEventRecords, newCheckpoint);
     } catch (JSONException | IOException e) {
       throw new HoodieException("Unable to read from SQS: ", e);
     }

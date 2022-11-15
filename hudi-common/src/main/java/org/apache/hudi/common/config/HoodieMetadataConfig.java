@@ -187,6 +187,26 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
 
+  public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY = "in-memory";
+  public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE = "engine";
+
+  public static final ConfigProperty<String> COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.processing.mode.override")
+      .noDefaultValue()
+      .withValidValues(COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY, COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE)
+      .sinceVersion("0.12.0")
+      .withDocumentation("By default Column Stats Index is automatically determining whether it should be read and processed either"
+          + "'in-memory' (w/in executing process) or using Spark (on a cluster), based on some factors like the size of the Index "
+          + "and how many columns are read. This config allows to override this behavior.");
+
+  public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_IN_MEMORY_PROJECTION_THRESHOLD = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.inMemory.projection.threshold")
+      .defaultValue(100000)
+      .sinceVersion("0.12.0")
+      .withDocumentation("When reading Column Stats Index, if the size of the expected resulting projection is below the in-memory"
+          + " threshold (counted by the # of rows), it will be attempted to be loaded \"in-memory\" (ie not using the execution engine"
+          + " like Spark, Flink, etc). If the value is above the threshold execution engine will be used to compose the projection.");
+
   public static final ConfigProperty<String> BLOOM_FILTER_INDEX_FOR_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.column.list")
       .noDefaultValue()
@@ -213,6 +233,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("There are cases when extra files are requested to be deleted from "
           + "metadata table which are never added before. This config determines how to handle "
           + "such spurious deletes");
+
+  public static final ConfigProperty<Boolean> USE_LOG_RECORD_READER_SCAN_V2 = ConfigProperty
+      .key(METADATA_PREFIX + ".log.record.reader.use.scanV2")
+      .defaultValue(false)
+      .sinceVersion("0.13.0")
+      .withDocumentation("ScanV2 logic address all the multiwriter challenges while appending to log files. "
+          + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
 
   private HoodieMetadataConfig() {
     super();
@@ -244,6 +271,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
     return StringUtils.split(getString(COLUMN_STATS_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
+  }
+
+  public String getColumnStatsIndexProcessingModeOverride() {
+    return getString(COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE);
+  }
+
+  public Integer getColumnStatsIndexInMemoryProjectionThreshold() {
+    return getIntOrDefault(COLUMN_STATS_INDEX_IN_MEMORY_PROJECTION_THRESHOLD);
   }
 
   public List<String> getColumnsEnabledForBloomFilterIndex() {
@@ -288,6 +323,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean ignoreSpuriousDeletes() {
     return getBoolean(IGNORE_SPURIOUS_DELETES);
+  }
+
+  public boolean getUseLogRecordReaderScanV2() {
+    return getBoolean(USE_LOG_RECORD_READER_SCAN_V2);
   }
 
   public static class Builder {
@@ -430,6 +469,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withProperties(Properties properties) {
       this.metadataConfig.getProps().putAll(properties);
+      return this;
+    }
+
+    public Builder withLogRecordReaderScanV2(boolean useLogRecordReaderScanV2) {
+      metadataConfig.setValue(USE_LOG_RECORD_READER_SCAN_V2, String.valueOf(useLogRecordReaderScanV2));
       return this;
     }
 

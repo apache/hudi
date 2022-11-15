@@ -22,8 +22,11 @@ package org.apache.hudi
 import org.apache.hudi.avro.model.HoodieClusteringGroup
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.spark.SparkException
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.withSparkConf
 
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
@@ -56,5 +59,17 @@ object HoodieCLIUtils {
     )
 
     partitionPaths.sorted.mkString(",")
+  }
+
+  def getHoodieCatalogTable(sparkSession: SparkSession, table: String): HoodieCatalogTable = {
+    val seq: Seq[String] = table.split('.')
+    seq match {
+      case Seq(tableName) =>
+        HoodieCatalogTable(sparkSession, TableIdentifier(tableName))
+      case Seq(database, tableName) =>
+        HoodieCatalogTable(sparkSession, TableIdentifier(tableName, Some(database)))
+      case _ =>
+        throw new SparkException(s"Unsupported identifier $table")
+    }
   }
 }

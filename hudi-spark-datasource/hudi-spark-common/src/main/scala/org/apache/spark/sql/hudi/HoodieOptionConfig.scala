@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ValidationUtils
 import org.apache.spark.sql.SparkSession
@@ -47,7 +46,6 @@ object HoodieOptionConfig {
     .withSqlKey("primaryKey")
     .withHoodieKey(DataSourceWriteOptions.RECORDKEY_FIELD.key)
     .withTableConfigKey(HoodieTableConfig.RECORDKEY_FIELDS.key)
-    .defaultValue(DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
     .build()
 
   val SQL_KEY_TABLE_TYPE: HoodieSQLOption[String] = buildConf()
@@ -67,7 +65,7 @@ object HoodieOptionConfig {
     .withSqlKey("payloadClass")
     .withHoodieKey(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key)
     .withTableConfigKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key)
-    .defaultValue(classOf[DefaultHoodieRecordPayload].getName)
+    .defaultValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue())
     .build()
 
   /**

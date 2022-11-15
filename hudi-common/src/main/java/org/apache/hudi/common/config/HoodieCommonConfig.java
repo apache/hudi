@@ -36,6 +36,11 @@ public class HoodieCommonConfig extends HoodieConfig {
       .defaultValue(false)
       .withDocumentation("Enables support for Schema Evolution feature");
 
+  public static final ConfigProperty<String> TIMESTAMP_AS_OF = ConfigProperty
+      .key("as.of.instant")
+      .noDefaultValue()
+      .withDocumentation("The query instant for time travel. Without specified this option, we query the latest snapshot.");
+
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)

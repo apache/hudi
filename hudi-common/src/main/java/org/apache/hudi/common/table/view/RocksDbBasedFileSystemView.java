@@ -136,6 +136,49 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
+  protected boolean isPendingLogCompactionScheduledForFileId(HoodieFileGroupId fgId) {
+    return getPendingLogCompactionOperationWithInstant(fgId).isPresent();
+  }
+
+  @Override
+  protected void resetPendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    rocksDB.writeBatch(batch -> {
+      operations.forEach(opPair ->
+          rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingLogCompaction(),
+              schemaHelper.getKeyForPendingLogCompactionLookup(opPair.getValue().getFileGroupId()), opPair)
+      );
+      LOG.info("Initializing pending Log compaction operations. Count=" + batch.count());
+    });
+  }
+
+  @Override
+  protected void addPendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    rocksDB.writeBatch(batch ->
+        operations.forEach(opInstantPair -> {
+          ValidationUtils.checkArgument(!isPendingLogCompactionScheduledForFileId(opInstantPair.getValue().getFileGroupId()),
+              "Duplicate FileGroupId found in pending log compaction operations. FgId :"
+                  + opInstantPair.getValue().getFileGroupId());
+          rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingLogCompaction(),
+              schemaHelper.getKeyForPendingLogCompactionLookup(opInstantPair.getValue().getFileGroupId()), opInstantPair);
+        })
+    );
+  }
+
+  @Override
+  void removePendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    rocksDB.writeBatch(batch ->
+        operations.forEach(opInstantPair -> {
+          ValidationUtils.checkArgument(
+              getPendingLogCompactionOperationWithInstant(opInstantPair.getValue().getFileGroupId()) != null,
+              "Trying to remove a FileGroupId which is not found in pending Log compaction operations. FgId :"
+                  + opInstantPair.getValue().getFileGroupId());
+          rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForPendingLogCompaction(),
+              schemaHelper.getKeyForPendingLogCompactionLookup(opInstantPair.getValue().getFileGroupId()));
+        })
+    );
+  }
+
+  @Override
   protected boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId) {
     return getPendingClusteringInstant(fgId).isPresent();
   }
@@ -171,7 +214,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     rocksDB.writeBatch(batch ->
         fileGroups.forEach(fgIdToClusterInstant -> {
           ValidationUtils.checkArgument(!isPendingClusteringScheduledForFileId(fgIdToClusterInstant.getLeft()),
-              "Duplicate FileGroupId found in pending compaction operations. FgId :"
+              "Duplicate FileGroupId found in pending clustering operations. FgId :"
                   + fgIdToClusterInstant.getLeft());
 
           rocksDB.putInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
@@ -186,7 +229,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         fileGroups.forEach(fgToPendingClusteringInstant -> {
           ValidationUtils.checkArgument(
               !isPendingClusteringScheduledForFileId(fgToPendingClusteringInstant.getLeft()),
-              "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
+              "Trying to remove a FileGroupId which is not found in pending clustering operations. FgId :"
                   + fgToPendingClusteringInstant.getLeft());
           rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
               schemaHelper.getKeyForFileGroupsInPendingClustering(fgToPendingClusteringInstant.getLeft()));
@@ -207,6 +250,14 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     String lookupKey = schemaHelper.getKeyForPendingCompactionLookup(fgId);
     Pair<String, CompactionOperation> instantOperationPair =
         rocksDB.get(schemaHelper.getColFamilyForPendingCompaction(), lookupKey);
+    return Option.ofNullable(instantOperationPair);
+  }
+
+  @Override
+  protected Option<Pair<String, CompactionOperation>> getPendingLogCompactionOperationWithInstant(HoodieFileGroupId fgId) {
+    String lookupKey = schemaHelper.getKeyForPendingLogCompactionLookup(fgId);
+    Pair<String, CompactionOperation> instantOperationPair =
+        rocksDB.get(schemaHelper.getColFamilyForPendingLogCompaction(), lookupKey);
     return Option.ofNullable(instantOperationPair);
   }
 
@@ -324,6 +375,12 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
+  Stream<Pair<String, CompactionOperation>> fetchPendingLogCompactionOperations() {
+    return rocksDB.<Pair<String, CompactionOperation>>prefixSearch(schemaHelper.getColFamilyForPendingLogCompaction(), "")
+        .map(Pair::getValue);
+  }
+
+  @Override
   Stream<HoodieBaseFile> fetchAllBaseFiles(String partitionPath) {
     return rocksDB.<HoodieBaseFile>prefixSearch(schemaHelper.getColFamilyForView(),
         schemaHelper.getPrefixForDataFileViewByPartition(partitionPath)).map(Pair::getValue);
@@ -399,7 +456,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  protected Option<FileSlice> fetchLatestFileSlice(String partitionPath, String fileId) {
+  public Option<FileSlice> fetchLatestFileSlice(String partitionPath, String fileId) {
     // Retries only file-slices of the file and filters for the latest
     return Option.ofNullable(rocksDB
         .<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(),

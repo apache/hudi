@@ -64,7 +64,8 @@ public class MarkerUtils {
    * @return marker file name
    */
   public static String stripMarkerFolderPrefix(String fullMarkerPath, String basePath, String instantTime) {
-    ValidationUtils.checkArgument(fullMarkerPath.contains(HoodieTableMetaClient.MARKER_EXTN));
+    ValidationUtils.checkArgument(fullMarkerPath.contains(HoodieTableMetaClient.MARKER_EXTN),
+        String.format("Using DIRECT markers but marker path does not contain extension: %s", HoodieTableMetaClient.MARKER_EXTN));
     String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
         new Path(String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime))).toString();
     return stripMarkerFolderPrefix(fullMarkerPath, markerRootPath);

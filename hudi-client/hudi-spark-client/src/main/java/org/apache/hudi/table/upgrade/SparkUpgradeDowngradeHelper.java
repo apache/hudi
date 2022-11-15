@@ -19,11 +19,11 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.SparkKeyGenUtils;
 
 /**
  * Spark upgrade and downgrade helper.
@@ -47,6 +47,6 @@ public class SparkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public String getPartitionColumns(HoodieWriteConfig config) {
-    return HoodieSparkUtils.getPartitionColumns(config.getProps());
+    return SparkKeyGenUtils.getPartitionColumns(config.getProps());
   }
 }

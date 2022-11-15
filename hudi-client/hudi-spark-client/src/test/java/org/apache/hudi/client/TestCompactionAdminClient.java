@@ -81,13 +81,13 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     int numEntriesPerInstant = 10;
     CompactionTestUtils.setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant,
         numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
-    // THere are delta-commits after compaction instant
+    // There are delta-commits after compaction instant
     validateUnSchedulePlan(client, "000", "001", numEntriesPerInstant, 2 * numEntriesPerInstant);
-    // THere are delta-commits after compaction instant
+    // There are delta-commits after compaction instant
     validateUnSchedulePlan(client, "002", "003", numEntriesPerInstant, 2 * numEntriesPerInstant);
-    // THere are no delta-commits after compaction instant
+    // There are no delta-commits after compaction instant
     validateUnSchedulePlan(client, "004", "005", numEntriesPerInstant, 0);
-    // THere are no delta-commits after compaction instant
+    // There are no delta-commits after compaction instant
     validateUnSchedulePlan(client, "006", "007", numEntriesPerInstant, 0);
   }
 
@@ -100,19 +100,19 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
         Stream.of("001", "003", "005", "007").map(instant -> {
           try {
             return Pair.of(instant, CompactionUtils.getCompactionPlan(metaClient, instant));
-          } catch (IOException ioe) {
+          } catch (Exception ioe) {
             throw new HoodieException(ioe);
           }
         }).map(instantWithPlan -> instantWithPlan.getRight().getOperations().stream()
             .map(op -> Pair.of(instantWithPlan.getLeft(), CompactionOperation.convertFromAvroRecordInstance(op)))
             .findFirst().get()).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
-    // THere are delta-commits after compaction instant
+    // There are delta-commits after compaction instant
     validateUnScheduleFileId(client, "000", "001", instantsWithOp.get("001"), 2);
-    // THere are delta-commits after compaction instant
+    // There are delta-commits after compaction instant
     validateUnScheduleFileId(client, "002", "003", instantsWithOp.get("003"), 2);
-    // THere are no delta-commits after compaction instant
+    // There are no delta-commits after compaction instant
     validateUnScheduleFileId(client, "004", "005", instantsWithOp.get("005"), 0);
-    // THere are no delta-commits after compaction instant
+    // There are no delta-commits after compaction instant
     validateUnScheduleFileId(client, "006", "007", instantsWithOp.get("007"), 0);
   }
 
@@ -121,13 +121,13 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     int numEntriesPerInstant = 10;
     CompactionTestUtils.setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant,
         numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
-    // THere are delta-commits after compaction instant
+    // There are delta-commits after compaction instant
     validateRepair("000", "001", numEntriesPerInstant, 2 * numEntriesPerInstant);
-    // THere are delta-commits after compaction instant
+    // There are delta-commits after compaction instant
     validateRepair("002", "003", numEntriesPerInstant, 2 * numEntriesPerInstant);
-    // THere are no delta-commits after compaction instant
+    // There are no delta-commits after compaction instant
     validateRepair("004", "005", numEntriesPerInstant, 0);
-    // THere are no delta-commits after compaction instant
+    // There are no delta-commits after compaction instant
     validateRepair("006", "007", numEntriesPerInstant, 0);
   }
 
@@ -163,7 +163,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     expRenameFiles.forEach((key, value) -> LOG.info("Key :" + key + " renamed to " + value + " rolled back to "
         + renameFilesFromUndo.get(key)));
 
-    assertEquals(expRenameFiles, renameFilesFromUndo, "Undo must completely rollback renames");
+    assertEquals(expRenameFiles, renameFilesFromUndo, "Undo must completely rollback renamed files");
     // Now expect validation to succeed
     result = client.validateCompactionPlan(metaClient, compactionInstant, 1);
     assertTrue(result.stream().allMatch(OperationResult::isSuccess), "Expect no failures in validation");
@@ -171,7 +171,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
   }
 
   /**
-   * Enssure compaction plan is valid.
+   * Ensure compaction plan is valid.
    *
    * @param compactionInstant Compaction Instant
    */
@@ -199,8 +199,8 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     renameFiles.forEach(lfPair -> {
       HoodieLogFile oldLogFile = lfPair.getLeft();
       HoodieLogFile newLogFile = lfPair.getValue();
-      assertEquals(ingestionInstant, newLogFile.getBaseCommitTime(), "Base Commit time is expected");
-      assertEquals(compactionInstant, oldLogFile.getBaseCommitTime(), "Base Commit time is expected");
+      assertEquals(ingestionInstant, newLogFile.getBaseCommitTime(), "Base Commit time of ingestion instant is expected");
+      assertEquals(compactionInstant, oldLogFile.getBaseCommitTime(), "Base Commit time of compaction instant is expected");
       assertEquals(oldLogFile.getFileId(), newLogFile.getFileId(), "File Id is expected");
       HoodieLogFile lastLogFileBeforeCompaction =
           fsView.getLatestMergedFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], ingestionInstant)
@@ -273,7 +273,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     final HoodieTableFileSystemView newFsView =
         new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
-    // Expect all file-slice whose base-commit is same as compaction commit to contain no new Log files
+    // Expect each file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
         .forEach(fs -> {
@@ -291,7 +291,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     assertEquals(fileIdToCountsBeforeRenaming, fileIdToCountsAfterRenaming,
         "Each File Id has same number of log-files");
     assertEquals(numEntriesPerInstant, fileIdToCountsAfterRenaming.size(), "Not Empty");
-    assertEquals(expNumRenames, renameFiles.size(), "Expected number of renames");
+    assertEquals(expNumRenames, renameFiles.size(), "Expected number of renamed files");
     return renameFiles;
   }
 
@@ -354,6 +354,6 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     assertEquals(fileIdToCountsBeforeRenaming, fileIdToCountsAfterRenaming,
         "Each File Id has same number of log-files");
     assertEquals(1, fileIdToCountsAfterRenaming.size(), "Not Empty");
-    assertEquals(expNumRenames, renameFiles.size(), "Expected number of renames");
+    assertEquals(expNumRenames, renameFiles.size(), "Expected number of renamed files");
   }
 }

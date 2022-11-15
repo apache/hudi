@@ -124,4 +124,12 @@ public class RawTripTestPayload extends GenericTestPayload implements HoodieReco
     metadataMap.put("InputRecordCount_1506582000", "2");
     return Option.of(metadataMap);
   }
+
+  public RawTripTestPayload clone() {
+    try {
+      return new RawTripTestPayload(unCompressData(jsonDataCompressed), rowKey, partitionPath, null);
+    } catch (IOException e) {
+      return null;
+    }
+  }
 }

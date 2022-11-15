@@ -61,6 +61,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
+import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
@@ -91,6 +92,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -124,7 +126,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 /**
  * Sync's one batch of data to hoodie table.
  */
-public class DeltaSync implements Serializable {
+public class DeltaSync implements Serializable, Closeable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
@@ -253,42 +255,72 @@ public class DeltaSync implements Serializable {
    */
   public void refreshTimeline() throws IOException {
     if (fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).setPayloadClassName(cfg.payloadClassName).build();
-      switch (meta.getTableType()) {
-        case COPY_ON_WRITE:
-          this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
-          this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
-          break;
-        case MERGE_ON_READ:
-          this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants());
-          this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
-          break;
-        default:
-          throw new HoodieException("Unsupported table type :" + meta.getTableType());
+      try {
+        HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).setPayloadClassName(cfg.payloadClassName).build();
+        switch (meta.getTableType()) {
+          case COPY_ON_WRITE:
+            this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
+            this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
+            break;
+          case MERGE_ON_READ:
+            this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants());
+            this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
+            break;
+          default:
+            throw new HoodieException("Unsupported table type :" + meta.getTableType());
+        }
+      } catch (HoodieIOException e) {
+        LOG.warn("Full exception msg " + e.getMessage());
+        if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
+          String basePathWithForwardSlash = cfg.targetBasePath.endsWith("/") ? cfg.targetBasePath : String.format("%s/", cfg.targetBasePath);
+          String pathToHoodieProps = String.format("%s%s/%s", basePathWithForwardSlash, HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+          String pathToHoodiePropsBackup = String.format("%s%s/%s", basePathWithForwardSlash, HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
+          boolean hoodiePropertiesExists = fs.exists(new Path(basePathWithForwardSlash))
+              && fs.exists(new Path(pathToHoodieProps))
+              && fs.exists(new Path(pathToHoodiePropsBackup));
+          if (!hoodiePropertiesExists) {
+            LOG.warn("Base path exists, but table is not fully initialized. Re-initializing again");
+            initializeEmptyTable();
+            // reload the timeline from metaClient and validate that its empty table. If there are any instants found, then we should fail the pipeline, bcoz hoodie.properties got deleted by mistake.
+            HoodieTableMetaClient metaClientToValidate = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).build();
+            if (metaClientToValidate.reloadActiveTimeline().getInstants().count() > 0) {
+              // Deleting the recreated hoodie.properties and throwing exception.
+              fs.delete(new Path(String.format("%s%s/%s", basePathWithForwardSlash, HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
+              throw new HoodieIOException("hoodie.properties is missing. Likely due to some external entity. Please populate the hoodie.properties and restart the pipeline. ",
+                  e.getIOException());
+            }
+          }
+        } else {
+          throw e;
+        }
       }
     } else {
-      this.commitTimelineOpt = Option.empty();
-      this.allCommitsTimelineOpt = Option.empty();
-      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
-      HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(cfg.tableType)
-          .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-          .setPayloadClassName(cfg.payloadClassName)
-          .setBaseFileFormat(cfg.baseFileFormat)
-          .setPartitionFields(partitionColumns)
-          .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
-          .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-              HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
-          .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-              SimpleKeyGenerator.class.getName()))
-          .setPreCombineField(cfg.sourceOrderingField)
-          .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
-              HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
-          .setShouldDropPartitionColumns(isDropPartitionColumns())
-          .initTable(new Configuration(jssc.hadoopConfiguration()),
-            cfg.targetBasePath);
+      initializeEmptyTable();
     }
+  }
+
+  private void initializeEmptyTable() throws IOException {
+    this.commitTimelineOpt = Option.empty();
+    this.allCommitsTimelineOpt = Option.empty();
+    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
+    HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(cfg.tableType)
+        .setTableName(cfg.targetTableName)
+        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+        .setPayloadClassName(cfg.payloadClassName)
+        .setBaseFileFormat(cfg.baseFileFormat)
+        .setPartitionFields(partitionColumns)
+        .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
+        .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+            HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
+        .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
+            SimpleKeyGenerator.class.getName()))
+        .setPreCombineField(cfg.sourceOrderingField)
+        .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
+            HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
+        .setShouldDropPartitionColumns(isDropPartitionColumns())
+        .initTable(new Configuration(jssc.hadoopConfiguration()),
+            cfg.targetBasePath);
   }
 
   /**
@@ -338,6 +370,7 @@ public class DeltaSync implements Serializable {
 
     metrics.updateDeltaStreamerSyncMetrics(System.currentTimeMillis());
 
+    // TODO revisit (too early to unpersist)
     // Clear persistent RDDs
     jssc.getPersistentRDDs().values().forEach(JavaRDD::unpersist);
     return result;
@@ -366,7 +399,7 @@ public class DeltaSync implements Serializable {
       resumeCheckpointStr = getCheckpointToResume(commitTimelineOpt);
     } else {
       // initialize the table for the first time.
-      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
+      String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
@@ -484,7 +517,7 @@ public class DeltaSync implements Serializable {
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
-    List<String> partitionColumns = getPartitionColumns(keyGenerator, props);
+    Set<String> partitionColumns = getPartitionColumns(keyGenerator, props);
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(record -> {
       GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(record, partitionColumns) : record;
@@ -630,7 +663,7 @@ public class DeltaSync implements Serializable {
           scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
         }
 
-        if (!isEmpty) {
+        if (!isEmpty || cfg.forceEmptyMetaSync) {
           runMetaSync();
         }
       } else {
@@ -705,6 +738,7 @@ public class DeltaSync implements Serializable {
 
       TypedProperties metaProps = new TypedProperties();
       metaProps.putAll(props);
+      metaProps.putAll(writeClient.getConfig().getProps());
       if (props.getBoolean(HIVE_SYNC_BUCKET_SYNC.key(), HIVE_SYNC_BUCKET_SYNC.defaultValue())) {
         metaProps.put(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
@@ -894,9 +928,13 @@ public class DeltaSync implements Serializable {
    * Close all resources.
    */
   public void close() {
-    if (null != writeClient) {
+    if (writeClient != null) {
       writeClient.close();
       writeClient = null;
+    }
+
+    if (formatAdapter != null) {
+      formatAdapter.close();
     }
 
     LOG.info("Shutting down embedded timeline server");
@@ -944,14 +982,14 @@ public class DeltaSync implements Serializable {
   }
 
   /**
-   * Get the list of partition columns as a list of strings.
+   * Get the partition columns as a set of strings.
    *
    * @param keyGenerator KeyGenerator
    * @param props TypedProperties
-   * @return List of partition columns.
+   * @return Set of partition columns.
    */
-  private List<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
-    String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
-    return Arrays.asList(partitionColumns.split(","));
+  private Set<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
+    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
+    return Arrays.stream(partitionColumns.split(",")).collect(Collectors.toSet());
   }
 }

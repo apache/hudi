@@ -25,7 +25,7 @@ import org.apache.spark.sql.avro.AvroSerializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
 import org.apache.spark.sql.catalyst.expressions.codegen._
-import org.apache.spark.sql.catalyst.expressions.{BoundReference, Expression, GenericInternalRow, LeafExpression, UnsafeArrayData, UnsafeMapData, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{BoundReference, Cast, Expression, GenericInternalRow, LeafExpression, UnsafeArrayData, UnsafeMapData, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.hudi.command.payload.ExpressionCodeGen.RECORD_NAME
 import org.apache.spark.sql.types.{DataType, Decimal}
@@ -122,7 +122,8 @@ object ExpressionCodeGen extends Logging {
       classOf[IndexedRecord].getName,
       classOf[AvroSerializer].getName,
       classOf[GenericRecord].getName,
-      classOf[GenericInternalRow].getName
+      classOf[GenericInternalRow].getName,
+      classOf[Cast].getName
     )
     evaluator.setImplementedInterfaces(Array(classOf[IExpressionEvaluator]))
     try {

@@ -17,12 +17,12 @@
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.12.0-SNAPSHOT</version>
+    <version>0.13.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
-  <version>0.12.0-SNAPSHOT</version>
+  <version>0.13.0-SNAPSHOT</version>
 
   <name>hudi-spark-common_${scala.binary.version}</name>
   <packaging>jar</packaging>
@@ -149,6 +149,17 @@
       <version>${scala.version}</version>
     </dependency>
 
+    <dependency>
+      <groupId>org.scala-lang.modules</groupId>
+      <artifactId>scala-collection-compat_${scala.binary.version}</artifactId>
+    </dependency>
+
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-1.2-api</artifactId>
+    </dependency>
+
     <!-- Hoodie -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -212,6 +223,12 @@
     </dependency>
 
     <!-- Hoodie - Test -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-client-common</artifactId>

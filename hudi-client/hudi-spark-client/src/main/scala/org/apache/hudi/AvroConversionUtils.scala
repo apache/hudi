@@ -19,13 +19,12 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema.Type
-import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
+import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
@@ -90,8 +89,7 @@ object AvroConversionUtils {
   @Deprecated
   def createConverterToRow(sourceAvroSchema: Schema,
                            targetSqlType: StructType): GenericRecord => Row = {
-    val encoder = RowEncoder.apply(targetSqlType).resolveAndBind()
-    val serde = sparkAdapter.createSparkRowSerDe(encoder)
+    val serde = sparkAdapter.createSparkRowSerDe(targetSqlType)
     val converter = AvroConversionUtils.createAvroToInternalRowConverter(sourceAvroSchema, targetSqlType)
 
     avro => converter.apply(avro).map(serde.deserializeRow).get
@@ -104,8 +102,7 @@ object AvroConversionUtils {
   def createConverterToAvro(sourceSqlType: StructType,
                             structName: String,
                             recordNamespace: String): Row => GenericRecord = {
-    val encoder = RowEncoder.apply(sourceSqlType).resolveAndBind()
-    val serde = sparkAdapter.createSparkRowSerDe(encoder)
+    val serde = sparkAdapter.createSparkRowSerDe(sourceSqlType)
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceSqlType, structName, recordNamespace)
     val (nullable, _) = resolveAvroTypeNullability(avroSchema)
 

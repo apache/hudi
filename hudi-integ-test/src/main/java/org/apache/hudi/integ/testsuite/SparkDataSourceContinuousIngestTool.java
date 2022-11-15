@@ -22,7 +22,6 @@ package org.apache.hudi.integ.testsuite;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.integ.testsuite.SparkDataSourceContinuousIngest;
 import org.apache.hudi.utilities.HoodieRepairTool;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;

@@ -20,13 +20,12 @@
 package org.apache.hudi.client.clustering.plan.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
-import org.apache.hudi.table.HoodieSparkMergeOnReadTable;
+import org.apache.hudi.table.HoodieTable;
 
 import java.util.Collections;
 import java.util.List;
@@ -40,11 +39,7 @@ import java.util.stream.Stream;
 public class SparkSingleFileSortPlanStrategy<T extends HoodieRecordPayload<T>>
     extends SparkSizeBasedClusteringPlanStrategy<T> {
 
-  public SparkSingleFileSortPlanStrategy(HoodieSparkCopyOnWriteTable<T> table, HoodieSparkEngineContext engineContext, HoodieWriteConfig writeConfig) {
-    super(table, engineContext, writeConfig);
-  }
-
-  public SparkSingleFileSortPlanStrategy(HoodieSparkMergeOnReadTable<T> table, HoodieSparkEngineContext engineContext, HoodieWriteConfig writeConfig) {
+  public SparkSingleFileSortPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
   }
 

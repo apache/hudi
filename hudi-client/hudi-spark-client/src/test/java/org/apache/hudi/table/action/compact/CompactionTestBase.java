@@ -20,7 +20,7 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -106,7 +106,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     });
   }
 
-  protected List<HoodieRecord> runNextDeltaCommits(SparkRDDWriteClient client, final HoodieReadClient readClient, List<String> deltaInstants,
+  protected List<HoodieRecord> runNextDeltaCommits(SparkRDDWriteClient client, final SparkRDDReadClient readClient, List<String> deltaInstants,
                                                    List<HoodieRecord> records, HoodieWriteConfig cfg, boolean insertFirst, List<String> expPendingCompactionInstants)
       throws Exception {
 

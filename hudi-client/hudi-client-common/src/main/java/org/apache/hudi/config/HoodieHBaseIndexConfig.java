@@ -183,6 +183,10 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("The value of hbase.master.kerberos.principal in hbase cluster.");
 
+  public static final ConfigProperty<Integer> BUCKET_NUMBER = ConfigProperty
+      .key("hoodie.index.hbase.bucket.number")
+      .defaultValue(8)
+      .withDocumentation("Only applicable when using RebalancedSparkHoodieHBaseIndex, same as hbase regions count can get the best performance");
 
   /**
    * @deprecated Use {@link #ZKQUORUM} and its methods instead

@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -103,6 +104,18 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     }
   }
 
+  @Override
+  protected boolean checkIfValidFileSlice(FileSlice fileSlice) {
+    Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
+    Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
+
+    if (baseFileOpt.isPresent() || latestLogFileOpt.isPresent()) {
+      return true;
+    } else {
+      throw new IllegalStateException("Invalid state: either base-file or log-file has to be present for " + fileSlice.getFileId());
+    }
+  }
+
   /**
    * Keep the logic of mor_incr_view as same as spark datasource.
    * Step1: Get list of commits to be fetched based on start commit and max commits(for snapshot max commits is -1).
@@ -144,7 +157,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     List<HoodieCommitMetadata> metadataList = commitsToCheck
         .get().stream().map(instant -> {
           try {
-            return HoodieInputFormatUtils.getCommitMetadata(instant, commitsTimelineToReturn);
+            return TimelineUtils.getCommitMetadata(instant, commitsTimelineToReturn);
           } catch (IOException e) {
             throw new HoodieException(String.format("cannot get metadata for instant: %s", instant));
           }
