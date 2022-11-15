@@ -126,7 +126,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       scheduleCompaction(requestInstant, writeClient, cfg);
 
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
-      assertEquals(metaClient.getActiveTimeline().getInstants()
+      assertEquals(metaClient.getActiveTimeline().getInstantsAsStream()
             .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
                   && hoodieInstant.getState() == HoodieInstant.State.REQUESTED).count(), 1);
 

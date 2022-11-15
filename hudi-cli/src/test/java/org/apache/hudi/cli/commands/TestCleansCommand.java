@@ -127,13 +127,13 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
     // First, run clean
     SparkMain.clean(jsc(), HoodieCLI.basePath, propsFilePath.getPath(), new ArrayList<>());
-    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count(),
+    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants(),
         "Loaded 1 clean and the count should match");
 
     Object result = shell.evaluate(() -> "cleans show");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
-    HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().findFirst().orElse(null);
+    HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstantsAsStream().findFirst().orElse(null);
     assertNotNull(clean);
 
     TableHeader header =
@@ -163,10 +163,10 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
     // First, run clean with two partition
     SparkMain.clean(jsc(), HoodieCLI.basePath, propsFilePath.toString(), new ArrayList<>());
-    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count(),
+    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants(),
         "Loaded 1 clean and the count should match");
 
-    HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().findFirst().get();
+    HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstantsAsStream().findFirst().get();
 
     Object result = shell.evaluate(() -> "clean showpartitions --clean " + clean.getTimestamp());
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));

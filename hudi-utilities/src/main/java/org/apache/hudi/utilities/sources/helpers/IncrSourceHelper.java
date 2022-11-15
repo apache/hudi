@@ -112,7 +112,7 @@ public class IncrSourceHelper {
 
     if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST || !activeCommitTimeline.isBeforeTimelineStarts(beginInstantTime)) {
       Option<HoodieInstant> nthInstant = Option.fromJavaOptional(activeCommitTimeline
-          .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstants().reduce((x, y) -> y));
+          .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstantsAsStream().reduce((x, y) -> y));
       return Pair.of(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), Pair.of(beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime)));
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.

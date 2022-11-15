@@ -213,7 +213,7 @@ public class HoodieCDCExtractor {
     try {
       Set<String> requiredActions = new HashSet<>(Arrays.asList(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION));
       HoodieActiveTimeline activeTimeLine = metaClient.getActiveTimeline();
-      this.commits = activeTimeLine.getInstants()
+      this.commits = activeTimeLine.getInstantsAsStream()
           .filter(instant ->
               instant.isCompleted()
                   && instantRange.isInRange(instant.getTimestamp())

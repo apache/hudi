@@ -249,7 +249,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
-    if (getActiveTimeline().getInstants().noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
+    if (getActiveTimeline().getInstantsAsStream().noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
       throw new HoodieHiveSyncException(
           "Not a valid completed timestamp " + timeStamp + " for table " + tableName);
     }

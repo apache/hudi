@@ -65,7 +65,7 @@ public class TimelineUtils {
   public static List<String> getDroppedPartitions(HoodieTimeline timeline) {
     HoodieTimeline replaceCommitTimeline = timeline.getWriteTimeline().filterCompletedInstants().getCompletedReplaceTimeline();
 
-    return replaceCommitTimeline.getInstants().flatMap(instant -> {
+    return replaceCommitTimeline.getInstantsAsStream().flatMap(instant -> {
       try {
         HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
             replaceCommitTimeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
@@ -85,7 +85,7 @@ public class TimelineUtils {
    * Returns partitions that have been modified including internal operations such as clean in the passed timeline.
    */
   public static List<String> getAffectedPartitions(HoodieTimeline timeline) {
-    return timeline.filterCompletedInstants().getInstants().flatMap(s -> {
+    return timeline.filterCompletedInstants().getInstantsAsStream().flatMap(s -> {
       switch (s.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
         case HoodieTimeline.DELTA_COMMIT_ACTION:

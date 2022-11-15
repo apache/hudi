@@ -83,7 +83,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
     optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
-  private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
+  private val commitsToReturn = commitsTimelineToReturn.getInstantsAsStream.iterator().toList
 
   // use schema from a file produced in the end/latest instant
 
@@ -131,7 +131,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
       // create Replaced file group
       val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
-      val replacedFile = replacedTimeline.getInstants.collect(Collectors.toList[HoodieInstant]).flatMap { instant =>
+      val replacedFile = replacedTimeline.getInstants.flatMap { instant =>
         val replaceMetadata = HoodieReplaceCommitMetadata.
           fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().flatMap { entry =>
@@ -177,7 +177,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       }
       // pass internalSchema to hadoopConf, so it can be used in executors.
       val validCommits = metaClient
-        .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
+        .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath)
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)

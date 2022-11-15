@@ -619,7 +619,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         0, 150);
 
     HoodieActiveTimeline activeTimeline = new HoodieActiveTimeline(metaClient, false);
-    List<HoodieInstant> instants = activeTimeline.getCommitTimeline().getInstants().collect(Collectors.toList());
+    List<HoodieInstant> instants = activeTimeline.getCommitTimeline().getInstants();
     assertEquals(5, instants.size());
     assertEquals(new HoodieInstant(COMPLETED, COMMIT_ACTION, "001"),
         instants.get(0));

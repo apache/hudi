@@ -516,7 +516,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
       }
     }
     boolean logCompactionInstantArchived = false;
-    Map<String, List<HoodieInstant>> instantsMap = metaClient.getArchivedTimeline().getInstants()
+    Map<String, List<HoodieInstant>> instantsMap = metaClient.getArchivedTimeline().getInstantsAsStream()
         .collect(Collectors.groupingBy(HoodieInstant::getTimestamp));
     for (String logCompactionTimeStamp: logCompactionInstantTimes) {
       List<HoodieInstant> instants = instantsMap.get(logCompactionTimeStamp);

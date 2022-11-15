@@ -208,7 +208,7 @@ public class TimelineCommand {
       Integer limit, String sortByField, boolean descending, boolean headerOnly, boolean withRowNo,
       boolean showTimeSeconds, boolean showRollbackInfo) {
     Map<String, List<String>> rollbackInfo = getRolledBackInstantInfo(timeline);
-    final List<Comparable[]> rows = timeline.getInstants().map(instant -> {
+    final List<Comparable[]> rows = timeline.getInstantsAsStream().map(instant -> {
       int numColumns = showRollbackInfo ? 7 : 6;
       Comparable[] row = new Comparable[numColumns];
       String instantTimestamp = instant.getTimestamp();
@@ -343,8 +343,7 @@ public class TimelineCommand {
     // Instant rolled back or to roll back -> rollback instants
     Map<String, List<String>> rollbackInfoMap = new HashMap<>();
     List<HoodieInstant> rollbackInstants = timeline.filter(instant ->
-            HoodieTimeline.ROLLBACK_ACTION.equalsIgnoreCase(instant.getAction()))
-        .getInstants().collect(Collectors.toList());
+            HoodieTimeline.ROLLBACK_ACTION.equalsIgnoreCase(instant.getAction())).getInstants();
     rollbackInstants.forEach(rollbackInstant -> {
       try {
         if (rollbackInstant.isInflight()) {

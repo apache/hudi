@@ -157,8 +157,8 @@ public class HoodieClientTestUtils {
   public static long countRecordsOptionallySince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
                                                  HoodieTimeline commitTimeline, Option<String> lastCommitTimeOpt) {
     List<HoodieInstant> commitsToReturn =
-        lastCommitTimeOpt.isPresent() ? commitTimeline.findInstantsAfter(lastCommitTimeOpt.get(), Integer.MAX_VALUE).getInstants().collect(Collectors.toList()) :
-            commitTimeline.getInstants().collect(Collectors.toList());
+        lastCommitTimeOpt.isPresent() ? commitTimeline.findInstantsAfter(lastCommitTimeOpt.get(), Integer.MAX_VALUE).getInstants() :
+            commitTimeline.getInstants();
     try {
       // Go over the commit metadata, and obtain the new files that need to be read.
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);

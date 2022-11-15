@@ -25,6 +25,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -335,7 +337,18 @@ public interface HoodieTimeline extends Serializable {
   /**
    * @return Get the stream of completed instants
    */
-  Stream<HoodieInstant> getInstants();
+  default Stream<HoodieInstant> getInstantsAsStream() {
+    return getInstants().stream();
+  }
+
+  /**
+   * @return Get tht list of instants
+   */
+  List<HoodieInstant> getInstants();
+
+  default List<HoodieInstant> getAndCopyInstants() {
+    return new ArrayList<>(getInstants());
+  }
 
   /**
    * @return Get the stream of completed instants in reverse order TODO Change code references to getInstants() that
@@ -454,7 +467,7 @@ public interface HoodieTimeline extends Serializable {
         // Deltacommit is used by both ingestion and logcompaction.
         // So, distinguish both of them check for the inflight file being present.
         HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
-        Option<HoodieInstant> logCompactionInstant = Option.fromJavaOptional(rawActiveTimeline.getInstants()
+        Option<HoodieInstant> logCompactionInstant = Option.fromJavaOptional(rawActiveTimeline.getInstantsAsStream()
             .filter(hoodieInstant -> hoodieInstant.getTimestamp().equals(instant.getTimestamp())
                 && LOG_COMPACTION_ACTION.equals(hoodieInstant.getAction())).findFirst());
         if (logCompactionInstant.isPresent()) {
