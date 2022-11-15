@@ -166,7 +166,7 @@ public class TestSourceFormatAdapter {
     typedProperties.put(SourceFormatAdapter.SourceFormatAdapterConfig.SANITIZE_AVRO_FIELD_NAMES.key(), true);
     typedProperties.put(SourceFormatAdapter.SourceFormatAdapterConfig.AVRO_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
     setupSource(inputDs);
-    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testDataSource, Option.empty(), Option.of(typedProperties));
+    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testDataSource, Option.of(typedProperties));
     return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(DUMMY_CHECKPOINT), 10L);
   }
 

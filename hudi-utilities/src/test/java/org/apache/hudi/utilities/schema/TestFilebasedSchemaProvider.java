@@ -44,7 +44,7 @@ public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices(false, false, false);
   }
 
   @AfterAll
