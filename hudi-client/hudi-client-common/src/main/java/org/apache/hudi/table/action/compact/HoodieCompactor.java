@@ -60,7 +60,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.StreamSupport;
 
 import static java.util.stream.Collectors.toList;
