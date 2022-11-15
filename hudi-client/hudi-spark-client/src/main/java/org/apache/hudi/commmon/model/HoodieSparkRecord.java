@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -122,6 +123,19 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     this.schema = schema;
   }
 
+  public HoodieSparkRecord(
+      HoodieKey key,
+      InternalRow data,
+      StructType schema,
+      HoodieOperation operation,
+      HoodieRecordLocation currentLocation,
+      HoodieRecordLocation newLocation,
+      boolean copy) {
+    super(key, data, operation, currentLocation, newLocation);
+    this.copy = copy;
+    this.schema = schema;
+  }
+
   @Override
   public HoodieSparkRecord newInstance() {
     return new HoodieSparkRecord(this.key, this.data, this.schema, this.operation, this.copy);
@@ -175,7 +189,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     InternalRow mergeRow = new JoinedRow(data, (InternalRow) other.getData());
     UnsafeProjection projection =
         HoodieInternalRowUtils.getCachedUnsafeProjection(targetStructType, targetStructType);
-    return new HoodieSparkRecord(getKey(), projection.apply(mergeRow), targetStructType, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), projection.apply(mergeRow), targetStructType, getOperation(), this.currentLocation, this.newLocation, copy);
   }
 
   @Override
@@ -189,7 +203,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     // TODO add actual rewriting
     InternalRow finalRow = new HoodieInternalRow(metaFields, data, containMetaFields);
 
-    return new HoodieSparkRecord(getKey(), finalRow, targetStructType, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), finalRow, targetStructType, getOperation(), this.currentLocation, this.newLocation, copy);
   }
 
   @Override
@@ -204,7 +218,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
         HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, structType, newStructType, renameCols);
     HoodieInternalRow finalRow = new HoodieInternalRow(metaFields, rewrittenRow, containMetaFields);
 
-    return new HoodieSparkRecord(getKey(), finalRow, newStructType, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), finalRow, newStructType, getOperation(), this.currentLocation, this.newLocation, copy);
   }
 
   @Override
@@ -219,7 +233,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
       }
     });
 
-    return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), copy);
+    return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), this.currentLocation, this.newLocation, copy);
   }
 
   @Override
@@ -284,7 +298,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
       partition = data.get(HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal(), StringType).toString();
     }
     HoodieKey hoodieKey = new HoodieKey(key, partition);
-    return new HoodieSparkRecord(hoodieKey, data, structType, getOperation(), copy);
+    return new HoodieSparkRecord(hoodieKey, data, structType, getOperation(), this.currentLocation, this.newLocation, copy);
   }
 
   @Override

@@ -52,6 +52,15 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     super(record);
   }
 
+  public HoodieAvroRecord(
+      HoodieKey key,
+      T data,
+      HoodieOperation operation,
+      HoodieRecordLocation currentLocation,
+      HoodieRecordLocation newLocation) {
+    super(key, data, operation, currentLocation, newLocation);
+  }
+
   public HoodieAvroRecord() {
   }
 
@@ -114,14 +123,14 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     Option<IndexedRecord> avroRecordPayloadOpt = getData().getInsertValue(recordSchema, props);
     GenericRecord avroPayloadInNewSchema =
         HoodieAvroUtils.rewriteRecord((GenericRecord) avroRecordPayloadOpt.get(), targetSchema);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroPayloadInNewSchema), getOperation());
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroPayloadInNewSchema), getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException {
     GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
     GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(oldRecord, newSchema, renameCols);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(rewriteRecord), getOperation());
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(rewriteRecord), getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override
@@ -134,14 +143,14 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       }
     });
 
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override
   public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException {
     GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
     avroRecordPayload.put(keyFieldName, StringUtils.EMPTY_STRING);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override
@@ -210,7 +219,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       return this;
     }
     Option<IndexedRecord> data = this.data.getInsertValue(recordSchema, props);
-    return new HoodieAvroRecord<>(getKey(), new HoodieAvroInsertValuePayload(data), getOperation());
+    return new HoodieAvroRecord<>(getKey(), new HoodieAvroInsertValuePayload(data), getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override

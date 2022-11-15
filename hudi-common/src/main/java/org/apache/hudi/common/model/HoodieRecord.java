@@ -124,12 +124,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Current location of record on storage. Filled in by looking up index
    */
-  private HoodieRecordLocation currentLocation;
+  protected HoodieRecordLocation currentLocation;
 
   /**
    * New location of record on storage, after written.
    */
-  private HoodieRecordLocation newLocation;
+  protected HoodieRecordLocation newLocation;
 
   /**
    * Indicates whether the object is sealed.
@@ -151,6 +151,19 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.currentLocation = null;
     this.newLocation = null;
     this.sealed = false;
+    this.operation = operation;
+  }
+
+  public HoodieRecord(
+      HoodieKey key,
+      T data,
+      HoodieOperation operation,
+      HoodieRecordLocation currentLocation,
+      HoodieRecordLocation newLocation) {
+    this.key = key;
+    this.data = data;
+    this.currentLocation = currentLocation;
+    this.newLocation = newLocation;
     this.operation = operation;
   }
 
