@@ -67,7 +67,7 @@ public class TestHoodieAvroParquetWriter {
 
     HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =
         new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE,
-            ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024, hadoopConf, 0.1);
+            ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024, hadoopConf, 0.1, true);
 
     Path filePath = new Path(tmpDir.resolve("test.parquet").toAbsolutePath().toString());
 

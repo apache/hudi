@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -41,8 +40,6 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -725,9 +722,10 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
 
   public static final ConfigOption<Boolean> HIVE_SYNC_ENABLED = ConfigOptions
-      .key("hive_sync.enable")
+      .key("hive_sync.enabled")
       .booleanType()
       .defaultValue(false)
+      .withFallbackKeys("hive_sync.enable")
       .withDescription("Asynchronously sync Hive meta to HMS, default false");
 
   public static final ConfigOption<String> HIVE_SYNC_DB = ConfigOptions
@@ -921,18 +919,6 @@ public class FlinkOptions extends HoodieConfig {
    * Returns all the config options.
    */
   public static List<ConfigOption<?>> allOptions() {
-    Field[] declaredFields = FlinkOptions.class.getDeclaredFields();
-    List<ConfigOption<?>> options = new ArrayList<>();
-    for (Field field : declaredFields) {
-      if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
-          && field.getType().equals(ConfigOption.class)) {
-        try {
-          options.add((ConfigOption<?>) field.get(ConfigOption.class));
-        } catch (IllegalAccessException e) {
-          throw new HoodieException("Error while fetching static config option", e);
-        }
-      }
-    }
-    return options;
+    return OptionsResolver.allOptions(FlinkOptions.class);
   }
 }

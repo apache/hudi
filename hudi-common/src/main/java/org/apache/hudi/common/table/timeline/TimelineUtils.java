@@ -185,7 +185,7 @@ public class TimelineUtils {
     }
   }
   
-  private static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+  public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     try {
       if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
         // replacecommit is used for multiple operations: insert_overwrite/cluster etc. 
@@ -194,7 +194,7 @@ public class TimelineUtils {
             metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
         return WriteOperationType.CLUSTER.equals(replaceMetadata.getOperationType());
       }
-      
+
       return false;
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read instant information: " + instant + " for " + metaClient.getBasePath(), e);
@@ -208,5 +208,23 @@ public class TimelineUtils {
       return archivedTimeline.mergeTimeline(activeTimeline);
     }
     return activeTimeline;
+  }
+
+  /**
+   * Returns the commit metadata of the given instant.
+   *
+   * @param instant   The hoodie instant
+   * @param timeline  The timeline
+   * @return the commit metadata
+   */
+  public static HoodieCommitMetadata getCommitMetadata(
+      HoodieInstant instant,
+      HoodieTimeline timeline) throws IOException {
+    byte[] data = timeline.getInstantDetails(instant).get();
+    if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      return HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class);
+    } else {
+      return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+    }
   }
 }

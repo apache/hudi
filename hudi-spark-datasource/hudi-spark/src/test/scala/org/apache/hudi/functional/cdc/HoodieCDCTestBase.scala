@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieKey, HoodieLogFile, HoodieRecord}
-import org.apache.hudi.common.table.cdc.HoodieCDCOperation
+import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
@@ -100,30 +100,41 @@ abstract class HoodieCDCTestBase extends HoodieClientTestBase {
     )
     val hoodieWriteStats = commitMetadata.getWriteStats.asScala
     hoodieWriteStats.exists { hoodieWriteStat =>
-      val cdcPath = hoodieWriteStat.getCdcPath
-      cdcPath != null && cdcPath.nonEmpty
+      val cdcPaths = hoodieWriteStat.getCdcStats
+      cdcPaths != null && cdcPaths.nonEmpty &&
+        cdcPaths.keySet().asScala.forall(_.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
     }
   }
 
   /**
-   * whether this instant will create a cdc log file.
+   * extract a list of cdc log file.
    */
-  protected def getCDCLogFIle(instant: HoodieInstant): List[String] = {
+  protected def getCDCLogFile(instant: HoodieInstant): List[String] = {
     val commitMetadata = HoodieCommitMetadata.fromBytes(
       metaClient.reloadActiveTimeline().getInstantDetails(instant).get(),
       classOf[HoodieCommitMetadata]
     )
-    commitMetadata.getWriteStats.asScala.map(_.getCdcPath).toList
+    commitMetadata.getWriteStats.asScala.flatMap(_.getCdcStats.keys).toList
+  }
+
+  protected def getCDCBlocks(relativeLogFile: String, cdcSchema: Schema): List[HoodieDataBlock] = {
+    val logFile = new HoodieLogFile(
+      metaClient.getFs.getFileStatus(new Path(metaClient.getBasePathV2, relativeLogFile)))
+    val reader = HoodieLogFormat.newReader(fs, logFile, cdcSchema)
+    val blocks = scala.collection.mutable.ListBuffer.empty[HoodieDataBlock]
+    while(reader.hasNext) {
+      blocks.add(reader.next().asInstanceOf[HoodieDataBlock])
+    }
+    blocks.toList
   }
 
   protected def readCDCLogFile(relativeLogFile: String, cdcSchema: Schema): List[IndexedRecord] = {
-    val logFile = new HoodieLogFile(
-      metaClient.getFs.getFileStatus(new Path(metaClient.getBasePathV2, relativeLogFile)))
-    val reader = HoodieLogFormat.newReader(fs, logFile, cdcSchema);
-    assertTrue(reader.hasNext);
-
-    val block = reader.next().asInstanceOf[HoodieDataBlock];
-    block.getRecordIterator.asScala.toList
+    val records = scala.collection.mutable.ListBuffer.empty[IndexedRecord]
+    val blocks = getCDCBlocks(relativeLogFile, cdcSchema)
+    blocks.foreach { block =>
+      records.addAll(block.getRecordIterator.asScala.toList)
+    }
+    records.toList
   }
 
   protected def checkCDCDataForInsertOrUpdate(cdcSupplementalLoggingMode: String,

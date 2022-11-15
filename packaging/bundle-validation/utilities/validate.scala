@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,19 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util.queue;
-
-/**
- * Producer for {@link BoundedInMemoryQueue}. Memory Bounded Buffer supports multiple producers single consumer pattern.
- *
- * @param <I> Input type for buffer items produced
- */
-public interface BoundedInMemoryQueueProducer<I> {
-
-  /**
-   * API to enqueue entries to memory bounded queue.
-   *
-   * @param queue In Memory bounded queue
-   */
-  void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception;
-}
+val hudiDf = spark.read.format("hudi").load("/tmp/hudi-utilities-test/")
+val inputDf = spark.read.format("json").load("/opt/bundle-validation/data/stocks/data")
+val hudiCount = hudiDf.select("date", "key").distinct.count
+val srcCount = inputDf.select("date", "key").distinct.count
+if (hudiCount == srcCount) System.exit(0)
+println(s"Counts don't match hudiCount: $hudiCount, srcCount: $srcCount")
+System.exit(1)

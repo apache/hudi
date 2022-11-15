@@ -27,9 +27,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.Objects;
 
 /**
  * ConfigProperty describes a configuration property. It contains the configuration
@@ -76,7 +76,7 @@ public class ConfigProperty<T> implements Serializable {
 
   public T defaultValue() {
     if (defaultValue == null) {
-      throw new HoodieException("There's no default value for this config");
+      throw new HoodieException(String.format("There's no default value for this config: %s", key));
     }
     return defaultValue;
   }

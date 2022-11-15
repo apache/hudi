@@ -18,8 +18,6 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -35,6 +33,9 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -152,7 +153,7 @@ public class HoodieIndexUtils {
     try {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
-        HoodieTimer timer = new HoodieTimer().startTimer();
+        HoodieTimer timer = HoodieTimer.start();
         HoodieFileReader fileReader = HoodieFileReaderFactory.getFileReader(configuration, filePath);
         Set<String> fileRowKeys = fileReader.filterRowKeys(new TreeSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);

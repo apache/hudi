@@ -53,8 +53,12 @@ public class HdfsTestService {
   private MiniDFSCluster miniDfsCluster;
 
   public HdfsTestService() throws IOException {
-    hadoopConf = new Configuration();
-    workDir = Files.createTempDirectory("temp").toAbsolutePath().toString();
+    this(new Configuration());
+  }
+
+  public HdfsTestService(Configuration hadoopConf) throws IOException {
+    this.hadoopConf = hadoopConf;
+    this.workDir = Files.createTempDirectory("temp").toAbsolutePath().toString();
   }
 
   public Configuration getHadoopConf() {
@@ -145,6 +149,7 @@ public class HdfsTestService {
     config.set("hadoop.proxyuser." + user + ".groups", "*");
     config.set("hadoop.proxyuser." + user + ".hosts", "*");
     config.setBoolean("dfs.permissions", false);
+    config.set("dfs.blocksize","16777216");
     return config;
   }
 

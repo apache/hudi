@@ -18,8 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
@@ -35,6 +33,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -122,7 +123,7 @@ public class MetadataCommand {
       HoodieCLI.fs.mkdirs(metadataPath);
     }
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     HoodieWriteConfig writeConfig = getWriteConfig();
     initJavaSparkContext(Option.of(master));
     SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc));
@@ -158,7 +159,7 @@ public class MetadataCommand {
       throw new RuntimeException("Metadata directory (" + metadataPath.toString() + ") does not exist.");
     }
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     if (!readOnly) {
       HoodieWriteConfig writeConfig = getWriteConfig();
       initJavaSparkContext(Option.of(master));
@@ -206,7 +207,7 @@ public class MetadataCommand {
       return "[ERROR] Metadata Table not enabled/initialized\n\n";
     }
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     List<String> partitions = metadata.getAllPartitionPaths();
     LOG.debug("Took " + timer.endTimer() + " ms");
 
@@ -239,7 +240,7 @@ public class MetadataCommand {
       partitionPath = new Path(HoodieCLI.basePath, partition);
     }
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     FileStatus[] statuses = metaReader.getAllFilesInPartition(partitionPath);
     LOG.debug("Took " + timer.endTimer() + " ms");
 
@@ -271,7 +272,7 @@ public class MetadataCommand {
     HoodieBackedTableMetadata fsMetaReader = new HoodieBackedTableMetadata(
         new HoodieLocalEngineContext(HoodieCLI.conf), fsConfig, HoodieCLI.basePath, "/tmp");
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     List<String> metadataPartitions = metadataReader.getAllPartitionPaths();
     LOG.debug("Listing partitions Took " + timer.endTimer() + " ms");
     List<String> fsPartitions = fsMetaReader.getAllPartitionPaths();

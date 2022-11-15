@@ -48,6 +48,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_OMIT_METADATA_FIELDS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
@@ -201,7 +202,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     boolean tableExists = syncClient.tableExists(tableName);
 
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = syncClient.getStorageSchema();
+    MessageType schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
+
 
     // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
     // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table

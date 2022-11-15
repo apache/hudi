@@ -56,12 +56,6 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
-        <!-- Httpcomponents -->
-        <dependency>
-            <groupId>org.apache.httpcomponents</groupId>
-            <artifactId>fluent-hc</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>io.javalin</groupId>
             <artifactId>javalin</artifactId>
@@ -162,11 +156,8 @@
                       -->
                       <include>org.apache.hudi:hudi-common</include>
                       <include>org.apache.hudi:hudi-timeline-service</include>
-                      <include>org.apache.httpcomponents:httpclient</include>
-                      <include>org.apache.httpcomponents:httpcore</include>
                       <include>org.mortbay.jetty:jetty</include>
                       <include>org.mortbay.jetty:jetty-util</include>
-                      <include>org.apache.httpcomponents:fluent-hc</include>
                       <include>io.javalin:javalin</include>
                       <include>org.jetbrains.kotlin:kotlin-stdlib-jdk8</include>
                       <include>org.jetbrains.kotlin:kotlin-stdlib</include>
@@ -189,8 +180,6 @@
                       <include>org.eclipse.jetty.websocket:websocket-servlet</include>
                       <include>com.beust:jcommander</include>
                       <include>org.rocksdb:rocksdbjni</include>
-                      <include>org.codehaus.jackson:jackson-core-asl</include>
-                      <include>org.codehaus.jackson:jackson-mapper-asl</include>
                       <include>com.fasterxml.jackson.core:jackson-annotations</include>
                       <include>com.fasterxml.jackson.core:jackson-core</include>
                       <include>com.fasterxml.jackson.core:jackson-databind</include>

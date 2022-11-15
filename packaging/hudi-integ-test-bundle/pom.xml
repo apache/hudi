@@ -161,12 +161,6 @@
                   <include>org.apache.thrift:libfb303</include>
                   <include>org.apache.thrift:libthrift</include>
 
-                  <include>org.apache.httpcomponents:httpclient</include>
-                  <include>org.apache.httpcomponents:httpcore</include>
-                  <include>org.apache.httpcomponents:fluent-hc</include>
-
-                  <include>org.codehaus.jackson:jackson-core-asl</include>
-                  <include>org.codehaus.jackson:jackson-mapper-asl</include>
                   <include>com.fasterxml.jackson.core:jackson-annotations</include>
                   <include>com.fasterxml.jackson.core:jackson-core</include>
                   <include>com.fasterxml.jackson.core:jackson-databind</include>
@@ -594,7 +588,7 @@
     <dependency>
       <groupId>commons-codec</groupId>
       <artifactId>commons-codec</artifactId>
-      <version>1.4</version>
+      <version>1.13</version>
     </dependency>
 
     <dependency>
@@ -607,11 +601,6 @@
       <groupId>commons-pool</groupId>
       <artifactId>commons-pool</artifactId>
       <version>1.4</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpcore</artifactId>
     </dependency>
 
     <dependency>
@@ -734,7 +723,7 @@
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
-      <version>0.9.3</version>
+      <version>0.14.0</version>
     </dependency>
 
     <!-- zookeeper -->

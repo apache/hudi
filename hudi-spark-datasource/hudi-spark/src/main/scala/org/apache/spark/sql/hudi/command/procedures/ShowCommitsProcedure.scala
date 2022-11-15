@@ -22,8 +22,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant}
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
@@ -41,6 +39,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("commit_time", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("total_bytes_written", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_files_added", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_files_updated", DataTypes.LongType, nullable = true, Metadata.empty),
@@ -135,7 +134,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      rows.add(Row(commit.getTimestamp, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
+      rows.add(Row(commit.getTimestamp, commit.getAction, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
         commitMetadata.fetchTotalFilesUpdated, commitMetadata.fetchTotalPartitionsWritten,
         commitMetadata.fetchTotalRecordsWritten, commitMetadata.fetchTotalUpdateRecordsWritten,
         commitMetadata.fetchTotalWriteErrors))

@@ -71,6 +71,7 @@
 
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>org.codehaus.jackson:*</include>
                   <include>org.apache.commons:commons-lang3</include>
                   <include>org.apache.hbase:hbase-common</include>
@@ -121,10 +122,6 @@
                 <relocation>
                   <pattern>org.apache.htrace.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.codehaus.jackson.</pattern>
-                  <shadedPattern>org.apache.hudi.org.codehaus.jackson.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>

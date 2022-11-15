@@ -57,7 +57,7 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }
 
-    val timer = new HoodieTimer().startTimer
+    val timer = HoodieTimer.start
     val partitions = metadata.getAllPartitionPaths
     Collections.sort(partitions)
     logDebug("Took " + timer.endTimer + " ms")

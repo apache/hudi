@@ -87,7 +87,6 @@ Refer to the table below for building with different Spark and Scala versions.
 |:--------------------------|:---------------------------------------------|:-------------------------------------------------|
 | (empty)                   | hudi-spark-bundle_2.11 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.11 (default options) |
 | `-Dspark2.4`              | hudi-spark2.4-bundle_2.11                    | For Spark 2.4.4 and Scala 2.11 (same as default) |
-| `-Dspark2.4 -Dscala-2.12` | hudi-spark2.4-bundle_2.12                    | For Spark 2.4.4 and Scala 2.12                   |
 | `-Dspark3.1 -Dscala-2.12` | hudi-spark3.1-bundle_2.12                    | For Spark 3.1.x and Scala 2.12                   |
 | `-Dspark3.2 -Dscala-2.12` | hudi-spark3.2-bundle_2.12                    | For Spark 3.2.x and Scala 2.12                   |
 | `-Dspark3.3 -Dscala-2.12` | hudi-spark3.3-bundle_2.12                    | For Spark 3.3.x and Scala 2.12                   |
@@ -102,8 +101,8 @@ mvn clean package -DskipTests -Dspark3.2 -Dscala-2.12
 # Build against Spark 3.1.x
 mvn clean package -DskipTests -Dspark3.1 -Dscala-2.12
 
-# Build against Spark 2.4.4 and Scala 2.12
-mvn clean package -DskipTests -Dspark2.4 -Dscala-2.12
+# Build against Spark 2.4.4 and Scala 2.11
+mvn clean package -DskipTests -Dspark2.4
 ```
 
 #### What about "spark-avro" module?

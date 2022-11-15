@@ -22,9 +22,11 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -33,6 +35,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
@@ -48,8 +53,16 @@ import java.io.Serializable;
 import java.util.HashMap;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
+import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
+import static org.apache.hudi.config.HoodieBootstrapConfig.KEYGEN_CLASS_NAME;
+import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
@@ -187,16 +200,44 @@ public class BootstrapExecutor implements Serializable {
             + ". Cannot bootstrap data on top of an existing table");
       }
     }
-    HoodieTableMetaClient.withPropertyBuilder()
+
+    HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(props)
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
-        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+        .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
+        .setPreCombineField(props.getString(
+            PRECOMBINE_FIELD_NAME.key(), PRECOMBINE_FIELD_NAME.defaultValue()))
+        .setPopulateMetaFields(props.getBoolean(
+            POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue()))
+        .setArchiveLogFolder(props.getString(
+            ARCHIVELOG_FOLDER.key(), ARCHIVELOG_FOLDER.defaultValue()))
         .setPayloadClassName(cfg.payloadClassName)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setBootstrapIndexClass(cfg.bootstrapIndexClass)
         .setBootstrapBasePath(bootstrapBasePath)
-        .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
+        .setHiveStylePartitioningEnable(props.getBoolean(
+            HIVE_STYLE_PARTITIONING_ENABLE.key(),
+            Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())
+        ))
+        .setUrlEncodePartitioning(props.getBoolean(
+            URL_ENCODE_PARTITIONING.key(),
+            Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
+        .setCommitTimezone(HoodieTimelineTimeZone.valueOf(
+            props.getString(
+                TIMELINE_TIMEZONE.key(),
+                String.valueOf(TIMELINE_TIMEZONE.defaultValue()))))
+        .setPartitionMetafileUseBaseFormat(props.getBoolean(
+            PARTITION_METAFILE_USE_BASE_FORMAT.key(),
+            PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()));
+    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
+    if (!StringUtils.isNullOrEmpty(partitionColumns)) {
+      builder.setPartitionFields(partitionColumns).setKeyGeneratorClassProp(props.getString(KEYGEN_CLASS_NAME.key(), SimpleKeyGenerator.class.getName()));
+    } else {
+      builder.setKeyGeneratorClassProp(props.getString(KEYGEN_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName()));
+    }
+
+    builder.initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
   }
 
   public HoodieWriteConfig getBootstrapConfig() {
