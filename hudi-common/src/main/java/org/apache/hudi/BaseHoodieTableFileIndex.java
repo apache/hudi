@@ -53,7 +53,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.hadoop.CachingPath.createPathUnsafe;
+import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 
 /**
  * Common (engine-agnostic) File Index implementation enabling individual query engines to

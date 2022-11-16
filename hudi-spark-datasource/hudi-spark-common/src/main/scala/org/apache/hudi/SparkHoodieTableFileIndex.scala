@@ -29,7 +29,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.hadoop.CachingPath
-import org.apache.hudi.hadoop.CachingPath.createPathUnsafe
+import org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
@@ -377,7 +377,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
             }
         }.mkString("/")
 
-        val pathWithPartitionName = new CachingPath(getBasePath, createPathUnsafe(partitionWithName))
+        val pathWithPartitionName = new CachingPath(getBasePath, createRelativePathUnsafe(partitionWithName))
         val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema)
 
