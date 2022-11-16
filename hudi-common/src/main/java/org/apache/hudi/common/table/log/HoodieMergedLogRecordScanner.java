@@ -54,7 +54,6 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Scans through all the blocks in a list of HoodieLogFile and builds up a compacted/merged list of records which will
@@ -160,12 +159,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   @Override
   public Iterator<HoodieRecord> iterator() {
-    checkState(forceFullScan, "Record reader has to be in full-scan mode to use this API");
     return records.iterator();
   }
 
   public Map<String, HoodieRecord> getRecords() {
-    checkState(forceFullScan, "Record reader has to be in full-scan mode to use this API");
+    // TODO make immutable (to be thread-safe)
     return Collections.unmodifiableMap(records);
   }
 
