@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -58,7 +59,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
   @SuppressWarnings("unchecked")
   public List<HoodieRecord<HoodieMetadataPayload>> getRecords() {
-    // TODO remove locking
+    // TODO remove useless locking (need to address getRecords thread-safety)
     synchronized (this) {
       logRecordScanner.scan();
       return logRecordScanner.getRecords().values()
@@ -70,27 +71,32 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
   @SuppressWarnings("unchecked")
   public List<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes) {
-    // Following operations have to be atomic, otherwise concurrent
-    // readers would race with each other and could crash when
-    // processing log block records as part of scan.
-    // TODO remove locking
+    if (keyPrefixes.isEmpty()) {
+      return Collections.emptyList();
+    }
+
+    // TODO add caching for queried prefixes
+    // TODO remove useless locking (need to address getRecords thread-safety)
     synchronized (this) {
       logRecordScanner.scanByKeyPrefixes(keyPrefixes);
       Map<String, HoodieRecord<? extends HoodieRecordPayload>> allRecords = logRecordScanner.getRecords();
+
+      Predicate<String> p = createPrefixMatchingPredicate(keyPrefixes);
       return allRecords.entrySet()
           .stream()
-          .filter(r -> r == null || keyPrefixes.stream().noneMatch(r.getKey()::startsWith))
-          .map(r -> (HoodieRecord<HoodieMetadataPayload>) r)
+          .filter(r -> r != null && p.test(r.getKey()))
+          .map(r -> (HoodieRecord<HoodieMetadataPayload>) r.getValue())
           .collect(Collectors.toList());
     }
   }
 
   @SuppressWarnings("unchecked")
   public List<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys) {
-    // Following operations have to be atomic, otherwise concurrent
-    // readers would race with each other and could crash when
-    // processing log block records as part of scan.
-    // TODO remove locking
+    if (keys.isEmpty()) {
+      return Collections.emptyList();
+    }
+
+    // TODO remove useless locking (need to address getRecords thread-safety)
     synchronized (this) {
       logRecordScanner.scanByFullKeys(keys);
       Map<String, HoodieRecord<? extends HoodieRecordPayload>> allRecords = logRecordScanner.getRecords();
@@ -109,6 +115,15 @@ public class HoodieMetadataLogRecordReader implements Closeable {
   @Override
   public void close() throws IOException {
     logRecordScanner.close();
+  }
+
+  private static Predicate<String> createPrefixMatchingPredicate(List<String> keyPrefixes) {
+    if (keyPrefixes.size() == 1) {
+      String keyPrefix = keyPrefixes.get(0);
+      return key -> key.startsWith(keyPrefix);
+    }
+
+    return key -> keyPrefixes.stream().anyMatch(key::startsWith);
   }
 
   /**
