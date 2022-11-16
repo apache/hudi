@@ -73,6 +73,7 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.COMMAND_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Implements logic to scan log blocks and expose valid and deleted log records to subclass implementation. Subclass is
@@ -98,15 +99,13 @@ public abstract class AbstractHoodieLogRecordReader {
   protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
-  private final String keyField;
+  private final String recordKeyField;
+  private final String partitionPathField;
   // Pre-combining field
   protected final String preCombineField;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
   private final TypedProperties payloadProps;
-  // TODO we should remove assumption that virtual keys entail using SimpleKeyGen
-  // simple key gen fields
-  private Option<Pair<String, String>> simpleKeyGenFields = Option.empty();
   // Log File Paths
   protected final List<String> logFilePaths;
   // Read Lazily flag
@@ -125,7 +124,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
   // Internal schema, used to support full schema evolution.
-  private InternalSchema internalSchema;
+  private final InternalSchema internalSchema;
   // Hoodie table path.
   private final String path;
   // Total log blocks read - for metrics
@@ -144,15 +143,15 @@ public abstract class AbstractHoodieLogRecordReader {
   // Progress
   private float progress = 0.0f;
   // Partition name
-  private Option<String> partitionName;
+  private final Option<String> partitionName;
   // Populate meta fields for the records
-  private boolean populateMetaFields = true;
+  private final boolean populateMetaFields;
   // Record type read from log block
   protected final HoodieRecordType recordType;
   // Collect all the block instants after scanning all the log files.
-  private List<String> validBlockInstants = new ArrayList<>();
+  private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
-  private boolean useScanV2;
+  private final boolean useScanV2;
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema,
@@ -198,24 +197,25 @@ public abstract class AbstractHoodieLogRecordReader {
     this.path = basePath;
     this.useScanV2 = useScanV2;
 
-    // Key fields when populate meta fields is disabled (that is, virtual keys enabled)
     if (keyFieldOverride.isPresent()) {
-      this.keyField = keyFieldOverride.get();
+      // TODO elaborate
+      checkState(partitionName.isPresent());
+
+      this.populateMetaFields = false;
+      this.recordKeyField = keyFieldOverride.get();
+      this.partitionPathField = "";
     } else if (tableConfig.populateMetaFields()) {
-      this.keyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
+      this.populateMetaFields = true;
+      this.recordKeyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
+      this.partitionPathField = HoodieRecord.PARTITION_PATH_METADATA_FIELD;
     } else {
       this.populateMetaFields = false;
-      this.keyField = tableConfig.getRecordKeyFieldProp();
-      this.simpleKeyGenFields = Option.of(
-          Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
+      this.recordKeyField = tableConfig.getRecordKeyFieldProp();
+      this.partitionPathField = tableConfig.getPartitionFieldProp();
     }
 
     this.partitionName = partitionName;
     this.recordType = recordMerger.getRecordType();
-  }
-
-  protected String getKeyField() {
-    return keyField;
   }
 
   // TODO java-doc
@@ -244,15 +244,11 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
-      // Get the key field based on populate meta fields config
-      // and the table type
-      final String keyField = getKeyField();
-
       // Iterate over the paths
       boolean enableRecordLookups = !forceFullScan;
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, enableRecordLookups, keyField, internalSchema);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, enableRecordLookups, recordKeyField, internalSchema);
 
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
@@ -410,16 +406,11 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
-
-      // Get the key field based on populate meta fields config
-      // and the table type
-      final String keyField = getKeyField();
-
       boolean enableRecordLookups = !forceFullScan;
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, enableRecordLookups, keyField, internalSchema);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, enableRecordLookups, recordKeyField, internalSchema);
 
       /**
        * Scanning log blocks and placing the compacted blocks at the right place require two traversals.
@@ -638,22 +629,22 @@ public abstract class AbstractHoodieLogRecordReader {
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
     try (ClosableIteratorWithSchema<HoodieRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt)) {
+      Option<Pair<String, String>> recordKeyPartitionPathFieldPair = populateMetaFields
+          ? Option.empty()
+          : Option.of(Pair.of(recordKeyField, partitionPathField));
+
       while (recordIterator.hasNext()) {
         HoodieRecord completedRecord = recordIterator.next()
             .wrapIntoHoodieRecordPayloadWithParams(recordIterator.getSchema(),
                 hoodieTableMetaClient.getTableConfig().getProps(),
-                this.simpleKeyGenFields,
+                recordKeyPartitionPathFieldPair,
                 this.withOperationField,
                 this.partitionName,
-                getPopulateMetaFields());
+                populateMetaFields);
         processNextRecord(completedRecord);
         totalLogRecords.incrementAndGet();
       }
     }
-  }
-
-  protected boolean getPopulateMetaFields() {
-    return this.populateMetaFields;
   }
 
   /**
