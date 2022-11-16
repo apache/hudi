@@ -28,6 +28,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -555,8 +556,8 @@ public class HoodieCatalog extends AbstractCatalog {
   private HoodieFlinkWriteClient<?> createWriteClient(
       Map<String, String> options,
       String tablePathStr,
-      ObjectPath tablePath) throws IOException {
-    return StreamerUtil.createWriteClient(
+      ObjectPath tablePath) {
+    return FlinkWriteClients.createWriteClientV2(
         Configuration.fromMap(options)
             .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
             .set(FlinkOptions.SOURCE_AVRO_SCHEMA,

@@ -47,7 +47,7 @@ import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -144,8 +144,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     super.open();
 
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
-    this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
+    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.table = writeClient.getHoodieTable();
 
     this.schema = AvroSchemaConverter.convertToSchema(rowType);

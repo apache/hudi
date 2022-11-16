@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategies;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
@@ -187,7 +188,7 @@ public class HoodieFlinkCompactor {
       // infer changelog mode
       CompactionUtil.inferChangelogMode(conf, metaClient);
 
-      this.writeClient = StreamerUtil.createWriteClient(conf);
+      this.writeClient = FlinkWriteClients.createWriteClientV2(conf);
       this.writeConfig = writeClient.getConfig();
       this.table = writeClient.getHoodieTable();
     }

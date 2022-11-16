@@ -39,6 +39,7 @@ import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -179,7 +180,7 @@ public class StreamWriteOperatorCoordinator
     this.metaClient = initTableIfNotExists(this.conf);
     this.ckpMetadata = initCkpMetadata(this.metaClient);
     // the write client must create after the table creation
-    this.writeClient = StreamerUtil.createWriteClient(conf);
+    this.writeClient = FlinkWriteClients.createWriteClient(conf);
     initMetadataTable(this.writeClient);
     this.tableState = TableState.create(conf);
     // start the executor

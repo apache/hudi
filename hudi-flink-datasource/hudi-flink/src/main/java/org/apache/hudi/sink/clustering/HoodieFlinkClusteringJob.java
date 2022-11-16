@@ -35,6 +35,7 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
@@ -198,7 +199,7 @@ public class HoodieFlinkClusteringJob {
       // set table schema
       CompactionUtil.setAvroSchema(conf, metaClient);
 
-      this.writeClient = StreamerUtil.createWriteClient(conf);
+      this.writeClient = FlinkWriteClients.createWriteClientV2(conf);
       this.writeConfig = writeClient.getConfig();
       this.table = writeClient.getHoodieTable();
     }
