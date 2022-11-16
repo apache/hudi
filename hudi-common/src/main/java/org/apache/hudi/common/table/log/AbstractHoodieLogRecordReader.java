@@ -99,8 +99,11 @@ public abstract class AbstractHoodieLogRecordReader {
   protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
+  // Record's key/partition-path fields
   private final String recordKeyField;
-  private final String partitionPathField;
+  private final Option<String> partitionPathFieldOpt;
+  // Partition name override
+  private final Option<String> partitionNameOverrideOpt;
   // Pre-combining field
   protected final String preCombineField;
   // Stateless component for merging records
@@ -142,8 +145,6 @@ public abstract class AbstractHoodieLogRecordReader {
   private int totalScannedLogFiles;
   // Progress
   private float progress = 0.0f;
-  // Partition name
-  private final Option<String> partitionName;
   // Populate meta fields for the records
   private final boolean populateMetaFields;
   // Record type read from log block
@@ -166,7 +167,7 @@ public abstract class AbstractHoodieLogRecordReader {
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField, boolean forceFullScan,
-                                          Option<String> partitionName,
+                                          Option<String> partitionNameOverride,
                                           InternalSchema internalSchema,
                                           Option<String> keyFieldOverride,
                                           boolean useScanV2, HoodieRecordMerger recordMerger) {
@@ -199,22 +200,22 @@ public abstract class AbstractHoodieLogRecordReader {
 
     if (keyFieldOverride.isPresent()) {
       // TODO elaborate
-      checkState(partitionName.isPresent());
+      checkState(partitionNameOverride.isPresent());
 
       this.populateMetaFields = false;
       this.recordKeyField = keyFieldOverride.get();
-      this.partitionPathField = "";
+      this.partitionPathFieldOpt = Option.empty();
     } else if (tableConfig.populateMetaFields()) {
       this.populateMetaFields = true;
       this.recordKeyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
-      this.partitionPathField = HoodieRecord.PARTITION_PATH_METADATA_FIELD;
+      this.partitionPathFieldOpt = Option.of(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
     } else {
       this.populateMetaFields = false;
       this.recordKeyField = tableConfig.getRecordKeyFieldProp();
-      this.partitionPathField = tableConfig.getPartitionFieldProp();
+      this.partitionPathFieldOpt = Option.of(tableConfig.getPartitionFieldProp());
     }
 
-    this.partitionName = partitionName;
+    this.partitionNameOverrideOpt = partitionNameOverride;
     this.recordType = recordMerger.getRecordType();
   }
 
@@ -628,18 +629,21 @@ public abstract class AbstractHoodieLogRecordReader {
    * handle it.
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
-    try (ClosableIteratorWithSchema<HoodieRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt)) {
-      Option<Pair<String, String>> recordKeyPartitionPathFieldPair = populateMetaFields
-          ? Option.empty()
-          : Option.of(Pair.of(recordKeyField, partitionPathField));
+    checkState(partitionNameOverrideOpt.isPresent() || partitionPathFieldOpt.isPresent(),
+        "Either partition-name override or partition-path field had to be present");
 
+    Option<Pair<String, String>> recordKeyPartitionPathFieldPair = populateMetaFields
+        ? Option.empty()
+        : Option.of(Pair.of(recordKeyField, partitionPathFieldOpt.orElse(null)));
+
+    try (ClosableIteratorWithSchema<HoodieRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt)) {
       while (recordIterator.hasNext()) {
         HoodieRecord completedRecord = recordIterator.next()
             .wrapIntoHoodieRecordPayloadWithParams(recordIterator.getSchema(),
                 hoodieTableMetaClient.getTableConfig().getProps(),
                 recordKeyPartitionPathFieldPair,
                 this.withOperationField,
-                this.partitionName,
+                this.partitionNameOverrideOpt,
                 populateMetaFields);
         processNextRecord(completedRecord);
         totalLogRecords.incrementAndGet();
@@ -713,8 +717,8 @@ public abstract class AbstractHoodieLogRecordReader {
     return payloadClassFQN;
   }
 
-  public Option<String> getPartitionName() {
-    return partitionName;
+  public Option<String> getPartitionNameOverride() {
+    return partitionNameOverrideOpt;
   }
 
   public long getTotalRollbacks() {
