@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Functions.Function0;
 import org.apache.hudi.common.util.Functions.Function2;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -266,22 +267,22 @@ public class FileSystemViewManager {
         return new FileSystemViewManager(context, config, (metaClient, viewConfig) -> {
           RemoteHoodieTableFileSystemView remoteFileSystemView =
               createRemoteFileSystemView(conf, viewConfig, metaClient);
-          SyncableFileSystemView secondaryView;
+          Function0<SyncableFileSystemView> secondaryViewFunc;
           switch (viewConfig.getSecondaryStorageType()) {
             case MEMORY:
-              secondaryView = createInMemoryFileSystemView(metadataConfig, viewConfig, metaClient, metadataSupplier);
+              secondaryViewFunc = () -> createInMemoryFileSystemView(metadataConfig, viewConfig, metaClient, metadataSupplier);
               break;
             case EMBEDDED_KV_STORE:
-              secondaryView = createRocksDBBasedFileSystemView(conf, viewConfig, metaClient);
+              secondaryViewFunc = () -> createRocksDBBasedFileSystemView(conf, viewConfig, metaClient);
               break;
             case SPILLABLE_DISK:
-              secondaryView = createSpillableMapBasedFileSystemView(conf, viewConfig, metaClient, commonConfig);
+              secondaryViewFunc = () -> createSpillableMapBasedFileSystemView(conf, viewConfig, metaClient, commonConfig);
               break;
             default:
               throw new IllegalArgumentException("Secondary Storage type can only be in-memory or spillable. Was :"
                   + viewConfig.getSecondaryStorageType());
           }
-          return new PriorityBasedFileSystemView(remoteFileSystemView, secondaryView);
+          return new PriorityBasedFileSystemView(remoteFileSystemView, secondaryViewFunc);
         });
       default:
         throw new IllegalArgumentException("Unknown file system view type :" + config.getStorageType());

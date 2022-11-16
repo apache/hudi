@@ -50,12 +50,13 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private static final Logger LOG = LogManager.getLogger(PriorityBasedFileSystemView.class);
 
   private final SyncableFileSystemView preferredView;
-  private final SyncableFileSystemView secondaryView;
+  private final Function0<SyncableFileSystemView> secondaryViewFunc;
+  private SyncableFileSystemView secondaryView;
   private boolean errorOnPreferredView;
 
-  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SyncableFileSystemView secondaryView) {
+  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, Function0<SyncableFileSystemView> secondaryViewFunc) {
     this.preferredView = preferredView;
-    this.secondaryView = secondaryView;
+    this.secondaryViewFunc = secondaryViewFunc;
     this.errorOnPreferredView = false;
   }
 
@@ -131,142 +132,145 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   @Override
   public Stream<HoodieBaseFile> getLatestBaseFiles(String partitionPath) {
-    return execute(partitionPath, preferredView::getLatestBaseFiles, secondaryView::getLatestBaseFiles);
+    return execute(partitionPath, preferredView::getLatestBaseFiles, val -> getSecondaryView().getLatestBaseFiles(val));
   }
 
   @Override
   public Stream<HoodieBaseFile> getLatestBaseFiles() {
-    return execute(preferredView::getLatestBaseFiles, secondaryView::getLatestBaseFiles);
+    return execute(preferredView::getLatestBaseFiles, () -> getSecondaryView().getLatestBaseFiles());
   }
 
   @Override
   public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
-    return execute(partitionPath, maxCommitTime, preferredView::getLatestBaseFilesBeforeOrOn,
-        secondaryView::getLatestBaseFilesBeforeOrOn);
+    return execute(partitionPath, maxCommitTime, preferredView::getLatestBaseFilesBeforeOrOn, (val, val2) -> getSecondaryView().getLatestBaseFilesBeforeOrOn(val, val2));
   }
 
   @Override
   public Option<HoodieBaseFile> getLatestBaseFile(String partitionPath, String fileId) {
-    return execute(partitionPath, fileId, preferredView::getLatestBaseFile, secondaryView::getLatestBaseFile);
+    return execute(partitionPath, fileId, preferredView::getLatestBaseFile, (val, val2) -> getSecondaryView().getLatestBaseFile(val, val2));
   }
 
   @Override
   public Option<HoodieBaseFile> getBaseFileOn(String partitionPath, String instantTime, String fileId) {
-    return execute(partitionPath, instantTime, fileId, preferredView::getBaseFileOn, secondaryView::getBaseFileOn);
+    return execute(partitionPath, instantTime, fileId, preferredView::getBaseFileOn, (val, val2, val3) -> getSecondaryView().getBaseFileOn(val, val2, val3));
   }
 
   @Override
   public Stream<HoodieBaseFile> getLatestBaseFilesInRange(List<String> commitsToReturn) {
-    return execute(commitsToReturn, preferredView::getLatestBaseFilesInRange, secondaryView::getLatestBaseFilesInRange);
+    return execute(commitsToReturn, preferredView::getLatestBaseFilesInRange, val -> getSecondaryView().getLatestBaseFilesInRange(val));
   }
 
   @Override
   public Stream<HoodieBaseFile> getAllBaseFiles(String partitionPath) {
-    return execute(partitionPath, preferredView::getAllBaseFiles, secondaryView::getAllBaseFiles);
+    return execute(partitionPath, preferredView::getAllBaseFiles, val -> getSecondaryView().getAllBaseFiles(val));
   }
 
   @Override
   public Stream<FileSlice> getLatestFileSlices(String partitionPath) {
-    return execute(partitionPath, preferredView::getLatestFileSlices, secondaryView::getLatestFileSlices);
+    return execute(partitionPath, preferredView::getLatestFileSlices, val -> getSecondaryView().getLatestFileSlices(val));
   }
 
   @Override
   public Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionPath) {
-    return execute(partitionPath, preferredView::getLatestUnCompactedFileSlices,
-        secondaryView::getLatestUnCompactedFileSlices);
+    return execute(partitionPath, preferredView::getLatestUnCompactedFileSlices, val -> getSecondaryView().getLatestUnCompactedFileSlices(val));
   }
 
   @Override
   public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
       boolean includeFileSlicesInPendingCompaction) {
     return execute(partitionPath, maxCommitTime, includeFileSlicesInPendingCompaction,
-        preferredView::getLatestFileSlicesBeforeOrOn, secondaryView::getLatestFileSlicesBeforeOrOn);
+        preferredView::getLatestFileSlicesBeforeOrOn, (val, val2, val3) -> getSecondaryView().getLatestFileSlicesBeforeOrOn(val, val2, val3));
   }
 
   @Override
   public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime) {
-    return execute(partitionPath, maxInstantTime, preferredView::getLatestMergedFileSlicesBeforeOrOn,
-        secondaryView::getLatestMergedFileSlicesBeforeOrOn);
+    return execute(partitionPath, maxInstantTime, preferredView::getLatestMergedFileSlicesBeforeOrOn, (val, val2) -> getSecondaryView().getLatestMergedFileSlicesBeforeOrOn(val, val2));
   }
 
   @Override
   public Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
-    return execute(commitsToReturn, preferredView::getLatestFileSliceInRange, secondaryView::getLatestFileSliceInRange);
+    return execute(commitsToReturn, preferredView::getLatestFileSliceInRange, val -> getSecondaryView().getLatestFileSliceInRange(val));
   }
 
   @Override
   public Stream<FileSlice> getAllFileSlices(String partitionPath) {
-    return execute(partitionPath, preferredView::getAllFileSlices, secondaryView::getAllFileSlices);
+    return execute(partitionPath, preferredView::getAllFileSlices, val -> getSecondaryView().getAllFileSlices(val));
   }
 
   @Override
   public Stream<HoodieFileGroup> getAllFileGroups(String partitionPath) {
-    return execute(partitionPath, preferredView::getAllFileGroups, secondaryView::getAllFileGroups);
+    return execute(partitionPath, preferredView::getAllFileGroups, val -> getSecondaryView().getAllFileGroups(val));
   }
 
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBeforeOrOn(String maxCommitTime, String partitionPath) {
-    return execute(maxCommitTime, partitionPath, preferredView::getReplacedFileGroupsBeforeOrOn, secondaryView::getReplacedFileGroupsBeforeOrOn);
+    return execute(maxCommitTime, partitionPath, preferredView::getReplacedFileGroupsBeforeOrOn, (val, val2) -> getSecondaryView().getReplacedFileGroupsBeforeOrOn(val, val2));
   }
 
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath) {
-    return execute(maxCommitTime, partitionPath, preferredView::getReplacedFileGroupsBefore, secondaryView::getReplacedFileGroupsBefore);
+    return execute(maxCommitTime, partitionPath, preferredView::getReplacedFileGroupsBefore, (val, val2) -> getSecondaryView().getReplacedFileGroupsBefore(val, val2));
   }
 
   @Override
   public Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath) {
-    return execute(partitionPath, preferredView::getAllReplacedFileGroups, secondaryView::getAllReplacedFileGroups);
+    return execute(partitionPath, preferredView::getAllReplacedFileGroups, val -> getSecondaryView().getAllReplacedFileGroups(val));
   }
 
   @Override
   public Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations() {
-    return execute(preferredView::getPendingCompactionOperations, secondaryView::getPendingCompactionOperations);
+    return execute(preferredView::getPendingCompactionOperations, () -> getSecondaryView().getPendingCompactionOperations());
   }
 
   @Override
   public Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations() {
-    return execute(preferredView::getPendingLogCompactionOperations, secondaryView::getPendingLogCompactionOperations);
+    return execute(preferredView::getPendingLogCompactionOperations, () -> getSecondaryView().getPendingLogCompactionOperations());
   }
 
   @Override
   public Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering() {
-    return execute(preferredView::getFileGroupsInPendingClustering, secondaryView::getFileGroupsInPendingClustering);
+    return execute(preferredView::getFileGroupsInPendingClustering, () -> getSecondaryView().getFileGroupsInPendingClustering());
   }
 
   @Override
   public void close() {
     preferredView.close();
-    secondaryView.close();
+    if (secondaryView != null) {
+      secondaryView.close();
+    }
   }
 
   @Override
   public void reset() {
     preferredView.reset();
-    secondaryView.reset();
+    if (secondaryView != null) {
+      secondaryView.reset();
+    }
     errorOnPreferredView = false;
   }
 
   @Override
   public Option<HoodieInstant> getLastInstant() {
-    return execute(preferredView::getLastInstant, secondaryView::getLastInstant);
+    return execute(preferredView::getLastInstant, () -> getSecondaryView().getLastInstant());
   }
 
   @Override
   public HoodieTimeline getTimeline() {
-    return execute(preferredView::getTimeline, secondaryView::getTimeline);
+    return execute(preferredView::getTimeline, () -> getSecondaryView().getTimeline());
   }
 
   @Override
   public void sync() {
     preferredView.sync();
-    secondaryView.sync();
+    if (secondaryView != null) {
+      secondaryView.sync();
+    }
     errorOnPreferredView = false;
   }
 
   @Override
   public Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId) {
-    return execute(partitionPath, fileId, preferredView::getLatestFileSlice, secondaryView::getLatestFileSlice);
+    return execute(partitionPath, fileId, preferredView::getLatestFileSlice, (val, val2) -> getSecondaryView().getLatestFileSlice(val, val2));
   }
 
   public SyncableFileSystemView getPreferredView() {
@@ -274,6 +278,13 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   public SyncableFileSystemView getSecondaryView() {
+    if (secondaryView == null) {
+      synchronized (this) {
+        if (secondaryView == null) {
+          secondaryView = secondaryViewFunc.apply();
+        }
+      }
+    }
     return secondaryView;
   }
 }

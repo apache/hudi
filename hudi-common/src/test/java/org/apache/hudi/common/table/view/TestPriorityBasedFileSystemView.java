@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.http.client.HttpResponseException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
@@ -44,6 +45,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -75,7 +77,7 @@ public class TestPriorityBasedFileSystemView {
 
   @BeforeEach
   public void setUp() {
-    fsView = new PriorityBasedFileSystemView(primary, secondary);
+    fsView = new PriorityBasedFileSystemView(primary, () -> secondary);
     testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
     testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
         "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
@@ -593,6 +595,7 @@ public class TestPriorityBasedFileSystemView {
 
   @Test
   public void testClose() {
+    fsView.getSecondaryView();
     fsView.close();
     verify(primary, times(1)).close();
     verify(secondary, times(1)).close();
@@ -600,6 +603,7 @@ public class TestPriorityBasedFileSystemView {
 
   @Test
   public void testReset() {
+    fsView.getSecondaryView();
     fsView.reset();
     verify(primary, times(1)).reset();
     verify(secondary, times(1)).reset();
@@ -661,6 +665,7 @@ public class TestPriorityBasedFileSystemView {
 
   @Test
   public void testSync() {
+    fsView.getSecondaryView();
     fsView.sync();
     verify(primary, times(1)).sync();
     verify(secondary, times(1)).sync();
@@ -703,6 +708,24 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testGetSecondaryView() {
     assertEquals(secondary, fsView.getSecondaryView());
+  }
+
+  @Test
+  public void testSecondaryViewLazyInit() {
+    assertEquals(null, getSecondaryViewDirectly(fsView));
+    // invoke secondary view
+    fsView.getSecondaryView();
+    assertEquals(secondary, getSecondaryViewDirectly(fsView));
+  }
+
+  private SyncableFileSystemView getSecondaryViewDirectly(PriorityBasedFileSystemView fsView) {
+    try {
+      Field secondaryViewField = PriorityBasedFileSystemView.class.getDeclaredField("secondaryView");
+      secondaryViewField.setAccessible(true);
+      return (SyncableFileSystemView) secondaryViewField.get(fsView);
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
   }
 
   class TestLogAppender extends AbstractAppender {
