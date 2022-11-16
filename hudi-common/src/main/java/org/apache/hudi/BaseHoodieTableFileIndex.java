@@ -33,8 +33,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.CachingPath;
@@ -50,9 +52,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CollectionUtils.combine;
 import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 
 /**
@@ -225,13 +229,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private Map<PartitionPath, List<FileSlice>> loadFileSlicesForPartitions(List<PartitionPath> partitions) {
-    Map<PartitionPath, FileStatus[]> partitionFiles = partitions.stream()
-        .collect(Collectors.toMap(p -> p, this::loadPartitionPathFiles));
+    FileStatus[] allFiles = listPartitionPathFiles(partitions);
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
 
-    FileStatus[] allFiles = partitionFiles.values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
-    HoodieTableFileSystemView fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
+    HoodieTableFileSystemView fileSystemView =
+        new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
 
     Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
 
@@ -243,17 +246,16 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
     // API.  Note that for COW table, the merging logic of two slices does not happen as there
     // is no compaction, thus there is no performance impact.
-    return partitionFiles.keySet().stream()
-        .collect(Collectors.toMap(
-                Function.identity(),
-                partitionPath ->
-                    queryInstant.map(instant ->
-                            fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
-                        )
-                        .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
-                        .collect(Collectors.toList())
-            )
-        );
+    return partitions.stream().collect(
+        Collectors.toMap(
+            Function.identity(),
+            partitionPath ->
+                queryInstant.map(instant ->
+                        fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+                    )
+                    .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
+                    .collect(Collectors.toList())
+        ));
   }
 
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
@@ -307,22 +309,47 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   /**
    * Load partition paths and it's files under the query table path.
    */
-  private FileStatus[] loadPartitionPathFiles(PartitionPath partition) {
-    // Try fetch from the FileStatusCache first
-    Option<FileStatus[]> files = fileStatusCache.get(partition.fullPartitionPath(basePath));
-    if (files.isPresent()) {
-      return files.get();
-    }
+  private FileStatus[] listPartitionPathFiles(List<PartitionPath> partitions) {
+    List<Path> partitionPaths = partitions.stream()
+        // NOTE: We're using [[createPathUnsafe]] to create Hadoop's [[Path]] objects
+        //       instances more efficiently, provided that
+        //          - We're using already normalized relative paths
+        //          - Its scope limited to [[FileStatusCache]]
+        .map(partition -> createRelativePathUnsafe(partition.path))
+        .collect(Collectors.toList());
+
+    // Lookup in cache first
+    Map<Path, FileStatus[]> cachedPartitionPaths =
+        partitionPaths.parallelStream()
+            .map(partitionPath -> Pair.of(partitionPath, fileStatusCache.get(partitionPath)))
+            .filter(partitionPathFilesPair -> partitionPathFilesPair.getRight().isPresent())
+            .collect(Collectors.toMap(Pair::getKey, p -> p.getRight().get()));
+
+    Set<Path> missingPartitionPaths =
+        CollectionUtils.diff(partitionPaths, cachedPartitionPaths.keySet());
+
+    // NOTE: We're constructing a mapping of absolute form of the partition-path into
+    //       its relative one, such that we don't need to reconstruct these again later on
+    Map<String, Path> missingPartitionPathsMap = missingPartitionPaths.stream()
+        .collect(Collectors.toMap(
+            relativePartitionPath -> new CachingPath(basePath, relativePartitionPath).toString(),
+            Function.identity()
+        ));
 
     try {
-      Path path = partition.fullPartitionPath(basePath);
-      FileStatus[] fetchedFiles = tableMetadata.getAllFilesInPartition(path);
+      Map<String, FileStatus[]> fetchedPartitionsMap =
+          tableMetadata.getAllFilesInPartitions(missingPartitionPathsMap.keySet());
 
-      // Update the fileStatusCache
-      fileStatusCache.put(partition.fullPartitionPath(basePath), fetchedFiles);
-      return fetchedFiles;
+      // Ingest newly fetched partitions into cache
+      fetchedPartitionsMap.forEach((absolutePath, files) -> {
+        Path relativePath = missingPartitionPathsMap.get(absolutePath);
+        fileStatusCache.put(relativePath, files);
+      });
+
+      return combine(flatMap(cachedPartitionPaths.values()),
+          flatMap(fetchedPartitionsMap.values()));
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to list partition path (" + partition + ") for a table", e);
+      throw new HoodieIOException("Failed to list partition paths", e);
     }
   }
 
@@ -411,8 +438,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       Path basePath
   ) {
     HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
     return newTableMetadata;
+  }
+
+  private static FileStatus[] flatMap(Collection<FileStatus[]> arrays) {
+    return arrays.stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
   }
 
   public static final class PartitionPath {
@@ -427,16 +458,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     public String getPath() {
       return path;
-    }
-
-    Path fullPartitionPath(Path basePath) {
-      if (!path.isEmpty()) {
-        // NOTE: Since we now that the path is a proper relative path that doesn't require
-        //       normalization we create Hadoop's Path using more performant unsafe variant
-        return new CachingPath(basePath, createPathUnsafe(path));
-      }
-
-      return basePath;
     }
 
     @Override

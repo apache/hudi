@@ -34,6 +34,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -147,8 +148,10 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   /**
    * Fetch all files for given partition paths.
+   *
+   * NOTE: Absolute partition paths are expected here
    */
-  Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
+  Map<String, FileStatus[]> getAllFilesInPartitions(Collection<String> partitionPaths) throws IOException;
 
   /**
    * Get the bloom filter for the FileID from the metadata table.
