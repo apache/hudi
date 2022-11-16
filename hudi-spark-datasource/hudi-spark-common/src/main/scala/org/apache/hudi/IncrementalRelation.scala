@@ -176,8 +176,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
           (regularFileIdToFullPath.values, metaBootstrapFileIdToFullPath.values)
         }
       }
-      // unset the path filter, otherwise if end_instant_time is not the latest instant, path filter set for RO view
-      // will filter out all the files incorrectly.
       // pass internalSchema to hadoopConf, so it can be used in executors.
       val validCommits = metaClient
         .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
@@ -188,7 +186,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
         case HoodieFileFormat.PARQUET => HoodieParquetFileFormat.FILE_FORMAT_ID
         case HoodieFileFormat.ORC => "orc"
       }
-      sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")
 
       // Fallback to full table scan if any of the following conditions matches:
       //   1. the start commit is archived
@@ -240,12 +237,16 @@ class IncrementalRelation(val sqlContext: SQLContext,
                 .format("hudi_v1")
                 .schema(usedSchema)
                 .option(DataSourceReadOptions.READ_PATHS.key, filteredMetaBootstrapFullPaths.mkString(","))
+                // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
+                .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
                 .load()
             }
 
             if (regularFileIdToFullPath.nonEmpty) {
               df = df.union(sqlContext.read.options(sOpts)
                 .schema(usedSchema).format(formatClassName)
+                // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
+                .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
                 .load(filteredRegularFullPaths.toList: _*)
                 .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
                   commitsToReturn.head.getTimestamp))
