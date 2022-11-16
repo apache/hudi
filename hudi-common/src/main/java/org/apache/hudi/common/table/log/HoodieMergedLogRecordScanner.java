@@ -114,7 +114,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   // TODO java-doc
   public void scanByFullKeys(List<String> keys) {
-    checkState(!forceFullScan, "Incremental scanning is not allowed in case record-scanner is in full-scan mode");
+    if (forceFullScan) {
+      return; // no-op
+    }
 
     List<String> missingKeys = keys.stream()
         .filter(key -> !records.containsKey(key))
@@ -130,7 +132,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   // TODO java-doc
   public void scanByKeyPrefixes(List<String> keyPrefixes) {
-    checkState(!forceFullScan, "Incremental scanning is not allowed in case record-scanner is in full-scan mode");
+    if (forceFullScan) {
+      return; // no-op
+    }
 
     // NOTE: When looking up by key-prefixes unfortunately we can't short-circuit
     //       and will have to scan every time as we can't know (based on just
