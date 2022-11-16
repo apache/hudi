@@ -505,7 +505,7 @@ public class HoodieCatalog extends AbstractCatalog {
     return newOptions;
   }
 
-  private String inferTablePath(String catalogPath, ObjectPath tablePath) {
+  protected String inferTablePath(String catalogPath, ObjectPath tablePath) {
     return String.format("%s/%s/%s", catalogPath, tablePath.getDatabaseName(), tablePath.getObjectName());
   }
 }

@@ -29,6 +29,7 @@ import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.action.commit.SmallFile;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -70,7 +71,7 @@ public class TestBucketAssigner {
     final String basePath = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(basePath);
 
-    writeConfig = StreamerUtil.getHoodieClientConfig(conf);
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
     context = new HoodieFlinkEngineContext(
         new SerializableConfiguration(HadoopConfigurations.getHadoopConf(conf)),
         new FlinkTaskContextSupplier(null));
@@ -151,7 +152,7 @@ public class TestBucketAssigner {
   @Test
   public void testInsertOverBucketAssigned() {
     conf.setInteger(HoodieCompactionConfig.COPY_ON_WRITE_INSERT_SPLIT_SIZE.key(), 2);
-    writeConfig = StreamerUtil.getHoodieClientConfig(conf);
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
 
     MockBucketAssigner mockBucketAssigner = new MockBucketAssigner(context, writeConfig);
     BucketInfo bucketInfo1 = mockBucketAssigner.addInsert("par1");

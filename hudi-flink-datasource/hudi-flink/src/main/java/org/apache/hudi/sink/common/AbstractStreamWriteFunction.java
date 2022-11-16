@@ -28,6 +28,7 @@ import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.TimeWait;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -139,7 +140,7 @@ public abstract class AbstractStreamWriteFunction<I>
   public void initializeState(FunctionInitializationContext context) throws Exception {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.metaClient = StreamerUtil.createMetaClient(this.config);
-    this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
+    this.writeClient = FlinkWriteClients.createWriteClient(this.config, getRuntimeContext());
     this.writeStatuses = new ArrayList<>();
     this.writeMetadataState = context.getOperatorStateStore().getListState(
         new ListStateDescriptor<>(

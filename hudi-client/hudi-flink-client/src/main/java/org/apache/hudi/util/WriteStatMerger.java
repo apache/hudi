@@ -68,8 +68,6 @@ public class WriteStatMerger {
   private static HoodieWriteStat mergeWriteStat(HoodieWriteStat merged, HoodieWriteStat stat1, HoodieWriteStat stat2) {
     merged.setFileId(stat2.getFileId());
     merged.setPath(stat2.getPath());
-    // merge cdc stats
-    merged.setCdcStats(getMergedCdcStats(stat1.getCdcStats(), stat2.getCdcStats()));
     // prev commit
     merged.setPrevCommit(stat2.getPrevCommit());
 

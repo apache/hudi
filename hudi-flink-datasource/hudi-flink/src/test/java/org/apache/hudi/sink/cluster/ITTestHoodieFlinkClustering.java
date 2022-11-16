@@ -38,6 +38,7 @@ import org.apache.hudi.sink.clustering.HoodieFlinkClusteringJob;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
@@ -136,7 +137,7 @@ public class ITTestHoodieFlinkClustering {
     // To compute the clustering instant time and do clustering.
     String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
 
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
     boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
@@ -274,7 +275,7 @@ public class ITTestHoodieFlinkClustering {
     // To compute the clustering instant time.
     String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
 
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
 
     boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
 

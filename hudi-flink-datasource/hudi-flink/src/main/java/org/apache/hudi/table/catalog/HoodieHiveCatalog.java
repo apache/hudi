@@ -914,4 +914,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       return newOptions;
     }
   }
+
+  @VisibleForTesting
+  public IMetaStoreClient getClient() {
+    return client;
+  }
 }
