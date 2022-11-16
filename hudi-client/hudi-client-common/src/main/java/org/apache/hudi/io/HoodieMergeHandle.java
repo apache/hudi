@@ -410,10 +410,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
       if (keyToNewRecords instanceof ExternalSpillableMap) {
         ((ExternalSpillableMap) keyToNewRecords).close();
-      } else {
-        keyToNewRecords.clear();
       }
-      writtenRecordKeys.clear();
+
+      keyToNewRecords = null;
+      writtenRecordKeys = null;
 
       if (fileWriter != null) {
         fileWriter.close();
