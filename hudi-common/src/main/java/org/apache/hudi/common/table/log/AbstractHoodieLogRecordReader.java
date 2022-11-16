@@ -684,13 +684,9 @@ public abstract class AbstractHoodieLogRecordReader {
       HoodieLogBlock lastBlock = logBlocks.pollLast();
       switch (lastBlock.getBlockType()) {
         case AVRO_DATA_BLOCK:
-          processDataBlock((HoodieAvroDataBlock) lastBlock, keySpecOpt);
-          break;
         case HFILE_DATA_BLOCK:
-          processDataBlock((HoodieHFileDataBlock) lastBlock, keySpecOpt);
-          break;
         case PARQUET_DATA_BLOCK:
-          processDataBlock((HoodieParquetDataBlock) lastBlock, keySpecOpt);
+          processDataBlock((HoodieDataBlock) lastBlock, keySpecOpt);
           break;
         case DELETE_BLOCK:
           Arrays.stream(((HoodieDeleteBlock) lastBlock).getRecordsToDelete()).forEach(this::processNextDeletedRecord);
