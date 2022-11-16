@@ -98,4 +98,4 @@ Data Summit Connect, May, 2021
 
 42. ["PrestoDB and Apache Hudi for the Lakehouse"](https://www.youtube.com/watch?v=3zQJR-IGH0Y&list=PLJVeO1NMmyqXHoLuUJtulMDU0yBgSL0GH&index=11) - By Sagar Sumit and Bhavani Sudha Saktheeswaran. PrestoCon Day. Jul 21, 2022
 
-43. ["Petabyte-scale lakehouses with dbt and Apache Hudi"](https://youtu.be/aTn5dkm6rqQ) - By Vinoth Govindarajan and Vinoth Chandar.  . Oct 17, 2022
+43. ["Petabyte-scale lakehouses with dbt and Apache Hudi"](https://youtu.be/aTn5dkm6rqQ) - By Vinoth Govindarajan and Vinoth Chandar.  Oct 17, 2022
