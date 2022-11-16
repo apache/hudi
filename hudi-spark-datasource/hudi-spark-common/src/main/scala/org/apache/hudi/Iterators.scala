@@ -50,6 +50,7 @@ import org.apache.spark.sql.types.StructType
 import java.io.Closeable
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.util.Try
 
 /**
@@ -90,7 +91,10 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
       maxCompactionMemoryInBytes, config, internalSchema)
   }
 
-  private val logRecords = logScanner.getRecords.asScala
+  private val logRecords = {
+    // NOTE: We have to copy underlying map, since it's immutable
+    mutable.HashMap(logScanner.getRecords.asScala.toSeq: _*)
+  }
 
   def logRecordsPairIterator(): Iterator[(String, HoodieRecord[_])] = {
     logRecords.iterator
