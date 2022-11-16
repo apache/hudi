@@ -44,6 +44,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
@@ -67,7 +68,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * <p>
  * This results in two I/O passes over the log file.
  */
-
+@NotThreadSafe
 public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     implements Iterable<HoodieRecord> {
 
@@ -113,17 +114,24 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   // TODO java-doc
   public void scanByFullKeys(List<String> keys) {
-    boolean allCached = keys.stream().allMatch(records::containsKey);
-    if (allCached) {
+    checkState(!forceFullScan, "Incremental scanning is not allowed in case record-scanner is in full-scan mode");
+
+    List<String> missingKeys = keys.stream()
+        .filter(key -> !records.containsKey(key))
+        .collect(Collectors.toList());
+
+    if (missingKeys.isEmpty()) {
       // All the required records are already fetched, no-op
       return;
     }
 
-    scanInternal(Option.of(KeySpec.fullKeySpec(keys)), false);
+    scanInternal(Option.of(KeySpec.fullKeySpec(missingKeys)), false);
   }
 
   // TODO java-doc
   public void scanByKeyPrefixes(List<String> keyPrefixes) {
+    checkState(!forceFullScan, "Incremental scanning is not allowed in case record-scanner is in full-scan mode");
+
     // NOTE: When looking up by key-prefixes unfortunately we can't short-circuit
     //       and will have to scan every time as we can't know (based on just
     //       the records cached) whether particular prefix was scanned or just records
