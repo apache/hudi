@@ -192,10 +192,9 @@ public abstract class AbstractStreamWriteFunction<I>
   // -------------------------------------------------------------------------
 
   private void restoreWriteMetadata() throws Exception {
-    String lastInflight = lastPendingInstant();
     boolean eventSent = false;
     for (WriteMetadataEvent event : this.writeMetadataState.get()) {
-      if (Objects.equals(lastInflight, event.getInstantTime())) {
+      if (Objects.equals(this.currentInstant, event.getInstantTime())) {
         // Reset taskID for event
         event.setTaskID(taskID);
         // The checkpoint succeed but the meta does not commit,
@@ -211,6 +210,15 @@ public abstract class AbstractStreamWriteFunction<I>
   }
 
   private void sendBootstrapEvent() {
+    int attemptId = getRuntimeContext().getAttemptNumber();
+    if (attemptId > 0) {
+      // either a partial or global failover, reuses the current inflight instant
+      if (this.currentInstant != null) {
+        LOG.info("Recover task[{}] for instant [{}] with attemptId [{}]", taskID, this.currentInstant, attemptId);
+        this.currentInstant = null;
+      }
+      return;
+    }
     this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
   }
