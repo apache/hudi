@@ -22,7 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.api.common.state.CheckpointListener;
@@ -60,7 +60,7 @@ public class CleanFunction<T> extends AbstractRichFunction
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     LOG.info(String.format("exec clean with instant time %s...", instantTime));
