@@ -38,6 +38,8 @@ public class WriteMetadataEvent implements OperatorEvent {
 
   private List<WriteStatus> writeStatuses;
   private int taskID;
+  private int parallelism;
+  private int numOfMetadataState;
   private String instantTime;
   private boolean lastBatch;
 
@@ -68,6 +70,8 @@ public class WriteMetadataEvent implements OperatorEvent {
    */
   private WriteMetadataEvent(
       int taskID,
+      int parallelism,
+      int numOfMetadataState,
       String instantTime,
       List<WriteStatus> writeStatuses,
       boolean lastBatch,
@@ -75,6 +79,8 @@ public class WriteMetadataEvent implements OperatorEvent {
       boolean bootstrap) {
     this.taskID = taskID;
     this.instantTime = instantTime;
+    this.numOfMetadataState = numOfMetadataState;
+    this.parallelism = parallelism;
     this.writeStatuses = new ArrayList<>(writeStatuses);
     this.lastBatch = lastBatch;
     this.endInput = endInput;
@@ -106,6 +112,22 @@ public class WriteMetadataEvent implements OperatorEvent {
 
   public void setTaskID(int taskID) {
     this.taskID = taskID;
+  }
+
+  public int getParallelism() {
+    return parallelism;
+  }
+
+  public void setParallelism(int parallelism) {
+    this.parallelism = parallelism;
+  }
+
+  public int getNumOfMetadataState() {
+    return numOfMetadataState;
+  }
+
+  public void setNumOfMetadataState(int numOfMetadataState) {
+    this.numOfMetadataState = numOfMetadataState;
   }
 
   public String getInstantTime() {
@@ -189,6 +211,7 @@ public class WriteMetadataEvent implements OperatorEvent {
     return WriteMetadataEvent.builder()
         .taskID(taskId)
         .instantTime(BOOTSTRAP_INSTANT)
+        .numOfMetadataState(1)
         .writeStatus(Collections.emptyList())
         .bootstrap(true)
         .build();
@@ -204,6 +227,8 @@ public class WriteMetadataEvent implements OperatorEvent {
   public static class Builder {
     private List<WriteStatus> writeStatus;
     private Integer taskID;
+    private int parallelism = 0;
+    private int numOfMetadataState = 1;
     private String instantTime;
     private boolean lastBatch = false;
     private boolean endInput = false;
@@ -213,7 +238,7 @@ public class WriteMetadataEvent implements OperatorEvent {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap);
+      return new WriteMetadataEvent(taskID, parallelism, numOfMetadataState, instantTime, writeStatus, lastBatch, endInput, bootstrap);
     }
 
     public Builder taskID(int taskID) {
@@ -228,6 +253,16 @@ public class WriteMetadataEvent implements OperatorEvent {
 
     public Builder writeStatus(List<WriteStatus> writeStatus) {
       this.writeStatus = writeStatus;
+      return this;
+    }
+
+    public Builder parallelism(int parallelism) {
+      this.parallelism = parallelism;
+      return this;
+    }
+
+    public Builder numOfMetadataState(int numOfMetadataState) {
+      this.numOfMetadataState = numOfMetadataState;
       return this;
     }
 
