@@ -168,7 +168,8 @@
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
-    <jetty.version>9.4.33.v20201020</jetty.version>
+    <javalin.version>4.6.7</javalin.version>
+    <jetty.version>9.4.48.v20220622</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
     <hbase.version>2.4.9</hbase.version>
     <h2.version>1.4.199</h2.version>
