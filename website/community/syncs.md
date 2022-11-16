@@ -26,6 +26,8 @@ Every month on the Last Wed, 09:00 AM Pacific Time (US and Canada)([translate to
 
 Uploaded to [Apache Hudi youtube channel](https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw) after every call.
 
+[LINK TO SLIDE DECKS](https://drive.google.com/drive/folders/1hsq-kerUsHDlJ3WDeysMQGnVTmttzHgB?usp=sharing)
+
 **Typical agenda**
 
 *   \[15 mins\] Progress updates & Plans (PMC member)
