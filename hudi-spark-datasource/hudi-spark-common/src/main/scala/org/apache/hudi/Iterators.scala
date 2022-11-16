@@ -282,8 +282,10 @@ object LogFileIterator {
       // NOTE: In case of Metadata Table partition path equates to partition name (since there's just one level
       //       of indirection among MT partitions)
       val relativePartitionPath = getRelativePartitionPath(new Path(tablePath), partitionPath)
+
+      // TODO return records instead
       metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath, toJavaOption(Some(forceFullScan)))
-        .getLeft
+        .getLeft.getLogRecordScanner
     } else {
       val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)

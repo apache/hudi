@@ -56,6 +56,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     return new HoodieMetadataLogRecordReader.Builder();
   }
 
+  @SuppressWarnings("unchecked")
   public List<HoodieRecord<HoodieMetadataPayload>> getRecords() {
     // TODO remove locking
     synchronized (this) {
@@ -98,6 +99,11 @@ public class HoodieMetadataLogRecordReader implements Closeable {
           .filter(Objects::nonNull)
           .collect(Collectors.toList());
     }
+  }
+
+  // TODO remove this method
+  public HoodieMergedLogRecordScanner getLogRecordScanner() {
+    return logRecordScanner;
   }
 
   @Override
