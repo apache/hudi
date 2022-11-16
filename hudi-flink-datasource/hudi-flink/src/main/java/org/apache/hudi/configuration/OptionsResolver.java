@@ -146,6 +146,16 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether async compaction operation is enabled or not.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsAsyncCompactionOperation(Configuration conf) {
+    return OptionsResolver.isMorTable(conf)
+        && conf.getBoolean(FlinkOptions.COMPACTION_OPERATION_ASYNC_ENABLED);
+  }
+
+  /**
    * Returns whether there is need to schedule the compaction plan.
    *
    * @param conf The flink configuration.

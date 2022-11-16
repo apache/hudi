@@ -58,9 +58,9 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
   private transient HoodieFlinkWriteClient<?> writeClient;
 
   /**
-   * Whether to execute compaction asynchronously.
+   * Whether to execute compaction operation asynchronously.
    */
-  private final boolean asyncCompaction;
+  private final boolean asyncCompactionOperation;
 
   /**
    * Id of current subtask.
@@ -74,14 +74,14 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
 
   public CompactFunction(Configuration conf) {
     this.conf = conf;
-    this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
+    this.asyncCompactionOperation = OptionsResolver.needsAsyncCompactionOperation(conf);
   }
 
   @Override
   public void open(Configuration parameters) throws Exception {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
-    if (this.asyncCompaction) {
+    if (this.asyncCompactionOperation) {
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
   }
@@ -90,7 +90,7 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
   public void processElement(CompactionPlanEvent event, Context context, Collector<CompactionCommitEvent> collector) throws Exception {
     final String instantTime = event.getCompactionInstantTime();
     final CompactionOperation compactionOperation = event.getOperation();
-    if (asyncCompaction) {
+    if (asyncCompactionOperation) {
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
           () -> doCompaction(instantTime, compactionOperation, collector, reloadWriteConfig()),

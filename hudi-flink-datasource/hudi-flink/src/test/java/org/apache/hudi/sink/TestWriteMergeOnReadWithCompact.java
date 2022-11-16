@@ -20,8 +20,11 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,6 +43,28 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   @Override
   public void testInsertClustering() {
     // insert clustering is only valid for cow table.
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testUpsertWithCompactAsyncOrSync(boolean compactOperationAsync) throws Exception {
+    conf.setBoolean(FlinkOptions.COMPACTION_OPERATION_ASYNC_ENABLED, compactOperationAsync);
+    // open the function and ingest data
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT)
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        // upsert another data buffer
+        .consume(TestData.DATA_SET_UPDATE_INSERT)
+        // the data is not flushed yet
+        .checkWrittenData(EXPECTED1)
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED2)
+        .end();
   }
 
   @Override

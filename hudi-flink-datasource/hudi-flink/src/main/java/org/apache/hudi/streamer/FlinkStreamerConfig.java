@@ -236,6 +236,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--compaction-async-enabled"}, description = "Async Compaction, enabled by default for MOR")
   public Boolean compactionAsyncEnabled = true;
 
+  @Parameter(names = {"--compaction-operation-async-enabled"}, description = "Async Compaction Operation, enabled by default for MOR")
+  public Boolean compactionOperationAsyncEnabled = true;
+
   @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is 10")
   public Integer compactionTasks = 10;
 
@@ -402,6 +405,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setLong(FlinkOptions.WRITE_LOG_MAX_SIZE, config.writeLogMaxSize);
     conf.setInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY, config.writeMergeMaxMemory);
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, config.compactionAsyncEnabled);
+    conf.setBoolean(FlinkOptions.COMPACTION_OPERATION_ASYNC_ENABLED, config.compactionOperationAsyncEnabled);
     conf.setInteger(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
     conf.setString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY, config.compactionTriggerStrategy);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, config.compactionDeltaCommits);
