@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model.debezium;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -27,6 +28,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * Provides support for seamlessly applying changes captured via Debezium for MysqlDB.
@@ -52,16 +54,20 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     super(record);
   }
 
-  private String extractSeq(IndexedRecord record) {
-    return ((CharSequence) ((GenericRecord) record).get(DebeziumConstants.ADDED_SEQ_COL_NAME)).toString();
+  private Option<String> extractSeq(IndexedRecord record) {
+    Object value = ((GenericRecord) record).get(DebeziumConstants.ADDED_SEQ_COL_NAME);
+    return Option.ofNullable(Objects.toString(value, null));
   }
 
   @Override
   protected boolean shouldPickCurrentRecord(IndexedRecord currentRecord, IndexedRecord insertRecord, Schema schema) throws IOException {
-    String currentSourceSeq = extractSeq(currentRecord);
-    String insertSourceSeq = extractSeq(insertRecord);
+    String insertSourceSeq = extractSeq(insertRecord)
+        .orElseThrow(() ->
+            new HoodieDebeziumAvroPayloadException(String.format("%s cannot be null in insert record: %s",
+                DebeziumConstants.ADDED_SEQ_COL_NAME, insertRecord)));
+    Option<String> currentSourceSeqOpt = extractSeq(currentRecord);
     // Pick the current value in storage only if its Seq (file+pos) is latest
     // compared to the Seq (file+pos) of the insert value
-    return insertSourceSeq.compareTo(currentSourceSeq) < 0;
+    return currentSourceSeqOpt.isPresent() && insertSourceSeq.compareTo(currentSourceSeqOpt.get()) < 0;
   }
 }
