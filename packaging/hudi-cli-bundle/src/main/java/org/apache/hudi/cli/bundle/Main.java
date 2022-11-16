@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 public class Main {
 
     public static void main(String[] args) {
-        System.out.println("cli bundle main");
         ReflectionUtils.getTopLevelClassesInClasspath(Main.class).forEach(System.out::println);
     }
 }

@@ -31,10 +31,6 @@ public class Main {
 
   public static void main(String[] args) throws IOException {
     System.out.println("Main called");
-    try {
-      SpringApplication.run(Main.class, args);
-    } catch (Throwable t) {
-      t.printStackTrace();
-    }
+    SpringApplication.run(Main.class, args);
   }
 }
