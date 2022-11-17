@@ -19,6 +19,7 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
@@ -48,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -100,7 +103,11 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    */
   private transient Map<String, DataBucket> buckets;
 
+  private transient HoodieFlinkEngineContext context;
+
   private transient BiFunction<List<HoodieRecord>, String, List<WriteStatus>> writeFunction;
+
+  private transient int flushTasks;
 
   /**
    * Total size tracer.
@@ -177,6 +184,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   private void initWriteFunction() {
     final String writeOperation = this.config.get(FlinkOptions.OPERATION);
+    this.flushTasks = this.config.get(FlinkOptions.FLUSH_TASKS);
+    this.context = new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(this.config));
     switch (WriteOperationType.fromValue(writeOperation)) {
       case INSERT:
         this.writeFunction = (records, instantTime) -> this.writeClient.insert(records, instantTime);
@@ -449,22 +458,21 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     final List<WriteStatus> writeStatus;
     if (buckets.size() > 0) {
       writeStatus = new ArrayList<>();
-      this.buckets.values()
-          // The records are partitioned by the bucket ID and each batch sent to
-          // the writer belongs to one bucket.
-          .forEach(bucket -> {
-            List<HoodieRecord> records = bucket.writeBuffer();
-            if (records.size() > 0) {
-              if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-                records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1,
+      this.context.map(Arrays.asList(this.buckets.values().toArray(new DataBucket[0])), bucket -> {
+        List<HoodieRecord> records = bucket.writeBuffer();
+        List<WriteStatus> writeStatus0 = new ArrayList<>();
+        if (records.size() > 0) {
+          if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
+            records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1,
                     this.writeClient.getConfig().getSchema());
-              }
-              bucket.preWrite(records);
-              writeStatus.addAll(writeFunction.apply(records, currentInstant));
-              records.clear();
-              bucket.reset();
-            }
-          });
+          }
+          bucket.preWrite(records);
+          writeStatus0.addAll(writeFunction.apply(records, currentInstant));
+          records.clear();
+          bucket.reset();
+        }
+        return writeStatus0;
+      }, flushTasks).forEach(writeStatus::addAll);
     } else {
       LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
       writeStatus = Collections.emptyList();

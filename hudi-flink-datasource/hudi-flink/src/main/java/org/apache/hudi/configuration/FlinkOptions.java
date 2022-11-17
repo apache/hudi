@@ -319,6 +319,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(WriteOperationType.UPSERT.value())
       .withDescription("The write operation, that this write should do");
 
+  public static final ConfigOption<Integer> FLUSH_TASKS = ConfigOptions
+          .key("flush.tasks")
+          .intType()
+          .defaultValue(1)
+          .withDescription("Parallelism of tasks that do actual flush, default is single task in write.tasks");
+
   /**
    * Flag to indicate whether to drop duplicates before insert/upsert.
    * By default false to gain extra performance.
