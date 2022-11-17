@@ -24,6 +24,10 @@ import org.apache.hudi.internal.schema.Types;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assertions;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -74,6 +78,16 @@ public class TestInternalSchemaUtils {
     Map<String, Integer> result1 = InternalSchemaBuilder.getBuilder().buildNameToId(simpleRecord);
     Assertions.assertEquals(result1.size(), 5);
     Assertions.assertEquals(result1.get("double"), 4);
+  }
+
+  @Test
+  public void testIntTypeEqualsAfterDeserialization() throws Exception {
+    Types.IntType intType = Types.IntType.get();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    new ObjectOutputStream(baos).writeObject(intType);
+    Types.IntType deserializedIntType = (Types.IntType)
+        new ObjectInputStream(new ByteArrayInputStream(baos.toByteArray())).readObject();
+    Assertions.assertEquals(intType, deserializedIntType);
   }
 
   public Types.RecordType getNestRecordType() {

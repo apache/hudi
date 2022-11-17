@@ -21,6 +21,7 @@ package org.apache.hudi.internal.schema;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * The type of a schema, reference avro schema.
@@ -59,6 +60,27 @@ public interface Type extends Serializable {
     @Override
     public boolean isNestedType() {
       return false;
+    }
+
+    /**
+     * We need to override equals because the check {@code intType1 == intType2} can return {@code false}.
+     * Despite the fact that most subclasses look like singleton with static field {@code INSTANCE},
+     * they can still be created by deserializer.
+     */
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      } else if (!(o instanceof PrimitiveType)) {
+        return false;
+      }
+      PrimitiveType that = (PrimitiveType) o;
+      return typeId().equals(that.typeId());
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(typeId());
     }
   }
 
