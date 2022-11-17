@@ -317,7 +317,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }, pool);
   }
 
-  private Map<PartitionPath, List<FileSlice>> getCandidateFileSlices(List<PartitionPath> innerPartitionFiles, Option<String> queryInstant,
+  private Map<PartitionPath, List<FileSlice>> getCandidateFileSlices(List<PartitionPath> partitions, Option<String> queryInstant,
                                                                      HoodieTableFileSystemView fileSystemView) {
     // NOTE: For MOR table, when the compaction is inflight, we need to not only fetch the
     // latest slices, but also include the base and log files of the second-last version of
@@ -325,17 +325,16 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
     // API.  Note that for COW table, the merging logic of two slices does not happen as there
     // is no compaction, thus there is no performance impact.
-    return innerPartitionFiles.stream()
-        .collect(Collectors.toMap(
+    return partitions.stream().collect(
+        Collectors.toMap(
             Function.identity(),
             partitionPath ->
                 queryInstant.map(instant ->
-                    fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
-                )
+                        fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+                    )
                     .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
                     .collect(Collectors.toList())
-            )
-        );
+        ));
   }
 
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
