@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -367,9 +368,19 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
   /**
    * Obtains the average record size based on records written during previous commits. Used for estimating how many
    * records pack into one file.
+   * Respect user setting by following the precedence as below
+   * 1) if user sets a value, then use it as is
+   * 2) if user not setting it, infer from timeline commit metadata
+   * 3) if timeline is empty, use a default (current: 1024)
    */
   protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, HoodieWriteConfig hoodieWriteConfig) {
+    long defaultAvgSize = Integer.parseInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.defaultValue());
     long avgSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
+
+    if (avgSize != defaultAvgSize) {
+      return avgSize;
+    }
+
     long fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
     try {
       if (!commitTimeline.empty()) {
@@ -388,9 +399,10 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
         }
       }
     } catch (Throwable t) {
-      // make this fail safe.
+      // make this fails safe.
       LOG.error("Error trying to compute average bytes/record ", t);
     }
+
     return avgSize;
   }
 }

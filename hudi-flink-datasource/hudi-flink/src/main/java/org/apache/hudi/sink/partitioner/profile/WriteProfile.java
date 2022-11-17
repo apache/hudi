@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.BucketAssigner;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -142,7 +143,12 @@ public class WriteProfile {
    * records pack into one file.
    */
   private long averageBytesPerRecord() {
+    long defaultAvgSize = Integer.parseInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.defaultValue());
     long avgSize = config.getCopyOnWriteRecordSizeEstimate();
+
+    if (avgSize != defaultAvgSize) {
+      return avgSize;
+    }
     long fileSizeThreshold = (long) (config.getRecordSizeEstimationThreshold() * config.getParquetSmallFileLimit());
     HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
     if (!commitTimeline.empty()) {

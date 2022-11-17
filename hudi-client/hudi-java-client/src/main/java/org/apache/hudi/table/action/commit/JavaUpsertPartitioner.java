@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -314,7 +315,12 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
    * records pack into one file.
    */
   protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, HoodieWriteConfig hoodieWriteConfig) {
+    long defaultAvgSize = Integer.parseInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.defaultValue());
     long avgSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
+
+    if (avgSize != defaultAvgSize) {
+      return avgSize;
+    }
     long fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
     try {
       if (!commitTimeline.empty()) {

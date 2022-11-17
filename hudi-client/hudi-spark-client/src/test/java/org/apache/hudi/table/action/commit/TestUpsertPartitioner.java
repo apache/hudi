@@ -180,6 +180,28 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   }
 
   @Test
+  public void testAverageBytesPerRecordProvidedByUserFirst() throws Exception {
+    int userProvidedAvgSize = 100;
+    HoodieTimeline commitTimeLine = mock(HoodieTimeline.class);
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+        .withCompactionConfig(
+            HoodieCompactionConfig
+                .newBuilder()
+                .compactionSmallFileSize(1000)
+                .approxRecordSize(userProvidedAvgSize)
+                .build()
+        )
+        .build();
+    when(commitTimeLine.empty()).thenReturn(false);
+    when(commitTimeLine.getReverseOrderedInstants()).thenReturn(setupHoodieInstants().stream());
+    LinkedList<Option<byte[]>> commits = generateCommitMetadataList();
+    when(commitTimeLine.getInstantDetails(any(HoodieInstant.class))).thenAnswer(invocationOnMock -> commits.pop());
+
+    long actualAvgSize = averageBytesPerRecord(commitTimeLine, config);
+    assertEquals(userProvidedAvgSize, actualAvgSize);
+  }
+
+  @Test
   public void testAverageBytesPerRecordForEmptyCommitTimeLine() throws Exception {
     HoodieTimeline commitTimeLine = mock(HoodieTimeline.class);
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().build();
