@@ -81,14 +81,6 @@ public class FileSlice implements Serializable {
     this.logFiles.addAll(logFiles);
   }
 
-  public FileSlice(HoodieFileGroupId fileGroupId, String baseInstantTime,
-                   HoodieBaseFile baseFile, TreeSet<HoodieLogFile> logFiles) {
-    this.fileGroupId = fileGroupId;
-    this.baseInstantTime = baseInstantTime;
-    this.baseFile = baseFile;
-    this.logFiles = logFiles;
-  }
-
   public void setBaseFile(HoodieBaseFile baseFile) {
     this.baseFile = baseFile;
   }
@@ -99,10 +91,6 @@ public class FileSlice implements Serializable {
 
   public Stream<HoodieLogFile> getLogFiles() {
     return logFiles.stream();
-  }
-
-  public TreeSet<HoodieLogFile> getRawLogFiles() {
-    return logFiles;
   }
 
   public String getBaseInstantTime() {

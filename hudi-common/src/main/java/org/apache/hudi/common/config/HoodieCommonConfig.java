@@ -45,7 +45,7 @@ public class HoodieCommonConfig extends HoodieConfig {
       .key("hoodie.datasource.read.loading.parallelism")
       .defaultValue(-1)
       .withDocumentation("Set the parallelism of loading hudi table. "
-          + "In general local parallelism can be tried from 20 and cluster parallelism can be tried from 200. "
+          + "In general local parallelism can be tried from 20. "
           + "-1 means disable parallel, and serial load hudi table.");
 
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty

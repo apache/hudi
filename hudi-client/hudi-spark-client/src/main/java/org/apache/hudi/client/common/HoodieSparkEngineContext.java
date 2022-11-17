@@ -126,17 +126,6 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPair(
-      Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> func, int parallelism) {
-    return javaSparkContext.parallelize(data.collect(Collectors.toList()), parallelism)
-        .mapPartitionsToPair((PairFlatMapFunction<Iterator<I>, K, V>) iterator ->
-            func.call(iterator).collect(Collectors.toList()).stream()
-                .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator()
-        ).map(e -> new ImmutablePair<>(e._1, e._2))
-        .collect().stream();
-  }
-
-  @Override
   public <I, K, V> List<V> reduceByKey(
       List<Pair<K, V>> data, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
     return javaSparkContext.parallelize(data, parallelism).mapToPair(pair -> new Tuple2<K, V>(pair.getLeft(), pair.getRight()))
