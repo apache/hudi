@@ -530,7 +530,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         //       target table, ie partially updating)
         AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
         RECONCILE_SCHEMA.key -> "false",
-        CANONICALIZE_SCHEMA.key -> "false"
+        "hoodie.datasource.write.schema.canonicalize" -> "false"
       )
         .filter { case (_, v) => v != null }
     }
