@@ -352,8 +352,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
       // Ingest newly fetched partitions into cache
       fetchedPartitionsMap.forEach((absolutePath, files) -> {
-          Path relativePath = missingPartitionPathsMap.get(absolutePath);
-          fileStatusCache.put(relativePath, files);
+        Path relativePath = missingPartitionPathsMap.get(absolutePath);
+        fileStatusCache.put(relativePath, files);
       });
 
       return combine(flatMap(cachedPartitionPaths.values()),
