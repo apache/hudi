@@ -61,7 +61,7 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
   override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
-        JFunction.toJava((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
+        JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
 
   @BeforeEach override def setUp(): Unit = {
