@@ -154,6 +154,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
    * @param keyPrefixes to be looked up
    */
   public void scanByKeyPrefixes(List<String> keyPrefixes) {
+    // TODO add caching for queried prefixes
     if (forceFullScan) {
       return; // no-op
     }

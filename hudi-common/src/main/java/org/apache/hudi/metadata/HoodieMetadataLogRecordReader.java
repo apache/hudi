@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
+import javax.annotation.concurrent.ThreadSafe;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
@@ -42,6 +43,7 @@ import java.util.stream.Collectors;
  * A {@code HoodieMergedLogRecordScanner} implementation which only merged records matching providing keys. This is
  * useful in limiting memory usage when only a small subset of updates records are to be read.
  */
+@ThreadSafe
 public class HoodieMetadataLogRecordReader implements Closeable {
 
   private final HoodieMergedLogRecordScanner logRecordScanner;
@@ -59,7 +61,8 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
   @SuppressWarnings("unchecked")
   public List<HoodieRecord<HoodieMetadataPayload>> getRecords() {
-    // TODO remove useless locking (need to address getRecords thread-safety)
+    // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
+    //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
       logRecordScanner.scan();
       return logRecordScanner.getRecords().values()
@@ -75,8 +78,8 @@ public class HoodieMetadataLogRecordReader implements Closeable {
       return Collections.emptyList();
     }
 
-    // TODO add caching for queried prefixes
-    // TODO remove useless locking (need to address getRecords thread-safety)
+    // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
+    //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
       logRecordScanner.scanByKeyPrefixes(keyPrefixes);
       Map<String, HoodieRecord<? extends HoodieRecordPayload>> allRecords = logRecordScanner.getRecords();
@@ -96,7 +99,8 @@ public class HoodieMetadataLogRecordReader implements Closeable {
       return Collections.emptyList();
     }
 
-    // TODO remove useless locking (need to address getRecords thread-safety)
+    // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
+    //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
       logRecordScanner.scanByFullKeys(keys);
       Map<String, HoodieRecord<? extends HoodieRecordPayload>> allRecords = logRecordScanner.getRecords();
