@@ -92,7 +92,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     Stream<HoodieLogFile> logFiles = fileSlice.getLogFiles();
 
     Option<HoodieInstant> latestCompletedInstantOpt = fileIndex.getLatestCompletedInstant();
-    String tableBasePath = fileIndex.getBasePath();
+    String tableBasePath = fileIndex.getBasePath().toString();
 
     // Check if we're reading a MOR table
     if (baseFileOpt.isPresent()) {

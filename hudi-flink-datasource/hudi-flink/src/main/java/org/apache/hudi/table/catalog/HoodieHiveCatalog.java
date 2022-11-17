@@ -35,6 +35,7 @@ import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -553,7 +554,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     // because since Hive 3.x, there is validation when altering table,
     // when the metadata fields are synced through the hive sync tool,
     // a compatability issue would be reported.
-    List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table.getSchema());
+    boolean withOperationField = Boolean.parseBoolean(table.getOptions().getOrDefault(FlinkOptions.CHANGELOG_ENABLED.key(), "false"));
+    List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table.getSchema(), withOperationField);
 
     // Table columns and partition keys
     CatalogTable catalogTable = (CatalogTable) table;
@@ -962,11 +964,11 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   private HoodieFlinkWriteClient<?> createWriteClient(
       ObjectPath tablePath,
-      CatalogBaseTable table) throws Exception {
+      CatalogBaseTable table) {
     Map<String, String> options = table.getOptions();
     // enable auto-commit though ~
     options.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
-    return StreamerUtil.createWriteClient(
+    return FlinkWriteClients.createWriteClientV2(
         Configuration.fromMap(options)
             .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
             .set(FlinkOptions.SOURCE_AVRO_SCHEMA,

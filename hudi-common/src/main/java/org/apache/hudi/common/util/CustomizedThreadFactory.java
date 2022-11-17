@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -59,7 +59,7 @@ public class CustomizedThreadFactory implements ThreadFactory {
   }
 
   @Override
-  public Thread newThread(@NotNull Runnable r) {
+  public Thread newThread(@Nonnull Runnable r) {
     Thread runThread = preExecuteRunnable == null ? new Thread(r) : new Thread(new Runnable() {
 
       @Override
@@ -68,7 +68,6 @@ public class CustomizedThreadFactory implements ThreadFactory {
         r.run();
       }
     });
-
     runThread.setDaemon(daemon);
     runThread.setName(threadName + threadNum.getAndIncrement());
     return runThread;

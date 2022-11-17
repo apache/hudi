@@ -54,6 +54,8 @@ import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 
+import org.apache.hadoop.util.VersionUtil;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -89,6 +91,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
  */
 public class HoodieAvroUtils {
 
+  public static final String AVRO_VERSION = Schema.class.getPackage().getImplementationVersion();
   private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
   private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
 
@@ -479,6 +482,32 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Obtain value of the provided key, which is consistent with avro before 1.10
+   */
+  public static Object getFieldVal(GenericRecord record, String key) {
+    return getFieldVal(record, key, true);
+  }
+
+  /**
+   * Obtain value of the provided key, when set returnNullIfNotFound false,
+   * it is consistent with avro after 1.10
+   */
+  public static Object getFieldVal(GenericRecord record, String key, boolean returnNullIfNotFound) {
+    if (record.getSchema().getField(key) == null) {
+      if (returnNullIfNotFound) {
+        return null;
+      } else {
+        // Since avro 1.10, arvo will throw AvroRuntimeException("Not a valid schema field: " + key)
+        // rather than return null like the previous version if record doesn't contain this key.
+        // Here we simulate this behavior.
+        throw new AvroRuntimeException("Not a valid schema field: " + key);
+      }
+    } else {
+      return record.get(key);
+    }
+  }
+
+  /**
    * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
    */
   public static String getNestedFieldValAsString(GenericRecord record, String fieldName, boolean returnNullIfNotFound, boolean consistentLogicalTimestampEnabled) {
@@ -492,44 +521,50 @@ public class HoodieAvroUtils {
   public static Object getNestedFieldVal(GenericRecord record, String fieldName, boolean returnNullIfNotFound, boolean consistentLogicalTimestampEnabled) {
     String[] parts = fieldName.split("\\.");
     GenericRecord valueNode = record;
-    int i = 0;
-    try {
-      for (; i < parts.length; i++) {
-        String part = parts[i];
-        Object val = valueNode.get(part);
-        if (val == null) {
-          break;
-        }
 
+    for (int i = 0; i < parts.length; i++) {
+      String part = parts[i];
+      Object val;
+      try {
+        val = HoodieAvroUtils.getFieldVal(valueNode, part, returnNullIfNotFound);
+      } catch (AvroRuntimeException e) {
+        if (returnNullIfNotFound) {
+          return null;
+        } else {
+          throw new HoodieException(
+              fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
+                  + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+        }
+      }
+
+      if (i == parts.length - 1) {
         // return, if last part of name
-        if (i == parts.length - 1) {
+        if (val == null) {
+          return null;
+        } else {
           Schema fieldSchema = valueNode.getSchema().getField(part).schema();
           return convertValueForSpecificDataTypes(fieldSchema, val, consistentLogicalTimestampEnabled);
-        } else {
-          // VC: Need a test here
-          if (!(val instanceof GenericRecord)) {
+        }
+      } else {
+        if (!(val instanceof GenericRecord)) {
+          if (returnNullIfNotFound) {
+            return null;
+          } else {
             throw new HoodieException("Cannot find a record at part value :" + part);
           }
+        } else {
           valueNode = (GenericRecord) val;
         }
       }
-    } catch (AvroRuntimeException e) {
-      // Since avro 1.10, arvo will throw AvroRuntimeException("Not a valid schema field: " + key)
-      // rather than return null like the previous version if if record doesn't contain this key.
-      // So when returnNullIfNotFound is true, catch this exception.
-      if (!returnNullIfNotFound) {
-        throw e;
-      }
     }
 
+    // This can only be reached if the length of parts is 0
     if (returnNullIfNotFound) {
       return null;
-    } else if (valueNode.getSchema().getField(parts[i]) == null) {
-      throw new HoodieException(
-          fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
-              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
     } else {
-      throw new HoodieException("The value of " + parts[i] + " can not be null");
+      throw new HoodieException(
+          fieldName + " field not found in record. Acceptable fields were :"
+              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
     }
   }
 
@@ -1032,5 +1067,13 @@ public class HoodieAvroUtils {
 
   public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema) {
     return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP);
+  }
+
+  public static boolean gteqAvro1_9() {
+    return VersionUtil.compareVersions(AVRO_VERSION, "1.9") >= 0;
+  }
+
+  public static boolean gteqAvro1_10() {
+    return VersionUtil.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
 }

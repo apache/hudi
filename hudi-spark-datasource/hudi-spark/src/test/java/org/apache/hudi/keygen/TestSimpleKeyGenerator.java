@@ -120,8 +120,9 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testComplexRecordKeyField() {
-    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getComplexRecordKeyProp());
-    assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
+    assertThrows(IllegalArgumentException.class, () -> {
+      new SimpleKeyGenerator(getComplexRecordKeyProp());
+    });
   }
 
   @Test

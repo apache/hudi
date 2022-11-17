@@ -427,7 +427,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     // Map each fileId that has inserts to a unique partition Id. This will be used while
     // repartitioning RDD<WriteStatus>
     final List<String> fileIds = writeStatusRDD.filter(w -> w.getStat().getNumInserts() > 0)
-                                   .map(w -> w.getFileId()).collect();
+                                   .map(WriteStatus::getFileId).collect();
     for (final String fileId : fileIds) {
       fileIdPartitionMap.put(fileId, partitionIndex++);
     }
@@ -445,7 +445,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
         writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
             .partitionBy(new WriteStatusPartitioner(fileIdPartitionMap,
                 this.numWriteStatusWithInserts))
-            .map(w -> w._2());
+            .map(Tuple2::_2);
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     acquireQPSResourcesAndSetBatchSize(desiredQPSFraction, jsc);
     JavaRDD<WriteStatus> writeStatusJavaRDD = partitionedRDD.mapPartitionsWithIndex(updateLocationFunction(),

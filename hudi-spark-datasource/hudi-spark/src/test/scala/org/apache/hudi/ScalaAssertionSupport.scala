@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.junit.jupiter.api.Assertions.fail
 
-class ScalaAssertionSupport {
+trait ScalaAssertionSupport {
 
   def assertThrows[T <: Throwable, R](expectedExceptionClass: Class[T])(f: => R): T = {
     try {

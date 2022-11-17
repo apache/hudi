@@ -25,8 +25,10 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
@@ -59,6 +61,7 @@ import org.apache.spark.{SPARK_VERSION, SparkContext}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
+import scala.util.matching.Regex
 
 object HoodieSparkSqlWriter {
 
@@ -85,14 +88,13 @@ object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     var tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
-    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite)
-
     val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode)
     val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(parameters)
     val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestampBasedKeyGenerator(
       originKeyGeneratorClassName, parameters)
     //validate datasource and tableconfig keygen are the same
     validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig);
+    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite);
     val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
     val tblName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME,
       s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.").trim
@@ -221,11 +223,13 @@ object HoodieSparkSqlWriter {
             // Get list of partitions to delete
             val partitionsToDelete = if (parameters.containsKey(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
-              java.util.Arrays.asList(partitionColsToDelete: _*)
+              java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).toList, jsc,
+                hoodieConfig, basePath.toString): _*)
             } else {
               val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
+
             // Create a HoodieWriteClient & issue the delete.
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
@@ -341,6 +345,41 @@ object HoodieSparkSqlWriter {
 
       (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     }
+  }
+
+  /**
+   * Resolve wildcards in partitions
+   *
+   * @param partitions   list of partitions that may contain wildcards
+   * @param jsc          instance of java spark context
+   * @param cfg          hoodie config
+   * @param basePath     base path
+   * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
+   */
+  private def resolvePartitionWildcards(partitions: List[String], jsc: JavaSparkContext, cfg: HoodieConfig, basePath: String): List[String] = {
+    //find out if any of the input partitions have wildcards
+    var (wildcardPartitions, fullPartitions) = partitions.partition(partition => partition.contains("*"))
+
+    if (wildcardPartitions.nonEmpty) {
+      //get list of all partitions
+      val allPartitions = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc): HoodieEngineContext,
+        HoodieMetadataConfig.newBuilder().fromProperties(cfg.getProps).build(), basePath)
+      //go through list of partitions with wildcards and add all partitions that match to val fullPartitions
+      wildcardPartitions.foreach(partition => {
+        //turn wildcard into regex
+        //regex for start of line is ^ and end of line is $
+        //If the partitionpath was just alphanumeric we would just replace * with .*
+        //Since there could be characters that could be considered regex in the partitionpath we must
+        //prevent that from happening. Any text inbetween \\Q and \\E is considered literal
+        //So we start the string with \\Q and end with \\E and then whenever we find a * we add \\E before
+        //and \\Q after so all other characters besides .* will be enclosed between a set of \\Q \\E
+        val regexPartition = "^\\Q" + partition.replace("*", "\\E.*\\Q") + "\\E$"
+
+        //filter all partitions with the regex and append the result to the list of full partitions
+        fullPartitions = List.concat(fullPartitions,allPartitions.filter(_.matches(regexPartition)))
+      })
+    }
+    fullPartitions.distinct
   }
 
   def generateSchemaWithoutPartitionColumns(partitionParam: String, schema: Schema): Schema = {
