@@ -207,22 +207,22 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   @Override
-  protected <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
+  protected <T> void processNextRecord(HoodieRecord<T> newRecord) {
     String key = newRecord.getRecordKey();
-    if (records.containsKey(key)) {
-      // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
-      // done when a DELETE (empty payload) is encountered before or after an insert/update.
-
-      HoodieRecord<T> oldRecord = records.get(key);
-      T oldValue = oldRecord.getData();
-      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(oldRecord, readerSchema,
+    HoodieRecord<T> prevRecord = records.get(key);
+    if (prevRecord != null) {
+      // Merge and store the combined record
+      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
           newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
-      // If combinedValue is oldValue, no need rePut oldRecord
-      if (combinedRecord.getData() != oldValue) {
-        HoodieRecord latestHoodieRecord = combinedRecord.newInstance(new HoodieKey(key, newRecord.getPartitionPath()), newRecord.getOperation());
+      // If pre-combine returns existing record, no need to update it
+      if (combinedRecord.getData() != prevRecord.getData()) {
+        HoodieRecord latestHoodieRecord =
+            combinedRecord.newInstance(new HoodieKey(key, newRecord.getPartitionPath()), newRecord.getOperation());
+
         latestHoodieRecord.unseal();
         latestHoodieRecord.setCurrentLocation(newRecord.getCurrentLocation());
         latestHoodieRecord.seal();
+
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
         //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
         //       it since these records will be put into records(Map).
