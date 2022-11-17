@@ -122,8 +122,8 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
         throw new HoodieUpsertException("Failed to close UpdateHandle", e);
       }
     }
+
     newRecordKeysSorted.clear();
-    keyToNewRecords.clear();
 
     return super.close();
   }
