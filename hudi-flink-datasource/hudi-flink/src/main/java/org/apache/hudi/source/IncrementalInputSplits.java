@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCExtractor;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
@@ -95,6 +96,8 @@ public class IncrementalInputSplits implements Serializable {
   private final Set<String> requiredPartitions;
   // skip compaction
   private final boolean skipCompaction;
+  // skip clustering
+  private final boolean skipClustering;
 
   private IncrementalInputSplits(
       Configuration conf,
@@ -102,13 +105,15 @@ public class IncrementalInputSplits implements Serializable {
       RowType rowType,
       long maxCompactionMemoryInBytes,
       @Nullable Set<String> requiredPartitions,
-      boolean skipCompaction) {
+      boolean skipCompaction,
+      boolean skipClustering) {
     this.conf = conf;
     this.path = path;
     this.rowType = rowType;
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.requiredPartitions = requiredPartitions;
     this.skipCompaction = skipCompaction;
+    this.skipClustering = skipClustering;
   }
 
   /**
@@ -446,7 +451,7 @@ public class IncrementalInputSplits implements Serializable {
       HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
       if (!archivedCompleteTimeline.empty()) {
         Stream<HoodieInstant> instantStream = archivedCompleteTimeline.getInstants();
-        return maySkipCompaction(instantStream)
+        return maySkipOverwriteInstants(instantStream)
             .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, archivedTimeline)).collect(Collectors.toList());
       }
     }
@@ -466,7 +471,7 @@ public class IncrementalInputSplits implements Serializable {
     HoodieTimeline completedTimeline = commitTimeline.filterCompletedInstants();
     if (issuedInstant != null) {
       // returns early for streaming mode
-      return maySkipCompaction(completedTimeline.getInstants())
+      return maySkipOverwriteInstants(completedTimeline.getInstants())
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, issuedInstant))
           .collect(Collectors.toList());
     }
@@ -482,13 +487,12 @@ public class IncrementalInputSplits implements Serializable {
       final String endCommit = this.conf.get(FlinkOptions.READ_END_COMMIT);
       instantStream = instantStream.filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN_OR_EQUALS, endCommit));
     }
-    return maySkipCompaction(instantStream).collect(Collectors.toList());
+    return maySkipOverwriteInstants(instantStream).collect(Collectors.toList());
   }
 
-  private Stream<HoodieInstant> maySkipCompaction(Stream<HoodieInstant> instants) {
-    return this.skipCompaction
-        ? instants.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
-        : instants;
+  private Stream<HoodieInstant> maySkipOverwriteInstants(Stream<HoodieInstant> instants) {
+    return instants.filter(instant -> !this.skipCompaction || !instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
+            .filter(instant -> !this.skipClustering|| !instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
   }
 
   private static <T> List<T> mergeList(List<T> list1, List<T> list2) {
@@ -544,6 +548,8 @@ public class IncrementalInputSplits implements Serializable {
     private Set<String> requiredPartitions;
     // skip compaction
     private boolean skipCompaction = false;
+    // skip clustering
+    private boolean skipClustering = true;
 
     public Builder() {
     }
@@ -578,10 +584,15 @@ public class IncrementalInputSplits implements Serializable {
       return this;
     }
 
+    public Builder skipClustering(boolean skipClustering) {
+      this.skipClustering = skipClustering;
+      return this;
+    }
+
     public IncrementalInputSplits build() {
       return new IncrementalInputSplits(
           Objects.requireNonNull(this.conf), Objects.requireNonNull(this.path), Objects.requireNonNull(this.rowType),
-          this.maxCompactionMemoryInBytes, this.requiredPartitions, this.skipCompaction);
+          this.maxCompactionMemoryInBytes, this.requiredPartitions, this.skipCompaction, this.skipClustering);
     }
   }
 }

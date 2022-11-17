@@ -324,6 +324,35 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
   }
 
   @Test
+  void testStreamWriteReadSkippingClustering() throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source", 4);
+    streamTableEnv.executeSql(createSource);
+
+    String hoodieTableDDL = sql("t1")
+            .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+            .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE)
+            .option(FlinkOptions.READ_AS_STREAMING, true)
+            .option(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true)
+            .option(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED,true)
+            .option(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true)
+            .option(FlinkOptions.CLUSTERING_DELTA_COMMITS,1)
+            .option(FlinkOptions.CLUSTERING_TASKS, 1)
+            .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    String instant = TestUtils.getNthCompleteInstant(tempFile.getAbsolutePath(), 2, true);
+
+    streamTableEnv.getConfig().getConfiguration()
+            .setBoolean("table.dynamic-table-options.enabled", true);
+    final String query = String.format("select * from t1/*+ options('read.start-commit'='%s')*/", instant);
+    List<Row> rows = execSelectSql(streamTableEnv, query, 10);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
+  }
+
+  @Test
   void testStreamWriteWithCleaning() {
     // create filesystem table named source
 
