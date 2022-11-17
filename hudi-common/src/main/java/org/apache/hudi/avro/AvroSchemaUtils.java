@@ -47,11 +47,26 @@ public class AvroSchemaUtils {
     return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
-  // TODO java-doc, test
+  /**
+   * Validate whether the {@code targetSchema} is a projection of {@code sourceSchema}.
+   *
+   * Schema B is considered a projection of schema A iff
+   * <ol>
+   *   <li>Schemas A and B are equal, or</li>
+   *   <li>Schemas A and B are record schemas and every field of the record B has corresponding
+   *   counterpart (w/ the same name) in the schema A, such that the schema of the field of the schema
+   *   B is also a projection of the A field's schema</li>
+   * </ol>
+   */
   public static boolean isProjectionOf(Schema sourceSchema, Schema targetSchema) {
+    if (sourceSchema.getType() != Schema.Type.RECORD
+        || targetSchema.getType() != Schema.Type.RECORD) {
+      return Objects.equals(sourceSchema, targetSchema);
+    }
+
     for (Schema.Field targetField : targetSchema.getFields()) {
       Schema.Field sourceField = sourceSchema.getField(targetField.name());
-      if (sourceField == null || !Objects.equals(sourceField.schema(), targetField.schema())) {
+      if (sourceField == null || !isProjectionOf(sourceField.schema(), targetField.schema())) {
         return false;
       }
     }
