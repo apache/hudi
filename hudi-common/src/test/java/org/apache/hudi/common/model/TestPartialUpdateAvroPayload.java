@@ -55,7 +55,7 @@ public class TestPartialUpdateAvroPayload {
       + "    {\"name\": \"id\", \"type\": [\"null\", \"string\"]},\n"
       + "    {\"name\": \"partition\", \"type\": [\"null\", \"string\"]},\n"
       + "    {\"name\": \"ts\", \"type\": [\"null\", \"long\"]},\n"
-      + "    {\"name\": \"_hoodie_is_deleted\", \"type\": [\"null\", \"boolean\"], \"default\":false},\n"
+      + "    {\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false},\n"
       + "    {\"name\": \"city\", \"type\": [\"null\", \"string\"]},\n"
       + "    {\"name\": \"child\", \"type\": [\"null\", {\"type\": \"array\", \"items\": \"string\"}]}\n"
       + "  ]\n"

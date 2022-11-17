@@ -58,7 +58,7 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @BeforeAll
   public static void beforeAll() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices();
   }
 
   @BeforeEach

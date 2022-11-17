@@ -22,8 +22,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.Option;
 
-import org.jetbrains.annotations.NotNull;
-
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
@@ -125,7 +123,7 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
   }
 
   @Override
-  public int compareTo(@NotNull HoodieCDCFileSplit o) {
+  public int compareTo(HoodieCDCFileSplit o) {
     return this.instant.compareTo(o.instant);
   }
 }

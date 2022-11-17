@@ -83,7 +83,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
-  override def rootPaths: Seq[Path] = queryPaths.asScala
+  override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
@@ -94,7 +94,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return List of FileStatus for base files
    */
   def allFiles: Seq[FileStatus] = {
-    cachedAllInputFileSlices.values.asScala.flatMap(_.asScala)
+    getAllInputFileSlices.values.asScala.flatMap(_.asScala)
       .map(fs => fs.getBaseFile.orElse(null))
       .filter(_ != null)
       .map(_.getFileStatus)
@@ -127,47 +127,43 @@ case class HoodieFileIndex(spark: SparkSession,
 
     logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
-    if (queryAsNonePartitionedTable) {
-      // Read as Non-Partitioned table
+    var totalFileSize = 0
+    var candidateFileSize = 0
+
+    // Prune the partition path by the partition filters
+    // NOTE: Non-partitioned tables are assumed to consist from a single partition
+    //       encompassing the whole table
+    val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
+    val listedPartitions = prunedPartitions.map { partition =>
+      val baseFileStatuses: Seq[FileStatus] =
+        getInputFileSlices(partition).asScala
+          .map(fs => fs.getBaseFile.orElse(null))
+          .filter(_ != null)
+          .map(_.getFileStatus)
+
       // Filter in candidate files based on the col-stats index lookup
-      val candidateFiles = allFiles.filter(fileStatus =>
+      val candidateFiles = baseFileStatuses.filter(fs =>
         // NOTE: This predicate is true when {@code Option} is empty
-        candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName))
-      )
+        candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
 
-      logInfo(s"Total files : ${allFiles.size}; " +
-        s"candidate files after data skipping: ${candidateFiles.size}; " +
-        s"skipping percent ${if (allFiles.nonEmpty) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
+      totalFileSize += baseFileStatuses.size
+      candidateFileSize += candidateFiles.size
+      PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
+    }
 
-      Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
+    val skippingRatio =
+      if (!areAllFileSlicesCached) -1
+      else if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble
+      else 0
+
+    logInfo(s"Total base files: $totalFileSize; " +
+      s"candidate files after data skipping: $candidateFileSize; " +
+      s"skipping percentage $skippingRatio")
+
+    if (shouldReadAsPartitionedTable()) {
+      listedPartitions
     } else {
-      // Prune the partition path by the partition filters
-      val prunedPartitions = prunePartition(cachedAllInputFileSlices.keySet.asScala.toSeq, partitionFilters)
-      var totalFileSize = 0
-      var candidateFileSize = 0
-
-      val result = prunedPartitions.map { partition =>
-        val baseFileStatuses: Seq[FileStatus] =
-          cachedAllInputFileSlices.get(partition).asScala
-            .map(fs => fs.getBaseFile.orElse(null))
-            .filter(_ != null)
-            .map(_.getFileStatus)
-
-        // Filter in candidate files based on the col-stats index lookup
-        val candidateFiles = baseFileStatuses.filter(fs =>
-          // NOTE: This predicate is true when {@code Option} is empty
-          candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
-
-        totalFileSize += baseFileStatuses.size
-        candidateFileSize += candidateFiles.size
-        PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
-      }
-
-      logInfo(s"Total base files: $totalFileSize; " +
-        s"candidate files after data skipping : $candidateFileSize; " +
-        s"skipping percent ${if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
-
-      result
+      Seq(PartitionDirectory(InternalRow.empty, listedPartitions.flatMap(_.files)))
     }
   }
 
@@ -252,7 +248,7 @@ case class HoodieFileIndex(spark: SparkSession,
   override def inputFiles: Array[String] =
     allFiles.map(_.getPath.toString).toArray
 
-  override def sizeInBytes: Long = cachedFileSize
+  override def sizeInBytes: Long = getTotalCachedFilesSize
 
   private def isDataSkippingEnabled: Boolean = HoodieFileIndex.getBooleanConfigValue(options, spark.sessionState.conf, DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
   "false")
@@ -350,14 +346,20 @@ object HoodieFileIndex extends Logging {
   }
 
   private def getQueryPaths(options: Map[String, String]): Seq[Path] = {
-    options.get("path") match {
-      case Some(p) => Seq(new Path(p))
+    // NOTE: To make sure that globbing is appropriately handled w/in the
+    //       `path`, we need to:
+    //          - First, probe whether requested globbed paths has been resolved (and `glob.paths` was provided
+    //          in options); otherwise
+    //          - Treat `path` as fully-qualified (ie non-globbed) path
+    val paths = options.get("glob.paths") match {
+      case Some(globbed) =>
+        globbed.split(",").toSeq
       case None =>
-        options.getOrElse("glob.paths",
+        val path = options.getOrElse("path",
           throw new IllegalArgumentException("'path' or 'glob paths' option required"))
-          .split(",")
-          .map(new Path(_))
-          .toSeq
+        Seq(path)
     }
+
+    paths.map(new Path(_))
   }
 }

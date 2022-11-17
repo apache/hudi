@@ -93,6 +93,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.queue.ExecutorType.BOUNDED_IN_MEMORY;
+import static org.apache.hudi.common.util.queue.ExecutorType.DISRUPTOR;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 
 /**
@@ -138,6 +139,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
       .defaultValue(BOUNDED_IN_MEMORY.name())
+      .withValidValues(BOUNDED_IN_MEMORY.name(), DISRUPTOR.name())
       .withDocumentation("Set executor which orchestrates concurrent producers and consumers communicating through a message queue."
           + "BOUNDED_IN_MEMORY(default): Use LinkedBlockingQueue as a bounded in-memory queue, this queue will use extra lock to balance producers and consumer"
           + "DISRUPTOR: Use disruptor which a lock free message queue as inner message, this queue may gain better writing performance if lock was the bottleneck. "
@@ -1002,7 +1004,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public ExecutorType getExecutorType() {
-    return ExecutorType.valueOf(getString(EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
+    return ExecutorType.valueOf(getStringOrDefault(EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
   }
 
   public boolean isCDCEnabled() {

@@ -108,7 +108,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   @Override
   public boolean isRemaining() {
-    return !queue.isEmpty();
+    return !getQueue().isEmpty();
   }
 
   @Override
@@ -124,6 +124,6 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   @Override
   public DisruptorMessageQueue<I, O> getQueue() {
-    return (DisruptorMessageQueue<I, O>)queue;
+    return (DisruptorMessageQueue<I, O>) queue;
   }
 }

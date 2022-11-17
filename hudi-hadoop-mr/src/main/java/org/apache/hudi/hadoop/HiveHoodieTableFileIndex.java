@@ -23,6 +23,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -30,6 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of {@link BaseHoodieTableFileIndex} for Hive-based query engines
@@ -54,11 +57,22 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
         specifiedQueryInstant,
         shouldIncludePendingCommits,
         true,
-        new NoopCache());
+        new NoopCache(),
+        false);
+  }
+
+  /**
+   * Lists latest file-slices (base-file along w/ delta-log files) per partition.
+   *
+   * @return mapping from string partition paths to its base/log files
+   */
+  public Map<String, List<FileSlice>> listFileSlices() {
+    return getAllInputFileSlices().entrySet().stream()
+        .collect(Collectors.toMap(e -> e.getKey().getPath(), Map.Entry::getValue));
   }
 
   @Override
-  public Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath) {
+  public Object[] doParsePartitionColumnValues(String[] partitionColumns, String partitionPath) {
     // NOTE: Parsing partition path into partition column values isn't required on Hive,
     //       since Hive does partition pruning in a different way (based on the input-path being
     //       fetched by the query engine)

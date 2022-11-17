@@ -42,6 +42,7 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -609,7 +610,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       this.serializer = new RowDataSerializer(rowType);
       this.splitIteratorFunc = splitIteratorFunc;
       this.cache = new TreeMap<>();
-      this.writeConfig = StreamerUtil.getHoodieClientConfig(flinkConf);
+      this.writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
     }
 
     public ExternalSpillableMap<String, byte[]> getOrLoadImages(

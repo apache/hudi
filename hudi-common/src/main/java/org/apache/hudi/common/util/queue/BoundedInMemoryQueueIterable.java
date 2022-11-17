@@ -135,7 +135,6 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
     this.iterator = new QueueIterator();
   }
 
-  @Override
   public long size() {
     return this.queue.size();
   }
@@ -205,7 +204,6 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
    * Reader interface but never exposed to outside world as this is a single consumer queue. Reading is done through a
    * singleton iterator for this queue.
    */
-  @Override
   public Option<O> readNextRecord() {
     if (this.isReadDone.get()) {
       return Option.empty();
@@ -256,17 +254,11 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
   /**
    * API to allow producers and consumer to communicate termination due to failure.
    */
-  @Override
   public void markAsFailed(Throwable e) {
     this.hasFailed.set(e);
     // release the permits so that if the queueing thread is waiting for permits then it will
     // get it.
     this.rateLimiter.release(RECORD_CACHING_LIMIT + 1);
-  }
-
-  @Override
-  public boolean isEmpty() {
-    return this.queue.size() == 0;
   }
 
   @Override

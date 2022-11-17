@@ -18,14 +18,12 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 /**
@@ -38,7 +36,6 @@ public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<
   private final InnerIterator innerIterator;
   private final Function<I, O> transformFunction;
   private final AtomicBoolean isWriteDone = new AtomicBoolean(false);
-  private final AtomicInteger count = new AtomicInteger(0);
 
   public SimpleHoodieQueueIterable(Iterator<I> inputItr, Function<I, O> transformFunction) {
     this.inputItr = inputItr;
@@ -52,16 +49,6 @@ public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<
   }
 
   @Override
-  public long size() {
-    return count.get();
-  }
-
-  @Override
-  public boolean isEmpty() {
-    return innerIterator.hasNext();
-  }
-
-  @Override
   public void close() throws IOException {
     while (!isWriteDone.get()) {
       isWriteDone.compareAndSet(false, true);
@@ -71,16 +58,6 @@ public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<
   @Override
   public void insertRecord(I t) throws Exception {
     // no action is needed here.
-  }
-
-  @Override
-  public Option<O> readNextRecord() {
-    return null;
-  }
-
-  @Override
-  public void markAsFailed(Throwable e) {
-    // do nothing.
   }
 
   /**
@@ -99,7 +76,6 @@ public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<
         throw new IllegalStateException("Queue closed for getting new entries");
       }
 
-      count.incrementAndGet();
       return transformFunction.apply(inputItr.next());
     }
   }

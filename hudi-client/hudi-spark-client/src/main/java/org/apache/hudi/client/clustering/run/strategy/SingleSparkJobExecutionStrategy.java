@@ -53,6 +53,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -77,8 +78,7 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     final TaskContextSupplier taskContextSupplier = getEngineContext().getTaskContextSupplier();
     final SerializableSchema serializableSchema = new SerializableSchema(schema);
-    final List<ClusteringGroupInfo> clusteringGroupInfos = clusteringPlan.getInputGroups().stream().map(clusteringGroup ->
-        ClusteringGroupInfo.create(clusteringGroup)).collect(Collectors.toList());
+    final List<ClusteringGroupInfo> clusteringGroupInfos = clusteringPlan.getInputGroups().stream().map(ClusteringGroupInfo::create).collect(Collectors.toList());
 
     String umask = engineContext.hadoopConfiguration().get("fs.permissions.umask-mode");
     Broadcast<String> umaskBroadcastValue = engineContext.broadcast(umask);
@@ -121,7 +121,7 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
 
     Iterable<List<WriteStatus>> writeStatusIterable = () -> writeStatuses;
     return StreamSupport.stream(writeStatusIterable.spliterator(), false)
-        .flatMap(writeStatusList -> writeStatusList.stream());
+        .flatMap(Collection::stream);
   }
 
 
@@ -152,7 +152,7 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
         }
       };
 
-      return StreamSupport.stream(indexedRecords.spliterator(), false).map(record -> transform(record)).iterator();
+      return StreamSupport.stream(indexedRecords.spliterator(), false).map(this::transform).iterator();
     }).collect(Collectors.toList());
 
     return new ConcatenatingIterator<>(iteratorsForPartition);

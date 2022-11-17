@@ -18,36 +18,15 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.common.util.Option;
 import java.io.Closeable;
 
 /**
- * HoodieMessageQueue holds an internal message queue, and control the behavior of
- * 1. insert record into internal message queue.
- * 2. get record from internal message queue.
- * 3. close internal message queue.
+ * HoodieMessageQueue holds an internal message queue, and control the behavior that insert record into internal message queue.
  */
 public interface HoodieMessageQueue<I, O> extends Closeable {
-
-  /**
-   * Returns the number of elements in this queue.
-   */
-  long size();
 
   /**
    * Insert a record into inner message queue.
    */
   void insertRecord(I t) throws Exception;
-
-  /**
-   * Read records from inner message queue.
-   */
-  Option<O> readNextRecord();
-
-  /**
-   * API to allow producers and consumer to communicate termination due to failure.
-   */
-  void markAsFailed(Throwable e);
-
-  boolean isEmpty();
 }

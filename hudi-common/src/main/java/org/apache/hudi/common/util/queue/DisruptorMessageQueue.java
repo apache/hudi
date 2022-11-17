@@ -55,28 +55,12 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   }
 
   @Override
-  public long size() {
-    return ringBuffer.getBufferSize() - ringBuffer.remainingCapacity();
-  }
-
-  @Override
   public void insertRecord(I value) throws Exception {
     O applied = transformFunction.apply(value);
     EventTranslator<HoodieDisruptorEvent> translator = (event, sequence) -> event.set(applied);
     queue.getRingBuffer().publishEvent(translator);
   }
 
-  @Override
-  public Option<O> readNextRecord() {
-    throw new UnsupportedOperationException("Should not call readNextRecord here. And let DisruptorMessageHandler to handle consuming logic");
-  }
-
-  @Override
-  public void markAsFailed(Throwable e) {
-    // do nothing.
-  }
-
-  @Override
   public boolean isEmpty() {
     return ringBuffer.getBufferSize() == ringBuffer.remainingCapacity();
   }

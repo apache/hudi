@@ -42,7 +42,7 @@ import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.FlinkTables;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -125,7 +125,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     }
 
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
-    this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, true);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.ckpMetadata = CkpMetadata.getInstance(hoodieTable.getMetaClient().getFs(), this.writeConfig.getBasePath());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();

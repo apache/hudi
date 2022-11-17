@@ -82,7 +82,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
           producer.produce(queue);
         } catch (Throwable e) {
           LOG.error("error producing records", e);
-          queue.markAsFailed(e);
+          getQueue().markAsFailed(e);
           throw new HoodieException("Error producing records in bounded in memory executor", e);
         } finally {
           synchronized (latch) {
@@ -116,7 +116,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
           return result;
         } catch (Exception e) {
           LOG.error("error consuming records", e);
-          queue.markAsFailed(e);
+          getQueue().markAsFailed(e);
           throw new HoodieException(e);
         }
       }, consumerExecutorService);
@@ -147,7 +147,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
 
   @Override
   public BoundedInMemoryQueueIterable<I, O> getQueue() {
-    return (BoundedInMemoryQueueIterable<I, O>)queue;
+    return (BoundedInMemoryQueueIterable<I, O>) queue;
   }
 
   @Override

@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -719,6 +720,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "day,hh")
+          .option(URL_ENCODE_PARTITIONING.key, "true")
           .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
@@ -744,11 +746,13 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
 
+        val escapedPathPart = escapePathName(day)
+
         // Test insert into
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$day', 12)")
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("id:1", s"$day/12", 1, "a1", 10, 1000, day, 12),
-          Seq("id:2", s"$day/12", 2, "a2", 10, 1000, day, 12)
+          Seq("id:1", s"$escapedPathPart/12", 1, "a1", 10, 1000, day, 12),
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 10, 1000, day, 12)
         )
         // Test merge into
         spark.sql(
@@ -759,19 +763,19 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |when matched then update set *
              |""".stripMargin)
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("id:1", s"$day/12", 1, "a1", 11, 1001, day, 12),
-          Seq("id:2", s"$day/12", 2, "a2", 10, 1000, day, 12)
+          Seq("id:1", s"$escapedPathPart/12", 1, "a1", 11, 1001, day, 12),
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 10, 1000, day, 12)
         )
         // Test update
         spark.sql(s"update $tableName set value = value + 1 where id = 2")
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("id:1", s"$day/12", 1, "a1", 11, 1001, day, 12),
-          Seq("id:2", s"$day/12", 2, "a2", 11, 1000, day, 12)
+          Seq("id:1", s"$escapedPathPart/12", 1, "a1", 11, 1001, day, 12),
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 11, 1000, day, 12)
         )
         // Test delete
         spark.sql(s"delete from $tableName where id = 1")
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("id:2", s"$day/12", 2, "a2", 11, 1000, day, 12)
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 11, 1000, day, 12)
         )
       }
     }
