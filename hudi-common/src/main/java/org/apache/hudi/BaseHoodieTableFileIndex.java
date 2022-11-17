@@ -249,6 +249,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     int parallelism = Integer.parseInt(String.valueOf(configProperties.getOrDefault(HoodieCommonConfig.TABLE_LOADING_PARALLELISM.key(),
         HoodieCommonConfig.TABLE_LOADING_PARALLELISM.defaultValue())));
 
+    Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices;
+    long buildCacheFileSlicesLocalStart = System.currentTimeMillis();
     if (parallelism > 0 && partitions.size() > 0) {
 
       // convert Map<Path, FileStatus[]> to Map<String, FileStatus[]>
@@ -260,15 +262,19 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
       Map<String, FileStatus[]> partitionFiles = combine(left, partitionFilesPair.getRight());
 
-      return buildCacheFileSlicesLocalParallel(parallelism, partitions, partitionFiles, activeTimeline, queryInstant);
+      cachedAllInputFileSlices = buildCacheFileSlicesLocalParallel(parallelism, partitions, partitionFiles, activeTimeline, queryInstant);
     } else {
-
       FileStatus[] allFiles = combine(flatMap(partitionFilesPair.getLeft().values()), flatMap(partitionFilesPair.getRight().values()));
       HoodieTableFileSystemView fileSystemView =
           new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
 
-      return getCandidateFileSlices(partitions, queryInstant, fileSystemView);
+      cachedAllInputFileSlices =  getCandidateFileSlices(partitions, queryInstant, fileSystemView);
     }
+
+    long buildCacheFileSlicesLocalEnd = System.currentTimeMillis();
+    LOG.info(String.format("Build cache file slices, spent: %d ms", buildCacheFileSlicesLocalEnd - buildCacheFileSlicesLocalStart));
+
+    return cachedAllInputFileSlices;
   }
 
   private Map<PartitionPath, List<FileSlice>> buildCacheFileSlicesLocalParallel(int parallelism, List<PartitionPath> partitions, Map<String, FileStatus[]> partitionFiles,
