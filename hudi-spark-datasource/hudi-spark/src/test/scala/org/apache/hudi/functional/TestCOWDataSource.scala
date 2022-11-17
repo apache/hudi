@@ -27,24 +27,23 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.util
-import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
+import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.{HoodieException, HoodieUpsertException}
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, concat, lit, udf}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
-import org.junit.jupiter.api.function.Executable
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
@@ -58,7 +57,7 @@ import scala.collection.JavaConverters._
 /**
  * Basic tests on the spark datasource for COW table.
  */
-class TestCOWDataSource extends HoodieClientTestBase {
+class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport {
   var spark: SparkSession = null
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -79,7 +78,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
   override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
-        JFunction.toJava((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
+        JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
 
   @BeforeEach override def setUp() {
@@ -138,14 +137,12 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     val df = inputDF.withColumn(HoodieRecord.HOODIE_IS_DELETED, lit("abc"))
 
-    assertThrows(classOf[HoodieException], new Executable {
-      override def execute(): Unit = {
-        df.write.format("hudi")
-          .options(commonOpts)
-          .mode(SaveMode.Overwrite)
-          .save(basePath)
-      }
-    }, "Should have failed since _hoodie_is_deleted is not a BOOLEAN data type")
+    assertThrows(classOf[HoodieException]) {
+      df.write.format("hudi")
+        .options(commonOpts)
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+    }
   }
 
   /**
@@ -633,11 +630,12 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Use the `driver,rider` field as the partition key, If no such field exists,
     // the default value [[PartitionPathEncodeUtils#DEFAULT_PARTITION_PATH]] is used
     writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
-    writer.partitionBy("driver", "rider")
-      .save(basePath)
-    recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath)
-    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit(DEFAULT_PARTITION_PATH)).count() == 0)
+    val t = assertThrows(classOf[Throwable]) {
+      writer.partitionBy("driver", "rider")
+        .save(basePath)
+    }
+
+    assertEquals("Single partition-path field is expected; provided (driver,rider)", getRootCause(t).getMessage)
   }
 
   @Test def testSparkPartitionByWithComplexKeyGenerator() {

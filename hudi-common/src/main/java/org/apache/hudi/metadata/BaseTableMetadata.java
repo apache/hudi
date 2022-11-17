@@ -55,6 +55,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -149,7 +150,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitions)
+  public Map<String, FileStatus[]> getAllFilesInPartitions(Collection<String> partitions)
       throws IOException {
     if (partitions.isEmpty()) {
       return Collections.emptyMap();

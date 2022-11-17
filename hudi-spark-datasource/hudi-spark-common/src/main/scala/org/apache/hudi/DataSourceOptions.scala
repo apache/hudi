@@ -145,6 +145,32 @@ object DataSourceReadOptions {
         " read from the data file (in Hudi partition columns are persisted by default)." +
         " This config is a fallback allowing to preserve existing behavior, and should not be used otherwise.")
 
+  val FILE_INDEX_LISTING_MODE_EAGER = "eager"
+  val FILE_INDEX_LISTING_MODE_LAZY = "lazy"
+
+  val FILE_INDEX_LISTING_MODE_OVERRIDE: ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.file.index.listing.mode.override")
+      .defaultValue(FILE_INDEX_LISTING_MODE_LAZY)
+      .withValidValues(FILE_INDEX_LISTING_MODE_LAZY, FILE_INDEX_LISTING_MODE_EAGER)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Overrides Hudi's file-index implementation's file listing mode: when set to 'eager'," +
+        " file-index will list all partition paths and corresponding file slices w/in them eagerly, during initialization," +
+        " prior to partition-pruning kicking in, meaning that all partitions will be listed including ones that might be " +
+        " subsequently pruned out; when set to 'lazy', partitions and file-slices w/in them will be listed" +
+        " lazily (ie when they actually accessed, instead of when file-index is initialized) allowing partition pruning" +
+        " to occur before that, only listing partitions that has already been pruned. Please note that, this config" +
+        " is provided purely to allow to fallback to behavior existing prior to 0.13.0 release, and will be deprecated" +
+        " soon after.")
+
+  val FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.datasource.read.file.index.listing.partition-path-prefix.analysis.enabled")
+      .defaultValue(true)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Controls whether partition-path prefix analysis is enabled w/in the file-index, allowing" +
+        " to avoid necessity to recursively list deep folder structures of partitioned tables w/ multiple partition columns," +
+        " by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from " +
+        " them (if possible).")
+
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
     .defaultValue("false")
