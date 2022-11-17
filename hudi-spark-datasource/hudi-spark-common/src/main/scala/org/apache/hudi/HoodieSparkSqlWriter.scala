@@ -290,7 +290,10 @@ object HoodieSparkSqlWriter {
             val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeStatuses, client)
 
+
           case _ =>
+            // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
+            //
             // Convert to RDD[HoodieRecord]
             val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace,
               Some(writerSchema))
@@ -322,6 +325,10 @@ object HoodieSparkSqlWriter {
 
             val hoodieRecords = avroRecords.mapPartitions(it => {
               val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
+              val consistentLogicalTimestampEnabled = parameters.getOrElse(
+                DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+                DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
+
               it.map { avroRecord =>
                 val processedRecord = if (shouldDropPartitionColumns) {
                   HoodieAvroUtils.rewriteRecord(avroRecord, dataFileSchema)
@@ -329,10 +336,8 @@ object HoodieSparkSqlWriter {
                   avroRecord
                 }
                 val hoodieRecord = if (shouldCombine) {
-                  val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRecord, hoodieConfig.getString(PRECOMBINE_FIELD), false, parameters.getOrElse(
-                    DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-                    DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean)
-                    .asInstanceOf[Comparable[_]]
+                  val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRecord, hoodieConfig.getString(PRECOMBINE_FIELD),
+                    false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
                   DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, keyGenerator.getKey(avroRecord),
                     hoodieConfig.getString(PAYLOAD_CLASS_NAME))
                 } else {
