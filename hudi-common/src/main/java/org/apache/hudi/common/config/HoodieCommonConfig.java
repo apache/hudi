@@ -48,16 +48,6 @@ public class HoodieCommonConfig extends HoodieConfig {
           + "In general local parallelism can be tried from 20 and cluster parallelism can be tried from 200. "
           + "-1 means disable parallel, and serial load hudi table.");
 
-  public static final ConfigProperty<String> TABLE_LOADING_MODE = ConfigProperty
-      .key("hoodie.datasource.read.loading.mode")
-      .defaultValue("LOCAL")
-      .withDocumentation("Used to set how to load hudi table before query. "
-          + "LOCAL(Default): load hudi table partitions and files locally; "
-          + "CLUSTER: distributed load hudi table partitions and files using cluster resources. "
-          + "Generally speaking, Local mode(maybe enable parallelism if necessary) can meet most needs. "
-          + "If the hudi table is very large and the load is relatively long, users can try the CLUSTER mode. "
-          + "Also using " + TABLE_LOADING_PARALLELISM.key() + " to control parallelism");
-
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
