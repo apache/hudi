@@ -336,6 +336,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   /**
    * Syncs the list of storage partitions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).
+   *
+   * @param writtenPartitionsSince partitions has been added, updated, or dropped since last updated.
    */
   private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, Set<String> droppedPartitions) {
     boolean partitionsChanged;

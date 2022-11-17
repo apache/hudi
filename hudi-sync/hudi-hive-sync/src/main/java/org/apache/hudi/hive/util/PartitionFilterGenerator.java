@@ -19,6 +19,7 @@
 package org.apache.hudi.hive.util;
 
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.expression.BinaryOperator;
@@ -42,19 +43,6 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_E
 
 public class PartitionFilterGenerator {
 
-  private interface ExpressionBuilder<T> {
-
-    /**
-     * Visit all elements provided to build the expression tree.
-     */
-    Expression visitAll(List<T> allElements);
-
-    /**
-     * Visit sub element to build the sub expression.
-     */
-    Expression visitElement(T element);
-  }
-
   /**
    * Build expression from the Partition list.
    *
@@ -62,19 +50,11 @@ public class PartitionFilterGenerator {
    *     Or(And(Equal(Attribute(date), Literal(2022-09-01)), Equal(Attribute(hour), Literal(12))),
    *     And(Equal(Attribute(date), Literal(2022-09-02)), Equal(Attribute(hour), Literal(13))))
    */
-  private static class PartitionExpressionBuilder implements ExpressionBuilder<Partition> {
-
-    private final List<FieldSchema> partitionFields;
-
-    public PartitionExpressionBuilder(List<FieldSchema> partitionFields) {
-      this.partitionFields = partitionFields;
-    }
-
-    @Override
-    public Expression visitElement(Partition partition) {
+  private static Expression buildPartitionExpression(List<Partition> partitions, List<FieldSchema> partitionFields) {
+    return partitions.stream().map(partition -> {
       List<String> partitionValues = partition.getValues();
-
       Expression root = null;
+
       for (int i = 0; i < partitionFields.size(); i++) {
         FieldSchema field = partitionFields.get(i);
         String value = partitionValues.get(i);
@@ -87,109 +67,96 @@ public class PartitionFilterGenerator {
         }
       }
       return root;
+    }).reduce(null, (result, expr) -> {
+      if (result == null) {
+        return expr;
+      } else {
+        return new BinaryOperator.Or(result, expr);
+      }
+    });
+  }
+
+  /**
+   * Extract partition values from the {@param partitions}, and binding to
+   * corresponding partition fieldSchemas.
+   */
+  private static List<Pair<FieldSchema, String[]>> extractFieldValues(List<Partition> partitions, List<FieldSchema> partitionFields) {
+    return IntStream.range(0, partitionFields.size())
+        .mapToObj(i -> {
+          Set<String> values = new HashSet<String>();
+          for (int j = 0; j < partitions.size(); j++) {
+            values.add(partitions.get(j).getValues().get(i));
+          }
+          return Pair.of(partitionFields.get(i), values.toArray(new String[0]));
+        })
+        .collect(Collectors.toList());
+  }
+
+  private static class ValueComparator implements Comparator<String> {
+
+    private final String valueType;
+    public ValueComparator(String type) {
+      this.valueType = type;
     }
 
     @Override
-    public Expression visitAll(List<Partition> partitions) {
-      Expression root = null;
+    public int compare(String s1, String s2) {
+      switch (valueType.toLowerCase(Locale.ROOT)) {
+        case HiveSchemaUtil.INT_TYPE_NAME:
+          int i1 = Integer.parseInt(s1);
+          int i2 = Integer.parseInt(s2);
+          return i1 - i2;
+        case HiveSchemaUtil.BIGINT_TYPE_NAME:
+          long l1 = Long.parseLong(s1);
+          long l2 = Long.parseLong(s2);
+          long result = l1 - l2;
+          if (result > 0) {
+            return 1;
+          }
 
-      for (Partition partition : partitions) {
-        Expression exp = visitElement(partition);
-        if (root != null) {
-          root = new BinaryOperator.Or(root, exp);
-        } else {
-          root = exp;
-        }
+          if (result < 0) {
+            return -1;
+          }
+
+          return 0;
+        default:
+          return s1.compareTo(s2);
       }
-
-      return root;
     }
   }
 
   /**
-   * Build expression from {@link PartitionField}, this builder will extract the min value
-   * and the max value of each field, and construct GreatThanOrEqual and LessThanOrEqual to
-   * build the expression.
+   * This method will extract the min value and the max value of each field,
+   * and construct GreatThanOrEqual and LessThanOrEqual to build the expression.
    *
-   * This builder can reduce the Expression tree level a lot if each field has too many values.
+   * This method can reduce the Expression tree level a lot if each field has too many values.
    */
-  private static class MinMaxPartitionExpressionBuilder implements ExpressionBuilder<PartitionField> {
+  private static Expression buildMinMaxPartitionExpression(List<Partition> partitions, List<FieldSchema> partitionFields) {
+    return extractFieldValues(partitions, partitionFields).stream().map(fieldWithValues -> {
+      FieldSchema fieldSchema = fieldWithValues.getKey();
+      String[] values = fieldWithValues.getValue();
 
-    public MinMaxPartitionExpressionBuilder() {}
-
-    @Override
-    public Expression visitAll(List<PartitionField> fieldValues) {
-      Expression root = null;
-      for (PartitionField values : fieldValues) {
-        Expression exp = visitElement(values);
-        if (root != null) {
-          root = new BinaryOperator.And(root, exp);
-        } else {
-          root = exp;
-        }
+      if (values.length == 1) {
+        return new BinaryOperator.EqualTo(new LeafExpression.AttributeReferenceExpression(fieldSchema.getName()),
+            new LeafExpression.Literal(values[0], fieldSchema.getType()));
       }
 
-      return root;
-    }
+      Arrays.sort(values, new ValueComparator(fieldSchema.getType()));
 
-    private static class ValueComparator implements Comparator<String> {
-
-      private final String valueType;
-      public ValueComparator(String type) {
-        this.valueType = type;
-      }
-
-      @Override
-      public int compare(String s1, String s2) {
-        switch (valueType.toLowerCase(Locale.ROOT)) {
-          case HiveSchemaUtil.INT_TYPE_NAME:
-            int i1 = Integer.parseInt(s1);
-            int i2 = Integer.parseInt(s2);
-            return i1 - i2;
-          case HiveSchemaUtil.BIGINT_TYPE_NAME:
-            long l1 = Long.parseLong(s1);
-            long l2 = Long.parseLong(s2);
-            long result = l1 - l2;
-            if (result > 0) {
-              return 1;
-            }
-
-            if (result < 0) {
-              return -1;
-            }
-
-            return 0;
-          default:
-            return s1.compareTo(s2);
-        }
-      }
-    }
-
-    @Override
-    public Expression visitElement(PartitionField partitionField) {
-      if (partitionField.values.length == 1) {
-        return new BinaryOperator.EqualTo(new LeafExpression.AttributeReferenceExpression(partitionField.field.getName()),
-            new LeafExpression.Literal(partitionField.values[0], partitionField.field.getType()));
-      }
-      Arrays.sort(partitionField.values, new ValueComparator(partitionField.field.getType()));
       return new BinaryOperator.And(
           new BinaryOperator.GreatThanOrEqual(
-              new LeafExpression.AttributeReferenceExpression(partitionField.field.getName()),
-              new LeafExpression.Literal(partitionField.values[0], partitionField.field.getType())),
+              new LeafExpression.AttributeReferenceExpression(fieldSchema.getName()),
+              new LeafExpression.Literal(values[0], fieldSchema.getType())),
           new BinaryOperator.LessThanOrEqual(
-              new LeafExpression.AttributeReferenceExpression(partitionField.field.getName()),
-              new LeafExpression.Literal(partitionField.values[partitionField.values.length - 1], partitionField.field.getType())));
-    }
-  }
-
-  private static class PartitionField {
-    protected final FieldSchema field;
-    protected final String[] values;
-
-    public PartitionField(FieldSchema field, String[] values) {
-      this.field = field;
-      this.values = values;
-    }
+              new LeafExpression.AttributeReferenceExpression(fieldSchema.getName()),
+              new LeafExpression.Literal(values[values.length - 1], fieldSchema.getType())));
+    }).reduce(null, (result, expr) -> {
+      if (result == null) {
+        return expr;
+      } else {
+        return new BinaryOperator.And(result, expr);
+      }
+    });
   }
 
   public static String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields, HiveSyncConfig config) {
@@ -210,18 +177,9 @@ public class PartitionFilterGenerator {
     Expression filter;
     int estimateSize = partitionFields.size() * partitions.size();
     if (estimateSize > config.getIntOrDefault(HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE)) {
-      List<PartitionField> fieldWithValuesList = IntStream.range(0, partitionFields.size())
-          .mapToObj(i -> {
-            Set<String> values = new HashSet<String>();
-            for (int j = 0; j < partitions.size(); j++) {
-              values.add(partitions.get(j).getValues().get(i));
-            }
-            return new PartitionField(partitionFields.get(i), values.toArray(new String[0]));
-          })
-          .collect(Collectors.toList());
-      filter = new MinMaxPartitionExpressionBuilder().visitAll(fieldWithValuesList);
+      filter = buildMinMaxPartitionExpression(partitions, partitionFields);
     } else {
-      filter = new PartitionExpressionBuilder(partitionFields).visitAll(partitions);
+      filter = buildPartitionExpression(partitions, partitionFields);
     }
 
     return generateFilterString(filter);
