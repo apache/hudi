@@ -111,7 +111,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
   }
 
-  // TODO java-doc
+  /**
+   * Provides incremental scanning capability where only provided keys will be looked
+   * up in the delta-log files, scanned and subsequently materialized into the internal
+   * cache
+   *
+   * @param keys to be looked up
+   */
   public void scanByFullKeys(List<String> keys) {
     if (forceFullScan) {
       return; // no-op
@@ -129,7 +135,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     scanInternal(Option.of(KeySpec.fullKeySpec(missingKeys)), false);
   }
 
-  // TODO java-doc
+  /**
+   * Provides incremental scanning capability where only keys matching provided key-prefixes
+   * will be looked up in the delta-log files, scanned and subsequently materialized into
+   * the internal cache
+   *
+   * @param keyPrefixes to be looked up
+   */
   public void scanByKeyPrefixes(List<String> keyPrefixes) {
     if (forceFullScan) {
       return; // no-op
@@ -148,11 +160,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     scan();
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = records.size();
+
     LOG.info("Number of log files scanned => " + logFilePaths.size());
     LOG.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
     LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
-    LOG.info(
-        "Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records.getCurrentInMemoryMapSize());
+    LOG.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records.getCurrentInMemoryMapSize());
     LOG.info("Number of entries in BitCaskDiskMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
     LOG.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
   }

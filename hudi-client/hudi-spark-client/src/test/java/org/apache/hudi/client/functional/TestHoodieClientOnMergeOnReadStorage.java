@@ -447,7 +447,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
             .withUseScanV2(true)
             .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
             .build();
-        scanner.scanInternal(Option.empty(), true);
+        scanner.scan(true);
         List<String> prevInstants = scanner.getValidBlockInstants();
         HoodieUnMergedLogRecordScanner scanner2 = HoodieUnMergedLogRecordScanner.newBuilder()
             .withFileSystem(metaClient.getFs())
@@ -461,7 +461,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
             .withUseScanV2(true)
             .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
             .build();
-        scanner2.scanInternal(Option.empty(), true);
+        scanner2.scan(true);
         List<String> currentInstants = scanner2.getValidBlockInstants();
         assertEquals(prevInstants, currentInstants);
       });

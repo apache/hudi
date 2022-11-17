@@ -94,7 +94,7 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
         .withUseScanV2(true)
         .withRecordMerger(writeConfig.getRecordMerger())
         .build();
-    scanner.scanInternal(Option.empty(), true);
+    scanner.scan(true);
     int totalBlocks = scanner.getCurrentInstantLogBlocks().size();
     LOG.info("Total blocks seen are " + totalBlocks);
 

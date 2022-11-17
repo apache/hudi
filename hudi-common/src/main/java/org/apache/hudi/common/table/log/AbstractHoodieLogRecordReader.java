@@ -155,15 +155,6 @@ public abstract class AbstractHoodieLogRecordReader {
   private final boolean useScanV2;
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
-                                          Schema readerSchema,
-                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
-                                          int bufferSize, Option<InstantRange> instantRange,
-                                          boolean withOperationField, HoodieRecordMerger recordMerger) {
-    this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema(), Option.empty(), false, recordMerger);
-  }
-
-  protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField, boolean forceFullScan,
@@ -219,20 +210,32 @@ public abstract class AbstractHoodieLogRecordReader {
     this.recordType = recordMerger.getRecordType();
   }
 
-  // TODO java-doc
-  public void scan() {
-    scanInternal(Option.empty(), false);
+  /**
+   * Scans delta-log files processing blocks
+   */
+  public final void scan() {
+    scan(false);
   }
 
-  public synchronized void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
-    if (useScanV2) {
-      scanInternalV2(keySpecOpt, skipProcessingBlocks);
-    } else {
-      scanInternalV1(keySpecOpt);
+  public final void scan(boolean skipProcessingBlocks) {
+    scanInternal(Option.empty(), skipProcessingBlocks);
+  }
+
+  /**
+   * @param keySpecOpt specifies target set of keys to be scanned
+   * @param skipProcessingBlocks controls, whether (delta) blocks have to actually be processed
+   */
+  protected final void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
+    synchronized (this) {
+      if (useScanV2) {
+        scanInternalV2(keySpecOpt, skipProcessingBlocks);
+      } else {
+        scanInternalV1(keySpecOpt);
+      }
     }
   }
 
-  private synchronized void scanInternalV1(Option<KeySpec> keySpecOpt) {
+  private void scanInternalV1(Option<KeySpec> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -393,7 +396,7 @@ public abstract class AbstractHoodieLogRecordReader {
     }
   }
 
-  private synchronized void scanInternalV2(Option<KeySpec> keySpecOption, boolean skipProcessingBlocks) {
+  private void scanInternalV2(Option<KeySpec> keySpecOption, boolean skipProcessingBlocks) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
