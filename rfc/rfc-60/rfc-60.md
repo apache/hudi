@@ -79,19 +79,19 @@ not meet their use-case.
  */
 public interface HoodieStorageStrategy extends Serializable {
   /**
-   * Return a fully-qualified storage file location for the given filename.
+   * Return a storage location for the given filename.
    *
    * @param fileId data file ID
-   * @return a fully-qualified location URI for a data file
+   * @return a storage location string for a data file
    */
   String storageLocation(String fileId);
 
   /**
-   * Return a fully-qualified storage file location for the given partition and filename.
+   * Return a storage location for the given partition and filename.
    *
    * @param partitionPath partition path for the file
    * @param fileId data file ID
-   * @return a fully-qualified location URI for a data file
+   * @return a storage location string for a data file
    */
   String storageLocation(String partitionPath, String fileId);
 }
@@ -147,7 +147,16 @@ s3://<table_storage_bucket>/0bfb3d6e/<hudi_table_name>/.4b0c6b40-2ac0-4a1c-a26f-
 s3://<table_storage_bucket>/0bfb3d6e/<hudi_table_name>/.075f3295-def8-4a42-a927-07fd2dd2976c-0_7-11-49_20220301005056692.log.1_0-22-26
 ...
 ```
-Storage strategy would be persisted in the table config (`.hoodie.properties`), and the strategy for 
+
+Note: Storage strategy would only return a storage location instead of a full path. In the above example,
+the storage location is `s3://<table_storage_bucket>/0bfb3d6e/`, and the lower-level folder structure would be appended
+later automatically to get the actual file path. In another word, 
+users would only be able to customize upper-level folder structure (storage location). 
+Having a fixed lower-level folder structure would be beneficial because:
+- It's much more intuitive in case someone needs to check data files
+- Easier to figure out where the data is when Hudi needs to fall back on file listing
+
+Storage strategy would be persisted in the table config (`.hoodie/hoodie.properties`), and the strategy for 
 metadata table would be always set to default. So the original table path will continue to store 
 the `metadata folder` and `partition metadata` files:
 ```
@@ -185,13 +194,9 @@ the users as long as they are not explicitly turning off metadata table, in whic
 3. The Instant metadata (`HoodieCommitMetadata`,`HoodieCleanMetadata` etc.) will always act as the source of file listing
 for metadata table to be populated.
 
-4. `HoodieCommitMetadata` currently stores `file name` instead of complete `file path`. We will have to modify commit
-metadata to store the complete file path instead of just file name, as the files are now distributed across several random
-prefix paths instead of a derivable table/partition path.
+4. If there is an error reading from Metadata table, we will not fall back listing from file system.
 
-5. If there is an error reading from Metadata table, we will not fall back listing from file system.
-
-6. In case of metadata table getting corrupted or lost, we need to have a solution here to reconstruct metadata table
+5. In case of metadata table getting corrupted or lost, we need to have a solution here to reconstruct metadata table
 from the files which distributed using federated storage. We will likely have to implement a file system listing
 logic, that can get all the partition to files mapping by listing all the prefixes under the `Table Storage Path`.
 Following the folder structure of adding table name/partitions under the prefix will help in getting the listing and
@@ -216,9 +221,6 @@ should not be user's responsibility to enable metadata listing from query engine
 
 ### Future Work
 
-- Currently, we are only targeting Hudi `Data files` to be stored in federated storage format. However, Hudi also
-generates `Marker files` corresponding to each data file which sits under the Hudi metadata folder. It can still be a
-bottleneck as all the marker files will be stored under the table path prefix.
 - We need a tool to bootstrap existing Hudi table to switch to another storage strategy.
 - Partition-level storage strategy: Each partition can have its own storage strategy for users to have
 finer grasp on how data is stored. It would also make new storage strategies more accessible for
