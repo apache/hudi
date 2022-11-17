@@ -22,8 +22,8 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -74,7 +74,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private static final Logger LOG = LogManager.getLogger(HoodieMergedLogRecordScanner.class);
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = new HoodieTimer();
-  // Final map of compacted/merged records
+  // Map of compacted/merged records
   protected final ExternalSpillableMap<String, HoodieRecord> records;
   // count of merged records in log
   private long numMergedRecordsInLog;
@@ -109,6 +109,17 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     if (forceFullScan) {
       performScan();
     }
+  }
+
+  /**
+   * Scans delta-log files processing blocks
+   */
+  public final void scan() {
+    scan(false);
+  }
+
+  public final void scan(boolean skipProcessingBlocks) {
+    scanInternal(Option.empty(), skipProcessingBlocks);
   }
 
   /**
@@ -157,7 +168,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private void performScan() {
     // Do the scan and merge
     timer.startTimer();
-    scan();
+
+    scanInternal(Option.empty(), false);
+
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = records.size();
 
@@ -175,7 +188,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   public Map<String, HoodieRecord> getRecords() {
-    // TODO make immutable (to be thread-safe)
     return Collections.unmodifiableMap(records);
   }
 

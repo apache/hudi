@@ -211,17 +211,6 @@ public abstract class AbstractHoodieLogRecordReader {
   }
 
   /**
-   * Scans delta-log files processing blocks
-   */
-  public final void scan() {
-    scan(false);
-  }
-
-  public final void scan(boolean skipProcessingBlocks) {
-    scanInternal(Option.empty(), skipProcessingBlocks);
-  }
-
-  /**
    * @param keySpecOpt specifies target set of keys to be scanned
    * @param skipProcessingBlocks controls, whether (delta) blocks have to actually be processed
    */

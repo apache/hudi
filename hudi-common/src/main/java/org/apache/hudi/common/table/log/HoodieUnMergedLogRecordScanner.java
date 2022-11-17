@@ -49,6 +49,17 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   }
 
   /**
+   * Scans delta-log files processing blocks
+   */
+  public final void scan() {
+    scan(false);
+  }
+
+  public final void scan(boolean skipProcessingBlocks) {
+    scanInternal(Option.empty(), skipProcessingBlocks);
+  }
+
+  /**
    * Returns the builder for {@code HoodieUnMergedLogRecordScanner}.
    */
   public static HoodieUnMergedLogRecordScanner.Builder newBuilder() {
