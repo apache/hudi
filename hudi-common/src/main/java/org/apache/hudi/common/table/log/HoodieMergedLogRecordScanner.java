@@ -45,6 +45,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.concurrent.NotThreadSafe;
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
@@ -69,7 +70,7 @@ import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
  */
 @NotThreadSafe
 public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
-    implements Iterable<HoodieRecord> {
+    implements Iterable<HoodieRecord>, Closeable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergedLogRecordScanner.class);
   // A timer for calculating elapsed time in millis
@@ -273,6 +274,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     return totalTimeTakenToReadAndMergeBlocks;
   }
 
+  @Override
   public void close() {
     if (records != null) {
       records.close();

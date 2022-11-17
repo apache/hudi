@@ -111,11 +111,6 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     }
   }
 
-  // TODO remove this method
-  public HoodieMergedLogRecordScanner getLogRecordScanner() {
-    return logRecordScanner;
-  }
-
   @Override
   public void close() throws IOException {
     logRecordScanner.close();
