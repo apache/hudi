@@ -492,7 +492,7 @@ public class IncrementalInputSplits implements Serializable {
 
   private Stream<HoodieInstant> maySkipOverwriteInstants(Stream<HoodieInstant> instants) {
     return instants.filter(instant -> !this.skipCompaction || !instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
-            .filter(instant -> !this.skipClustering|| !instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+            .filter(instant -> !this.skipClustering || !instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
   }
 
   private static <T> List<T> mergeList(List<T> list1, List<T> list2) {
