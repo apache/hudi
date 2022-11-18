@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieException;
@@ -44,17 +43,8 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, final Iterator<I> inputItr,
                                  IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
-    this(bufferLimitInBytes, new IteratorBasedQueueProducer<>(inputItr), Option.of(consumer), transformFunction, preExecuteRunnable);
-  }
-
-  public BoundedInMemoryExecutor(final long bufferLimitInBytes, HoodieProducer<I> producer,
-                                 Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
-    this(bufferLimitInBytes, producer, consumer, transformFunction, Functions.noop());
-  }
-
-  public BoundedInMemoryExecutor(final long bufferLimitInBytes, HoodieProducer<I> producer,
-                                 Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, Runnable preExecuteRunnable) {
-    this(bufferLimitInBytes, Collections.singletonList(producer), consumer, transformFunction, new DefaultSizeEstimator<>(), preExecuteRunnable);
+    this(bufferLimitInBytes, Collections.singletonList(new IteratorBasedQueueProducer<>(inputItr)),
+        Option.of(consumer), transformFunction, new DefaultSizeEstimator<>(), preExecuteRunnable);
   }
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<HoodieProducer<I>> producers,
