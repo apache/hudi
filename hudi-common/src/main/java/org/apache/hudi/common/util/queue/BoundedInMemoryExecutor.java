@@ -33,7 +33,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 /**
@@ -74,26 +74,22 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
   @Override
   public CompletableFuture<Void> startProducers() {
     // Latch to control when and which producer thread will close the queue
-    final CountDownLatch latch = new CountDownLatch(producers.size());
-
+    final AtomicInteger runningProducers = new AtomicInteger(producers.size());
     return CompletableFuture.allOf(producers.stream().map(producer -> {
       return CompletableFuture.supplyAsync(() -> {
         try {
           producer.produce(queue);
         } catch (Throwable e) {
-          LOG.error("error producing records", e);
+          LOG.error("Failed to produce records", e);
           queue.markAsFailed(e);
-          throw new HoodieException("Error producing records in bounded in memory executor", e);
+          throw new HoodieException("Failed to produce records", e);
         } finally {
-          synchronized (latch) {
-            latch.countDown();
-            if (latch.getCount() == 0) {
+          if (runningProducers.decrementAndGet() == 0) {
+            try {
               // Mark production as done so that consumer will be able to exit
-              try {
-                queue.close();
-              } catch (IOException e) {
-                throw new HoodieIOException("Catch Exception when closing BoundedInMemoryQueue.", e);
-              }
+              queue.close();
+            } catch (IOException e) {
+              throw new HoodieIOException("Catch Exception when closing BoundedInMemoryQueue.", e);
             }
           }
         }
