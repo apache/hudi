@@ -42,19 +42,19 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
     extends IteratorBasedQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
-  private HoodieWriteConfig config;
-  private String instantTime;
-  private boolean areRecordsSorted;
-  private HoodieTable hoodieTable;
-  private String idPrefix;
-  private TaskContextSupplier taskContextSupplier;
-  private WriteHandleFactory writeHandleFactory;
+  private final HoodieWriteConfig config;
+  private final String instantTime;
+  private final boolean areRecordsSorted;
+  private final HoodieTable hoodieTable;
+  private final String idPrefix;
+  private final TaskContextSupplier taskContextSupplier;
+  private final WriteHandleFactory writeHandleFactory;
 
   private final List<WriteStatus> statuses = new ArrayList<>();
   // Stores the open HoodieWriteHandle for each table partition path
   // If the records are consumed in order, there should be only one open handle in this mapping.
   // Otherwise, there may be multiple handles.
-  private Map<String, HoodieWriteHandle> handles = new HashMap<>();
+  private final Map<String, HoodieWriteHandle> handles = new HashMap<>();
 
   public CopyOnWriteInsertHandler(HoodieWriteConfig config, String instantTime,
                                   boolean areRecordsSorted, HoodieTable hoodieTable, String idPrefix,
