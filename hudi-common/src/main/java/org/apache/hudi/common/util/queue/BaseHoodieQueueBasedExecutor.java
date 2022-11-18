@@ -101,7 +101,7 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
       // to make sure resources are properly cleaned up
       producers.forEach(HoodieProducer::close);
       // Mark production as done so that consumer will be able to exit
-      queue.close();
+      queue.seal();
     });
   }
 

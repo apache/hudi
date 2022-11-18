@@ -241,9 +241,15 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
    * Puts an empty entry to queue to denote termination.
    */
   @Override
-  public void close() {
+  public void seal() {
     // done queueing records notifying queue-reader.
     isWriteDone.set(true);
+  }
+
+  @Override
+  public void close() {
+    // NOTE: Closing is a no-op to support the 1-sided case, when the queue
+    //       is just populated (for subsequent reading), but never consumed
   }
 
   private void throwExceptionIfFailed() {
