@@ -32,12 +32,14 @@ public abstract class BaseAvroPayload implements Serializable {
   /**
    * Avro data extracted from the source converted to bytes.
    */
-  public final byte[] recordBytes;
+  protected final byte[] recordBytes;
 
   /**
    * For purposes of preCombining.
    */
-  public final Comparable orderingVal;
+  protected final Comparable orderingVal;
+
+  protected final boolean isDeletedRecord;
 
   /**
    * Instantiate {@link BaseAvroPayload}.
@@ -48,8 +50,26 @@ public abstract class BaseAvroPayload implements Serializable {
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
     this.recordBytes = record != null ? HoodieAvroUtils.avroToBytes(record) : new byte[0];
     this.orderingVal = orderingVal;
+    this.isDeletedRecord = record == null || isDeleteRecord(record);
+
     if (orderingVal == null) {
       throw new HoodieException("Ordering value is null for record: " + record);
     }
+  }
+
+  /**
+   * @param genericRecord instance of {@link GenericRecord} of interest.
+   * @returns {@code true} if record represents a delete record. {@code false} otherwise.
+   */
+  protected static boolean isDeleteRecord(GenericRecord genericRecord) {
+    final String isDeleteKey = HoodieRecord.HOODIE_IS_DELETED_FIELD;
+    // Modify to be compatible with new version Avro.
+    // The new version Avro throws for GenericRecord.get if the field name
+    // does not exist in the schema.
+    if (genericRecord.getSchema().getField(isDeleteKey) == null) {
+      return false;
+    }
+    Object deleteMarker = genericRecord.get(isDeleteKey);
+    return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
   }
 }
