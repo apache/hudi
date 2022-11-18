@@ -33,6 +33,8 @@ import org.apache.hudi.util.QueueBasedExecutorFactory;
 import java.util.Iterator;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 public class JavaLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
   public JavaLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                 boolean areRecordsSorted,
@@ -65,7 +67,7 @@ public class JavaLazyInsertIterable<T extends HoodieRecordPayload> extends Hoodi
       bufferedIteratorExecutor =
           QueueBasedExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(), getTransformFunction(schema));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
-      assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
+      checkState(result != null && !result.isEmpty());
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);

@@ -42,6 +42,4 @@ public interface HoodieExecutor<I, O, E>  {
    * Allows to gracefully await the termination of the executor
    */
   boolean awaitTermination();
-
-  boolean isRemaining();
 }

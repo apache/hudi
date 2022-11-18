@@ -88,8 +88,7 @@ public class DisruptorExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, 
     return producingFuture.thenApply(res -> consumer.get().finish());
   }
 
-  @Override
-  public boolean isRemaining() {
+  public boolean isRunning() {
     return !queue.isEmpty();
   }
 }

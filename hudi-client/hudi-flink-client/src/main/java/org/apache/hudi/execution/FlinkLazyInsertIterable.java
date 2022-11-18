@@ -34,6 +34,8 @@ import org.apache.hudi.util.QueueBasedExecutorFactory;
 import java.util.Iterator;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * Flink lazy iterable that supports explicit write handler.
  *
@@ -61,7 +63,7 @@ public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
       bufferedIteratorExecutor = QueueBasedExecutorFactory.create(hoodieConfig, inputItr, getExplicitInsertHandler(),
           getTransformFunction(schema, hoodieConfig));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
-      assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
+      checkState(result != null && !result.isEmpty());
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);

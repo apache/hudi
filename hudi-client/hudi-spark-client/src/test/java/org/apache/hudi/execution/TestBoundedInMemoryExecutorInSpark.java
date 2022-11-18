@@ -100,7 +100,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
 
       assertEquals(100, result);
       // There should be no remaining records in the buffer
-      assertFalse(executor.isRemaining());
+      assertFalse(executor.isRunning());
     } finally {
       if (executor != null) {
         executor.shutdownNow();

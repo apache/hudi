@@ -103,7 +103,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
       // It should buffer and write 100 records
       assertEquals(128, result);
       // There should be no remaining records in the buffer
-      assertFalse(exec.isRemaining());
+      assertFalse(exec.isRunning());
 
       // collect all records and assert that consumed records are identical to produced ones
       // assert there's no tampering, and that the ordering is preserved

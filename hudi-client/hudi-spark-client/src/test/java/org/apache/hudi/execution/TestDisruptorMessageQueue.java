@@ -145,7 +145,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
       // It should buffer and write 100 records
       assertEquals(100, result);
       // There should be no remaining records in the buffer
-      assertFalse(exec.isRemaining());
+      assertFalse(exec.isRunning());
 
       assertEquals(beforeRecord, afterRecord);
       assertEquals(beforeIndexedRecord, afterIndexedRecord);

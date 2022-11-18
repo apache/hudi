@@ -105,16 +105,15 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
     }).orElse(CompletableFuture.completedFuture(null));
   }
 
-  @Override
-  public boolean isRemaining() {
-    return ((BoundedInMemoryQueue<I, O>) queue).iterator().hasNext();
+  public boolean isRunning() {
+    return !queue.isEmpty();
   }
 
   /**
    * @deprecated
    */
   @Deprecated
-  public HoodieMessageQueue<I, O> getQueue() {
-    return queue;
+  public BoundedInMemoryQueue<I, O> getQueue() {
+    return (BoundedInMemoryQueue<I, O>) queue;
   }
 }
