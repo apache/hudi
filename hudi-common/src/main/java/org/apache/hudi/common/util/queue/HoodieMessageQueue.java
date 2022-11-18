@@ -51,4 +51,7 @@ public interface HoodieMessageQueue<I, O> extends Closeable {
   void markAsFailed(Throwable e);
 
   boolean isEmpty();
+
+  @Override
+  void close();
 }

@@ -46,6 +46,8 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
   protected final ExecutorService producerExecutorService;
   // Executor service used for launching read thread.
   protected final ExecutorService consumerExecutorService;
+  // Queue
+  protected final HoodieMessageQueue<I, O> queue;
   // Producers
   protected final List<HoodieProducer<I>> producers;
   // Consumer
@@ -53,8 +55,11 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
   protected final Runnable preExecuteRunnable;
 
-  public HoodieExecutorBase(List<HoodieProducer<I>> producers, Option<IteratorBasedQueueConsumer<O, E>> consumer,
+  public HoodieExecutorBase(List<HoodieProducer<I>> producers,
+                            Option<IteratorBasedQueueConsumer<O, E>> consumer,
+                            HoodieMessageQueue<I, O> queue,
                             Runnable preExecuteRunnable) {
+    this.queue = queue;
     this.producers = producers;
     this.consumer = consumer;
     this.preExecuteRunnable = preExecuteRunnable;
@@ -74,16 +79,6 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
    */
   protected abstract CompletableFuture<E> startConsuming();
 
-  /**
-   * Closing/cleaning up the executor's resources after consuming finished.
-   */
-  protected abstract void postAction();
-
-  /**
-   * get bounded in message queue.
-   */
-  public abstract HoodieMessageQueue<I, O> getQueue();
-
   @Override
   public final boolean awaitTermination() {
     // if current thread has been interrupted before awaitTermination was called, we still give
@@ -101,17 +96,22 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
     if (interruptedBefore) {
       Thread.currentThread().interrupt();
     }
+
     return producerTerminated && consumerTerminated;
   }
 
   @Override
+  public void shutdownNow() {
+    queue.close();
+    producerExecutorService.shutdownNow();
+    consumerExecutorService.shutdownNow();
+  }
+
+  @Override
   public void close() {
-    if (!producerExecutorService.isShutdown()) {
-      producerExecutorService.shutdown();
-    }
-    if (!consumerExecutorService.isShutdown()) {
-      consumerExecutorService.shutdown();
-    }
+    queue.close();
+    producerExecutorService.shutdown();
+    consumerExecutorService.shutdown();
   }
 
   /**
@@ -126,8 +126,6 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
       return future.join();
     } catch (Exception e) {
       throw new HoodieException(e);
-    } finally {
-      postAction();
     }
   }
 }

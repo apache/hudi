@@ -38,7 +38,6 @@ import java.util.function.Function;
 public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(DisruptorExecutor.class);
-  private final DisruptorMessageQueue<I, O> queue;
 
   private CompletableFuture<Void> producingFuture;
 
@@ -55,8 +54,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   public DisruptorExecutor(final Option<Integer> bufferSize, List<HoodieProducer<I>> producers,
                            Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                            final Option<String> waitStrategy, Runnable preExecuteRunnable) {
-    super(producers, consumer, preExecuteRunnable);
-    this.queue = new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable);
+    super(producers, consumer, new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable), preExecuteRunnable);
   }
 
   /**
@@ -64,6 +62,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
    */
   @Override
   public void startProducing() {
+    DisruptorMessageQueue<I, O> queue = (DisruptorMessageQueue<I, O>) this.queue;
     // Before we start producing, we need to set up Disruptor's queue
     queue.setHandlers(consumer.get());
     queue.start();
@@ -85,12 +84,6 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   }
 
   @Override
-  protected void postAction() {
-    super.close();
-    queue.close();
-  }
-
-  @Override
   protected CompletableFuture<E> startConsuming() {
     return producingFuture.thenApply(res -> consumer.get().finish());
   }
@@ -98,17 +91,5 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   @Override
   public boolean isRemaining() {
     return !queue.isEmpty();
-  }
-
-  @Override
-  public void shutdownNow() {
-    producerExecutorService.shutdownNow();
-    consumerExecutorService.shutdownNow();
-    queue.close();
-  }
-
-  @Override
-  public DisruptorMessageQueue<I, O> getQueue() {
-    return queue;
   }
 }

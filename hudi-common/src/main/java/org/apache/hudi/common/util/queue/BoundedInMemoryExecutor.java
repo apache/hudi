@@ -23,12 +23,9 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -44,7 +41,6 @@ import java.util.function.Function;
 public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
-  private final HoodieMessageQueue<I, O> queue;
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, final Iterator<I> inputItr,
                                  IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
@@ -64,8 +60,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<HoodieProducer<I>> producers,
                                  Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                                  final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
-    super(producers, consumer, preExecuteRunnable);
-    this.queue = new BoundedInMemoryQueueIterable<>(bufferLimitInBytes, transformFunction, sizeEstimator);
+    super(producers, consumer, new BoundedInMemoryQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator), preExecuteRunnable);
   }
 
   /**
@@ -89,12 +84,8 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
           throw new HoodieException("Failed to produce records", e);
         } finally {
           if (runningProducers.decrementAndGet() == 0) {
-            try {
-              // Mark production as done so that consumer will be able to exit
-              queue.close();
-            } catch (IOException e) {
-              throw new HoodieIOException("Catch Exception when closing BoundedInMemoryQueue.", e);
-            }
+            // Mark production as done so that consumer will be able to exit
+            queue.close();
           }
         }
         return true;
@@ -126,28 +117,10 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
 
   @Override
   public boolean isRemaining() {
-    return getQueue().iterator().hasNext();
+    return ((BoundedInMemoryQueue<I, O>) queue).iterator().hasNext();
   }
 
-  @Override
-  protected void postAction() {
-    super.close();
-  }
-
-  @Override
-  public void shutdownNow() {
-    producerExecutorService.shutdownNow();
-    consumerExecutorService.shutdownNow();
-    // close queue to force producer stop
-    try {
-      queue.close();
-    } catch (IOException e) {
-      throw new HoodieIOException("catch IOException while closing HoodieMessageQueue", e);
-    }
-  }
-
-  @Override
-  public BoundedInMemoryQueueIterable<I, O> getQueue() {
-    return (BoundedInMemoryQueueIterable<I, O>)queue;
+  public HoodieMessageQueue<I, O> getQueue() {
+    return queue;
   }
 }
