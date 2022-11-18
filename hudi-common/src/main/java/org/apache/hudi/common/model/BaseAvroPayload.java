@@ -57,6 +57,10 @@ public abstract class BaseAvroPayload implements Serializable {
     }
   }
 
+  public Comparable getOrderingVal() {
+    return orderingVal;
+  }
+
   /**
    * Defines whether this implementation of {@link HoodieRecordPayload} could produce
    * {@link HoodieRecord#SENTINEL}
