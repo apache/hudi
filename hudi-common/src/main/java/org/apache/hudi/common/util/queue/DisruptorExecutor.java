@@ -93,8 +93,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   protected CompletableFuture<E> startConsumer() {
     return producerFuture.thenApplyAsync(res -> {
       queue.close();
-      consumer.get().finish();
-      return consumer.get().getResult();
+      return consumer.get().finish();
     }, consumerExecutorService);
   }
 

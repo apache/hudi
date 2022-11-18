@@ -48,10 +48,7 @@ public class BootstrapRecordConsumer extends IteratorBasedQueueConsumer<HoodieRe
   }
 
   @Override
-  public void finish() {}
-
-  @Override
-  protected Void getResult() {
+  public Void finish() {
     return null;
   }
 }

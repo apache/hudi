@@ -131,7 +131,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
           }
 
           @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return count;
           }
     };
@@ -237,7 +237,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
           }
 
           @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return 0;
           }
         };
@@ -321,7 +321,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
       }
 
       @Override
-      protected Integer getResult() {
+      public Integer finish() {
         return count;
       }
     };

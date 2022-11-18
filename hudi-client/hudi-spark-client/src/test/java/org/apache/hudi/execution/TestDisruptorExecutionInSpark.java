@@ -90,7 +90,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
           }
 
           @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return count;
           }
         };
@@ -139,7 +139,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
           }
 
           @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return 0;
           }
         };

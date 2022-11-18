@@ -87,7 +87,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
           }
 
           @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return count;
           }
         };
@@ -130,7 +130,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
           }
 
           @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return 0;
           }
         };
@@ -176,7 +176,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
           }
 
           @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return 0;
           }
         };

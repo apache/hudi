@@ -32,17 +32,13 @@ public abstract class IteratorBasedQueueConsumer<I, O> implements HoodieConsumer
    */
   @Override
   public O consume(HoodieMessageQueue<?, I> queue) throws Exception {
-
     Iterator<I> iterator = ((HoodieIterableMessageQueue) queue).iterator();
-
     while (iterator.hasNext()) {
       consumeOneRecord(iterator.next());
     }
 
-    // Notifies done
-    finish();
-
-    return getResult();
+    // Notifies done, returns final result
+    return finish();
   }
 
   /**
@@ -53,11 +49,6 @@ public abstract class IteratorBasedQueueConsumer<I, O> implements HoodieConsumer
   /**
    * Notifies implementation that we have exhausted consuming records from queue.
    */
-  public void finish(){}
-
-  /**
-   * Return result of consuming records so far.
-   */
-  protected abstract O getResult();
+  public abstract O finish();
 
 }

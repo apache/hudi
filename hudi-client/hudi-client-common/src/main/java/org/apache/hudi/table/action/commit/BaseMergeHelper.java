@@ -79,10 +79,7 @@ public abstract class BaseMergeHelper {
     }
 
     @Override
-    public void finish() {}
-
-    @Override
-    protected Void getResult() {
+    public Void finish() {
       return null;
     }
   }

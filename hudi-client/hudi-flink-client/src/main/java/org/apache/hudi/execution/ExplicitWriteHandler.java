@@ -27,6 +27,8 @@ import org.apache.hudi.io.HoodieWriteHandle;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * Consumes stream of hoodie records from in-memory queue and writes to one explicit create handle.
  */
@@ -48,13 +50,9 @@ public class ExplicitWriteHandler<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void finish() {
+  public List<WriteStatus> finish() {
     closeOpenHandle();
-    assert statuses.size() > 0;
-  }
-
-  @Override
-  public List<WriteStatus> getResult() {
+    checkState(statuses.size() > 0);
     return statuses;
   }
 
