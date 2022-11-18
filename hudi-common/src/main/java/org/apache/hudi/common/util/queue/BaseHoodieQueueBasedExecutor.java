@@ -21,13 +21,17 @@ package org.apache.hudi.common.util.queue;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.FutureUtils.allOf;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -38,18 +42,18 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
 
   private static final long TERMINATE_WAITING_TIME_SECS = 60L;
 
+  private final Logger logger = LogManager.getLogger(getClass());
+
   // Executor service used for launching write thread.
-  protected final ExecutorService producerExecutorService;
+  private final ExecutorService producerExecutorService;
   // Executor service used for launching read thread.
-  protected final ExecutorService consumerExecutorService;
+  private final ExecutorService consumerExecutorService;
   // Queue
   protected final HoodieMessageQueue<I, O> queue;
   // Producers
-  protected final List<HoodieProducer<I>> producers;
+  private final List<HoodieProducer<I>> producers;
   // Consumer
   protected final Option<HoodieConsumer<O, E>> consumer;
-  // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
-  protected final Runnable preExecuteRunnable;
 
   public BaseHoodieQueueBasedExecutor(List<HoodieProducer<I>> producers,
                                       Option<HoodieConsumer<O, E>> consumer,
@@ -58,22 +62,43 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
     this.queue = queue;
     this.producers = producers;
     this.consumer = consumer;
-    this.preExecuteRunnable = preExecuteRunnable;
     // Ensure fixed thread for each producer thread
     this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new CustomizedThreadFactory("executor-queue-producer", preExecuteRunnable));
     // Ensure single thread for consumer
     this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("executor-queue-consumer", preExecuteRunnable));
   }
 
-  protected abstract CompletableFuture<Void> doStartProducing();
+  protected CompletableFuture<Void> doStartProducingAsync(HoodieMessageQueue<I, O> queue) {
+    return allOf(producers.stream()
+        .map(producer -> CompletableFuture.supplyAsync(() -> {
+          logger.info("Starting producer, populating records into the queue");
+          try {
+            producer.produce(queue);
+            logger.info("Finished producing records into the queue");
+          } catch (Exception e) {
+            logger.error("Failed to produce records", e);
+            queue.markAsFailed(e);
+            throw new HoodieException("Failed to produce records", e);
+          }
+          return (Void) null;
+        }, producerExecutorService))
+        .collect(Collectors.toList())
+    )
+        .thenApply(ignored -> null);
+  }
 
-  protected abstract CompletableFuture<E> doStartConsuming();
+  protected abstract CompletableFuture<E> doStartConsumingAsync(HoodieMessageQueue<I, O> queue);
 
   /**
    * Start producers
+   *
+   * NOTE: This method SHOULD NOT be overridden. If you need to customize boostrapping
+   *       seq, please override {@link #doStartProducingAsync(HoodieMessageQueue)} instead
    */
-  public void startProducing() {
-    doStartProducing().whenComplete((result, throwable) -> {
+  public final CompletableFuture<Void> startProducingAsync() {
+    return doStartProducingAsync(queue).whenComplete((result, throwable) -> {
+      // Regardless of how producing has completed, we have to close producers
+      // to make sure resources are properly cleaned up
       producers.forEach(HoodieProducer::close);
       // Mark production as done so that consumer will be able to exit
       queue.close();
@@ -86,9 +111,11 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
    * NOTE: This is a sync operation that _will_ block, until all records
    *       are fully consumed
    */
-  private E startConsuming() {
-    //
-    return doStartConsuming().join();
+  private CompletableFuture<E> startConsumingAsync() {
+    return doStartConsumingAsync(queue).whenComplete((result, throwable) -> {
+      // Close the queue, after finishing the consuming
+      queue.close();
+    });
   }
 
   @Override
@@ -129,15 +156,12 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
   public E execute() {
     try {
       checkState(this.consumer.isPresent());
-
-      // Start producing/consuming
-      startProducing();
-      E result = startConsuming();
-
-      // Shut down the queue
-      queue.close();
-
-      return result;
+      // Start producing/consuming asynchronously
+      CompletableFuture<Void> producing = startProducingAsync();
+      CompletableFuture<E> consuming = startConsumingAsync();
+      // Block until producing and consuming both finish
+      producing.join();
+      return consuming.join();
     } catch (Exception e) {
       throw new HoodieException(e);
     }

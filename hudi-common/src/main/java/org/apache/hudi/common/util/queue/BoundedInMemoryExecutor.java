@@ -30,9 +30,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.util.FutureUtils.allOf;
 
 /**
  * Executor which orchestrates concurrent producers and consumers communicating through 'BoundedInMemoryQueue'. This
@@ -56,32 +53,10 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
   }
 
   /**
-   * Start all producers at once.
+   * Start consumer
    */
   @Override
-  public CompletableFuture<Void> doStartProducing() {
-    return allOf(producers.stream()
-        .map(producer -> CompletableFuture.supplyAsync(() -> {
-          LOG.info("Starting producer, populating records into the queue");
-          try {
-            producer.produce(queue);
-            LOG.info("Finished producing records into the queue");
-          } catch (Exception e) {
-            LOG.error("Failed to produce records", e);
-            queue.markAsFailed(e);
-            throw new HoodieException("Failed to produce records", e);
-          }
-          return (Void) null;
-        }, producerExecutorService))
-        .collect(Collectors.toList()))
-        .thenApply(ignored -> null);
-  }
-
-  /**
-   * Start only consumer.
-   */
-  @Override
-  protected CompletableFuture<E> doStartConsuming() {
+  protected CompletableFuture<E> doStartConsumingAsync(HoodieMessageQueue<I, O> queue) {
     return consumer.map(consumer -> {
       return CompletableFuture.supplyAsync(() -> {
         LOG.info("Starting consumer, consuming records from the queue");
@@ -97,7 +72,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
           return result;
         } catch (Exception e) {
           LOG.error("error consuming records", e);
-          queue.markAsFailed(e);
+          this.queue.markAsFailed(e);
           throw new HoodieException(e);
         }
       }, consumerExecutorService);

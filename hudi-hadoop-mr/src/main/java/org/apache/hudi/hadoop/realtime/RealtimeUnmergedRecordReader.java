@@ -91,7 +91,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
     this.iterator = this.executor.getRecordIterator();
 
     // Start reading and buffering
-    this.executor.startProducing();
+    this.executor.startProducingAsync();
   }
 
   /**

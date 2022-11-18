@@ -210,7 +210,7 @@ public class FormatUtils {
       this.iterator = this.executor.getRecordIterator();
 
       // Start reading and buffering
-      this.executor.startProducing();
+      this.executor.startProducingAsync();
     }
 
     public Iterator<HoodieRecord<?>> getRecordsIterator() {
