@@ -77,9 +77,12 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
     final AtomicInteger runningProducers = new AtomicInteger(producers.size());
     return CompletableFuture.allOf(producers.stream().map(producer -> {
       return CompletableFuture.supplyAsync(() -> {
+        LOG.info("Starting producer, populating records into the queue");
         try {
           producer.produce(queue);
-        } catch (Throwable e) {
+
+          LOG.info("Finished producing records into the queue");
+        } catch (Exception e) {
           LOG.error("Failed to produce records", e);
           queue.markAsFailed(e);
           throw new HoodieException("Failed to produce records", e);
@@ -105,10 +108,11 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
   protected CompletableFuture<E> startConsumer() {
     return consumer.map(consumer -> {
       return CompletableFuture.supplyAsync(() -> {
-        LOG.info("starting consumer thread");
+        LOG.info("Starting consumer, consuming records from the queue");
         try {
           E result = consumer.consume(queue);
-          LOG.info("Queue Consumption is done; notifying producer threads");
+
+          LOG.info("All records from the queue have been consumed");
           return result;
         } catch (Exception e) {
           LOG.error("error consuming records", e);
