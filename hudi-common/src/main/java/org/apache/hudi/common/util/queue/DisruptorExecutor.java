@@ -33,40 +33,25 @@ import java.util.function.Function;
  */
 public class DisruptorExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, O, E> {
 
-  private CompletableFuture<Void> producingFuture;
-
   public DisruptorExecutor(final Option<Integer> bufferSize, final Iterator<I> inputItr,
                            HoodieConsumer<O, E> consumer, Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
-    this(bufferSize, new IteratorBasedQueueProducer<>(inputItr), Option.of(consumer), transformFunction, waitStrategy, preExecuteRunnable);
-  }
-
-  public DisruptorExecutor(final Option<Integer> bufferSize, HoodieProducer<I> producer,
-                           Option<HoodieConsumer<O, E>> consumer, final Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
-    this(bufferSize, Collections.singletonList(producer), consumer, transformFunction, waitStrategy, preExecuteRunnable);
+    this(bufferSize, Collections.singletonList(new IteratorBasedQueueProducer<>(inputItr)), Option.of(consumer),
+        transformFunction, waitStrategy, preExecuteRunnable);
   }
 
   public DisruptorExecutor(final Option<Integer> bufferSize, List<HoodieProducer<I>> producers,
                            Option<HoodieConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                            final Option<String> waitStrategy, Runnable preExecuteRunnable) {
     super(producers, consumer, new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable), preExecuteRunnable);
-  }
 
-  /**
-   * Start all Producers.
-   */
-  @Override
-  protected CompletableFuture<Void> doStartProducingAsync(HoodieMessageQueue<I, O> queue) {
-    DisruptorMessageQueue<I, O> disruptorQueue = (DisruptorMessageQueue<I, O>) queue;
+    DisruptorMessageQueue<I, O> disruptorQueue = (DisruptorMessageQueue<I, O>) this.queue;
     // Before we start producing, we need to set up Disruptor's queue
     disruptorQueue.setHandlers(consumer.get());
     disruptorQueue.start();
-
-    producingFuture = super.doStartProducingAsync(queue);
-    return producingFuture;
   }
 
   @Override
-  protected CompletableFuture<E> doStartConsumingAsync(HoodieMessageQueue<I, O> queue) {
+  protected E doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
     return producingFuture.thenApply(res -> consumer.get().finish());
   }
 }

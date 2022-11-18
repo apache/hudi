@@ -68,41 +68,39 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
     this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("executor-queue-consumer", preExecuteRunnable));
   }
 
-  protected CompletableFuture<Void> doStartProducingAsync(HoodieMessageQueue<I, O> queue) {
+  protected void doProduce(HoodieMessageQueue<I, O> queue, HoodieProducer<I> producer) {
+    logger.info("Starting producer, populating records into the queue");
+    try {
+      producer.produce(queue);
+      logger.info("Finished producing records into the queue");
+    } catch (Exception e) {
+      logger.error("Failed to produce records", e);
+      queue.markAsFailed(e);
+      throw new HoodieException("Failed to produce records", e);
+    }
+  }
+
+  protected abstract E doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer);
+
+  /**
+   * Start producing
+   */
+  public final CompletableFuture<Void> startProducingAsync() {
     return allOf(producers.stream()
         .map(producer -> CompletableFuture.supplyAsync(() -> {
-          logger.info("Starting producer, populating records into the queue");
-          try {
-            producer.produce(queue);
-            logger.info("Finished producing records into the queue");
-          } catch (Exception e) {
-            logger.error("Failed to produce records", e);
-            queue.markAsFailed(e);
-            throw new HoodieException("Failed to produce records", e);
-          }
+          doProduce(queue, producer);
           return (Void) null;
         }, producerExecutorService))
         .collect(Collectors.toList())
     )
-        .thenApply(ignored -> null);
-  }
-
-  protected abstract CompletableFuture<E> doStartConsumingAsync(HoodieMessageQueue<I, O> queue);
-
-  /**
-   * Start producers
-   *
-   * NOTE: This method SHOULD NOT be overridden. If you need to customize boostrapping
-   *       seq, please override {@link #doStartProducingAsync(HoodieMessageQueue)} instead
-   */
-  public final CompletableFuture<Void> startProducingAsync() {
-    return doStartProducingAsync(queue).whenComplete((result, throwable) -> {
-      // Regardless of how producing has completed, we have to close producers
-      // to make sure resources are properly cleaned up
-      producers.forEach(HoodieProducer::close);
-      // Mark production as done so that consumer will be able to exit
-      queue.seal();
-    });
+        .thenApply(ignored -> (Void) null)
+        .whenComplete((result, throwable) -> {
+          // Regardless of how producing has completed, we have to close producers
+          // to make sure resources are properly cleaned up
+          producers.forEach(HoodieProducer::close);
+          // Mark production as done so that consumer will be able to exit
+          queue.seal();
+        });
   }
 
   /**
@@ -111,11 +109,19 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
    * NOTE: This is a sync operation that _will_ block, until all records
    *       are fully consumed
    */
-  private CompletableFuture<E> startConsumingAsync() {
-    return doStartConsumingAsync(queue).whenComplete((result, throwable) -> {
-      // Close the queue, after finishing the consuming
-      queue.close();
-    });
+  private CompletableFuture<E> startConsumingAsync(CompletableFuture<Void> producingFuture) {
+    return consumer.map(consumer ->
+            CompletableFuture.supplyAsync(() -> {
+              return doConsume(queue, consumer);
+            }, consumerExecutorService)
+        )
+        // NOTE: To properly support mode when there's no consumer, we have to fall back
+        //       to producing future as the trigger for us to clean up the queue
+        .orElse(producingFuture.thenApply(ignored -> null))
+        .whenComplete((result, throwable) -> {
+          // Close the queue, after finishing the consuming
+          queue.close();
+        });
   }
 
   @Override
@@ -158,7 +164,7 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
       checkState(this.consumer.isPresent());
       // Start producing/consuming asynchronously
       CompletableFuture<Void> producing = startProducingAsync();
-      CompletableFuture<E> consuming = startConsumingAsync();
+      CompletableFuture<E> consuming = startConsumingAsync(producing);
       // Block until producing and consuming both finish
       producing.join();
       return consuming.join();

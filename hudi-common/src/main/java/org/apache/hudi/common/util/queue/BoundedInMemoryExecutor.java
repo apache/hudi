@@ -28,7 +28,6 @@ import org.apache.log4j.Logger;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 /**
@@ -52,31 +51,24 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
     super(producers, consumer, new BoundedInMemoryQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator), preExecuteRunnable);
   }
 
-  /**
-   * Start consumer
-   */
   @Override
-  protected CompletableFuture<E> doStartConsumingAsync(HoodieMessageQueue<I, O> queue) {
-    return consumer.map(consumer -> {
-      return CompletableFuture.supplyAsync(() -> {
-        LOG.info("Starting consumer, consuming records from the queue");
-        try {
-          Iterator<O> it = ((BoundedInMemoryQueue<I, O>) queue).iterator();
-          while (it.hasNext()) {
-            consumer.consume(it.next());
-          }
-          // Notifies done, returns final result
-          E result = consumer.finish();
+  protected E doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
+    LOG.info("Starting consumer, consuming records from the queue");
+    try {
+      Iterator<O> it = ((BoundedInMemoryQueue<I, O>) queue).iterator();
+      while (it.hasNext()) {
+        consumer.consume(it.next());
+      }
+      // Notifies done, returns final result
+      E result = consumer.finish();
 
-          LOG.info("All records from the queue have been consumed");
-          return result;
-        } catch (Exception e) {
-          LOG.error("error consuming records", e);
-          this.queue.markAsFailed(e);
-          throw new HoodieException(e);
-        }
-      }, consumerExecutorService);
-    }).orElse(CompletableFuture.completedFuture(null));
+      LOG.info("All records from the queue have been consumed");
+      return result;
+    } catch (Exception e) {
+      LOG.error("Error consuming records", e);
+      queue.markAsFailed(e);
+      throw new HoodieException(e);
+    }
   }
 
   public Iterator<O> getRecordIterator() {
