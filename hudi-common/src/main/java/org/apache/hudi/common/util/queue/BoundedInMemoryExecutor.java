@@ -92,7 +92,12 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
       return CompletableFuture.supplyAsync(() -> {
         LOG.info("Starting consumer, consuming records from the queue");
         try {
-          E result = consumer.consume(queue);
+          Iterator<O> it = ((BoundedInMemoryQueue<I, O>) queue).iterator();
+          while (it.hasNext()) {
+            consumer.consume(it.next());
+          }
+          // Notifies done, returns final result
+          E result = consumer.finish();
 
           LOG.info("All records from the queue have been consumed");
           return result;
