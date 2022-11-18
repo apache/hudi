@@ -116,7 +116,6 @@ object AlterHoodieTableAddColumnsCommand {
     client.startCommitWithTime(instantTime, commitActionType)
     client.preWrite(instantTime, WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.metaClient)
 
-
     val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
     val timeLine = hoodieTable.getActiveTimeline
     val requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime)
