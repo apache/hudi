@@ -386,6 +386,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Timeline archiving removes older instants from the timeline, after each write operation, to minimize metadata overhead. "
           + "Controls whether or not, the write should be failed as well, if such archiving fails.");
 
+  public static final ConfigProperty<String> FAIL_ON_TABLE_SERVICE_EXCEPTION_ENABLE = ConfigProperty
+      .key("hoodie.deltastreamer.fail.writes.on.inline.table.service.errors")
+      .defaultValue("false")
+      .withDocumentation("Table services such as compaction and clustering can fail and prevent syncing to "
+          + "the metaclient in Deltastreamer. Set this to true to fail writes when table services fail");
+
   public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
       .defaultValue(2000L)
@@ -1149,6 +1155,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isFailOnTimelineArchivingEnabled() {
     return getBoolean(FAIL_ON_TIMELINE_ARCHIVING_ENABLE);
+  }
+
+  public boolean isFailOnTableServiceExceptionEnabled() {
+    return getBoolean(FAIL_ON_TABLE_SERVICE_EXCEPTION_ENABLE);
   }
 
   public int getMaxConsistencyChecks() {
