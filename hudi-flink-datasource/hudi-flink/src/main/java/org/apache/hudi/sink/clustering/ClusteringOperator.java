@@ -136,7 +136,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
     // override max parquet file size in conf
     this.conf.setLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(),
-        Integer.MAX_VALUE);
+        this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES));
 
     // target size should larger than small file limit
     this.conf.setLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT.key(),
