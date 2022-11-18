@@ -20,12 +20,10 @@ package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -41,6 +39,8 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(DisruptorExecutor.class);
   private final DisruptorMessageQueue<I, O> queue;
+
+  private CompletableFuture<Void> producingFuture;
 
   public DisruptorExecutor(final Option<Integer> bufferSize, final Iterator<I> inputItr,
                            IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
@@ -63,8 +63,12 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
    * Start all Producers.
    */
   @Override
-  public CompletableFuture<Void> startProducers() {
-    return CompletableFuture.allOf(producers.stream().map(producer -> {
+  public void startProducing() {
+    // Before we start producing, we need to set up Disruptor's queue
+    queue.setHandlers(consumer.get());
+    queue.start();
+
+    producingFuture = CompletableFuture.allOf(producers.stream().map(producer -> {
       return CompletableFuture.supplyAsync(() -> {
         try {
           producer.produce(queue);
@@ -72,15 +76,12 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
           LOG.error("error producing records", e);
           throw new HoodieException("Error producing records in disruptor executor", e);
         }
+
+        // Shutdown the queue after we're done producing
+        queue.close();
         return true;
       }, producerExecutorService);
     }).toArray(CompletableFuture[]::new));
-  }
-
-  @Override
-  protected void setup() {
-    queue.setHandlers(consumer.get());
-    queue.start();
   }
 
   @Override
@@ -90,11 +91,8 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   }
 
   @Override
-  protected CompletableFuture<E> startConsumer() {
-    return producerFuture.thenApplyAsync(res -> {
-      queue.close();
-      return consumer.get().finish();
-    }, consumerExecutorService);
+  protected CompletableFuture<E> startConsuming() {
+    return producingFuture.thenApply(res -> consumer.get().finish());
   }
 
   @Override

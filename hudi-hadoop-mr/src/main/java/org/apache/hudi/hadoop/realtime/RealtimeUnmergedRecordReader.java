@@ -98,7 +98,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
         })
         .build();
     // Start reading and buffering
-    this.executor.startProducers();
+    this.executor.startProducing();
   }
 
   /**

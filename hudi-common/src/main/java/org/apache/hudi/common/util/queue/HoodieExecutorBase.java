@@ -20,7 +20,6 @@ package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.log4j.LogManager;
@@ -31,6 +30,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * HoodieExecutorBase holds common elements producerExecutorService, consumerExecutorService, producers and a single consumer.
@@ -52,8 +53,6 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
   protected final Runnable preExecuteRunnable;
 
-  CompletableFuture<Void> producerFuture;
-
   public HoodieExecutorBase(List<HoodieProducer<I>> producers, Option<IteratorBasedQueueConsumer<O, E>> consumer,
                             Runnable preExecuteRunnable) {
     this.producers = producers;
@@ -68,12 +67,12 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
   /**
    * Start all Producers.
    */
-  public abstract CompletableFuture<Void> startProducers();
+  public abstract void startProducing();
 
   /**
    * Start consumer.
    */
-  protected abstract CompletableFuture<E> startConsumer();
+  protected abstract CompletableFuture<E> startConsuming();
 
   /**
    * Closing/cleaning up the executor's resources after consuming finished.
@@ -85,13 +84,8 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
    */
   public abstract HoodieMessageQueue<I, O> getQueue();
 
-  /**
-   * set all the resources for current HoodieExecutor before start to produce and consume records.
-   */
-  protected abstract void setup();
-
   @Override
-  public boolean awaitTermination() {
+  public final boolean awaitTermination() {
     // if current thread has been interrupted before awaitTermination was called, we still give
     // executor a chance to proceeding. So clear the interrupt flag and reset it if needed before return.
     boolean interruptedBefore = Thread.interrupted();
@@ -126,15 +120,10 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
   @Override
   public E execute() {
     try {
-      ValidationUtils.checkState(this.consumer.isPresent());
-      setup();
-      producerFuture = startProducers();
-      CompletableFuture<E> future = startConsumer();
-      return future.get();
-    } catch (InterruptedException ie) {
-      shutdownNow();
-      Thread.currentThread().interrupt();
-      throw new HoodieException(ie);
+      checkState(this.consumer.isPresent());
+      startProducing();
+      CompletableFuture<E> future = startConsuming();
+      return future.join();
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {

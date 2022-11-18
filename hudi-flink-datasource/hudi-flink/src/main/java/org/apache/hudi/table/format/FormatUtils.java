@@ -226,7 +226,7 @@ public class FormatUtils {
       this.scanner = FormatUtils.unMergedLogScanner(split, logSchema, internalSchema, flinkConf, hadoopConf,
           record -> executor.getQueue().insertRecord(record));
       // Start reading and buffering
-      this.executor.startProducers();
+      this.executor.startProducing();
     }
 
     public Iterator<HoodieRecord<?>> getRecordsIterator() {

@@ -72,11 +72,12 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
    * Start all producers at once.
    */
   @Override
-  public CompletableFuture<Void> startProducers() {
+  public void startProducing() {
     // Latch to control when and which producer thread will close the queue
     final AtomicInteger runningProducers = new AtomicInteger(producers.size());
-    return CompletableFuture.allOf(producers.stream().map(producer -> {
-      return CompletableFuture.supplyAsync(() -> {
+
+    producers.forEach(producer -> {
+      CompletableFuture.supplyAsync(() -> {
         LOG.info("Starting producer, populating records into the queue");
         try {
           producer.produce(queue);
@@ -98,14 +99,14 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
         }
         return true;
       }, producerExecutorService);
-    }).toArray(CompletableFuture[]::new));
+    });
   }
 
   /**
    * Start only consumer.
    */
   @Override
-  protected CompletableFuture<E> startConsumer() {
+  protected CompletableFuture<E> startConsuming() {
     return consumer.map(consumer -> {
       return CompletableFuture.supplyAsync(() -> {
         LOG.info("Starting consumer, consuming records from the queue");
@@ -148,10 +149,5 @@ public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E
   @Override
   public BoundedInMemoryQueueIterable<I, O> getQueue() {
     return (BoundedInMemoryQueueIterable<I, O>)queue;
-  }
-
-  @Override
-  protected void setup() {
-    // do nothing.
   }
 }
