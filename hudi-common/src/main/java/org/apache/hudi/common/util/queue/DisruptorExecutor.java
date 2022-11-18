@@ -40,7 +40,7 @@ import java.util.function.Function;
 public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(DisruptorExecutor.class);
-  private final HoodieMessageQueue<I, O> queue;
+  private final DisruptorMessageQueue<I, O> queue;
 
   public DisruptorExecutor(final Option<Integer> bufferSize, final Iterator<I> inputItr,
                            IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
@@ -79,30 +79,22 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
 
   @Override
   protected void setup() {
-    ((DisruptorMessageQueue)queue).setHandlers(consumer.get());
-    ((DisruptorMessageQueue)queue).start();
+    queue.setHandlers(consumer.get());
+    queue.start();
   }
 
   @Override
   protected void postAction() {
-    try {
-      super.close();
-      queue.close();
-    } catch (IOException e) {
-      throw new HoodieIOException("Catch IOException while closing DisruptorMessageQueue", e);
-    }
+    super.close();
+    queue.close();
   }
 
   @Override
   protected CompletableFuture<E> startConsumer() {
     return producerFuture.thenApplyAsync(res -> {
-      try {
-        queue.close();
-        consumer.get().finish();
-        return consumer.get().getResult();
-      } catch (IOException e) {
-        throw new HoodieIOException("Catch Exception when closing", e);
-      }
+      queue.close();
+      consumer.get().finish();
+      return consumer.get().getResult();
     }, consumerExecutorService);
   }
 
@@ -115,15 +107,11 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
   public void shutdownNow() {
     producerExecutorService.shutdownNow();
     consumerExecutorService.shutdownNow();
-    try {
-      queue.close();
-    } catch (IOException e) {
-      throw new HoodieIOException("Catch IOException while closing DisruptorMessageQueue");
-    }
+    queue.close();
   }
 
   @Override
   public DisruptorMessageQueue<I, O> getQueue() {
-    return (DisruptorMessageQueue<I, O>)queue;
+    return queue;
   }
 }
