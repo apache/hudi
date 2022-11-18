@@ -34,9 +34,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTimelineServerBasedEarlyConflictDetectionStrategy {
+
   private static final Logger LOG = LogManager.getLogger(AsyncTimelineMarkerEarlyConflictDetectionStrategy.class);
+
   private AtomicBoolean hasConflict = new AtomicBoolean(false);
   private ScheduledExecutorService markerChecker;
+
+  public AsyncTimelineMarkerEarlyConflictDetectionStrategy(String basePath, String markerDir, String markerName) {
+    super(basePath, markerDir, markerName);
+  }
 
   @Override
   public boolean hasMarkerConflict() {
@@ -57,5 +63,12 @@ public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTim
     markerChecker = Executors.newSingleThreadScheduledExecutor();
     markerChecker.scheduleAtFixedRate(new MarkerCheckerRunnable(hasConflict, (MarkerHandler) markerHandler, markerDir, basePath,
         fileSystem, Long.parseLong(maxAllowableHeartbeatIntervalInMs), oldInstants), Long.parseLong(batchInterval), Long.parseLong(period), TimeUnit.MILLISECONDS);
+  }
+
+  @Override
+  public void detectAndResolveConflictIfNecessary() {
+    if (hasMarkerConflict()) {
+      resolveMarkerConflict(basePath, markerDir, markerName);
+    }
   }
 }

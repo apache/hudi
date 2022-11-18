@@ -18,17 +18,20 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -44,23 +47,17 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIEN
 public class LockManager implements Serializable, AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(LockManager.class);
-  private final HoodieWriteConfig writeConfig;
-  private final LockConfiguration lockConfiguration;
-  private final SerializableConfiguration hadoopConf;
-  private final int maxRetries;
-  private final long maxWaitTimeInMs;
+  private HoodieWriteConfig writeConfig;
+  private LockConfiguration lockConfiguration;
+  private SerializableConfiguration hadoopConf;
+  private int maxRetries;
+  private long maxWaitTimeInMs;
   private transient HoodieLockMetrics metrics;
   private volatile LockProvider lockProvider;
 
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs) {
-    this.writeConfig = writeConfig;
-    this.hadoopConf = new SerializableConfiguration(fs.getConf());
     this.lockConfiguration = new LockConfiguration(writeConfig.getProps());
-    maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
-        Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
-    maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
-        Long.parseLong(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS.defaultValue()));
-    metrics = new HoodieLockMetrics(writeConfig);
+    init(writeConfig, fs.getConf());
   }
 
   /**
@@ -71,14 +68,19 @@ public class LockManager implements Serializable, AutoCloseable {
    * @param fileId
    */
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs, String partitionPath, String fileId) {
-    this.writeConfig = writeConfig;
-    this.hadoopConf = new SerializableConfiguration(fs.getConf());
     TypedProperties props = refreshLockConfig(writeConfig, partitionPath + "/" + fileId);
     this.lockConfiguration = new LockConfiguration(props);
-    maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
+    init(writeConfig, fs.getConf());
+  }
+
+  private void init(HoodieWriteConfig writeConfig, Configuration conf) {
+    this.writeConfig = writeConfig;
+    this.hadoopConf = new SerializableConfiguration(conf);
+    this.maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
         Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
-    maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
+    this.maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
         Long.parseLong(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS.defaultValue()));
+    this.metrics = new HoodieLockMetrics(writeConfig);
   }
 
   /**
@@ -86,6 +88,10 @@ public class LockManager implements Serializable, AutoCloseable {
    */
   private TypedProperties refreshLockConfig(HoodieWriteConfig writeConfig, String key) {
     TypedProperties props = new TypedProperties(writeConfig.getProps());
+    String zk_base_path = props.getProperty(LockConfiguration.ZK_BASE_PATH_PROP_KEY);
+    if (StringUtils.isNullOrEmpty(zk_base_path)) {
+      throw new HoodieNotSupportedException("Only Support ZK based lock for now.");
+    }
     props.setProperty(LockConfiguration.ZK_LOCK_KEY_PROP_KEY, key);
     return props;
   }

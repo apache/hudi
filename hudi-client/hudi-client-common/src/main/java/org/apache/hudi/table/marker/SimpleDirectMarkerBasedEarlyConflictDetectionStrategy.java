@@ -20,8 +20,10 @@ package org.apache.hudi.table.marker;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.conflict.detection.HoodieDirectMarkerBasedEarlyConflictDetectionStrategy;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
@@ -30,19 +32,26 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * This strategy is used for direct marker writers, trying to do early conflict detection.
  * It will use fileSystem api like list and exist directly to check if there is any marker file conflict.
  */
 public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends HoodieDirectMarkerBasedEarlyConflictDetectionStrategy {
+
   private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class);
 
+  public SimpleDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config) {
+    super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config);
+  }
+
   @Override
-  public boolean hasMarkerConflict(String basePath, FileSystem fs, String partitionPath, String fileId, String instantTime,
-                                   Set<HoodieInstant> completedCommitInstants, HoodieTableMetaClient metaClient) {
+  protected boolean hasMarkerConflict(String basePath, FileSystem fs, String partitionPath, String fileId, String instantTime,
+                                   Set<HoodieInstant> completedCommitInstants) {
     try {
-      return checkMarkerConflict(basePath, partitionPath, fileId, fs, instantTime) || checkCommitConflict(metaClient, completedCommitInstants, fileId);
+      return checkMarkerConflict(basePath, partitionPath, fileId, fs, instantTime) || checkCommitConflict(completedCommitInstants, fileId, basePath);
     } catch (IOException e) {
       LOG.warn("Exception occurs during create marker file in eager conflict detection mode.");
       throw new HoodieIOException("Exception occurs during create marker file in eager conflict detection mode.", e);
@@ -50,7 +59,20 @@ public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends Hoodi
   }
 
   @Override
-  public void resolveMarkerConflict(String basePath, String partitionPath, String dataFileName) {
+  protected void resolveMarkerConflict(String basePath, String partitionPath, String dataFileName) {
     throw new HoodieEarlyConflictDetectionException(new ConcurrentModificationException("Early conflict detected but cannot resolve conflicts for overlapping writes"));
+  }
+
+  @Override
+  public void detectAndResolveConflictIfNecessary() {
+
+    Set<HoodieInstant> completedCommitInstants = activeTimeline.getCommitsTimeline()
+        .filterCompletedInstants()
+        .getInstants()
+        .collect(Collectors.toSet());
+
+    if (hasMarkerConflict(basePath, fs, partitionPath, fileId, instantTime, completedCommitInstants)) {
+      resolveMarkerConflict(basePath, partitionPath, fileId);
+    }
   }
 }

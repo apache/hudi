@@ -762,12 +762,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
               .withAutoArchive(false).build())
           .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
           .withMarkersType(MarkerType.DIRECT.name())
-          .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-              .withEarlyConflictDetectionEnable(true)
-              .withEarlyConflictDetectionStrategy(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName())
-              .withMarkerConflictCheckerBatchInterval(0)
-              .withMarkerConflictCheckerPeriod(100)
-              .build())
+          .withEarlyConflictDetectionEnable(true)
+          .withEarlyConflictDetectionStrategy(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName())
+          .withMarkerConflictCheckerBatchInterval(0)
+          .withMarkerConflictCheckerPeriod(100)
+          .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
           .withAutoCommit(false).withProperties(properties).build();
     } else {
       return getConfigBuilder()
@@ -783,12 +782,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
               .withAutoArchive(false).build())
           .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
           .withMarkersType(MarkerType.TIMELINE_SERVER_BASED.name())
-          .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-              .withEarlyConflictDetectionEnable(true)
-              .withEarlyConflictDetectionStrategy(AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName())
-              .withMarkerConflictCheckerBatchInterval(0)
-              .withMarkerConflictCheckerPeriod(100)
-              .build())
+          .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+          .withEarlyConflictDetectionEnable(true)
+          .withEarlyConflictDetectionStrategy(AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName())
+          .withMarkerConflictCheckerBatchInterval(0)
+          .withMarkerConflictCheckerPeriod(100)
           .withAutoCommit(false).withProperties(properties).build();
     }
   }

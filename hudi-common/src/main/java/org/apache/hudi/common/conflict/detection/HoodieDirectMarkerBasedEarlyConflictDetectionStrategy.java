@@ -18,11 +18,15 @@
 
 package org.apache.hudi.common.conflict.detection;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -36,12 +40,31 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy implements HoodieEarlyConflictDetectionStrategy {
+
   private static final Logger LOG = LogManager.getLogger(HoodieDirectMarkerBasedEarlyConflictDetectionStrategy.class);
+  protected final String basePath;
+  protected final FileSystem fs;
+  protected final String partitionPath;
+  protected final String fileId;
+  protected final String instantTime;
+  protected final HoodieActiveTimeline activeTimeline;
+  protected final HoodieConfig config;
 
-  public abstract boolean hasMarkerConflict(String basePath, FileSystem fs, String partitionPath, String dataFileName, String instantTime,
-                                            Set<HoodieInstant> completedCommitInstants, HoodieTableMetaClient metaClient);
 
-  public abstract void resolveMarkerConflict(String basePath, String partitionPath, String dataFileName);
+  public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config) {
+    this.basePath = basePath;
+    this.fs = fs;
+    this.partitionPath = partitionPath;
+    this.fileId = fileId;
+    this.instantTime = instantTime;
+    this.activeTimeline = activeTimeline;
+    this.config = config;
+  }
+
+  protected abstract boolean hasMarkerConflict(String basePath, FileSystem fs, String partitionPath, String dataFileName, String instantTime, Set<HoodieInstant> completedCommitInstants);
+
+  protected abstract void resolveMarkerConflict(String basePath, String partitionPath, String dataFileName);
 
   /**
    * We need to do list operation here.
@@ -93,8 +116,12 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
     return basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
   }
 
-  public boolean checkCommitConflict(HoodieTableMetaClient metaClient, Set<HoodieInstant> completedCommitInstants, String fileId) {
-    Set<HoodieInstant> currentInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
+  public boolean checkCommitConflict(Set<HoodieInstant> completedCommitInstants, String fileId, String basePath) {
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(basePath).build();
+    HoodieActiveTimeline currentActiveTimeline = metaClient.getActiveTimeline().reload();
+
+    Set<HoodieInstant> currentInstants = currentActiveTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
     currentInstants.removeAll(completedCommitInstants);
     Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {
       try {

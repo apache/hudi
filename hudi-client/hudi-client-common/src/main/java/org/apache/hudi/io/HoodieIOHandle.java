@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -40,5 +41,5 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload, I, K, O> {
     this.fs = getFileSystem();
   }
 
-  protected abstract FileSystem getFileSystem();
+  public abstract FileSystem getFileSystem();
 }

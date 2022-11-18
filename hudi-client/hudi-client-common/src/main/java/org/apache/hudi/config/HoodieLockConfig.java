@@ -26,7 +26,6 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy;
 
 import java.io.File;
 import java.io.FileReader;
@@ -190,33 +189,6 @@ public class HoodieLockConfig extends HoodieConfig {
       .withDocumentation("Lock provider class name, this should be subclass of "
           + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");
 
-  // Pluggable strategies to use when early conflict detection
-  public static final ConfigProperty<String> EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME = ConfigProperty
-      .key(LOCK_PREFIX + "early.conflict.detection.strategy")
-      .defaultValue(AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName())
-      .sinceVersion("0.12.0")
-      .withDocumentation("Early conflict detection class name, this should be subclass of "
-          + "org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy");
-
-  public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_ENABLE = ConfigProperty
-      .key(LOCK_PREFIX + "early.conflict.detection.enable")
-      .defaultValue(false)
-      .sinceVersion("0.12.0")
-      .withDocumentation("Enable early conflict detection based on markers. It will try to detect writing conflict before create markers and fast fail"
-          + " which will release cluster resources as soon as possible.");
-
-  public static final ConfigProperty<Long> MARKER_CONFLICT_CHECKER_BATCH_INTERVAL = ConfigProperty
-      .key(LOCK_PREFIX + "early.conflict.async.checker.batch.interval")
-      .defaultValue(30000L)
-      .sinceVersion("0.12.0")
-      .withDocumentation("Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The time to delay first async marker conflict checking.");
-
-  public static final ConfigProperty<Long> MARKER_CONFLICT_CHECKER_PERIOD = ConfigProperty
-      .key(LOCK_PREFIX + "early.conflict.async.checker.period")
-      .defaultValue(30000L)
-      .sinceVersion("0.12.0")
-      .withDocumentation("Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The period between each marker conflict checking.");
-
   /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
   @Deprecated
   public static final String WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_PROP = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key();
@@ -336,26 +308,6 @@ public class HoodieLockConfig extends HoodieConfig {
 
     public HoodieLockConfig.Builder withConflictResolutionStrategy(ConflictResolutionStrategy conflictResolutionStrategy) {
       lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME, conflictResolutionStrategy.getClass().getName());
-      return this;
-    }
-
-    public HoodieLockConfig.Builder withEarlyConflictDetectionEnable(boolean enable) {
-      lockConfig.setValue(EARLY_CONFLICT_DETECTION_ENABLE, String.valueOf(enable));
-      return this;
-    }
-
-    public HoodieLockConfig.Builder withMarkerConflictCheckerBatchInterval(long interval) {
-      lockConfig.setValue(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, String.valueOf(interval));
-      return this;
-    }
-
-    public HoodieLockConfig.Builder withMarkerConflictCheckerPeriod(long period) {
-      lockConfig.setValue(MARKER_CONFLICT_CHECKER_PERIOD, String.valueOf(period));
-      return this;
-    }
-
-    public HoodieLockConfig.Builder withEarlyConflictDetectionStrategy(String className) {
-      lockConfig.setValue(EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME, className);
       return this;
     }
 

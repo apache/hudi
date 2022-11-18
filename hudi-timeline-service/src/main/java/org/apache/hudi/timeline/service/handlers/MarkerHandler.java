@@ -177,7 +177,7 @@ public class MarkerHandler extends Handler {
       try {
         synchronized (earlyConflictDetectionLock) {
           if (earlyConflictDetectionStrategy == null) {
-            earlyConflictDetectionStrategy = ReflectionUtils.loadClass(earlyConflictDetectionClassName);
+            earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(earlyConflictDetectionClassName, basePath, markerDir, markerName);
           }
 
           if (!markerDir.equalsIgnoreCase(currentMarkerDir)) {
@@ -195,9 +195,8 @@ public class MarkerHandler extends Handler {
           }
         }
 
-        if (earlyConflictDetectionStrategy.hasMarkerConflict()) {
-          earlyConflictDetectionStrategy.resolveMarkerConflict(basePath, markerDir, markerName);
-        }
+        earlyConflictDetectionStrategy.detectAndResolveConflictIfNecessary();
+
       } catch (Exception ex) {
         LOG.warn("Failed to create marker with early conflict detection enable", ex);
         MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);

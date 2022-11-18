@@ -25,9 +25,19 @@ import java.util.Set;
 
 public abstract class HoodieTimelineServerBasedEarlyConflictDetectionStrategy implements HoodieEarlyConflictDetectionStrategy {
 
-  public abstract boolean hasMarkerConflict();
+  protected final String basePath;
+  protected final String markerDir;
+  protected final String markerName;
 
-  public abstract void resolveMarkerConflict(String basePath, String markerDir, String markerName);
+  public HoodieTimelineServerBasedEarlyConflictDetectionStrategy(String basePath, String markerDir, String markerName) {
+    this.basePath = basePath;
+    this.markerDir = markerDir;
+    this.markerName = markerName;
+  }
+
+  protected abstract boolean hasMarkerConflict();
+
+  protected abstract void resolveMarkerConflict(String basePath, String markerDir, String markerName);
 
   public void fresh(String batchInterval, String period, String markerDir, String basePath,
                     String maxAllowableHeartbeatIntervalInMs, FileSystem fileSystem, Object markerHandler, Set<HoodieInstant> oldInstants) {}

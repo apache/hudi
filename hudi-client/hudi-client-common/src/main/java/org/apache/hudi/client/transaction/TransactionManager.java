@@ -80,8 +80,9 @@ public class TransactionManager implements Serializable {
     }
   }
 
-  public void endTransaction(String filePath) {
+  public void endTransaction(String partitionPath, String fileId) {
     if (isOptimisticConcurrencyControlEnabled) {
+      String filePath = partitionPath + "/" + fileId;
       LOG.info("Transaction ending with transaction for " + filePath);
       lockManager.unlock();
       LOG.info("Transaction ended with transaction for " + filePath);

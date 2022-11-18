@@ -20,9 +20,6 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.transaction.TransactionManager;
-import org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy;
-import org.apache.hudi.common.conflict.detection.HoodieTransactionDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -30,8 +27,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -41,7 +38,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
@@ -56,8 +52,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -194,54 +188,8 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    * @param partitionPath Partition path
    */
   protected void createMarkerFile(String partitionPath, String dataFileName) {
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
-    // do early conflict detection before create markers.
-    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
-        && config.isEarlyConflictDetectionEnable()) {
-      HoodieEarlyConflictDetectionStrategy earlyConflictDetectionStrategy = config.getEarlyConflictDetectionStrategy();
-      if (earlyConflictDetectionStrategy instanceof HoodieTransactionDirectMarkerBasedEarlyConflictDetectionStrategy) {
-        createMarkerWithTransaction(earlyConflictDetectionStrategy, writeMarkers, partitionPath, dataFileName);
-      } else {
-        createMarkerWithEarlyConflictDetection(earlyConflictDetectionStrategy, writeMarkers, partitionPath, dataFileName);
-      }
-    } else {
-      // create marker directly
-      writeMarkers.create(partitionPath, dataFileName, getIOType());
-    }
-  }
-
-  private Option<Path> createMarkerWithEarlyConflictDetection(HoodieEarlyConflictDetectionStrategy resolutionStrategy,
-                                                              WriteMarkers writeMarkers,
-                                                              String partitionPath,
-                                                              String dataFileName) {
-    Set<HoodieInstant> completedCommitInstants = hoodieTable.getMetaClient().getActiveTimeline()
-        .getCommitsTimeline()
-        .filterCompletedInstants()
-        .getInstants()
-        .collect(Collectors.toSet());
-
-    return writeMarkers.createWithEarlyConflictDetection(partitionPath, dataFileName, getIOType(), false, resolutionStrategy, completedCommitInstants, config, fileId);
-
-  }
-
-  private Option<Path> createMarkerWithTransaction(HoodieEarlyConflictDetectionStrategy resolutionStrategy,
-                                                   WriteMarkers writeMarkers,
-                                                   String partitionPath,
-                                                   String dataFileName) {
-    TransactionManager txnManager = new TransactionManager(config, fs, partitionPath, fileId);
-    try {
-      // Need to do transaction before create marker file when using early conflict detection
-      txnManager.beginTransaction(partitionPath, fileId);
-      return createMarkerWithEarlyConflictDetection(resolutionStrategy, writeMarkers, partitionPath, dataFileName);
-
-    } catch (Exception e) {
-      LOG.warn("Exception occurs during create marker file in early conflict detection mode.");
-      throw e;
-    } finally {
-      // End transaction after created marker file.
-      txnManager.endTransaction(partitionPath + "/" + fileId);
-      txnManager.close();
-    }
+    WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime)
+        .create(partitionPath, dataFileName, getIOType(), Option.of(this));
   }
 
   public Schema getWriterSchemaWithMetaFields() {
@@ -309,8 +257,16 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   public abstract IOType getIOType();
 
   @Override
-  protected FileSystem getFileSystem() {
+  public FileSystem getFileSystem() {
     return hoodieTable.getMetaClient().getFs();
+  }
+
+  public HoodieWriteConfig getConfig() {
+    return this.config;
+  }
+
+  public HoodieTableMetaClient getHoodieTableMetaClient() {
+    return hoodieTable.getMetaClient();
   }
 
   protected int getPartitionId() {
@@ -363,6 +319,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
           + "base commit time: " + baseCommitTime + ", "
           + "file suffix: " + fileSuffix + " error");
     }
+  }
+
+  public String getFileId() {
+    return this.fileId;
   }
 
   private static class IgnoreRecord implements GenericRecord {
