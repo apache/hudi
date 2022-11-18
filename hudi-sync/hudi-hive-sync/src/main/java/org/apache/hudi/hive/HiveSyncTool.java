@@ -342,6 +342,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, Set<String> droppedPartitions) {
     boolean partitionsChanged;
     try {
+      if (writtenPartitionsSince.isEmpty()) {
+        return true;
+      }
+
       List<Partition> hivePartitions = getTablePartitions(tableName, writtenPartitionsSince);
       List<PartitionEvent> partitionEvents =
           syncClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, droppedPartitions);

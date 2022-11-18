@@ -98,6 +98,7 @@ public class TestHiveSyncTool {
     return SYNC_MODES;
   }
 
+  // syncMode, enablePushDown
   private static Iterable<Object[]> syncModeAndEnablePushDown() {
     List<Object[]> opts = new ArrayList<>();
     for (Object mode : SYNC_MODES) {
