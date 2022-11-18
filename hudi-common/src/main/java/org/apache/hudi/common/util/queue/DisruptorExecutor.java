@@ -35,7 +35,7 @@ import java.util.function.Function;
  * class takes as queue producer(s), consumer and transformer and exposes API to orchestrate
  * concurrent execution of these actors communicating through disruptor
  */
-public class DisruptorExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
+public class DisruptorExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(DisruptorExecutor.class);
 

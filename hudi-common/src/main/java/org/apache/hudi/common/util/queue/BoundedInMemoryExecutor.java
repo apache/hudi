@@ -38,7 +38,7 @@ import java.util.function.Function;
  * class takes as input the size limit, queue producer(s), consumer and transformer and exposes API to orchestrate
  * concurrent execution of these actors communicating through a central bounded queue
  */
-public class BoundedInMemoryExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
+public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
 

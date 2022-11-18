@@ -37,11 +37,10 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * HoodieExecutorBase holds common elements producerExecutorService, consumerExecutorService, producers and a single consumer.
  * Also HoodieExecutorBase control the lifecycle of producerExecutorService and consumerExecutorService.
  */
-public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O, E> {
-
-  private static final Logger LOG = LogManager.getLogger(HoodieExecutorBase.class);
+public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
 
   private static final long TERMINATE_WAITING_TIME_SECS = 60L;
+
   // Executor service used for launching write thread.
   protected final ExecutorService producerExecutorService;
   // Executor service used for launching read thread.
@@ -55,10 +54,10 @@ public abstract class HoodieExecutorBase<I, O, E> implements HoodieExecutor<I, O
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
   protected final Runnable preExecuteRunnable;
 
-  public HoodieExecutorBase(List<HoodieProducer<I>> producers,
-                            Option<IteratorBasedQueueConsumer<O, E>> consumer,
-                            HoodieMessageQueue<I, O> queue,
-                            Runnable preExecuteRunnable) {
+  public BaseHoodieQueueBasedExecutor(List<HoodieProducer<I>> producers,
+                                      Option<IteratorBasedQueueConsumer<O, E>> consumer,
+                                      HoodieMessageQueue<I, O> queue,
+                                      Runnable preExecuteRunnable) {
     this.queue = queue;
     this.producers = producers;
     this.consumer = consumer;
