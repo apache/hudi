@@ -80,6 +80,11 @@ public class HoodieStorageConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Target file size in bytes for HFile base files.");
 
+  public static final ConfigProperty<Boolean> HFILE_WRITER_TO_ALLOW_DUPLICATES = ConfigProperty
+      .key("hoodie.hfile.writes.allow.duplicates")
+      .defaultValue(false)
+      .withDocumentation("Allows duplicates to be written into HFile.");
+
   public static final ConfigProperty<String> HFILE_BLOCK_SIZE = ConfigProperty
       .key("hoodie.hfile.block.size")
       .defaultValue(String.valueOf(1024 * 1024))
@@ -426,6 +431,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder hfileMaxFileSize(long maxFileSize) {
       storageConfig.setValue(HFILE_MAX_FILE_SIZE, String.valueOf(maxFileSize));
+      return this;
+    }
+
+    public Builder allowDuplicatesWithHfileWrites(boolean allowDuplicatesToBeInserted) {
+      storageConfig.setValue(HFILE_WRITER_TO_ALLOW_DUPLICATES, String.valueOf(allowDuplicatesToBeInserted));
       return this;
     }
 
