@@ -41,6 +41,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -342,8 +343,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, Set<String> droppedPartitions) {
     boolean partitionsChanged;
     try {
-      if (writtenPartitionsSince.isEmpty()) {
-        return true;
+      if (writtenPartitionsSince.isEmpty() || config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
+        return false;
       }
 
       List<Partition> hivePartitions = getTablePartitions(tableName, writtenPartitionsSince);
