@@ -34,7 +34,7 @@ public interface HoodieExecutor<I, O, E>  {
   E execute();
 
   /**
-   * Shuts executor down, cleaning up any allocated resources
+   * Shuts executor down immediately, cleaning up any allocated resources
    */
   void shutdownNow();
 
