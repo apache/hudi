@@ -53,7 +53,6 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
-
 import org.apache.hadoop.util.VersionUtil;
 
 import java.io.ByteArrayInputStream;
@@ -71,14 +70,15 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Deque;
-import java.util.LinkedList;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.avro.Schema.Type.UNION;
@@ -101,8 +101,8 @@ public class HoodieAvroUtils {
   public static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   // As per https://avro.apache.org/docs/current/spec.html#names
-  private static final String INVALID_AVRO_CHARS_IN_NAMES = "[^A-Za-z0-9_]";
-  private static final String INVALID_AVRO_FIRST_CHAR_IN_NAMES = "[^A-Za-z_]";
+  private static final Pattern INVALID_AVRO_CHARS_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z0-9_]");
+  private static final Pattern INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z_]");
   private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
 
   // All metadata fields are optional strings.
@@ -595,7 +595,6 @@ public class HoodieAvroUtils {
     throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
   }
 
-
   /**
    * Get schema for the given field and write schema. Field can be nested, denoted by dot notation. e.g: a.b.c
    * Use this method when record is not available. Otherwise, prefer to use {@link #getNestedFieldSchemaFromRecord(GenericRecord, String)}
@@ -704,10 +703,10 @@ public class HoodieAvroUtils {
    * @return sanitized name
    */
   public static String sanitizeName(String name) {
-    if (name.substring(0, 1).matches(INVALID_AVRO_FIRST_CHAR_IN_NAMES)) {
-      name = name.replaceFirst(INVALID_AVRO_FIRST_CHAR_IN_NAMES, MASK_FOR_INVALID_CHARS_IN_NAMES);
+    if (INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name.substring(0, 1)).matches()) {
+      name = INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name).replaceFirst(MASK_FOR_INVALID_CHARS_IN_NAMES);
     }
-    return name.replaceAll(INVALID_AVRO_CHARS_IN_NAMES, MASK_FOR_INVALID_CHARS_IN_NAMES);
+    return INVALID_AVRO_CHARS_IN_NAMES_PATTERN.matcher(name).replaceAll(MASK_FOR_INVALID_CHARS_IN_NAMES);
   }
 
   /**
@@ -922,7 +921,7 @@ public class HoodieAvroUtils {
         break;
       case FLOAT:
         if ((oldSchema.getType() == Schema.Type.INT)
-                || (oldSchema.getType() == Schema.Type.LONG)) {
+            || (oldSchema.getType() == Schema.Type.LONG)) {
           return oldSchema.getType() == Schema.Type.INT ? ((Integer) oldValue).floatValue() : ((Long) oldValue).floatValue();
         }
         break;
@@ -949,9 +948,9 @@ public class HoodieAvroUtils {
           return toJavaDate((Integer) oldValue).toString();
         }
         if (oldSchema.getType() == Schema.Type.INT
-                || oldSchema.getType() == Schema.Type.LONG
-                || oldSchema.getType() == Schema.Type.FLOAT
-                || oldSchema.getType() == Schema.Type.DOUBLE) {
+            || oldSchema.getType() == Schema.Type.LONG
+            || oldSchema.getType() == Schema.Type.FLOAT
+            || oldSchema.getType() == Schema.Type.DOUBLE) {
           return oldValue.toString();
         }
         if (oldSchema.getType() == Schema.Type.FIXED && oldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
@@ -967,19 +966,19 @@ public class HoodieAvroUtils {
         if (newSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
           // TODO: support more types
           if (oldSchema.getType() == Schema.Type.STRING
-                  || oldSchema.getType() == Schema.Type.DOUBLE
-                  || oldSchema.getType() == Schema.Type.INT
-                  || oldSchema.getType() == Schema.Type.LONG
-                  || oldSchema.getType() == Schema.Type.FLOAT) {
+              || oldSchema.getType() == Schema.Type.DOUBLE
+              || oldSchema.getType() == Schema.Type.INT
+              || oldSchema.getType() == Schema.Type.LONG
+              || oldSchema.getType() == Schema.Type.FLOAT) {
             LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
             BigDecimal bigDecimal = null;
             if (oldSchema.getType() == Schema.Type.STRING) {
               bigDecimal = new java.math.BigDecimal(oldValue.toString())
-                      .setScale(decimal.getScale());
+                  .setScale(decimal.getScale());
             } else {
               // Due to Java, there will be precision problems in direct conversion, we should use string instead of use double
               bigDecimal = new java.math.BigDecimal(oldValue.toString())
-                      .setScale(decimal.getScale());
+                  .setScale(decimal.getScale());
             }
             return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
           }
@@ -1024,10 +1023,10 @@ public class HoodieAvroUtils {
       return schema;
     }
     if (schema.getTypes().size() == 2
-            && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
+        && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
       actualSchema = schema.getTypes().get(1);
     } else if (schema.getTypes().size() == 2
-            && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
+        && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
       actualSchema = schema.getTypes().get(0);
     } else if (schema.getTypes().size() == 1) {
       actualSchema = schema.getTypes().get(0);

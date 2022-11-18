@@ -18,14 +18,16 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.avro.generic.GenericRecordBuilder;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -35,6 +37,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Converts Json record to Avro Generic Record.
@@ -42,6 +45,8 @@ import java.util.Map;
 public class MercifulJsonConverter {
 
   private static final Map<Schema.Type, JsonToAvroFieldProcessor> FIELD_TYPE_PROCESSORS = getFieldTypeProcessors();
+  // For each schema (keyed by full name), stores a mapping of schema field name to json field name to account for sanitization of fields
+  private static final Map<String, Map<String, String>> SANITIZED_FIELD_MAPPINGS = new ConcurrentHashMap<>();
 
   private final ObjectMapper mapper;
 
@@ -97,14 +102,39 @@ public class MercifulJsonConverter {
   }
 
   private static GenericRecord convertJsonToAvro(Map<String, Object> inputJson, Schema schema) {
-    GenericRecord avroRecord = new GenericData.Record(schema);
+    GenericRecordBuilder genericRecordBuilder = new GenericRecordBuilder(schema);
     for (Schema.Field f : schema.getFields()) {
-      Object val = inputJson.get(f.name());
+      Object val = getFieldFromJson(f, inputJson, schema.getFullName());
       if (val != null) {
-        avroRecord.put(f.pos(), convertJsonToAvroField(val, f.name(), f.schema()));
+        genericRecordBuilder.set(f, convertJsonToAvroField(val, f.name(), f.schema()));
       }
     }
-    return avroRecord;
+    return genericRecordBuilder.build();
+  }
+
+  private static Object getFieldFromJson(final Schema.Field fieldSchema, final Map<String, Object> inputJson, final String schemaFullName) {
+    Map<String, String> schemaToJsonFieldNames = SANITIZED_FIELD_MAPPINGS.computeIfAbsent(schemaFullName, unused -> new ConcurrentHashMap<>());
+    if (!schemaToJsonFieldNames.containsKey(fieldSchema.name())) {
+      // if we don't have field mapping, proactively populate as many as possible based on input json
+      for (String inputFieldName : inputJson.keySet()) {
+        // we expect many fields won't need sanitization so check if un-sanitized field name is already present
+        if (!schemaToJsonFieldNames.containsKey(inputFieldName)) {
+          String sanitizedJsonFieldName = HoodieAvroUtils.sanitizeName(inputFieldName);
+          schemaToJsonFieldNames.putIfAbsent(sanitizedJsonFieldName, inputFieldName);
+        }
+      }
+    }
+    Object match = inputJson.get(schemaToJsonFieldNames.getOrDefault(fieldSchema.name(), fieldSchema.name()));
+    if (match != null) {
+      return match;
+    }
+    // Check if there is an alias match
+    for (String alias : fieldSchema.aliases()) {
+      if (inputJson.containsKey(alias)) {
+        return inputJson.get(alias);
+      }
+    }
+    return null;
   }
 
   private static Schema getNonNull(Schema schema) {
@@ -116,7 +146,7 @@ public class MercifulJsonConverter {
   private static boolean isOptional(Schema schema) {
     return schema.getType().equals(Schema.Type.UNION) && schema.getTypes().size() == 2
         && (schema.getTypes().get(0).getType().equals(Schema.Type.NULL)
-            || schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
+        || schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
   }
 
   private static Object convertJsonToAvroField(Object value, String name, Schema schema) {
