@@ -207,14 +207,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    */
   protected Map<PartitionPath, List<FileSlice>> getAllInputFileSlices() {
     if (!areAllFileSlicesCached()) {
-      // Fetching file slices for partitions that have not been cached yet
-      List<PartitionPath> missingPartitions = getAllQueryPartitionPaths().stream()
-          .filter(p -> !cachedAllInputFileSlices.containsKey(p))
-          .collect(Collectors.toList());
-
-      // NOTE: Individual partitions are always cached in full, therefore if partition is cached
-      //       it will hold all the file-slices residing w/in the partition
-      cachedAllInputFileSlices.putAll(loadFileSlicesForPartitions(missingPartitions));
+      ensurePreloadedPartitions(getAllQueryPartitionPaths());
     }
 
     return cachedAllInputFileSlices;
@@ -223,12 +216,29 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   /**
    * Get input file slice for the given partition. Will use cache directly if it is computed before.
    */
-  protected List<FileSlice> getInputFileSlices(PartitionPath partition) {
-    return cachedAllInputFileSlices.computeIfAbsent(partition,
-        p -> loadFileSlicesForPartitions(Collections.singletonList(p)).get(p));
+  protected Map<PartitionPath, List<FileSlice>> getInputFileSlices(PartitionPath... partitions) {
+    ensurePreloadedPartitions(Arrays.asList(partitions));
+    return Arrays.stream(partitions).collect(
+        Collectors.toMap(Function.identity(), partition -> cachedAllInputFileSlices.get(partition))
+    );
+  }
+
+  private void ensurePreloadedPartitions(List<PartitionPath> partitionPaths) {
+    // Fetching file slices for partitions that have not been cached yet
+    List<PartitionPath> missingPartitions = partitionPaths.stream()
+        .filter(p -> !cachedAllInputFileSlices.containsKey(p))
+        .collect(Collectors.toList());
+
+    // NOTE: Individual partitions are always cached in full, therefore if partition is cached
+    //       it will hold all the file-slices residing w/in the partition
+    cachedAllInputFileSlices.putAll(loadFileSlicesForPartitions(missingPartitions));
   }
 
   private Map<PartitionPath, List<FileSlice>> loadFileSlicesForPartitions(List<PartitionPath> partitions) {
+    if (partitions.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
     FileStatus[] allFiles = listPartitionPathFiles(partitions);
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
@@ -363,10 +373,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // Reset it to null to trigger re-loading of all partition path
     this.cachedAllPartitionPaths = null;
-    List<PartitionPath> partitionPaths = getAllQueryPartitionPaths();
-
-    // Refresh the partitions & file slices
-    this.cachedAllInputFileSlices = loadFileSlicesForPartitions(partitionPaths);
+    ensurePreloadedPartitions(getAllQueryPartitionPaths());
 
     LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), timer.endTimer()));
   }
