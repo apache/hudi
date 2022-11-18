@@ -16,32 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.bootstrap;
+package org.apache.hudi.client.utils;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.queue.HoodieConsumer;
-import org.apache.hudi.io.HoodieBootstrapHandle;
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 
-/**
- * Consumer that dequeues records from queue and sends to Merge Handle for writing.
- */
-public class BootstrapRecordConsumer implements HoodieConsumer<HoodieRecord, Void> {
+import java.util.function.Function;
 
-  private final HoodieBootstrapHandle bootstrapHandle;
+// TODO move to hudi-common
+public class ClosableMergingIterator<T> extends MergingIterator<T> implements ClosableIterator<T> {
 
-  public BootstrapRecordConsumer(HoodieBootstrapHandle bootstrapHandle) {
-    this.bootstrapHandle = bootstrapHandle;
+  public ClosableMergingIterator(ClosableIterator<T> leftIterator,
+                                 ClosableIterator<T> rightIterator,
+                                 Function<Pair<T, T>, T> mergeFunction) {
+    super(leftIterator, rightIterator, mergeFunction);
   }
 
   @Override
-  public void consume(HoodieRecord record) {
-    bootstrapHandle.write(record, bootstrapHandle.getWriterSchema(), new TypedProperties());
-  }
-
-  @Override
-  public Void finish() {
-    bootstrapHandle.close();
-    return null;
+  public void close() {
+    ((ClosableIterator<T>) leftIterator).close();
+    ((ClosableIterator<T>) rightIterator).close();
   }
 }

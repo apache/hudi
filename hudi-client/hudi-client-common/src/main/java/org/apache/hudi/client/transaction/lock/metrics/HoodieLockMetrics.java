@@ -39,8 +39,8 @@ public class HoodieLockMetrics {
   private final HoodieWriteConfig writeConfig;
   private final boolean isMetricsEnabled;
   private final int keepLastNtimes = 100;
-  private final transient HoodieTimer lockDurationTimer = HoodieTimer.create();
-  private final transient HoodieTimer lockApiRequestDurationTimer = HoodieTimer.create();
+  private final transient HoodieTimer lockDurationTimer = HoodieTimer.delayed();
+  private final transient HoodieTimer lockApiRequestDurationTimer = HoodieTimer.delayed();
   private transient Counter lockAttempts;
   private transient Counter successfulLockAttempts;
   private transient Counter failedLockAttempts;

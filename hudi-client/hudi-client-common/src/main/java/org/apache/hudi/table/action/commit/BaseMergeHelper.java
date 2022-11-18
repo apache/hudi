@@ -19,9 +19,16 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.utils.ClosableMergingIterator;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 
@@ -56,6 +63,7 @@ public abstract class BaseMergeHelper {
 
     @Override
     public Void finish() {
+      upsertHandle.close();
       return null;
     }
   }

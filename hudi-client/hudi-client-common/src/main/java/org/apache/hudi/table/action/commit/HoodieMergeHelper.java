@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableMappingIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -49,7 +50,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -105,10 +105,10 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         || !isPureProjection
         || baseFile.getBootstrapBaseFile().isPresent();
 
-    HoodieExecutor<Void> wrapper = null;
+    HoodieExecutor<Void> executor = null;
 
     try {
-      Iterator<HoodieRecord> recordIterator;
+      ClosableIterator<HoodieRecord> recordIterator;
 
       // In case writer's schema is simply a projection of the reader's one we can read
       // the records in the projected schema directly
@@ -148,21 +148,19 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         return isBufferingRecords ? newRecord.copy() : newRecord;
       }, table.getPreExecuteRunnable());
 
-      wrapper.execute();
+      executor.execute();
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      // HUDI-2875: mergeHandle is not thread safe, we should totally terminate record inputting
-      // and executor firstly and then close mergeHandle.
-      baseFileReader.close();
-      if (bootstrapFileReader != null) {
-        bootstrapFileReader.close();
+      // NOTE: If executor is initialized it's responsible for gracefully shutting down
+      //       both producer and consumer
+      if (executor != null) {
+        executor.shutdownNow();
+        executor.awaitTermination();
+      } else {
+        reader.close();
+        mergeHandle.close();
       }
-      if (null != wrapper) {
-        wrapper.shutdownNow();
-        wrapper.awaitTermination();
-      }
-      mergeHandle.close();
     }
   }
 
