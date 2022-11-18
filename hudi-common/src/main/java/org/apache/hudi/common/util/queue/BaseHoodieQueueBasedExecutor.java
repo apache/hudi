@@ -98,7 +98,6 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
 
   @Override
   public void shutdownNow() {
-    queue.close();
     producerExecutorService.shutdownNow();
     consumerExecutorService.shutdownNow();
   }
@@ -110,9 +109,16 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
   public E execute() {
     try {
       checkState(this.consumer.isPresent());
+
+      // Start producing/consuming
       startProducing();
       CompletableFuture<E> future = startConsuming();
-      return future.join();
+      // Wait on processing to complete
+      E result = future.join();
+      // Shut down the queue
+      queue.close();
+
+      return result;
     } catch (Exception e) {
       throw new HoodieException(e);
     }
