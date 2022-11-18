@@ -18,7 +18,9 @@
 package org.apache.spark.sql.hudi.streaming
 
 import java.util.Date
+
 import org.apache.hadoop.fs.Path
+
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieTableType
