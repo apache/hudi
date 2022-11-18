@@ -98,12 +98,12 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     closeLocker.unlock();
   }
 
-  protected void setHandlers(IteratorBasedQueueConsumer consumer) {
+  protected void setHandlers(HoodieConsumer consumer) {
     queue.handleEventsWith(new EventHandler<HoodieDisruptorEvent>() {
 
       @Override
       public void onEvent(HoodieDisruptorEvent event, long sequence, boolean endOfBatch) throws Exception {
-        consumer.consumeOneRecord(event.get());
+        consumer.consume(event.get());
       }
     });
   }

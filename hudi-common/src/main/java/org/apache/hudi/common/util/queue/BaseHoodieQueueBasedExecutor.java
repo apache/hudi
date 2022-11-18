@@ -47,12 +47,12 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
   // Producers
   protected final List<HoodieProducer<I>> producers;
   // Consumer
-  protected final Option<IteratorBasedQueueConsumer<O, E>> consumer;
+  protected final Option<HoodieConsumer<O, E>> consumer;
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
   protected final Runnable preExecuteRunnable;
 
   public BaseHoodieQueueBasedExecutor(List<HoodieProducer<I>> producers,
-                                      Option<IteratorBasedQueueConsumer<O, E>> consumer,
+                                      Option<HoodieConsumer<O, E>> consumer,
                                       HoodieMessageQueue<I, O> queue,
                                       Runnable preExecuteRunnable) {
     this.queue = queue;

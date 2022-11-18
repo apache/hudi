@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.queue;
 
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -46,5 +47,12 @@ public class IteratorBasedQueueProducer<I> implements HoodieProducer<I> {
       queue.insertRecord(inputIterator.next());
     }
     LOG.info("finished buffering records");
+  }
+
+  @Override
+  public void close() {
+    if (inputIterator instanceof ClosableIterator) {
+      ((ClosableIterator<I>) inputIterator).close();
+    }
   }
 }

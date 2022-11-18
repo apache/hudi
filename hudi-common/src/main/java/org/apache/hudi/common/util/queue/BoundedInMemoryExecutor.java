@@ -42,13 +42,13 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, final Iterator<I> inputItr,
-                                 IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
+                                 HoodieConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
     this(bufferLimitInBytes, Collections.singletonList(new IteratorBasedQueueProducer<>(inputItr)),
         Option.of(consumer), transformFunction, new DefaultSizeEstimator<>(), preExecuteRunnable);
   }
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<HoodieProducer<I>> producers,
-                                 Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
+                                 Option<HoodieConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                                  final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
     super(producers, consumer, new BoundedInMemoryQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator), preExecuteRunnable);
   }

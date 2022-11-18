@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.DisruptorMessageQueue;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.HoodieProducer;
-import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
+import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.common.util.queue.WaitStrategyFactory;
@@ -112,13 +112,13 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getDisruptorWriteBufferSize()).thenReturn(Option.of(16));
-    IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
           private int count = 0;
 
           @Override
-          public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
             count++;
             afterRecord.add((HoodieAvroRecord) record.record);
             try {
@@ -221,11 +221,11 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
         IntStream.range(0, numProducers).boxed().collect(Collectors.toMap(Function.identity(), x -> 0));
 
     // setup consumer and start disruptor
-    IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
           @Override
-          public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
+          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
             // Read recs and ensure we have covered all producer recs.
             final HoodieRecord rec = payload.record;
             Pair<Integer, Integer> producerPos = keyToProducerAndIndexMap.get(rec.getRecordKey());
@@ -242,7 +242,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
           }
         };
 
-    Method setHandlersFunc = queue.getClass().getDeclaredMethod("setHandlers", IteratorBasedQueueConsumer.class);
+    Method setHandlersFunc = queue.getClass().getDeclaredMethod("setHandlers", HoodieConsumer.class);
     setHandlersFunc.setAccessible(true);
     setHandlersFunc.invoke(queue, consumer);
 
@@ -309,12 +309,12 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
     }
 
 
-    IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
       int count = 0;
       @Override
-      public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
+      public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
         // Read recs and ensure we have covered all producer recs.
         final HoodieRecord rec = payload.record;
         count++;

@@ -42,17 +42,17 @@ public class DisruptorExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, 
   private CompletableFuture<Void> producingFuture;
 
   public DisruptorExecutor(final Option<Integer> bufferSize, final Iterator<I> inputItr,
-                           IteratorBasedQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
+                           HoodieConsumer<O, E> consumer, Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
     this(bufferSize, new IteratorBasedQueueProducer<>(inputItr), Option.of(consumer), transformFunction, waitStrategy, preExecuteRunnable);
   }
 
   public DisruptorExecutor(final Option<Integer> bufferSize, HoodieProducer<I> producer,
-                           Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
+                           Option<HoodieConsumer<O, E>> consumer, final Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
     this(bufferSize, Collections.singletonList(producer), consumer, transformFunction, waitStrategy, preExecuteRunnable);
   }
 
   public DisruptorExecutor(final Option<Integer> bufferSize, List<HoodieProducer<I>> producers,
-                           Option<IteratorBasedQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
+                           Option<HoodieConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                            final Option<String> waitStrategy, Runnable preExecuteRunnable) {
     super(producers, consumer, new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable), preExecuteRunnable);
   }

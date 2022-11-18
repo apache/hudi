@@ -26,5 +26,10 @@ public interface HoodieConsumer<I, O> {
   /**
    * Consume records from inner message queue.
    */
-  O consume(HoodieMessageQueue<?, I> queue) throws Exception;
+  void consume(I record) throws Exception;
+
+  /**
+   * Notifies implementation that we have exhausted consuming records from queue.
+   */
+  O finish();
 }

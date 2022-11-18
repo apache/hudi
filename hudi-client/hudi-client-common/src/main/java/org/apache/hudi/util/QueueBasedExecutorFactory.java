@@ -23,7 +23,7 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
 import org.apache.hudi.common.util.queue.ExecutorType;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
-import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
+import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
@@ -34,14 +34,14 @@ public class QueueBasedExecutorFactory {
 
   public static <I, O, E> HoodieExecutor<I, O, E> create(HoodieWriteConfig hoodieConfig,
                                                          Iterator<I> inputItr,
-                                                         IteratorBasedQueueConsumer<O, E> consumer,
+                                                         HoodieConsumer<O, E> consumer,
                                                          Function<I, O> transformFunction) {
     return create(hoodieConfig, inputItr, consumer, transformFunction, Functions.noop());
   }
 
   public static <I, O, E> HoodieExecutor<I, O, E> create(HoodieWriteConfig hoodieConfig,
                                                          Iterator<I> inputItr,
-                                                         IteratorBasedQueueConsumer<O, E> consumer,
+                                                         HoodieConsumer<O, E> consumer,
                                                          Function<I, O> transformFunction,
                                                          Runnable preExecuteRunnable) {
     ExecutorType executorType = hoodieConfig.getExecutorType();

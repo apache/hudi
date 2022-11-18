@@ -22,7 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
+import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenResult;
 import org.apache.hudi.io.HoodieWriteHandle;
@@ -40,7 +40,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
  */
 public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
-    extends IteratorBasedQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
+    implements HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
   private final HoodieWriteConfig config;
   private final String instantTime;
@@ -70,7 +70,7 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
+  public void consume(HoodieInsertValueGenResult<HoodieRecord> payload) {
     final HoodieRecord insertPayload = payload.record;
     String partitionPath = insertPayload.getPartitionPath();
     HoodieWriteHandle<?,?,?,?> handle = handles.get(partitionPath);
