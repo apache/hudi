@@ -154,9 +154,9 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
   public E execute() {
     try {
       checkState(this.consumer.isPresent());
-      // Start producing/consuming asynchronously
-      CompletableFuture<Void> producing = startProducingAsync();
+      // Start consuming/producing asynchronously
       CompletableFuture<Void> consuming = startConsumingAsync();
+      CompletableFuture<Void> producing = startProducingAsync();
 
       // NOTE: To properly support mode when there's no consumer, we have to fall back
       //       to producing future as the trigger for us to shut down the queue

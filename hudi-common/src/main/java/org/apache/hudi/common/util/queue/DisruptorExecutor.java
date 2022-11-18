@@ -42,16 +42,13 @@ public class DisruptorExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, 
                            Option<HoodieConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                            final Option<String> waitStrategy, Runnable preExecuteRunnable) {
     super(producers, consumer, new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable), preExecuteRunnable);
-
-    // TODO fold this into the queue itself
-    DisruptorMessageQueue<I, O> disruptorQueue = (DisruptorMessageQueue<I, O>) this.queue;
-    // Before we start producing, we need to set up Disruptor's queue
-    disruptorQueue.setHandlers(consumer.get());
-    disruptorQueue.start();
   }
 
   @Override
   protected void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
-    // no-op
+    DisruptorMessageQueue<I, O> disruptorQueue = (DisruptorMessageQueue<I, O>) queue;
+    // Before we start producing, we need to set up Disruptor's queue
+    disruptorQueue.setHandlers(consumer);
+    disruptorQueue.start();
   }
 }
