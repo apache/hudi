@@ -65,15 +65,31 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
     this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("executor-queue-consumer", preExecuteRunnable));
   }
 
-  /**
-   * Start all Producers.
-   */
-  public abstract void startProducing();
+  protected abstract CompletableFuture<Void> doStartProducing();
+
+  protected abstract CompletableFuture<E> doStartConsuming();
 
   /**
-   * Start consumer.
+   * Start producers
    */
-  protected abstract CompletableFuture<E> startConsuming();
+  public void startProducing() {
+    doStartProducing().whenComplete((result, throwable) -> {
+      producers.forEach(HoodieProducer::close);
+      // Mark production as done so that consumer will be able to exit
+      queue.close();
+    });
+  }
+
+  /**
+   * Start consumer
+   *
+   * NOTE: This is a sync operation that _will_ block, until all records
+   *       are fully consumed
+   */
+  private E startConsuming() {
+    //
+    return doStartConsuming().join();
+  }
 
   @Override
   public final boolean awaitTermination() {
@@ -102,6 +118,10 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
     consumerExecutorService.shutdownNow();
   }
 
+  public boolean isRunning() {
+    return !queue.isEmpty();
+  }
+
   /**
    * Main API to run both production and consumption.
    */
@@ -112,9 +132,8 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
 
       // Start producing/consuming
       startProducing();
-      CompletableFuture<E> future = startConsuming();
-      // Wait on processing to complete
-      E result = future.join();
+      E result = startConsuming();
+
       // Shut down the queue
       queue.close();
 

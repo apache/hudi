@@ -29,6 +29,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.FutureUtils.allOf;
 
 /**
  * Executor which orchestrates concurrent producers and consumers communicating through 'DisruptorMessageQueue'. This
@@ -61,34 +64,34 @@ public class DisruptorExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, 
    * Start all Producers.
    */
   @Override
-  public void startProducing() {
+  public CompletableFuture<Void> doStartProducing() {
     DisruptorMessageQueue<I, O> queue = (DisruptorMessageQueue<I, O>) this.queue;
     // Before we start producing, we need to set up Disruptor's queue
     queue.setHandlers(consumer.get());
     queue.start();
 
-    producingFuture = CompletableFuture.allOf(producers.stream().map(producer -> {
-      return CompletableFuture.supplyAsync(() -> {
-        try {
-          producer.produce(queue);
-        } catch (Throwable e) {
-          LOG.error("error producing records", e);
-          throw new HoodieException("Error producing records in disruptor executor", e);
-        }
+    producingFuture = allOf(producers.stream()
+        .map(producer -> CompletableFuture.supplyAsync(() -> {
+          LOG.info("Starting producer, populating records into the queue");
+          try {
+            producer.produce(queue);
+            LOG.info("Finished producing records into the queue");
+          } catch (Exception e) {
+            LOG.error("Failed to produce records", e);
+            queue.markAsFailed(e);
+            throw new HoodieException("Failed to produce records", e);
+          }
+          return (Void) null;
+        }, producerExecutorService))
+        .collect(Collectors.toList())
+    )
+        .thenApply(ignored -> null);
 
-        // Shutdown the queue after we're done producing
-        queue.close();
-        return true;
-      }, producerExecutorService);
-    }).toArray(CompletableFuture[]::new));
+    return producingFuture;
   }
 
   @Override
-  protected CompletableFuture<E> startConsuming() {
+  protected CompletableFuture<E> doStartConsuming() {
     return producingFuture.thenApply(res -> consumer.get().finish());
-  }
-
-  public boolean isRunning() {
-    return !queue.isEmpty();
   }
 }

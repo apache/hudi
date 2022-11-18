@@ -29,8 +29,10 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.FutureUtils.allOf;
 
 /**
  * Executor which orchestrates concurrent producers and consumers communicating through 'BoundedInMemoryQueue'. This
@@ -57,37 +59,29 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
    * Start all producers at once.
    */
   @Override
-  public void startProducing() {
-    // Latch to control when and which producer thread will close the queue
-    final AtomicInteger runningProducers = new AtomicInteger(producers.size());
-
-    producers.forEach(producer -> {
-      CompletableFuture.supplyAsync(() -> {
-        LOG.info("Starting producer, populating records into the queue");
-        try {
-          producer.produce(queue);
-
-          LOG.info("Finished producing records into the queue");
-        } catch (Exception e) {
-          LOG.error("Failed to produce records", e);
-          queue.markAsFailed(e);
-          throw new HoodieException("Failed to produce records", e);
-        } finally {
-          if (runningProducers.decrementAndGet() == 0) {
-            // Mark production as done so that consumer will be able to exit
-            queue.close();
+  public CompletableFuture<Void> doStartProducing() {
+    return allOf(producers.stream()
+        .map(producer -> CompletableFuture.supplyAsync(() -> {
+          LOG.info("Starting producer, populating records into the queue");
+          try {
+            producer.produce(queue);
+            LOG.info("Finished producing records into the queue");
+          } catch (Exception e) {
+            LOG.error("Failed to produce records", e);
+            queue.markAsFailed(e);
+            throw new HoodieException("Failed to produce records", e);
           }
-        }
-        return true;
-      }, producerExecutorService);
-    });
+          return (Void) null;
+        }, producerExecutorService))
+        .collect(Collectors.toList()))
+        .thenApply(ignored -> null);
   }
 
   /**
    * Start only consumer.
    */
   @Override
-  protected CompletableFuture<E> startConsuming() {
+  protected CompletableFuture<E> doStartConsuming() {
     return consumer.map(consumer -> {
       return CompletableFuture.supplyAsync(() -> {
         LOG.info("Starting consumer, consuming records from the queue");
@@ -108,10 +102,6 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
         }
       }, consumerExecutorService);
     }).orElse(CompletableFuture.completedFuture(null));
-  }
-
-  public boolean isRunning() {
-    return !queue.isEmpty();
   }
 
   public Iterator<O> getRecordIterator() {
