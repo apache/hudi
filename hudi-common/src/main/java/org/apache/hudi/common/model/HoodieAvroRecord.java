@@ -155,9 +155,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
-    if (!(data instanceof HoodieAvroInsertValuePayload) && !(data instanceof RewriteAvroPayload)) {
-      throw new HoodieException("We should deserialization before calling isDelete");
-    }
     return !getData().getInsertValue(recordSchema, props).isPresent();
   }
 
@@ -166,13 +163,15 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     if (!(data instanceof HoodieAvroInsertValuePayload) && !(data instanceof RewriteAvroPayload)) {
       throw new HoodieException("We should deserialization before calling shouldIgnore");
     }
-    Option<IndexedRecord> insertRecord = getData().getInsertValue(recordSchema, props);
-    // just skip the ignored record
-    if (insertRecord.isPresent() && insertRecord.get().equals(SENTINEL)) {
-      return true;
-    } else {
-      return false;
+    HoodieRecordPayload<?> recordPayload = getData();
+    // NOTE: Currently only records borne by [[ExpressionPayload]] can currently be ignored,
+    //       as such, we limit exposure of this method only to such payloads
+    if (recordPayload instanceof BaseAvroPayload && ((BaseAvroPayload) recordPayload).canProduceSentinel()) {
+      Option<IndexedRecord> insertRecord = recordPayload.getInsertValue(recordSchema, props);
+      return insertRecord.isPresent() && insertRecord.get().equals(SENTINEL);
     }
+
+    return false;
   }
 
   @Override

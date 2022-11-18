@@ -58,6 +58,14 @@ public abstract class BaseAvroPayload implements Serializable {
   }
 
   /**
+   * Defines whether this implementation of {@link HoodieRecordPayload} could produce
+   * {@link HoodieRecord#SENTINEL}
+   */
+  public boolean canProduceSentinel() {
+    return false;
+  }
+
+  /**
    * @param genericRecord instance of {@link GenericRecord} of interest.
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */

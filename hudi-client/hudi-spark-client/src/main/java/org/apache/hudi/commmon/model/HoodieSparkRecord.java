@@ -258,11 +258,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
 
   @Override
   public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
-    if (data != null && data.equals(SENTINEL)) {
-      return true;
-    } else {
-      return false;
-    }
+    return false;
   }
 
   @Override
