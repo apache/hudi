@@ -33,7 +33,6 @@ public class IteratorBasedQueueProducer<I> implements HoodieProducer<I> {
 
   private static final Logger LOG = LogManager.getLogger(IteratorBasedQueueProducer.class);
 
-  // input iterator for producing items in the buffer.
   private final Iterator<I> inputIterator;
 
   public IteratorBasedQueueProducer(Iterator<I> inputIterator) {

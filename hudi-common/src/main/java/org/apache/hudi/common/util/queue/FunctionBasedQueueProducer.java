@@ -27,10 +27,7 @@ import java.util.function.Function;
  * Buffer producer which allows custom functions to insert entries to queue.
  *
  * @param <I> Type of entry produced for queue
- *
- * @deprecated 
  */
-@Deprecated
 public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
 
   private static final Logger LOG = LogManager.getLogger(FunctionBasedQueueProducer.class);
@@ -43,9 +40,9 @@ public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
 
   @Override
   public void produce(HoodieMessageQueue<I, ?> queue) {
-    LOG.info("starting function which will enqueue records");
+    LOG.info("Starting to produce records into the queue");
     producerFunction.apply(queue);
-    LOG.info("finished function which will enqueue records");
+    LOG.info("Finished producing records into the queue");
   }
 
   @Override

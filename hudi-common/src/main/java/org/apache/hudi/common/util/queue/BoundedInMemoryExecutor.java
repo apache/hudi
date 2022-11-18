@@ -114,11 +114,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
     return !queue.isEmpty();
   }
 
-  /**
-   * @deprecated
-   */
-  @Deprecated
-  public BoundedInMemoryQueue<I, O> getQueue() {
-    return (BoundedInMemoryQueue<I, O>) queue;
+  public Iterator<O> getRecordIterator() {
+    return ((BoundedInMemoryQueue<I, O>) queue).iterator();
   }
 }
