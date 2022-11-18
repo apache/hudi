@@ -52,18 +52,14 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
   }
 
   @Override
-  protected E doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
+  protected void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
     LOG.info("Starting consumer, consuming records from the queue");
     try {
       Iterator<O> it = ((BoundedInMemoryQueue<I, O>) queue).iterator();
       while (it.hasNext()) {
         consumer.consume(it.next());
       }
-      // Notifies done, returns final result
-      E result = consumer.finish();
-
       LOG.info("All records from the queue have been consumed");
-      return result;
     } catch (Exception e) {
       LOG.error("Error consuming records", e);
       queue.markAsFailed(e);

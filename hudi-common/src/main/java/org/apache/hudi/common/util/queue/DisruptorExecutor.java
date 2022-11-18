@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.Option;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 /**
@@ -44,6 +43,7 @@ public class DisruptorExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, 
                            final Option<String> waitStrategy, Runnable preExecuteRunnable) {
     super(producers, consumer, new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable), preExecuteRunnable);
 
+    // TODO fold this into the queue itself
     DisruptorMessageQueue<I, O> disruptorQueue = (DisruptorMessageQueue<I, O>) this.queue;
     // Before we start producing, we need to set up Disruptor's queue
     disruptorQueue.setHandlers(consumer.get());
@@ -51,7 +51,7 @@ public class DisruptorExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, 
   }
 
   @Override
-  protected E doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
-    return producingFuture.thenApply(res -> consumer.get().finish());
+  protected void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
+    // no-op
   }
 }

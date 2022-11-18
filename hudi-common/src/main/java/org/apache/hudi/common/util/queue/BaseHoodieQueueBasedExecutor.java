@@ -80,7 +80,7 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
     }
   }
 
-  protected abstract E doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer);
+  protected abstract void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer);
 
   /**
    * Start producing
@@ -105,23 +105,15 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
 
   /**
    * Start consumer
-   *
-   * NOTE: This is a sync operation that _will_ block, until all records
-   *       are fully consumed
    */
-  private CompletableFuture<E> startConsumingAsync(CompletableFuture<Void> producingFuture) {
+  private CompletableFuture<Void> startConsumingAsync() {
     return consumer.map(consumer ->
             CompletableFuture.supplyAsync(() -> {
-              return doConsume(queue, consumer);
+              doConsume(queue, consumer);
+              return (Void) null;
             }, consumerExecutorService)
         )
-        // NOTE: To properly support mode when there's no consumer, we have to fall back
-        //       to producing future as the trigger for us to clean up the queue
-        .orElse(producingFuture.thenApply(ignored -> null))
-        .whenComplete((result, throwable) -> {
-          // Close the queue, after finishing the consuming
-          queue.close();
-        });
+        .orElse(CompletableFuture.completedFuture(null));
   }
 
   @Override
@@ -164,10 +156,18 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
       checkState(this.consumer.isPresent());
       // Start producing/consuming asynchronously
       CompletableFuture<Void> producing = startProducingAsync();
-      CompletableFuture<E> consuming = startConsumingAsync(producing);
-      // Block until producing and consuming both finish
-      producing.join();
-      return consuming.join();
+      CompletableFuture<Void> consuming = startConsumingAsync();
+
+      // NOTE: To properly support mode when there's no consumer, we have to fall back
+      //       to producing future as the trigger for us to shut down the queue
+      return producing.thenCombine(consuming, (aVoid, anotherVoid) -> null)
+          .whenComplete((ignored, throwable) -> {
+            // Close the queue to release the resources
+            queue.close();
+          })
+          .thenApply(ignored -> consumer.get().finish())
+          // Block until producing and consuming both finish
+          .join();
     } catch (Exception e) {
       throw new HoodieException(e);
     }
