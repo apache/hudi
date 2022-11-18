@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE}
 import org.apache.log4j.Level
 import org.apache.spark.sql.streaming.StreamTest
@@ -138,12 +139,46 @@ class TestStreamingSource extends StreamTest {
     }
   }
 
-  private def addData(inputPath: String, rows: Seq[(String, String, String, String)]): Unit = {
+  test("test mor stream source with compaction") {
+    withTempDir { inputDir =>
+      val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream"
+      HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(MERGE_ON_READ)
+        .setTableName(getTableName(tablePath))
+        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
+        .initTable(spark.sessionState.newHadoopConf(), tablePath)
+
+      val df = spark.readStream
+        .format("org.apache.hudi")
+        .load(tablePath)
+        .select("id", "name", "price", "ts")
+
+      addData(tablePath, Seq(("1", "a1", "10", "000")))
+      addData(tablePath,
+        Seq(("1", "a2", "12", "000"),
+          ("2", "a3", "12", "000")))
+      addData(tablePath, Seq(("2", "a5", "12", "000"), ("1", "a6", "12", "001")))
+      // trigger compaction
+      addData(tablePath, Seq(("3", "a6", "12", "000")), true)
+
+      testStream(df)(
+        AssertOnQuery {q => q.processAllAvailable(); true },
+        CheckAnswerRows(Seq(Row("1", "a6", "12", "001"),
+          Row("2", "a5", "12", "000"),
+          Row("3", "a6", "12", "000")), lastOnly = true, isSorted = false),
+        StopStream
+      )
+    }
+  }
+
+  private def addData(inputPath: String, rows: Seq[(String, String, String, String)], enableInlineCompaction: Boolean = false) : Unit = {
     rows.toDF(columns: _*)
       .write
       .format("org.apache.hudi")
       .options(commonOptions)
       .option(TBL_NAME.key, getTableName(inputPath))
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), enableInlineCompaction.toString)
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "2")
       .mode(SaveMode.Append)
       .save(inputPath)
   }
