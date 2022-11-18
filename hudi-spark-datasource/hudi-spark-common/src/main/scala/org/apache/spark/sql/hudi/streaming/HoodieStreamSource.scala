@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.TablePathUtils
-import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -75,8 +74,7 @@ class HoodieStreamSource(
         case HoodieEarliestOffsetRangeLimit =>
           INIT_OFFSET
         case HoodieLatestOffsetRangeLimit =>
-          getLatestOffset.getOrElse(throw new HoodieException("Cannot fetch latest offset from table, " +
-            "the table might be empty"))
+          getLatestOffset.getOrElse(INIT_OFFSET)
         case HoodieSpecifiedOffsetRangeLimit(instantTime) =>
           HoodieSourceOffset(instantTime)
       }
