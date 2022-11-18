@@ -3301,8 +3301,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   }
 
-  @Test
-  public void testDuplicatesDuringRecordIndexBootstrap() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testDuplicatesDuringRecordIndexBootstrap(boolean allowDuplicates) throws Exception {
     init(HoodieTableType.COPY_ON_WRITE, true);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     List<String> commitTimestamps = new ArrayList<>();
@@ -3340,7 +3341,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Create a commit, with record index enabled
       String secondCommitTime = client.startCommit();
       List<HoodieRecord> recordsSecondBatch = dataGen.generateInserts(secondCommitTime, 100);
-      assertThrows(HoodieException.class, () -> client.insert(jsc.parallelize(recordsSecondBatch, 1), secondCommitTime).collect());
+      if (!allowDuplicates) {
+        assertThrows(HoodieException.class, () -> client.insert(jsc.parallelize(recordsSecondBatch, 1), secondCommitTime).collect());
+      } else {
+        client.insert(jsc.parallelize(recordsSecondBatch, 1), secondCommitTime).collect();
+      }
     }
   }
 
