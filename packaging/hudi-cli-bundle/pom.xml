@@ -164,7 +164,6 @@
                                     <include>org.apache.httpcomponents:httpcore</include>
                                     <include>org.apache.httpcomponents:fluent-hc</include>
                                     <include>org.jline:*</include>
-                                    <include>org.slf4j:slf4j-api</include>
                                     <include>org.yaml:*</include>
                                     <include>commons-logging:*</include>
                                     <include>org.apache.avro:avro</include>
@@ -364,6 +363,7 @@
                                         <!-- hbase-default.xml comes from hbase-common, hbase related classes used in hudi are in shaded
                                         pattern, the default classes in hbase-default.xml can cause ClassNotFoundException. -->
                                         <exclude>hbase-default.xml</exclude>
+                                        <exclude>**/Log4j2Plugins.dat</exclude>
                                     </excludes>
                                 </filter>
                             </filters>
@@ -375,7 +375,7 @@
         </plugins>
         <resources>
             <resource>
-                <directory>src/main/resources</directory>
+                <directory>hudi-cli/src/main/resources</directory>
             </resource>
         </resources>
     </build>
@@ -575,17 +575,6 @@
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-slf4j-impl</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>${slf4j.version}</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
