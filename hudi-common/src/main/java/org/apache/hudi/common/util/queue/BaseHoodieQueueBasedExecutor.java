@@ -22,9 +22,6 @@ import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -104,13 +101,6 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
     queue.close();
     producerExecutorService.shutdownNow();
     consumerExecutorService.shutdownNow();
-  }
-
-  @Override
-  public void close() {
-    queue.close();
-    producerExecutorService.shutdown();
-    consumerExecutorService.shutdown();
   }
 
   /**

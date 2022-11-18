@@ -110,6 +110,10 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
     return ((BoundedInMemoryQueue<I, O>) queue).iterator().hasNext();
   }
 
+  /**
+   * @deprecated
+   */
+  @Deprecated
   public HoodieMessageQueue<I, O> getQueue() {
     return queue;
   }
