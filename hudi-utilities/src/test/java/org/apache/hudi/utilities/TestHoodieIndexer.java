@@ -42,6 +42,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -88,7 +89,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     boolean initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      SparkRDDWriteClient.registerClasses(sparkConf);
+      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
