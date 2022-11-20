@@ -365,6 +365,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
 
     // TODO MetadataColumnStatsIndex for spark record
+    // https://issues.apache.org/jira/browse/HUDI-5249
     if (config.isMetadataColumnStatsIndexEnabled() && recordMerger.getRecordType() == HoodieRecordType.AVRO) {
       final List<Schema.Field> fieldsToIndex;
       // If column stats index is enabled but columns not configured then we assume that
