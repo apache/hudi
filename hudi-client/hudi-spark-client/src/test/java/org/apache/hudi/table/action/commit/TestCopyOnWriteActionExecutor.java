@@ -482,7 +482,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 
-  public void testBulkInsertRecords(String bulkInsertMode) throws Exception {
+  private void testBulkInsertRecords(String bulkInsertMode) {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
