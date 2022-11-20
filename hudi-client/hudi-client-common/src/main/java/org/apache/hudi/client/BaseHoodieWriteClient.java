@@ -280,7 +280,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
     if (!historySchemaStr.isEmpty() || Boolean.parseBoolean(config.getString(HoodieCommonConfig.RECONCILE_SCHEMA.key()))) {
       InternalSchema internalSchema;
-      Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
+      Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema(), config.allowOperationMetadataField());
       if (historySchemaStr.isEmpty()) {
         internalSchema = AvroInternalSchemaConverter.convert(avroSchema);
         internalSchema.setSchemaId(Long.parseLong(instantTime));
@@ -1762,16 +1762,13 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   private Pair<InternalSchema, HoodieTableMetaClient> getInternalSchemaAndMetaClient() {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    Option<InternalSchema> internalSchemaOption = schemaUtil.getTableInternalSchemaFromCommitMetadata();
-    if (!internalSchemaOption.isPresent()) {
-      throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
-    }
-    return Pair.of(internalSchemaOption.get(), metaClient);
+    return Pair.of(getInternalSchema(schemaUtil), metaClient);
   }
 
   private void commitTableChange(InternalSchema newSchema, HoodieTableMetaClient metaClient) {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
+    String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElseGet(
+        () -> SerDeHelper.inheritSchemas(getInternalSchema(schemaUtil), ""));
     Schema schema = AvroInternalSchemaConverter.convert(newSchema, config.getTableName());
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
@@ -1792,5 +1789,15 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
     schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(newSchema, historySchemaStr));
     commitStats(instantTime, Collections.emptyList(), Option.of(extraMeta), commitActionType);
+  }
+
+  private InternalSchema getInternalSchema(TableSchemaResolver schemaUtil) {
+    return schemaUtil.getTableInternalSchemaFromCommitMetadata().orElseGet(() -> {
+      try {
+        return AvroInternalSchemaConverter.convert(schemaUtil.getTableAvroSchema());
+      } catch (Exception e) {
+        throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
+      }
+    });
   }
 }
