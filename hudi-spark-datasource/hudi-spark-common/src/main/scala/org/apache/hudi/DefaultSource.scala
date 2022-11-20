@@ -34,7 +34,7 @@ import org.apache.log4j.LogManager
 
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
-import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
+import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
@@ -185,7 +185,16 @@ class DefaultSource extends RelationProvider
                             schema: Option[StructType],
                             providerName: String,
                             parameters: Map[String, String]): Source = {
-    new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
+    val offsetRangeLimit = parameters.getOrElse(START_OFFSET.key(), START_OFFSET.defaultValue()) match {
+      case offset if offset.equalsIgnoreCase("earliest") =>
+        HoodieEarliestOffsetRangeLimit
+      case offset if offset.equalsIgnoreCase("latest") =>
+        HoodieLatestOffsetRangeLimit
+      case instantTime =>
+        HoodieSpecifiedOffsetRangeLimit(instantTime)
+    }
+
+    new HoodieStreamSource(sqlContext, metadataPath, schema, parameters, offsetRangeLimit)
   }
 }
 

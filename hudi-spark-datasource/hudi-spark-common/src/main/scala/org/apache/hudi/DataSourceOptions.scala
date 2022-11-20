@@ -96,6 +96,12 @@ object DataSourceReadOptions {
     .withDocumentation("Enables use of the spark file index implementation for Hudi, "
       + "that speeds up listing of large tables.")
 
+  val START_OFFSET: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.streaming.startOffset")
+    .defaultValue("earliest")
+    .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
+      "specified start instant time")
+
   val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()
