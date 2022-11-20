@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DataSourceReadOptions.START_OFFSET
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -134,6 +135,65 @@ class TestStreamingSource extends StreamTest {
           Seq(Row("5", "a5", "12", "000"),
             Row("6", "a6", "12", "000")),
           lastOnly = true, isSorted = false)
+      )
+    }
+  }
+
+  test("Test cow from latest offset") {
+    withTempDir { inputDir =>
+      val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"
+      HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(COPY_ON_WRITE)
+        .setTableName(getTableName(tablePath))
+        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
+        .initTable(spark.sessionState.newHadoopConf(), tablePath)
+
+      addData(tablePath, Seq(("1", "a1", "10", "000")))
+      val df = spark.readStream
+        .format("org.apache.hudi")
+        .option(START_OFFSET.key(), "latest")
+        .load(tablePath)
+        .select("id", "name", "price", "ts")
+
+      testStream(df)(
+        AssertOnQuery {q => q.processAllAvailable(); true },
+        // Start from the latest, should contains no data
+        CheckAnswerRows(Seq(), lastOnly = true, isSorted = false),
+        StopStream,
+
+        addDataToQuery(tablePath, Seq(("2", "a1", "12", "000"))),
+        StartStream(),
+        AssertOnQuery {q => q.processAllAvailable(); true },
+        CheckAnswerRows(Seq(Row("2", "a1", "12", "000")), lastOnly = false, isSorted = false)
+      )
+    }
+  }
+
+  test("Test cow from specified offset") {
+    withTempDir { inputDir =>
+      val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"
+      val metaClient = HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(COPY_ON_WRITE)
+        .setTableName(getTableName(tablePath))
+        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
+        .initTable(spark.sessionState.newHadoopConf(), tablePath)
+
+      addData(tablePath, Seq(("1", "a1", "10", "000")))
+      addData(tablePath, Seq(("2", "a1", "11", "001")))
+      addData(tablePath, Seq(("3", "a1", "12", "002")))
+
+      val timestamp = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
+        .firstInstant().get().getTimestamp
+      val df = spark.readStream
+        .format("org.apache.hudi")
+        .option(START_OFFSET.key(), timestamp)
+        .load(tablePath)
+        .select("id", "name", "price", "ts")
+
+      testStream(df)(
+        AssertOnQuery {q => q.processAllAvailable(); true },
+        // Start after the first commit
+        CheckAnswerRows(Seq(Row("2", "a1", "11", "001"), Row("3", "a1", "12", "002")), lastOnly = true, isSorted = false)
       )
     }
   }
