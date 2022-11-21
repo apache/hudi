@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.testutils.HoodieJavaClientTestBase;
+import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestBase {
+public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestHarness {
   private static final Comparator<HoodieRecord> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey()));
 
