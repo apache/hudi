@@ -46,7 +46,6 @@ public class SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy ex
     try {
       // Need to do transaction before create marker file when using early conflict detection
       txnManager.beginTransaction(partitionPath, fileId);
-      this.completedCommitInstants = activeTimeline.reload().getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
       super.detectAndResolveConflictIfNecessary();
 
     } catch (Exception e) {
