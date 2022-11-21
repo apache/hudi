@@ -779,7 +779,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
             {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
             {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()}
-    };
+        };
     return Stream.of(data).map(Arguments::of);
   }
 
