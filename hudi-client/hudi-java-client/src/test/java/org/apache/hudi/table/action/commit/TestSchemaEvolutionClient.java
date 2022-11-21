@@ -26,10 +26,9 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.testutils.HoodieJavaClientTestBase;
+import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.Schema;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Tests for schema evolution client api.
  */
-public class TestSchemaEvolutionClient extends HoodieJavaClientTestBase {
+public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
 
   private static final Schema SCHEMA = getSchemaFromResource(TestSchemaEvolutionClient.class, "/exampleSchema.avsc");
 
@@ -79,7 +78,6 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestBase {
   private void prepareTable(HoodieJavaWriteClient<RawTripTestPayload> writeClient) throws IOException {
     String commitTime = "1";
     writeClient.startCommitWithTime(commitTime);
-    //language=JSON
     String jsonRow = "{\"_row_key\": \"1\", \"time\": \"2000-01-01T00:00:00.000Z\", \"number\": 1}";
     RawTripTestPayload payload = new RawTripTestPayload(jsonRow);
     HoodieAvroRecord<RawTripTestPayload> record = new HoodieAvroRecord<>(
