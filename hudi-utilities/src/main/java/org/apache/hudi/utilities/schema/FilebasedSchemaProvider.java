@@ -43,8 +43,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter.SourceFormatAdapterConfig.AVRO_FIELD_NAME_INVALID_CHAR_MASK;
-import static org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter.SourceFormatAdapterConfig.SANITIZE_AVRO_FIELD_NAMES;
+import static org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter.SourceFormatAdapterConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK
+import static org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter.SourceFormatAdapterConfig.SANITIZE_SCHEMA_FIELD_NAMES;
 
 /**
  * A simple schema provider, that reads off files on DFS.
@@ -135,16 +135,10 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   private static Schema readAvroSchemaFromFile(String schemaPath, FileSystem fs, boolean sanitizeSchema, String invalidCharMask) {
     String schemaStr;
-    FSDataInputStream in = null;
-    try {
-      in = fs.open(new Path(schemaPath));
+    try (FSDataInputStream in = fs.open(new Path(schemaPath))) {
       schemaStr = FileIOUtils.readAsUTFString(in);
     } catch (IOException ioe) {
       throw new HoodieIOException(String.format("Error reading schema from file %s", schemaPath), ioe);
-    } finally {
-      if (in != null) {
-        IOUtils.closeStream(in);
-      }
     }
     return parseAvroSchema(schemaStr, sanitizeSchema, invalidCharMask);
   }
@@ -153,8 +147,8 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
     String sourceFile = props.getString(Config.SOURCE_SCHEMA_FILE_PROP);
-    boolean sanitizeSchema = props.getBoolean(SANITIZE_AVRO_FIELD_NAMES.key(), SANITIZE_AVRO_FIELD_NAMES.defaultValue());
-    String invalidCharMask = props.getString(AVRO_FIELD_NAME_INVALID_CHAR_MASK.key(), AVRO_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
+    boolean sanitizeSchema = props.getBoolean(SANITIZE_SCHEMA_FIELD_NAMES.key(), SANITIZE_SCHEMA_FIELD_NAMES.defaultValue());
+    String invalidCharMask = props.getString(SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
     this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
     this.sourceSchema = readAvroSchemaFromFile(sourceFile, this.fs, sanitizeSchema, invalidCharMask);
     if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {

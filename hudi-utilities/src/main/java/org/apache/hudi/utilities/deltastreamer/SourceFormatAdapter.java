@@ -57,14 +57,14 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 public final class SourceFormatAdapter implements Closeable {
 
   public static class SourceFormatAdapterConfig extends HoodieConfig {
-    // sanitizes invalid columns both in the data read from source and also in the schema.
+    // sanitizes names of invalid schema fields both in the data read from source and also in the schema.
     // invalid definition here goes by avro naming convention (https://avro.apache.org/docs/current/spec.html#names).
-    public static final ConfigProperty<Boolean> SANITIZE_AVRO_FIELD_NAMES = ConfigProperty
-        .key("hoodie.deltastreamer.source.sanitize.invalid.column.names")
+    public static final ConfigProperty<Boolean> SANITIZE_SCHEMA_FIELD_NAMES = ConfigProperty
+        .key("hoodie.deltastreamer.source.sanitize.invalid.schema.field.names")
         .defaultValue(false)
-        .withDocumentation("Sanitizes invalid column names both in the data and also in the schema");
+        .withDocumentation("Sanitizes invalid schema field names both in the data and also in the schema");
 
-    public static final ConfigProperty<String> AVRO_FIELD_NAME_INVALID_CHAR_MASK = ConfigProperty
+    public static final ConfigProperty<String> SCHEMA_FIELD_NAME_INVALID_CHAR_MASK = ConfigProperty
         .key("hoodie.deltastreamer.source.sanitize.invalid.char.mask")
         .defaultValue("__")
         .withDocumentation("Character mask to be used as replacement for invalid field names");
@@ -96,7 +96,7 @@ public final class SourceFormatAdapter implements Closeable {
    * @return enabled status.
    */
   private boolean isNameSanitizingEnabled() {
-    return config.getBooleanOrDefault(SourceFormatAdapterConfig.SANITIZE_AVRO_FIELD_NAMES);
+    return config.getBooleanOrDefault(SourceFormatAdapterConfig.SANITIZE_SCHEMA_FIELD_NAMES);
   }
 
   /**
@@ -104,7 +104,7 @@ public final class SourceFormatAdapter implements Closeable {
    * @return sanitized value.
    */
   private String getInvalidCharMask() {
-    return config.getStringOrDefault(SourceFormatAdapterConfig.AVRO_FIELD_NAME_INVALID_CHAR_MASK);
+    return config.getStringOrDefault(SourceFormatAdapterConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK);
   }
 
   private static DataType sanitizeDataTypeForAvro(DataType dataType, String invalidCharMask) {
@@ -123,7 +123,7 @@ public final class SourceFormatAdapter implements Closeable {
     return dataType;
   }
 
-  // TODO: Rebase this to use InternalSchema when it is ready.
+  // TODO(HUDI-5256): Rebase this to use InternalSchema when it is ready.
   private static StructType sanitizeStructTypeForAvro(StructType structType, String invalidCharMask) {
     StructType sanitizedStructType = new StructType();
     StructField[] structFields = structType.fields();
