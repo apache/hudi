@@ -43,7 +43,7 @@ import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.table.HoodieJavaCopyOnWriteTable;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieJavaClientTestBase;
+import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
@@ -76,7 +76,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase {
+public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestJavaCopyOnWriteActionExecutor.class);
   private static final Schema SCHEMA = getSchemaFromResource(TestJavaCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
