@@ -46,9 +46,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestMarkerCheckerRunnable extends HoodieCommonTestHarness {
+public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestMarkerCheckerRunnable.class);
+  private static final Logger LOG = LogManager.getLogger(TestMarkerBasedEarlyConflictDetectionRunnable.class);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -98,7 +98,7 @@ public class TestMarkerCheckerRunnable extends HoodieCommonTestHarness {
     when(markerHandler.getAllMarkers(currentMarkerDir)).thenReturn(currentMarkers);
 
     ScheduledExecutorService markerChecker = Executors.newSingleThreadScheduledExecutor();
-    markerChecker.submit(new MarkerCheckerRunnable(hasConflict, markerHandler, currentMarkerDir,
+    markerChecker.submit(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, markerHandler, currentMarkerDir,
         basePath, fs, Long.MAX_VALUE, oldInstants));
 
     markerChecker.shutdown();

@@ -61,7 +61,7 @@ public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTim
     }
     hasConflict.compareAndSet(true, false);
     markerChecker = Executors.newSingleThreadScheduledExecutor();
-    markerChecker.scheduleAtFixedRate(new MarkerCheckerRunnable(hasConflict, (MarkerHandler) markerHandler, markerDir, basePath,
+    markerChecker.scheduleAtFixedRate(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, (MarkerHandler) markerHandler, markerDir, basePath,
         fileSystem, Long.parseLong(maxAllowableHeartbeatIntervalInMs), oldInstants), Long.parseLong(batchInterval), Long.parseLong(period), TimeUnit.MILLISECONDS);
   }
 

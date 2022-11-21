@@ -35,14 +35,13 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class MarkerCheckerRunnable implements Runnable {
-  private static final Logger LOG = LogManager.getLogger(MarkerCheckerRunnable.class);
+public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
+  private static final Logger LOG = LogManager.getLogger(MarkerBasedEarlyConflictDetectionRunnable.class);
 
   private MarkerHandler markerHandler;
   private String markerDir;
@@ -52,9 +51,9 @@ public class MarkerCheckerRunnable implements Runnable {
   private long maxAllowableHeartbeatIntervalInMs;
   private Set<HoodieInstant> oldInstants;
 
-  public MarkerCheckerRunnable(AtomicBoolean hasConflict, MarkerHandler markerHandler, String markerDir,
-                               String basePath, FileSystem fileSystem, long maxAllowableHeartbeatIntervalInMs,
-                               Set<HoodieInstant> oldInstants) {
+  public MarkerBasedEarlyConflictDetectionRunnable(AtomicBoolean hasConflict, MarkerHandler markerHandler, String markerDir,
+                                                   String basePath, FileSystem fileSystem, long maxAllowableHeartbeatIntervalInMs,
+                                                   Set<HoodieInstant> oldInstants) {
     this.markerHandler = markerHandler;
     this.markerDir = markerDir;
     this.basePath = basePath;

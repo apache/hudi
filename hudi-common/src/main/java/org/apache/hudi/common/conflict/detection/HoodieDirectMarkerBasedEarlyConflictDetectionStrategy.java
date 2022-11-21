@@ -51,7 +51,6 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
   protected final HoodieConfig config;
   private final Set<HoodieInstant> completedCommitInstants;
 
-
   public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
                                                                HoodieActiveTimeline activeTimeline, HoodieConfig config) {
     this.basePath = basePath;
@@ -61,7 +60,7 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
     this.instantTime = instantTime;
     this.activeTimeline = activeTimeline;
     this.config = config;
-    this.completedCommitInstants= activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
+    this.completedCommitInstants = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
   }
 
   /**
