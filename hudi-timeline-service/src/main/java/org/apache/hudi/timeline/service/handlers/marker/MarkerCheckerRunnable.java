@@ -35,6 +35,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -70,7 +71,7 @@ public class MarkerCheckerRunnable implements Runnable {
         return;
       }
 
-      HoodieTimer timer = new HoodieTimer().startTimer();
+      HoodieTimer timer = HoodieTimer.start();
       Set<String> currentInstantAllMarkers = markerHandler.getAllMarkers(markerDir);
       Path tempPath = new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
 

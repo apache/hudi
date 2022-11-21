@@ -18,8 +18,10 @@
 
 package org.apache.hudi.client;
 
+import org.apache.curator.test.TestingServer;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -44,6 +46,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.marker.SimpleDirectMarkerBasedEarlyConflictDetectionStrategy;
+import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.Path;
@@ -82,6 +85,11 @@ import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PA
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_BASE_PATH_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIMEOUT_MS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -155,15 +163,33 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
    */
   @ParameterizedTest
   @MethodSource("configParams")
-  public void testHoodieClientBasicMultiWriterWithEarlyConflictDetection(String tableType, String markerType) throws Exception {
+  public void testHoodieClientBasicMultiWriterWithEarlyConflictDetection(String tableType, String markerType, String earlyConflictDetectionStrategy) throws Exception {
     if (tableType.equalsIgnoreCase(HoodieTableType.MERGE_ON_READ.name())) {
       setUpMORTestTable();
     }
-    Properties properties = new Properties();
-    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
 
-    HoodieWriteConfig writeConfig = buildWriteConfigForEarlyConflictDetect(markerType, properties);
+    HoodieWriteConfig writeConfig;
+    TestingServer server = null;
+    if (earlyConflictDetectionStrategy.equalsIgnoreCase(SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName())) {
+      // need to setup zk related env there. Bcz SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy is only support zk lock for now.
+      server = new TestingServer();
+      Properties properties = new Properties();
+      properties.setProperty(ZK_BASE_PATH_PROP_KEY, basePath);
+      properties.setProperty(ZK_CONNECT_URL_PROP_KEY, server.getConnectString());
+      properties.setProperty(ZK_BASE_PATH_PROP_KEY, server.getTempDirectory().getAbsolutePath());
+      properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, "10000");
+      properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, "10000");
+      properties.setProperty(ZK_LOCK_KEY_PROP_KEY, "key");
+      properties.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "1000");
+
+      writeConfig = buildWriteConfigForEarlyConflictDetect(markerType, properties, ZookeeperBasedLockProvider.class, earlyConflictDetectionStrategy);
+    } else {
+      Properties properties = new Properties();
+      properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+      properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+      writeConfig = buildWriteConfigForEarlyConflictDetect(markerType, properties, InProcessLockProvider.class, earlyConflictDetectionStrategy);
+    }
+
     // Create the first commit
     final String nextCommitTime1 = "001";
     createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", nextCommitTime1, 2000, true);
@@ -196,6 +222,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     assertTrue(completedInstant.contains(nextCommitTime1));
     assertTrue(completedInstant.contains(nextCommitTime2));
     FileIOUtils.deleteDirectory(new File(basePath));
+    if (server != null) {
+      server.close();
+    }
   }
 
   @ParameterizedTest
@@ -743,12 +772,19 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   public static Stream<Arguments> configParams() {
     Object[][] data =
-        new Object[][] {{"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name()}, {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name()},
-            {"MERGE_ON_READ", MarkerType.DIRECT.name()}, {"COPY_ON_WRITE", MarkerType.DIRECT.name()}};
+        new Object[][] {
+            {"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName()},
+            {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName()},
+            {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
+            {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
+            {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
+            {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()}
+    };
     return Stream.of(data).map(Arguments::of);
   }
 
-  private HoodieWriteConfig buildWriteConfigForEarlyConflictDetect(String markerType, Properties properties) {
+  private HoodieWriteConfig buildWriteConfigForEarlyConflictDetect(String markerType, Properties properties,
+                                                                   Class lockProvider, String earlyConflictDetectionStrategy) {
     if (markerType.equalsIgnoreCase(MarkerType.DIRECT.name())) {
       return getConfigBuilder()
           .withHeartbeatIntervalInMs(3600 * 1000)
@@ -763,10 +799,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
           .withMarkersType(MarkerType.DIRECT.name())
           .withEarlyConflictDetectionEnable(true)
-          .withEarlyConflictDetectionStrategy(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName())
+          .withEarlyConflictDetectionStrategy(earlyConflictDetectionStrategy)
           .withMarkerConflictCheckerBatchInterval(0)
           .withMarkerConflictCheckerPeriod(100)
-          .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+          .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(lockProvider).build())
           .withAutoCommit(false).withProperties(properties).build();
     } else {
       return getConfigBuilder()
@@ -782,9 +818,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
               .withAutoArchive(false).build())
           .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
           .withMarkersType(MarkerType.TIMELINE_SERVER_BASED.name())
-          .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+          .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(lockProvider).build())
           .withEarlyConflictDetectionEnable(true)
-          .withEarlyConflictDetectionStrategy(AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName())
+          .withEarlyConflictDetectionStrategy(earlyConflictDetectionStrategy)
           .withMarkerConflictCheckerBatchInterval(0)
           .withMarkerConflictCheckerPeriod(100)
           .withAutoCommit(false).withProperties(properties).build();
