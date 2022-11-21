@@ -184,6 +184,10 @@ public class HoodieAvroUtils {
     return createHoodieWriteSchema(new Schema.Parser().parse(originalSchema));
   }
 
+  public static Schema createHoodieWriteSchema(String originalSchema, boolean withOperationField) {
+    return addMetadataFields(new Schema.Parser().parse(originalSchema), withOperationField);
+  }
+
   /**
    * Adds the Hoodie metadata fields to the given schema.
    *
