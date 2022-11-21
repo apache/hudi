@@ -56,8 +56,7 @@ public class LockManager implements Serializable, AutoCloseable {
   private volatile LockProvider lockProvider;
 
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs) {
-    this.lockConfiguration = new LockConfiguration(writeConfig.getProps());
-    init(writeConfig, fs.getConf());
+    init(writeConfig, fs.getConf(), writeConfig.getProps());
   }
 
   /**
@@ -69,11 +68,11 @@ public class LockManager implements Serializable, AutoCloseable {
    */
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs, String partitionPath, String fileId) {
     TypedProperties props = refreshLockConfig(writeConfig, partitionPath + "/" + fileId);
-    this.lockConfiguration = new LockConfiguration(props);
-    init(writeConfig, fs.getConf());
+    init(writeConfig, fs.getConf(), props);
   }
 
-  private void init(HoodieWriteConfig writeConfig, Configuration conf) {
+  private void init(HoodieWriteConfig writeConfig, Configuration conf, TypedProperties lockProps) {
+    this.lockConfiguration = new LockConfiguration(lockProps);
     this.writeConfig = writeConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
     this.maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
