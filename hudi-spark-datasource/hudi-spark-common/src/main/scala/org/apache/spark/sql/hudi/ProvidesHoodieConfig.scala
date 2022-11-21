@@ -165,9 +165,13 @@ trait ProvidesHoodieConfig extends Logging {
       // Only validate duplicate key for COW, for MOR it will do the merge with the DefaultHoodieRecordPayload
       // on reading.
       classOf[ValidateDuplicateKeyPayload].getCanonicalName
+    } else if (operation == INSERT_OPERATION_OPT_VAL &&
+      tableType == COW_TABLE_TYPE_OPT_VAL && hasPrecombineColumn == false && insertMode == InsertMode.STRICT){
+      classOf[ValidateDuplicateKeyPayload].getCanonicalName
     } else {
       classOf[OverwriteWithLatestAvroPayload].getCanonicalName
     }
+
 
     logInfo(s"Insert statement use write operation type: $operation, payloadClass: $payloadClassName")
 
