@@ -46,7 +46,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -105,10 +104,10 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
   /**
    * Test Helper for Cleaning by versions logic from HoodieWriteClient API perspective.
    *
-   * @param insertFn Insert API to be tested
-   * @param upsertFn Upsert API to be tested
+   * @param insertFn     Insert API to be tested
+   * @param upsertFn     Upsert API to be tested
    * @param isPreppedAPI Flag to indicate if a prepped-version is used. If true, a wrapper function will be used during
-   *        record generation to also tag the regards (de-dupe is implicit as we use unique record-gen APIs)
+   *                     record generation to also tag the regards (de-dupe is implicit as we use unique record-gen APIs)
    * @throws Exception in case of errors
    */
   private void testInsertAndCleanByCommits(
@@ -127,23 +126,21 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .build();
-    final SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    try (final SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(System.nanoTime());
+      final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction = isPreppedAPI
+          ? wrapRecordsGenFunctionForPreppedCalls(basePath(), hadoopConf(), context(), cfg, dataGen::generateInserts)
+          : dataGen::generateInserts;
+      final Function2<List<HoodieRecord>, String, Integer> recordUpsertGenWrappedFunction = isPreppedAPI
+          ? wrapRecordsGenFunctionForPreppedCalls(basePath(), hadoopConf(), context(), cfg, dataGen::generateUniqueUpdates)
+          : dataGen::generateUniqueUpdates;
 
-    final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(System.nanoTime());
-    final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction = isPreppedAPI
-        ? wrapRecordsGenFunctionForPreppedCalls(basePath(), hadoopConf(), context(), cfg, dataGen::generateInserts)
-        : dataGen::generateInserts;
-    final Function2<List<HoodieRecord>, String, Integer> recordUpsertGenWrappedFunction = isPreppedAPI
-        ? wrapRecordsGenFunctionForPreppedCalls(basePath(), hadoopConf(), context(), cfg, dataGen::generateUniqueUpdates)
-        : dataGen::generateUniqueUpdates;
+      HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
+      insertFirstBigBatchForClientCleanerTest(context(), metaClient, client, recordInsertGenWrappedFunction, insertFn);
 
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
-    insertFirstBigBatchForClientCleanerTest(context(), metaClient, client, recordInsertGenWrappedFunction, insertFn);
-
-    // Keep doing some writes and clean inline. Make sure we have expected number of files remaining.
-    for (int i = 0; i < 8; i++) {
-      String newCommitTime = makeNewCommitTime();
-      try {
+      // Keep doing some writes and clean inline. Make sure we have expected number of files remaining.
+      for (int i = 0; i < 8; i++) {
+        String newCommitTime = makeNewCommitTime();
         client.startCommitWithTime(newCommitTime);
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newCommitTime, BATCH_SIZE);
 
@@ -186,8 +183,6 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
                 "Only contain acceptable versions of file should be present");
           }
         }
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
       }
     }
   }
