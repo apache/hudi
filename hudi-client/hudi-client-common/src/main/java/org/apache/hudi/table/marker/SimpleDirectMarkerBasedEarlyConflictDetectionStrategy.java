@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.marker;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.conflict.detection.HoodieDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -43,7 +42,7 @@ public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends Hoodi
   private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class);
 
   public SimpleDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config, boolean checkCommitConflict) {
+                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config, Boolean checkCommitConflict) {
     super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, checkCommitConflict);
   }
 

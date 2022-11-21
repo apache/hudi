@@ -165,8 +165,7 @@ public class DirectWriteMarkers extends WriteMarkers {
                                                        HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
 
     HoodieDirectMarkerBasedEarlyConflictDetectionStrategy strategy = (HoodieDirectMarkerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(config.getEarlyConflictDetectionStrategyClassName(),
-        basePath, partitionPath, fileId, instantTime, activeTimeline, config, config.checkCommitConflictDuringEarlyConflictDetect());
-
+        basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, config.checkCommitConflictDuringEarlyConflictDetect());
 
     strategy.detectAndResolveConflictIfNecessary();
     return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);

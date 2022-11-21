@@ -40,7 +40,7 @@ public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTim
   private AtomicBoolean hasConflict = new AtomicBoolean(false);
   private ScheduledExecutorService markerChecker;
 
-  public AsyncTimelineMarkerEarlyConflictDetectionStrategy(String basePath, String markerDir, String markerName, boolean checkCommitConflict) {
+  public AsyncTimelineMarkerEarlyConflictDetectionStrategy(String basePath, String markerDir, String markerName, Boolean checkCommitConflict) {
     super(basePath, markerDir, markerName, checkCommitConflict);
   }
 

@@ -30,7 +30,7 @@ public abstract class HoodieTimelineServerBasedEarlyConflictDetectionStrategy im
   protected final String markerName;
   protected final boolean checkCommitConflict;
 
-  public HoodieTimelineServerBasedEarlyConflictDetectionStrategy(String basePath, String markerDir, String markerName, boolean checkCommitConflict) {
+  public HoodieTimelineServerBasedEarlyConflictDetectionStrategy(String basePath, String markerDir, String markerName, Boolean checkCommitConflict) {
     this.basePath = basePath;
     this.markerDir = markerDir;
     this.markerName = markerName;

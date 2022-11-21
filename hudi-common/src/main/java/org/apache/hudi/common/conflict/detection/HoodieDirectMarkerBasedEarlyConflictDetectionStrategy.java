@@ -51,7 +51,7 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
   protected final boolean checkCommitConflict;
 
   public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config, boolean checkCommitConflict) {
+                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config, Boolean checkCommitConflict) {
     this.basePath = basePath;
     this.fs = fs;
     this.partitionPath = partitionPath;
