@@ -34,7 +34,6 @@ import org.apache.avro.SchemaParseException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IOUtils;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
@@ -43,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter.SourceFormatAdapterConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK
+import static org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter.SourceFormatAdapterConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
 import static org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter.SourceFormatAdapterConfig.SANITIZE_SCHEMA_FIELD_NAMES;
 
 /**
