@@ -896,7 +896,7 @@ df = spark.readStream \
     .format("hudi") \
     .load(basePath)
 
-# ead stream and output results to console
+# read stream and output results to console
 spark.readStream \
     .format("hudi") \
     .load(basePath) \
