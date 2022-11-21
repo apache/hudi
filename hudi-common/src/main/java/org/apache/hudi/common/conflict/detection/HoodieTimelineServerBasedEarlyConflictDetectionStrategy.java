@@ -35,10 +35,6 @@ public abstract class HoodieTimelineServerBasedEarlyConflictDetectionStrategy im
     this.markerName = markerName;
   }
 
-  protected abstract boolean hasMarkerConflict();
-
-  protected abstract void resolveMarkerConflict(String basePath, String markerDir, String markerName);
-
   public void fresh(String batchInterval, String period, String markerDir, String basePath,
                     String maxAllowableHeartbeatIntervalInMs, FileSystem fileSystem, Object markerHandler, Set<HoodieInstant> oldInstants) {}
 }

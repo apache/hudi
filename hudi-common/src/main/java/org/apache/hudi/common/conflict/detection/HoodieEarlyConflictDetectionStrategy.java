@@ -18,7 +18,14 @@
 
 package org.apache.hudi.common.conflict.detection;
 
+/**
+ *
+ */
 public interface HoodieEarlyConflictDetectionStrategy {
 
   void detectAndResolveConflictIfNecessary();
+
+  boolean hasMarkerConflict();
+
+  void resolveMarkerConflict(String basePath, String partitionPath, String dataFileName);
 }

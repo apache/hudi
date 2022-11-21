@@ -31,8 +31,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * This strategy is used for direct marker writers, trying to do early conflict detection.
@@ -48,10 +46,9 @@ public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends Hoodi
   }
 
   @Override
-  protected boolean hasMarkerConflict(String basePath, FileSystem fs, String partitionPath, String fileId, String instantTime,
-                                   Set<HoodieInstant> completedCommitInstants) {
+  public boolean hasMarkerConflict() {
     try {
-      return checkMarkerConflict(basePath, partitionPath, fileId, fs, instantTime) || checkCommitConflict(completedCommitInstants, fileId, basePath);
+      return checkMarkerConflict(basePath, partitionPath, fileId, fs, instantTime) || checkCommitConflict(fileId, basePath);
     } catch (IOException e) {
       LOG.warn("Exception occurs during create marker file in eager conflict detection mode.");
       throw new HoodieIOException("Exception occurs during create marker file in eager conflict detection mode.", e);
@@ -59,19 +56,14 @@ public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends Hoodi
   }
 
   @Override
-  protected void resolveMarkerConflict(String basePath, String partitionPath, String dataFileName) {
+  public void resolveMarkerConflict(String basePath, String partitionPath, String dataFileName) {
     throw new HoodieEarlyConflictDetectionException(new ConcurrentModificationException("Early conflict detected but cannot resolve conflicts for overlapping writes"));
   }
 
   @Override
   public void detectAndResolveConflictIfNecessary() {
 
-    Set<HoodieInstant> completedCommitInstants = activeTimeline.getCommitsTimeline()
-        .filterCompletedInstants()
-        .getInstants()
-        .collect(Collectors.toSet());
-
-    if (hasMarkerConflict(basePath, fs, partitionPath, fileId, instantTime, completedCommitInstants)) {
+    if (hasMarkerConflict()) {
       resolveMarkerConflict(basePath, partitionPath, fileId);
     }
   }

@@ -49,6 +49,7 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
   protected final String instantTime;
   protected final HoodieActiveTimeline activeTimeline;
   protected final HoodieConfig config;
+  private final Set<HoodieInstant> completedCommitInstants;
 
 
   public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
@@ -60,11 +61,8 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
     this.instantTime = instantTime;
     this.activeTimeline = activeTimeline;
     this.config = config;
+    this.completedCommitInstants= activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
   }
-
-  protected abstract boolean hasMarkerConflict(String basePath, FileSystem fs, String partitionPath, String dataFileName, String instantTime, Set<HoodieInstant> completedCommitInstants);
-
-  protected abstract void resolveMarkerConflict(String basePath, String partitionPath, String dataFileName);
 
   /**
    * We need to do list operation here.
@@ -116,7 +114,7 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
     return basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
   }
 
-  public boolean checkCommitConflict(Set<HoodieInstant> completedCommitInstants, String fileId, String basePath) {
+  public boolean checkCommitConflict(String fileId, String basePath) {
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(basePath).build();
     HoodieActiveTimeline currentActiveTimeline = metaClient.getActiveTimeline().reload();
