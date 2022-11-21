@@ -168,7 +168,6 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     client.compact(compactionTimeStamp.get());
 
     prevCommitTime = compactionTimeStamp.get();
-    //TODO: Below commits are creating duplicates when all the tests are run together. but individually they are passing.
     for (int i = 0; i < 2; i++) {
       // Upsert
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
