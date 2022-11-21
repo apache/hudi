@@ -30,7 +30,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieMetastoreConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;

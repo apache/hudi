@@ -88,8 +88,8 @@ public class LockManager implements Serializable, AutoCloseable {
    */
   private TypedProperties refreshLockConfig(HoodieWriteConfig writeConfig, String key) {
     TypedProperties props = new TypedProperties(writeConfig.getProps());
-    String zk_base_path = props.getProperty(LockConfiguration.ZK_BASE_PATH_PROP_KEY);
-    if (StringUtils.isNullOrEmpty(zk_base_path)) {
+    String zkBasePath = props.getProperty(LockConfiguration.ZK_BASE_PATH_PROP_KEY);
+    if (StringUtils.isNullOrEmpty(zkBasePath)) {
       throw new HoodieNotSupportedException("Only Support ZK based lock for now.");
     }
     props.setProperty(LockConfiguration.ZK_LOCK_KEY_PROP_KEY, key);
