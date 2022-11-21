@@ -76,7 +76,7 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
    */
   public boolean checkMarkerConflict(String basePath, String partitionPath, String fileId,
                                       FileSystem fs, String instantTime) throws IOException {
-    String tempFolderPath = getTempFolderPath(basePath);
+    String tempFolderPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
     long res = Arrays.stream(fs.listStatus(new Path(tempFolderPath)))
         .parallel()
         .map(FileStatus::getPath)
@@ -110,11 +110,7 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
     return false;
   }
 
-  private String getTempFolderPath(String basePath) {
-    return basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
-  }
-
-  public boolean checkCommitConflict(String fileId, String basePath) {
+  protected boolean checkCommitConflict(String fileId, String basePath) {
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(basePath).build();
     HoodieActiveTimeline currentActiveTimeline = metaClient.getActiveTimeline().reload();

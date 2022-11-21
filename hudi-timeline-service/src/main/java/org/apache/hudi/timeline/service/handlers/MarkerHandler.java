@@ -95,7 +95,6 @@ public class MarkerHandler extends Handler {
   private transient HoodieEngineContext hoodieEngineContext;
   private ScheduledFuture<?> dispatchingThreadFuture;
   private boolean firstCreationRequestSeen;
-  private final ConcurrentHashMap<String, ScheduledExecutorService> checkers;
   private String currentMarkerDir = null;
   private HoodieTimelineServerBasedEarlyConflictDetectionStrategy earlyConflictDetectionStrategy;
 
@@ -114,7 +113,6 @@ public class MarkerHandler extends Handler {
     this.markerCreationDispatchingRunnable =
         new MarkerCreationDispatchingRunnable(markerDirStateMap, batchingExecutorService);
     this.firstCreationRequestSeen = false;
-    this.checkers = new ConcurrentHashMap<>();
   }
 
   /**
@@ -126,7 +124,6 @@ public class MarkerHandler extends Handler {
     }
     dispatchingExecutorService.shutdown();
     batchingExecutorService.shutdown();
-    checkers.values().forEach(ExecutorService::shutdown);
   }
 
   /**
@@ -180,6 +177,9 @@ public class MarkerHandler extends Handler {
             earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(earlyConflictDetectionClassName, basePath, markerDir, markerName);
           }
 
+          // markerDir => $base_path/.hoodie/.temp/$instant_time
+          // If markerDir is changed like move to the next instant action, we need to fresh this earlyConflictDetectionStrategy.
+          // For specific instant related create marker action, we only call this check/fresh once instead of starting the checker for every request
           if (!markerDir.equalsIgnoreCase(currentMarkerDir)) {
             this.currentMarkerDir = markerDir;
             Set<String> actions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);

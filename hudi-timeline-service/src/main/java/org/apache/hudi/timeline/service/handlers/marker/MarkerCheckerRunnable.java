@@ -21,6 +21,7 @@ package org.apache.hudi.timeline.service.handlers.marker;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -32,6 +33,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -75,7 +77,8 @@ public class MarkerCheckerRunnable implements Runnable {
       List<Path> instants = MarkerUtils.getAllMarkerDir(tempPath, fs);
       List<String> candidate = getCandidateInstants(instants, markerDirToInstantTime(markerDir));
       Set<String> tableMarkers = candidate.stream().flatMap(instant -> {
-        return MarkerUtils.readTimelineServerBasedMarkersFromFileSystemLocally(instant, fs).stream();
+        return MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(instant, fs, new HoodieLocalEngineContext(new Configuration()), 100)
+            .values().stream().flatMap(Collection::stream);
       }).collect(Collectors.toSet());
 
       Set<String> currentFileIDs = currentInstantAllMarkers.stream().map(this::makerToPartitionAndFileID).collect(Collectors.toSet());

@@ -227,44 +227,6 @@ public class MarkerUtils {
     return markers;
   }
 
-  /**
-   * Reads files containing the markers written by timeline-server-based marker mechanism locally instead of using cluster Context.
-   *
-   * @param markerDir   marker directory.
-   * @param fileSystem  file system to use.
-   * @return A {@code Map} of file name to the set of markers stored in the file.
-   */
-  public static Set<String> readTimelineServerBasedMarkersFromFileSystemLocally(String markerDir, FileSystem fileSystem) {
-    Path dirPath = new Path(markerDir);
-    try {
-      if (fileSystem.exists(dirPath)) {
-        Predicate<FileStatus> prefixFilter = fileStatus ->
-            fileStatus.getPath().getName().startsWith(MARKERS_FILENAME_PREFIX);
-        Predicate<FileStatus> markerTypeFilter = fileStatus ->
-            !fileStatus.getPath().getName().equals(MARKER_TYPE_FILENAME);
-
-        CopyOnWriteArraySet<String> result = new CopyOnWriteArraySet<>();
-        FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
-        List<String> subPaths = Arrays.stream(fileStatuses)
-            .filter(prefixFilter.and(markerTypeFilter))
-            .map(fileStatus -> fileStatus.getPath().toString())
-            .collect(Collectors.toList());
-
-        if (subPaths.size() > 0) {
-          SerializableConfiguration conf = new SerializableConfiguration(fileSystem.getConf());
-          subPaths.stream().parallel().forEach(subPath -> {
-            result.addAll(readMarkersFromFile(new Path(subPath), conf, true));
-          });
-        }
-        return result;
-      }
-      return new HashSet<>();
-    } catch (Exception ioe) {
-      LOG.warn("IOException occurs during read TimelineServer based markers from fileSystem", ioe);
-      return new HashSet<>();
-    }
-  }
-
   public static List<Path> getAllMarkerDir(Path tempPath, FileSystem fs) throws IOException {
     return Arrays.stream(fs.listStatus(tempPath)).map(FileStatus::getPath).collect(Collectors.toList());
   }
