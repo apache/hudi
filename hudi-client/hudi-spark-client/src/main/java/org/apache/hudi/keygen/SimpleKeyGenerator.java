@@ -20,7 +20,6 @@ package org.apache.hudi.keygen;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -28,6 +27,8 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Collections;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -48,10 +49,8 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
     super(props);
     // Make sure key-generator is configured properly
-    ValidationUtils.checkArgument(recordKeyField == null || !recordKeyField.isEmpty(),
-        "Record key field has to be non-empty!");
-    ValidationUtils.checkArgument(partitionPathField == null || !partitionPathField.isEmpty(),
-        "Partition path field has to be non-empty!");
+    validateRecordKey(recordKeyField);
+    validatePartitionPath(partitionPathField);
 
     this.recordKeyFields = recordKeyField == null ? Collections.emptyList() : Collections.singletonList(recordKeyField);
     this.partitionPathFields = partitionPathField == null ? Collections.emptyList() : Collections.singletonList(partitionPathField);
@@ -108,5 +107,19 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   public UTF8String getPartitionPath(InternalRow row, StructType schema) {
     tryInitRowAccessor(schema);
     return combinePartitionPathUnsafe(rowAccessor.getRecordPartitionPathValues(row));
+  }
+
+  private static void validatePartitionPath(String partitionPathField) {
+    checkArgument(partitionPathField == null || !partitionPathField.isEmpty(),
+        "Partition-path field has to be non-empty!");
+    checkArgument(partitionPathField == null || !partitionPathField.contains(FIELDS_SEP),
+        String.format("Single partition-path field is expected; provided (%s)", partitionPathField));
+  }
+
+  private static void validateRecordKey(String recordKeyField) {
+    checkArgument(recordKeyField == null || !recordKeyField.isEmpty(),
+        "Record key field has to be non-empty!");
+    checkArgument(recordKeyField == null || !recordKeyField.contains(FIELDS_SEP),
+        String.format("Single record-key field is expected; provided (%s)", recordKeyField));
   }
 }

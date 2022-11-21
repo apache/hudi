@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import java.io.{BufferedWriter, InputStream, OutputStream, OutputStreamWriter}
-import java.nio.charset.StandardCharsets
 import java.util.Date
 
 import org.apache.hadoop.fs.Path
@@ -29,14 +27,12 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{FileIOUtils, TablePathUtils}
-import org.apache.spark.sql.hudi.streaming.HoodieStreamSource.VERSION
+import org.apache.hudi.common.util.TablePathUtils
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.execution.streaming.{HDFSMetadataLog, Offset, Source}
+import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext}
@@ -52,7 +48,8 @@ class HoodieStreamSource(
     sqlContext: SQLContext,
     metadataPath: String,
     schemaOption: Option[StructType],
-    parameters: Map[String, String])
+    parameters: Map[String, String],
+    offsetRangeLimit: HoodieOffsetRangeLimit)
   extends Source with Logging with Serializable with SparkAdapterSupport {
 
   @transient private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
@@ -72,57 +69,20 @@ class HoodieStreamSource(
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
     parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
 
-  @transient private var lastOffset: HoodieSourceOffset = _
-
   @transient private lazy val initialOffsets = {
-    val metadataLog =
-      new HDFSMetadataLog[HoodieSourceOffset](sqlContext.sparkSession, metadataPath) {
-        override def serialize(metadata: HoodieSourceOffset, out: OutputStream): Unit = {
-          val writer = new BufferedWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))
-          writer.write("v" + VERSION + "\n")
-          writer.write(metadata.json)
-          writer.flush()
-        }
-
-        /**
-          * Deserialize the init offset from the metadata file.
-          * The format in the metadata file is like this:
-          * ----------------------------------------------
-          * v1         -- The version info in the first line
-          * offsetJson -- The json string of HoodieSourceOffset in the rest of the file
-          * -----------------------------------------------
-          * @param in
-          * @return
-          */
-        override def deserialize(in: InputStream): HoodieSourceOffset = {
-          val content = FileIOUtils.readAsUTFString(in)
-          // Get version from the first line
-          val firstLineEnd = content.indexOf("\n")
-          if (firstLineEnd > 0) {
-            val version = getVersion(content.substring(0, firstLineEnd))
-            if (version > VERSION) {
-              throw new IllegalStateException(s"UnSupportVersion: max support version is: $VERSION" +
-                s" current version is: $version")
-            }
-            // Get offset from the rest line in the file
-            HoodieSourceOffset.fromJson(content.substring(firstLineEnd + 1))
-          } else {
-            throw new IllegalStateException(s"Bad metadata format, failed to find the version line.")
-          }
-        }
-      }
+    val metadataLog = new HoodieMetadataLog(sqlContext.sparkSession, metadataPath)
     metadataLog.get(0).getOrElse {
-      metadataLog.add(0, INIT_OFFSET)
-      INIT_OFFSET
-    }
-  }
-
-  private def getVersion(versionLine: String): Int = {
-    if (versionLine.startsWith("v")) {
-      versionLine.substring(1).toInt
-    } else {
-      throw new IllegalStateException(s"Illegal version line: $versionLine " +
-        s"in the streaming metadata path")
+      val offset = offsetRangeLimit match {
+        case HoodieEarliestOffsetRangeLimit =>
+          INIT_OFFSET
+        case HoodieLatestOffsetRangeLimit =>
+          getLatestOffset.getOrElse(INIT_OFFSET)
+        case HoodieSpecifiedOffsetRangeLimit(instantTime) =>
+          HoodieSourceOffset(instantTime)
+      }
+      metadataLog.add(0, offset)
+      logInfo(s"The initial offset is $offset")
+      offset
     }
   }
 
@@ -137,27 +97,25 @@ class HoodieStreamSource(
     }
   }
 
+  private def getLatestOffset: Option[HoodieSourceOffset] = {
+    metaClient.reloadActiveTimeline()
+    metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants() match {
+      case activeInstants if !activeInstants.empty() =>
+        Some(HoodieSourceOffset(activeInstants.lastInstant().get().getTimestamp))
+      case _ =>
+        None
+    }
+  }
+
   /**
     * Get the latest offset from the hoodie table.
     * @return
     */
   override def getOffset: Option[Offset] = {
-    metaClient.reloadActiveTimeline()
-    val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
-    if (!activeInstants.empty()) {
-      val currentLatestCommitTime = activeInstants.lastInstant().get().getTimestamp
-      if (lastOffset == null || currentLatestCommitTime > lastOffset.commitTime) {
-        lastOffset = HoodieSourceOffset(currentLatestCommitTime)
-      }
-    } else { // if there are no active commits, use the init offset
-      lastOffset = initialOffsets
-    }
-    Some(lastOffset)
+    getLatestOffset
   }
 
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
-    initialOffsets
-
     val startOffset = start.map(HoodieSourceOffset(_))
       .getOrElse(initialOffsets)
     val endOffset = HoodieSourceOffset(end)
@@ -216,8 +174,4 @@ class HoodieStreamSource(
   override def stop(): Unit = {
 
   }
-}
-
-object HoodieStreamSource {
-  val VERSION = 1
 }

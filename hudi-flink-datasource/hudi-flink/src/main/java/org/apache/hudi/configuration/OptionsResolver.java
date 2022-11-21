@@ -122,7 +122,7 @@ public class OptionsResolver {
   }
 
   public static boolean isBucketIndexType(Configuration conf) {
-    return conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name());
+    return conf.getString(FlinkOptions.INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name());
   }
 
   /**

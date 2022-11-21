@@ -35,6 +35,7 @@ import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -963,11 +964,11 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   private HoodieFlinkWriteClient<?> createWriteClient(
       ObjectPath tablePath,
-      CatalogBaseTable table) throws Exception {
+      CatalogBaseTable table) {
     Map<String, String> options = table.getOptions();
     // enable auto-commit though ~
     options.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
-    return StreamerUtil.createWriteClient(
+    return FlinkWriteClients.createWriteClientV2(
         Configuration.fromMap(options)
             .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
             .set(FlinkOptions.SOURCE_AVRO_SCHEMA,

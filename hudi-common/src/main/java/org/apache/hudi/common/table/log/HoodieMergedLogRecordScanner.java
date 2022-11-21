@@ -308,8 +308,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    @Override
     public Builder withInternalSchema(InternalSchema internalSchema) {
-      this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+      this.internalSchema = internalSchema;
       return this;
     }
 
