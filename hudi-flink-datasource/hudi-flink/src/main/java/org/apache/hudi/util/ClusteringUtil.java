@@ -77,4 +77,21 @@ public class ClusteringUtil {
       table.getMetaClient().reloadActiveTimeline();
     });
   }
+
+  /**
+   * Force rolls back the inflight clustering instant, for handling failure case.
+   *
+   * @param table The hoodie table
+   * @param writeClient The write client
+   * @param instantTime The instant time
+   */
+  public static void rollbackClustering(HoodieFlinkTable<?> table, HoodieFlinkWriteClient writeClient, String instantTime) {
+    Option<HoodieInstant> inflightInstant = Option.fromJavaOptional(ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient())
+        .stream().filter(instant -> instant.equals(instantTime)).findFirst());
+    if (inflightInstant.isPresent()) {
+      LOG.warn("Rollback failed clustering instant: [" + instantTime + "]");
+      table.rollbackInflightClustering(inflightInstant.get(),
+          commitToRollback -> writeClient.getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+    }
+  }
 }
