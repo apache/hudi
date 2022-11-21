@@ -466,7 +466,8 @@ public class RequestHandler {
           ctx.queryParamAsClass(MarkerOperation.MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL, String.class).getOrDefault(""),
           ctx.queryParamAsClass(MarkerOperation.MARKER_BASEPATH_PARAM, String.class).getOrDefault(""),
           ctx.queryParamAsClass(MarkerOperation.MARKER_CONFLICT_CHECKER_ENABLE, String.class).getOrDefault(""),
-          ctx.queryParamAsClass(MarkerOperation.MARKER_CONFLICT_CHECKER_STRATEGY, String.class).getOrDefault("")));
+          ctx.queryParamAsClass(MarkerOperation.MARKER_CONFLICT_CHECKER_STRATEGY, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(MarkerOperation.MARKER_CONFLICT_CHECK_COMMIT_CONFLICT, String.class).getOrDefault("")));
     }, false));
 
     app.post(MarkerOperation.DELETE_MARKER_DIR_URL, new ViewHandler(ctx -> {

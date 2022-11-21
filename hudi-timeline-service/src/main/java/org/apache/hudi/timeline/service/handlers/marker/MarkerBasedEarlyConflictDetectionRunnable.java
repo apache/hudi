@@ -22,7 +22,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -38,7 +37,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
   private static final Logger LOG = LogManager.getLogger(MarkerBasedEarlyConflictDetectionRunnable.class);
@@ -50,10 +48,11 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
   private AtomicBoolean hasConflict;
   private long maxAllowableHeartbeatIntervalInMs;
   private Set<HoodieInstant> oldInstants;
+  private final boolean checkCommitConflict;
 
   public MarkerBasedEarlyConflictDetectionRunnable(AtomicBoolean hasConflict, MarkerHandler markerHandler, String markerDir,
                                                    String basePath, FileSystem fileSystem, long maxAllowableHeartbeatIntervalInMs,
-                                                   Set<HoodieInstant> oldInstants) {
+                                                   Set<HoodieInstant> oldInstants, boolean checkCommitConflict) {
     this.markerHandler = markerHandler;
     this.markerDir = markerDir;
     this.basePath = basePath;
@@ -61,6 +60,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
     this.hasConflict = hasConflict;
     this.maxAllowableHeartbeatIntervalInMs = maxAllowableHeartbeatIntervalInMs;
     this.oldInstants = oldInstants;
+    this.checkCommitConflict = checkCommitConflict;
   }
 
   @Override
@@ -86,7 +86,8 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
 
       currentFileIDs.retainAll(tableFilesIDs);
 
-      if (!currentFileIDs.isEmpty() || hasCommitConflict(currentInstantAllMarkers, basePath)) {
+      if (!currentFileIDs.isEmpty()
+          || (checkCommitConflict && MarkerUtils.hasCommitConflict(currentInstantAllMarkers.stream().map(this::makerToPartitionAndFileID).collect(Collectors.toSet()), basePath, oldInstants))) {
         LOG.warn("Conflict writing detected based on markers!\n"
             + "Conflict markers: " + currentInstantAllMarkers + "\n"
             + "Table markers: " + tableMarkers);
@@ -152,7 +153,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
    * @return
    * @throws IOException
    */
-  public Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
+  private Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
     Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
     if (fs.exists(heartbeatFilePath)) {
       return fs.getFileStatus(heartbeatFilePath).getModificationTime();
@@ -162,7 +163,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
     }
   }
 
-  public boolean isHeartbeatExpired(String instantTime) throws IOException {
+  private boolean isHeartbeatExpired(String instantTime) throws IOException {
     Long currentTime = System.currentTimeMillis();
     Long lastHeartbeatTime = getLastHeartbeatTime(fs, basePath, instantTime);
     if (currentTime - lastHeartbeatTime > this.maxAllowableHeartbeatIntervalInMs) {
@@ -170,27 +171,5 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
       return true;
     }
     return false;
-  }
-
-  public boolean hasCommitConflict(Set<String> currentInstantAllMarkers, String basePath) {
-    Set<String> currentFileIDs = currentInstantAllMarkers.stream().map(this::makerToPartitionAndFileID).collect(Collectors.toSet());
-
-    HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(basePath)
-            .setLoadActiveTimelineOnLoad(true).build();
-
-    Set<HoodieInstant> currentInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
-
-    currentInstants.removeAll(oldInstants);
-    Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {
-      try {
-        return HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class)
-            .getFileIdAndRelativePaths().keySet().stream();
-      } catch (Exception e) {
-        return Stream.empty();
-      }
-    }).collect(Collectors.toSet());
-    currentFileIDs.retainAll(missingFileIDs);
-    return !currentFileIDs.isEmpty();
   }
 }

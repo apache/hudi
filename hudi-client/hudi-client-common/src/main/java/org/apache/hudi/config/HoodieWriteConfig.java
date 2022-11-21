@@ -553,6 +553,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The period between each marker conflict checking.");
 
+  public static final ConfigProperty<Boolean> MARKER_CONFLICT_CHECK_COMMIT_CONFLICT = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "early.conflict.check.commit.conflict")
+      .defaultValue(false)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Enable check commit conflict or not during early conflict detect");
+
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -2195,6 +2201,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME);
   }
 
+  public boolean checkCommitConflictDuringEarlyConflictDetect() {
+    return getBoolean(MARKER_CONFLICT_CHECK_COMMIT_CONFLICT);
+  }
+
   // misc configs
   public Boolean doSkipDefaultPartitionValidation() {
     return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
@@ -2719,6 +2729,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withMarkerConflictCheckerPeriod(long period) {
       writeConfig.setValue(MARKER_CONFLICT_CHECKER_PERIOD, String.valueOf(period));
+      return this;
+    }
+
+    public Builder withCheckCommitConflict(boolean enable) {
+      writeConfig.setValue(MARKER_CONFLICT_CHECK_COMMIT_CONFLICT, String.valueOf(enable));
       return this;
     }
 

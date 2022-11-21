@@ -18,9 +18,11 @@
 
 package org.apache.hudi.table.marker;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.conflict.detection.HoodieDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -29,6 +31,8 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * This strategy is used for direct marker writers, trying to do early conflict detection.
@@ -39,14 +43,15 @@ public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends Hoodi
   private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class);
 
   public SimpleDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config) {
-    super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config);
+                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config, boolean checkCommitConflict) {
+    super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, checkCommitConflict);
   }
 
   @Override
   public boolean hasMarkerConflict() {
     try {
-      return checkMarkerConflict(basePath, partitionPath, fileId, fs, instantTime) || checkCommitConflict(fileId, basePath);
+      return checkMarkerConflict(basePath, partitionPath, fileId, fs, instantTime)
+          || (checkCommitConflict && MarkerUtils.hasCommitConflict(Stream.of(fileId).collect(Collectors.toSet()), basePath, completedCommitInstants));
     } catch (IOException e) {
       LOG.warn("Exception occurs during create marker file in eager conflict detection mode.");
       throw new HoodieIOException("Exception occurs during create marker file in eager conflict detection mode.", e);

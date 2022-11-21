@@ -99,7 +99,7 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
 
     ScheduledExecutorService markerChecker = Executors.newSingleThreadScheduledExecutor();
     markerChecker.submit(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, markerHandler, currentMarkerDir,
-        basePath, fs, Long.MAX_VALUE, oldInstants));
+        basePath, fs, Long.MAX_VALUE, oldInstants, true));
 
     markerChecker.shutdown();
     markerChecker.awaitTermination(60, TimeUnit.SECONDS);

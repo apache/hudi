@@ -19,11 +19,14 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -47,6 +50,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
 
@@ -228,5 +232,26 @@ public class MarkerUtils {
 
   public static List<Path> getAllMarkerDir(Path tempPath, FileSystem fs) throws IOException {
     return Arrays.stream(fs.listStatus(tempPath)).map(FileStatus::getPath).collect(Collectors.toList());
+  }
+
+  public static boolean hasCommitConflict(Set<String> currentFileIDs, String basePath, Set<HoodieInstant> completedCommitInstants) {
+
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(basePath)
+            .setLoadActiveTimelineOnLoad(true).build();
+
+    Set<HoodieInstant> currentInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
+
+    currentInstants.removeAll(completedCommitInstants);
+    Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {
+      try {
+        return HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class)
+            .getFileIdAndRelativePaths().keySet().stream();
+      } catch (Exception e) {
+        return Stream.empty();
+      }
+    }).collect(Collectors.toSet());
+    currentFileIDs.retainAll(missingFileIDs);
+    return !currentFileIDs.isEmpty();
   }
 }

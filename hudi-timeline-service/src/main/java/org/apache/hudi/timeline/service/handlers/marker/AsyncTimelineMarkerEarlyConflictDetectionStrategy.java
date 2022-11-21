@@ -40,8 +40,8 @@ public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTim
   private AtomicBoolean hasConflict = new AtomicBoolean(false);
   private ScheduledExecutorService markerChecker;
 
-  public AsyncTimelineMarkerEarlyConflictDetectionStrategy(String basePath, String markerDir, String markerName) {
-    super(basePath, markerDir, markerName);
+  public AsyncTimelineMarkerEarlyConflictDetectionStrategy(String basePath, String markerDir, String markerName, boolean checkCommitConflict) {
+    super(basePath, markerDir, markerName, checkCommitConflict);
   }
 
   @Override
@@ -62,7 +62,8 @@ public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTim
     hasConflict.compareAndSet(true, false);
     markerChecker = Executors.newSingleThreadScheduledExecutor();
     markerChecker.scheduleAtFixedRate(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, (MarkerHandler) markerHandler, markerDir, basePath,
-        fileSystem, Long.parseLong(maxAllowableHeartbeatIntervalInMs), oldInstants), Long.parseLong(batchInterval), Long.parseLong(period), TimeUnit.MILLISECONDS);
+        fileSystem, Long.parseLong(maxAllowableHeartbeatIntervalInMs), oldInstants, checkCommitConflict),
+        Long.parseLong(batchInterval), Long.parseLong(period), TimeUnit.MILLISECONDS);
   }
 
   @Override

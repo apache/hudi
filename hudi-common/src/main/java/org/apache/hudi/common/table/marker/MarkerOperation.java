@@ -46,4 +46,5 @@ public class MarkerOperation implements Serializable {
   public static final String MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL = "markerheartbeatinterval";
   public static final String MARKER_CONFLICT_CHECKER_ENABLE = "markerconflictenable";
   public static final String MARKER_CONFLICT_CHECKER_STRATEGY = "markerearlyconflictdetectionstrategy";
+  public static final String MARKER_CONFLICT_CHECK_COMMIT_CONFLICT = "markercheckcommitconflict";
 }

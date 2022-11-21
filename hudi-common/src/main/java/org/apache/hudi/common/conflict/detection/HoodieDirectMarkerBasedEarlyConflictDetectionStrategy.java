@@ -18,13 +18,11 @@
 
 package org.apache.hudi.common.conflict.detection;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -49,10 +47,11 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
   protected final String instantTime;
   protected final HoodieActiveTimeline activeTimeline;
   protected final HoodieConfig config;
-  private final Set<HoodieInstant> completedCommitInstants;
+  protected final Set<HoodieInstant> completedCommitInstants;
+  protected final boolean checkCommitConflict;
 
   public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config) {
+                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config, boolean checkCommitConflict) {
     this.basePath = basePath;
     this.fs = fs;
     this.partitionPath = partitionPath;
@@ -61,6 +60,7 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
     this.activeTimeline = activeTimeline;
     this.config = config;
     this.completedCommitInstants = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
+    this.checkCommitConflict = checkCommitConflict;
   }
 
   /**
@@ -107,23 +107,5 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
       return true;
     }
     return false;
-  }
-
-  protected boolean checkCommitConflict(String fileId, String basePath) {
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(basePath).build();
-    HoodieActiveTimeline currentActiveTimeline = metaClient.getActiveTimeline().reload();
-
-    Set<HoodieInstant> currentInstants = currentActiveTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
-    currentInstants.removeAll(completedCommitInstants);
-    Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {
-      try {
-        return HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class)
-            .getFileIdAndRelativePaths().keySet().stream();
-      } catch (Exception e) {
-        return Stream.empty();
-      }
-    }).collect(Collectors.toSet());
-    return missingFileIDs.contains(fileId);
   }
 }

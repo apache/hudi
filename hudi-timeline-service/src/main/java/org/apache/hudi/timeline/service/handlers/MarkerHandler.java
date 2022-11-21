@@ -25,6 +25,7 @@ import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import org.apache.hudi.common.conflict.detection.HoodieTimelineServerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
@@ -168,13 +169,15 @@ public class MarkerHandler extends Handler {
   public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName,
                                                 String batchInterval, String period, String maxAllowableHeartbeatIntervalInMs,
                                                 String basePath, String earlyConflictDetectionEnable,
-                                                String earlyConflictDetectionClassName) {
+                                                String earlyConflictDetectionClassName,
+                                                String checkCommitConflict) {
     // Step1 do early conflict detection if enable
     if (Boolean.parseBoolean(earlyConflictDetectionEnable)) {
       try {
         synchronized (earlyConflictDetectionLock) {
           if (earlyConflictDetectionStrategy == null) {
-            earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(earlyConflictDetectionClassName, basePath, markerDir, markerName);
+            earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(earlyConflictDetectionClassName,
+                basePath, markerDir, markerName, Boolean.parseBoolean(checkCommitConflict));
           }
 
           // markerDir => $base_path/.hoodie/.temp/$instant_time

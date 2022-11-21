@@ -59,6 +59,7 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLIC
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_PERIOD;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_STRATEGY;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECK_COMMIT_CONFLICT;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
 
@@ -217,6 +218,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       paramsMap.put(MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL, String.valueOf(config.getHoodieClientHeartbeatIntervalInMs()));
       paramsMap.put(MARKER_CONFLICT_CHECKER_ENABLE, String.valueOf(config.isEarlyConflictDetectionEnable()));
       paramsMap.put(MARKER_CONFLICT_CHECKER_STRATEGY, config.getEarlyConflictDetectionStrategyClassName());
+      paramsMap.put(MARKER_CONFLICT_CHECK_COMMIT_CONFLICT, String.valueOf(config.checkCommitConflictDuringEarlyConflictDetect()));
     }
 
     return paramsMap;

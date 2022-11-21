@@ -773,12 +773,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   public static Stream<Arguments> configParams() {
     Object[][] data =
         new Object[][] {
-            {"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName()},
-            {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName()},
-            {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
+//            {"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName()},
+//            {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName()},
+//            {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
             {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
-            {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
-            {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()}
+//            {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
+//            {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()}
         };
     return Stream.of(data).map(Arguments::of);
   }
