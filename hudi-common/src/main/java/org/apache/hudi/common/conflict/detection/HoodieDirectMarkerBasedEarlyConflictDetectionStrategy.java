@@ -47,7 +47,7 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
   protected final String instantTime;
   protected final HoodieActiveTimeline activeTimeline;
   protected final HoodieConfig config;
-  protected final Set<HoodieInstant> completedCommitInstants;
+  protected Set<HoodieInstant> completedCommitInstants;
   protected final boolean checkCommitConflict;
 
   public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
