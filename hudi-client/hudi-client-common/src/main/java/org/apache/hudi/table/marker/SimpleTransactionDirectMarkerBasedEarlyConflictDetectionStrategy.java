@@ -25,8 +25,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.stream.Collectors;
-
 /**
  * This strategy is used for direct marker writers, trying to do early conflict detection.
  * It will use fileSystem api like list and exist directly to check if there is any marker file conflict.
