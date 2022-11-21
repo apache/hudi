@@ -5,6 +5,28 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2022/11/10/How-Hudl-built-a-cost-optimized-AWS-Glue-pipeline-with-Apache-Hudi-datasets",
+            "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/how-hudl-built-a-cost-optimized-aws-glue-pipeline-with-apache-hudi-datasets/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2022/11/10/How-Hudl-built-a-cost-optimized-AWS-Glue-pipeline-with-Apache-Hudi-datasets",
+            "title": "How Hudl built a cost-optimized AWS Glue pipeline with Apache Hudi datasets",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2022-11-10T00:00:00.000Z",
+            "author": {
+                "name": "Indira Balakrishnan"
+            }
+        },
+        {
+            "id": "/2022/10/17/Get-started-with-Apache-Hudi-using-AWS",
+            "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/part-1-get-started-with-apache-hudi-using-aws-glue-by-implementing-key-design-concepts/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2022/10/17/Get-started-with-Apache-Hudi-using-AWS",
+            "title": "Get started with Apache Hudi using AWS Glue by implementing key design concepts – Part 1",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2022-10-17T00:00:00.000Z",
+            "author": {
+                "name": "Amit Maindola"
+            }
+        },
+        {
             "id": "/2022/10/06/Ingest-streaming-data-to-Apache-Hudi-using-AWS-Glue-and-DeltaStreamer",
             "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/ingest-streaming-data-to-apache-hudi-tables-using-aws-glue-and-apache-hudi-deltastreamer/\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/cn/blog/2022/10/06/Ingest-streaming-data-to-Apache-Hudi-using-AWS-Glue-and-DeltaStreamer",

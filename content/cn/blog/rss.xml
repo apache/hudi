@@ -4,9 +4,25 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Thu, 06 Oct 2022 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Thu, 10 Nov 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[How Hudl built a cost-optimized AWS Glue pipeline with Apache Hudi datasets]]></title>
+            <link>https://hudi.apache.org/cn/blog/2022/11/10/How-Hudl-built-a-cost-optimized-AWS-Glue-pipeline-with-Apache-Hudi-datasets</link>
+            <guid>/2022/11/10/How-Hudl-built-a-cost-optimized-AWS-Glue-pipeline-with-Apache-Hudi-datasets</guid>
+            <pubDate>Thu, 10 Nov 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/how-hudl-built-a-cost-optimized-aws-glue-pipeline-with-apache-hudi-datasets/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Get started with Apache Hudi using AWS Glue by implementing key design concepts – Part 1]]></title>
+            <link>https://hudi.apache.org/cn/blog/2022/10/17/Get-started-with-Apache-Hudi-using-AWS</link>
+            <guid>/2022/10/17/Get-started-with-Apache-Hudi-using-AWS</guid>
+            <pubDate>Mon, 17 Oct 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/part-1-get-started-with-apache-hudi-using-aws-glue-by-implementing-key-design-concepts/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Ingest streaming data to Apache Hudi tables using AWS Glue and Apache Hudi DeltaStreamer]]></title>
             <link>https://hudi.apache.org/cn/blog/2022/10/06/Ingest-streaming-data-to-Apache-Hudi-using-AWS-Glue-and-DeltaStreamer</link>
