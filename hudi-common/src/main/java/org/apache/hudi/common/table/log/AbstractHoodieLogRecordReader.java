@@ -563,6 +563,8 @@ public abstract class AbstractHoodieLogRecordReader {
 
     public abstract Builder withReaderSchema(Schema schema);
 
+    public abstract Builder withInternalSchema(InternalSchema internalSchema);
+
     public abstract Builder withLatestInstantTime(String latestInstantTime);
 
     public abstract Builder withReadBlocksLazily(boolean readBlocksLazily);
