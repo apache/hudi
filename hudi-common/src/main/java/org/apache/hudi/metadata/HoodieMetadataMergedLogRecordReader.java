@@ -169,6 +169,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     }
 
     @Override
+    public Builder withInternalSchema(InternalSchema internalSchema) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
     public Builder withLatestInstantTime(String latestInstantTime) {
       this.latestInstantTime = latestInstantTime;
       return this;
