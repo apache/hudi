@@ -73,6 +73,7 @@ public class CloudWatchReporter extends ScheduledReporter {
     return new Builder(registry);
   }
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public static class Builder {
     private final MetricRegistry registry;
     private Clock clock;

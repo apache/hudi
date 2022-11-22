@@ -19,6 +19,7 @@
 
 package org.apache.hudi.aws.utils;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public final class S3Utils {
 
   public static String s3aToS3(String s3aUrl) {

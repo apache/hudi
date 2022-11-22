@@ -21,6 +21,7 @@ package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class HoodieGlueSyncException extends HoodieHiveSyncException {
 
   public HoodieGlueSyncException(String message) {

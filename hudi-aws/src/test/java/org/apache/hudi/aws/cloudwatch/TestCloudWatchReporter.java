@@ -55,6 +55,7 @@ import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_METRIC
 import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_TABLE_NAME_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@SuppressWarnings("checkstyle:JavadocType")
 @ExtendWith(MockitoExtension.class)
 public class TestCloudWatchReporter {
 
