@@ -353,7 +353,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   /**
    * Populate rec with values for EXTRA_TYPE_SCHEMA
    */
-  private void generateExtraValues(GenericRecord rec) {
+  private void generateExtraSchemaValues(GenericRecord rec) {
     rec.put("distance_in_meters", rand.nextInt());
     rec.put("seconds_since_epoch", rand.nextLong());
     rec.put("weight", rand.nextFloat());
@@ -374,7 +374,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   /**
    * Populate rec with values for MAP_TYPE_SCHEMA
    */
-  private void generateMapValues(GenericRecord rec) {
+  private void generateMapTypeValues(GenericRecord rec) {
     rec.put("city_to_state", Collections.singletonMap("LA", "CA"));
   }
 
@@ -424,8 +424,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     if (isFlattened) {
       generateFareFlattenedValues(rec);
     } else {
-      generateExtraValues(rec);
-      generateMapValues(rec);
+      generateExtraSchemaValues(rec);
+      generateMapTypeValues(rec);
       generateFareNestedValues(rec);
       generateTipNestedValues(rec);
     }
@@ -564,7 +564,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
-   * Generates new inserts with nested schema, uniformly across the partition paths above.
+   * Generates new inserts for TRIP_EXAMPLE_SCHEMA with nested schema, uniformly across the partition paths above.
    * It also updates the list of existing keys.
    */
   public List<HoodieRecord> generateInserts(String instantTime, Integer n) {
@@ -574,52 +574,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public List<HoodieRecord> generateInsertsNestedExample(String instantTime, Integer n) {
     return generateInsertsStream(instantTime, n, false, TRIP_NESTED_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }
-
-  public List<Map<String,Object>> convertInsertsToMapNestedExample(List<HoodieRecord> recs) throws IOException {
-    List<Map<String,Object>> maps = new ArrayList<>();
-    for (HoodieRecord rec : recs) {
-      maps.add(getNestedExampleValues(rec));
-    }
-    return maps;
-  }
-
-  public Map<String,Object> getNestedExampleValues(HoodieRecord rec) throws IOException {
-    Map<String,Object> values = new HashMap<>();
-    RawTripTestPayload payload  = (RawTripTestPayload) rec.getData();
-    IndexedRecord irec = payload.getInsertValue(NESTED_AVRO_SCHEMA).get();
-    IndexedRecord fare = (IndexedRecord) irec.get(9);
-    values.put("timestamp", irec.get(0));
-    values.put("_row_key", irec.get(1));
-    values.put("rider", irec.get(3));
-    values.put("driver", irec.get(4));
-    values.put("begin_lat", irec.get(5));
-    values.put("begin_lon", irec.get(6));
-    values.put("end_lat", irec.get(7));
-    values.put("end_lon", irec.get(8));
-    values.put("fare.amount", fare.get(0));
-    values.put("fare.currency", fare.get(1));
-    values.put("_hoodie_is_deleted", irec.get(10));
-    values.put("partition_path", irec.get(2));
-    return values;
-  }
-
-  public String getNestedExampleSQLString(Map<String,Object> rec) {
-    return "( "
-        + rec.get("timestamp").toString() + ", " //timestamp
-        + "'" + rec.get("_row_key").toString() + "', " //_row_key
-        + "'" + rec.get("rider").toString()  + "', " //rider
-        + "'" + rec.get("driver").toString()  + "', " //driver
-        + "double(" + rec.get("begin_lat").toString()  + "), " //begin_lat
-        + "double(" + rec.get("begin_lon").toString()  + "), " //begin_lon
-        + "double(" + rec.get("end_lat").toString()  + "), " //end_lat
-        + "double(" + rec.get("end_lon").toString()  + "), " //end_lon
-        + "struct( "
-        + "double(" + rec.get("fare.amount").toString()  + "), " //amount
-        + "'" + rec.get("fare.currency").toString()  + "' ), " //currency
-        + rec.get("_hoodie_is_deleted").toString()  + ", " //_hoodie_is_deleted
-        + "\"" + rec.get("partition_path").toString()  + "\" )";
-  }
-
 
   /**
    * Generates new inserts, uniformly across the partition paths above.
