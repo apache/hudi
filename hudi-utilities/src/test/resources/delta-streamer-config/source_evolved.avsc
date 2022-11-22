@@ -131,9 +131,9 @@
   {
       "name": "evoluted_optional_union_field",
       "type": [
-        "null",
-        "string"
+        "string",
+        "null"
       ],
-      "default": null
+      "default": "Hello World"
   }]
 }

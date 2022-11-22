@@ -661,6 +661,63 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
+  public void testSchemaEvolutionWithRowSource() throws Exception {
+    String tableBasePath = basePath + "/test_table_schema_evolution_row_source";
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
+    prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(true, true, "source.avsc", "source.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "");
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(
+        tableBasePath,
+        WriteOperationType.INSERT,
+        ParquetDFSSource.class.getName(),
+        Collections.singletonList(TestIdentityTransformer.class.getName()),
+        PROPS_FILENAME_TEST_PARQUET,
+        false,
+        true,
+        100000,
+        false,
+        null,
+        null,
+        "timestamp",
+        null);
+    cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
+
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    TestHelpers.assertRecordCount(100, tableBasePath, sqlContext);
+
+    // Upsert data produced with Schema B, pass Schema B
+    prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(true, true, "source.avsc", "source_evolved.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "");
+    cfg = TestHelpers.makeConfig(
+        tableBasePath,
+        WriteOperationType.UPSERT,
+        ParquetDFSSource.class.getName(),
+        Collections.singletonList(TestIdentityTransformer.class.getName()),
+        PROPS_FILENAME_TEST_PARQUET,
+        false,
+        true,
+        100000,
+        false,
+        null,
+        null,
+        "timestamp",
+        null);
+    cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+
+    TestHelpers.assertRecordCount(200, tableBasePath, sqlContext);
+    List<Row> counts = TestHelpers.countsPerCommit(tableBasePath, sqlContext);
+    assertEquals(200, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+
+    sqlContext.read().format("org.apache.hudi").load(tableBasePath).createOrReplaceTempView("tmp_trips");
+    long recordCount =
+        sqlContext.sparkSession().sql("select * from tmp_trips where evoluted_optional_union_field is not NULL").count();
+    assertNotEquals(0, recordCount);
+  }
+
+  @Test
   public void testModifiedTableConfigs() throws Exception {
     String tableBasePath = basePath + "/test_table_modified_configs";
 
