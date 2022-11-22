@@ -89,6 +89,12 @@ public class HoodieIncrSource extends RowSource {
      */
     static final String SOURCE_FILE_FORMAT = "hoodie.deltastreamer.source.hoodieincr.file.format";
     static final String DEFAULT_SOURCE_FILE_FORMAT = "parquet";
+
+    /**
+     * Drops all meta fields from the source hudi table while ingesting into sink hudi table.
+     */
+    static final String HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE = "hoodie.deltastreamer.source.hoodieincr.drop.all.meta.fields.from.source";
+    public static final Boolean DEFAULT_HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE = false;
   }
 
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -174,10 +180,13 @@ public class HoodieIncrSource extends RowSource {
      *
      * log.info("Validated Source Schema :" + validated.schema());
      */
+    boolean dropAllMetaFields = props.getBoolean(Config.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE,
+        Config.DEFAULT_HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE);
 
     // Remove Hoodie meta columns except partition path from input source
-    final Dataset<Row> src = source.drop(HoodieRecord.HOODIE_META_COLUMNS.stream()
-        .filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new));
+    String[] colsToDrop = dropAllMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
+        HoodieRecord.HOODIE_META_COLUMNS.stream().filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new);
+    final Dataset<Row> src = source.drop(colsToDrop);
     // log.info("Final Schema from Source is :" + src.schema());
     return Pair.of(Option.of(src), queryTypeAndInstantEndpts.getRight().getRight());
   }
