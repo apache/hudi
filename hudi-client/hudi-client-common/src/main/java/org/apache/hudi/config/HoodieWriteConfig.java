@@ -386,11 +386,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Timeline archiving removes older instants from the timeline, after each write operation, to minimize metadata overhead. "
           + "Controls whether or not, the write should be failed as well, if such archiving fails.");
 
-  public static final ConfigProperty<String> FAIL_ON_TABLE_SERVICE_EXCEPTION_ENABLE = ConfigProperty
-      .key("hoodie.deltastreamer.fail.writes.on.inline.table.service.exceptions")
+  public static final ConfigProperty<String> FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION = ConfigProperty
+      .key("hoodie.fail.writes.on.inline.table.service.exception")
       .defaultValue("false")
       .withDocumentation("Table services such as compaction and clustering can fail and prevent syncing to "
-          + "the metaclient in Deltastreamer. Set this to true to fail writes when table services fail");
+          + "the metaclient. Set this to true to fail writes when table services fail");
 
   public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
@@ -1157,8 +1157,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(FAIL_ON_TIMELINE_ARCHIVING_ENABLE);
   }
 
-  public boolean isFailOnTableServiceExceptionEnabled() {
-    return getBoolean(FAIL_ON_TABLE_SERVICE_EXCEPTION_ENABLE);
+  public boolean isFailOnInlineTableServiceExceptionEnabled() {
+    return getBoolean(FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION);
   }
 
   public int getMaxConsistencyChecks() {
@@ -2365,8 +2365,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public  Builder withFailureOnTableServiceException(boolean fail) {
-      writeConfig.setValue(FAIL_ON_TABLE_SERVICE_EXCEPTION_ENABLE, String.valueOf(fail));
+    public  Builder withFailureOnInlineTableServiceException(boolean fail) {
+      writeConfig.setValue(FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION, String.valueOf(fail));
       return this;
     }
 

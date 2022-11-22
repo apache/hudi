@@ -244,15 +244,16 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       this.txnManager.endTransaction(Option.of(inflightInstant));
     }
 
-    // We don't want to fail the commit if hoodie.deltastreamer.fail.writes.on.inline.table.service.exceptions is false. We catch warn if false
+    // We don't want to fail the commit if hoodie.fail.writes.on.inline.table.service.exception is false. We catch warn if false
     try {
       // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
       runTableServicesInline(table, metadata, extraMetadata);
     } catch (Exception e) {
-      if (config.isFailOnTableServiceExceptionEnabled()) {
+      if (config.isFailOnInlineTableServiceExceptionEnabled()) {
         throw e;
       }
-      LOG.warn("Inline compaction or clustering failed with exception: " + e.getMessage() + ". Attempting to finish commit. ");
+      LOG.warn("Inline compaction or clustering failed with exception: " + e.getMessage()
+          + ". Moving further since \"hoodie.fail.writes.on.inline.table.service.exception\" is set to false.");
     }
 
     emitCommitMetrics(instantTime, metadata, commitActionType);
