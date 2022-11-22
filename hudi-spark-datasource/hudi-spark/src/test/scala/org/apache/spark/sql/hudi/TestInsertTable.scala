@@ -317,11 +317,11 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | )
        """.stripMargin)
       spark.sql(s"insert into $tableName values(1, 'a1', 10)")
-      checkAnswer(s"select id, name, price, ts from $tableName")(
-        Seq(1, "a1", 10.0, 1000)
+      checkAnswer(s"select id, name, price from $tableName")(
+        Seq(1, "a1", 10.0)
       )
       spark.sql(s"insert into $tableName select 2, 'a2', 12")
-      checkAnswer(s"select id, name, price, ts from $tableName")(
+      checkAnswer(s"select id, name, price from $tableName")(
         Seq(1, "a1", 10.0),
         Seq(2, "a2", 12.0)
       )
