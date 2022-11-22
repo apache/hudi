@@ -124,6 +124,11 @@
     }
   },
   {
+    "name": "new_field",
+    "type": ["string", "null"],
+    "default": "Hello World"
+  },
+  {
     "name" : "_hoodie_is_deleted",
     "type" : "boolean",
     "default" : false
