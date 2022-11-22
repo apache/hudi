@@ -269,7 +269,7 @@ public class MarkerUtils {
     return instants.stream().map(Path::toString).filter(instantPath -> {
       String instantTime = markerDirToInstantTime(instantPath);
       return instantTime.compareToIgnoreCase(currentInstantTime) < 0
-          && !reloadActive.filterPendingCompactionTimeline() .containsInstant(instantTime)
+          && !reloadActive.filterPendingCompactionTimeline().containsInstant(instantTime)
           && !reloadActive.filterPendingReplaceTimeline().containsInstant(instantTime);
     }).filter(instantPath -> {
       try {
