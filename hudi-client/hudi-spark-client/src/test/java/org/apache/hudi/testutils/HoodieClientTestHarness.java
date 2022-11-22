@@ -25,6 +25,7 @@ import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.functional.WriteClientBrokenClustering;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -489,12 +490,20 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
+    return getHoodieWriteClient(cfg, false);
+  }
+
+  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, Boolean makeClusteringBroken) {
     if (null != writeClient) {
       writeClient.close();
       writeClient = null;
     }
-    writeClient = new SparkRDDWriteClient(context, cfg);
-    return writeClient;
+    if (makeClusteringBroken) {
+      writeClient = new WriteClientBrokenClustering(context, cfg);
+    } else {
+      writeClient = new SparkRDDWriteClient(context, cfg);
+    }
+    return  writeClient;
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(Configuration conf, String basePath) {

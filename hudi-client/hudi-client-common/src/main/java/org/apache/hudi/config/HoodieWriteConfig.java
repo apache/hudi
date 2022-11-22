@@ -387,7 +387,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "Controls whether or not, the write should be failed as well, if such archiving fails.");
 
   public static final ConfigProperty<String> FAIL_ON_TABLE_SERVICE_EXCEPTION_ENABLE = ConfigProperty
-      .key("hoodie.deltastreamer.fail.writes.on.inline.table.service.errors")
+      .key("hoodie.deltastreamer.fail.writes.on.inline.table.service.exceptions")
       .defaultValue("false")
       .withDocumentation("Table services such as compaction and clustering can fail and prevent syncing to "
           + "the metaclient in Deltastreamer. Set this to true to fail writes when table services fail");
@@ -2362,6 +2362,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withDeleteParallelism(int parallelism) {
       writeConfig.setValue(DELETE_PARALLELISM_VALUE, String.valueOf(parallelism));
+      return this;
+    }
+
+    public  Builder withFailureOnTableServiceException(boolean fail) {
+      writeConfig.setValue(FAIL_ON_TABLE_SERVICE_EXCEPTION_ENABLE, String.valueOf(fail));
       return this;
     }
 

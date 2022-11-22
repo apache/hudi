@@ -244,7 +244,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       this.txnManager.endTransaction(Option.of(inflightInstant));
     }
 
-    // We don't want to fail the commit if hoodie.deltastreamer.fail.writes.on.inline.table.service.errors is false. We catch warn if false
+    // We don't want to fail the commit if hoodie.deltastreamer.fail.writes.on.inline.table.service.exceptions is false. We catch warn if false
     try {
       // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
       runTableServicesInline(table, metadata, extraMetadata);
