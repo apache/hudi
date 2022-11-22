@@ -27,7 +27,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -265,12 +264,13 @@ public class MarkerUtils {
   public static List<String> getCandidateInstants(HoodieActiveTimeline activeTimeline, List<Path> instants, String currentInstantTime,
                                                   long maxAllowableHeartbeatIntervalInMs, FileSystem fs, String basePath) {
 
-    HoodieTimeline pendingCompactionTimeline = activeTimeline.reload().filterPendingCompactionTimeline();
+    HoodieActiveTimeline reloadActive = activeTimeline.reload();
 
     return instants.stream().map(Path::toString).filter(instantPath -> {
       String instantTime = markerDirToInstantTime(instantPath);
-      boolean isPendingCompaction = pendingCompactionTimeline.containsInstant(instantTime);
-      return instantTime.compareToIgnoreCase(currentInstantTime) < 0 && !isPendingCompaction;
+      return instantTime.compareToIgnoreCase(currentInstantTime) < 0
+          && !reloadActive.filterPendingCompactionTimeline() .containsInstant(instantTime)
+          && !reloadActive.filterPendingReplaceTimeline().containsInstant(instantTime);
     }).filter(instantPath -> {
       try {
         return !isHeartbeatExpired(markerDirToInstantTime(instantPath), maxAllowableHeartbeatIntervalInMs, fs, basePath);

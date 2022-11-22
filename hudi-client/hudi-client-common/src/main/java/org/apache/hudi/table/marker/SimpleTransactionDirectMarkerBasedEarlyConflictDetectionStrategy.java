@@ -33,8 +33,9 @@ public class SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy ex
 
   private static final Logger LOG = LogManager.getLogger(SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class);
 
-  public SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                                          HoodieActiveTimeline activeTimeline, HoodieWriteConfig config, Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs) {
+  public SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId,
+                                                                          String instantTime, HoodieActiveTimeline activeTimeline, HoodieWriteConfig config,
+                                                                          Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs) {
     super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, checkCommitConflict, maxAllowableHeartbeatIntervalInMs);
   }
 
