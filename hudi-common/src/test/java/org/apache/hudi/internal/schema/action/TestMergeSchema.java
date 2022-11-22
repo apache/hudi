@@ -20,13 +20,16 @@ package org.apache.hudi.internal.schema.action;
 
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Types;
-
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+/**
+ * Tests {@link InternalSchemaMerger}
+ */
 public class TestMergeSchema {
 
   @Test
@@ -54,7 +57,7 @@ public class TestMergeSchema {
     updateChange.updateColumnType("col2", Types.LongType.get())
         .updateColumnComment("col2", "alter col2 comments")
         .renameColumn("col2", "colx").addPositionChange("col2",
-        "col4", "after");
+            "col4", "after");
     InternalSchema updateSchema = SchemaChangeUtils.applyTableChanges2Schema(newDeleteSchema, updateChange);
 
     // add col1 again

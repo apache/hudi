@@ -22,6 +22,9 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.zip.CRC32;
 
+/**
+ * Utils for Java byte array.
+ */
 public class BinaryUtil {
 
   /**

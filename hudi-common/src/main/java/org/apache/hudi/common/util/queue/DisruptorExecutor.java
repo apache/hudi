@@ -20,8 +20,8 @@ package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-
 import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

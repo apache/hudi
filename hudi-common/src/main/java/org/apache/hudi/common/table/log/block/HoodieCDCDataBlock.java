@@ -18,12 +18,11 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-
 import org.apache.hadoop.fs.FSDataInputStream;
-
-import org.apache.hudi.common.util.Option;
 
 import java.util.HashMap;
 import java.util.List;
