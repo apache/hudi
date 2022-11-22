@@ -129,14 +129,16 @@ public class TimelineService {
     @Parameter(names = {"--early-conflict-detection-check-commit-conflict"}, description = "Enable check commit conflict or not during early conflict detect")
     public Boolean checkCommitConflict = false;
 
-    @Parameter(names = {"--early-conflict-detection-enable"}, description = "Enable early conflict detection based on markers. It will try to detect writing conflict before create markers and fast fail "
-        + "which will release cluster resources as soon as possible.")
+    @Parameter(names = {"--early-conflict-detection-enable"}, description = "Enable early conflict detection based on markers. It will try to detect writing conflict "
+        + "before create markers and fast fail which will release cluster resources as soon as possible.")
     public Boolean earlyConflictDetectionEnable = false;
 
-    @Parameter(names = {"--early-conflict-async-checker-batch-interval"}, description = "Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The time to delay first async marker conflict checking.")
+    @Parameter(names = {"--early-conflict-async-checker-batch-interval"}, description = "Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. "
+        + "The time to delay first async marker conflict checking.")
     public Long earlyConflictAsyncCheckerBatchInterval = 30000L;
 
-    @Parameter(names = {"--early-conflict-async-checker-batch-period"}, description = "Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The period between each marker conflict checking.")
+    @Parameter(names = {"--early-conflict-async-checker-batch-period"}, description = "Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy."
+        + " The period between each marker conflict checking.")
     public Long earlyConflictAsyncCheckerBatchPeriod = 30000L;
 
     @Parameter(names = {"--early-conflict-async-checker-heart-beat-interval"}, description = "Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. "
