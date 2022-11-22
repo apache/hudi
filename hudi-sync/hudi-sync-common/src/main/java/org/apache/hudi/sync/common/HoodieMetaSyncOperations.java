@@ -29,6 +29,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public interface HoodieMetaSyncOperations {
 
   String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";

@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 
 import java.util.Objects;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class FieldSchema {
 
   private final String name;

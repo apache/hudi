@@ -35,6 +35,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_P
 import static org.apache.hudi.sync.common.util.ManifestFileWriter.fetchLatestBaseFilesForAllPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class TestManifestFileWriter extends HoodieCommonTestHarness {
 
   @BeforeEach

@@ -21,6 +21,7 @@ package org.apache.hudi.sync.common.model;
 
 import java.util.List;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class Partition {
 
   private final List<String> values;

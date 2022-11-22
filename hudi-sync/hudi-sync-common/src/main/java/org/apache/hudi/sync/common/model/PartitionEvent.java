@@ -24,6 +24,7 @@ package org.apache.hudi.sync.common.model;
  */
 public class PartitionEvent {
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public enum PartitionEventType {
     ADD, UPDATE, DROP
   }

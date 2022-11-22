@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class ConfigUtils {
   /**
    * Config stored in hive serde properties to tell query engine (spark/flink) to

@@ -33,6 +33,7 @@ import java.util.Map;
 import static org.apache.parquet.schema.OriginalType.UTF8;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class SparkDataSourceTableUtils {
   /**
    * Get Spark Sql related table properties. This is used for spark datasource table.

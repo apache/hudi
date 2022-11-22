@@ -192,6 +192,7 @@ public class HoodieSyncConfig extends HoodieConfig {
     return props.toString();
   }
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public static class HoodieSyncConfigParams {
     @Parameter(names = {"--database"}, description = "name of the target database in meta store")
     public String databaseName;

@@ -48,6 +48,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSyncClient.class);

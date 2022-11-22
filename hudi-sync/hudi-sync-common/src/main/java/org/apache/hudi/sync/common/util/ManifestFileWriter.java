@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class ManifestFileWriter {
 
   public static final String MANIFEST_FOLDER_NAME = "manifest";

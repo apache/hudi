@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class TestSyncUtilHelpers {
   private static final String BASE_PATH = "/tmp/test";
   private static final String BASE_FORMAT = "PARQUET";
@@ -100,6 +101,7 @@ public class TestSyncUtilHelpers {
     assertEquals(expectedMessage, t.getMessage());
   }
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public static class DummySyncTool1 extends HoodieSyncTool {
     public DummySyncTool1(Properties props, Configuration hadoopConf) {
       super(props, hadoopConf);
@@ -111,6 +113,7 @@ public class TestSyncUtilHelpers {
     }
   }
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public static class DummySyncTool2 extends HoodieSyncTool {
     public DummySyncTool2(Properties props, Configuration hadoopConf) {
       super(props, hadoopConf);
@@ -122,6 +125,7 @@ public class TestSyncUtilHelpers {
     }
   }
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public static class DeprecatedSyncTool1 extends HoodieSyncTool {
     public DeprecatedSyncTool1(TypedProperties props, Configuration hadoopConf, FileSystem fs) {
       super(props, hadoopConf, fs);
@@ -133,6 +137,7 @@ public class TestSyncUtilHelpers {
     }
   }
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public static class DeprecatedSyncTool2 extends HoodieSyncTool {
     public DeprecatedSyncTool2(Properties props, FileSystem fs) {
       super(props, fs);
@@ -144,6 +149,7 @@ public class TestSyncUtilHelpers {
     }
   }
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public static class InvalidSyncTool {
     public InvalidSyncTool(Properties props, FileSystem fs, Configuration hadoopConf) {
     }

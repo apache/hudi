@@ -19,6 +19,7 @@
 
 package org.apache.hudi.sync.common.util;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public final class TableUtils {
 
   public static String tableId(String database, String table) {

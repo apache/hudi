@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sync.common;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class HoodieSyncException extends RuntimeException {
 
   public HoodieSyncException() {
