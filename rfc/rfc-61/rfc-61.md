@@ -29,15 +29,15 @@
 
 JIRA: [HUDI-4677](https://issues.apache.org/jira/browse/HUDI-4677)
 
-> Please keep the status updated in `rfc/README.md`.
 
 ## Abstract
 
 For the snapshot view scenario, Hudi already provides two key features to support it:
 * Time travel: user provides a timestamp to query a specific snapshot view of a Hudi table
 * Savepoint/restore: "savepoint" saves the table as of the commit time so that it lets you restore the table to this savepoint at a later point in time if need be.
-but in this case, the user usually uses this to prevent cleaning snapshot view at a specific timestamp, hence, only clean unused files
-The situation is there some inconvenience for users if they use them directly
+but in this case, the user usually uses this to prevent cleaning snapshot view at a specific timestamp, and also remove savepoint if already expire. 
+the situation is there no life-cycle management of save points, that bring inconvenience for the users
+ 
 
 Usually users incline to use a meaningful name instead of querying Hudi table with a timestamp, using the timestamp in SQL may lead to the wrong snapshot view being used. 
 for example, we can announce that a new tag of hudi table with table_nameYYYYMMDD was released, then the user can use this new table name to query.
@@ -48,12 +48,14 @@ What this RFC plan to do is to let Hudi support release a snapshot view and life
 ## Background
 Introduce any much background context which is relevant or necessary to understand the feature and design choices.
 typical scenarios and benefits of snapshot view:
+
 1. Basic idea:
-![basic_design](basic_design.png)
+
+![basic_design](./basic_design.png)
 
 Create Snapshot view based on Hudi Savepoint
-    * Create Snapshot views periodically by time(date time/processing time)
-    * Use External Metastore(such as HMS) to store external view 
+* Create Snapshot views periodically by time(date time/processing time)
+* Use External Metastore(such as HMS) to store external view 
 
 Build periodic snapshots based on the time period required by the user
 These Shapshots are stored as partitions in the metadata management system
@@ -65,8 +67,8 @@ So the data itself is to support the full amount of data calculation, also suppo
 ![resource_usage](resrouce_usage.png)
 
 The Snapshot view is created based on Hudi Savepoint, which significantly reduces the data storage space of some large tables
-    * The space usage becomes (1 + (t-1) * p)/t
-    * Incremental use reduces the amount of data involved in the calculation
+   * The space usage becomes (1 + (t-1) * p)/t
+   * Incremental use reduces the amount of data involved in the calculation
 
 When using snapshot view storage, for some scenarios where the proportion of changing data is not large, a better storage saving effect will be achieved
 We have a simple formula here to calculate the effect
@@ -184,8 +186,6 @@ for example, if you choose Hive Metastore as the catalog and create a snapshot v
 
 when user query such a snapshot's external table, engines like Spark/Presto will get the savepoint timestamp from external table's properties then pass back to Hudi for time travel 
 
-### Clean service
-Normal savepoint will never be cleaned in Clean service, but a tagged savepoint is cleanable since it could be out-of-date.
 
 ### Operations
 * Create Snapshot View
@@ -225,16 +225,17 @@ call show_snapshotviews(table => 'hudi_table');
 |  --------------  | -------  | ------- | ------- |
 | `table`          | `true`   | `--`    | the Hive table name you want to show savepoint list, must be a Hudi table |
 
-### Mor support
-Savepoint is already support Merge-On-Read table
 
-### Precise Event time Snapshot On Merge-On-Read table
-
-handle drifted data issue 
 
 ## Rollout/Adoption Plan
-there should be no impact on existing users
+This change simply extend savepoint feature and will not impact an existing users. The changes to the savepoint will only impact who use snapshot view feature to create new type of save points. Users will need to start running a Spark-SQL client or hudi-cli to get this functionality.
+
 
 ## Test Plan
 
-Describe in few sentences how the RFC will be tested. How will we know that the implementation works as expected? How will we know nothing broke?.
+Create snapshot view with expired time
+* query it within expired time
+* clean it within expired time
+* clean it when exceed expired time
+* query it when exceed expired time
+* query it after delete&clean snapshot view  
