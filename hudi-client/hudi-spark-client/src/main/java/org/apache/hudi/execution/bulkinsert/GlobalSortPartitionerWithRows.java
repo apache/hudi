@@ -19,8 +19,10 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.functions;
@@ -30,11 +32,32 @@ import org.apache.spark.sql.functions;
  */
 public class GlobalSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
+  private Column[] columns;
+
+  public GlobalSortPartitionerWithRows() {
+    this(null);
+  }
+
+  public GlobalSortPartitionerWithRows(String colsToSortStr) {
+    if (!StringUtils.isNullOrEmpty(colsToSortStr)) {
+      String[] colsToSort = colsToSortStr.split(",");
+      columns = new Column[colsToSort.length];
+      int index = 0;
+      while (index < colsToSort.length) {
+        columns[index] = functions.col(colsToSort[index++]);
+      }
+    } else {
+      columns = new Column[2];
+      columns[0] = functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+      columns[1] = functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    }
+  }
+
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
     // Now, sort the records and line them up nicely for loading.
     // Let's use "partitionPath + key" as the sort key.
-    return rows.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+    return rows.sort(columns)
         .coalesce(outputSparkPartitions);
   }
 

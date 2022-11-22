@@ -29,12 +29,12 @@ import org.apache.spark.sql.Row;
  */
 public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode) {
+  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode, String colstoSort) {
     switch (sortMode) {
       case NONE:
         return new NonSortPartitionerWithRows();
       case GLOBAL_SORT:
-        return new GlobalSortPartitionerWithRows();
+        return new GlobalSortPartitionerWithRows(colstoSort);
       case PARTITION_SORT:
         return new PartitionSortPartitionerWithRows();
       default:

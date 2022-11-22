@@ -346,6 +346,20 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "lowest and best effort file sizing. "
           + "NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads");
 
+  public static final ConfigProperty<String> WRITE_SORT_MODE = ConfigProperty
+      .key("hoodie.write.sort.mode")
+      .defaultValue(BulkInsertSortMode.NONE.toString())
+      .withDocumentation("Sorting modes to use for sorting records for insert and upserts. Available values are - "
+          + "GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. "
+          + "PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing "
+          + "lowest and best effort file sizing. "
+          + "NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads");
+
+  public static final ConfigProperty<String> WRITE_SORT_COLS = ConfigProperty
+      .key("hoodie.write.sort.cols")
+      .noDefaultValue()
+      .withDocumentation("Columns to sort by when write.sort.mode is set to any other mode other than NONE.");
+
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server")
       .defaultValue("true")
@@ -1166,6 +1180,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   public BulkInsertSortMode getBulkInsertSortMode() {
     String sortMode = getStringOrDefault(BULK_INSERT_SORT_MODE);
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
+  }
+
+  public BulkInsertSortMode getWriteSortMode() {
+    String sortMode = getStringOrDefault(WRITE_SORT_MODE);
+    return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
+  }
+
+  public String getWriteSortCols() {
+    return getString(WRITE_SORT_COLS);
   }
 
   public boolean isMergeDataValidationCheckEnabled() {

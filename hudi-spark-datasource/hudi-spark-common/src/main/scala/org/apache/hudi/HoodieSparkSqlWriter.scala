@@ -37,7 +37,7 @@ import org.apache.hudi.common.util.{CommitUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME, KEYGEN_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.execution.bulkinsert.{BulkInsertInternalPartitionerWithRowsFactory, NonSortPartitionerWithRows}
+import org.apache.hudi.execution.bulkinsert.{BulkInsertInternalPartitionerWithRowsFactory, BulkInsertSortMode, NonSortPartitionerWithRows}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
@@ -286,8 +286,17 @@ object HoodieSparkSqlWriter {
             sparkContext.getConf.registerAvroSchemas(writerSchema)
             log.info(s"Registered avro schema : ${writerSchema.toString(true)}")
 
+            // sort if required.
+            var orderedDf = df;
+            if (!parameters.getOrElse(HoodieWriteConfig.WRITE_SORT_MODE.key(), HoodieWriteConfig.WRITE_SORT_MODE.defaultValue()).toString.equalsIgnoreCase(BulkInsertSortMode.NONE.name())) {
+              log.warn("Sorting incoming records ")
+              val sortMode = parameters.get(HoodieWriteConfig.WRITE_SORT_MODE.key()).get;
+              // todo: determine the shuffle parallelism based on write operation type.
+              val shuffleParallelism = parameters.getOrElse(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key(), HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.defaultValue()).toInt
+              orderedDf = BulkInsertInternalPartitionerWithRowsFactory.get(BulkInsertSortMode.valueOf(sortMode), parameters.getOrElse(HoodieWriteConfig.WRITE_SORT_COLS.key(), null)).repartitionRecords(df, shuffleParallelism);
+            }
             // Convert to RDD[HoodieRecord]
-            val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema,
+            val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(orderedDf, structName, nameSpace, reconcileSchema,
               org.apache.hudi.common.util.Option.of(writerSchema))
             val shouldCombine = parameters(INSERT_DROP_DUPS.key()).toBoolean ||
               operation.equals(WriteOperationType.UPSERT) ||
@@ -603,7 +612,7 @@ object HoodieSparkSqlWriter {
         userDefinedBulkInsertPartitionerOpt.get
       }
       else {
-        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
+        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode, writeConfig.getWriteSortCols)
       }
     } else {
       // Sort modes are not yet supported when meta fields are disabled
