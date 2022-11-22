@@ -38,6 +38,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DECODE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class HivePartitionUtil {
   private static final Logger LOG = LogManager.getLogger(HivePartitionUtil.class);
 

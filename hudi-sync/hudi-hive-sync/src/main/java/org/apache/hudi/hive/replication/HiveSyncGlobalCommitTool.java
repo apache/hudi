@@ -33,6 +33,7 @@ import java.util.List;
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.LOCAL_HIVE_SITE_URI;
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_HIVE_SITE_URI;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(HiveSyncGlobalCommitTool.class);

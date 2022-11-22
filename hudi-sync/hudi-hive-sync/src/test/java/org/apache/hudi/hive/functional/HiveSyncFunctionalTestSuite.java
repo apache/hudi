@@ -24,6 +24,7 @@ import org.junit.platform.suite.api.IncludeTags;
 import org.junit.platform.suite.api.SelectPackages;
 import org.junit.runner.RunWith;
 
+@SuppressWarnings("checkstyle:JavadocType")
 @RunWith(JUnitPlatform.class)
 @SelectPackages("org.apache.hudi.hive.functional")
 @IncludeTags("functional")

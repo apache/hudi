@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class HoodieHiveSyncException extends RuntimeException {
 
   public HoodieHiveSyncException(String message) {

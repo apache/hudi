@@ -32,6 +32,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.hive.replication.GlobalHiveSyncConfig.META_SYNC_GLOBAL_REPLICATE_TIMESTAMP;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class GlobalHiveSyncTool extends HiveSyncTool {
 
   private static final Logger LOG = LogManager.getLogger(GlobalHiveSyncTool.class);

@@ -28,6 +28,7 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.util.Properties;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class GlobalHiveSyncConfig extends HiveSyncConfig {
 
   public static final ConfigProperty<String> META_SYNC_GLOBAL_REPLICATE_TIMESTAMP = ConfigProperty
@@ -35,6 +36,7 @@ public class GlobalHiveSyncConfig extends HiveSyncConfig {
       .noDefaultValue()
       .withDocumentation("");
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public GlobalHiveSyncConfig(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
   }

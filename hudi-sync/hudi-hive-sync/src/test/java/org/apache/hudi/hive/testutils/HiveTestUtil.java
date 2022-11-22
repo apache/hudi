@@ -98,7 +98,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@SuppressWarnings("SameParameterValue")
+@SuppressWarnings({"checkstyle:JavadocType", "SameParameterValue"})
 public class HiveTestUtil {
 
   public static final String DB_NAME = "testdb";

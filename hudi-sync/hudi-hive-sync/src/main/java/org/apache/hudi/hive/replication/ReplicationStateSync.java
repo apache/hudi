@@ -25,6 +25,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import java.util.Map;
 import java.util.Properties;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class ReplicationStateSync implements AutoCloseable {
 
   protected GlobalHiveSyncTool globalHiveSyncTool;

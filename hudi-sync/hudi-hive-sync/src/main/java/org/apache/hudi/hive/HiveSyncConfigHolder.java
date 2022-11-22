@@ -21,6 +21,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.config.ConfigProperty;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class HiveSyncConfigHolder {
   /*
    * NOTE: below are HIVE SYNC SPECIFIC CONFIGS which should be under HiveSyncConfig.java

@@ -59,6 +59,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class HiveTestService {
 
   private static final Logger LOG = LogManager.getLogger(HiveTestService.class);

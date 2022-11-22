@@ -29,6 +29,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class TestPartitionValueExtractor {
   @Test
   public void testHourPartition() {

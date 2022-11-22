@@ -21,8 +21,8 @@ package org.apache.hudi.hive.functional;
 
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.hive.transaction.lock.HiveMetastoreBasedLockProvider;
 import org.apache.hudi.hive.testutils.HiveSyncFunctionalTestHarness;
+import org.apache.hudi.hive.transaction.lock.HiveMetastoreBasedLockProvider;
 
 import org.apache.hadoop.hive.metastore.api.DataOperationType;
 import org.apache.hadoop.hive.metastore.api.LockComponent;

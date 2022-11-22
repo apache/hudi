@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class ColumnNameXLator {
 
   private static Map<String, String> xformMap = new HashMap<>();

@@ -79,6 +79,7 @@ public class SchemaDifference {
            .toString();
   }
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public static class Builder {
 
     private final MessageType storageSchema;

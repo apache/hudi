@@ -36,6 +36,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 // TODO: stop extending HiveSyncConfig and take all the variables needed from config file
+@SuppressWarnings("checkstyle:JavadocType")
 @Parameters(commandDescription = "A tool to sync the hudi table to hive from different clusters. Similar to HiveSyncTool but syncs it to more"
     + "than one hive cluster ( currently a local and remote cluster). The common timestamp that was synced is stored as a new table property "
     + "This is most useful when we want to ensure that across different hive clusters we want ensure consistent reads. If that is not a requirement"

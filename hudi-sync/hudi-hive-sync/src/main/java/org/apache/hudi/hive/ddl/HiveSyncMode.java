@@ -20,6 +20,7 @@ package org.apache.hudi.hive.ddl;
 
 import java.util.Locale;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public enum HiveSyncMode {
   
   /**

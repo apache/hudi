@@ -76,6 +76,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback {
   public MiniDFSCluster dfsCluster;
   private HdfsTestService hdfsTestService;

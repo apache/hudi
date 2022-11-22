@@ -51,6 +51,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class HiveSyncFunctionalTestHarness {
 
   private static transient Configuration hadoopConf;

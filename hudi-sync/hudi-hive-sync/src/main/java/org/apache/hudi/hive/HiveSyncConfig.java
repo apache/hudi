@@ -92,6 +92,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     return getBooleanOrDefault(HIVE_SYNC_BUCKET_SYNC);
   }
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public static class HiveSyncConfigParams {
 
     @ParametersDelegate()
