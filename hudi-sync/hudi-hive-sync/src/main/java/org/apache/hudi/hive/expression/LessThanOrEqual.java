@@ -18,12 +18,9 @@
 
 package org.apache.hudi.hive.expression;
 
-/**
- * Expression that without any child expressions.
- */
-public abstract class LeafExpression extends Expression {
+public class LessThanOrEqual extends BinaryComparator {
 
-  public LeafExpression() {
-    super(null);
+  public LessThanOrEqual(Expression left, Expression right) {
+    super(left, Operator.LT_EQ, right);
   }
 }

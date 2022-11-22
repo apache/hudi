@@ -18,12 +18,9 @@
 
 package org.apache.hudi.hive.expression;
 
-/**
- * Expression that without any child expressions.
- */
-public abstract class LeafExpression extends Expression {
+public class GreatThanOrEqual extends BinaryComparator {
 
-  public LeafExpression() {
-    super(null);
+  public GreatThanOrEqual(Expression left, Expression right) {
+    super(left, Operator.GT_EQ, right);
   }
 }

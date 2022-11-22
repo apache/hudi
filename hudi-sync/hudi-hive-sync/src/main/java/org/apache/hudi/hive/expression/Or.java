@@ -18,12 +18,9 @@
 
 package org.apache.hudi.hive.expression;
 
-/**
- * Expression that without any child expressions.
- */
-public abstract class LeafExpression extends Expression {
+public class Or extends BinaryOperator {
 
-  public LeafExpression() {
-    super(null);
+  public Or(Expression left, Expression right) {
+    super(left, Operator.OR, right);
   }
 }

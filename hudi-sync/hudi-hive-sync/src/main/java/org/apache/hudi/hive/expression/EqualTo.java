@@ -18,12 +18,10 @@
 
 package org.apache.hudi.hive.expression;
 
-/**
- * Expression that without any child expressions.
- */
-public abstract class LeafExpression extends Expression {
+public class EqualTo extends BinaryComparator {
 
-  public LeafExpression() {
-    super(null);
+  public EqualTo(Expression left, Expression right) {
+    super(left, Operator.EQ, right);
   }
 }
+

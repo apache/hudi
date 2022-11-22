@@ -18,12 +18,26 @@
 
 package org.apache.hudi.hive.expression;
 
-/**
- * Expression that without any child expressions.
- */
-public abstract class LeafExpression extends Expression {
+public class Literal extends LeafExpression {
 
-  public LeafExpression() {
-    super(null);
+  private final String value;
+  private final String type;
+
+  public Literal(String value, String type) {
+    this.value = value;
+    this.type = type;
+  }
+
+  public String getValue() {
+    return value;
+  }
+
+  public String getType() {
+    return type;
+  }
+
+  @Override
+  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
+    return exprVisitor.visitLiteral(this);
   }
 }

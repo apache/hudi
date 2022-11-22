@@ -23,13 +23,9 @@ package org.apache.hudi.hive.expression;
  */
 public interface ExpressionVisitor<T> {
 
-  T visitAnd(Expression left, Expression right);
+  T visitBinaryOperator(BinaryOperator binaryOperator);
 
-  T visitOr(Expression left, Expression right);
+  T visitLiteral(Literal literal);
 
-  T visitBinaryComparator(Expression left, Expression.Operator operator, Expression right);
-
-  T visitLiteral(LeafExpression.Literal literal);
-
-  T visitAttribute(LeafExpression.AttributeReferenceExpression attribute);
+  T visitAttribute(AttributeReferenceExpression attribute);
 }

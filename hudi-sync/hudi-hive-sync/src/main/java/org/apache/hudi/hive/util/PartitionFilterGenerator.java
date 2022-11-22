@@ -22,9 +22,14 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.hive.expression.BinaryOperator;
+import org.apache.hudi.hive.expression.And;
+import org.apache.hudi.hive.expression.AttributeReferenceExpression;
+import org.apache.hudi.hive.expression.EqualTo;
 import org.apache.hudi.hive.expression.Expression;
-import org.apache.hudi.hive.expression.LeafExpression;
+import org.apache.hudi.hive.expression.GreatThanOrEqual;
+import org.apache.hudi.hive.expression.LessThanOrEqual;
+import org.apache.hudi.hive.expression.Literal;
+import org.apache.hudi.hive.expression.Or;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
@@ -34,6 +39,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -43,8 +49,16 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_E
 
 public class PartitionFilterGenerator {
 
+  private static final Set<String> SUPPORT_TYPES = new HashSet<String>() {{
+      add(HiveSchemaUtil.INT_TYPE_NAME);
+      add(HiveSchemaUtil.BIGINT_TYPE_NAME);
+      add(HiveSchemaUtil.DATE_TYPE_NAME);
+      add(HiveSchemaUtil.STRING_TYPE_NAME);
+    }
+  };
+
   /**
-   * Build expression from the Partition list.
+   * Build expression from the Partition list. Here we're trying to match all partitions.
    *
    * ex. partitionSchema(date, hour) [Partition(2022-09-01, 12), Partition(2022-09-02, 13)] =>
    *     Or(And(Equal(Attribute(date), Literal(2022-09-01)), Equal(Attribute(hour), Literal(12))),
@@ -58,10 +72,10 @@ public class PartitionFilterGenerator {
       for (int i = 0; i < partitionFields.size(); i++) {
         FieldSchema field = partitionFields.get(i);
         String value = partitionValues.get(i);
-        BinaryOperator.EqualTo exp = new BinaryOperator.EqualTo(new LeafExpression.AttributeReferenceExpression(field.getName()),
-            new LeafExpression.Literal(value, field.getType()));
+        EqualTo exp = new EqualTo(new AttributeReferenceExpression(field.getName()),
+            new Literal(value, field.getType()));
         if (root != null) {
-          root = new BinaryOperator.And(root, exp);
+          root = new And(root, exp);
         } else {
           root = exp;
         }
@@ -71,7 +85,7 @@ public class PartitionFilterGenerator {
       if (result == null) {
         return expr;
       } else {
-        return new BinaryOperator.Or(result, expr);
+        return new Or(result, expr);
       }
     });
   }
@@ -109,18 +123,13 @@ public class PartitionFilterGenerator {
         case HiveSchemaUtil.BIGINT_TYPE_NAME:
           long l1 = Long.parseLong(s1);
           long l2 = Long.parseLong(s2);
-          long result = l1 - l2;
-          if (result > 0) {
-            return 1;
-          }
-
-          if (result < 0) {
-            return -1;
-          }
-
-          return 0;
-        default:
+          return Long.signum(l1 - l2);
+        case HiveSchemaUtil.DATE_TYPE_NAME:
+        case HiveSchemaUtil.STRING_TYPE_NAME:
           return s1.compareTo(s2);
+        default:
+          throw new IllegalArgumentException("The value type: " + valueType + " doesn't support to "
+              + "do comparison here");
       }
     }
   }
@@ -134,29 +143,36 @@ public class PartitionFilterGenerator {
   private static Expression buildMinMaxPartitionExpression(List<Partition> partitions, List<FieldSchema> partitionFields) {
     return extractFieldValues(partitions, partitionFields).stream().map(fieldWithValues -> {
       FieldSchema fieldSchema = fieldWithValues.getKey();
+
+      if (!SUPPORT_TYPES.contains(fieldSchema.getType())) {
+        return null;
+      }
+
       String[] values = fieldWithValues.getValue();
 
       if (values.length == 1) {
-        return new BinaryOperator.EqualTo(new LeafExpression.AttributeReferenceExpression(fieldSchema.getName()),
-            new LeafExpression.Literal(values[0], fieldSchema.getType()));
+        return new EqualTo(new AttributeReferenceExpression(fieldSchema.getName()),
+            new Literal(values[0], fieldSchema.getType()));
       }
 
       Arrays.sort(values, new ValueComparator(fieldSchema.getType()));
 
-      return new BinaryOperator.And(
-          new BinaryOperator.GreatThanOrEqual(
-              new LeafExpression.AttributeReferenceExpression(fieldSchema.getName()),
-              new LeafExpression.Literal(values[0], fieldSchema.getType())),
-          new BinaryOperator.LessThanOrEqual(
-              new LeafExpression.AttributeReferenceExpression(fieldSchema.getName()),
-              new LeafExpression.Literal(values[values.length - 1], fieldSchema.getType())));
-    }).reduce(null, (result, expr) -> {
-      if (result == null) {
-        return expr;
-      } else {
-        return new BinaryOperator.And(result, expr);
-      }
-    });
+      return new And(
+          new GreatThanOrEqual(
+              new AttributeReferenceExpression(fieldSchema.getName()),
+              new Literal(values[0], fieldSchema.getType())),
+          new LessThanOrEqual(
+              new AttributeReferenceExpression(fieldSchema.getName()),
+              new Literal(values[values.length - 1], fieldSchema.getType())));
+    })
+        .filter(Objects::nonNull)
+        .reduce(null, (result, expr) -> {
+          if (result == null) {
+            return expr;
+          } else {
+            return new And(result, expr);
+          }
+        });
   }
 
   public static String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields, HiveSyncConfig config) {
@@ -182,7 +198,11 @@ public class PartitionFilterGenerator {
       filter = buildPartitionExpression(partitions, partitionFields);
     }
 
-    return generateFilterString(filter);
+    if (filter != null) {
+      return generateFilterString(filter);
+    }
+
+    return "";
   }
 
   private static String generateFilterString(Expression filter) {

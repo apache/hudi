@@ -314,6 +314,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   /**
    * Fetch partitions from meta service, will try to push down more filters to avoid fetching
    * too many unnecessary partitions.
+   *
+   * @param writtenPartitionsSince partitions has been added, updated, or dropped since last synced.
    */
   private List<Partition> getTablePartitions(String tableName, List<String> writtenPartitionsSince) {
     if (!config.getBooleanOrDefault(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED)) {
@@ -337,7 +339,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    * Syncs the list of storage partitions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).
    *
-   * @param writtenPartitionsSince partitions has been added, updated, or dropped since last updated.
+   * @param writtenPartitionsSince partitions has been added, updated, or dropped since last synced.
    */
   private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, Set<String> droppedPartitions) {
     boolean partitionsChanged;

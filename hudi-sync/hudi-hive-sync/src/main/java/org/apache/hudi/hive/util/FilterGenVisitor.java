@@ -18,9 +18,12 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.hudi.hive.expression.AttributeReferenceExpression;
+import org.apache.hudi.hive.expression.BinaryComparator;
+import org.apache.hudi.hive.expression.BinaryOperator;
 import org.apache.hudi.hive.expression.Expression;
 import org.apache.hudi.hive.expression.ExpressionVisitor;
-import org.apache.hudi.hive.expression.LeafExpression;
+import org.apache.hudi.hive.expression.Literal;
 
 import java.util.Locale;
 
@@ -40,28 +43,24 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
     }
   }
 
-  @Override
-  public String visitAnd(Expression left, Expression right) {
+  private String visitAnd(Expression left, Expression right) {
     String leftResult = left.accept(this);
     String rightResult = right.accept(this);
 
-    if (leftResult.isEmpty() && rightResult.isEmpty()) {
-      return "";
-    }
-
-    if (!leftResult.isEmpty() && rightResult.isEmpty()) {
-      return leftResult;
-    }
-
     if (leftResult.isEmpty()) {
+      if (rightResult.isEmpty()) {
+        return "";
+      }
+
       return rightResult;
+    } else if (rightResult.isEmpty()) {
+      return leftResult;
     }
 
     return "(" + makeBinaryOperatorString(leftResult, Expression.Operator.AND, rightResult) + ")";
   }
 
-  @Override
-  public String visitOr(Expression left, Expression right) {
+  private String visitOr(Expression left, Expression right) {
     String leftResult = left.accept(this);
     String rightResult = right.accept(this);
 
@@ -71,8 +70,7 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
     return "";
   }
 
-  @Override
-  public String visitBinaryComparator(Expression left, Expression.Operator operator, Expression right) {
+  private String visitBinaryComparator(Expression left, Expression.Operator operator, Expression right) {
     String leftResult = left.accept(this);
     String rightResult = right.accept(this);
 
@@ -84,7 +82,23 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
   }
 
   @Override
-  public String visitLiteral(LeafExpression.Literal literalExpr) {
+  public String visitBinaryOperator(BinaryOperator expr) {
+    if (expr instanceof BinaryComparator) {
+      return visitBinaryComparator(expr.getLeft(), expr.getOperator(), expr.getRight());
+    }
+
+    switch (expr.getOperator()) {
+      case AND:
+        return visitAnd(expr.getLeft(), expr.getRight());
+      case OR:
+        return visitOr(expr.getLeft(), expr.getRight());
+      default:
+        return "";
+    }
+  }
+
+  @Override
+  public String visitLiteral(Literal literalExpr) {
     switch (literalExpr.getType().toLowerCase(Locale.ROOT)) {
       case HiveSchemaUtil.STRING_TYPE_NAME:
         return quoteStringLiteral(literalExpr.getValue());
@@ -98,7 +112,7 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
   }
 
   @Override
-  public String visitAttribute(LeafExpression.AttributeReferenceExpression attribute) {
+  public String visitAttribute(AttributeReferenceExpression attribute) {
     return attribute.getName();
   }
 }

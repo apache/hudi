@@ -48,60 +48,8 @@ public abstract class BinaryOperator extends Expression {
     return right;
   }
 
-  public abstract static class BinaryComparator extends BinaryOperator {
-
-    public BinaryComparator(Expression left, Operator operator, Expression right) {
-      super(left, operator, right);
-    }
-
-    @Override
-    public <T> T accept(ExpressionVisitor<T> exprVisitor) {
-      return exprVisitor.visitBinaryComparator(getLeft(), getOperator(), getRight());
-    }
-  }
-
-  public static class Or extends BinaryOperator {
-
-    public Or(Expression left, Expression right) {
-      super(left, Operator.OR, right);
-    }
-
-    @Override
-    public <T> T accept(ExpressionVisitor<T> exprVisitor) {
-      return exprVisitor.visitOr(this.getLeft(), this.getRight());
-    }
-  }
-
-  public static class And extends BinaryOperator {
-
-    public And(Expression left, Expression right) {
-      super(left, Operator.AND, right);
-    }
-
-    @Override
-    public <T> T accept(ExpressionVisitor<T> exprVisitor) {
-      return exprVisitor.visitAnd(this.getLeft(), this.getRight());
-    }
-  }
-
-  public static class EqualTo extends BinaryComparator {
-
-    public EqualTo(Expression left, Expression right) {
-      super(left, Operator.EQ, right);
-    }
-  }
-
-  public static class GreatThanOrEqual extends BinaryComparator {
-
-    public GreatThanOrEqual(Expression left, Expression right) {
-      super(left, Operator.GT_EQ, right);
-    }
-  }
-
-  public static class LessThanOrEqual extends BinaryComparator {
-
-    public LessThanOrEqual(Expression left, Expression right) {
-      super(left, Operator.LT_EQ, right);
-    }
+  @Override
+  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
+    return exprVisitor.visitBinaryOperator(this);
   }
 }
