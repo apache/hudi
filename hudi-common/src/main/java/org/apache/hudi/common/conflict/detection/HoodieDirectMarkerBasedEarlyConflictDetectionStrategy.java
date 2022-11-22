@@ -34,6 +34,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -54,13 +55,14 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
   protected final Long maxAllowableHeartbeatIntervalInMs;
 
   public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config, Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs) {
+                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config, Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs,
+                                                               HashSet<HoodieInstant> completedCommitInstants) {
     this.basePath = basePath;
     this.fs = fs;
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.instantTime = instantTime;
-    this.completedCommitInstants = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
+    this.completedCommitInstants = completedCommitInstants;
     this.activeTimeline = activeTimeline;
     this.config = config;
     this.checkCommitConflict = checkCommitConflict;

@@ -21,6 +21,7 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.common.conflict.detection.HoodieDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
@@ -30,6 +31,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
+import java.util.HashSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -42,8 +44,9 @@ public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends Hoodi
   private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class);
 
   public SimpleDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config, Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs) {
-    super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, checkCommitConflict, maxAllowableHeartbeatIntervalInMs);
+                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config, Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs,
+                                                               HashSet<HoodieInstant> completedCommitInstants) {
+    super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, checkCommitConflict, maxAllowableHeartbeatIntervalInMs, completedCommitInstants);
   }
 
   @Override

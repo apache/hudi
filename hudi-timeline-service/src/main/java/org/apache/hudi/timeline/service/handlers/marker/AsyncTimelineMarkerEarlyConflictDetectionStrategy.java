@@ -54,16 +54,16 @@ public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTim
     throw new HoodieEarlyConflictDetectionException(new ConcurrentModificationException("Early conflict detected but cannot resolve conflicts for overlapping writes"));
   }
 
-  public void fresh(String batchInterval, String period, String markerDir, String basePath,
-                    String maxAllowableHeartbeatIntervalInMs, FileSystem fileSystem, Object markerHandler, Set<HoodieInstant> oldInstants) {
+  public void fresh(Long batchInterval, Long period, String markerDir, String basePath,
+                    Long maxAllowableHeartbeatIntervalInMs, FileSystem fileSystem, Object markerHandler, Set<HoodieInstant> oldInstants) {
     if (markerChecker != null) {
       markerChecker.shutdown();
     }
     hasConflict.set(false);
     markerChecker = Executors.newSingleThreadScheduledExecutor();
     markerChecker.scheduleAtFixedRate(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, (MarkerHandler) markerHandler, markerDir, basePath,
-        fileSystem, Long.parseLong(maxAllowableHeartbeatIntervalInMs), oldInstants, checkCommitConflict),
-        Long.parseLong(batchInterval), Long.parseLong(period), TimeUnit.MILLISECONDS);
+        fileSystem, maxAllowableHeartbeatIntervalInMs, oldInstants, checkCommitConflict),
+        batchInterval, period, TimeUnit.MILLISECONDS);
   }
 
   @Override

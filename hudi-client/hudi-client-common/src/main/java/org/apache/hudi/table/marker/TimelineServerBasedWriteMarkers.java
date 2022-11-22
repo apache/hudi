@@ -54,12 +54,6 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_MARKER_
 import static org.apache.hudi.common.table.marker.MarkerOperation.DELETE_MARKER_DIR_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKERS_DIR_EXISTS_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_BASEPATH_PARAM;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_BATCH_INTERVAL;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_ENABLE;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_PERIOD;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_STRATEGY;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECK_COMMIT_CONFLICT;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
 
@@ -144,7 +138,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     HoodieTimer timer = HoodieTimer.start();
     String markerFileName = getMarkerFileName(dataFileName, type);
 
-    Map<String, String> paramsMap = initConfigMap(partitionPath, markerFileName, Option.empty(), false);
+    Map<String, String> paramsMap = initConfigMap(partitionPath, markerFileName, false);
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
     LOG.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
         + " in " + timer.endTimer() + " ms");
@@ -160,7 +154,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
                                                        HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
     HoodieTimer timer = new HoodieTimer().startTimer();
     String markerFileName = getMarkerFileName(dataFileName, type);
-    Map<String, String> paramsMap = initConfigMap(partitionPath, markerFileName, Option.of(config), true);
+    Map<String, String> paramsMap = initConfigMap(partitionPath, markerFileName, true);
 
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
 
@@ -200,7 +194,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
    * @param markerFileName
    * @return
    */
-  private Map<String, String> initConfigMap(String partitionPath, String markerFileName, Option<HoodieWriteConfig> hoodieWriteConfig, boolean initEarlyConflictConfigs) {
+  private Map<String, String> initConfigMap(String partitionPath, String markerFileName, boolean initEarlyConflictConfigs) {
 
     Map<String, String> paramsMap = new HashMap<>();
     paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
@@ -211,14 +205,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     }
 
     if (initEarlyConflictConfigs) {
-      HoodieWriteConfig config = hoodieWriteConfig.get();
-      paramsMap.put(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, config.getMarkerConflictCheckerBatchInterval());
-      paramsMap.put(MARKER_CONFLICT_CHECKER_PERIOD, config.getMarkerConflictCheckerPeriod());
       paramsMap.put(MARKER_BASEPATH_PARAM, basePath);
-      paramsMap.put(MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL, String.valueOf(config.getHoodieClientHeartbeatIntervalInMs() * config.getHoodieClientHeartbeatTolerableMisses()));
-      paramsMap.put(MARKER_CONFLICT_CHECKER_ENABLE, String.valueOf(config.isEarlyConflictDetectionEnable()));
-      paramsMap.put(MARKER_CONFLICT_CHECKER_STRATEGY, config.getEarlyConflictDetectionStrategyClassName());
-      paramsMap.put(MARKER_CONFLICT_CHECK_COMMIT_CONFLICT, String.valueOf(config.checkCommitConflictDuringEarlyConflictDetect()));
     }
 
     return paramsMap;

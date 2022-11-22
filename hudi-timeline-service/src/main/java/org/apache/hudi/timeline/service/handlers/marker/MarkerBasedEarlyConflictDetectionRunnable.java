@@ -23,6 +23,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
@@ -79,8 +80,9 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
       HoodieTableMetaClient metaClient =
           HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(basePath)
               .setLoadActiveTimelineOnLoad(true).build();
+      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
 
-      List<String> candidate = MarkerUtils.getCandidateInstants(metaClient.getActiveTimeline(), instants,
+      List<String> candidate = MarkerUtils.getCandidateInstants(activeTimeline, instants,
           MarkerUtils.markerDirToInstantTime(markerDir), maxAllowableHeartbeatIntervalInMs, fs, basePath);
       Set<String> tableMarkers = candidate.stream().flatMap(instant -> {
         return MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(instant, fs, new HoodieLocalEngineContext(new Configuration()), 100)
@@ -92,7 +94,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
 
       currentFileIDs.retainAll(tableFilesIDs);
       if (!currentFileIDs.isEmpty()
-          || (checkCommitConflict && MarkerUtils.hasCommitConflict(metaClient.getActiveTimeline(),
+          || (checkCommitConflict && MarkerUtils.hasCommitConflict(activeTimeline,
           currentInstantAllMarkers.stream().map(MarkerUtils::makerToPartitionAndFileID).collect(Collectors.toSet()), oldInstants))) {
         LOG.warn("Conflict writing detected based on markers!\n"
             + "Conflict markers: " + currentInstantAllMarkers + "\n"

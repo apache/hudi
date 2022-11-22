@@ -86,7 +86,17 @@ public class EmbeddedTimelineService {
           .enableMarkerRequests(true)
           .markerBatchNumThreads(writeConfig.getMarkersTimelineServerBasedBatchNumThreads())
           .markerBatchIntervalMs(writeConfig.getMarkersTimelineServerBasedBatchIntervalMs())
-          .markerParallelism(writeConfig.getMarkersDeleteParallelism());
+          .markerParallelism(writeConfig.getMarkersDeleteParallelism())
+      ;
+    }
+
+    if (writeConfig.isEarlyConflictDetectionEnable()) {
+      timelineServiceConfBuilder.markerEarlyConflictDetectEnable(true)
+          .markerEarlyConflictDetectStrategy(writeConfig.getEarlyConflictDetectionStrategyClassName())
+          .markerEarlyConflictDetectCheckCommitConflict(writeConfig.earlyConflictDetectionCheckCommitConflict())
+          .markerEarlyConflictAsyncCheckerBatchInterval(writeConfig.getEarlyConflictDetectionAsyncCheckerBatchInterval())
+          .markerEarlyConflictAsyncCheckerBatchPeriod(writeConfig.getEarlyConflictDetectionAsyncCheckerPeriod())
+          .markerEarlyConflictMaxAllowableHeartbeatIntervalInMs(writeConfig.getHoodieClientHeartbeatIntervalInMs());
     }
 
     server = new TimelineService(context, hadoopConf.newCopy(), timelineServiceConfBuilder.build(),

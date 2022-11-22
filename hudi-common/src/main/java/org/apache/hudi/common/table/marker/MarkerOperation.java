@@ -39,12 +39,4 @@ public class MarkerOperation implements Serializable {
   // POST requests
   public static final String CREATE_MARKER_URL = String.format("%s/%s", BASE_URL, "create");
   public static final String DELETE_MARKER_DIR_URL = String.format("%s/%s", BASE_URL, "dir/delete");
-
-  // marker conflict check related configs.
-  public static final String MARKER_CONFLICT_CHECKER_BATCH_INTERVAL = "markerbatchinterval";
-  public static final String MARKER_CONFLICT_CHECKER_PERIOD = "markercheckperiod";
-  public static final String MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL = "markerheartbeatinterval";
-  public static final String MARKER_CONFLICT_CHECKER_ENABLE = "markerconflictenable";
-  public static final String MARKER_CONFLICT_CHECKER_STRATEGY = "markerearlyconflictdetectionstrategy";
-  public static final String MARKER_CONFLICT_CHECK_COMMIT_CONFLICT = "markercheckcommitconflict";
 }

@@ -37,6 +37,6 @@ public abstract class HoodieTimelineServerBasedEarlyConflictDetectionStrategy im
     this.checkCommitConflict = checkCommitConflict;
   }
 
-  public void fresh(String batchInterval, String period, String markerDir, String basePath,
-                    String maxAllowableHeartbeatIntervalInMs, FileSystem fileSystem, Object markerHandler, Set<HoodieInstant> oldInstants) {}
+  public void fresh(Long batchInterval, Long period, String markerDir, String basePath,
+                    Long maxAllowableHeartbeatIntervalInMs, FileSystem fileSystem, Object markerHandler, Set<HoodieInstant> oldInstants) {}
 }

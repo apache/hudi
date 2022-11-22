@@ -2177,12 +2177,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
   }
 
-  public String getMarkerConflictCheckerBatchInterval() {
-    return String.valueOf(getLong(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL));
+  public Long getEarlyConflictDetectionAsyncCheckerBatchInterval() {
+    return getLong(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL);
   }
 
-  public String getMarkerConflictCheckerPeriod() {
-    return String.valueOf(getLong(MARKER_CONFLICT_CHECKER_PERIOD));
+  public Long getEarlyConflictDetectionAsyncCheckerPeriod() {
+    return getLong(MARKER_CONFLICT_CHECKER_PERIOD);
   }
 
   public Long getLockAcquireWaitTimeoutInMs() {
@@ -2201,7 +2201,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME);
   }
 
-  public boolean checkCommitConflictDuringEarlyConflictDetect() {
+  public boolean earlyConflictDetectionCheckCommitConflict() {
     return getBoolean(MARKER_CONFLICT_CHECK_COMMIT_CONFLICT);
   }
 

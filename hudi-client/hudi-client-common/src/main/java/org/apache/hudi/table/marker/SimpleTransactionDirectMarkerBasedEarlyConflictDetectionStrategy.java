@@ -21,9 +21,12 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.util.HashSet;
 
 /**
  * This strategy is used for direct marker writers, trying to do early conflict detection.
@@ -33,10 +36,10 @@ public class SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy ex
 
   private static final Logger LOG = LogManager.getLogger(SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class);
 
-  public SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId,
-                                                                          String instantTime, HoodieActiveTimeline activeTimeline, HoodieWriteConfig config,
-                                                                          Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs) {
-    super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, checkCommitConflict, maxAllowableHeartbeatIntervalInMs);
+  public SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+                                                                          HoodieActiveTimeline activeTimeline, HoodieWriteConfig config, Boolean checkCommitConflict,
+                                                                          Long maxAllowableHeartbeatIntervalInMs, HashSet<HoodieInstant> completedCommitInstants) {
+    super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, checkCommitConflict, maxAllowableHeartbeatIntervalInMs, completedCommitInstants);
   }
 
   @Override

@@ -165,18 +165,14 @@ public class MarkerHandler extends Handler {
    * @param markerName marker name
    * @return the {@code CompletableFuture} instance for the request
    */
-  public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName,
-                                                String batchInterval, String period, String maxAllowableHeartbeatIntervalInMs,
-                                                String basePath, String earlyConflictDetectionEnable,
-                                                String earlyConflictDetectionClassName,
-                                                String checkCommitConflict) {
+  public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName, String basePath) {
     // Step1 do early conflict detection if enable
-    if (Boolean.parseBoolean(earlyConflictDetectionEnable)) {
+    if (timelineServiceConfig.earlyConflictDetectionEnable) {
       try {
         synchronized (earlyConflictDetectionLock) {
           if (earlyConflictDetectionStrategy == null) {
-            earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(earlyConflictDetectionClassName,
-                basePath, markerDir, markerName, Boolean.parseBoolean(checkCommitConflict));
+            earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(timelineServiceConfig.earlyConflictDetectStrategy,
+                basePath, markerDir, markerName, timelineServiceConfig.checkCommitConflict);
           }
 
           // markerDir => $base_path/.hoodie/.temp/$instant_time
@@ -192,7 +188,8 @@ public class MarkerHandler extends Handler {
                 .getInstants()
                 .collect(Collectors.toSet());
 
-            earlyConflictDetectionStrategy.fresh(batchInterval, period, markerDir, basePath, maxAllowableHeartbeatIntervalInMs, fileSystem,
+            earlyConflictDetectionStrategy.fresh(timelineServiceConfig.earlyConflictAsyncCheckerBatchInterval,
+                timelineServiceConfig.earlyConflictAsyncCheckerBatchPeriod, markerDir, basePath, timelineServiceConfig.maxAllowableHeartbeatIntervalInMs, fileSystem,
                 this, oldInstants);
           }
         }
