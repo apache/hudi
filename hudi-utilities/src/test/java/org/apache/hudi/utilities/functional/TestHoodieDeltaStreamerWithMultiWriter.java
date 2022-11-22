@@ -428,7 +428,6 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
     long getCommitsAfterInstant() {
       HoodieTimeline timeline1 = meta.reloadActiveTimeline().getAllCommitsTimeline().findInstantsAfter(lastSuccessfulCommit);
-      // LOG.info("Timeline Instants=" + meta1.getActiveTimeline().getInstants().collect(Collectors.toList()));
       return timeline1.countInstants();
     }
   }
