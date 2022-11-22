@@ -20,6 +20,7 @@ package org.apache.hudi.avro;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaCompatibility;
 
 import java.util.List;
 import java.util.Objects;
@@ -33,6 +34,22 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class AvroSchemaUtils {
 
   private AvroSchemaUtils() {}
+
+  /**
+   * Establishes whether {@code prevSchema} is compatible w/ {@code newSchema}, as
+   * defined by Avro's {@link AvroSchemaCompatibility}
+   *
+   * @param prevSchema previous instance of the schema
+   * @param newSchema new instance of the schema
+   */
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema) {
+    // NOTE: We're establishing compatibility of the {@code prevSchema} and {@code newSchema}
+    //       as following: {@code newSchema} is considered compatible to {@code prevSchema},
+    //       iff data written using {@code prevSchema} could be read by {@code newSchema}
+    AvroSchemaCompatibility.SchemaPairCompatibility result =
+        AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema);
+    return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+  }
 
   /**
    * Generates fully-qualified name for the Avro's schema based on the Table's name

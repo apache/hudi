@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.avro.AvroSchemaCompatibility;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -302,22 +302,6 @@ public class TableSchemaResolver {
   }
 
   /**
-   * Establishes whether {@code prevSchema} is compatible w/ {@code newSchema}, as
-   * defined by Avro's {@link AvroSchemaCompatibility}
-   *
-   * @param prevSchema previous instance of the schema
-   * @param newSchema new instance of the schema
-   */
-  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema) {
-    // NOTE: We're establishing compatibility of the {@code prevSchema} and {@code newSchema}
-    //       as following: {@code newSchema} is considered compatible to {@code prevSchema},
-    //       iff data written using {@code prevSchema} could be read by {@code newSchema}
-    AvroSchemaCompatibility.SchemaPairCompatibility result =
-        AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema);
-    return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
-  }
-
-  /**
    * Returns table's latest Avro {@link Schema} iff table is non-empty (ie there's at least
    * a single commit)
    *
@@ -351,7 +335,7 @@ public class TableSchemaResolver {
         if (convertTableSchemaToAddNamespace && converterFn != null) {
           tableSchema = converterFn.apply(tableSchema);
         }
-        if (writeSchema.getFields().size() < tableSchema.getFields().size() && isSchemaCompatible(writeSchema, tableSchema)) {
+        if (writeSchema.getFields().size() < tableSchema.getFields().size() && AvroSchemaUtils.isSchemaCompatible(writeSchema, tableSchema)) {
           // if incoming schema is a subset (old schema) compared to table schema. For eg, one of the
           // ingestion pipeline is still producing events in old schema
           latestSchema = tableSchema;
