@@ -85,24 +85,24 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
         instantTime, maxAllowableHeartbeatIntervalInMs, fs, basePath);
 
     long res = candidateInstants.stream().flatMap(currentMarkerDirPath -> {
-          try {
-            Path markerPartitionPath;
-            if (StringUtils.isNullOrEmpty(partitionPath)) {
-              markerPartitionPath = new Path(currentMarkerDirPath);
-            } else {
-              markerPartitionPath = new Path(currentMarkerDirPath, partitionPath);
-            }
+      try {
+        Path markerPartitionPath;
+        if (StringUtils.isNullOrEmpty(partitionPath)) {
+          markerPartitionPath = new Path(currentMarkerDirPath);
+        } else {
+          markerPartitionPath = new Path(currentMarkerDirPath, partitionPath);
+        }
 
-            if (!StringUtils.isNullOrEmpty(partitionPath) && !fs.exists(markerPartitionPath)) {
-              return Stream.empty();
-            } else {
-              return Arrays.stream(fs.listStatus(markerPartitionPath)).parallel()
-                  .filter((path) -> path.toString().contains(fileId));
-            }
-          } catch (IOException e) {
-            throw new HoodieIOException("IOException occurs during checking marker file conflict");
-          }
-        }).count();
+        if (!StringUtils.isNullOrEmpty(partitionPath) && !fs.exists(markerPartitionPath)) {
+          return Stream.empty();
+        } else {
+          return Arrays.stream(fs.listStatus(markerPartitionPath)).parallel()
+              .filter((path) -> path.toString().contains(fileId));
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("IOException occurs during checking marker file conflict");
+      }
+    }).count();
 
     if (res != 0L) {
       LOG.warn("Detected conflict marker files: " + partitionPath + "/" + fileId + " for " + instantTime);
