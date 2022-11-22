@@ -118,9 +118,7 @@ public class HoodieSnapshotExporter {
 
   public void export(JavaSparkContext jsc, Config cfg) throws IOException {
     FileSystem outputFs = FSUtils.getFs(cfg.targetOutputPath, jsc.hadoopConfiguration());
-    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-
-    if (outputPathExists(outputFs, cfg)) {
+    if (outputFs.exists(new Path(cfg.targetOutputPath))) {
       throw new HoodieSnapshotExporterException("The target output path already exists.");
     }
 
@@ -132,6 +130,7 @@ public class HoodieSnapshotExporter {
     LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 
+    final HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     final List<String> partitions = getPartitions(engineContext, cfg);
     if (partitions.isEmpty()) {
       throw new HoodieSnapshotExporterException("The source dataset has 0 partition to snapshot.");
@@ -144,10 +143,6 @@ public class HoodieSnapshotExporter {
       exportAsNonHudi(jsc, sourceFs, cfg, partitions, latestCommitTimestamp);
     }
     createSuccessTag(outputFs, cfg);
-  }
-
-  private boolean outputPathExists(FileSystem fs, Config cfg) throws IOException {
-    return fs.exists(new Path(cfg.targetOutputPath));
   }
 
   private Option<String> getLatestCommitTimestamp(FileSystem fs, Config cfg) {
@@ -195,7 +190,7 @@ public class HoodieSnapshotExporter {
     Dataset<Row> sourceDataset = new SQLContext(jsc).read().parquet(JavaConversions.asScalaIterator(exportingFilePaths).toSeq());
     partitioner.partition(sourceDataset)
         .format(cfg.outputFormat)
-        .mode(SaveMode.Overwrite)
+        .mode(SaveMode.ErrorIfExists)
         .save(cfg.targetOutputPath);
   }
 
