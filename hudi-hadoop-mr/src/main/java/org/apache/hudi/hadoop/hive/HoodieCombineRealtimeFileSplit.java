@@ -153,6 +153,7 @@ public class HoodieCombineRealtimeFileSplit extends CombineFileSplit {
     }).toArray(String[]::new);
   }
 
+  @SuppressWarnings("checkstyle:JavadocType")
   public static class Builder {
 
     // These are instances of HoodieRealtimeSplits

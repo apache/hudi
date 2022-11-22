@@ -38,6 +38,7 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class TestHoodieMergeOnReadTableInputFormat {
 
   @TempDir

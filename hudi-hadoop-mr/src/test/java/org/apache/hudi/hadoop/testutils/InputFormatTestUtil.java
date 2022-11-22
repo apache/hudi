@@ -66,6 +66,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class InputFormatTestUtil {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";

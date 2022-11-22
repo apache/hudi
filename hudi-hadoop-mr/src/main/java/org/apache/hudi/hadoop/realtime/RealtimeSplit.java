@@ -18,11 +18,12 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.InputSplitWithLocationInfo;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.InputSplitUtils;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.InputSplitWithLocationInfo;
 
 import java.io.DataInput;
 import java.io.DataOutput;

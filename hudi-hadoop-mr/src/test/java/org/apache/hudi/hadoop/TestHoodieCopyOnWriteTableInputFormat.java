@@ -33,6 +33,7 @@ import java.nio.file.Files;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class TestHoodieCopyOnWriteTableInputFormat {
 
   @TempDir

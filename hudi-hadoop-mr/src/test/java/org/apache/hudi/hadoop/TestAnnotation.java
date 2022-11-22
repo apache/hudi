@@ -18,12 +18,15 @@
 
 package org.apache.hudi.hadoop;
 
-import org.junit.jupiter.api.Test;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
+
+import org.junit.jupiter.api.Test;
+
 import java.lang.annotation.Annotation;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class TestAnnotation {
 
   @Test

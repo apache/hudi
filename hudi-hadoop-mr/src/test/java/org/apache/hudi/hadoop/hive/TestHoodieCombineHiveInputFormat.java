@@ -71,6 +71,7 @@ import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
   private JobConf jobConf;

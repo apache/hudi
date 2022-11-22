@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public class TestInputPathHandler {
 
   // Incremental Table
