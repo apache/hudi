@@ -35,7 +35,7 @@ import java.io.File
 import scala.collection.JavaConversions._
 
 
-class TestSparkSql extends HoodieSparkSqlTestBase {
+class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   val colsToCompare = "timestamp, _row_key, partition_path, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare.amount, fare.currency, _hoodie_is_deleted"
 
   //params for core flow tests
@@ -292,7 +292,7 @@ class TestSparkSql extends HoodieSparkSqlTestBase {
   }
 
   def compareUpdateDfWithHudiDf(inputDf: Dataset[Row], hudiDf: Dataset[Row], beforeDf: Dataset[Row]): Unit = {
-    dropMetadata(hudiDf).createOrReplaceTempView("hudiTbl")
+    dropMetaColumns(hudiDf).createOrReplaceTempView("hudiTbl")
     inputDf.createOrReplaceTempView("inputTbl")
     beforeDf.createOrReplaceTempView("beforeTbl")
     val hudiDfToCompare = spark.sqlContext.sql("select " + colsToCompare + " from hudiTbl")
@@ -304,7 +304,7 @@ class TestSparkSql extends HoodieSparkSqlTestBase {
   }
 
   def compareEntireInputDfWithHudiDf(inputDf: Dataset[Row], hudiDf: Dataset[Row]): Unit = {
-    dropMetadata(hudiDf).createOrReplaceTempView("hudiTbl")
+    dropMetaColumns(hudiDf).createOrReplaceTempView("hudiTbl")
     inputDf.createOrReplaceTempView("inputTbl")
     val hudiDfToCompare = spark.sqlContext.sql("select " + colsToCompare + " from hudiTbl")
     val inputDfToCompare = spark.sqlContext.sql("select " + colsToCompare + " from inputTbl")
@@ -314,7 +314,6 @@ class TestSparkSql extends HoodieSparkSqlTestBase {
   }
 
   def doMORReadOptimizedQuery(isMetadataEnabledOnRead: Boolean, basePath: String): sql.DataFrame = {
-    
     spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .option(HoodieMetadataConfig.ENABLE.key(), isMetadataEnabledOnRead)
@@ -324,8 +323,8 @@ class TestSparkSql extends HoodieSparkSqlTestBase {
   def compareROAndRT(isMetadataEnabledOnRead: Boolean, tableName: String, basePath: String): Unit = {
     val roDf = doMORReadOptimizedQuery(isMetadataEnabledOnRead, basePath)
     val rtDf = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-    dropMetadata(roDf).createOrReplaceTempView("hudiTbl1")
-    dropMetadata(rtDf).createOrReplaceTempView("hudiTbl2")
+    dropMetaColumns(roDf).createOrReplaceTempView("hudiTbl1")
+    dropMetaColumns(rtDf).createOrReplaceTempView("hudiTbl2")
 
     val hudiDf1ToCompare = spark.sqlContext.sql("select " + colsToCompare + " from hudiTbl1")
     val hudiDf2ToCompare = spark.sqlContext.sql("select " + colsToCompare + " from hudiTbl2")
@@ -334,7 +333,7 @@ class TestSparkSql extends HoodieSparkSqlTestBase {
     assertEquals(hudiDf1ToCompare.except(hudiDf2ToCompare).count, 0)
   }
 
-  def dropMetadata(inputDf: sql.DataFrame): sql.DataFrame = {
+  def dropMetaColumns(inputDf: sql.DataFrame): sql.DataFrame = {
     inputDf.drop(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
       HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD,
       HoodieRecord.FILENAME_METADATA_FIELD)
