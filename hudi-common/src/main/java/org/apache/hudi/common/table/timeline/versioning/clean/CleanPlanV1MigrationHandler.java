@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Migration handler for clean plan in version 1
+ * Migration handler for clean plan in version 1.
  */
 public class CleanPlanV1MigrationHandler extends AbstractMigratorBase<HoodieCleanerPlan> {
 

@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link RateLimiter}
+ * Tests {@link RateLimiter}.
  */
 public class TestRatelimiter {
 

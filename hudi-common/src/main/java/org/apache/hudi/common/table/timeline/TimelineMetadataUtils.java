@@ -60,7 +60,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Utils for Hudi timeline metadata
+ * Utils for Hudi timeline metadata.
  */
 public class TimelineMetadataUtils {
 

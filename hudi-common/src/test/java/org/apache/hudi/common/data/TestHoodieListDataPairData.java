@@ -44,7 +44,7 @@ import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests {@link HoodieListPairData}
+ * Tests {@link HoodieListPairData}.
  */
 public class TestHoodieListDataPairData {
 

@@ -32,9 +32,9 @@ import java.util.Random;
 import java.util.stream.Collectors;
 
 /**
- * Retry Helper implementation
+ * Retry Helper implementation.
  *
- * @param <T> Type of return value for checked function
+ * @param <T> Type of return value for checked function.
  */
 public class RetryHelper<T> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(RetryHelper.class);
@@ -143,9 +143,9 @@ public class RetryHelper<T> implements Serializable {
   }
 
   /**
-   * Checked function interface
+   * Checked function interface.
    *
-   * @param <T> Type of return value
+   * @param <T> Type of return value.
    */
   @FunctionalInterface
   public interface CheckedFunction<T> extends Serializable {

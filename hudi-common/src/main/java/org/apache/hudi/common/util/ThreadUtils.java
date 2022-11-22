@@ -22,7 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Utils for Java threading
+ * Utils for Java threading.
  */
 public class ThreadUtils {
 

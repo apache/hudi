@@ -33,7 +33,7 @@ import static org.apache.hudi.common.util.ObjectSizeCalculator.getObjectSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests {@link ObjectSizeCalculator}
+ * Tests {@link ObjectSizeCalculator}.
  */
 public class TestObjectSizeCalculator {
 
@@ -96,7 +96,7 @@ public class TestObjectSizeCalculator {
   }
 
   /**
-   * Test class for object size estimation
+   * Test class for object size estimation.
    */
   class Person {
     private String name;
@@ -107,7 +107,7 @@ public class TestObjectSizeCalculator {
   }
 
   /**
-   * Test enum for object size estimation
+   * Test enum for object size estimation.
    */
   public enum DayOfWeek {
     MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY

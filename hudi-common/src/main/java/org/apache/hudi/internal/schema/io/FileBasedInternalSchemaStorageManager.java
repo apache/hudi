@@ -48,7 +48,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SCHEMA_COMMIT_ACTION;
 
 /**
- * {@link AbstractInternalSchemaStorageManager} implementation based on the schema files
+ * {@link AbstractInternalSchemaStorageManager} implementation based on the schema files.
  */
 public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchemaStorageManager {
   private static final Logger LOG = LogManager.getLogger(FileBasedInternalSchemaStorageManager.class);

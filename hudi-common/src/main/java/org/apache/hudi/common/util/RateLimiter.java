@@ -29,7 +29,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Thread-safe rate limiter implementation
+ * Thread-safe rate limiter implementation.
  */
 @ThreadSafe
 public class RateLimiter {

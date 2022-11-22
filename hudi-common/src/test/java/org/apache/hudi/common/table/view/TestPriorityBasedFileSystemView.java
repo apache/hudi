@@ -59,7 +59,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests {@link PriorityBasedFileSystemView}
+ * Tests {@link PriorityBasedFileSystemView}.
  */
 @ExtendWith(MockitoExtension.class)
 public class TestPriorityBasedFileSystemView {

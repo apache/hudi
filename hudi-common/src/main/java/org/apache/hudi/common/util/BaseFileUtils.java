@@ -40,7 +40,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Utils for Hudi base file
+ * Utils for Hudi base file.
  */
 public abstract class BaseFileUtils {
 

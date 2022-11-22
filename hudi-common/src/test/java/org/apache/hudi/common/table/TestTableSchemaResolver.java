@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link TableSchemaResolver}
+ * Tests {@link TableSchemaResolver}.
  */
 public class TestTableSchemaResolver {
 

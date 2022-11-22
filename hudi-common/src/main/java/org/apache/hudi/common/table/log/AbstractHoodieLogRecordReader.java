@@ -787,7 +787,7 @@ public abstract class AbstractHoodieLogRecordReader {
   }
 
   /**
-   * Key specification with a list of column names
+   * Key specification with a list of column names.
    */
   protected static class KeySpec {
     private final List<String> keys;

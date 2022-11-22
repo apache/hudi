@@ -37,7 +37,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Metrics for metadata
+ * Metrics for metadata.
  */
 public class HoodieMetadataMetrics implements Serializable {
 

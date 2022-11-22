@@ -21,9 +21,9 @@ package org.apache.hudi.common.function;
 import java.io.Serializable;
 
 /**
- * Serializable supplier interface
+ * Serializable supplier interface.
  *
- * @param <T> Type of return value
+ * @param <T> Type of return value.
  */
 @FunctionalInterface
 public interface SerializableSupplier<T> extends Serializable {

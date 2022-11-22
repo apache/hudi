@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Migration handler for clean metadata in version 2
+ * Migration handler for clean metadata in version 2.
  */
 public class CleanMetadataV2MigrationHandler extends AbstractMigratorBase<HoodieCleanMetadata> {
 

@@ -46,7 +46,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Tests {@link AvroSchemaEvolutionUtils}
+ * Tests {@link AvroSchemaEvolutionUtils}.
  */
 public class TestAvroSchemaEvolutionUtils {
 

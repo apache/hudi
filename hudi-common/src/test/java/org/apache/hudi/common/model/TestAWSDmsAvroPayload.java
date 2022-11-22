@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Tests {@link AWSDmsAvroPayload}
+ * Tests {@link AWSDmsAvroPayload}.
  */
 public class TestAWSDmsAvroPayload {
 

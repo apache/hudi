@@ -68,8 +68,8 @@ public abstract class Either<L, R> {
   /**
    * Utility that holds R value only.
    *
-   * @param <L> Left value type
-   * @param <R> Right value type
+   * @param <L> Left value type.
+   * @param <R> Right value type.
    */
   public static class EitherRight<L, R> extends Either<L, R> {
     private final R value;
@@ -88,8 +88,8 @@ public abstract class Either<L, R> {
   /**
    * Utility that holds L value only.
    *
-   * @param <L> Left value type
-   * @param <R> Right value type
+   * @param <L> Left value type.
+   * @param <R> Right value type.
    */
   public static class EitherLeft<L, R> extends Either<L, R> {
     private final L value;

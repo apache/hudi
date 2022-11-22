@@ -27,7 +27,7 @@ import org.apache.hadoop.mapred.Reporter;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Utils for Hadoop MapRed in testing
+ * Utils for Hadoop MapRed in testing.
  */
 public class HadoopMapRedUtils {
 

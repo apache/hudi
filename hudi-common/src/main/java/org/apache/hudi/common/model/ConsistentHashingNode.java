@@ -87,7 +87,7 @@ public class ConsistentHashingNode implements Serializable {
   }
 
   /**
-   * Node tag
+   * Node tag.
    */
   public enum NodeTag {
     /**

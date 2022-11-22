@@ -22,7 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Partition types for metadata table
+ * Partition types for metadata table.
  */
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-"),

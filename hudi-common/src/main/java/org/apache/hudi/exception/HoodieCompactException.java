@@ -19,7 +19,7 @@
 package org.apache.hudi.exception;
 
 /**
- * Exception for Hudi compaction
+ * Exception for Hudi compaction.
  */
 public class HoodieCompactException extends HoodieException {
 

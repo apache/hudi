@@ -36,7 +36,7 @@ import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests {@link HoodieMetadataPayload}
+ * Tests {@link HoodieMetadataPayload}.
  */
 public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
 

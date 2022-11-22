@@ -38,7 +38,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * {@link HoodieFileReader} implementation for parquet format
+ * {@link HoodieFileReader} implementation for parquet format.
  *
  * @param <R> Record implementation that permits field access by integer index.
  */

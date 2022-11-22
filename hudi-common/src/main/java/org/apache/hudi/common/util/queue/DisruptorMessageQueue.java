@@ -36,10 +36,10 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
- * Implementation of {@link HoodieMessageQueue} based on Disruptor Queue
+ * Implementation of {@link HoodieMessageQueue} based on Disruptor Queue.
  *
- * @param <I> Input type
- * @param <O> Transformed output type
+ * @param <I> Input type.
+ * @param <O> Transformed output type.
  */
 public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 

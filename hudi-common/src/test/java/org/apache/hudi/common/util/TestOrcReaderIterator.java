@@ -43,7 +43,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests {@link OrcReaderIterator}
+ * Tests {@link OrcReaderIterator}.
  */
 public class TestOrcReaderIterator {
   private final Path filePath = new Path(System.getProperty("java.io.tmpdir") + "/f1_1-0-1_000.orc");

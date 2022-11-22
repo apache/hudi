@@ -24,7 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Implementation of {@link FSDataInputStream} with bound check based on file size
+ * Implementation of {@link FSDataInputStream} with bound check based on file size.
  */
 public class BoundedFsDataInputStream extends FSDataInputStream {
   private FileSystem fs;

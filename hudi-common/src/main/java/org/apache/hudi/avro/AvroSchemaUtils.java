@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
- * Utils for Avro Schema
+ * Utils for Avro Schema.
  */
 public class AvroSchemaUtils {
 

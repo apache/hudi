@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Migration handler for clean plan in version 2
+ * Migration handler for clean plan in version 2.
  */
 public class CleanPlanV2MigrationHandler extends AbstractMigratorBase<HoodieCleanerPlan> {
 

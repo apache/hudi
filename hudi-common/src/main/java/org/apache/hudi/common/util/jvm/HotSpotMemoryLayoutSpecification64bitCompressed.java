@@ -20,7 +20,7 @@ package org.apache.hudi.common.util.jvm;
 
 /**
  * Implementation of {@link MemoryLayoutSpecification} based on
- * Hot Spot Memory Layout Specification on 64-bit compressed
+ * Hot Spot Memory Layout Specification on 64-bit compressed.
  */
 public class HotSpotMemoryLayoutSpecification64bitCompressed implements MemoryLayoutSpecification {
   @Override

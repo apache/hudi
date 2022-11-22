@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * Tests {@link FileSystemBackedTableMetadata}
+ * Tests {@link FileSystemBackedTableMetadata}.
  */
 public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
 

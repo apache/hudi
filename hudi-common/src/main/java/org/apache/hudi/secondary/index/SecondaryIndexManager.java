@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.secondary.index.SecondaryIndexUtils.getSecondaryIndexes;
 
 /**
- * Manages secondary index
+ * Manages secondary index.
  */
 public class SecondaryIndexManager {
   private static final Logger LOG = LoggerFactory.getLogger(SecondaryIndexManager.class);

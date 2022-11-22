@@ -20,7 +20,7 @@ package org.apache.hudi.common.util.jvm;
 
 /**
  * Implementation of {@link MemoryLayoutSpecification} based on
- * OpenJ9 Memory Layout Specification on 64-bit compressed
+ * OpenJ9 Memory Layout Specification on 64-bit compressed.
  */
 public class OpenJ9MemoryLayoutSpecification64bitCompressed implements MemoryLayoutSpecification {
   @Override

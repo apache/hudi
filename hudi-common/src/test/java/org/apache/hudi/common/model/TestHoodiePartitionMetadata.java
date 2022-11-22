@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link HoodiePartitionMetadata}
+ * Tests {@link HoodiePartitionMetadata}.
  */
 public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
 

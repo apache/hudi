@@ -33,9 +33,9 @@ import org.apache.parquet.io.OutputFile;
 import java.io.IOException;
 
 /**
- * Hudi log block writer for parquet format
+ * Hudi log block writer for parquet format.
  * <p>
- * TODO(HUDI-3035) unify w/ HoodieParquetWriter
+ * TODO(HUDI-3035) unify w/ HoodieParquetWriter.
  *
  * @param <R> Record implementation that permits field access by integer index.
  */

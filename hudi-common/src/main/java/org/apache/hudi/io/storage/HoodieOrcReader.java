@@ -40,7 +40,7 @@ import java.io.IOException;
 import java.util.Set;
 
 /**
- * {@link HoodieFileReader} implementation for ORC format
+ * {@link HoodieFileReader} implementation for ORC format.
  *
  * @param <R> Record implementation that permits field access by integer index.
  */

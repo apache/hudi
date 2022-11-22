@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link ConfigProperty}
+ * Tests {@link ConfigProperty}.
  */
 public class TestConfigProperty extends HoodieConfig {
 

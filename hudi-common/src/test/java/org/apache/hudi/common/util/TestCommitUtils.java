@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link CommitUtils}
+ * Tests {@link CommitUtils}.
  */
 public class TestCommitUtils {
 

@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 
 /**
- * Utils for clean action
+ * Utils for clean action.
  */
 public class CleanerUtils {
 

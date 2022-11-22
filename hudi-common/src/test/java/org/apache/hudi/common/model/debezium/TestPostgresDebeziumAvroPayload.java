@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Tests {@link PostgresDebeziumAvroPayload}
+ * Tests {@link PostgresDebeziumAvroPayload}.
  */
 public class TestPostgresDebeziumAvroPayload {
 

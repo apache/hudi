@@ -32,7 +32,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 
 /**
- * Record iterator for Hudi logs in CDC format
+ * Record iterator for Hudi logs in CDC format.
  */
 public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecord> {
 

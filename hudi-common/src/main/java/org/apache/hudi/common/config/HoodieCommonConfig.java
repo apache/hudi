@@ -27,7 +27,7 @@ import java.util.Locale;
 import java.util.Properties;
 
 /**
- * Hudi configs used across engines
+ * Hudi configs used across engines.
  */
 @ConfigClassProperty(name = "Common Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
@@ -80,7 +80,7 @@ public class HoodieCommonConfig extends HoodieConfig {
   }
 
   /**
-   * Builder for {@link HoodieCommonConfig}
+   * Builder for {@link HoodieCommonConfig}.
    */
   public static class Builder {
 

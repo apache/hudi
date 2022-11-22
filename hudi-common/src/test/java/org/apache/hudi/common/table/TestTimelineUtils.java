@@ -57,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link TimelineUtils}
+ * Tests {@link TimelineUtils}.
  */
 public class TestTimelineUtils extends HoodieCommonTestHarness {
 

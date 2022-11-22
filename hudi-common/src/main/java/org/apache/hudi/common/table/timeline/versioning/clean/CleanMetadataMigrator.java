@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.timeline.versioning.MetadataMigrator;
 import java.util.Arrays;
 
 /**
- * Migrator for clean metadata
+ * Migrator for clean metadata.
  */
 public class CleanMetadataMigrator extends MetadataMigrator<HoodieCleanMetadata> {
 

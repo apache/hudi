@@ -48,7 +48,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 /**
- * Implementation of {@link HoodieTableMetadata} based file-system-backed table metadata
+ * Implementation of {@link HoodieTableMetadata} based file-system-backed table metadata.
  */
 public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 

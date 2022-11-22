@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
 /**
- * Key generator configs
+ * Key generator configs.
  */
 @ConfigClassProperty(name = "Key Generator Options",
     groupName = ConfigGroups.Names.WRITE_CLIENT,

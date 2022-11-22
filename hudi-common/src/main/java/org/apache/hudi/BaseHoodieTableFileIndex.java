@@ -456,7 +456,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   /**
    * Partition path information containing the relative partition path
-   * and values of partition columns
+   * and values of partition columns.
    */
   public static final class PartitionPath {
 
@@ -486,7 +486,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   /**
-   * APIs for caching {@link FileStatus}
+   * APIs for caching {@link FileStatus}.
    */
   protected interface FileStatusCache {
     Option<FileStatus[]> get(Path path);

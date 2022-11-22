@@ -28,7 +28,7 @@ import java.util.stream.Stream;
 /**
  * Data representation of either a stream or a list of objects with Type T.
  *
- * @param <T> Object value type
+ * @param <T> Object value type.
  */
 public abstract class HoodieBaseListData<T> {
 

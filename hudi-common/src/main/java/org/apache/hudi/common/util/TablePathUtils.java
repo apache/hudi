@@ -30,7 +30,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 
 /**
- * Utils for table path
+ * Utils for table path.
  */
 public class TablePathUtils {
 

@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests metrics {@link Registry}
+ * Tests metrics {@link Registry}.
  */
 public class TestRegistry {
 

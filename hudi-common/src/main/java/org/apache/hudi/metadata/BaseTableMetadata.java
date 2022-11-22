@@ -67,7 +67,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Abstract class for implementing common table metadata operations
+ * Abstract class for implementing common table metadata operations.
  */
 public abstract class BaseTableMetadata implements HoodieTableMetadata {
 

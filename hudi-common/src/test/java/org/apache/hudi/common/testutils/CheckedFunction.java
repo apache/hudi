@@ -20,10 +20,10 @@
 package org.apache.hudi.common.testutils;
 
 /**
- * Checked function for testing
+ * Checked function for testing.
  *
- * @param <T> Passed-in value type
- * @param <R> Return value type
+ * @param <T> Passed-in value type.
+ * @param <R> Return value type.
  */
 @FunctionalInterface
 public interface CheckedFunction<T, R> {

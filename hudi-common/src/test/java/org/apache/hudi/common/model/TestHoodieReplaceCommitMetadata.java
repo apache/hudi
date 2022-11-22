@@ -30,7 +30,7 @@ import java.util.List;
 import static org.apache.hudi.common.model.TestHoodieCommitMetadata.verifyMetadataFieldNames;
 
 /**
- * Tests {@link HoodieReplaceCommitMetadata}
+ * Tests {@link HoodieReplaceCommitMetadata}.
  */
 public class TestHoodieReplaceCommitMetadata {
 

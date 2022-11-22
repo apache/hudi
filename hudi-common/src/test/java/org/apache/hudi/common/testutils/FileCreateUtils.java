@@ -69,7 +69,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackPlan;
 
 /**
- * Utils for creating dummy Hudi files in testing
+ * Utils for creating dummy Hudi files in testing.
  */
 public class FileCreateUtils {
 

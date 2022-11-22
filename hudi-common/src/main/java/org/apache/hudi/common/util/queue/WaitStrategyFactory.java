@@ -30,7 +30,7 @@ import com.lmax.disruptor.YieldingWaitStrategy;
 import static org.apache.hudi.common.util.queue.DisruptorWaitStrategyType.BLOCKING_WAIT;
 
 /**
- * Factory for creating wait strategy for a queue
+ * Factory for creating wait strategy for a queue.
  */
 public class WaitStrategyFactory {
 

@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.TreeMap;
 
 /**
- * Tests {@link SerDeHelper}
+ * Tests {@link SerDeHelper}.
  */
 public class TestSerDeHelper {
 

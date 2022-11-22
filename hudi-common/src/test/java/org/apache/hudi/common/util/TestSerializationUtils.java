@@ -94,7 +94,7 @@ public class TestSerializationUtils {
   }
 
   /**
-   * A class for non-serializable
+   * A class for non-serializable.
    */
   private static class NonSerializableClass {
     private String id;

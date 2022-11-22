@@ -330,7 +330,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   /**
-   * Builder for {@link HoodieMetadataConfig}
+   * Builder for {@link HoodieMetadataConfig}.
    */
   public static class Builder {
 

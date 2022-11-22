@@ -30,7 +30,7 @@ import java.util.Objects;
  */
 public interface Type extends Serializable {
   /**
-   * Enums for type names
+   * Enums for type names.
    */
   enum TypeID {
     RECORD, ARRAY, MAP, FIXED, STRING, BINARY,
@@ -61,7 +61,7 @@ public interface Type extends Serializable {
   }
 
   /**
-   * The type of a schema for primitive fields
+   * The type of a schema for primitive fields.
    */
   abstract class PrimitiveType implements Type {
     @Override
@@ -92,7 +92,7 @@ public interface Type extends Serializable {
   }
 
   /**
-   * The type of a schema for nested fields
+   * The type of a schema for nested fields.
    */
   abstract class NestedType implements Type {
 

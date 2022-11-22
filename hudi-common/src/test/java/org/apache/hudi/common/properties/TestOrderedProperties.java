@@ -28,7 +28,7 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests {@link OrderedProperties}
+ * Tests {@link OrderedProperties}.
  */
 public class TestOrderedProperties {
 

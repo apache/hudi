@@ -74,7 +74,7 @@ public class HoodieMetastoreConfig extends HoodieConfig {
   }
 
   /**
-   * Builder for {@link HoodieMetastoreConfig}
+   * Builder for {@link HoodieMetastoreConfig}.
    */
   public static class Builder {
     private final HoodieMetastoreConfig config = new HoodieMetastoreConfig();

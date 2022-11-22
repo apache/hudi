@@ -31,14 +31,14 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Types supported in schema evolution
+ * Types supported in schema evolution.
  */
 public class Types {
   private Types() {
   }
 
   /**
-   * Boolean primitive type
+   * Boolean primitive type.
    */
   public static class BooleanType extends PrimitiveType {
     private static final BooleanType INSTANCE = new BooleanType();
@@ -59,7 +59,7 @@ public class Types {
   }
 
   /**
-   * Integer primitive type
+   * Integer primitive type.
    */
   public static class IntType extends PrimitiveType {
     private static final IntType INSTANCE = new IntType();
@@ -80,7 +80,7 @@ public class Types {
   }
 
   /**
-   * Long primitive type
+   * Long primitive type.
    */
   public static class LongType extends PrimitiveType {
     private static final LongType INSTANCE = new LongType();
@@ -101,7 +101,7 @@ public class Types {
   }
 
   /**
-   * Float primitive type
+   * Float primitive type.
    */
   public static class FloatType extends PrimitiveType {
     private static final FloatType INSTANCE = new FloatType();
@@ -122,7 +122,7 @@ public class Types {
   }
 
   /**
-   * Double primitive type
+   * Double primitive type.
    */
   public static class DoubleType extends PrimitiveType {
     private static final DoubleType INSTANCE = new DoubleType();
@@ -143,7 +143,7 @@ public class Types {
   }
 
   /**
-   * Date primitive type
+   * Date primitive type.
    */
   public static class DateType extends PrimitiveType {
     private static final DateType INSTANCE = new DateType();
@@ -164,7 +164,7 @@ public class Types {
   }
 
   /**
-   * Time primitive type
+   * Time primitive type.
    */
   public static class TimeType extends PrimitiveType {
     private static final TimeType INSTANCE = new TimeType();
@@ -188,7 +188,7 @@ public class Types {
   }
 
   /**
-   * Time primitive type
+   * Time primitive type.
    */
   public static class TimestampType extends PrimitiveType {
     private static final TimestampType INSTANCE = new TimestampType();
@@ -212,7 +212,7 @@ public class Types {
   }
 
   /**
-   * String primitive type
+   * String primitive type.
    */
   public static class StringType extends PrimitiveType {
     private static final StringType INSTANCE = new StringType();
@@ -233,7 +233,7 @@ public class Types {
   }
 
   /**
-   * Binary primitive type
+   * Binary primitive type.
    */
   public static class BinaryType extends PrimitiveType {
     private static final BinaryType INSTANCE = new BinaryType();
@@ -254,7 +254,7 @@ public class Types {
   }
 
   /**
-   * Fixed primitive type
+   * Fixed primitive type.
    */
   public static class FixedType extends PrimitiveType {
     public static FixedType getFixed(int size) {
@@ -300,7 +300,7 @@ public class Types {
   }
 
   /**
-   * Decimal primitive type
+   * Decimal primitive type.
    */
   public static class DecimalType extends PrimitiveType {
     public static DecimalType get(int precision, int scale) {
@@ -385,7 +385,7 @@ public class Types {
   }
 
   /**
-   * UUID primitive type
+   * UUID primitive type.
    */
   public static class UUIDType extends PrimitiveType {
     private static final UUIDType INSTANCE = new UUIDType();
@@ -499,7 +499,7 @@ public class Types {
   }
 
   /**
-   * Record nested type
+   * Record nested type.
    */
   public static class RecordType extends NestedType {
 
@@ -587,7 +587,7 @@ public class Types {
   }
 
   /**
-   * Array nested type
+   * Array nested type.
    */
   public static class ArrayType extends NestedType {
     public static ArrayType get(int elementId, boolean isOptional, Type elementType) {
@@ -661,7 +661,7 @@ public class Types {
   }
 
   /**
-   * Map nested type
+   * Map nested type.
    */
   public static class MapType extends NestedType {
 

@@ -28,7 +28,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests {@link BinaryUtil}
+ * Tests {@link BinaryUtil}.
  */
 public class TestBinaryUtil {
 

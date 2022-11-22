@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests {@link HoodieConsistentHashingMetadata}
+ * Tests {@link HoodieConsistentHashingMetadata}.
  */
 public class TestHoodieConsistentHashingMetadata {
 

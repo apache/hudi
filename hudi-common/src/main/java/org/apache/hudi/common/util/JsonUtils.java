@@ -28,7 +28,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Utils for JSON serialization and deserialization
+ * Utils for JSON serialization and deserialization.
  */
 public class JsonUtils {
 

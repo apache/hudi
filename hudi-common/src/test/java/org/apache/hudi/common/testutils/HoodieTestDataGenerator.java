@@ -883,7 +883,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
-   * Object containing the key and partition path for testing
+   * Object containing the key and partition path for testing.
    */
   public static class KeyPartition implements Serializable {
 

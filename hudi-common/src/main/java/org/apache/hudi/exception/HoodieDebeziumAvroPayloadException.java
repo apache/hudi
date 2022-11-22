@@ -22,7 +22,7 @@ package org.apache.hudi.exception;
 import java.io.IOException;
 
 /**
- * Exception for HoodieDebeziumAvroPayload
+ * Exception for HoodieDebeziumAvroPayload.
  */
 public class HoodieDebeziumAvroPayloadException extends IOException {
 

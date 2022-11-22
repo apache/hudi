@@ -28,7 +28,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * Tests {@link CustomizedThreadFactory}
+ * Tests {@link CustomizedThreadFactory}.
  */
 public class TestCustomizedThreadFactory {
 

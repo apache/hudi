@@ -120,7 +120,7 @@ import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
- * Test Hoodie Table for testing only
+ * Test Hoodie Table for testing only.
  */
 public class HoodieTestTable {
 
@@ -1128,7 +1128,7 @@ public class HoodieTestTable {
   }
 
   /**
-   * Exception for {@link HoodieTestTable}
+   * Exception for {@link HoodieTestTable}.
    */
   public static class HoodieTestTableException extends RuntimeException {
     public HoodieTestTableException(Throwable t) {

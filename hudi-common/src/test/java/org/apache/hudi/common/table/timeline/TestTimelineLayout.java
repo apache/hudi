@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link TimelineLayout}
+ * Tests {@link TimelineLayout}.
  */
 public class TestTimelineLayout  {
 

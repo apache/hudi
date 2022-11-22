@@ -26,7 +26,7 @@ package org.apache.hudi.common.config;
  */
 public class ConfigGroups {
   /**
-   * Config group names
+   * Config group names.
    */
   public enum Names {
     SPARK_DATASOURCE("Spark Datasource Configs"),

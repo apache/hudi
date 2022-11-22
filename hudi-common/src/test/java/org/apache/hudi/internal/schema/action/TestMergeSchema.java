@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 
 /**
- * Tests {@link InternalSchemaMerger}
+ * Tests {@link InternalSchemaMerger}.
  */
 public class TestMergeSchema {
 

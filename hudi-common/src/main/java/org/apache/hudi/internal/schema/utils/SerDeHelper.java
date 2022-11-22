@@ -42,7 +42,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Utils of serialization and deserialization
+ * Utils of serialization and deserialization.
  */
 public class SerDeHelper {
   private SerDeHelper() {

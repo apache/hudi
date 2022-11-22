@@ -36,7 +36,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Utils for Hudi instant time
+ * Utils for Hudi instant time.
  */
 public class DateTimeUtils {
   private static final Map<String, ChronoUnit> LABEL_TO_UNIT_MAP =

@@ -735,7 +735,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Builder for {@link Properties}
+   * Builder for {@link Properties}.
    */
   public static class PropertyBuilder {
 

@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 
 /**
- * Tests schema changes with {@link TableChanges}
+ * Tests schema changes with {@link TableChanges}.
  */
 public class TestTableChanges {
 

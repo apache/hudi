@@ -24,7 +24,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 
 /**
- * Utils for networking setup in testing
+ * Utils for networking setup in testing.
  */
 public class NetworkTestUtils {
 

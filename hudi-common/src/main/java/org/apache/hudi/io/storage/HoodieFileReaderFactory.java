@@ -32,7 +32,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 /**
- * Factory methods to create Hudi file reader
+ * Factory methods to create Hudi file reader.
  */
 public class HoodieFileReaderFactory {
 

@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Tests {@link DateTimeUtils}
+ * Tests {@link DateTimeUtils}.
  */
 public class TestDateTimeUtils {
 

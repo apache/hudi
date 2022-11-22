@@ -26,7 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Represents a single secondary index
+ * Represents a single secondary index.
  */
 public class HoodieSecondaryIndex {
   private String indexName;
@@ -95,7 +95,7 @@ public class HoodieSecondaryIndex {
   }
 
   /**
-   * Builder for {@link HoodieSecondaryIndex}
+   * Builder for {@link HoodieSecondaryIndex}.
    */
   public static class Builder {
     private String indexName;
@@ -129,7 +129,7 @@ public class HoodieSecondaryIndex {
   }
 
   /**
-   * Comparator for {@link HoodieSecondaryIndex}
+   * Comparator for {@link HoodieSecondaryIndex}.
    */
   public static class HoodieIndexCompactor implements Comparator<HoodieSecondaryIndex> {
     @Override

@@ -40,7 +40,7 @@ import java.net.URI;
 import java.util.EnumSet;
 
 /**
- * Extending {@link FileSystem} implementation of I/O operations with retries
+ * Extending {@link FileSystem} implementation of I/O operations with retries.
  */
 public class HoodieRetryWrapperFileSystem extends FileSystem {
 

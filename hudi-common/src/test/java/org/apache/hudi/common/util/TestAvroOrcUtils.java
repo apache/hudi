@@ -33,7 +33,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHE
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests {@link AvroOrcUtils}
+ * Tests {@link AvroOrcUtils}.
  */
 public class TestAvroOrcUtils extends HoodieCommonTestHarness {
 

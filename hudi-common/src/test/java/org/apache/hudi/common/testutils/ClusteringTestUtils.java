@@ -34,7 +34,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 
 /**
- * Utils for clustering in testing
+ * Utils for clustering in testing.
  */
 public class ClusteringTestUtils {
 

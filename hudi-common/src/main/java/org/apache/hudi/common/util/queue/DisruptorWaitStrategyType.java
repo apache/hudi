@@ -25,7 +25,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Enum for the type of waiting strategy in Disruptor Queue
+ * Enum for the type of waiting strategy in Disruptor Queue.
  */
 public enum DisruptorWaitStrategyType {
 

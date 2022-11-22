@@ -35,7 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Tests {@link InternalSchemaUtils}
+ * Tests {@link InternalSchemaUtils}.
  */
 public class TestInternalSchemaUtils {
   @Test

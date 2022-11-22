@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link StringUtils}
+ * Tests {@link StringUtils}.
  */
 public class TestStringUtils {
 

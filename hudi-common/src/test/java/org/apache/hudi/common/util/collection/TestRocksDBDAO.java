@@ -239,7 +239,7 @@ public class TestRocksDBDAO {
   }
 
   /**
-   * Payload key object
+   * Payload key object.
    */
   public static class PayloadKey implements Serializable {
     private String key;

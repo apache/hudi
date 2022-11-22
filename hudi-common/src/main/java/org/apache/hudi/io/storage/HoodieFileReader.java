@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Hudi base file reader interface
+ * Hudi base file reader interface.
  *
  * @param <R> Record implementation that permits field access by integer index.
  */
