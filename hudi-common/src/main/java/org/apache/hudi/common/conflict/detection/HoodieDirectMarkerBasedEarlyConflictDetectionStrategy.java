@@ -26,6 +26,7 @@ import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
@@ -33,6 +34,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,19 +50,21 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
   protected final HoodieActiveTimeline activeTimeline;
   protected final HoodieConfig config;
   protected Set<HoodieInstant> completedCommitInstants;
-  protected final boolean checkCommitConflict;
+  protected final Boolean checkCommitConflict;
+  protected final Long maxAllowableHeartbeatIntervalInMs;
 
   public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config, Boolean checkCommitConflict) {
+                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config, Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs) {
     this.basePath = basePath;
     this.fs = fs;
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.instantTime = instantTime;
+    this.completedCommitInstants = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
     this.activeTimeline = activeTimeline;
     this.config = config;
-    this.completedCommitInstants = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
     this.checkCommitConflict = checkCommitConflict;
+    this.maxAllowableHeartbeatIntervalInMs = maxAllowableHeartbeatIntervalInMs;
   }
 
   /**
@@ -73,20 +77,18 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
    * @return true if current fileID is already existed under .temp/instant_time/partition_path/..
    * @throws IOException
    */
-  public boolean checkMarkerConflict(String basePath, String partitionPath, String fileId,
+  public boolean checkMarkerConflict(HoodieActiveTimeline activeTimeline, String basePath, String partitionPath, String fileId,
                                       FileSystem fs, String instantTime) throws IOException {
     String tempFolderPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
-    long res = Arrays.stream(fs.listStatus(new Path(tempFolderPath)))
-        .parallel()
-        .map(FileStatus::getPath)
-        .filter(markerPath -> {
-          return !markerPath.getName().equalsIgnoreCase(instantTime);
-        })
-        .flatMap(currentMarkerDirPath -> {
+
+    List<String> candidateInstants = MarkerUtils.getCandidateInstants(activeTimeline, Arrays.stream(fs.listStatus(new Path(tempFolderPath))).map(FileStatus::getPath).collect(Collectors.toList()),
+        instantTime, maxAllowableHeartbeatIntervalInMs, fs, basePath);
+
+    long res = candidateInstants.stream().flatMap(currentMarkerDirPath -> {
           try {
             Path markerPartitionPath;
             if (StringUtils.isNullOrEmpty(partitionPath)) {
-              markerPartitionPath = currentMarkerDirPath;
+              markerPartitionPath = new Path(currentMarkerDirPath);
             } else {
               markerPartitionPath = new Path(currentMarkerDirPath, partitionPath);
             }

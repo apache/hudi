@@ -26,7 +26,9 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -234,18 +236,14 @@ public class MarkerUtils {
     return Arrays.stream(fs.listStatus(tempPath)).map(FileStatus::getPath).collect(Collectors.toList());
   }
 
-  public static boolean hasCommitConflict(Set<String> currentFileIDs, String basePath, Set<HoodieInstant> completedCommitInstants) {
+  public static boolean hasCommitConflict(HoodieActiveTimeline activeTimeline, Set<String> currentFileIDs, Set<HoodieInstant> completedCommitInstants) {
 
-    HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(basePath)
-            .setLoadActiveTimelineOnLoad(true).build();
-
-    Set<HoodieInstant> currentInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
+    Set<HoodieInstant> currentInstants = activeTimeline.reload().getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
 
     currentInstants.removeAll(completedCommitInstants);
     Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {
       try {
-        return HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class)
+        return HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class)
             .getFileIdAndRelativePaths().keySet().stream();
       } catch (Exception e) {
         return Stream.empty();
@@ -253,5 +251,85 @@ public class MarkerUtils {
     }).collect(Collectors.toSet());
     currentFileIDs.retainAll(missingFileIDs);
     return !currentFileIDs.isEmpty();
+  }
+
+  /**
+   * Get Candidate Instant to do conflict checking:
+   * 1. Skip current writer related instant(currentInstantTime)
+   * 2. Skip all instants after currentInstantTime
+   * 3. Skip dead writers related instants based on heart-beat
+   * 4. Skip pending compaction instant (For now we don' do early conflict check with compact action)
+   *      Because we don't want to let pending compaction block common writer.
+   * @param instants
+   * @return
+   */
+  public static List<String> getCandidateInstants(HoodieActiveTimeline activeTimeline, List<Path> instants, String currentInstantTime,
+                                                  long maxAllowableHeartbeatIntervalInMs, FileSystem fs, String basePath) {
+
+    HoodieTimeline pendingCompactionTimeline = activeTimeline.reload().filterPendingCompactionTimeline();
+
+    return instants.stream().map(Path::toString).filter(instantPath -> {
+      String instantTime = markerDirToInstantTime(instantPath);
+      boolean isPendingCompaction = pendingCompactionTimeline.containsInstant(instantTime);
+      return instantTime.compareToIgnoreCase(currentInstantTime) < 0 && !isPendingCompaction;
+    }).filter(instantPath -> {
+      try {
+        return !isHeartbeatExpired(markerDirToInstantTime(instantPath), maxAllowableHeartbeatIntervalInMs, fs, basePath);
+      } catch (IOException e) {
+        return false;
+      }
+    }).collect(Collectors.toList());
+  }
+
+  /**
+   * Get fileID from full marker path, for example:
+   * 20210623/0/20210825/932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0_85-15-1390_20220620181735781.parquet.marker.MERGE
+   *    ==> get 20210623/0/20210825/932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0
+   * @param marker
+   * @return
+   */
+  public static String makerToPartitionAndFileID(String marker) {
+    String[] ele = marker.split("_");
+    return ele[0];
+  }
+
+  /**
+   * Get instantTime from full marker path, for example:
+   * /var/folders/t3/th1dw75d0yz2x2k2qt6ys9zh0000gp/T/junit6502909693741900820/dataset/.hoodie/.temp/003
+   *    ==> 003
+   * @param marker
+   * @return
+   */
+  public static String markerDirToInstantTime(String marker) {
+    String[] ele = marker.split("/");
+    return ele[ele.length - 1];
+  }
+
+  /**
+   * Use modification time as last heart beat time
+   * @param fs
+   * @param basePath
+   * @param instantTime
+   * @return
+   * @throws IOException
+   */
+  public static Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
+    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
+    if (fs.exists(heartbeatFilePath)) {
+      return fs.getFileStatus(heartbeatFilePath).getModificationTime();
+    } else {
+      // NOTE : This can happen when a writer is upgraded to use lazy cleaning and the last write had failed
+      return 0L;
+    }
+  }
+
+  public static boolean isHeartbeatExpired(String instantTime, long maxAllowableHeartbeatIntervalInMs, FileSystem fs, String basePath) throws IOException {
+    Long currentTime = System.currentTimeMillis();
+    Long lastHeartbeatTime = getLastHeartbeatTime(fs, basePath, instantTime);
+    if (currentTime - lastHeartbeatTime > maxAllowableHeartbeatIntervalInMs) {
+      LOG.warn("Heartbeat expired, for instant: " + instantTime);
+      return true;
+    }
+    return false;
   }
 }

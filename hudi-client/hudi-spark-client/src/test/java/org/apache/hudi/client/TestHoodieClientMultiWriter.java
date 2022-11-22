@@ -29,12 +29,14 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -151,12 +153,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
    *    3. MOR + Timeline server based marker
    *    4. COW + Timeline server based marker
    *
-   *  ---|---------|--------------------|--------------------------------------|-------------------------> time
+   *                                    |---------------------- 003 heartBeat expired -------------------|
+   *
+   *  ---|---------|--------------------|--------------------------------------|-------------------------|-------------------------> time
    * init 001
    *               002 start writing
    *                                    003 start which has conflict with 002
    *                                    and failed soon
-   *                                                                           002 commit successfully
+   *                                                                           002 commit successfully       004 write successfully
    * @param tableType
    * @param markerType
    * @throws Exception
@@ -167,6 +171,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     if (tableType.equalsIgnoreCase(HoodieTableType.MERGE_ON_READ.name())) {
       setUpMORTestTable();
     }
+
+    int heartBeatIntervalForCommit4 = 10 * 1000;
 
     HoodieWriteConfig writeConfig;
     TestingServer server = null;
@@ -192,7 +198,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Create the first commit
     final String nextCommitTime1 = "001";
-    createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", nextCommitTime1, 2000, true);
+    createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", nextCommitTime1, 200, true);
 
     final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
     final SparkRDDWriteClient client3 = getHoodieWriteClient(writeConfig);
@@ -200,13 +206,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     final String nextCommitTime2 = "002";
 
     // start to write commit 002
-    final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client2, nextCommitTime2, 1000);
+    final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client2, nextCommitTime2, 100);
 
     // start to write commit 003
     // this commit 003 will failed quickly because early conflict detection before create marker.
     final String nextCommitTime3 = "003";
     assertThrows(SparkException.class, () -> {
-      final JavaRDD<WriteStatus> writeStatusList3 = startCommitForUpdate(writeConfig, client3, nextCommitTime3, 1000);
+      final JavaRDD<WriteStatus> writeStatusList3 = startCommitForUpdate(writeConfig, client3, nextCommitTime3, 100);
       client3.commit(nextCommitTime3, writeStatusList3);
     }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
 
@@ -215,12 +221,30 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       client2.commit(nextCommitTime2, writeStatusList2);
     });
 
+    HoodieWriteConfig config4 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).withHeartbeatIntervalInMs(heartBeatIntervalForCommit4).build();
+    final SparkRDDWriteClient client4 = getHoodieWriteClient(config4);
+
+    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + nextCommitTime3);
+    fs.create(heartbeatFilePath, true);
+
+    // Wait for heart beat expired for failed commitTime3 "003"
+    // Otherwise commit4 still can see conflict between failed write 003.
+    Thread.sleep(heartBeatIntervalForCommit4 * 2);
+
+    final String nextCommitTime4 = "004";
+    assertDoesNotThrow(() -> {
+      final JavaRDD<WriteStatus> writeStatusList4 = startCommitForUpdate(writeConfig, client4, nextCommitTime4, 100);
+      client4.commit(nextCommitTime4, writeStatusList4);
+    });
+
     List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
-    assertEquals(2, completedInstant.size());
+    assertEquals(3, completedInstant.size());
     assertTrue(completedInstant.contains(nextCommitTime1));
     assertTrue(completedInstant.contains(nextCommitTime2));
+    assertTrue(completedInstant.contains(nextCommitTime4));
+
     FileIOUtils.deleteDirectory(new File(basePath));
     if (server != null) {
       server.close();
@@ -732,13 +756,22 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
   }
 
-  private void createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,
-                                       String commitTimeBetweenPrevAndNew, String newCommitTime, int numRecords)
+  private JavaRDD<WriteStatus> createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,
+                                       String commitTimeBetweenPrevAndNew, String newCommitTime, int numRecords) throws Exception {
+    return createCommitWithUpserts(cfg, client, prevCommit, commitTimeBetweenPrevAndNew, newCommitTime, numRecords, true);
+  }
+
+  private JavaRDD<WriteStatus> createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,
+                                       String commitTimeBetweenPrevAndNew, String newCommitTime, int numRecords, boolean commit)
       throws Exception {
     JavaRDD<WriteStatus> result = updateBatch(cfg, client, newCommitTime, prevCommit,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
         numRecords, 200, 2);
-    client.commit(newCommitTime, result);
+    if (commit) {
+      client.commit(newCommitTime, result);
+    }
+
+    return result;
   }
 
   /**
@@ -777,7 +810,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName()},
             {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
             {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
-            {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
             {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()}
         };
     return Stream.of(data).map(Arguments::of);
@@ -787,7 +819,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
                                                                    Class lockProvider, String earlyConflictDetectionStrategy) {
     if (markerType.equalsIgnoreCase(MarkerType.DIRECT.name())) {
       return getConfigBuilder()
-          .withHeartbeatIntervalInMs(3600 * 1000)
+          .withHeartbeatIntervalInMs(60 * 1000)
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withStorageType(FileSystemViewStorageType.MEMORY)
               .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
@@ -807,7 +839,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     } else {
       return getConfigBuilder()
           .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(20 * 1024).build())
-          .withHeartbeatIntervalInMs(3600 * 1000)
+          .withHeartbeatIntervalInMs(60 * 1000)
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withStorageType(FileSystemViewStorageType.MEMORY)
               .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())

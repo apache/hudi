@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.Path;
@@ -80,11 +81,15 @@ public abstract class WriteMarkers implements Serializable {
       HoodieTableMetaClient metaClient = handler.get().getHoodieTableMetaClient();
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
 
-      Set<HoodieInstant> completedCommitInstants = metaClient.getActiveTimeline()
-          .getCommitsTimeline()
-          .filterCompletedInstants()
-          .getInstants()
-          .collect(Collectors.toSet());
+      HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
+      HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
+      // TODO if current is compact or clustering then create marker directly without early conflict detection.
+      // Need to support early conflict detection between table service and common writers.
+      if (pendingCompactionTimeline.containsInstant(instantTime) || pendingReplaceTimeline.containsInstant(instantTime)) {
+        return create(partitionPath, dataFileName, type, checkIfExists);
+      }
+
+      Set<HoodieInstant> completedCommitInstants = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
 
       String fileId = handler.get().getFileId();
       HoodieWriteConfig config = handler.get().getConfig();

@@ -42,15 +42,15 @@ public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends Hoodi
   private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class);
 
   public SimpleDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config, Boolean checkCommitConflict) {
-    super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, checkCommitConflict);
+                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config, Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs) {
+    super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, checkCommitConflict, maxAllowableHeartbeatIntervalInMs);
   }
 
   @Override
   public boolean hasMarkerConflict() {
     try {
-      return checkMarkerConflict(basePath, partitionPath, fileId, fs, instantTime)
-          || (checkCommitConflict && MarkerUtils.hasCommitConflict(Stream.of(fileId).collect(Collectors.toSet()), basePath, completedCommitInstants));
+      return checkMarkerConflict(activeTimeline, basePath, partitionPath, fileId, fs, instantTime)
+          || (checkCommitConflict && MarkerUtils.hasCommitConflict(activeTimeline, Stream.of(fileId).collect(Collectors.toSet()), completedCommitInstants));
     } catch (IOException e) {
       LOG.warn("Exception occurs during create marker file in eager conflict detection mode.");
       throw new HoodieIOException("Exception occurs during create marker file in eager conflict detection mode.", e);

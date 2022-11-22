@@ -215,7 +215,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       paramsMap.put(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, config.getMarkerConflictCheckerBatchInterval());
       paramsMap.put(MARKER_CONFLICT_CHECKER_PERIOD, config.getMarkerConflictCheckerPeriod());
       paramsMap.put(MARKER_BASEPATH_PARAM, basePath);
-      paramsMap.put(MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL, String.valueOf(config.getHoodieClientHeartbeatIntervalInMs()));
+      paramsMap.put(MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL, String.valueOf(config.getHoodieClientHeartbeatIntervalInMs() * config.getHoodieClientHeartbeatTolerableMisses()));
       paramsMap.put(MARKER_CONFLICT_CHECKER_ENABLE, String.valueOf(config.isEarlyConflictDetectionEnable()));
       paramsMap.put(MARKER_CONFLICT_CHECKER_STRATEGY, config.getEarlyConflictDetectionStrategyClassName());
       paramsMap.put(MARKER_CONFLICT_CHECK_COMMIT_CONFLICT, String.valueOf(config.checkCommitConflictDuringEarlyConflictDetect()));
