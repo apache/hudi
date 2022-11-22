@@ -49,7 +49,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_E
 
 public class PartitionFilterGenerator {
 
-  private static final Set<String> SUPPORT_TYPES = new HashSet<String>() {{
+  private static final Set<String> SUPPORT_TYPES = new HashSet<String>() {
+    {
       add(HiveSchemaUtil.INT_TYPE_NAME);
       add(HiveSchemaUtil.BIGINT_TYPE_NAME);
       add(HiveSchemaUtil.DATE_TYPE_NAME);

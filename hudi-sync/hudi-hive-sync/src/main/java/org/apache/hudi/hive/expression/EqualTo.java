@@ -24,4 +24,3 @@ public class EqualTo extends BinaryComparator {
     super(left, Operator.EQ, right);
   }
 }
-
