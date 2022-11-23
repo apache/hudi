@@ -185,21 +185,14 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
     appendData(secondSchema, secondBatch)
     val (tableSchemaAfterSecondBatch, rowsAfterSecondBatch) = loadTable()
 
-    // NOTE: In case schema reconciliation is ENABLED, Hudi would prefer the table's schema over the new batch
-    //       schema, therefore table's schema after commit will actually stay the same, shedding (newly added) columns
-    //       from the records that are present in the batch schema, but not in the table's one.
+    // NOTE: In case schema reconciliation is ENABLED, Hudi would prefer the new batch's schema (since it's adding a
+    //       new column, compared w/ the table's one), therefore this case would be identical to reconciliation
+    //       being DISABLED
     //
     //       In case schema reconciliation is DISABLED, table will be overwritten in the batch's schema,
     //       entailing that the data in the added columns for table's existing records will be added w/ nulls,
     //       in case new column is nullable, and would fail otherwise
-    if (shouldReconcileSchema) {
-      assertEquals(firstSchema, tableSchemaAfterSecondBatch)
-
-      val ageColOrd = secondSchema.indexWhere(_.name == "age")
-      val expectedRows = firstBatch ++ dropColumn(secondBatch, ageColOrd)
-
-      assertEquals(expectedRows, rowsAfterSecondBatch)
-    } else {
+    if (true) {
       assertEquals(secondSchema, tableSchemaAfterSecondBatch)
 
       val ageColOrd = secondSchema.indexWhere(_.name == "age")
@@ -228,27 +221,23 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
     val (tableSchemaAfterThirdBatch, rowsAfterThirdBatch) = loadTable()
 
     // NOTE: In case schema reconciliation is ENABLED, Hudi would prefer the table's schema over the new batch
-    //       schema, therefore table's schema after commit will actually stay the same, adding back (dropped) columns
-    //       to the records in the batch (setting them as null).
+    //       schema (since we drop the column in the new batch), therefore table's schema after commit will actually
+    //       stay the same, adding back (dropped) columns to the records in the batch (setting them as null).
     //
     //       In case schema reconciliation is DISABLED, table will be overwritten in the batch's schema,
     //       entailing that the data in the dropped columns for table's existing records will be dropped.
     if (shouldReconcileSchema) {
-      assertEquals(firstSchema, tableSchemaAfterThirdBatch)
+      assertEquals(secondSchema, tableSchemaAfterThirdBatch)
 
-      val ageColOrd = secondSchema.indexWhere(_.name == "age")
       val lastNameColOrd = firstSchema.indexWhere(_.name == "last_name")
-
-      val expectedRows = rowsAfterSecondBatch ++ dropColumn(injectColumnAt(thirdBatch, lastNameColOrd, null), ageColOrd)
+      val expectedRows = rowsAfterSecondBatch ++ injectColumnAt(thirdBatch, lastNameColOrd, null)
 
       assertEquals(expectedRows, rowsAfterThirdBatch)
     } else {
       assertEquals(thirdSchema, tableSchemaAfterThirdBatch)
 
       val lastNameColOrd = secondSchema.indexWhere(_.name == "last_name")
-
-      val expectedRows =
-        dropColumn(rowsAfterSecondBatch, lastNameColOrd) ++ thirdBatch
+      val expectedRows = dropColumn(rowsAfterSecondBatch, lastNameColOrd) ++ thirdBatch
 
       assertEquals(expectedRows, rowsAfterThirdBatch)
     }
@@ -294,9 +283,8 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
       assertEquals(expectedRecords, rows)
     }
 
-
     //
-    // 6. Write 6th batch with another schema w/ data-type changing for a column `timestamp`;
+    // 5. Write 5th batch with another schema w/ data-type changing for a column `timestamp`;
     //      - Expected to succeed when reconciliation is off, and
     //      - Expected to fail when reconciliation is on (b/c we can't down-cast Long to Int)
     //
