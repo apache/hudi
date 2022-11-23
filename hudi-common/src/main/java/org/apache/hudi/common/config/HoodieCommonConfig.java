@@ -47,11 +47,13 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
-      .withDocumentation("This controls how incoming batch's schema will be handled relative to existing table's one."
-        + "When schema reconciliation is enabled: table's schema will be favored and will be used it as a writer-schema "
-          + "(entailing that incoming batch will be rewritten in the table's schema). When reconciliation is disabled: "
-        + "incoming batch's schema will be favored and used it as a writer-schema (entailing that newly created files will "
-          + "be written in this new schema potentially rewriting the table's schema)");
+      .withDocumentation("This config controls how writer's schema will be selected based on the incoming batch's "
+          + "schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's "
+          + "schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation "
+          + "is ENABLED, writer-schema will be picked such that table's schema (after txn) is either kept the same "
+          + "or extended, meaning that we'll always prefer the schema that either adds new columns or stays the same. "
+          + "This enables us, to always extend the table's schema during evolution and never lose the data (when, for "
+          + "ex, existing column is being dropped in a new batch)");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
