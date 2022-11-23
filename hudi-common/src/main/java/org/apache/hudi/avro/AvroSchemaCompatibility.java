@@ -76,9 +76,11 @@ public class AvroSchemaCompatibility {
    * @param writer schema to check.
    * @return a result object identifying any compatibility errors.
    */
-  public static SchemaPairCompatibility checkReaderWriterCompatibility(final Schema reader, final Schema writer) {
+  public static SchemaPairCompatibility checkReaderWriterCompatibility(final Schema reader,
+                                                                       final Schema writer,
+                                                                       boolean checkNamingOverride) {
     final SchemaCompatibilityResult compatibility =
-        new ReaderWriterCompatibilityChecker().getCompatibility(reader, writer);
+        new ReaderWriterCompatibilityChecker(checkNamingOverride).getCompatibility(reader, writer);
 
     final String message;
     switch (compatibility.getCompatibility()) {
@@ -212,6 +214,11 @@ public class AvroSchemaCompatibility {
   private static final class ReaderWriterCompatibilityChecker {
     private final AvroDefaultValueAccessor defaultValueAccessor = new AvroDefaultValueAccessor();
     private final Map<ReaderWriter, SchemaCompatibilityResult> mMemoizeMap = new HashMap<>();
+    private final boolean checkNaming;
+
+    public ReaderWriterCompatibilityChecker(boolean checkNaming) {
+      this.checkNaming = checkNaming;
+    }
 
 
     /**
@@ -489,7 +496,7 @@ public class AvroSchemaCompatibility {
       //          - This is a top-level schema (ie enclosing one)
       //          - This is a schema enclosed w/in a union (since in that case schemas could be
       //          reverse-looked up by their fully-qualified names)
-      boolean shouldCheckNames = locations.size() == 1 || locations.peekLast().type == Type.UNION;
+      boolean shouldCheckNames = checkNaming && (locations.size() == 1 || locations.peekLast().type == Type.UNION);
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
       if (shouldCheckNames && !Objects.equals(reader.getFullName(), writer.getFullName())) {
         String message = String.format("expected: %s", writer.getFullName());

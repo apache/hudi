@@ -36,18 +36,26 @@ public class AvroSchemaUtils {
   private AvroSchemaUtils() {}
 
   /**
+   * See {@link #isSchemaCompatible(Schema, Schema, boolean)} doc for more details
+   */
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema) {
+    return isSchemaCompatible(prevSchema, newSchema, true);
+  }
+
+  /**
    * Establishes whether {@code prevSchema} is compatible w/ {@code newSchema}, as
    * defined by Avro's {@link AvroSchemaCompatibility}
    *
    * @param prevSchema previous instance of the schema
    * @param newSchema new instance of the schema
+   * @param checkNaming controls whether schemas fully-qualified names should be checked
    */
-  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema) {
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean checkNaming) {
     // NOTE: We're establishing compatibility of the {@code prevSchema} and {@code newSchema}
     //       as following: {@code newSchema} is considered compatible to {@code prevSchema},
     //       iff data written using {@code prevSchema} could be read by {@code newSchema}
     AvroSchemaCompatibility.SchemaPairCompatibility result =
-        AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema);
+        AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema, checkNaming);
     return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
   }
 
@@ -64,9 +72,23 @@ public class AvroSchemaUtils {
     return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
-  // TODO java-doc
+  /**
+   * Validate whether the {@code targetSchema} is a "compatible" projection of {@code sourceSchema}.
+   *
+   * Only difference of this method from {@link #isStrictProjectionOf(Schema, Schema)} is
+   * the fact that it allows some legitimate type promotions (like {@code int -> long},
+   * {@code decimal(3, 2) -> decimal(5, 2)}, etc) that allows projection to have a "wider"
+   * atomic type (whereas strict projection requires atomic type to be identical)
+   */
   public static boolean isCompatibleProjectionOf(Schema sourceSchema, Schema targetSchema) {
-    return isProjectionOfInternal(sourceSchema, targetSchema, AvroSchemaUtils::isSchemaCompatible);
+    return isProjectionOfInternal(sourceSchema, targetSchema,
+        AvroSchemaUtils::isAtomicSchemasCompatible);
+  }
+
+  private static boolean isAtomicSchemasCompatible(Schema oneAtomicType, Schema anotherAtomicType) {
+    // NOTE: Checking for compatibility of atomic types, we should ignore their
+    //       corresponding fully-qualified names (as irrelevant)
+    return isSchemaCompatible(oneAtomicType, anotherAtomicType, false);
   }
 
   /**
