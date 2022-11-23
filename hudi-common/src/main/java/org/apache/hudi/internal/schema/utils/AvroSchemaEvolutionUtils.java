@@ -18,11 +18,12 @@
 
 package org.apache.hudi.internal.schema.utils;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+
+import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.List;

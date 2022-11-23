@@ -18,17 +18,23 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Hudi base file reader interface.
+ *
+ * @param <R> Record implementation that permits field access by integer index.
+ */
 public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable {
 
   String[] readMinMaxRecordKeys();

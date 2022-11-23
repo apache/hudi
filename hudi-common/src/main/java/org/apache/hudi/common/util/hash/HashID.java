@@ -19,11 +19,12 @@
 
 package org.apache.hudi.common.util.hash;
 
+import org.apache.hudi.exception.HoodieIOException;
+
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHash64;
 import net.jpountz.xxhash.XXHashFactory;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;

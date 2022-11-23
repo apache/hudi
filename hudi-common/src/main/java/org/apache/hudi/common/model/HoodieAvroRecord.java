@@ -19,6 +19,11 @@
 
 package org.apache.hudi.common.model;
 
+/**
+ * Implementation of {@link HoodieRecord} using Avro payload.
+ *
+ * @param <T> payload implementation.
+ */
 public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
   public HoodieAvroRecord(HoodieKey key, T data) {
     super(key, data);

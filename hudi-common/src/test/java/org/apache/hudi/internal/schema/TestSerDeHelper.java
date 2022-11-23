@@ -20,14 +20,18 @@ package org.apache.hudi.internal.schema;
 
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.junit.jupiter.api.Test;
+
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
 
+/**
+ * Tests {@link SerDeHelper}.
+ */
 public class TestSerDeHelper {
 
   @Test

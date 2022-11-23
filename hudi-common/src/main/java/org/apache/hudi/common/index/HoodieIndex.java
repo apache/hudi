@@ -23,6 +23,9 @@ import java.util.Arrays;
 import java.util.Map;
 
 public class HoodieIndex {
+  /**
+   * Represents a single secondary index.
+   */
   private String indexName;
   private String[] colNames;
   private HoodieIndexType indexType;
@@ -33,11 +36,11 @@ public class HoodieIndex {
   }
 
   public HoodieIndex(
-      String indexName,
-      String[] colNames,
-      HoodieIndexType indexType,
-      Map<String, Map<String, String>> colOptions,
-      Map<String, String> options) {
+          String indexName,
+          String[] colNames,
+          HoodieIndexType indexType,
+          Map<String, Map<String, String>> colOptions,
+          Map<String, String> options) {
     this.indexName = indexName;
     this.colNames = colNames;
     this.indexType = indexType;
@@ -72,14 +75,17 @@ public class HoodieIndex {
   @Override
   public String toString() {
     return "HoodieIndex{"
-        + "indexName='" + indexName + '\''
-        + ", colNames='" + Arrays.toString(colNames) + '\''
-        + ", indexType=" + indexType
-        + ", colOptions=" + colOptions
-        + ", options=" + options
-        + '}';
+            + "indexName='" + indexName + '\''
+            + ", colNames='" + Arrays.toString(colNames) + '\''
+            + ", indexType=" + indexType
+            + ", colOptions=" + colOptions
+            + ", options=" + options
+            + '}';
   }
 
+  /**
+   * Builder.
+   */
   public static class Builder {
     private String indexName;
     private String[] colNames;

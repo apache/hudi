@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,6 +56,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link TimelineUtils}.
+ */
 public class TestTimelineUtils extends HoodieCommonTestHarness {
 
   @BeforeEach
@@ -80,7 +84,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.createNewInstant(instant1);
     // create replace metadata only with replaced file Ids (no new files created)
     activeTimeline.saveAsComplete(instant1,
-        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2, 
+        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
             newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();
 
@@ -222,7 +226,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // verify modified partitions included cleaned data
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());
-    
+
     // verify adding clustering commit doesn't change behavior of getExtraMetadataFromLatest
     String ts2 = "2";
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts2);
@@ -233,7 +237,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         Option.of(getReplaceCommitMetadata(basePath, ts2, "p2", 0,
             "p2", 3, extraMetadata, WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();
-    
+
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
     verifyExtraMetadataLatestValue(extraMetadataKey, newValueForMetadata, true);
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());
@@ -246,10 +250,10 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertTrue(extraMetadataEntries.get("2").isPresent());
     assertEquals(newValueForMetadata, extraMetadataEntries.get("2").get());
   }
-  
+
   private void verifyExtraMetadataLatestValue(String extraMetadataKey, String expected, boolean includeClustering) {
     final Option<String> extraLatestValue;
-    if (includeClustering) {       
+    if (includeClustering) {
       extraLatestValue = TimelineUtils.getExtraMetadataFromLatestIncludeClustering(metaClient, extraMetadataKey);
     } else {
       extraLatestValue = TimelineUtils.getExtraMetadataFromLatest(metaClient, extraMetadataKey);

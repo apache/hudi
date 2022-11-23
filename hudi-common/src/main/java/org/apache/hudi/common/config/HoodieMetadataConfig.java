@@ -318,6 +318,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(IGNORE_SPURIOUS_DELETES);
   }
 
+  /**
+   * Builder for {@link HoodieMetadataConfig}.
+   */
   public static class Builder {
 
     private EngineType engineType = EngineType.SPARK;

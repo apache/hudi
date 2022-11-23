@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.util.RetryHelper;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -31,13 +33,15 @@ import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Progressable;
-import org.apache.hudi.common.util.RetryHelper;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.util.EnumSet;
 
+/**
+ * Extending {@link FileSystem} implementation of I/O operations with retries.
+ */
 public class HoodieRetryWrapperFileSystem extends FileSystem {
 
   private FileSystem fileSystem;
@@ -139,7 +143,7 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
                                    short replication, long blockSize, Progressable progress, Options.ChecksumOpt checksumOpt) throws IOException {
     return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
         .tryWith(() -> fileSystem.create(f, permission, flags, bufferSize, replication,
-                blockSize, progress, checksumOpt)).start();
+            blockSize, progress, checksumOpt)).start();
   }
 
   @Override

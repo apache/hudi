@@ -42,6 +42,9 @@ import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
+/**
+ * Utils for Java Collection.
+ */
 public class CollectionUtils {
 
   private static final Properties EMPTY_PROPERTIES = new Properties();

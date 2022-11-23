@@ -18,9 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -33,6 +30,8 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -47,6 +46,11 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+/**
+ * An internal cache implementation for managing different version of schemas.
+ * This is a Global cache; all threads in one container/executor share the same cache.
+ * A map of (tablePath, HistorySchemas) is maintained.
+ */
 public class InternalSchemaCache {
   private static final Logger LOG = LogManager.getLogger(InternalSchemaCache.class);
   // Use segment lock to reduce competition.

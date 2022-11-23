@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -30,6 +31,11 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
+/**
+ * Retry Helper implementation.
+ *
+ * @param <T> Type of return value for checked function.
+ */
 public class RetryHelper<T> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(RetryHelper.class);
   private transient CheckedFunction<T> func;
@@ -48,9 +54,9 @@ public class RetryHelper<T> implements Serializable {
     } else {
       try {
         this.retryExceptionsClasses = Arrays.stream(retryExceptions.split(","))
-                .map(exception -> (Exception) ReflectionUtils.loadClass(exception, ""))
-                .map(Exception::getClass)
-                .collect(Collectors.toList());
+            .map(exception -> (Exception) ReflectionUtils.loadClass(exception, ""))
+            .map(Exception::getClass)
+            .collect(Collectors.toList());
       } catch (HoodieException e) {
         LOG.error("Exception while loading retry exceptions classes '" + retryExceptions + "'.", e);
         this.retryExceptionsClasses = new ArrayList<>();
@@ -136,6 +142,11 @@ public class RetryHelper<T> implements Serializable {
     return (long) Math.pow(2, retryCount) * initialIntervalTime + random.nextInt(100);
   }
 
+  /**
+   * Checked function interface.
+   *
+   * @param <T> Type of return value.
+   */
   @FunctionalInterface
   public interface CheckedFunction<T> extends Serializable {
     T get() throws IOException;

@@ -24,9 +24,13 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * Utils for JSON serialization and deserialization.
+ */
 public class JsonUtils {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
+
   static {
     MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     // We need to exclude custom getters, setters and creators which can use member fields

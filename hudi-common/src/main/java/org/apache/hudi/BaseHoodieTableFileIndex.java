@@ -370,6 +370,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath.toString());
   }
 
+  /**
+   * Partition path information containing the relative partition path
+   * and values of partition columns.
+   */
   public static final class PartitionPath {
 
     final String path;
@@ -407,6 +411,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
+  /**
+   * APIs for caching {@link FileStatus}.
+   */
   protected interface FileStatusCache {
     Option<FileStatus[]> get(Path path);
 
