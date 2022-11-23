@@ -25,7 +25,8 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAv
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaCompatible}
+import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, HoodieMetadataConfig, TypedProperties}
@@ -34,6 +35,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{CommitUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME, KEYGEN_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
@@ -424,20 +426,16 @@ object HoodieSparkSqlWriter {
               AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
 
             case None =>
-              // In case schema reconciliation is enabled and source and latest table schemas
-              // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]]), then we
-              // will rebase incoming batch onto the table's latest schema (ie, reconcile them)
-              //
-              // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
-              //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
-              //       and [[latestTableSchema]] is treated as a writer's schema)
-              //
+              // In case schema reconciliation is enabled we will employ (legacy) reconciliation
+              // strategy to produce target writer's schema (see definition below)
+              val (reconciledSchema, isCompatible) = reconcileSchemasLegacy(latestTableSchema, canonicalizedSourceSchema)
+
               // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
               //       w/ the table's one and allow schemas to diverge. This is required in cases where
               //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
               //       only incoming dataset's projection has to match the table's schema, and not the whole one
-              if (!shouldValidateSchemasCompatibility || TableSchemaResolver.isSchemaCompatible(canonicalizedSourceSchema, latestTableSchema)) {
-                latestTableSchema
+              if (!shouldValidateSchemasCompatibility || isCompatible) {
+                reconciledSchema
               } else {
                 log.error(
                   s"""Failed to reconcile incoming batch schema with the table's one.
@@ -457,7 +455,7 @@ object HoodieSparkSqlWriter {
           //       w/ the table's one and allow schemas to diverge. This is required in cases where
           //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
           //       only incoming dataset's projection has to match the table's schema, and not the whole one
-          if (!shouldValidateSchemasCompatibility || TableSchemaResolver.isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema)) {
+          if (!shouldValidateSchemasCompatibility || AvroSchemaUtils.isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema)) {
             canonicalizedSourceSchema
           } else {
             log.error(
@@ -521,13 +519,33 @@ object HoodieSparkSqlWriter {
       HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> schemaEvolutionEnable)
   }
 
+  private def reconcileSchemasLegacy(tableSchema: Schema, newSchema: Schema): (Schema, Boolean) = {
+    // Legacy reconciliation implements following semantic
+    //    - In case new-schema is a "compatible" projection of the existing table's one (projection allowing
+    //      permitted type promotions), table's schema would be picked as (reconciled) writer's schema;
+    //    - Otherwise, we'd fall back to picking new (batch's) schema as a writer's schema;
+    //
+    // Philosophically, such semantic aims at always choosing a "wider" schema, ie the one containing
+    // the other one (schema A contains schema B, if schema B is a projection of A). This enables us,
+    // to always "extend" the schema during schema evolution and hence never lose the data (when, for ex
+    // existing column is being dropped in a new batch)
+    if (isCompatibleProjectionOf(tableSchema, newSchema)) {
+      // Picking table schema as a writer schema we need to validate that we'd be able to
+      // rewrite incoming batch's data (written in new schema) into it
+      (tableSchema, isSchemaCompatible(newSchema, tableSchema))
+    } else {
+      // Picking new schema as a writer schema we need to validate that we'd be able to
+      // rewrite table's data into it
+      (newSchema, isSchemaCompatible(tableSchema, newSchema))
+    }
+  }
+
   /**
     * get latest internalSchema from table
     *
     * @param fs           instance of FileSystem.
     * @param basePath     base path.
     * @param sparkContext instance of spark context.
-    * @param schema       incoming record's schema.
     * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
     */
   def getLatestTableInternalSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext): Option[InternalSchema] = {

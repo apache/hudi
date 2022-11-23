@@ -64,6 +64,11 @@ public class AvroSchemaUtils {
     return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
+  // TODO java-doc
+  public static boolean isCompatibleProjectionOf(Schema sourceSchema, Schema targetSchema) {
+    return isProjectionOfInternal(sourceSchema, targetSchema, AvroSchemaUtils::isSchemaCompatible);
+  }
+
   /**
    * Validate whether the {@code targetSchema} is a strict projection of {@code sourceSchema}.
    *
