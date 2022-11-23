@@ -64,7 +64,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -175,7 +174,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         LOG.info("No Instants to archive");
       }
 
-      if (shouldMergeSmallArchiveFies()) {
+      if (shouldMergeSmallArchiveFiles()) {
         mergeArchiveFilesIfNecessary(context);
       }
       return success;
@@ -187,7 +186,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
-  public boolean shouldMergeSmallArchiveFies() {
+  public boolean shouldMergeSmallArchiveFiles() {
     return config.getArchiveMergeEnable() && !StorageSchemes.isAppendSupported(metaClient.getFs().getScheme());
   }
 
@@ -227,7 +226,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       // after merge, delete the small archive files.
       deleteFilesParallelize(metaClient, candidateFiles, context, true);
       LOG.info("Success to delete replaced small archive files.");
-      // finally, delete archiveMergePlan which means merging small archive files operation is succeed.
+      // finally, delete archiveMergePlan which means merging small archive files operation is successful.
       metaClient.getFs().delete(planPath, false);
       LOG.info("Success to merge small archive files.");
     }
@@ -266,7 +265,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
    * @throws IOException
    */
   private void verifyLastMergeArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
-    if (shouldMergeSmallArchiveFies()) {
+    if (shouldMergeSmallArchiveFiles()) {
       Path planPath = new Path(metaClient.getArchivePath(), HoodieArchivedTimeline.MERGE_ARCHIVE_PLAN_NAME);
       HoodieWrapperFileSystem fs = metaClient.getFs();
       // If plan exist, last merge small archive files was failed.

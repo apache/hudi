@@ -93,6 +93,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.queue.ExecutorType.BOUNDED_IN_MEMORY;
+import static org.apache.hudi.common.util.queue.ExecutorType.DISRUPTOR;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 
 /**
@@ -138,6 +139,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
       .defaultValue(BOUNDED_IN_MEMORY.name())
+      .withValidValues(BOUNDED_IN_MEMORY.name(), DISRUPTOR.name())
       .withDocumentation("Set executor which orchestrates concurrent producers and consumers communicating through a message queue."
           + "default value is BOUNDED_IN_MEMORY which use a bounded in-memory queue using LinkedBlockingQueue."
           + "Also users could use DISRUPTOR, which use disruptor as a lock free message queue "
@@ -1000,7 +1002,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public ExecutorType getExecutorType() {
-    return ExecutorType.valueOf(getString(EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
+    return ExecutorType.valueOf(getStringOrDefault(EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
   }
 
   public boolean isCDCEnabled() {
@@ -2792,7 +2794,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     private String getDefaultMarkersType(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return MarkerType.TIMELINE_SERVER_BASED.toString();
+          if (writeConfig.isEmbeddedTimelineServerEnabled()) {
+            return MarkerType.TIMELINE_SERVER_BASED.toString();
+          } else {
+            LOG.warn("Embedded timeline server is disabled, fallback to use direct marker type for spark");
+            return MarkerType.DIRECT.toString();
+          }
         case FLINK:
         case JAVA:
           // Timeline-server-based marker is not supported for Flink and Java engines

@@ -25,6 +25,8 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.net.URI;
 import java.net.URISyntaxException;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * This is an extension of the {@code Path} class allowing to avoid repetitive
  * computations (like {@code getFileName}, {@code toString}) which are secured
@@ -98,7 +100,7 @@ public class CachingPath extends Path {
   }
 
   public CachingPath subPath(String relativePath) {
-    return new CachingPath(this, createPathUnsafe(relativePath));
+    return new CachingPath(this, createRelativePathUnsafe(relativePath));
   }
 
   public static CachingPath wrap(Path path) {
@@ -116,7 +118,7 @@ public class CachingPath extends Path {
    *       what they are doing this is not going to work with paths having scheme (which require
    *       parsing) and is only meant to work w/ relative paths in a few specific cases.
    */
-  public static CachingPath createPathUnsafe(String relativePath) {
+  public static CachingPath createRelativePathUnsafe(String relativePath) {
     try {
       // NOTE: {@code normalize} is going to be invoked by {@code Path} ctor, so there's no
       //       point in invoking it here
@@ -127,6 +129,48 @@ public class CachingPath extends Path {
     }
   }
 
+  // TODO java-doc
+  public static CachingPath concatPathUnsafe(Path basePath, Path relativePath) {
+    checkState(!relativePath.toUri().isAbsolute());
+    return concatPathUnsafe(basePath, relativePath.toUri().getPath());
+  }
+
+  // TODO java-doc
+  public static CachingPath concatPathUnsafe(Path basePath, String relativePath) {
+    try {
+      URI baseURI = basePath.toUri();
+      // NOTE: {@code normalize} is going to be invoked by {@code Path} ctor, so there's no
+      //       point in invoking it here
+      String resolvedPath = resolveRelativePath(baseURI.getPath(), relativePath);
+      URI resolvedURI = new URI(baseURI.getScheme(), baseURI.getAuthority(), resolvedPath,
+          baseURI.getQuery(), baseURI.getFragment());
+
+      return new CachingPath(resolvedURI);
+    } catch (URISyntaxException e) {
+      throw new HoodieException("Failed to instantiate relative path", e);
+    }
+  }
+
+  // NOTE: This method does NOT perform any normalization, assuming that the incoming paths
+  //       are already normalized
+  private static String resolveRelativePath(String basePath, String relativePath) {
+    StringBuffer sb = new StringBuffer(basePath);
+    if (basePath.endsWith("/")) {
+      if (relativePath.startsWith("/")) {
+        sb.append(relativePath.substring(1));
+      } else {
+        sb.append(relativePath);
+      }
+    } else if (relativePath.startsWith("/")) {
+      sb.append(relativePath);
+    } else {
+      sb.append('/');
+      sb.append(relativePath);
+    }
+
+    return sb.toString();
+  }
+
   /**
    * This is {@link Path#getPathWithoutSchemeAndAuthority(Path)} counterpart, instantiating
    * {@link CachingPath}
@@ -135,7 +179,7 @@ public class CachingPath extends Path {
     // This code depends on Path.toString() to remove the leading slash before
     // the drive specification on Windows.
     return path.isUriPathAbsolute()
-        ? createPathUnsafe(path.toUri().getPath())
+        ? createRelativePathUnsafe(path.toUri().getPath())
         : path;
   }
 }

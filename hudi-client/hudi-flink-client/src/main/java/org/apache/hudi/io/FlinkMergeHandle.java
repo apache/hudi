@@ -143,13 +143,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
           break;
         }
 
-        // Override the old file name,
-        // In rare cases, when a checkpoint was aborted and the instant time
-        // is reused, the merge handle generates a new file name
-        // with the reused instant time of last checkpoint, which is duplicate,
-        // use the same name file as new base file in case data loss.
-        oldFilePath = newFilePath;
-        rolloverPaths.add(oldFilePath);
+        rolloverPaths.add(newFilePath);
         newFileName = newFileNameWithRollover(rollNumber++);
         newFilePath = makeNewFilePath(partitionPath, newFileName);
         LOG.warn("Duplicate write for MERGE bucket with path: " + oldFilePath + ", rolls over to new path: " + newFilePath);

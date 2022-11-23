@@ -20,6 +20,7 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -76,5 +77,21 @@ public class ClusteringUtil {
           commitToRollback -> writeClient.getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
       table.getMetaClient().reloadActiveTimeline();
     });
+  }
+
+  /**
+   * Force rolls back the inflight clustering instant, for handling failure case.
+   *
+   * @param table The hoodie table
+   * @param writeClient The write client
+   * @param instantTime The instant time
+   */
+  public static void rollbackClustering(HoodieFlinkTable<?> table, HoodieFlinkWriteClient<?> writeClient, String instantTime) {
+    HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(instantTime);
+    if (table.getMetaClient().reloadActiveTimeline().filterPendingReplaceTimeline().containsInstant(inflightInstant)) {
+      LOG.warn("Rollback failed clustering instant: [" + instantTime + "]");
+      table.rollbackInflightClustering(inflightInstant,
+          commitToRollback -> writeClient.getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+    }
   }
 }

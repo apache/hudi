@@ -144,6 +144,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
+  public List<String> getPartitionPathsWithPrefixes(List<String> prefixes) throws IOException {
+    return getAllPartitionPaths().stream()
+        .filter(p -> prefixes.stream().anyMatch(p::startsWith))
+        .collect(Collectors.toList());
+  }
+
+  @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
                                                                                  String partitionName,
                                                                                  boolean shouldLoadInMemory) {
@@ -346,8 +353,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     return toStream(records)
         .map(record -> Pair.of(
-            (String) record.get(HoodieMetadataPayload.KEY_FIELD_NAME),
-            composeRecord(record, partitionName)))
+          (String) record.get(HoodieMetadataPayload.KEY_FIELD_NAME),
+          composeRecord(record, partitionName)))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
