@@ -38,6 +38,8 @@ import java.util.stream.Collectors;
  */
 public class InternalSchema implements Serializable {
 
+  private static final InternalSchema EMPTY_SCHEMA = new InternalSchema(-1L, RecordType.get());
+
   private static final long DEFAULT_VERSION_ID = 0;
 
   private final RecordType record;
@@ -50,7 +52,7 @@ public class InternalSchema implements Serializable {
   private transient Map<Integer, String> idToName = null;
 
   public static InternalSchema getEmptyInternalSchema() {
-    return new InternalSchema(-1L, RecordType.get());
+    return EMPTY_SCHEMA;
   }
 
   public boolean isEmptySchema() {
