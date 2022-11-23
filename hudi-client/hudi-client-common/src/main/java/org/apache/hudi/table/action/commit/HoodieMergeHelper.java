@@ -53,7 +53,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.isProjectionOf;
+import static org.apache.hudi.avro.AvroSchemaUtils.isStrictProjectionOf;
 import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
 
 public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper {
@@ -89,7 +89,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
     // Check whether the writer schema is simply a projection of the file's one, ie
     //   - Its field-set is a proper subset (of the reader schema)
     //   - There's no schema evolution transformation necessary
-    boolean isPureProjection = isProjectionOf(readerSchema, writerSchema)
+    boolean isPureProjection = isStrictProjectionOf(readerSchema, writerSchema)
         && !schemaEvolutionTransformerOpt.isPresent();
     // Check whether we will need to rewrite target (already merged) records into the
     // writer's schema

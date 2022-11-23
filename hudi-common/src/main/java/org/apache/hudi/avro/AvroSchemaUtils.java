@@ -20,10 +20,10 @@ package org.apache.hudi.avro;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaCompatibility;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -65,30 +65,59 @@ public class AvroSchemaUtils {
   }
 
   /**
-   * Validate whether the {@code targetSchema} is a projection of {@code sourceSchema}.
+   * Validate whether the {@code targetSchema} is a strict projection of {@code sourceSchema}.
    *
-   * Schema B is considered a projection of schema A iff
+   * Schema B is considered a strict projection of schema A iff
    * <ol>
    *   <li>Schemas A and B are equal, or</li>
+   *   <li>Schemas A and B are array schemas and element-type of B is a strict projection
+   *   of the element-type of A, or</li>
+   *   <li>Schemas A and B are map schemas and value-type of B is a strict projection
+   *   of the value-type of A, or</li>
+   *   <li>Schemas A and B are union schemas (of the same size) and every element-type of B
+   *   is a strict projection of the corresponding element-type of A, or</li>
    *   <li>Schemas A and B are record schemas and every field of the record B has corresponding
    *   counterpart (w/ the same name) in the schema A, such that the schema of the field of the schema
-   *   B is also a projection of the A field's schema</li>
+   *   B is also a strict projection of the A field's schema</li>
    * </ol>
    */
-  public static boolean isProjectionOf(Schema sourceSchema, Schema targetSchema) {
-    if (sourceSchema.getType() != Schema.Type.RECORD
-        || targetSchema.getType() != Schema.Type.RECORD) {
-      return Objects.equals(sourceSchema, targetSchema);
-    }
+  public static boolean isStrictProjectionOf(Schema sourceSchema, Schema targetSchema) {
+    return isProjectionOfInternal(sourceSchema, targetSchema, Objects::equals);
+  }
 
-    for (Schema.Field targetField : targetSchema.getFields()) {
-      Schema.Field sourceField = sourceSchema.getField(targetField.name());
-      if (sourceField == null || !isProjectionOf(sourceField.schema(), targetField.schema())) {
+  private static boolean isProjectionOfInternal(Schema sourceSchema,
+                                                Schema targetSchema,
+                                                BiFunction<Schema, Schema, Boolean> atomicTypeEqualityPredicate) {
+    if (sourceSchema.getType() != targetSchema.getType()) {
+      return false;
+    } else if (sourceSchema.getType() == Schema.Type.RECORD) {
+      for (Schema.Field targetField : targetSchema.getFields()) {
+        Schema.Field sourceField = sourceSchema.getField(targetField.name());
+        if (sourceField == null || !isProjectionOfInternal(sourceField.schema(), targetField.schema(), atomicTypeEqualityPredicate)) {
+          return false;
+        }
+      }
+      return true;
+    } else if (sourceSchema.getType() == Schema.Type.ARRAY) {
+      return isProjectionOfInternal(sourceSchema.getElementType(), targetSchema.getElementType(), atomicTypeEqualityPredicate);
+    } else if (sourceSchema.getType() == Schema.Type.MAP) {
+      return isProjectionOfInternal(sourceSchema.getValueType(), targetSchema.getValueType(), atomicTypeEqualityPredicate);
+    } else if (sourceSchema.getType() == Schema.Type.UNION) {
+      List<Schema> sourceNestedSchemas = sourceSchema.getTypes();
+      List<Schema> targetNestedSchemas = targetSchema.getTypes();
+      if (sourceNestedSchemas.size() != targetNestedSchemas.size()) {
         return false;
       }
-    }
 
-    return true;
+      for (int i = 0; i < sourceNestedSchemas.size(); ++i) {
+        if (!isProjectionOfInternal(sourceNestedSchemas.get(i), targetNestedSchemas.get(i), atomicTypeEqualityPredicate)) {
+          return false;
+        }
+      }
+      return true;
+    } else {
+      return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
+    }
   }
 
   /**

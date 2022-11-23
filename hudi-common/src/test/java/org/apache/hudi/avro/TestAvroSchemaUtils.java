@@ -85,12 +85,12 @@ public class TestAvroSchemaUtils {
     Schema sourceSchema = new Schema.Parser().parse(SOURCE_SCHEMA);
     Schema projectedNestedSchema = new Schema.Parser().parse(PROJECTED_NESTED_SCHEMA);
 
-    assertTrue(AvroSchemaUtils.isProjectionOf(sourceSchema, sourceSchema));
+    assertTrue(AvroSchemaUtils.isStrictProjectionOf(sourceSchema, sourceSchema));
 
-    assertTrue(AvroSchemaUtils.isProjectionOf(sourceSchema, projectedNestedSchema));
+    assertTrue(AvroSchemaUtils.isStrictProjectionOf(sourceSchema, projectedNestedSchema));
     // NOTE: That the opposite have to be false: if schema B is a projection of A,
     //       then A could be a projection of B iff A == B
-    assertFalse(AvroSchemaUtils.isProjectionOf(projectedNestedSchema, sourceSchema));
+    assertFalse(AvroSchemaUtils.isStrictProjectionOf(projectedNestedSchema, sourceSchema));
 
   }
 
