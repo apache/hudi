@@ -93,36 +93,36 @@ public class AvroSchemaUtils {
   private static boolean isProjectionOfInternal(Schema sourceSchema,
                                                 Schema targetSchema,
                                                 BiFunction<Schema, Schema, Boolean> atomicTypeEqualityPredicate) {
-    if (sourceSchema.getType() != targetSchema.getType()) {
-      return false;
-    } else if (sourceSchema.getType() == Schema.Type.RECORD) {
-      for (Schema.Field targetField : targetSchema.getFields()) {
-        Schema.Field sourceField = sourceSchema.getField(targetField.name());
-        if (sourceField == null || !isProjectionOfInternal(sourceField.schema(), targetField.schema(), atomicTypeEqualityPredicate)) {
+    if (sourceSchema.getType() == targetSchema.getType()) {
+      if (sourceSchema.getType() == Schema.Type.RECORD) {
+        for (Schema.Field targetField : targetSchema.getFields()) {
+          Schema.Field sourceField = sourceSchema.getField(targetField.name());
+          if (sourceField == null || !isProjectionOfInternal(sourceField.schema(), targetField.schema(), atomicTypeEqualityPredicate)) {
+            return false;
+          }
+        }
+        return true;
+      } else if (sourceSchema.getType() == Schema.Type.ARRAY) {
+        return isProjectionOfInternal(sourceSchema.getElementType(), targetSchema.getElementType(), atomicTypeEqualityPredicate);
+      } else if (sourceSchema.getType() == Schema.Type.MAP) {
+        return isProjectionOfInternal(sourceSchema.getValueType(), targetSchema.getValueType(), atomicTypeEqualityPredicate);
+      } else if (sourceSchema.getType() == Schema.Type.UNION) {
+        List<Schema> sourceNestedSchemas = sourceSchema.getTypes();
+        List<Schema> targetNestedSchemas = targetSchema.getTypes();
+        if (sourceNestedSchemas.size() != targetNestedSchemas.size()) {
           return false;
         }
-      }
-      return true;
-    } else if (sourceSchema.getType() == Schema.Type.ARRAY) {
-      return isProjectionOfInternal(sourceSchema.getElementType(), targetSchema.getElementType(), atomicTypeEqualityPredicate);
-    } else if (sourceSchema.getType() == Schema.Type.MAP) {
-      return isProjectionOfInternal(sourceSchema.getValueType(), targetSchema.getValueType(), atomicTypeEqualityPredicate);
-    } else if (sourceSchema.getType() == Schema.Type.UNION) {
-      List<Schema> sourceNestedSchemas = sourceSchema.getTypes();
-      List<Schema> targetNestedSchemas = targetSchema.getTypes();
-      if (sourceNestedSchemas.size() != targetNestedSchemas.size()) {
-        return false;
-      }
 
-      for (int i = 0; i < sourceNestedSchemas.size(); ++i) {
-        if (!isProjectionOfInternal(sourceNestedSchemas.get(i), targetNestedSchemas.get(i), atomicTypeEqualityPredicate)) {
-          return false;
+        for (int i = 0; i < sourceNestedSchemas.size(); ++i) {
+          if (!isProjectionOfInternal(sourceNestedSchemas.get(i), targetNestedSchemas.get(i), atomicTypeEqualityPredicate)) {
+            return false;
+          }
         }
+        return true;
       }
-      return true;
-    } else {
-      return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
     }
+
+    return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
   }
 
   /**
