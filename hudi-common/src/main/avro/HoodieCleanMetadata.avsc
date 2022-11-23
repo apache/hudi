@@ -19,6 +19,7 @@
  "type": "record",
  "name": "HoodieCleanMetadata",
  "fields": [
+     {"name": "policy", "type": "string", "default" : ""},
      {"name": "startCleanTime", "type": "string"},
      {"name": "timeTakenInMillis", "type": "long"},
      {"name": "totalFilesDeleted", "type": "int"},
