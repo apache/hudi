@@ -136,7 +136,9 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     HoodieRecord<?> record = (HoodieRecord<?>) value;
     bufferRecord(record);
     String partitionPath = record.getPartitionPath();
-    out.collect(partitionPath);
+    if (partitionPath != null && out != null) {
+      out.collect(partitionPath);
+    }
   }
 
   @Override
