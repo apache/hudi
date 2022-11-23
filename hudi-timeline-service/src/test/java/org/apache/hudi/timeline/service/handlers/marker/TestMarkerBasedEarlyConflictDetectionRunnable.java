@@ -21,8 +21,10 @@ package org.apache.hudi.timeline.service.handlers.marker;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -80,6 +82,7 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
     MarkerHandler markerHandler = mock(MarkerHandler.class);
     String rootBaseMarkerDir = basePath + "/.hoodie/.temp";
     String partition = "2016";
+    metaClient = HoodieTestUtils.init(new Configuration(), basePath, HoodieTableType.COPY_ON_WRITE);
 
     String oldInstant = "001";
     Set<String> oldMarkers = Stream.of(partition + "/b21adfa2-7013-4452-a565-4cc39fea5b73-0_4-17-21_001.parquet.marker.CREATE",
@@ -108,6 +111,7 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
   }
 
   private void prepareFiles(String baseMarkerDir, String instant, Set<String> markers, FileSystem fs) throws IOException {
+    fs.create(new Path(basePath + "/.hoodie/" + instant + ".commit"), true);
     String markerDir = baseMarkerDir + "/" + instant;
     fs.mkdirs(new Path(markerDir));
     BufferedWriter out = new BufferedWriter(new FileWriter(markerDir + "/MARKERS0"));
