@@ -81,16 +81,14 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
         DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, context.isBounded());
+        //Whether enable success file write in append mode.
+        if (OptionsResolver.isPartitionSuccessFileWriteEnable(conf)) {
+          pipeline = Pipelines.successFileWrite(conf, pipeline);
+        }
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
         } else {
-          // If the partition success file sink enabled, add a success file sink as next operator,
-          // else add a dummy sink.
-          if (OptionsResolver.isPartitionSuccessFileWriteEnable(conf)) {
-            return Pipelines.successFileSink(pipeline, conf);
-          } else {
-            return Pipelines.dummySink(pipeline);
-          }
+          return Pipelines.dummySink(pipeline);
         }
       }
 
@@ -100,6 +98,10 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
           Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
       // write pipeline
       pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      // Whether enable success file write.
+      if (OptionsResolver.isPartitionSuccessFileWriteEnable(conf)) {
+        pipeline = Pipelines.successFileWrite(conf, pipeline);
+      }
       // compaction
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         // use synchronous compaction for bounded source.

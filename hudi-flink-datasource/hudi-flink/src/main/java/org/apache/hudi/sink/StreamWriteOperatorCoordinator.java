@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.core.fs.FileSystem;
+import org.apache.flink.core.fs.Path;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -53,6 +55,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.URI;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -281,6 +284,8 @@ public class StreamWriteOperatorCoordinator
           () -> {
             if (event.isBootstrap()) {
               handleBootstrapEvent(event);
+            } else if (event.isPartitionFinished()) {
+              handlePartitionSuccessFileWrite(event);
             } else {
               handleWriteMetaEvent(event);
             }
@@ -443,6 +448,15 @@ public class StreamWriteOperatorCoordinator
             event.getInstantTime(), event.getTaskID()));
 
     addEventToBuffer(event);
+  }
+
+  private void handlePartitionSuccessFileWrite(WriteMetadataEvent event) throws Exception {
+    List<WriteStatus> writeResults = event.getWriteStatuses();
+    for (WriteStatus writeStatus : writeResults) {
+      String partitionPath = writeStatus.getPartitionPath();
+      FileSystem fs = FileSystem.get(new URI(partitionPath));
+      fs.create(new Path(partitionPath, "_SUCCESS"), FileSystem.WriteMode.OVERWRITE).close();
+    }
   }
 
   /**

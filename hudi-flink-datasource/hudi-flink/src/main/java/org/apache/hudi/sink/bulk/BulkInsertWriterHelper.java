@@ -219,10 +219,9 @@ public class BulkInsertWriterHelper {
    * @return
    */
   public String getPartitionPath(RowData record) {
-    if (keyGen == null) {
-      return null;
-    }
-    return keyGen.getPartitionPath(record);
+    return keyGen != null
+            ? keyGen.getPartitionPath(record)
+            : record.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD).toString();
   }
 }
 

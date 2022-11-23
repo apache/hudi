@@ -55,6 +55,11 @@ public class WriteMetadataEvent implements OperatorEvent {
   private boolean bootstrap;
 
   /**
+   * Flag saying whether the partition is written finished.
+   */
+  private boolean partitionFinished;
+
+  /**
    * Creates an event.
    *
    * @param taskID        The task ID
@@ -72,13 +77,15 @@ public class WriteMetadataEvent implements OperatorEvent {
       List<WriteStatus> writeStatuses,
       boolean lastBatch,
       boolean endInput,
-      boolean bootstrap) {
+      boolean bootstrap,
+      boolean partitionFinished) {
     this.taskID = taskID;
     this.instantTime = instantTime;
     this.writeStatuses = new ArrayList<>(writeStatuses);
     this.lastBatch = lastBatch;
     this.endInput = endInput;
     this.bootstrap = bootstrap;
+    this.partitionFinished = partitionFinished;
   }
 
   // default constructor for efficient serialization
@@ -138,6 +145,10 @@ public class WriteMetadataEvent implements OperatorEvent {
 
   public void setLastBatch(boolean lastBatch) {
     this.lastBatch = lastBatch;
+  }
+
+  public boolean isPartitionFinished() {
+    return partitionFinished;
   }
 
   /**
@@ -208,12 +219,13 @@ public class WriteMetadataEvent implements OperatorEvent {
     private boolean lastBatch = false;
     private boolean endInput = false;
     private boolean bootstrap = false;
+    private boolean partitionFinished = false;
 
     public WriteMetadataEvent build() {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap);
+      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap, partitionFinished);
     }
 
     public Builder taskID(int taskID) {
@@ -243,6 +255,11 @@ public class WriteMetadataEvent implements OperatorEvent {
 
     public Builder bootstrap(boolean bootstrap) {
       this.bootstrap = bootstrap;
+      return this;
+    }
+
+    public Builder partitionFinished(boolean partitionFinished) {
+      this.partitionFinished = partitionFinished;
       return this;
     }
   }

@@ -861,20 +861,6 @@ public class FlinkOptions extends HoodieConfig {
                           + " can configure: '$year-$month-$day $hour:00:00'."
                           + " If timestamp in partition is dt and hour, can configure: '$dt $hour:00:00'.");
 
-  public static final ConfigOption<String> PARTITION_TIME_EXTRACTOR_TIMESTAMP_FORMATTER =
-          key("partition.time-extractor.timestamp-formatter")
-                  .stringType()
-                  .noDefaultValue()
-                  .withDescription(
-                          Description.builder()
-                                  .text("The formatter to format timestamp from string, it can be used with 'partition.time-extractor.timestamp-pattern', "
-                                          + "creates a formatter using the specified value. "
-                                          + "Supports multiple partition fields like '$year-$month-$day $hour:00:00'.")
-                                  .list(text("The timestamp-formatter is compatible with "
-                                          + "Java's DateTimeFormatter."))
-                                  .build());
-
-
   public static final ConfigOption<Duration> PARTITION_WRITE_SUCCESS_FILE_DELAY = ConfigOptions
           .key("partition.write-success-file.delay")
           .durationType()
