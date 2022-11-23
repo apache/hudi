@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.util.queue;
 
+import org.apache.hudi.common.util.CustomizedThreadFactory;
+import org.apache.hudi.common.util.Option;
+
 import com.lmax.disruptor.EventFactory;
 import com.lmax.disruptor.EventHandler;
 import com.lmax.disruptor.EventTranslator;
@@ -25,8 +28,6 @@ import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
-import org.apache.hudi.common.util.CustomizedThreadFactory;
-import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -34,6 +35,12 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
+/**
+ * Implementation of {@link HoodieMessageQueue} based on Disruptor Queue.
+ *
+ * @param <I> Input type.
+ * @param <O> Transformed output type.
+ */
 public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   private static final Logger LOG = LogManager.getLogger(DisruptorMessageQueue.class);

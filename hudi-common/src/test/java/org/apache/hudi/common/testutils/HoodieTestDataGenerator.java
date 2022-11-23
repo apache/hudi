@@ -882,6 +882,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return numKeysBySchema.getOrDefault(schemaStr, 0);
   }
 
+  /**
+   * Object containing the key and partition path for testing.
+   */
   public static class KeyPartition implements Serializable {
 
     public HoodieKey key;

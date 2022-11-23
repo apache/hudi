@@ -119,6 +119,9 @@ import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
+/**
+ * Test Hoodie Table for testing only.
+ */
 public class HoodieTestTable {
 
   public static final String PHONY_TABLE_SCHEMA =
@@ -1079,7 +1082,7 @@ public class HoodieTestTable {
   }
 
   public static List<HoodieWriteStat> generateHoodieWriteStatForPartition(Map<String, List<Pair<String, Integer>>> partitionToFileIdMap,
-                                                                           String commitTime, boolean bootstrap) {
+                                                                          String commitTime, boolean bootstrap) {
     List<HoodieWriteStat> writeStats = new ArrayList<>();
     for (Map.Entry<String, List<Pair<String, Integer>>> entry : partitionToFileIdMap.entrySet()) {
       String partition = entry.getKey();
@@ -1124,6 +1127,9 @@ public class HoodieTestTable {
     return writeStats;
   }
 
+  /**
+   * Exception for {@link HoodieTestTable}.
+   */
   public static class HoodieTestTableException extends RuntimeException {
     public HoodieTestTableException(Throwable t) {
       super(t);

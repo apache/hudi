@@ -18,8 +18,6 @@
 
 package org.apache.hudi;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -41,6 +39,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -453,6 +454,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return arrays.stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
   }
 
+  /**
+   * Partition path information containing the relative partition path
+   * and values of partition columns.
+   */
   public static final class PartitionPath {
 
     final String path;
@@ -480,6 +485,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
+  /**
+   * APIs for caching {@link FileStatus}.
+   */
   protected interface FileStatusCache {
     Option<FileStatus[]> get(Path path);
 

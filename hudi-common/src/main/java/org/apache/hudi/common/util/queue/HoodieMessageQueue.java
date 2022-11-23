@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.Option;
+
 import java.io.Closeable;
 
 /**

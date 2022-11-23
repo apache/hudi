@@ -53,7 +53,6 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
-
 import org.apache.hadoop.util.VersionUtil;
 
 import java.io.ByteArrayInputStream;
@@ -71,12 +70,12 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Deque;
-import java.util.LinkedList;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Collectors;

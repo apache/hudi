@@ -329,6 +329,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(USE_LOG_RECORD_READER_SCAN_V2);
   }
 
+  /**
+   * Builder for {@link HoodieMetadataConfig}.
+   */
   public static class Builder {
 
     private EngineType engineType = EngineType.SPARK;

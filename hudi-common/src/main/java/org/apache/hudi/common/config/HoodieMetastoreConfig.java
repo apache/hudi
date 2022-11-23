@@ -19,6 +19,7 @@
 package org.apache.hudi.common.config;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.util.Properties;
 
 /**
@@ -72,6 +73,9 @@ public class HoodieMetastoreConfig extends HoodieConfig {
     return getIntOrDefault(METASTORE_CONNECTION_RETRY_DELAY);
   }
 
+  /**
+   * Builder for {@link HoodieMetastoreConfig}.
+   */
   public static class Builder {
     private final HoodieMetastoreConfig config = new HoodieMetastoreConfig();
 

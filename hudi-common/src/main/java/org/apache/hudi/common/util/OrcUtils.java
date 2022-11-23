@@ -32,14 +32,14 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.orc.OrcFile;
 import org.apache.orc.OrcProto.UserMetadataItem;
 import org.apache.orc.Reader;
 import org.apache.orc.Reader.Options;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
-import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
-import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

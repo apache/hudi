@@ -22,15 +22,18 @@ import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
-
 import org.apache.hudi.internal.schema.Types.StringType;
 import org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
-import org.junit.jupiter.api.Test;
+
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+/**
+ * Tests schema changes with {@link TableChanges}.
+ */
 public class TestTableChanges {
 
   @Test
