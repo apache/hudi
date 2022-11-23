@@ -36,7 +36,7 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -122,7 +122,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     if (events.stream().anyMatch(ClusteringCommitEvent::isFailed)) {
       try {
         // handle failure case
-        CompactionUtil.rollbackCompaction(table, instant);
+        ClusteringUtil.rollbackClustering(table, writeClient, instant);
       } finally {
         // remove commitBuffer to avoid obsolete metadata commit
         reset(instant);
