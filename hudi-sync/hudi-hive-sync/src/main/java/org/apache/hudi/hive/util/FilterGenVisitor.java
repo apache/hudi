@@ -19,7 +19,6 @@
 package org.apache.hudi.hive.util;
 
 import org.apache.hudi.hive.expression.AttributeReferenceExpression;
-import org.apache.hudi.hive.expression.BinaryComparator;
 import org.apache.hudi.hive.expression.BinaryOperator;
 import org.apache.hudi.hive.expression.Expression;
 import org.apache.hudi.hive.expression.ExpressionVisitor;
@@ -83,15 +82,17 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
 
   @Override
   public String visitBinaryOperator(BinaryOperator expr) {
-    if (expr instanceof BinaryComparator) {
-      return visitBinaryComparator(expr.getLeft(), expr.getOperator(), expr.getRight());
-    }
-
     switch (expr.getOperator()) {
       case AND:
         return visitAnd(expr.getLeft(), expr.getRight());
       case OR:
         return visitOr(expr.getLeft(), expr.getRight());
+      case EQ:
+      case GT:
+      case LT:
+      case GT_EQ:
+      case LT_EQ:
+        return visitBinaryComparator(expr.getLeft(), expr.getOperator(), expr.getRight());
       default:
         return "";
     }

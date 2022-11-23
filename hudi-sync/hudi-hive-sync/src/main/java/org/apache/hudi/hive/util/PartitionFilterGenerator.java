@@ -22,14 +22,10 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.hive.expression.And;
 import org.apache.hudi.hive.expression.AttributeReferenceExpression;
-import org.apache.hudi.hive.expression.EqualTo;
+import org.apache.hudi.hive.expression.BinaryOperator;
 import org.apache.hudi.hive.expression.Expression;
-import org.apache.hudi.hive.expression.GreatThanOrEqual;
-import org.apache.hudi.hive.expression.LessThanOrEqual;
 import org.apache.hudi.hive.expression.Literal;
-import org.apache.hudi.hive.expression.Or;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
@@ -73,10 +69,10 @@ public class PartitionFilterGenerator {
       for (int i = 0; i < partitionFields.size(); i++) {
         FieldSchema field = partitionFields.get(i);
         String value = partitionValues.get(i);
-        EqualTo exp = new EqualTo(new AttributeReferenceExpression(field.getName()),
+        BinaryOperator exp = BinaryOperator.eq(new AttributeReferenceExpression(field.getName()),
             new Literal(value, field.getType()));
         if (root != null) {
-          root = new And(root, exp);
+          root = BinaryOperator.and(root, exp);
         } else {
           root = exp;
         }
@@ -86,7 +82,7 @@ public class PartitionFilterGenerator {
       if (result == null) {
         return expr;
       } else {
-        return new Or(result, expr);
+        return BinaryOperator.or(result, expr);
       }
     });
   }
@@ -114,6 +110,10 @@ public class PartitionFilterGenerator {
       this.valueType = type;
     }
 
+    /**
+     * As HMS only accept DATE, INT, STRING, BIGINT to push down partition filters, here we only
+     * do the comparison for these types.
+     */
     @Override
     public int compare(String s1, String s2) {
       switch (valueType.toLowerCase(Locale.ROOT)) {
@@ -130,7 +130,7 @@ public class PartitionFilterGenerator {
           return s1.compareTo(s2);
         default:
           throw new IllegalArgumentException("The value type: " + valueType + " doesn't support to "
-              + "do comparison here");
+              + "be pushed down to HMS, acceptable types: " + String.join(",", SUPPORT_TYPES));
       }
     }
   }
@@ -152,17 +152,17 @@ public class PartitionFilterGenerator {
       String[] values = fieldWithValues.getValue();
 
       if (values.length == 1) {
-        return new EqualTo(new AttributeReferenceExpression(fieldSchema.getName()),
+        return BinaryOperator.eq(new AttributeReferenceExpression(fieldSchema.getName()),
             new Literal(values[0], fieldSchema.getType()));
       }
 
       Arrays.sort(values, new ValueComparator(fieldSchema.getType()));
 
-      return new And(
-          new GreatThanOrEqual(
+      return BinaryOperator.and(
+          BinaryOperator.gteq(
               new AttributeReferenceExpression(fieldSchema.getName()),
               new Literal(values[0], fieldSchema.getType())),
-          new LessThanOrEqual(
+          BinaryOperator.lteq(
               new AttributeReferenceExpression(fieldSchema.getName()),
               new Literal(values[values.length - 1], fieldSchema.getType())));
     })
@@ -171,7 +171,7 @@ public class PartitionFilterGenerator {
           if (result == null) {
             return expr;
           } else {
-            return new And(result, expr);
+            return BinaryOperator.and(result, expr);
           }
         });
   }

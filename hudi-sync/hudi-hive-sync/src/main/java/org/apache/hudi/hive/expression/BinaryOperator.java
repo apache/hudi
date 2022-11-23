@@ -23,17 +23,37 @@ import java.util.Arrays;
 /**
  * The expression that accept two child expressions.
  */
-public abstract class BinaryOperator extends Expression {
+public class BinaryOperator extends Expression {
 
   private final Operator operator;
   private final Expression left;
   private final Expression right;
 
-  public BinaryOperator(Expression left, Operator operator, Expression right) {
+  private BinaryOperator(Expression left, Operator operator, Expression right) {
     super(Arrays.asList(left, right));
     this.left = left;
     this.operator = operator;
     this.right = right;
+  }
+
+  public static BinaryOperator and(Expression left, Expression right) {
+    return new BinaryOperator(left, Operator.AND, right);
+  }
+
+  public static BinaryOperator or(Expression left, Expression right) {
+    return new BinaryOperator(left, Operator.OR, right);
+  }
+
+  public static BinaryOperator eq(Expression left, Expression right) {
+    return new BinaryOperator(left, Operator.EQ, right);
+  }
+
+  public static BinaryOperator gteq(Expression left, Expression right) {
+    return new BinaryOperator(left, Operator.GT_EQ, right);
+  }
+
+  public static BinaryOperator lteq(Expression left, Expression right) {
+    return new BinaryOperator(left, Operator.LT_EQ, right);
   }
 
   public Operator getOperator() {

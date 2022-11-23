@@ -315,9 +315,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    * Fetch partitions from meta service, will try to push down more filters to avoid fetching
    * too many unnecessary partitions.
    *
-   * @param writtenPartitionsSince partitions has been added, updated, or dropped since last synced.
+   * @param writtenPartitions partitions has been added, updated, or dropped since last synced.
    */
-  private List<Partition> getTablePartitions(String tableName, List<String> writtenPartitionsSince) {
+  private List<Partition> getTablePartitions(String tableName, List<String> writtenPartitions) {
     if (!config.getBooleanOrDefault(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED)) {
       return syncClient.getAllPartitions(tableName);
     }
@@ -332,7 +332,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         .collect(Collectors.toList());
 
     return syncClient.getPartitionsByFilter(tableName,
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitionsSince, partitionFields, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFields, config));
   }
 
   /**
