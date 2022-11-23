@@ -23,6 +23,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SlidingWindowReservoir;
 import com.codahale.metrics.Timer;
 
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.Metrics;
@@ -70,11 +71,13 @@ public class HoodieLockMetrics {
 
   private Timer createTimerForMetrics(MetricRegistry registry, String metric) {
     String metricName = getMetricsName(metric);
-    synchronized (REGISTRY_LOCK) {
-      if (registry.getMetrics().get(metricName) == null) {
-        lockDuration = new Timer(new SlidingWindowReservoir(keepLastNtimes));
-        registry.register(metricName, lockDuration);
-        return lockDuration;
+    if (registry.getMetrics().get(metricName) == null) {
+      synchronized (Registry.class) {
+        if (registry.getMetrics().get(metricName) == null) {
+          lockDuration = new Timer(new SlidingWindowReservoir(keepLastNtimes));
+          registry.register(metricName, lockDuration);
+          return lockDuration;
+        }
       }
     }
     return (Timer) registry.getMetrics().get(metricName);
