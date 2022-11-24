@@ -20,7 +20,8 @@ package org.apache.hudi.table.format.cow;
 
 import java.util.Comparator;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
+import org.apache.hudi.table.format.HoodieParquetReader;
+import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.api.common.io.FileInputFormat;
@@ -74,13 +75,15 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final SerializableConfiguration conf;
   private final long limit;
 
-  private transient ParquetColumnarRowSplitReader reader;
+  private transient HoodieParquetReader reader;
   private transient long currentReadCount;
 
   /**
    * Files filter for determining what files/directories should be included.
    */
   private FilePathFilter localFilesFilter = new GlobFilePathFilter();
+
+  private final InternalSchemaManager internalSchemaManager;
 
   public CopyOnWriteInputFormat(
       Path[] paths,
@@ -90,7 +93,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       String partDefaultName,
       long limit,
       Configuration conf,
-      boolean utcTimestamp) {
+      boolean utcTimestamp,
+      InternalSchemaManager internalSchemaManager) {
     super.setFilePaths(paths);
     this.limit = limit;
     this.partDefaultName = partDefaultName;
@@ -99,6 +103,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.selectedFields = selectedFields;
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
+    this.internalSchemaManager = internalSchemaManager;
   }
 
   @Override
@@ -123,7 +128,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       }
     });
 
-    this.reader = ParquetSplitReaderUtil.genPartColumnarRowReader(
+    this.reader = HoodieParquetReader.getReader(
+        internalSchemaManager,
         utcTimestamp,
         true,
         conf.conf(),

@@ -36,8 +36,10 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.format.FormatUtils;
-import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
+import org.apache.hudi.table.format.HoodieParquetReader;
+import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
@@ -88,7 +90,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       String defaultPartName,
       long limit,
       boolean emitDelete) {
-    super(conf, tableState, fieldTypes, defaultPartName, limit, emitDelete);
+    super(conf, tableState, fieldTypes, defaultPartName, limit, emitDelete, InternalSchemaManager.DISABLED);
   }
 
   @Override
@@ -127,6 +129,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           this.tableState.getRowType(),
           this.tableState.getRowType(),
           tableSchema,
+          InternalSchema.getEmptyInternalSchema(),
           Option.empty(),
           Option.empty(),
           false,
@@ -241,11 +244,11 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
 
   static class AddBaseFileIterator implements RecordIterator {
     // base file reader
-    private ParquetColumnarRowSplitReader reader;
+    private HoodieParquetReader reader;
 
     private RowData currentRecord;
 
-    AddBaseFileIterator(ParquetColumnarRowSplitReader reader) {
+    AddBaseFileIterator(HoodieParquetReader reader) {
       this.reader = reader;
     }
 
