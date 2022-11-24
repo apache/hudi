@@ -27,7 +27,7 @@ import org.apache.hadoop.mapred.JobConf
 
 import org.apache.hudi.HoodieBaseRelation._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableConfiguration}
 import org.apache.hudi.common.fs.FSUtils
@@ -159,7 +159,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     } orElse {
       specifiedQueryTimestamp.map(schemaResolver.getTableAvroSchema)
     } orElse {
-      schemaSpec.map(convertToAvroSchema)
+      schemaSpec.map(schema => convertToAvroSchema(schema, tableConfig.getTableName))
     } getOrElse {
       Try(schemaResolver.getTableAvroSchema) match {
         case Success(schema) => schema
@@ -330,7 +330,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       schema conversion, which is lossy in nature (for ex, it doesn't preserve original Avro type-names) and
     //       could have an effect on subsequent de-/serializing records in some exotic scenarios (when Avro unions
     //       w/ more than 2 types are involved)
-    val sourceSchema = optimizerPrunedDataSchema.map(convertToAvroSchema).getOrElse(tableAvroSchema)
+    val sourceSchema = optimizerPrunedDataSchema
+      .map(schema => convertToAvroSchema(schema, tableConfig.getTableName))
+      .getOrElse(tableAvroSchema)
     val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
       projectSchema(Either.cond(internalSchemaOpt.isDefined, internalSchemaOpt.get, sourceSchema), targetColumns)
 
@@ -630,8 +632,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
 
       (partitionSchema,
-        HoodieTableSchema(prunedDataStructSchema, convertToAvroSchema(prunedDataStructSchema).toString),
-        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema).toString))
+        HoodieTableSchema(prunedDataStructSchema, convertToAvroSchema(prunedDataStructSchema, tableConfig.getTableName).toString),
+        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema, tableConfig.getTableName).toString))
     } else {
       (StructType(Nil), tableSchema, requiredSchema)
     }
@@ -659,8 +661,10 @@ object HoodieBaseRelation extends SparkAdapterSupport {
   def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection =
     HoodieCatalystExpressionUtils.generateUnsafeProjection(from, to)
 
-  def convertToAvroSchema(structSchema: StructType): Schema =
-    sparkAdapter.getAvroSchemaConverters.toAvroType(structSchema, nullable = false, "Record")
+  def convertToAvroSchema(structSchema: StructType, tableName: String): Schema = {
+    AvroConversionUtils.convertStructTypeToAvroSchema(structSchema,
+      AvroSchemaUtils.getAvroRecordQualifiedName(tableName))
+  }
 
   def getPartitionPath(fileStatus: FileStatus): Path =
     fileStatus.getPath.getParent
