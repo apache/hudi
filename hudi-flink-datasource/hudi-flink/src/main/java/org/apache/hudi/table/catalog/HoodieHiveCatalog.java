@@ -112,6 +112,7 @@ import static org.apache.hudi.configuration.FlinkOptions.PATH;
 import static org.apache.hudi.table.catalog.TableOptionProperties.COMMENT;
 import static org.apache.hudi.table.catalog.TableOptionProperties.PK_CONSTRAINT_NAME;
 import static org.apache.hudi.table.catalog.TableOptionProperties.SPARK_SOURCE_PROVIDER;
+import static org.apache.hudi.table.catalog.TableOptionProperties.loadFromHoodiePropertieFile;
 
 /**
  * A catalog implementation for Hoodie based on MetaStore.
@@ -382,6 +383,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         parameters.putAll(TableOptionProperties.translateSparkTableProperties2Flink(hiveTable));
         String path = hiveTable.getSd().getLocation();
         parameters.put(PATH.key(), path);
+        Map<String, String> hoodieProps = loadFromHoodiePropertieFile(path, hiveConf);
+        parameters.putAll(TableOptionProperties.translateSparkTableProperties2Flink(hoodieProps));
         if (!parameters.containsKey(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
           Path hoodieTablePath = new Path(path);
           boolean hiveStyle = Arrays.stream(FSUtils.getFs(hoodieTablePath, hiveConf).listStatus(hoodieTablePath))
@@ -808,7 +811,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     try (HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, table)) {
       boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
       writeClient.deletePartitions(
-          Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
+              Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
               HoodieActiveTimeline.createNewInstantTime())
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {

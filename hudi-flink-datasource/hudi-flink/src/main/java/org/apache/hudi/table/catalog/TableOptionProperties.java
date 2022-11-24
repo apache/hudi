@@ -50,6 +50,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 /**
  * Helper class to read/write flink table options as a map.
@@ -64,6 +65,7 @@ public class TableOptionProperties {
   static final Map<String, String> KEY_MAPPING = new HashMap<>();
 
   private static final String FILE_NAME = "table_option.properties";
+  private static final String HOODUE_PROP_FILE_NAME = "hoodie.properties";
 
   public static final String PK_CONSTRAINT_NAME = "pk.constraint.name";
   public static final String PK_COLUMNS = "pk.columns";
@@ -89,6 +91,7 @@ public class TableOptionProperties {
     KEY_MAPPING.put(FlinkOptions.RECORD_KEY_FIELD.key(), "primaryKey");
     KEY_MAPPING.put(FlinkOptions.PRECOMBINE_FIELD.key(), "preCombineField");
     KEY_MAPPING.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), "payloadClass");
+    KEY_MAPPING.put(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), FlinkOptions.HIVE_STYLE_PARTITIONING.key());
   }
 
   /**
@@ -113,6 +116,18 @@ public class TableOptionProperties {
    */
   public static Map<String, String> loadFromProperties(String basePath, Configuration hadoopConf) {
     Path propertiesFilePath = getPropertiesFilePath(basePath);
+    return getPropsFromFile(basePath, hadoopConf, propertiesFilePath);
+  }
+
+  /**
+   * Read table options map from the given table base path.
+   */
+  public static Map<String, String> loadFromHoodiePropertieFile(String basePath, Configuration hadoopConf) {
+    Path propertiesFilePath = getHoodiePropertiesFilePath(basePath);
+    return getPropsFromFile(basePath, hadoopConf, propertiesFilePath);
+  }
+
+  private static Map<String, String> getPropsFromFile(String basePath, Configuration hadoopConf, Path propertiesFilePath) {
     Map<String, String> options = new HashMap<>();
     Properties props = new Properties();
 
@@ -132,6 +147,11 @@ public class TableOptionProperties {
   private static Path getPropertiesFilePath(String basePath) {
     String auxPath = basePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
     return new Path(auxPath, FILE_NAME);
+  }
+
+  private static Path getHoodiePropertiesFilePath(String basePath) {
+    String auxPath = basePath + Path.SEPARATOR + METAFOLDER_NAME;
+    return new Path(auxPath, HOODUE_PROP_FILE_NAME);
   }
 
   public static String getPkConstraintName(Map<String, String> options) {
