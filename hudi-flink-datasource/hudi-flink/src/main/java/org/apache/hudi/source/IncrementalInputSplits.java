@@ -39,6 +39,7 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -450,7 +451,7 @@ public class IncrementalInputSplits implements Serializable {
       HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
       if (!archivedCompleteTimeline.empty()) {
         Stream<HoodieInstant> instantStream = archivedCompleteTimeline.getInstants();
-        return maySkipOverwriteInstants(instantStream)
+        return filterInstantsByCondition(instantStream, archivedTimeline)
             .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, archivedTimeline)).collect(Collectors.toList());
       }
     }
@@ -470,7 +471,7 @@ public class IncrementalInputSplits implements Serializable {
     HoodieTimeline completedTimeline = commitTimeline.filterCompletedInstants();
     if (issuedInstant != null) {
       // returns early for streaming mode
-      return maySkipOverwriteInstants(completedTimeline.getInstants())
+      return filterInstantsByCondition(completedTimeline.getInstants(), commitTimeline)
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, issuedInstant))
           .collect(Collectors.toList());
     }
@@ -486,12 +487,20 @@ public class IncrementalInputSplits implements Serializable {
       final String endCommit = this.conf.get(FlinkOptions.READ_END_COMMIT);
       instantStream = instantStream.filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN_OR_EQUALS, endCommit));
     }
-    return maySkipOverwriteInstants(instantStream).collect(Collectors.toList());
+    return filterInstantsByCondition(instantStream, commitTimeline).collect(Collectors.toList());
   }
 
-  private Stream<HoodieInstant> maySkipOverwriteInstants(Stream<HoodieInstant> instants) {
+  /**
+   * Filters out the unnecessary instants by user specified condition.
+   *
+   * @param instants The instants to filter
+   * @param timeline The timeline
+   *
+   * @return the filtered instants
+   */
+  private Stream<HoodieInstant> filterInstantsByCondition(Stream<HoodieInstant> instants, HoodieTimeline timeline) {
     return instants.filter(instant -> !this.skipCompaction || !instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
-            .filter(instant -> !this.skipClustering || !instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+            .filter(instant -> !this.skipClustering || !ClusteringUtil.isClusteringInstant(instant, timeline));
   }
 
   private static <T> List<T> mergeList(List<T> list1, List<T> list2) {
