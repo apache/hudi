@@ -18,6 +18,10 @@
 
 package org.apache.hudi.client;
 
+import com.codahale.metrics.Timer;
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.async.AsyncArchiveService;
 import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -94,11 +98,6 @@ import org.apache.hudi.table.action.savepoint.SavepointHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
-
-import com.codahale.metrics.Timer;
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -114,6 +113,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 
 /**
@@ -300,7 +300,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolvedSchema, historySchemaStr));
       }
       // update SCHEMA_KEY
-      metadata.addMetadata(SCHEMA_KEY, AvroInternalSchemaConverter.convert(evolvedSchema, avroSchema.getName()).toString());
+      metadata.addMetadata(SCHEMA_KEY, AvroInternalSchemaConverter.convert(evolvedSchema, avroSchema.getFullName()).toString());
     }
   }
 
@@ -1769,7 +1769,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElseGet(
         () -> SerDeHelper.inheritSchemas(getInternalSchema(schemaUtil), ""));
-    Schema schema = AvroInternalSchemaConverter.convert(newSchema, config.getTableName());
+    Schema schema = AvroInternalSchemaConverter.convert(newSchema, getAvroRecordQualifiedName(config.getTableName()));
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     startCommitWithTime(instantTime, commitActionType, metaClient);

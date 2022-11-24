@@ -72,17 +72,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
                              Option<Schema> readerSchema,
                              Map<HeaderMetadataType, String> header,
                              Map<HeaderMetadataType, String> footer,
-                             String keyField, InternalSchema internalSchema) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false, internalSchema);
-  }
-
-  public HoodieAvroDataBlock(FSDataInputStream inputStream,
-                             Option<byte[]> content,
-                             boolean readBlockLazily,
-                             HoodieLogBlockContentLocation logBlockContentLocation,
-                             Option<Schema> readerSchema,
-                             Map<HeaderMetadataType, String> header,
-                             Map<HeaderMetadataType, String> footer,
                              String keyField) {
     super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
   }
@@ -140,7 +129,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   @Override
   protected ClosableIterator<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
-    return RecordIterator.getInstance(this, content, internalSchema);
+    return RecordIterator.getInstance(this, content);
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
@@ -152,35 +141,24 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     private int totalRecords = 0;
     private int readRecords = 0;
 
-    private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content, InternalSchema internalSchema) throws IOException {
+    private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content) throws IOException {
       this.content = content;
 
       this.dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(this.content)));
 
       // 1. Read version for this data block
       int version = this.dis.readInt();
-      HoodieAvroDataBlockVersion logBlockVersion = new HoodieAvroDataBlockVersion(version);
-
-      Schema finalReadSchema = readerSchema;
-      if (!internalSchema.isEmptySchema()) {
-        // we should use write schema to read log file,
-        // since when we have done some DDL operation, the readerSchema maybe different from writeSchema, avro reader will throw exception.
-        // eg: origin writeSchema is: "a String, b double" then we add a new column now the readerSchema will be: "a string, c int, b double". it's wrong to use readerSchema to read old log file.
-        // after we read those record by writeSchema,  we rewrite those record with readerSchema in AbstractHoodieLogRecordReader
-        finalReadSchema = writerSchema;
-      }
-
-      this.reader = new GenericDatumReader<>(writerSchema, finalReadSchema);
-
-      if (logBlockVersion.hasRecordCount()) {
+      if (new HoodieAvroDataBlockVersion(version).hasRecordCount()) {
         this.totalRecords = this.dis.readInt();
       }
+
+      this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
     }
 
-    public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content, InternalSchema internalSchema) throws IOException {
+    public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content) throws IOException {
       // Get schema from the header
       Schema writerSchema = new Schema.Parser().parse(dataBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-      return new RecordIterator(dataBlock.readerSchema, writerSchema, content, internalSchema);
+      return new RecordIterator(dataBlock.readerSchema, writerSchema, content);
     }
 
     @Override

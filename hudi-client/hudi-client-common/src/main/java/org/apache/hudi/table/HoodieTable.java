@@ -98,6 +98,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
@@ -781,7 +782,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
 
-    if (!config.getAvroSchemaValidate() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+    if (!config.shouldValidateAvroSchema() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
       // Check not required
       return;
     }
@@ -793,7 +794,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       TableSchemaResolver schemaResolver = new TableSchemaResolver(getMetaClient());
       writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
       tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaResolver.getTableAvroSchemaWithoutMetadataFields());
-      isValid = TableSchemaResolver.isSchemaCompatible(tableSchema, writerSchema);
+      isValid = isSchemaCompatible(tableSchema, writerSchema);
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
     }
@@ -808,7 +809,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     try {
       validateSchema();
     } catch (HoodieException e) {
-      throw new HoodieUpsertException("Failed upsert schema compatibility check.", e);
+      throw new HoodieUpsertException("Failed upsert schema compatibility check", e);
     }
   }
 
@@ -816,7 +817,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     try {
       validateSchema();
     } catch (HoodieException e) {
-      throw new HoodieInsertException("Failed insert schema compability check.", e);
+      throw new HoodieInsertException("Failed insert schema compatibility check", e);
     }
   }
 

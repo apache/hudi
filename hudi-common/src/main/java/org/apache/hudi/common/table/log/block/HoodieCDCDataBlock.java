@@ -42,7 +42,7 @@ public class HoodieCDCDataBlock extends HoodieAvroDataBlock {
       Map<HeaderMetadataType, String> header,
       String keyField) {
     super(inputStream, content, readBlockLazily, logBlockContentLocation,
-        Option.of(readerSchema), header, new HashMap<>(), keyField, null);
+        Option.of(readerSchema), header, new HashMap<>(), keyField);
   }
 
   public HoodieCDCDataBlock(List<IndexedRecord> records,

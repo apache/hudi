@@ -16,24 +16,21 @@
  * limitations under the License.
  */
 
-package org.apache.hudi
+package org.apache.hudi.common.util.collection;
 
-import org.junit.jupiter.api.Assertions.fail
+import org.apache.hudi.common.util.ClosableIterator;
 
-trait ScalaAssertionSupport {
+import java.util.function.Function;
 
-  def assertThrows[T <: Throwable, R](expectedExceptionClass: Class[T])(f: => R): T = {
-    try {
-      f
-    } catch {
-      case t: Throwable if expectedExceptionClass.isAssignableFrom(t.getClass) =>
-        // scalastyle:off return
-        return t.asInstanceOf[T]
-      // scalastyle:on return
-      case ot @ _ =>
-        fail(s"Expected exception of class $expectedExceptionClass, but ${ot.getClass} has been thrown: $ot\n${ot.getStackTrace.mkString("\n")}")
-    }
+// TODO java-doc
+public class CloseableMappingIterator<I, O> extends MappingIterator<I, O> implements ClosableIterator<O> {
 
-    fail(s"Expected exception of class $expectedExceptionClass, but nothing has been thrown")
+  public CloseableMappingIterator(ClosableIterator<I> source, Function<I, O> mapper) {
+    super(source, mapper);
+  }
+
+  @Override
+  public void close() {
+    ((ClosableIterator<I>) source).close();
   }
 }

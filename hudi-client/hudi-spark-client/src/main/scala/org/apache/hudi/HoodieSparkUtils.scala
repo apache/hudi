@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
@@ -66,19 +67,14 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
   /**
    * @deprecated please use other overload [[createRdd]]
    */
+  @Deprecated
   def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
                 latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
-    var latestTableSchemaConverted : Option[Schema] = None
-
-    if (latestTableSchema.isPresent && reconcileToLatestSchema) {
-      latestTableSchemaConverted = Some(latestTableSchema.get())
-    } else {
-      // cases when users want to use latestTableSchema but have not turned on reconcileToLatestSchema explicitly
-      // for example, when using a Transformer implementation to transform source RDD to target RDD
-      latestTableSchemaConverted = if (latestTableSchema.isPresent) Some(latestTableSchema.get()) else None
-    }
-    createRdd(df, structName, recordNamespace, latestTableSchemaConverted)
+    createRdd(df, structName, recordNamespace, toScalaOption(latestTableSchema))
   }
+
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String): RDD[GenericRecord] =
+    createRdd(df, structName, recordNamespace, None)
 
   def createRdd(df: DataFrame, structName: String, recordNamespace: String, readerAvroSchemaOpt: Option[Schema]): RDD[GenericRecord] = {
     val writerSchema = df.schema

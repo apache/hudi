@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
@@ -201,8 +202,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       createMarkerFile(partitionPath, newFilePath.getName());
 
       // Create the writer for writing the new version file
-      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config,
-        writeSchemaWithMetaFields, taskContextSupplier);
+      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable,
+          config, writeSchemaWithMetaFields, taskContextSupplier);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -229,7 +230,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(tableSchema),
+          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writeSchema),
           config.getCommonConfig().getSpillableDiskMapType(),
           config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
     } catch (IOException io) {
@@ -285,7 +286,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord) throws IOException {
-    Schema schema = useWriterSchemaForCompaction ? tableSchemaWithMetaFields : tableSchema;
+    Schema schema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
     Option<IndexedRecord> insertRecord = hoodieRecord.getData().getInsertValue(schema, config.getProps());
     // just skip the ignored record
     if (insertRecord.isPresent() && insertRecord.get().equals(IGNORE_RECORD)) {
@@ -345,7 +346,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       try {
         Option<IndexedRecord> combinedAvroRecord =
             hoodieRecord.getData().combineAndGetUpdateValue(oldRecord,
-              useWriterSchemaForCompaction ? tableSchemaWithMetaFields : tableSchema,
+              useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema,
                 config.getPayloadConfig().getProps());
 
         if (combinedAvroRecord.isPresent() && combinedAvroRecord.get().equals(IGNORE_RECORD)) {

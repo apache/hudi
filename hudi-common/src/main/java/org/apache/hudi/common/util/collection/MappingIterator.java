@@ -16,24 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.hudi
+package org.apache.hudi.common.util.collection;
 
-import org.junit.jupiter.api.Assertions.fail
+import java.util.Iterator;
+import java.util.function.Function;
 
-trait ScalaAssertionSupport {
+// TODO java-docs
+public class MappingIterator<I, O> implements Iterator<O> {
 
-  def assertThrows[T <: Throwable, R](expectedExceptionClass: Class[T])(f: => R): T = {
-    try {
-      f
-    } catch {
-      case t: Throwable if expectedExceptionClass.isAssignableFrom(t.getClass) =>
-        // scalastyle:off return
-        return t.asInstanceOf[T]
-      // scalastyle:on return
-      case ot @ _ =>
-        fail(s"Expected exception of class $expectedExceptionClass, but ${ot.getClass} has been thrown: $ot\n${ot.getStackTrace.mkString("\n")}")
-    }
+  protected final Iterator<I> source;
+  private final Function<I, O> mapper;
 
-    fail(s"Expected exception of class $expectedExceptionClass, but nothing has been thrown")
+  public MappingIterator(Iterator<I> source, Function<I, O> mapper) {
+    this.source = source;
+    this.mapper = mapper;
+  }
+
+  @Override
+  public boolean hasNext() {
+    return source.hasNext();
+  }
+
+  @Override
+  public O next() {
+    return mapper.apply(source.next());
   }
 }

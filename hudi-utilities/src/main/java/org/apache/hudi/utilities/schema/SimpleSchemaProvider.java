@@ -16,24 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi
+package org.apache.hudi.utilities.schema;
 
-import org.junit.jupiter.api.Assertions.fail
+import org.apache.avro.Schema;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.spark.api.java.JavaSparkContext;
 
-trait ScalaAssertionSupport {
+public class SimpleSchemaProvider extends SchemaProvider {
 
-  def assertThrows[T <: Throwable, R](expectedExceptionClass: Class[T])(f: => R): T = {
-    try {
-      f
-    } catch {
-      case t: Throwable if expectedExceptionClass.isAssignableFrom(t.getClass) =>
-        // scalastyle:off return
-        return t.asInstanceOf[T]
-      // scalastyle:on return
-      case ot @ _ =>
-        fail(s"Expected exception of class $expectedExceptionClass, but ${ot.getClass} has been thrown: $ot\n${ot.getStackTrace.mkString("\n")}")
-    }
+  private final Schema sourceSchema;
 
-    fail(s"Expected exception of class $expectedExceptionClass, but nothing has been thrown")
+  public SimpleSchemaProvider(JavaSparkContext jssc, Schema sourceSchema, TypedProperties props) {
+    super(props, jssc);
+    this.sourceSchema = sourceSchema;
+  }
+
+  @Override
+  public Schema getSourceSchema() {
+    return sourceSchema;
   }
 }

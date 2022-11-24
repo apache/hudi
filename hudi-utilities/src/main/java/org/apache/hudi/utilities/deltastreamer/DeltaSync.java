@@ -18,8 +18,18 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import com.codahale.metrics.Timer;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaCompatibility;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieConversionUtils;
+import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -55,6 +65,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -73,17 +84,10 @@ import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
+import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.transform.Transformer;
-
-import com.codahale.metrics.Timer;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -91,6 +95,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import scala.collection.JavaConversions;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -106,8 +111,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import scala.collection.JavaConversions;
-
+import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
@@ -462,37 +466,33 @@ public class DeltaSync implements Serializable, Closeable {
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
-        // If the target schema is specified through Avro schema,
-        // pass in the schema for the Row-to-Avro conversion
-        // to avoid nullability mismatch between Avro schema and Row schema
-        avroRDDOptional = transformed
-            .map(t -> HoodieSparkUtils.createRdd(
-                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
-                Option.of(this.userProvidedSchemaProvider.getTargetSchema())
-            ).toJavaRDD());
         schemaProvider = this.userProvidedSchemaProvider;
       } else {
-        // Use Transformed Row's schema if not overridden. If target schema is not specified
-        // default to RowBasedSchemaProvider
-        schemaProvider =
-            transformed
-                .map(r -> {
-                  // determine the targetSchemaProvider. use latestTableSchema if reconcileSchema is enabled.
-                  SchemaProvider targetSchemaProvider = null;
-                  if (reconcileSchema) {
-                    targetSchemaProvider = UtilHelpers.createLatestSchemaProvider(r.schema(), jssc, fs, cfg.targetBasePath);
-                  } else {
-                    targetSchemaProvider = UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc);
-                  }
-                  return (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
-                      dataAndCheckpoint.getSchemaProvider(), targetSchemaProvider); })
-                .orElse(dataAndCheckpoint.getSchemaProvider());
-        avroRDDOptional = transformed
-            .map(t -> HoodieSparkUtils.createRdd(
-                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
-                Option.ofNullable(schemaProvider.getTargetSchema())
-            ).toJavaRDD());
+        Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jssc, fs, cfg.targetBasePath);
+        // Deduce proper target (writer's) schema for the transformed dataset, reconciling its
+        // schema w/ the table's one
+        Option<Schema> targetSchemaOpt = transformed.map(df -> {
+          Schema sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(),
+              latestTableSchemaOpt.map(Schema::getFullName).orElse(getAvroRecordQualifiedName(cfg.targetTableName)));
+          // Target (writer's) schema is determined based on the incoming source schema
+          // and existing table's one, reconciling the two (if necessary) based on configuration
+          return HoodieSparkSqlWriter.deduceWriterSchema(
+                  sourceSchema,
+                  HoodieConversionUtils.<Schema>toScalaOption(latestTableSchemaOpt),
+                  HoodieConversionUtils.<InternalSchema>toScalaOption(Option.empty()),
+                  HoodieConversionUtils.fromProperties(props));
+        });
+        // Override schema provider with the reconciled target schema
+        schemaProvider = targetSchemaOpt.map(targetSchema ->
+          (SchemaProvider) new DelegatingSchemaProvider(props, jssc, dataAndCheckpoint.getSchemaProvider(),
+                new SimpleSchemaProvider(jssc, targetSchema, props)))
+          .orElse(dataAndCheckpoint.getSchemaProvider());
       }
+
+      // Rewrite transformed records into the expected target schema
+      avroRDDOptional =
+          transformed.map(t -> HoodieSparkUtils.createRdd(t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE,
+              reconcileSchema, Option.of(schemaProvider.getTargetSchema())).toJavaRDD());
     } else {
       // Pull the data from the source & prepare the write
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint =
