@@ -38,6 +38,8 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends HoodieLeaf
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute update command for $tableId")
+    val catalogTable = HoodieCatalogTable(sparkSession, tableId)
+    val allowOperationMetadataField = catalogTable.tableConfig.allowOperationMetadataField()
     val sqlConf = sparkSession.sessionState.conf
     val name2UpdateValue = updateTable.assignments.map {
       case Assignment(attr: AttributeReference, value) =>
@@ -51,11 +53,11 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends HoodieLeaf
       })
       .filter { // filter the meta columns
         case attr: AttributeReference =>
-          !HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet.contains(attr.name)
+          !getMetaFields(allowOperationMetadataField).contains(attr.name)
         case _=> true
       }
 
-    val projects = updateExpressions.zip(removeMetaFields(table.schema).fields).map {
+    val projects = updateExpressions.zip(removeMetaFields(table.schema, allowOperationMetadataField).fields).map {
       case (attr: AttributeReference, field) =>
         Column(cast(attr, field, sqlConf))
       case (exp, field) =>
@@ -67,7 +69,8 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends HoodieLeaf
       df = df.filter(Column(updateTable.condition.get))
     }
     df = df.select(projects: _*)
-    val config = buildHoodieConfig(HoodieCatalogTable(sparkSession, tableId))
+    val config = buildHoodieConfig(catalogTable)
+
     df.write
       .format("hudi")
       .mode(SaveMode.Append)

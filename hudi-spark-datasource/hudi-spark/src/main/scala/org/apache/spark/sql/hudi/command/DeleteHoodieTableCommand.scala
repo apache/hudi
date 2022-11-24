@@ -35,12 +35,12 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Hoodie
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute delete command for $tableId")
 
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableId)
     // Remove meta fields from the data frame
-    var df = removeMetaFields(Dataset.ofRows(sparkSession, table))
+    var df = removeMetaFields(Dataset.ofRows(sparkSession, table), hoodieCatalogTable.allowOperationMetadataField)
     val condition = sparkAdapter.extractDeleteCondition(deleteTable)
     if (condition != null) df = df.filter(Column(condition))
 
-    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableId)
     val config = buildHoodieDeleteTableConfig(hoodieCatalogTable, sparkSession)
     df.write
       .format("hudi")

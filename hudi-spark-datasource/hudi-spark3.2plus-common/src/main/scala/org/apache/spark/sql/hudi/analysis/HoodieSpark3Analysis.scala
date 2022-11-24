@@ -83,8 +83,8 @@ class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
                                     partitionSpec: Map[String, Option[String]],
                                     schema: StructType): Boolean = {
     val output = query.output
-    val queryOutputWithoutMetaFields = removeMetaFields(output)
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, table)
+    val queryOutputWithoutMetaFields = removeMetaFields(output, hoodieCatalogTable.allowOperationMetadataField)
 
     val partitionFields = hoodieCatalogTable.partitionFields
     val partitionSchema = hoodieCatalogTable.partitionSchema

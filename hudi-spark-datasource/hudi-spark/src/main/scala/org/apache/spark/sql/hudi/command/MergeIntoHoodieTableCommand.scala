@@ -74,17 +74,19 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * The target table schema without hoodie meta fields.
    */
-  private var sourceDFOutput = mergeInto.sourceTable.output.filter(attr => !isMetaField(attr.name))
+  private var sourceDFOutput: Seq[Attribute] = _
 
   /**
    * The target table schema without hoodie meta fields.
    */
   private lazy val targetTableSchemaWithoutMetaFields =
-    removeMetaFields(mergeInto.targetTable.schema).fields
+    removeMetaFields(mergeInto.targetTable.schema, allowOperationMetadataField).fields
 
   private lazy val hoodieCatalogTable = HoodieCatalogTable(sparkSession, targetTableIdentify)
 
   private lazy val targetTableType = hoodieCatalogTable.tableTypeName
+
+  private lazy val allowOperationMetadataField = hoodieCatalogTable.tableConfig.allowOperationMetadataField()
 
   /**
    *
@@ -170,9 +172,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         ).getOrElse {
           // If there is no update action, mapping the target column to the source by order.
           val target2Source = mergeInto.targetTable.output
-            .filter(attr => !isMetaField(attr.name))
+            .filter(attr => !isMetaField(attr.name, allowOperationMetadataField))
             .map(_.name)
-            .zip(mergeInto.sourceTable.output.filter(attr => !isMetaField(attr.name)))
+            .zip(mergeInto.sourceTable.output.filter(attr => !isMetaField(attr.name, allowOperationMetadataField)))
             .toMap
           target2Source.getOrElse(preCombineField, null)
         }
@@ -182,6 +184,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
+    sourceDFOutput = mergeInto.sourceTable.output.filter(attr => !isMetaField(attr.name, allowOperationMetadataField))
 
     // Create the write parameters
     val parameters = buildMergeIntoConfig(hoodieCatalogTable)
@@ -347,7 +350,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       serializedInsertConditionAndExpressions(insertActions))
 
     // Remove the meta fields from the sourceDF as we do not need these when writing.
-    val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
+    val sourceDFWithoutMetaFields = removeMetaFields(sourceDF, allowOperationMetadataField)
     HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
   }
 
@@ -420,7 +423,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     }.toMap[Attribute, Expression]
    // reorder the assignments by the target table field
     mergeInto.targetTable.output
-      .filterNot(attr => isMetaField(attr.name))
+      .filterNot(attr => isMetaField(attr.name, allowOperationMetadataField))
       .map(attr => {
         val assignment = attr2Assignment.find(f => attributeEqual(f._1, attr, sparkSession.sessionState.conf.resolver))
           .getOrElse(throw new IllegalArgumentException(s"Cannot find related assignment for field: ${attr.name}"))
@@ -437,7 +440,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    */
   private def replaceAttributeInExpression(exp: Expression): Expression = {
     val sourceJoinTargetFields = sourceDFOutput ++
-      mergeInto.targetTable.output.filterNot(attr => isMetaField(attr.name))
+      mergeInto.targetTable.output.filterNot(attr => isMetaField(attr.name, allowOperationMetadataField))
 
     exp transform {
       case attr: AttributeReference =>

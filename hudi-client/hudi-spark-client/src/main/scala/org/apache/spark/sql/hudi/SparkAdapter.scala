@@ -138,6 +138,13 @@ trait SparkAdapter extends Serializable {
     }
   }
 
+  def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
+    unfoldSubqueryAliases(table) match {
+      case LogicalRelation(_, _, Some(table), _) => table.identifier
+      case relation: UnresolvedRelation => getCatalystPlanUtils.toTableIdentifier(relation)
+    }
+  }
+
   /**
    * Create instance of [[ParquetFileFormat]]
    */

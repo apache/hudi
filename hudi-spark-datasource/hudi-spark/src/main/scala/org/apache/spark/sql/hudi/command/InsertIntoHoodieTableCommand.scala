@@ -128,9 +128,9 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     val targetPartitionSchema = catalogTable.partitionSchema
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
 
-    validate(removeMetaFields(query.schema), partitionsSpec, catalogTable)
+    validate(removeMetaFields(query.schema, catalogTable.tableConfig.allowOperationMetadataField()), partitionsSpec, catalogTable)
     // Make sure we strip out meta-fields from the incoming dataset (these will have to be discarded anyway)
-    val cleanedQuery = stripMetaFields(query)
+    val cleanedQuery = stripMetaFields(query, catalogTable.tableConfig.allowOperationMetadataField())
     // To validate and align properly output of the query, we simply filter out partition columns with already
     // provided static values from the table's schema
     //
@@ -203,8 +203,8 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
   }
 
-  def stripMetaFields(query: LogicalPlan): LogicalPlan = {
-    val filteredOutput = query.output.filterNot(attr => isMetaField(attr.name))
+  def stripMetaFields(query: LogicalPlan, allowOperationMetadataField: Boolean): LogicalPlan = {
+    val filteredOutput = query.output.filterNot(attr => isMetaField(attr.name, allowOperationMetadataField))
     if (filteredOutput == query.output) {
       query
     } else {
