@@ -267,6 +267,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
             throw root
         }
       }
+
       // Create table with dropDup is true
       val tableName2 = generateTableName
       spark.sql("set hoodie.datasource.write.insert.drop.duplicates = true")
@@ -293,6 +294,52 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       )
       // disable this config to avoid affect other test in this class.
       spark.sql("set hoodie.datasource.write.insert.drop.duplicates = false")
+      spark.sql(s"set hoodie.sql.insert.mode=upsert")
+    }
+  }
+
+  test("Test Insert Into None Partitioned Table strict mode with no preCombineField") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      // Create none partitioned cow table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id'
+           | )
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 10)")
+      checkAnswer(s"select id, name, price from $tableName")(
+        Seq(1, "a1", 10.0)
+      )
+      spark.sql(s"insert into $tableName select 2, 'a2', 12")
+      checkAnswer(s"select id, name, price from $tableName")(
+        Seq(1, "a1", 10.0),
+        Seq(2, "a2", 12.0)
+      )
+
+      assertThrows[HoodieDuplicateKeyException] {
+        try {
+          spark.sql(s"insert into $tableName select 1, 'a1', 10")
+        } catch {
+          case e: Exception =>
+            var root: Throwable = e
+            while (root.getCause != null) {
+              root = root.getCause
+            }
+            throw root
+        }
+      }
+
+      // disable this config to avoid affect other test in this class.
       spark.sql(s"set hoodie.sql.insert.mode=upsert")
     }
   }
