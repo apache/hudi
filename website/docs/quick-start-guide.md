@@ -36,7 +36,8 @@ instructions.
 :::
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -167,7 +168,8 @@ spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.12.1 \
 Setup table name, base path and a data generator to generate records for this guide.
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -214,7 +216,8 @@ can generate sample inserts and updates based on the the sample trip schema [her
 ## Create Table
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -403,7 +406,8 @@ To set any custom hudi config(like index type, max parquet size, etc), see the  
 ## Insert data
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -532,7 +536,8 @@ you can also centrally set them in a configuration file `hudi-default.conf`.
 Load the data files into a DataFrame.
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -594,7 +599,8 @@ Refer to [Table types and queries](/docs/concepts#table-types--queries) for more
 Hudi supports time travel query since 0.9.0. Currently three query time formats are supported as given below.
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -693,7 +699,8 @@ This is similar to inserting new data. Generate updates to existing trips using 
 and write DataFrame into the hudi table.
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -829,7 +836,8 @@ This can be achieved using Hudi's incremental querying and providing a begin tim
 We do not need to specify endTime, if we want all changes after the given commit (as is the common case). 
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -905,8 +913,10 @@ Hudi supports Spark Structured Streaming reads and writes.
 Structured Streaming reads are based on Hudi Incremental Query feature, therefore streaming read can return data for which commits and base files were not yet removed by the cleaner. You can control commits retention time.
 
 ### Streaming Read
+
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -991,7 +1001,8 @@ spark.readStream \
 ### Streaming Write
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -1092,7 +1103,8 @@ Lets look at how to query data as of a specific time. The specific time can be r
 specific commit time and beginTime to "000" (denoting earliest possible commit time). 
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -1156,7 +1168,8 @@ Apache Hudi supports two types of deletes: <br/>
 Soft deletes retain the record key and null out the values for all the other fields. For example, records with nulls in soft deletes are always persisted in storage and never removed.<br/><br/>
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', }
@@ -1286,7 +1299,8 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot where rider is no
 Hard deletes physically remove any trace of the record from the table. For example, this deletes records for the HoodieKeys passed in.<br/><br/>
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
@@ -1411,7 +1425,8 @@ updating the target tables). This is because, we are able to bypass indexing, pr
 steps in the upsert write path completely.
 
 <Tabs
-defaultValue="scala"
+groupId="programming-language"
+defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
