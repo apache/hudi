@@ -39,6 +39,11 @@ key generators.
 | ```hoodie.datasource.write.partitionpath.urlencode```| When set to true, partition path will be url encoded. Default value is false. |
 | ```hoodie.datasource.write.hive_style_partitioning```| When set to true, uses hive style partitioning. Partition field name will be prefixed to the value. Format: “<partition_path_field_name>=<partition_path_value>”. Default value is false.|
 
+NOTE: 
+Please use `hoodie.datasource.write.keygenerator.class` instead of `hoodie.datasource.write.keygenerator.type`. The second config was introduced more recently.
+and will internally instantiate the correct KeyGenerator class based on the type name. The second one is intended for ease of use and is being actively worked on.
+We still recommend using the first config until it is marked as deprecated.
+
 There are few more configs involved if you are looking for TimestampBasedKeyGenerator. Will cover those in the respective section.
 
 Lets go over different key generators available to be used with Hudi.
