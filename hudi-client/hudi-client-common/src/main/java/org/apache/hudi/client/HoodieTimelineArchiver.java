@@ -48,7 +48,6 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -556,39 +555,29 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // other monitors on the timeline(such as the compaction or clustering services) would
     // mistakenly recognize the pending file as a pending operation,
     // then all kinds of weird bugs occur.
-    boolean success = deleteArchivedInstants(context, metaClient, pendingInstants);
-    success &= deleteArchivedInstants(context, metaClient, completedInstants);
+    deleteArchivedInstants(context, metaClient, pendingInstants);
+    deleteArchivedInstants(context, metaClient, completedInstants);
 
     // Remove older meta-data from auxiliary path too
     Option<HoodieInstant> latestCommitted = Option.fromJavaOptional(archivedInstants.stream().filter(i -> i.isCompleted() && (i.getAction().equals(HoodieTimeline.COMMIT_ACTION)
         || (i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)))).max(Comparator.comparing(HoodieInstant::getTimestamp)));
     LOG.info("Latest Committed Instant=" + latestCommitted);
     if (latestCommitted.isPresent()) {
-      success &= deleteAllInstantsOlderOrEqualsInAuxMetaFolder(latestCommitted.get());
+      return deleteAllInstantsOlderOrEqualsInAuxMetaFolder(latestCommitted.get());
     }
-    return success;
+    return true;
   }
 
-  private boolean deleteArchivedInstants(HoodieEngineContext context,
-                                         HoodieTableMetaClient metaClient,
-                                         List<HoodieInstant> instants) {
-    if (instants.isEmpty()) {
-      return true;
+  private void deleteArchivedInstants(HoodieEngineContext context,
+                                      HoodieTableMetaClient metaClient,
+                                      List<HoodieInstant> instants) {
+    if (!instants.isEmpty()) {
+      context.foreach(
+          instants,
+          instant -> metaClient.getActiveTimeline().deleteInstantFileIfExists(instant),
+          Math.min(instants.size(), config.getArchiveDeleteParallelism())
+      );
     }
-
-    Map<HoodieInstant, Boolean> result = context.mapToPair(
-        instants,
-        instant -> ImmutablePair.of(
-            instant,
-            metaClient.getActiveTimeline().deleteInstantFileIfExists(instant, false)),
-        Math.min(instants.size(), config.getArchiveDeleteParallelism()));
-
-    boolean success = true;
-    for (Map.Entry<HoodieInstant, Boolean> entry : result.entrySet()) {
-      LOG.info("Archived and deleted instant " + entry.getKey().toString() + " : " + entry.getValue());
-      success &= entry.getValue();
-    }
-    return success;
   }
 
   /**

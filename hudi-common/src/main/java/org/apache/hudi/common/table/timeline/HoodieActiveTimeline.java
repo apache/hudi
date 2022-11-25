@@ -266,11 +266,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     deleteInstantFile(instant);
   }
 
+  /**
+   * Note: This should only be used in the case that delete requested/inflight instant
+   * or empty clean instant. The completed commit instant is not allowed to delete.
+   */
   public void deleteInstantFileIfExists(HoodieInstant instant) {
-    deleteInstantFileIfExists(instant, true);
-  }
-
-  public boolean deleteInstantFileIfExists(HoodieInstant instant, boolean exceptionIfFailToDelete) {
     LOG.info("Deleting instant " + instant);
     Path commitFilePath = getInstantFileNamePath(instant.getFileName());
     try {
@@ -278,13 +278,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         boolean result = metaClient.getFs().delete(commitFilePath, false);
         if (result) {
           LOG.info("Removed instant " + instant);
-        } else if (exceptionIfFailToDelete) {
+        } else {
           throw new HoodieIOException("Could not delete instant " + instant);
         }
-        return result;
       } else {
         LOG.warn("The commit " + commitFilePath + " to remove does not exist");
-        return true;
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not remove commit " + commitFilePath, e);
