@@ -113,6 +113,7 @@ public class StreamReadMonitoringFunction
         .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
         .requiredPartitions(requiredPartitionPaths)
         .skipCompaction(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
+        .skipClustering(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
         .build();
   }
 
