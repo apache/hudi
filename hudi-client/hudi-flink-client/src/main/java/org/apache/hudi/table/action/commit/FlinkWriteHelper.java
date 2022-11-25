@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -68,7 +69,8 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> write(String instantTime, List<HoodieRecord<T>> inputRecords, HoodieEngineContext context,
                                                       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table, boolean shouldCombine, int shuffleParallelism,
-                                                      BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, WriteOperationType operationType) {
+                                                      BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, WriteOperationType operationType,
+                                                      boolean dropDuplicates) {
     try {
       Instant lookupBegin = Instant.now();
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
@@ -114,5 +116,10 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
       hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
       return hoodieRecord;
     }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
+  }
+
+  @Override
+  public List<HoodieRecord<T>> dropDuplicates(List<HoodieRecord<T>> records, int parallelism) {
+    return (List<HoodieRecord<T>>) records.stream().filter(tHoodieRecord -> !tHoodieRecord.isCurrentLocationKnown());
   }
 }

@@ -364,14 +364,8 @@ object HoodieSparkSqlWriter {
               asyncClusteringTriggerFn.get.apply(client)
             }
 
-            val dedupedHoodieRecords =
-              if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
-                DataSourceUtils.dropDuplicates(jsc, hoodieRecords, mapAsJavaMap(parameters))
-              } else {
-                hoodieRecords
-              }
             client.startCommitWithTime(instantTime, commitActionType)
-            val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation)
+            val writeResult = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation)
             (writeResult, client)
         }
 

@@ -39,7 +39,8 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
                                       boolean shouldCombine,
                                       int shuffleParallelism,
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
-                                      WriteOperationType operationType) {
+                                      WriteOperationType operationType,
+                                      boolean dropDuplicates) {
     try {
       // De-dupe/merge if needed
       I dedupedRecords =
@@ -53,8 +54,12 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
         taggedRecords = tag(dedupedRecords, context, table);
       }
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
+      I processedRecords = taggedRecords;
+      if (dropDuplicates) {
+        processedRecords = dropDuplicates(taggedRecords, shuffleParallelism);
+      }
 
-      HoodieWriteMetadata<O> result = executor.execute(taggedRecords);
+      HoodieWriteMetadata<O> result = executor.execute(processedRecords);
       result.setIndexLookupDuration(indexLookupDuration);
       return result;
     } catch (Throwable e) {
@@ -87,4 +92,7 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
 
   public abstract I deduplicateRecords(
       I records, HoodieIndex<?, ?> index, int parallelism, String schema);
+
+  public abstract I dropDuplicates(
+      I records, int parallelism);
 }

@@ -77,4 +77,9 @@ public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteH
       return new HoodieAvroRecord<T>(rec1.getKey(), reducedData);
     }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
   }
+
+  @Override
+  public List<HoodieRecord<T>> dropDuplicates(List<HoodieRecord<T>> records, int parallelism) {
+    return (List<HoodieRecord<T>>) records.stream().filter(tHoodieRecord -> !tHoodieRecord.isCurrentLocationKnown());
+  }
 }

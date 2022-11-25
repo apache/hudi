@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -71,6 +72,11 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
 
       return new HoodieAvroRecord<>(reducedKey, reducedData);
     }, reduceParallelism).map(Pair::getRight);
+  }
+
+  @Override
+  public HoodieData<HoodieRecord<T>> dropDuplicates(HoodieData<HoodieRecord<T>> records, int parallelism) {
+    return records.filter((SerializableFunction<HoodieRecord<T>, Boolean>) v1 -> !v1.isCurrentLocationKnown());
   }
 
 }

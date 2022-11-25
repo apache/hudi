@@ -514,6 +514,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When table is upgraded from pre 0.12 to 0.12, we check for \"default\" partition and fail if found one. "
           + "Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation");
 
+  public static final ConfigProperty<Boolean> INSERT_DROP_DUPS = ConfigProperty
+      .key("hoodie.datasource.write.insert.drop.duplicates")
+      .defaultValue(false)
+      .withDocumentation("If set to true, filters out all duplicate records from incoming dataframe, during insert operations.");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 
@@ -2141,6 +2146,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   // misc configs
   public Boolean doSkipDefaultPartitionValidation() {
     return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
+  }
+
+  public Boolean doInsertDropDupes() {
+    return getBooleanOrDefault(INSERT_DROP_DUPS);
   }
 
   /**

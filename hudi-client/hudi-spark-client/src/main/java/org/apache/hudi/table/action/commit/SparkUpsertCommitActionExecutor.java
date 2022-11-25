@@ -43,6 +43,6 @@ public class SparkUpsertCommitActionExecutor<T extends HoodieRecordPayload<T>>
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     return HoodieWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
-        config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, operationType);
+        config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, operationType, config.doInsertDropDupes());
   }
 }
