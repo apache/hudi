@@ -34,10 +34,10 @@ import java.io.IOException;
  */
 public class HoodieCommonTestHarness {
 
-  protected String tableName = null;
-  protected String basePath = null;
-  protected transient HoodieTestDataGenerator dataGen = null;
-  protected transient HoodieTableMetaClient metaClient;
+  protected String tableName;
+  protected String basePath;
+  protected HoodieTestDataGenerator dataGen;
+  protected HoodieTableMetaClient metaClient;
   @TempDir
   public java.nio.file.Path tempDir;
 
@@ -52,7 +52,7 @@ public class HoodieCommonTestHarness {
     try {
       java.nio.file.Path basePath = tempDir.resolve("dataset");
       java.nio.file.Files.createDirectories(basePath);
-      this.basePath = basePath.toString();
+      this.basePath = basePath.toUri().toString();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }

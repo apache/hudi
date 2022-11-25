@@ -47,7 +47,6 @@ import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -74,8 +73,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -84,12 +81,10 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.SparkSessionExtensions;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -118,42 +113,32 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * The test harness for resource initialization and cleanup.
  */
-public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness implements Serializable {
+public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(HoodieClientTestHarness.class);
-
-  protected static int timelineServicePort =
-      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
-  private String testMethodName;
-  protected transient JavaSparkContext jsc = null;
-  protected transient HoodieSparkEngineContext context = null;
-  protected transient SparkSession sparkSession = null;
-  protected transient Configuration hadoopConf = null;
-  protected transient SQLContext sqlContext;
-  protected transient FileSystem fs;
-  protected transient ExecutorService executorService;
-  protected transient HoodieTableMetaClient metaClient;
-  protected transient SparkRDDWriteClient writeClient;
-  protected transient SparkRDDReadClient readClient;
-  protected transient HoodieTableFileSystemView tableView;
-  protected transient TimelineService timelineService;
-
-  protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
-
-  // dfs
-  protected String dfsBasePath;
-  protected transient HdfsTestService hdfsTestService;
-  protected transient MiniDFSCluster dfsCluster;
-  protected transient DistributedFileSystem dfs;
+  protected static int timelineServicePort = FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
 
   @AfterAll
   public static void tearDownAll() throws IOException {
     FileSystem.closeAll();
   }
 
-  protected Option<Consumer<SparkSessionExtensions>> getSparkSessionExtensionsInjector() {
-    return Option.empty();
-  }
+  protected JavaSparkContext jsc;
+  protected HoodieSparkEngineContext context;
+  protected SparkSession sparkSession;
+  protected Configuration hadoopConf;
+  protected SQLContext sqlContext;
+  protected FileSystem fs;
+  protected ExecutorService executorService;
+  protected HoodieTableMetaClient metaClient;
+  protected SparkRDDWriteClient writeClient;
+  protected SparkRDDReadClient readClient;
+  protected HoodieTableFileSystemView tableView;
+
+  protected TimelineService timelineService;
+  protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
+
+  private String testMethodName;
 
   @BeforeEach
   public void setTestMethodName(TestInfo testInfo) {
@@ -185,9 +170,12 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     cleanupSparkContexts();
     cleanupTestDataGenerator();
     cleanupFileSystem();
-    cleanupDFS();
     cleanupExecutorService();
     System.gc();
+  }
+
+  protected Option<Consumer<SparkSessionExtensions>> getSparkSessionExtensionsInjector() {
+    return Option.empty();
   }
 
   /**
@@ -395,58 +383,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       tableView.close();
       tableView = null;
     }
-  }
-
-  /**
-   * Initializes a distributed file system and base directory.
-   *
-   * @throws IOException
-   */
-  protected void initDFS() throws IOException {
-    hdfsTestService = new HdfsTestService();
-    dfsCluster = hdfsTestService.start(true);
-
-    // Create a temp folder as the base path
-    dfs = dfsCluster.getFileSystem();
-    dfsBasePath = dfs.getWorkingDirectory().toString();
-    this.basePath = dfsBasePath;
-    this.hadoopConf = dfs.getConf();
-    dfs.mkdirs(new Path(dfsBasePath));
-  }
-
-  /**
-   * Initializes an instance of {@link HoodieTableMetaClient} with a special table type specified by
-   * {@code getTableType()}.
-   *
-   * @throws IOException
-   */
-  protected void initDFSMetaClient() throws IOException {
-    if (dfsBasePath == null) {
-      throw new IllegalStateException("The base path has not been initialized.");
-    }
-
-    if (jsc == null) {
-      throw new IllegalStateException("The Spark context has not been initialized.");
-    }
-    metaClient = HoodieTestUtils.init(dfs.getConf(), dfsBasePath, getTableType());
-  }
-
-  /**
-   * Cleanups the distributed file system.
-   *
-   * @throws IOException
-   */
-  protected void cleanupDFS() throws IOException {
-    if (hdfsTestService != null) {
-      hdfsTestService.stop();
-      dfsCluster.shutdown(true, true);
-      hdfsTestService = null;
-      dfsCluster = null;
-      dfs = null;
-    }
-    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
-    // same JVM
-    FileSystem.closeAll();
   }
 
   /**
@@ -713,7 +649,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
     List<MetadataPartitionType> enabledPartitionTypes = metadataWriter.getEnabledPartitionTypes();
 
-    Assertions.assertEquals(enabledPartitionTypes.size(), metadataTablePartitions.size());
+    assertEquals(enabledPartitionTypes.size(), metadataTablePartitions.size());
 
     Map<String, MetadataPartitionType> partitionTypeMap = enabledPartitionTypes.stream()
         .collect(Collectors.toMap(MetadataPartitionType::getPartitionPath, Function.identity()));
