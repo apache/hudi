@@ -31,12 +31,12 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
+import org.apache.hudi.common.model.HoodieKeyWithLocation;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
@@ -264,7 +264,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         recordsDeleted++;
       }
 
-      writeStatus.markSuccess(hoodieRecord, recordMetadata);
+      writeStatus.markSuccess(HoodieKeyWithLocation.toHoodieKeyWithLocation(hoodieRecord), recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
@@ -272,7 +272,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       return avroRecord;
     } catch (Exception e) {
       LOG.error("Error writing record  " + hoodieRecord, e);
-      writeStatus.markFailure(hoodieRecord, e, recordMetadata);
+      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(hoodieRecord), e, recordMetadata);
     }
     return Option.empty();
   }
@@ -468,7 +468,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     } catch (Throwable t) {
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
-      writeStatus.markFailure(record, t, recordMetadata);
+      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(record), t, recordMetadata);
       LOG.error("Error writing record " + record, t);
     }
   }
@@ -532,14 +532,14 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     if (!partitionPath.equals(record.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + record.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
-      writeStatus.markFailure(record, failureEx, record.getData().getMetadata());
+      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(record), failureEx, record.getData().getMetadata());
       return;
     }
 
     // update the new location of the record, so we know where to find it next
     if (needsUpdateLocation()) {
       record.unseal();
-      record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+      record.setNewLocation(newRecordLocation);
       record.seal();
     }
     // fetch the ordering val first in case the record was deflated.

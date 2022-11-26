@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieKeyWithLocation;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -310,7 +311,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + hoodieRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
-      writeStatus.markFailure(hoodieRecord, failureEx, recordMetadata);
+      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(hoodieRecord), failureEx, recordMetadata);
       return false;
     }
     try {
@@ -320,7 +321,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       } else {
         recordsDeleted++;
       }
-      writeStatus.markSuccess(hoodieRecord, recordMetadata);
+      writeStatus.markSuccess(HoodieKeyWithLocation.toHoodieKeyWithLocation(hoodieRecord), recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
@@ -328,7 +329,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       return true;
     } catch (Exception e) {
       LOG.error("Error writing record  " + hoodieRecord, e);
-      writeStatus.markFailure(hoodieRecord, e, recordMetadata);
+      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(hoodieRecord), e, recordMetadata);
     }
     return false;
   }

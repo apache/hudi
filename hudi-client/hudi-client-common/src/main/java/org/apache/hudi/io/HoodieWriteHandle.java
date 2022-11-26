@@ -23,8 +23,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieKeyWithLocation;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -86,6 +88,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
+  protected HoodieRecordLocation newRecordLocation;
   protected final String partitionPath;
   protected final String fileId;
   protected final String writeToken;
@@ -110,6 +113,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     this.timer = HoodieTimer.start();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+    this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
     schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
@@ -187,7 +191,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     Option recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
     if (exception.isPresent() && exception.get() instanceof Throwable) {
       // Not throwing exception from here, since we don't want to fail the entire job for a single record
-      writeStatus.markFailure(record, exception.get(), recordMetadata);
+      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(record), exception.get(), recordMetadata);
       LOG.error("Error writing record " + record, exception.get());
     } else {
       write(record, avroRecord);
