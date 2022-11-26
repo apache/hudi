@@ -24,6 +24,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -36,6 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
@@ -44,6 +46,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -127,6 +130,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean canTriggerTableService) {
+    commitInternal(instantTime, partitionRecordsMap, canTriggerTableService, Option.empty());
+  }
+
+  private void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean canTriggerTableService,
+                      Option<BulkInsertPartitioner> partitioner) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
@@ -162,8 +170,10 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         // clean plan is the same, so we don't need to delete the requested and inflight instant
         // files in the active timeline.
       }
-      
-      List<WriteStatus> statuses = writeClient.upsertPreppedRecords(preppedRecordRDD, instantTime).collect();
+
+      List<WriteStatus> statuses = partitioner.isPresent()
+          ? writeClient.bulkInsertPreppedRecords((JavaRDD<HoodieRecord>) preppedRecordRDD, instantTime, partitioner).collect()
+          : writeClient.upsertPreppedRecords((JavaRDD<HoodieRecord>) preppedRecordRDD, instantTime).collect();
       statuses.forEach(writeStatus -> {
         if (writeStatus.hasErrors()) {
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
@@ -192,5 +202,19 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       writeClient.startCommitWithTime(instantTime, actionType);
       writeClient.deletePartitions(partitionsToDrop, instantTime);
     }
+  }
+
+  @Override
+  protected void commit(String instantTime, MetadataPartitionType metadataPartitionType, HoodieData<HoodieRecord> records, int fileGroupCount) {
+    LOG.info("Performing bulk insert for partition " + metadataPartitionType.getPartitionPath() + " with " + fileGroupCount + " file groups");
+    SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
+    commitInternal(instantTime, Collections.singletonMap(metadataPartitionType, records),false, Option.of(partitioner));
+
+    // Ensure the expected number of file groups were created
+    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient,
+        metadataPartitionType.getPartitionPath());
+    ValidationUtils.checkState(fileSlices.size() == fileGroupCount,
+        String.format("Wrong number of fileSlices created for partition %s: expected=%d, found=%d", metadataPartitionType.getPartitionPath(),
+            fileGroupCount, fileSlices.size()));
   }
 }

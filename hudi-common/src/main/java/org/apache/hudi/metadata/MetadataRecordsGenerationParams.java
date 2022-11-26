@@ -35,6 +35,7 @@ import java.util.List;
 public class MetadataRecordsGenerationParams implements Serializable {
 
   private final HoodieTableMetaClient dataMetaClient;
+  private final HoodieTableMetaClient metadataMetaClient;
   private final List<MetadataPartitionType> enabledPartitionTypes;
   private final String bloomFilterType;
   private final int bloomIndexParallelism;
@@ -43,9 +44,12 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final List<String> targetColumnsForColumnStatsIndex;
   private final List<String> targetColumnsForBloomFilterIndex;
 
-  MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
-                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex) {
+  MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, HoodieTableMetaClient metadataMetaClient,
+                                  List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
+                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex,
+                                  List<String> targetColumnsForBloomFilterIndex) {
     this.dataMetaClient = dataMetaClient;
+    this.metadataMetaClient = metadataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
     this.bloomIndexParallelism = bloomIndexParallelism;
@@ -85,5 +89,9 @@ public class MetadataRecordsGenerationParams implements Serializable {
 
   public List<String> getSecondaryKeysForBloomFilterIndex() {
     return targetColumnsForBloomFilterIndex;
+  }
+
+  public HoodieTableMetaClient getMetadataMetaClient() {
+    return metadataMetaClient;
   }
 }

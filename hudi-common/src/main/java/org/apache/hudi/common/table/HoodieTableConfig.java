@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -247,7 +248,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS = ConfigProperty
       .key("hoodie.table.metadata.partitions")
-      .noDefaultValue()
+      .defaultValue("")
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
@@ -665,6 +666,46 @@ public class HoodieTableConfig extends HoodieConfig {
     return new HashSet<>(
         StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
             CONFIG_VALUES_DELIMITER));
+  }
+
+
+  /**
+   * @returns true if metadata table has been created and is being used for this dataset, else returns false.
+   */
+  public boolean isMetadataTableEnabled() {
+    return !StringUtils.isNullOrEmpty(getStringOrDefault(TABLE_METADATA_PARTITIONS));
+  }
+
+  /**
+   * Checks if metadata table is enabled and the specified partition has been initialized.
+   *
+   * @param partition The partition to check
+   * @returns true if the specific partition has been initialized, else returns false.
+   */
+  public boolean isMetadataPartitionEnabled(MetadataPartitionType partition) {
+    String[] partitions = getStringOrDefault(TABLE_METADATA_PARTITIONS).split(",");
+    return Arrays.stream(partitions).anyMatch(p -> p.equals(partition.name()));
+  }
+
+  /**
+   * Enables or disables the specified metadata table partition.
+   *
+   * @param partition The partition to save
+   */
+  public void setMetadataPartitionState(MetadataPartitionType partition, boolean enabled) {
+    ValidationUtils.checkArgument(!partition.name().contains(","), "Metadata Table partition name cannot contain a comma: " + partition.name());
+    Set<String> partitions = Arrays.stream(getStringOrDefault(TABLE_METADATA_PARTITIONS).split(","))
+        .filter(p -> !p.isEmpty()).collect(Collectors.toSet());
+    if (enabled) {
+      partitions.add(partition.name());
+    } else if (partition.name().equals(MetadataPartitionType.FILES.name())) {
+      // file listing partition is required for all other partitions to work
+      // Disabling file partition will also disable all partitions
+      partitions.clear();
+    } else {
+      partitions.remove(partition.name());
+    }
+    setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(",")));
   }
 
   /**
