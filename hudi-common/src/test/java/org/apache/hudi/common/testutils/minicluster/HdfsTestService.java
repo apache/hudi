@@ -21,7 +21,6 @@ package org.apache.hudi.common.testutils.minicluster;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.log4j.LogManager;
