@@ -159,7 +159,7 @@ object HoodieDatasetBulkInsertHelper extends Logging {
         writer.close()
       }
 
-      writer.getWriteStatuses.asScala.map(_.toWriteStatus).iterator
+      writer.getWriteStatuses.asScala.iterator
     }).collect()
     table.getContext.parallelize(writeStatuses.toList.asJava)
   }

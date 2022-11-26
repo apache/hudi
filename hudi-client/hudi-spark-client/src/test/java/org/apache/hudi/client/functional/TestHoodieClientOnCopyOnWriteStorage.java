@@ -45,6 +45,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieKeyWithLocation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -512,11 +513,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    *
    * @param records List of Hoodie records
    */
-  void assertNodupesInPartition(List<HoodieRecord> records) {
+  void assertNodupesInPartition(List<HoodieKeyWithLocation> records) {
     Map<String, Set<String>> partitionToKeys = new HashMap<>();
-    for (HoodieRecord r : records) {
-      String key = r.getRecordKey();
-      String partitionPath = r.getPartitionPath();
+    for (HoodieKeyWithLocation r : records) {
+      String key = r.getKey().getRecordKey();
+      String partitionPath = r.getKey().getPartitionPath();
       if (!partitionToKeys.containsKey(partitionPath)) {
         partitionToKeys.put(partitionPath, new HashSet<>());
       }

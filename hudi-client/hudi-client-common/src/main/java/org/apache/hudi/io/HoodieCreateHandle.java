@@ -24,10 +24,11 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieKeyWithLocation;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
@@ -152,14 +153,14 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         }
         // update the new location of record, so we know where to find it next
         record.unseal();
-        record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
+        record.setNewLocation(newRecordLocation);
         record.seal();
         recordsWritten++;
         insertRecordsWritten++;
       } else {
         recordsDeleted++;
       }
-      writeStatus.markSuccess(record, recordMetadata);
+      writeStatus.markSuccess(HoodieKeyWithLocation.toHoodieKeyWithLocation(record), recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
@@ -167,7 +168,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     } catch (Throwable t) {
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
-      writeStatus.markFailure(record, t, recordMetadata);
+      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(record), t, recordMetadata);
       LOG.error("Error writing record " + record, t);
     }
   }

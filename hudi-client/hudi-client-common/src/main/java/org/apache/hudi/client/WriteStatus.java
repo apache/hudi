@@ -21,11 +21,13 @@ package org.apache.hudi.client;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieKeyWithLocation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -52,9 +54,9 @@ public class WriteStatus implements Serializable {
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-  private final List<HoodieRecord> writtenRecords = new ArrayList<>();
+  private final List<HoodieKeyWithLocation> writtenRecords = new ArrayList<>();
 
-  private final List<HoodieRecord> failedRecords = new ArrayList<>();
+  private final List<Pair<HoodieKeyWithLocation, Throwable>> failedRecords = new ArrayList<>();
 
   private Throwable globalError = null;
 
@@ -83,16 +85,20 @@ public class WriteStatus implements Serializable {
     this.random = null;
   }
 
+  public void markSuccess() {
+    totalRecords++;
+  }
+
   /**
    * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
    * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param record deflated {@code HoodieRecord} containing information that uniquely identifies it.
+   * @param keyWithLocation HoodieKey with location information.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markSuccess(HoodieKeyWithLocation keyWithLocation, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecords.add(record);
+      writtenRecords.add(keyWithLocation);
     }
     totalRecords++;
 
@@ -115,14 +121,14 @@ public class WriteStatus implements Serializable {
    * Mark write as failed, optionally using given parameters for the purpose of calculating some aggregate metrics. This
    * method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param record deflated {@code HoodieRecord} containing information that uniquely identifies it.
+   * @param keyWithLocation HoodieKey with location information.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(HoodieKeyWithLocation keyWithLocation, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
-      failedRecords.add(record);
-      errors.put(record.getKey(), t);
+      failedRecords.add(Pair.of(keyWithLocation, t));
+      errors.put(keyWithLocation.getKey(), t);
     }
     totalRecords++;
     totalErrorRecords++;
@@ -160,11 +166,11 @@ public class WriteStatus implements Serializable {
     this.globalError = t;
   }
 
-  public List<HoodieRecord> getWrittenRecords() {
+  public List<HoodieKeyWithLocation> getWrittenRecords() {
     return writtenRecords;
   }
 
-  public List<HoodieRecord> getFailedRecords() {
+  public List<Pair<HoodieKeyWithLocation, Throwable>> getFailedRecords() {
     return failedRecords;
   }
 
@@ -198,6 +204,10 @@ public class WriteStatus implements Serializable {
 
   public void setTotalErrorRecords(long totalErrorRecords) {
     this.totalErrorRecords = totalErrorRecords;
+  }
+
+  public boolean isTrackingSuccessfulWrites() {
+    return trackSuccessRecords;
   }
 
   @Override
