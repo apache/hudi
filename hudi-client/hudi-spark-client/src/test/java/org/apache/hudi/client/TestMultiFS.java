@@ -57,8 +57,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class TestMultiFS extends HoodieClientTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestMultiFS.class);
-  private static final String tableType = HoodieTableType.COPY_ON_WRITE.name();
-  private static final String tableName = "hoodie_rt";
+  private static final String TABLE_TYPE = HoodieTableType.COPY_ON_WRITE.name();
+  private static final String TABLE_NAME = "hoodie_rt";
   private static HdfsTestService hdfsTestService;
   private static FileSystem dfs;
   private String tablePath;
@@ -72,7 +72,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
   }
 
   @AfterAll
-  public static void cleanUpAll() throws IOException {
+  public static void cleanUpAll() {
     hdfsTestService.stop();
   }
 
@@ -81,7 +81,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
     initPath();
     initSparkContexts();
     initTestDataGenerator();
-    tablePath = basePath + "/sample-table";
+    tablePath = baseUri + "/sample-table";
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
     hadoopConf = dfs.getConf();
@@ -94,7 +94,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
   protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withEmbeddedTimelineServerEnabled(true)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(tableName)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(TABLE_NAME)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .build();
   }
@@ -103,8 +103,8 @@ public class TestMultiFS extends HoodieClientTestHarness {
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
     HoodieTableMetaClient.withPropertyBuilder()
-        .setTableType(tableType)
-        .setTableName(tableName)
+        .setTableType(TABLE_TYPE)
+        .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
         .initTable(hadoopConf, dfsBasePath);
 
@@ -113,8 +113,8 @@ public class TestMultiFS extends HoodieClientTestHarness {
     HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath);
 
     HoodieTableMetaClient.withPropertyBuilder()
-        .setTableType(tableType)
-        .setTableName(tableName)
+        .setTableType(TABLE_TYPE)
+        .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
         .setRecordKeyFields(localConfig.getProps().getProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()))
         .setPartitionFields(localConfig.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
@@ -140,8 +140,8 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
       // Write to local
       HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(tableType)
-          .setTableName(tableName)
+          .setTableType(TABLE_TYPE)
+          .setTableName(TABLE_NAME)
           .setPayloadClass(HoodieAvroPayload.class)
           .initTable(hadoopConf, tablePath);
 

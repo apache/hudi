@@ -18,8 +18,6 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -28,6 +26,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -47,7 +49,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
+public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase implements Serializable {
   private static final Comparator<HoodieRecord<? extends HoodieRecordPayload>> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey()));
 
@@ -70,8 +72,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
     return records.map(record -> record.getPartitionPath()).countByValue();
   }
 
-  private static JavaRDD<HoodieRecord> generateTripleTestRecordsForBulkInsert(JavaSparkContext jsc)
-      throws Exception {
+  private static JavaRDD<HoodieRecord> generateTripleTestRecordsForBulkInsert(JavaSparkContext jsc) {
     return generateTestRecordsForBulkInsert(jsc).union(generateTestRecordsForBulkInsert(jsc))
         .union(generateTestRecordsForBulkInsert(jsc));
   }
@@ -135,8 +136,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
   @ParameterizedTest(name = "[{index}] {0}")
   @MethodSource("configParams")
   public void testBulkInsertInternalPartitioner(BulkInsertSortMode sortMode,
-                                                boolean isGloballySorted, boolean isLocallySorted)
-      throws Exception {
+                                                boolean isGloballySorted, boolean isLocallySorted) {
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
     testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode),
@@ -146,7 +146,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
   }
 
   @Test
-  public void testCustomColumnSortPartitioner() throws Exception {
+  public void testCustomColumnSortPartitioner() {
     String sortColumnString = "rider";
     String[] sortColumns = sortColumnString.split(",");
     Comparator<HoodieRecord<? extends HoodieRecordPayload>> columnComparator = getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
