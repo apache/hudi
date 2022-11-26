@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -62,7 +62,7 @@ public class BulkInsertDataInternalWriterHelper {
   protected final HoodieWriteConfig writeConfig;
   protected final StructType structType;
   protected final Boolean arePartitionRecordsSorted;
-  protected final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
+  protected final List<WriteStatus> writeStatusList = new ArrayList<>();
   protected final String fileIdPrefix;
   protected final Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
   protected final boolean populateMetaFields;
@@ -158,7 +158,7 @@ public class BulkInsertDataInternalWriterHelper {
     }
   }
 
-  public List<HoodieInternalWriteStatus> getWriteStatuses() throws IOException {
+  public List<WriteStatus> getWriteStatuses() throws IOException {
     close();
     return writeStatusList;
   }

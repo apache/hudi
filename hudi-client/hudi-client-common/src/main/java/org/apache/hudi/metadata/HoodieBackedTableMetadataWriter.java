@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieKeyWithLocation;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -1161,20 +1162,20 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private HoodieData<HoodieRecord> getRecordIndexUpdates(HoodieData<WriteStatus> writeStatuses) {
     return writeStatuses.flatMap(writeStatus -> {
       List<HoodieRecord> recordList = new LinkedList<>();
-      for (HoodieRecord writtenRecord : writeStatus.getWrittenRecords()) {
-        if (!writeStatus.isErrored(writtenRecord.getKey())) {
+      for (HoodieKeyWithLocation keyWithLocation : writeStatus.getWrittenRecords()) {
+        if (!writeStatus.isErrored(keyWithLocation.getKey())) {
           HoodieRecord hoodieRecord;
-          HoodieKey key = writtenRecord.getKey();
-          Option<HoodieRecordLocation> newLocation = writtenRecord.getNewLocation();
+          HoodieKey key = keyWithLocation.getKey();
+          Option<HoodieRecordLocation> newLocation = keyWithLocation.getNewLocation();
           if (newLocation.isPresent()) {
-            if (writtenRecord.getCurrentLocation() != null) {
+            if (keyWithLocation.getCurrentLocation() != null) {
               // This is an update, no need to update index if the location has not changed
               // newLocation should have the same fileID as currentLocation. The instantTimes differ as newLocation's
               // instantTime refers to the current commit which was completed.
-              if (!writtenRecord.getCurrentLocation().getFileId().equals(newLocation.get().getFileId())) {
+              if (!keyWithLocation.getCurrentLocation().getFileId().equals(newLocation.get().getFileId())) {
                 final String msg = String.format("Detected update in location of record with key %s from %s "
                         + " to %s. The fileID should not change.",
-                    writtenRecord.getKey(), writtenRecord.getCurrentLocation(), newLocation.get());
+                    keyWithLocation.getKey(), keyWithLocation.getCurrentLocation(), newLocation.get());
                 LOG.error(msg);
                 throw new HoodieMetadataException(msg);
               } else {
