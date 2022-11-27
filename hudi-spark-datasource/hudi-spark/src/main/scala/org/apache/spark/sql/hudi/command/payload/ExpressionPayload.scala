@@ -176,6 +176,16 @@ class ExpressionPayload(record: GenericRecord,
     }
   }
 
+  override def isDeleted(schema: Schema, props: Properties): Boolean = {
+    val deleteConditionText = props.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
+    val isUpdateRecord = props.getProperty(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, "false").toBoolean
+    val isDeleteOnCondition= if (isUpdateRecord && deleteConditionText != null) {
+      !getInsertValue(schema, props).isPresent
+    } else false
+
+    isDeletedRecord || isDeleteOnCondition
+  }
+
   override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
     val incomingRecord = bytesToAvro(recordBytes, schema)
     if (isDeleteRecord(incomingRecord)) {

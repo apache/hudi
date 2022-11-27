@@ -132,7 +132,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
     Option<Map<String, String>> recordMetadata = record.getMetadata();
     try {
-      record = record.deserialization(schema, config.getProps());
       if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(schema, config.getProps())) {
         if (record.shouldIgnore(schema, config.getProps())) {
           return;

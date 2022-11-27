@@ -21,9 +21,11 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.Serializable;
+import java.util.Properties;
 
 /**
  * Base class for all AVRO record based payloads, that can be ordered based on a field.
@@ -59,6 +61,14 @@ public abstract class BaseAvroPayload implements Serializable {
 
   public Comparable getOrderingVal() {
     return orderingVal;
+  }
+
+  /**
+   * Defines whether this implementation of {@link HoodieRecordPayload} is deleted.
+   * We will not do deserialization in this method.
+   */
+  public boolean isDeleted(Schema schema, Properties props) {
+    return isDeletedRecord;
   }
 
   /**

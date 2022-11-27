@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
@@ -155,14 +154,15 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
-    return !getData().getInsertValue(recordSchema, props).isPresent();
+    if (this.data instanceof BaseAvroPayload) {
+      return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
+    } else {
+      return !this.data.getInsertValue(recordSchema, props).isPresent();
+    }
   }
 
   @Override
   public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
-    if (!(data instanceof HoodieAvroInsertValuePayload) && !(data instanceof RewriteAvroPayload)) {
-      throw new HoodieException("We should deserialization before calling shouldIgnore");
-    }
     HoodieRecordPayload<?> recordPayload = getData();
     // NOTE: Currently only records borne by [[ExpressionPayload]] can currently be ignored,
     //       as such, we limit exposure of this method only to such payloads
@@ -210,15 +210,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     } else {
       return Option.empty();
     }
-  }
-
-  @Override
-  public HoodieRecord deserialization(Schema recordSchema, Properties props) throws IOException {
-    if (this.data instanceof RewriteAvroPayload || this.data instanceof HoodieAvroInsertValuePayload) {
-      return this;
-    }
-    Option<IndexedRecord> data = this.data.getInsertValue(recordSchema, props);
-    return new HoodieAvroRecord<>(getKey(), new HoodieAvroInsertValuePayload(data), getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override
