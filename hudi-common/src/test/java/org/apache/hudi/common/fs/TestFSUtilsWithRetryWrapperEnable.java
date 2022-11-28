@@ -54,7 +54,6 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
   @BeforeEach
   public void setUp() throws IOException {
     initMetaClient();
-    basePath = "file:" + basePath;
     FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().withFileSystemActionRetryEnabled(true).build();
     maxRetryIntervalMs = fileSystemRetryConfig.getMaxRetryIntervalMs();
     maxRetryNumbers = fileSystemRetryConfig.getMaxRetryNumbers();
