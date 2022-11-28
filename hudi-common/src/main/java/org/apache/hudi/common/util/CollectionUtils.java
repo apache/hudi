@@ -19,6 +19,10 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.ExceptionUtil;
+import org.apache.hudi.exception.HoodieException;
+
+import org.apache.commons.lang.exception.ExceptionUtils;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
@@ -34,7 +38,14 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -117,7 +128,6 @@ public class CollectionUtils {
     combined[array.length] = elem;
     return combined;
   }
-
 
   /**
    * Combines provided {@link List}s into one, returning new instance of {@link ArrayList}
@@ -269,4 +279,70 @@ public class CollectionUtils {
     return Objects.requireNonNull(element, "Element is null at index " + index);
   }
 
+  public static <T> void forEachParallel(Collection<T> inputs, Consumer<T> function) {
+    forEachParallel(inputs, function, 4, 1000);
+  }
+
+  /**
+   * Executes forEach loops in parallel. The input function will run on all inputs even if exceptions are thrown during the execution of any individual input.
+   * Execution of inputs is not guaranteed to occur if the timeout is reached. Don't use this if your consumer function isn't thread safe
+   * */
+  public static <T> void forEachParallel(Collection<T> inputs, Consumer<T> function, int nThreads, long msTimeout) {
+    long timeoutTime = System.currentTimeMillis() + msTimeout;
+    ExecutorService executorService = Executors.newFixedThreadPool(nThreads);
+
+    //Queue up all consumer functions to run, they may start at any time
+    List<Future<Boolean>> futures = inputs.stream().map(t ->
+        executorService.submit(() -> {
+          function.accept(t);
+          return true;
+        })).collect(Collectors.toList());
+
+    //List of exceptions that consumer functions throw
+    List<Throwable> exceptions = new ArrayList<>();
+
+    boolean cancelAll = false;
+    for (Future<Boolean> future : futures) {
+      if (cancelAll) {
+        //We have a timeout exception so cancel every task we haven't processed
+        future.cancel(true);
+        continue;
+      }
+      try {
+        //Calculate remaining time left and throw if we are out
+        long timeout =  timeoutTime - System.currentTimeMillis();
+        if (timeout <= 0) {
+          future.cancel(true);
+          throw new TimeoutException();
+        }
+        //wait until task completes or times out
+        future.get(timeout, TimeUnit.MILLISECONDS);
+      } catch (ExecutionException e) {
+        //task had an exception. Add it to the list. Don't stop the other tasks
+        exceptions.add(e.getCause());
+      } catch (TimeoutException e) {
+        //cancel this task and set the cancel flag
+        future.cancel(true);
+        cancelAll = true;
+      } catch (InterruptedException e) {
+        // ¯\_(ツ)_/¯
+        throw new RuntimeException(e);
+      }
+    }
+    if (cancelAll) {
+      throw new HoodieException("Timeout hit before executors completed");
+    }
+    if (exceptions.isEmpty()) {
+      return;
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("Exceptions that occurred:\n********************\n");
+    exceptions.forEach(e -> {
+      sb.append(e.getMessage());
+      sb.append("\n");
+      sb.append(ExceptionUtils.getFullStackTrace(e));
+      sb.append("********************\n");
+    });
+    throw new HoodieException(sb.toString());
+  }
 }

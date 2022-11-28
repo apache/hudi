@@ -35,7 +35,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.common.util.CollectionUtils
 import org.apache.hudi.common.util.{CommitUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME, KEYGEN_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
@@ -63,10 +63,10 @@ import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{SPARK_VERSION, SparkContext}
 
+import java.util.function.Consumer
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters.setAsJavaSetConverter
 import scala.collection.mutable
-import scala.util.matching.Regex
 
 object HoodieSparkSqlWriter {
 
@@ -821,9 +821,9 @@ object HoodieSparkSqlWriter {
       properties.put(HoodieSyncConfig.META_SYNC_SPARK_VERSION.key, SPARK_VERSION)
       properties.put(HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA.key, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
 
-      syncClientToolClassSet.foreach(impl => {
+      CollectionUtils.forEachParallel(syncClientToolClassSet, toJavaConsumer((impl:String) =>  {
         SyncUtilHelpers.runHoodieMetaSync(impl.trim, properties, fs.getConf, fs, basePath.toString, baseFileFormat)
-      })
+      }))
     }
 
     // Since Hive tables are now synced as Spark data source tables which are cached after Spark SQL queries
@@ -992,6 +992,15 @@ object HoodieSparkSqlWriter {
       params.filterKeys(HoodieTableConfig.PERSISTED_CONFIG_LIST.contains)
     } else {
       Map.empty
+    }
+  }
+
+  //Need for Scala < 2.12
+  private def toJavaConsumer[T](consumer: T => Unit): Consumer[T] = {
+    new Consumer[T] {
+      override def accept(t: T): Unit = {
+        consumer(t)
+      }
     }
   }
 }

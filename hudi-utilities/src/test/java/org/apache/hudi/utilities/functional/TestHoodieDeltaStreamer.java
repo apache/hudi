@@ -65,6 +65,13 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
+import org.apache.hudi.hive.MockHoodieHiveSyncTool1;
+import org.apache.hudi.hive.MockHoodieHiveSyncTool2;
+import org.apache.hudi.hive.MockHoodieHiveSyncTool3;
+import org.apache.hudi.hive.MockHoodieHiveSyncTool4;
+import org.apache.hudi.hive.MockHoodieHiveSyncTool5;
+import org.apache.hudi.hive.MockHoodieHiveSyncToolException;
+import org.apache.hudi.hive.MockHoodieHiveSyncToolException2;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.utilities.DummySchemaProvider;
@@ -1433,6 +1440,82 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(lastInstantForUpstreamTable,
         hiveClient.getLastCommitTimeSynced(tableName).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
+  }
+
+  @Test
+  public void testMultipleMetaStore() throws Exception {
+    String tableBasePath = basePath + "/test_multiple_metastore";
+    MockHoodieHiveSyncTool1.syncSuccess = false;
+    MockHoodieHiveSyncTool2.syncSuccess = false;
+    MockHoodieHiveSyncTool3.syncSuccess = false;
+    MockHoodieHiveSyncTool4.syncSuccess = false;
+    MockHoodieHiveSyncTool5.syncSuccess = false;
+
+    // Initial bulk insert to ingest to first hudi table
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true);
+    cfg.syncClientToolClassNames = "org.apache.hudi.hive.MockHoodieHiveSyncTool1,org.apache.hudi.hive.MockHoodieHiveSyncTool2,org.apache.hudi.hive.MockHoodieHiveSyncTool3,org.apache.hudi.hive.MockHoodieHiveSyncTool4,org.apache.hudi.hive.MockHoodieHiveSyncTool5";
+    // NOTE: We should not have need to set below config, 'datestr' should have assumed date partitioning
+    cfg.configs.add("hoodie.datasource.hive_sync.partition_fields=year,month,day");
+    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    assertTrue(MockHoodieHiveSyncTool1.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool2.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool3.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool4.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool5.syncSuccess);
+  }
+
+  @Test
+  public void testMultipleMetaStoreWithException() throws Exception {
+    String tableBasePath = basePath + "/test_multiple_metastore_exception";
+    MockHoodieHiveSyncTool1.syncSuccess = false;
+    MockHoodieHiveSyncTool2.syncSuccess = false;
+    MockHoodieHiveSyncTool3.syncSuccess = false;
+    MockHoodieHiveSyncTool4.syncSuccess = false;
+    MockHoodieHiveSyncTool5.syncSuccess = false;
+
+    // Initial bulk insert to ingest to first hudi table
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true);
+    cfg.syncClientToolClassNames = "org.apache.hudi.hive.MockHoodieHiveSyncTool1,org.apache.hudi.hive.MockHoodieHiveSyncToolException,org.apache.hudi.hive.MockHoodieHiveSyncTool2,org.apache.hudi.hive.MockHoodieHiveSyncTool3,org.apache.hudi.hive.MockHoodieHiveSyncTool4,org.apache.hudi.hive.MockHoodieHiveSyncTool5";
+    // NOTE: We should not have need to set below config, 'datestr' should have assumed date partitioning
+    cfg.configs.add("hoodie.datasource.hive_sync.partition_fields=year,month,day");
+    Exception e = assertThrows(HoodieException.class, () -> {
+      new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    });
+    assertTrue(e.getMessage().contains(MockHoodieHiveSyncToolException.EXCEPTION_STRING));
+    assertTrue(MockHoodieHiveSyncTool1.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool2.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool3.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool4.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool5.syncSuccess);
+  }
+
+  @Test
+  public void testMultipleMetaStoreWithMultipleException() throws Exception {
+    String tableBasePath = basePath + "/test_multiple_metastore_multiple_exception";
+    MockHoodieHiveSyncTool1.syncSuccess = false;
+    MockHoodieHiveSyncTool2.syncSuccess = false;
+    MockHoodieHiveSyncTool3.syncSuccess = false;
+    MockHoodieHiveSyncTool4.syncSuccess = false;
+    MockHoodieHiveSyncTool5.syncSuccess = false;
+
+    // Initial bulk insert to ingest to first hudi table
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true);
+    cfg.syncClientToolClassNames = "org.apache.hudi.hive.MockHoodieHiveSyncTool1,org.apache.hudi.hive.MockHoodieHiveSyncToolException,org.apache.hudi.hive.MockHoodieHiveSyncTool2,org.apache.hudi.hive.MockHoodieHiveSyncTool3,org.apache.hudi.hive.MockHoodieHiveSyncTool4,org.apache.hudi.hive.MockHoodieHiveSyncTool5,org.apache.hudi.hive.MockHoodieHiveSyncToolException2";
+    // NOTE: We should not have need to set below config, 'datestr' should have assumed date partitioning
+    cfg.configs.add("hoodie.datasource.hive_sync.partition_fields=year,month,day");
+    Exception e = assertThrows(HoodieException.class, () -> {
+      new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    });
+    assertTrue(e.getMessage().contains(MockHoodieHiveSyncToolException.EXCEPTION_STRING));
+    assertTrue(e.getMessage().contains(MockHoodieHiveSyncToolException2.EXCEPTION_STRING));
+    assertTrue(MockHoodieHiveSyncTool1.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool2.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool3.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool4.syncSuccess);
+    assertTrue(MockHoodieHiveSyncTool5.syncSuccess);
   }
 
   @Test
