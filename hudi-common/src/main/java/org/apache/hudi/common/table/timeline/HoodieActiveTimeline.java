@@ -267,8 +267,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Note: This should only be used in the case that delete requested/inflight instant
-   * or empty clean instant. The completed commit instant is not allowed to delete.
+   * Note: This method should only be used in the case that delete requested/inflight instant or empty clean instant,
+   * and completed commit instant in an archive operation.
    */
   public void deleteInstantFileIfExists(HoodieInstant instant) {
     LOG.info("Deleting instant " + instant);

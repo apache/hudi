@@ -555,8 +555,20 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // other monitors on the timeline(such as the compaction or clustering services) would
     // mistakenly recognize the pending file as a pending operation,
     // then all kinds of weird bugs occur.
-    deleteArchivedInstants(context, metaClient, pendingInstants);
-    deleteArchivedInstants(context, metaClient, completedInstants);
+    if (!pendingInstants.isEmpty()) {
+      context.foreach(
+          pendingInstants,
+          instant -> metaClient.getActiveTimeline().deleteInstantFileIfExists(instant),
+          Math.min(pendingInstants.size(), config.getArchiveDeleteParallelism())
+      );
+    }
+    if (!completedInstants.isEmpty()) {
+      context.foreach(
+          completedInstants,
+          instant -> metaClient.getActiveTimeline().deleteInstantFileIfExists(instant),
+          Math.min(completedInstants.size(), config.getArchiveDeleteParallelism())
+      );
+    }
 
     // Remove older meta-data from auxiliary path too
     Option<HoodieInstant> latestCommitted = Option.fromJavaOptional(archivedInstants.stream().filter(i -> i.isCompleted() && (i.getAction().equals(HoodieTimeline.COMMIT_ACTION)
@@ -566,18 +578,6 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       return deleteAllInstantsOlderOrEqualsInAuxMetaFolder(latestCommitted.get());
     }
     return true;
-  }
-
-  private void deleteArchivedInstants(HoodieEngineContext context,
-                                      HoodieTableMetaClient metaClient,
-                                      List<HoodieInstant> instants) {
-    if (!instants.isEmpty()) {
-      context.foreach(
-          instants,
-          instant -> metaClient.getActiveTimeline().deleteInstantFileIfExists(instant),
-          Math.min(instants.size(), config.getArchiveDeleteParallelism())
-      );
-    }
   }
 
   /**
