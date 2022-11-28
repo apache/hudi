@@ -133,20 +133,20 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(5, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"0", "2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList("0", "2", "3", "4", "5"));
 
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertEquals(4, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"0", "2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList("0", "2", "3", "4"));
 
     // verify only commit actions
     partitions = TimelineUtils.getWrittenPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(4, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4", "5"));
 
     partitions = TimelineUtils.getWrittenPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertEquals(3, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4"));
   }
 
   @Test
@@ -194,10 +194,10 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
 
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4", "5"));
 
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4"));
   }
 
   @Test
