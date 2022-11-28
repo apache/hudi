@@ -33,7 +33,9 @@ import org.apache.spark.sql.{Row, SparkSession}
 
 import java.util
 
-import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}case class CreateIndexCommand(table: CatalogTable,
+import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
+
+case class CreateIndexCommand(table: CatalogTable,
                               indexName: String,
                               indexType: String,
                               ignoreIfExists: Boolean,
@@ -42,6 +44,7 @@ import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapA
                               override val output: Seq[Attribute]) extends IndexBaseCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    val tableId = table.identifier
     val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
     val columnsMap: java.util.LinkedHashMap[String, java.util.Map[String, String]] =
       new util.LinkedHashMap[String, java.util.Map[String, String]]()
@@ -66,6 +69,7 @@ case class DropIndexCommand(table: CatalogTable,
                             override val output: Seq[Attribute]) extends IndexBaseCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    val tableId = table.identifier
     val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
     SecondaryIndexManager.getInstance().drop(metaClient, indexName, ignoreIfNotExists)
 
@@ -83,7 +87,7 @@ case class ShowIndexesCommand(table: CatalogTable,
                               override val output: Seq[Attribute]) extends IndexBaseCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
+    val metaClient = createHoodieTableMetaClient(table.identifier, sparkSession)
     val secondaryIndexes = SecondaryIndexManager.getInstance().show(metaClient)
 
     val mapper = getObjectMapper
@@ -110,7 +114,7 @@ case class RefreshIndexCommand(table: CatalogTable,
                                override val output: Seq[Attribute]) extends IndexBaseCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
+    val metaClient = createHoodieTableMetaClient(table.identifier, sparkSession)
     SecondaryIndexManager.getInstance().refresh(metaClient, indexName)
     Seq.empty
   }
