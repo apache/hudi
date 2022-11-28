@@ -148,7 +148,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
       return result;
     }
     HoodieTimeline commitsTimelineToReturn = HoodieInputFormatUtils.getHoodieTimelineForIncrementalQuery(jobContext, incrementalTableName, timeline.get());
-    Option<List<HoodieInstant>> commitsToCheck = Option.of(commitsTimelineToReturn.getInstants().collect(Collectors.toList()));
+    Option<List<HoodieInstant>> commitsToCheck = Option.of(commitsTimelineToReturn.getInstants());
     if (!commitsToCheck.isPresent()) {
       return result;
     }

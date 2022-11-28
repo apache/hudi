@@ -190,7 +190,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
         for (String partitionPath : dataGen.getPartitionPaths()) {
           // compute all the versions of all files, from time 0
           HashMap<String, TreeSet<String>> fileIdToVersions = new HashMap<>();
-          for (HoodieInstant entry : timeline.getInstants().collect(Collectors.toList())) {
+          for (HoodieInstant entry : timeline.getInstants()) {
             HoodieCommitMetadata commitMetadata =
                 HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(entry).get(), HoodieCommitMetadata.class);
 

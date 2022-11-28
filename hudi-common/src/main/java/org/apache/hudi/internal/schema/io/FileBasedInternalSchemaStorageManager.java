@@ -131,7 +131,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   private List<String> getValidInstants() {
     return getMetaClient().getCommitsTimeline()
-        .filterCompletedInstants().getInstants().map(f -> f.getTimestamp()).collect(Collectors.toList());
+        .filterCompletedInstants().getInstantsAsStream().map(f -> f.getTimestamp()).collect(Collectors.toList());
   }
 
   @Override

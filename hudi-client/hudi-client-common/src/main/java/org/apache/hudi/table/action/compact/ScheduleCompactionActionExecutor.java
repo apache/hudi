@@ -81,7 +81,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
       }
       // Committed and pending compaction instants should have strictly lower timestamps
       List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
-          .getWriteTimeline().filterCompletedAndCompactionInstants().getInstants()
+          .getWriteTimeline().filterCompletedAndCompactionInstants().getInstantsAsStream()
           .filter(instant -> HoodieTimeline.compareTimestamps(
               instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime))
           .collect(Collectors.toList());

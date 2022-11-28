@@ -211,7 +211,7 @@ public class RepairsCommand {
   public void showFailedCommits() {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
-    activeTimeline.filterCompletedInstants().getInstants().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> LOG.warn("Empty Commit: " + hoodieInstant.toString()));
+    activeTimeline.filterCompletedInstants().getInstantsAsStream().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> LOG.warn("Empty Commit: " + hoodieInstant.toString()));
   }
 
   @ShellMethod(key = "repair migrate-partition-meta", value = "Migrate all partition meta file currently stored in text format "

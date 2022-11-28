@@ -521,7 +521,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     // the latest instant of test_table2 is 101
     List<String> commitsToCatchup = metaClient.getActiveTimeline().findInstantsAfter("101", Integer.MAX_VALUE)
-        .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     String expected = String.format("Source %s is ahead by %d commits. Commits to catch up - %s",
         tableName1, commitsToCatchup.size(), commitsToCatchup);
     assertEquals(expected, result.toString());

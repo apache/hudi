@@ -132,7 +132,7 @@ public class CompactionUtils {
   public static List<Pair<HoodieInstant, HoodieCompactionPlan>> getAllPendingCompactionPlans(
       HoodieTableMetaClient metaClient) {
     List<HoodieInstant> pendingCompactionInstants =
-        metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
+        metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants();
     return pendingCompactionInstants.stream().map(instant -> {
       try {
         return Pair.of(instant, getCompactionPlan(metaClient, instant.getTimestamp()));
@@ -140,6 +140,7 @@ public class CompactionUtils {
         throw new HoodieException(e);
       }
     }).collect(Collectors.toList());
+
   }
 
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
@@ -200,7 +201,7 @@ public class CompactionUtils {
    * @return
    */
   public static List<HoodieInstant> getPendingCompactionInstantTimes(HoodieTableMetaClient metaClient) {
-    return metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
+    return metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants();
   }
 
   /**
@@ -291,7 +292,7 @@ public class CompactionUtils {
         return Option.of(deltaCommitsInfo.getRight());
       } else {
         // delta commits with the last one to keep
-        List<HoodieInstant> instants = deltaCommitTimeline.getInstants()
+        List<HoodieInstant> instants = deltaCommitTimeline.getInstantsAsStream()
             .limit(numDeltaCommits - maxDeltaCommits + 1).collect(Collectors.toList());
         return Option.of(instants.get(instants.size() - 1));
       }

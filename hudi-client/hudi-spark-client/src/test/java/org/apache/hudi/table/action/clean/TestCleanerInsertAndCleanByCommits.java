@@ -158,11 +158,11 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
         // NOTE: See CleanPlanner#getFilesToCleanKeepingLatestCommits. We explicitly keep one commit before earliest
         // commit
         Option<HoodieInstant> earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits);
-        Set<HoodieInstant> acceptableCommits = activeTimeline.getInstants().collect(Collectors.toSet());
+        Set<HoodieInstant> acceptableCommits = activeTimeline.getInstantsAsStream().collect(Collectors.toSet());
         if (earliestRetainedCommit.isPresent()) {
           acceptableCommits
               .removeAll(activeTimeline.findInstantsInRange("000", earliestRetainedCommit.get().getTimestamp())
-                  .getInstants().collect(Collectors.toSet()));
+                  .getInstantsAsStream().collect(Collectors.toSet()));
           acceptableCommits.add(earliestRetainedCommit.get());
         }
 

@@ -312,7 +312,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
       .setLoadActiveTimelineOnLoad(true).build()
 
-    val instantTime = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.findFirst().get().getTimestamp
+    val instantTime = metaClient.getActiveTimeline.filterCompletedInstants().getInstantsAsStream.findFirst().get().getTimestamp
 
     val record1FilePaths = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
       .filter(!_.getPath.getName.contains("hoodie_partition_metadata"))

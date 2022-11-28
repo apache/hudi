@@ -66,13 +66,13 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
 
     //get instants in the active timeline only returns the latest state of the commit
     //therefore we expect 2 instants because minCommits is 2
-    assertEquals(2, metaClient.getActiveTimeline().getInstants().count());
+    assertEquals(2, metaClient.getActiveTimeline().countInstants());
 
     //get instants in the archived timeline returns all instants in the commit
     //therefore we expect 12 instants because 6 commits - 2 commits in active timeline = 4 in archived
     //since each commit is completed, there are 3 instances per commit (requested, inflight, completed)
     //and 3 instances per commit * 4 commits = 12 instances
-    assertEquals(12, metaClient.getArchivedTimeline().getInstants().count());
+    assertEquals(12, metaClient.getArchivedTimeline().countInstants());
   }
 
 }

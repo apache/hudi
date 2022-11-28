@@ -225,7 +225,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public HoodieInstant revertToInflight(HoodieInstant instant) {
     LOG.info("Reverting instant to inflight " + instant);
-    HoodieInstant inflight = HoodieTimeline.getInflightInstant(instant, metaClient.getTableType());
+    HoodieInstant inflight = HoodieTimeline.getInflightInstant(instant, metaClient);
     revertCompleteToInflight(instant, inflight);
     LOG.info("Reverted " + instant + " to inflight " + inflight);
     return inflight;
@@ -336,7 +336,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private Stream<Pair<HoodieInstant, HoodieCommitMetadata>> getCommitMetadataStream() {
     // NOTE: Streams are lazy
     return getCommitsTimeline().filterCompletedInstants()
-        .getInstants()
+        .getInstantsAsStream()
         .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed())
         .map(instant -> {
           try {

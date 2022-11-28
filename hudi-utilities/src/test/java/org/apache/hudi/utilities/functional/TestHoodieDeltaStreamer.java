@@ -338,32 +338,32 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     static void assertAtleastNCompactionCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numCompactionCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numCompactionCommits = timeline.countInstants();
       assertTrue(minExpected <= numCompactionCommits, "Got=" + numCompactionCommits + ", exp >=" + minExpected);
     }
 
     static void assertAtleastNDeltaCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
 
     static void assertAtleastNCompactionCommitsAfterCommit(int minExpected, String lastSuccessfulCommit, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().findInstantsAfter(lastSuccessfulCommit).filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numCompactionCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numCompactionCommits = timeline.countInstants();
       assertTrue(minExpected <= numCompactionCommits, "Got=" + numCompactionCommits + ", exp >=" + minExpected);
     }
 
     static void assertAtleastNDeltaCommitsAfterCommit(int minExpected, String lastSuccessfulCommit, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.reloadActiveTimeline().getDeltaCommitTimeline().findInstantsAfter(lastSuccessfulCommit).filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
 
@@ -399,48 +399,48 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     static void assertAtLeastNCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
 
     static void assertAtLeastNReplaceCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
 
     static void assertPendingIndexCommit(String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterPendingIndexTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numIndexCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
     }
 
     static void assertCompletedIndexCommit(String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numIndexCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
     }
 
     static void assertNoReplaceCommits(String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertEquals(0, numDeltaCommits, "Got=" + numDeltaCommits + ", exp =" + 0);
     }
 
     static void assertAtLeastNReplaceRequests(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieTimeline timeline = meta.getActiveTimeline().filterPendingReplaceTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
   }
@@ -936,7 +936,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieClusteringJob clusteringJob = initialHoodieClusteringJob(tableBasePath, null, false, "schedule");
     clusteringJob.cluster(0);
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
-    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants().collect(Collectors.toList());
+    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
     HoodieInstant clusteringRequest = hoodieClusteringInstants.get(0);
     meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
 
@@ -1034,7 +1034,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     ds.sync();
 
     // Step 5 : Make sure that firstReplaceHoodieInstant is archived.
-    long count = meta.reloadActiveTimeline().getCompletedReplaceTimeline().getInstants().filter(instant -> firstReplaceHoodieInstant.get().equals(instant)).count();
+    long count = meta.reloadActiveTimeline().getCompletedReplaceTimeline().getInstantsAsStream().filter(instant -> firstReplaceHoodieInstant.get().equals(instant)).count();
     assertEquals(0, count);
 
     // Step 6 : All the replaced files in firstReplaceHoodieInstant should be deleted through sync/async cleaner.
@@ -1282,7 +1282,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // convert clustering request into inflight, Simulate the last clustering failed scenario
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
-    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants().collect(Collectors.toList());
+    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
     HoodieInstant clusteringRequest = hoodieClusteringInstants.get(0);
     HoodieInstant hoodieInflightInstant = meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
 

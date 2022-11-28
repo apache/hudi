@@ -385,7 +385,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private Stream<HoodieInstant> getCleanInstantsToArchive() {
     HoodieTimeline cleanAndRollbackTimeline = table.getActiveTimeline()
         .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION, HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants();
-    return cleanAndRollbackTimeline.getInstants()
+    return cleanAndRollbackTimeline.getInstantsAsStream()
         .collect(Collectors.groupingBy(HoodieInstant::getAction)).values().stream()
         .map(hoodieInstants -> {
           if (hoodieInstants.size() > this.maxInstantsToKeep) {
@@ -430,7 +430,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               : Option.empty();
 
       // Actually do the commits
-      Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstants()
+      Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstantsAsStream()
           .filter(s -> {
             if (config.shouldArchiveBeyondSavepoint()) {
               // skip savepoint commits and proceed further
@@ -473,7 +473,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
     // For archiving and cleaning instants, we need to include intermediate state files if they exist
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
-    Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstants()
+    Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
         .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
             HoodieInstant.getComparableAction(i.getAction()))));
 

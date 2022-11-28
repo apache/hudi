@@ -256,7 +256,7 @@ public class FileSystemViewCommand {
       timeline = timeline.filterCompletedInstants();
     }
 
-    instantsStream = timeline.getInstants();
+    instantsStream = timeline.getInstantsAsStream();
 
     if (!maxInstant.isEmpty()) {
       final BiPredicate<String, String> predicate;

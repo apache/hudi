@@ -546,7 +546,7 @@ public class TestInputFormat {
     }
 
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
-    List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants()
+    List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
     assertThat(commits.size(), is(3));
@@ -663,13 +663,13 @@ public class TestInputFormat {
     writeClient.clean();
 
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
-    List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants()
+    List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
     assertThat(commits.size(), is(4));
 
     List<String> archivedCommits = metaClient.getArchivedTimeline().getCommitsTimeline().filterCompletedInstants()
-        .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
     assertThat(archivedCommits.size(), is(6));
 

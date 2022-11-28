@@ -136,7 +136,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
 
     // assert compaction complete
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
-        .filterCompletedInstants().getInstants()
+        .filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList()).contains(instance),
         "Pending compaction must be completed");
   }
@@ -164,7 +164,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
 
     // assert compaction complete
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
-            .filterCompletedInstants().getInstants()
+            .filterCompletedInstants().getInstantsAsStream()
             .map(HoodieInstant::getTimestamp).count() > 0,
         "Completed compaction couldn't be 0");
   }

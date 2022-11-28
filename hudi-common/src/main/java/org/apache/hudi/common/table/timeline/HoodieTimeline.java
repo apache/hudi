@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -53,6 +54,7 @@ public interface HoodieTimeline extends Serializable {
   // With Async Compaction, compaction instant can be in 3 states :
   // (compaction-requested), (compaction-inflight), (completed)
   String COMPACTION_ACTION = "compaction";
+  String LOG_COMPACTION_ACTION = "logcompaction";
   String REQUESTED_EXTENSION = ".requested";
   String RESTORE_ACTION = "restore";
   String INDEXING_ACTION = "indexing";
@@ -292,7 +294,12 @@ public interface HoodieTimeline extends Serializable {
   /**
    * @return Get the stream of completed instants
    */
-  Stream<HoodieInstant> getInstants();
+  Stream<HoodieInstant> getInstantsAsStream();
+
+  /**
+   * @return Get tht list of instants
+   */
+  List<HoodieInstant> getInstants();
 
   /**
    * @return Get the stream of completed instants in reverse order TODO Change code references to getInstants() that
@@ -390,12 +397,23 @@ public interface HoodieTimeline extends Serializable {
    * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
    * between inflight and completed instants (compaction <=> commit).
    * @param instant Hoodie Instant
-   * @param tableType Hoodie Table Type
    * @return Inflight Hoodie Instant
    */
-  static HoodieInstant getInflightInstant(final HoodieInstant instant, final HoodieTableType tableType) {
-    if ((tableType == HoodieTableType.MERGE_ON_READ) && instant.getAction().equals(COMMIT_ACTION)) {
-      return new HoodieInstant(true, COMPACTION_ACTION, instant.getTimestamp());
+  static HoodieInstant getInflightInstant(final HoodieInstant instant, final HoodieTableMetaClient metaClient) {
+    if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
+      if (instant.getAction().equals(COMMIT_ACTION)) {
+        return new HoodieInstant(true, COMPACTION_ACTION, instant.getTimestamp());
+      } else if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
+        // Deltacommit is used by both ingestion and logcompaction.
+        // So, distinguish both of them check for the inflight file being present.
+        HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
+        Option<HoodieInstant> logCompactionInstant = Option.fromJavaOptional(rawActiveTimeline.getInstantsAsStream()
+            .filter(hoodieInstant -> hoodieInstant.getTimestamp().equals(instant.getTimestamp())
+                && LOG_COMPACTION_ACTION.equals(hoodieInstant.getAction())).findFirst());
+        if (logCompactionInstant.isPresent()) {
+          return new HoodieInstant(true, LOG_COMPACTION_ACTION, instant.getTimestamp());
+        }
+      }
     }
     return new HoodieInstant(true, instant.getAction(), instant.getTimestamp());
   }
