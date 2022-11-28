@@ -405,7 +405,7 @@ object HoodieSparkSqlWriter {
         val shouldCanonicalizeSchema = opts.getOrDefault(DataSourceWriteOptions.CANONICALIZE_SCHEMA.key,
           DataSourceWriteOptions.CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-          AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
+          AvroSchemaEvolutionUtils.reconcileNullability(sourceSchema, latestTableSchema)
         } else {
           sourceSchema
         }
