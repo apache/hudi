@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -394,8 +395,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public Stream<HoodieInstant> getInstantsAsStream() {
+    return instants.stream();
+  }
+
+  @Override
   public List<HoodieInstant> getInstants() {
-    return instants;
+    return new ArrayList<>(instants);
   }
 
   @Override

@@ -87,7 +87,7 @@ public class ExportCommand {
     // The non archived instants can be listed from the Timeline.
     HoodieTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedInstants()
         .filter(i -> actionSet.contains(i.getAction()));
-    List<HoodieInstant> nonArchivedInstants = timeline.getAndCopyInstants();
+    List<HoodieInstant> nonArchivedInstants = timeline.getInstants();
 
     // Archived instants are in the commit archive files
     FileStatus[] statuses = FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
