@@ -67,11 +67,6 @@ trait HoodieCatalystExpressionUtils {
 
 object HoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
-  object MatchCast {
-    def unapply(expr: Expression): Option[(Expression, DataType, Option[String])] =
-      sparkAdapter.getCatalystExpressionUtils.matchCast(expr)
-  }
-
   /**
    * Convenience extractor allowing to untuple [[Cast]] across Spark versions
    */
