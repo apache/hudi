@@ -67,6 +67,6 @@ public class FlinkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     return FlinkWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType, config.shouldPersistBeforeInsert());
   }
 }
