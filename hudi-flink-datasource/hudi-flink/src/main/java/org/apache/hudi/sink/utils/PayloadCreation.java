@@ -86,7 +86,7 @@ public class PayloadCreation implements Serializable {
 
   public HoodieRecordPayload<?> createDeletePayload(BaseAvroPayload payload) throws Exception {
     if (shouldCombine) {
-      return (HoodieRecordPayload<?>) constructor.newInstance(null, payload.orderingVal);
+      return (HoodieRecordPayload<?>) constructor.newInstance(null, payload.getOrderingVal());
     } else {
       return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.empty());
     }

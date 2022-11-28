@@ -24,10 +24,10 @@ import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
+import org.apache.hudi.common.model.BaseAvroPayload.isDeleteRecord
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
 import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.sql.avro.{AvroSerializer, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -35,8 +35,8 @@ import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{getEvaluator, getMergedSchema, setWriteSchema}
 import org.apache.spark.sql.types.{StructField, StructType}
 
-import java.util.{Base64, Properties}
 import java.util.function.Function
+import java.util.{Base64, Properties}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
@@ -46,7 +46,7 @@ import scala.collection.mutable.ArrayBuffer
  * match and not-match actions and compute the final record to write.
  *
  * If there is no condition match the record, ExpressionPayload will return
- * a HoodieWriteHandle.IGNORE_RECORD, and the write handles will ignore this record.
+ * a [[HoodieRecord.SENTINEL]], and the write handles will ignore this record.
  */
 class ExpressionPayload(record: GenericRecord,
                         orderingVal: Comparable[_])
@@ -77,11 +77,14 @@ class ExpressionPayload(record: GenericRecord,
     processMatchedRecord(joinSqlRecord, Some(targetRecord), properties)
   }
 
+  override def canProduceSentinel: Boolean = true
+
   /**
    * Process the matched record. Firstly test if the record matched any of the update-conditions,
    * if matched, return the update assignments result. Secondly, test if the record matched
    * delete-condition, if matched then return a delete record. Finally if no condition matched,
-   * return a {@link HoodieWriteHandle.IGNORE_RECORD} which will be ignored by HoodieWriteHandle.
+   * return a [[HoodieRecord.SENTINEL]] which will be ignored by HoodieWriteHandle.
+   *
    * @param inputRecord  The input record to process.
    * @param targetRecord The origin exist record.
    * @param properties   The properties.
@@ -140,7 +143,7 @@ class ExpressionPayload(record: GenericRecord,
   /**
    * Process the not-matched record. Test if the record matched any of insert-conditions,
    * if matched then return the result of insert-assignment. Or else return a
-   * {@link HoodieWriteHandle.IGNORE_RECORD} which will be ignored by HoodieWriteHandle.
+   * [[HoodieRecord.SENTINEL]] which will be ignored by HoodieWriteHandle.
    *
    * @param inputRecord The input record to process.
    * @param properties  The properties.
@@ -171,6 +174,16 @@ class ExpressionPayload(record: GenericRecord,
       // Here we return a IGNORE_RECORD, HoodieCreateHandle will not handle it.
       HOption.of(HoodieRecord.SENTINEL)
     }
+  }
+
+  override def isDeleted(schema: Schema, props: Properties): Boolean = {
+    val deleteConditionText = props.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
+    val isUpdateRecord = props.getProperty(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, "false").toBoolean
+    val isDeleteOnCondition= if (isUpdateRecord && deleteConditionText != null) {
+      !getInsertValue(schema, props).isPresent
+    } else false
+
+    isDeletedRecord || isDeleteOnCondition
   }
 
   override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {

@@ -110,7 +110,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
 
     Seq(
-      (legacyRecord, 527),
+      (legacyRecord, 528),
       (avroIndexedRecord, 389)
     ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
   }

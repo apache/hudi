@@ -347,7 +347,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
         Schema combineRecordSchema = mergeResult.map(Pair::getRight).orElse(null);
         Option<HoodieRecord> combinedRecord = mergeResult.map(Pair::getLeft);
-
         if (combinedRecord.isPresent() && combinedRecord.get().shouldIgnore(combineRecordSchema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;

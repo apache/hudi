@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
@@ -215,18 +216,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // If the format can not record the operation field, nullify the DELETE payload manually.
       boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
-      Option<HoodieRecord> finalRecord = Option.empty();
-      if (!nullifyPayload && !hoodieRecord.isDelete(tableSchema, recordProperties)) {
-        if (hoodieRecord.shouldIgnore(tableSchema, recordProperties)) {
-          return Option.of(hoodieRecord);
+      Option<HoodieRecord> finalRecord = nullifyPayload ? Option.empty() : Option.of(hoodieRecord);
+      // Check for delete
+      if (finalRecord.isPresent() && !finalRecord.get().isDelete(tableSchema, recordProperties)) {
+        // Check for ignore ExpressionPayload
+        if (finalRecord.get().shouldIgnore(tableSchema, recordProperties)) {
+          return finalRecord;
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        HoodieRecord rewrittenRecord;
-        if (schemaOnReadEnabled) {
-          rewrittenRecord = hoodieRecord.rewriteRecordWithNewSchema(tableSchema, recordProperties, writeSchemaWithMetaFields);
-        } else {
-          rewrittenRecord = hoodieRecord.rewriteRecord(tableSchema, recordProperties, writeSchemaWithMetaFields);
-        }
+        HoodieRecord rewrittenRecord = schemaOnReadEnabled ? finalRecord.get().rewriteRecordWithNewSchema(tableSchema, recordProperties, writeSchemaWithMetaFields)
+            : finalRecord.get().rewriteRecord(tableSchema, recordProperties, writeSchemaWithMetaFields);
         HoodieRecord populatedRecord = populateMetadataFields(rewrittenRecord, writeSchemaWithMetaFields, recordProperties);
         finalRecord = Option.of(populatedRecord);
         if (isUpdateRecord) {
@@ -236,6 +235,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         }
         recordsWritten++;
       } else {
+        finalRecord = Option.empty();
         recordsDeleted++;
       }
 
@@ -364,7 +364,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       updateWriteStatus(stat, result);
     }
 
-    if (config.isMetadataColumnStatsIndexEnabled()) {
+    // TODO MetadataColumnStatsIndex for spark record
+    // https://issues.apache.org/jira/browse/HUDI-5249
+    if (config.isMetadataColumnStatsIndexEnabled() && recordMerger.getRecordType() == HoodieRecordType.AVRO) {
       final List<Schema.Field> fieldsToIndex;
       // If column stats index is enabled but columns not configured then we assume that
       // all columns should be indexed
@@ -511,7 +513,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       record.seal();
     }
     // fetch the ordering val first in case the record was deflated.
-    final Comparable<?> orderingVal = record.getOrderingValue(tableSchema, config.getProps());
+    final Comparable<?> orderingVal = record.getOrderingValue(tableSchema, recordProperties);
     Option<HoodieRecord> indexedRecord = prepareRecord(record);
     if (indexedRecord.isPresent()) {
       // Skip the ignored record.

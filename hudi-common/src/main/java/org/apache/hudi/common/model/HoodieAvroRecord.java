@@ -51,6 +51,15 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     super(record);
   }
 
+  public HoodieAvroRecord(
+      HoodieKey key,
+      T data,
+      HoodieOperation operation,
+      HoodieRecordLocation currentLocation,
+      HoodieRecordLocation newLocation) {
+    super(key, data, operation, currentLocation, newLocation);
+  }
+
   public HoodieAvroRecord() {
   }
 
@@ -113,14 +122,14 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     Option<IndexedRecord> avroRecordPayloadOpt = getData().getInsertValue(recordSchema, props);
     GenericRecord avroPayloadInNewSchema =
         HoodieAvroUtils.rewriteRecord((GenericRecord) avroRecordPayloadOpt.get(), targetSchema);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroPayloadInNewSchema), getOperation());
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroPayloadInNewSchema), getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException {
     GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
     GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(oldRecord, newSchema, renameCols);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(rewriteRecord), getOperation());
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(rewriteRecord), getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override
@@ -133,30 +142,36 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       }
     });
 
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override
   public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException {
     GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
     avroRecordPayload.put(keyFieldName, StringUtils.EMPTY_STRING);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
-    return !getData().getInsertValue(recordSchema, props).isPresent();
+    if (this.data instanceof BaseAvroPayload) {
+      return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
+    } else {
+      return !this.data.getInsertValue(recordSchema, props).isPresent();
+    }
   }
 
   @Override
   public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
-    Option<IndexedRecord> insertRecord = getData().getInsertValue(recordSchema, props);
-    // just skip the ignored record
-    if (insertRecord.isPresent() && insertRecord.get().equals(SENTINEL)) {
-      return true;
-    } else {
-      return false;
+    HoodieRecordPayload<?> recordPayload = getData();
+    // NOTE: Currently only records borne by [[ExpressionPayload]] can currently be ignored,
+    //       as such, we limit exposure of this method only to such payloads
+    if (recordPayload instanceof BaseAvroPayload && ((BaseAvroPayload) recordPayload).canProduceSentinel()) {
+      Option<IndexedRecord> insertRecord = recordPayload.getInsertValue(recordSchema, props);
+      return insertRecord.isPresent() && insertRecord.get().equals(SENTINEL);
     }
+
+    return false;
   }
 
   @Override
