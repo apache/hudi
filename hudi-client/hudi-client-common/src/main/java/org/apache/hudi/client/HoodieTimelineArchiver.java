@@ -555,17 +555,18 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // other monitors on the timeline(such as the compaction or clustering services) would
     // mistakenly recognize the pending file as a pending operation,
     // then all kinds of weird bugs occur.
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     if (!pendingInstants.isEmpty()) {
       context.foreach(
           pendingInstants,
-          instant -> metaClient.getActiveTimeline().deleteInstantFileIfExists(instant),
+          instant -> activeTimeline.deleteInstantFileIfExists(instant),
           Math.min(pendingInstants.size(), config.getArchiveDeleteParallelism())
       );
     }
     if (!completedInstants.isEmpty()) {
       context.foreach(
           completedInstants,
-          instant -> metaClient.getActiveTimeline().deleteInstantFileIfExists(instant),
+          instant -> activeTimeline.deleteInstantFileIfExists(instant),
           Math.min(completedInstants.size(), config.getArchiveDeleteParallelism())
       );
     }
