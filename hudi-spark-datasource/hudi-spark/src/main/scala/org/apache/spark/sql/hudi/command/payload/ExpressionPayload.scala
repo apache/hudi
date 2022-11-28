@@ -20,13 +20,10 @@ package org.apache.spark.sql.hudi.command.payload
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
-import org.apache.hudi.AvroConversionUtils
-import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
-import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
+import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.avro.AvroSchemaUtils.isNullable
-import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
+import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.BaseAvroPayload.isDeleteRecord
@@ -35,13 +32,11 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, Projection, SafeProjection}
 import org.apache.spark.sql.hudi.SerDeUtils
-import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{getEvaluator, getMergedSchema, getWriteSchema}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.BooleanType
 
@@ -385,14 +380,6 @@ object ExpressionPayload {
     .maximumSize(16)
     .build[String, AnyRef]()
 
-  def getWriteSchema(props: Properties): Schema = {
-    ValidationUtils.checkArgument(props.containsKey(HoodieWriteConfig.WRITE_SCHEMA.key),
-      s"Missing ${HoodieWriteConfig.WRITE_SCHEMA.key} property in the provided config")
-
-    getCachedSchema(props.getProperty(HoodieWriteConfig.WRITE_SCHEMA.key),
-      schema => new Schema.Parser().parse(schema))
-  }
-
   def getExpectedCombinedSchema(props: Properties): StructType = {
     ValidationUtils.checkArgument(props.containsKey(PAYLOAD_EXPECTED_COMBINED_SCHEMA),
       s"Missing ${PAYLOAD_EXPECTED_COMBINED_SCHEMA} property in the provided config")
@@ -403,7 +390,7 @@ object ExpressionPayload {
   }
 
   private def getCachedSchema[T <: AnyRef](key: String, ctor: String => T): T = {
-    writeSchemaCache.get(key, new Function[String, T] {
+    schemaCache.get(key, new Function[String, T] {
       override def apply(key: String): T = {
         ctor.apply(key)
       }
@@ -414,10 +401,7 @@ object ExpressionPayload {
     .maximumSize(16).build[(Schema, Schema), Schema]()
 
   private def parseSchema(schemaStr: String): Schema = {
-    schemaCache.get(schemaStr,
-      new Function[String, Schema] {
-        override def apply(t: String): Schema = new Schema.Parser().parse(t)
-      })
+    getCachedSchema(schemaStr, new Schema.Parser().parse(_))
   }
 
   private def getRecordSchema(props: Properties) = {
