@@ -478,7 +478,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testParallelizeSubPathProcessWithExistingDir() throws IOException {
     Path rootDir = getHoodieTempDir();
     FileSystem fileSystem = metaClient.getFs();
-    prepareTestDirectory(fileSystem, getHoodieTempDir());
+    prepareTestDirectory(fileSystem, rootDir);
     Map<String, List<String>> result = FSUtils.parallelizeSubPathProcess(
         new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem, rootDir, 2,
         fileStatus -> !fileStatus.getPath().getName().contains("1"),
