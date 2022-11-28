@@ -192,7 +192,29 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     //assert the record count matches now
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(5, targetBasePath1, sqlContext);
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, targetBasePath2, sqlContext);
+
+    //assert sync complete without data availability
+    streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    streamer.sync();
+    assertEquals(2, streamer.getSuccessTables().size());
     testNum++;
+  }
+
+  @Test
+  public void testContinuousModeWithMultipleTables() throws IOException, InterruptedException {
+    //create topics for each table
+    String topicName1 = "topic" + testNum++;
+    String topicName2 = "topic" + testNum;
+    testUtils.createTopic(topicName1, 2);
+    testUtils.createTopic(topicName2, 2);
+
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", JsonKafkaSource.class.getName(), false, false, null);
+    cfg.continuousIterations = 2;
+    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    streamer.sync();
+
+    Thread.sleep(5000);
+    assertEquals(2, streamer.getSuccessTables().size());
   }
 
   @Test
