@@ -61,7 +61,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * base file format.
  */
 public class HoodieHFileDataBlock extends HoodieDataBlock {
-  private static final Logger LOG = LogManager.getLogger(HoodieHFileDataBlock.class);
 
   private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
 
