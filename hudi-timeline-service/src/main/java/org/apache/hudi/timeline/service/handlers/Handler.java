@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 
+@SuppressWarnings("checkstyle:JavadocType")
 public abstract class Handler {
 
   protected final Configuration conf;
