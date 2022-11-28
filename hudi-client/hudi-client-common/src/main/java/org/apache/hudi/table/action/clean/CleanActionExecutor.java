@@ -238,7 +238,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     List<HoodieCleanMetadata> cleanMetadataList = new ArrayList<>();
     // If there are inflight(failed) or previously requested clean operation, first perform them
     List<HoodieInstant> pendingCleanInstants = table.getCleanTimeline()
-        .filterInflightsAndRequested().getInstants().collect(Collectors.toList());
+        .filterInflightsAndRequested().getInstants();
     if (pendingCleanInstants.size() > 0) {
       // try to clean old history schema.
       try {

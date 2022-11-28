@@ -337,7 +337,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private Stream<Pair<HoodieInstant, HoodieCommitMetadata>> getCommitMetadataStream() {
     // NOTE: Streams are lazy
     return getCommitsTimeline().filterCompletedInstants()
-        .getInstants()
+        .getInstantsAsStream()
         .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed())
         .map(instant -> {
           try {

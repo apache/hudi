@@ -157,9 +157,9 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
         scheduleLogCompactionOnExperimentTable(experimentTable);
 
         // Verify that no compaction plans are left on the timeline.
-        assertEquals(0, mainTable.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().getInstants().count());
-        assertEquals(0, experimentTable.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().getInstants().count());
-        assertEquals(0, experimentTable.metaClient.reloadActiveTimeline().filterPendingLogCompactionTimeline().getInstants().count());
+        assertEquals(0, mainTable.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants());
+        assertEquals(0, experimentTable.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants());
+        assertEquals(0, experimentTable.metaClient.reloadActiveTimeline().filterPendingLogCompactionTimeline().countInstants());
 
         // Verify the records in both the tables.
         verifyRecords(mainTable, experimentTable);

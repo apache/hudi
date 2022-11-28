@@ -94,15 +94,14 @@ public class TestCompactionUtil {
     List<HoodieInstant> instants = metaClient.getActiveTimeline()
         .filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
-        .getInstants()
-        .collect(Collectors.toList());
+        .getInstants();
     assertThat("all the instants should be in pending state", instants.size(), is(3));
     CompactionUtil.rollbackCompaction(table);
-    boolean allRolledBack = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants()
+    boolean allRolledBack = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstantsAsStream()
         .allMatch(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     assertTrue(allRolledBack, "all the instants should be rolled back");
     List<String> actualInstants = metaClient.getActiveTimeline()
-        .filterPendingCompactionTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .filterPendingCompactionTimeline().getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     assertThat(actualInstants, is(oriInstants));
   }
 
@@ -115,11 +114,10 @@ public class TestCompactionUtil {
     List<HoodieInstant> instants = metaClient.getActiveTimeline()
         .filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
-        .getInstants()
-        .collect(Collectors.toList());
+        .getInstants();
     assertThat("all the instants should be in pending state", instants.size(), is(3));
     CompactionUtil.rollbackEarliestCompaction(table, conf);
-    long requestedCnt = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants()
+    long requestedCnt = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstantsAsStream()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).count();
     assertThat("Only the first instant expects to be rolled back", requestedCnt, is(1L));
 

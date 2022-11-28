@@ -278,11 +278,11 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
   }
 
   private static List<HoodieInstant> getRemainingArchivedAndActiveInstantsSince(String instant, HoodieTableMetaClient metaClient) {
-    List<HoodieInstant> remainingInstantsToIndex = metaClient.getArchivedTimeline().getInstants()
+    List<HoodieInstant> remainingInstantsToIndex = metaClient.getArchivedTimeline().getInstantsAsStream()
         .filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), GREATER_THAN_OR_EQUALS, instant))
         .filter(i -> !INDEXING_ACTION.equals(i.getAction()))
         .collect(Collectors.toList());
-    remainingInstantsToIndex.addAll(metaClient.getActiveTimeline().findInstantsAfter(instant).getInstants()
+    remainingInstantsToIndex.addAll(metaClient.getActiveTimeline().findInstantsAfter(instant).getInstantsAsStream()
         .filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), GREATER_THAN_OR_EQUALS, instant))
         .filter(i -> !INDEXING_ACTION.equals(i.getAction()))
         .collect(Collectors.toList()));
@@ -291,9 +291,9 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
 
   private static List<HoodieInstant> getCompletedArchivedAndActiveInstantsAfter(String instant, HoodieTableMetaClient metaClient) {
     List<HoodieInstant> completedInstants = metaClient.getArchivedTimeline().filterCompletedInstants().findInstantsAfter(instant)
-        .getInstants().filter(i -> !INDEXING_ACTION.equals(i.getAction())).collect(Collectors.toList());
+        .getInstantsAsStream().filter(i -> !INDEXING_ACTION.equals(i.getAction())).collect(Collectors.toList());
     completedInstants.addAll(metaClient.reloadActiveTimeline().filterCompletedInstants().findInstantsAfter(instant)
-        .getInstants().filter(i -> !INDEXING_ACTION.equals(i.getAction())).collect(Collectors.toList()));
+        .getInstantsAsStream().filter(i -> !INDEXING_ACTION.equals(i.getAction())).collect(Collectors.toList()));
     return completedInstants;
   }
 
