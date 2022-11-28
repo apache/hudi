@@ -34,10 +34,10 @@ public class JavaInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> ex
   private List<HoodieRecord<T>> inputRecords;
 
   public JavaInsertCommitActionExecutor(HoodieEngineContext context,
-                                         HoodieWriteConfig config,
-                                         HoodieTable table,
-                                         String instantTime,
-                                         List<HoodieRecord<T>> inputRecords) {
+                                        HoodieWriteConfig config,
+                                        HoodieTable table,
+                                        String instantTime,
+                                        List<HoodieRecord<T>> inputRecords) {
     super(context, config, table, instantTime, WriteOperationType.INSERT);
     this.inputRecords = inputRecords;
   }
@@ -45,6 +45,6 @@ public class JavaInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> ex
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     return JavaWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType, config.shouldPersistBeforeInsert());
   }
 }

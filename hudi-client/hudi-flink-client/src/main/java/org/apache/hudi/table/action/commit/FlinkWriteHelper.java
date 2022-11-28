@@ -68,7 +68,7 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> write(String instantTime, List<HoodieRecord<T>> inputRecords, HoodieEngineContext context,
                                                       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table, boolean shouldCombine, int shuffleParallelism,
-                                                      BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, WriteOperationType operationType) {
+                                                      BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, WriteOperationType operationType, Boolean shouldPersist) {
     try {
       Instant lookupBegin = Instant.now();
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());

@@ -265,6 +265,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When inserted records share same key, controls whether they should be first combined (i.e de-duplicated) before"
           + " writing to storage.");
 
+  public static final ConfigProperty<String> PERSIST_BEFORE_INSERT = ConfigProperty
+      .key("hoodie.persist.before.insert")
+      .defaultValue("true")
+      .sinceVersion("0.13.0")
+      .withDocumentation("When inserted records, controls whether they should be first persist before"
+          + " writing to storage.");
+
   public static final ConfigProperty<String> COMBINE_BEFORE_UPSERT = ConfigProperty
       .key("hoodie.combine.before.upsert")
       .defaultValue("true")
@@ -1079,6 +1086,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldCombineBeforeInsert() {
     return getBoolean(COMBINE_BEFORE_INSERT);
+  }
+
+  public boolean shouldPersistBeforeInsert() {
+    return getBoolean(PERSIST_BEFORE_INSERT);
   }
 
   public boolean shouldCombineBeforeUpsert() {
@@ -2388,6 +2399,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder combineInput(boolean onInsert, boolean onUpsert) {
       writeConfig.setValue(COMBINE_BEFORE_INSERT, String.valueOf(onInsert));
       writeConfig.setValue(COMBINE_BEFORE_UPSERT, String.valueOf(onUpsert));
+      return this;
+    }
+
+    public Builder persistInput(boolean persist) {
+      writeConfig.setValue(PERSIST_BEFORE_INSERT, String.valueOf(persist));
       return this;
     }
 

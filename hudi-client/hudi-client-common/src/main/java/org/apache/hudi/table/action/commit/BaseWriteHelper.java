@@ -18,13 +18,13 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.time.Duration;
@@ -39,8 +39,14 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
                                       boolean shouldCombine,
                                       int shuffleParallelism,
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
-                                      WriteOperationType operationType) {
+                                      WriteOperationType operationType,
+                                      Boolean shouldPersist) {
+    boolean persistRdd = shouldPersist && inputRecords instanceof HoodieData;
     try {
+      if (persistRdd) {
+        ((HoodieData<?>) inputRecords).persist("MEMORY_AND_DISK_SER");
+      }
+
       // De-dupe/merge if needed
       I dedupedRecords =
           combineOnCondition(shouldCombine, inputRecords, shuffleParallelism, table);
@@ -62,6 +68,10 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
         throw (HoodieUpsertException) e;
       }
       throw new HoodieUpsertException("Failed to upsert for commit time " + instantTime, e);
+    } finally {
+      if (persistRdd) {
+        ((HoodieData<?>) inputRecords).unpersist();
+      }
     }
   }
 
