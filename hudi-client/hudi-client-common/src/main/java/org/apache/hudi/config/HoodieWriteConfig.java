@@ -388,7 +388,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION = ConfigProperty
       .key("hoodie.fail.writes.on.inline.table.service.exception")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("Table services such as compaction and clustering can fail and prevent syncing to "
           + "the metaclient. Set this to true to fail writes when table services fail");
 
