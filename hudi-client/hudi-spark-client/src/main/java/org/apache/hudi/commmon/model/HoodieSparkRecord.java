@@ -203,9 +203,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     boolean containMetaFields = hasMetaFields(targetStructType);
     UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, targetStructType);
     HoodieInternalRow internalRow = new HoodieInternalRow(metaFields, unsafeRow, containMetaFields);
-    InternalRow finalRow = copy ? internalRow.copy() : internalRow;
 
-    return new HoodieSparkRecord(getKey(), finalRow, targetStructType, getOperation(), this.currentLocation, this.newLocation, copy);
+    return new HoodieSparkRecord(getKey(), internalRow, targetStructType, getOperation(), this.currentLocation, this.newLocation, false);
   }
 
   @Override
@@ -220,9 +219,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     boolean containMetaFields = hasMetaFields(newStructType);
     UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, newStructType);
     HoodieInternalRow internalRow = new HoodieInternalRow(metaFields, unsafeRow, containMetaFields);
-    InternalRow finalRow = copy ? internalRow.copy() : internalRow;
 
-    return new HoodieSparkRecord(getKey(), finalRow, newStructType, getOperation(), this.currentLocation, this.newLocation, copy);
+    return new HoodieSparkRecord(getKey(), internalRow, newStructType, getOperation(), this.currentLocation, this.newLocation, false);
   }
 
   @Override
