@@ -18,9 +18,6 @@
 
 package org.apache.hudi.table.action;
 
-import java.io.Serializable;
-
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -30,6 +27,10 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.conf.Configuration;
+
+import java.io.Serializable;
 
 public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O, R> implements Serializable {
 

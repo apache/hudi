@@ -18,6 +18,11 @@
 
 package org.apache.hudi.examples.quickstart;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.data.RowData;
@@ -35,10 +40,6 @@ import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
 import org.apache.parquet.Strings;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;

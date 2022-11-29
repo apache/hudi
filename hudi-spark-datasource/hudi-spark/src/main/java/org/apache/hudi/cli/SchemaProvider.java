@@ -18,11 +18,12 @@
 
 package org.apache.hudi.cli;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
+
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.Serializable;

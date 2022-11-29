@@ -18,10 +18,11 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.junit.jupiter.api.Test;
-import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
 import java.util.HashMap;
 import java.util.HashSet;

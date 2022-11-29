@@ -19,10 +19,11 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
+
+import org.apache.avro.generic.GenericRecord;
 
 /**
  * Custom key generator for the Hoodie table metadata. The metadata table record payload

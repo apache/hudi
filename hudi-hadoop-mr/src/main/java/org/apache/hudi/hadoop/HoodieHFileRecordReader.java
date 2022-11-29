@@ -18,8 +18,8 @@
 
 package org.apache.hudi.hadoop;
 
-import java.io.IOException;
-import java.util.Iterator;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.io.storage.HoodieHFileReader;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -33,8 +33,9 @@ import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.io.storage.HoodieHFileReader;
+
+import java.io.IOException;
+import java.util.Iterator;
 
 public class HoodieHFileRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 

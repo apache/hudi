@@ -17,7 +17,6 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
@@ -28,6 +27,8 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
 import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
+
+import org.apache.avro.generic.GenericRecord;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;

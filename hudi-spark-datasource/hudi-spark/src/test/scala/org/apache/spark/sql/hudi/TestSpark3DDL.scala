@@ -19,8 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.spark.sql.catalyst.TableIdentifier

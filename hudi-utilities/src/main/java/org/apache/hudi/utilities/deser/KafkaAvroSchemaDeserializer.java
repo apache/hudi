@@ -20,12 +20,12 @@ package org.apache.hudi.utilities.deser;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
-
-import org.apache.avro.Schema;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
-import org.apache.kafka.common.errors.SerializationException;
+
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import org.apache.avro.Schema;
+import org.apache.kafka.common.errors.SerializationException;
 
 import java.util.Map;
 import java.util.Map.Entry;

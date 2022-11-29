@@ -18,6 +18,9 @@
 
 package org.apache.hudi.examples.quickstart.factory;
 
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.examples.quickstart.source.ContinuousFileSource;
+
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
@@ -29,8 +32,6 @@ import org.apache.flink.table.factories.FactoryUtil;
 
 import java.util.Collections;
 import java.util.Set;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.examples.quickstart.source.ContinuousFileSource;
 
 /**
  * Factory for ContinuousFileSource.

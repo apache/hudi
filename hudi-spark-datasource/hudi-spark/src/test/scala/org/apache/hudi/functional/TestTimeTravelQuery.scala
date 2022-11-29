@@ -19,15 +19,13 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
-
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest

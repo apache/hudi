@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
@@ -31,15 +30,15 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;

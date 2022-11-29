@@ -18,19 +18,18 @@
 
 package org.apache.hudi.execution;
 
-import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformFunction;
-
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
+import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
 import org.apache.hudi.common.util.queue.WaitStrategyFactory;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 import org.junit.jupiter.api.AfterEach;
@@ -43,6 +42,7 @@ import java.util.List;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformFunction;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

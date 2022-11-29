@@ -20,9 +20,9 @@ package org.apache.hudi.utilities.schema.postprocessor;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;

@@ -18,9 +18,10 @@
 
 package org.apache.hudi.examples.common;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**

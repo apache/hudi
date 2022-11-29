@@ -18,11 +18,12 @@
 
 package org.apache.hudi.utilities.checkpointing;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
+
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Objects;

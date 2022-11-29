@@ -18,13 +18,14 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+
+import org.apache.hadoop.fs.Path;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;

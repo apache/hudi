@@ -23,11 +23,12 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
+import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
 
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY;

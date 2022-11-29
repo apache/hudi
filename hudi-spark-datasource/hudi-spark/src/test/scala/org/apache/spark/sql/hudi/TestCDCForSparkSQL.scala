@@ -19,10 +19,8 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.table.HoodieTableMetaClient
-
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
-
 import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {

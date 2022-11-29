@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -31,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

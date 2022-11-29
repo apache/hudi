@@ -18,15 +18,16 @@
 
 package org.apache.hudi.integ.testsuite.dag;
 
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
+import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
+import org.apache.hudi.integ.testsuite.dag.nodes.HiveQueryNode;
+import org.apache.hudi.integ.testsuite.dag.nodes.HiveSyncNode;
+import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
-import org.apache.hudi.integ.testsuite.dag.nodes.HiveSyncNode;
-import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
-import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
-import org.apache.hudi.integ.testsuite.dag.nodes.HiveQueryNode;
 
 /**
  * An implementation of {@link WorkflowDagGenerator}, that generates workflowDag with hive nodes as child node

@@ -18,11 +18,12 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.client.transaction.lock.LockManager;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

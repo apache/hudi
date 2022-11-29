@@ -28,9 +28,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.QueueBasedExecutorFactory;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.util.QueueBasedExecutorFactory;
 
 import java.util.Iterator;
 import java.util.List;

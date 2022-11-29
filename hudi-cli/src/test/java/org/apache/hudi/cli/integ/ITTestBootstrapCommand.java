@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.commands.TableCommand;
@@ -27,6 +26,8 @@ import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.functional.TestBootstrap;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;

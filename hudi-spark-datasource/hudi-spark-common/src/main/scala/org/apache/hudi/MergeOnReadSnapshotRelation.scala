@@ -20,15 +20,12 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema}
+import org.apache.hudi.HoodieBaseRelation.convertToAvroSchema
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow

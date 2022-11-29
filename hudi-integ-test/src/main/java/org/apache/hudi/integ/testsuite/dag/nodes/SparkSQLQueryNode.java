@@ -19,9 +19,10 @@
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.integ.testsuite.helpers.HiveServiceProvider;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+import org.apache.hudi.integ.testsuite.helpers.HiveServiceProvider;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;

@@ -22,11 +22,11 @@ import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 
 import scala.util.control.NonFatal
 

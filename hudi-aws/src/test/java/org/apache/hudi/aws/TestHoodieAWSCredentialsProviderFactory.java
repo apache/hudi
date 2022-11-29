@@ -18,10 +18,10 @@
 
 package org.apache.hudi.aws;
 
-import com.amazonaws.auth.BasicSessionCredentials;
-import org.apache.hudi.config.HoodieAWSConfig;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.config.HoodieAWSConfig;
 
+import com.amazonaws.auth.BasicSessionCredentials;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

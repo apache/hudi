@@ -30,7 +30,7 @@ import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
-import org.apache.hudi.exception.{HoodieException, HoodieUpsertException, SchemaCompatibilityException}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
@@ -39,7 +39,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
 import org.apache.spark.sql._
-import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
 import org.joda.time.DateTime

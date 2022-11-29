@@ -39,7 +39,6 @@ import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
-import java.util.stream.Collectors
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 

@@ -20,15 +20,15 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.spark.sql
-import org.apache.spark.sql.{Dataset, Row}
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
+import org.apache.spark.sql
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.{Dataset, Row}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.scalatest.Inspectors.forAll
 
 import java.io.File

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.timeline.service;
 
-import io.javalin.core.JavalinConfig;
-import io.javalin.jetty.JettyServer;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -33,6 +31,8 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
+import io.javalin.core.JavalinConfig;
+import io.javalin.jetty.JettyServer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;

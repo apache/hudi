@@ -32,12 +32,12 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.utilities.UtilHelpers;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -46,6 +46,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
 
 /**
  * CLI command to show cleans options.

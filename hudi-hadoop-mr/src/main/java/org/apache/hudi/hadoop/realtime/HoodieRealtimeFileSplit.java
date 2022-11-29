@@ -18,9 +18,10 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
 import java.io.DataOutput;

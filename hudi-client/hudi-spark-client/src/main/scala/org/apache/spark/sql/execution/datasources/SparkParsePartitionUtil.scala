@@ -17,12 +17,11 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import java.util.TimeZone
-
 import org.apache.hadoop.fs.Path
-
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.DataType
+
+import java.util.TimeZone
 
 trait SparkParsePartitionUtil extends Serializable {
 

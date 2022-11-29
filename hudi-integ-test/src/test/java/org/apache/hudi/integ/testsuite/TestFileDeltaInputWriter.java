@@ -18,9 +18,26 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.integ.testsuite.generator.GenericRecordFullPayloadGenerator;
+import org.apache.hudi.integ.testsuite.reader.SparkBasedReader;
+import org.apache.hudi.integ.testsuite.writer.AvroFileDeltaInputWriter;
+import org.apache.hudi.integ.testsuite.writer.DeltaInputWriter;
+import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
+import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -28,25 +45,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.integ.testsuite.reader.SparkBasedReader;
-import org.apache.hudi.integ.testsuite.writer.AvroFileDeltaInputWriter;
-import org.apache.hudi.integ.testsuite.writer.DeltaInputWriter;
-import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
-import org.apache.hudi.integ.testsuite.generator.GenericRecordFullPayloadGenerator;
-import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
-import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
-import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit test for {@link DeltaInputWriter}.

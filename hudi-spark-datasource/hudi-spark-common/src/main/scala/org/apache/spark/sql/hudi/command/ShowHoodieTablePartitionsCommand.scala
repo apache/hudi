@@ -18,15 +18,13 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
-
-import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
 import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.{Row, SparkSession}
 
 /**
  * Command for show hudi table's partitions.

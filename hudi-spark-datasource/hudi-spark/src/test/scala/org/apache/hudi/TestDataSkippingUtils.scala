@@ -30,7 +30,7 @@ import org.apache.spark.sql.functions.{col, lower}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, Row, SparkSession}
+import org.apache.spark.sql.{Column, Row, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest

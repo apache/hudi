@@ -18,6 +18,14 @@
 
 package org.apache.hudi.hadoop.hive;
 
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.HoodieParquetInputFormatBase;
+import org.apache.hudi.hadoop.realtime.HoodieCombineRealtimeRecordReader;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -56,13 +64,6 @@ import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapred.lib.CombineFileInputFormat;
 import org.apache.hadoop.mapred.lib.CombineFileSplit;
 import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.hadoop.HoodieParquetInputFormat;
-import org.apache.hudi.hadoop.HoodieParquetInputFormatBase;
-import org.apache.hudi.hadoop.realtime.HoodieCombineRealtimeRecordReader;
-import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

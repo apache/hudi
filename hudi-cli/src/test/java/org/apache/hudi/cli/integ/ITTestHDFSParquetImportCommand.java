@@ -18,9 +18,6 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
@@ -33,6 +30,10 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.functional.TestHDFSParquetImporter;
 import org.apache.hudi.utilities.functional.TestHDFSParquetImporter.HoodieTripModel;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;

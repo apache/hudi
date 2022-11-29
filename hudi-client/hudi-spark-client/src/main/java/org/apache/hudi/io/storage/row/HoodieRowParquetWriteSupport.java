@@ -18,11 +18,12 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
 import org.apache.spark.sql.types.StructType;

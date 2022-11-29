@@ -19,11 +19,10 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.SafeAvroProjection.collectFieldOrdinals
-import org.apache.hudi.common.util.ValidationUtils.checkState
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
+import org.apache.hudi.SafeAvroProjection.collectFieldOrdinals
+import org.apache.hudi.common.util.ValidationUtils.checkState
 
 import scala.collection.JavaConverters._
 

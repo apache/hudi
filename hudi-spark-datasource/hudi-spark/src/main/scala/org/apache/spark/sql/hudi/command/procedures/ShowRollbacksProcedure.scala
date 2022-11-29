@@ -17,10 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import java.io.IOException
-import java.util
-import java.util.function.Supplier
-
 import org.apache.hudi.avro.model.HoodieRollbackMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
@@ -31,6 +27,9 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
+import java.io.IOException
+import java.util
+import java.util.function.Supplier
 import scala.collection.JavaConversions.asScalaBuffer
 import scala.collection.JavaConverters._
 

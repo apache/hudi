@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
@@ -31,10 +30,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

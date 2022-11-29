@@ -18,10 +18,11 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.hudi.common.config.TypedProperties;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
-import org.apache.hudi.common.config.TypedProperties;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 

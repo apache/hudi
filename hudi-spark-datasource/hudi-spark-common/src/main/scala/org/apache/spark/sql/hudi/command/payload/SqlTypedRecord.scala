@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi.command.payload
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
-import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.AvroConversionUtils
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.hudi.command.payload.SqlTypedRecord.{getAvroDeserializer, getSqlType}

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -28,6 +27,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

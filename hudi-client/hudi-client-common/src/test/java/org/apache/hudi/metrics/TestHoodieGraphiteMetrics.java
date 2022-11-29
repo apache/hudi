@@ -20,6 +20,7 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

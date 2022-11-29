@@ -18,7 +18,6 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -27,6 +26,8 @@ import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.helpers.DFSTestSuitePathSelector;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
+
+import org.apache.hadoop.fs.Path;
 
 /**
  * A rollback node in the DAG helps to perform rollback operations.

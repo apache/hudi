@@ -18,14 +18,14 @@
 
 package org.apache.hudi.client.transaction.lock.metrics;
 
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metrics.Metrics;
+
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SlidingWindowReservoir;
 import com.codahale.metrics.Timer;
-
-import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metrics.Metrics;
 
 import java.util.concurrent.TimeUnit;
 

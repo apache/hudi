@@ -42,6 +42,7 @@ import org.apache.hudi.exception.HoodieDependentSystemUnavailableException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HRegionLocation;
@@ -86,9 +87,9 @@ import java.util.concurrent.TimeUnit;
 import scala.Tuple2;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_CLIENT_PORT;
 import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_QUORUM;
 import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_ZNODE_PARENT;
-import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_CLIENT_PORT;
 import static org.apache.hadoop.hbase.security.SecurityConstants.MASTER_KRB_PRINCIPAL;
 import static org.apache.hadoop.hbase.security.SecurityConstants.REGIONSERVER_KRB_PRINCIPAL;
 import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_AUTHORIZATION_CONF_KEY;

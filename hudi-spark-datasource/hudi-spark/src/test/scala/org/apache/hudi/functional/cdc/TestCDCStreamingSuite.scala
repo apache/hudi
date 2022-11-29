@@ -17,17 +17,14 @@
 
 package org.apache.hudi.functional.cdc
 
-import org.apache.hudi.DataSourceReadOptions
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieWriteConfig
-
 import org.apache.spark.sql.QueryTest.checkAnswer
-import org.apache.spark.sql.{Column, Dataset, Row, SaveMode}
 import org.apache.spark.sql.catalyst.expressions.{Add, If, Literal}
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.functions._
-
+import org.apache.spark.sql.{Column, Dataset, Row, SaveMode}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 

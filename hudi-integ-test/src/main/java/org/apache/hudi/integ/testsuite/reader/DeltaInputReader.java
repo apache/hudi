@@ -18,9 +18,10 @@
 
 package org.apache.hudi.integ.testsuite.reader;
 
+import org.apache.spark.api.java.JavaRDD;
+
 import java.io.IOException;
 import java.io.Serializable;
-import org.apache.spark.api.java.JavaRDD;
 
 /**
  * Implementations of {@link DeltaInputReader} will read the configured input type and provide an RDD of records to the

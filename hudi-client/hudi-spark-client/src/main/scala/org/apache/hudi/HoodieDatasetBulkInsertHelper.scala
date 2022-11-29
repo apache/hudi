@@ -27,8 +27,8 @@ import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.keygen.{BuiltinKeyGenerator, SparkKeyGeneratorInterface}
-import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper
+import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}

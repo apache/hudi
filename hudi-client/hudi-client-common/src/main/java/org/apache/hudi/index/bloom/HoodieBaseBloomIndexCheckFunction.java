@@ -28,10 +28,10 @@ import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.function.Function;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * Function performing actual checking of list containing (fileId, hoodieKeys) against the actual files.

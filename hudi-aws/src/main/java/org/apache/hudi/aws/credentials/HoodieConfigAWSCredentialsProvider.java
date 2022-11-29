@@ -18,12 +18,13 @@
 
 package org.apache.hudi.aws.credentials;
 
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieAWSConfig;
+
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.BasicSessionCredentials;
-import org.apache.hudi.config.HoodieAWSConfig;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

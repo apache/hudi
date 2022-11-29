@@ -20,11 +20,11 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.common.util.Option;
 import org.apache.parquet.hadoop.api.WriteSupport;
 
 import java.nio.charset.StandardCharsets;

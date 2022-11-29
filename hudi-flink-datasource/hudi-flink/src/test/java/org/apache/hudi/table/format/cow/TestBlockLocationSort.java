@@ -18,13 +18,14 @@
 
 package org.apache.hudi.table.format.cow;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
+import org.apache.hadoop.fs.BlockLocation;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Comparator;
-import org.apache.hadoop.fs.BlockLocation;
-import org.junit.jupiter.api.Test;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 
 public class TestBlockLocationSort {
 

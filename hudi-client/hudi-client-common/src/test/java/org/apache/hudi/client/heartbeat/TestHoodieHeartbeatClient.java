@@ -18,9 +18,10 @@
 
 package org.apache.hudi.client.heartbeat;
 
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

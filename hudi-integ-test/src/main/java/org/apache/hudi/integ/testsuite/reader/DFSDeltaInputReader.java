@@ -18,19 +18,21 @@
 
 package org.apache.hudi.integ.testsuite.reader;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.collection.Pair;
+
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.collection.Pair;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * This class helps to estimate the number of files to read a given number of total records.

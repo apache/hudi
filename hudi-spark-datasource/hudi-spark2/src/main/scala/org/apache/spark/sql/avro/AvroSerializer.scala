@@ -17,23 +17,19 @@
 
 package org.apache.spark.sql.avro
 
-import java.nio.ByteBuffer
-
-import scala.collection.JavaConverters._
-
-import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
-import org.apache.avro.Schema
 import org.apache.avro.Schema.Type
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
-import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.util.Utf8
-
+import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecializedGetters, SpecificInternalRow}
 import org.apache.spark.sql.types._
+
+import java.nio.ByteBuffer
+import scala.collection.JavaConverters._
 
 /**
  * A serializer to serialize data in catalyst format to data in avro format.

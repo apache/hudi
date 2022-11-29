@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.SQLConfInjectingRDD
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}

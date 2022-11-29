@@ -18,14 +18,15 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.io.Serializable;
