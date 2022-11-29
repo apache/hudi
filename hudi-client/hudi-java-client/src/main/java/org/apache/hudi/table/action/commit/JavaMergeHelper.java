@@ -90,12 +90,11 @@ public class JavaMergeHelper<T> extends BaseMergeHelper<T, List<HoodieRecord<T>>
 
       wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
           Option.of(new UpdateHandler(mergeHandle)), record -> {
-        HoodieRecord recordCopy = record.copy();
         if (!externalSchemaTransformation) {
-          return recordCopy;
+          return record.copy();
         }
         try {
-          return recordCopy.rewriteRecord(writerSchema, new Properties(), readerSchema);
+          return record.rewriteRecord(writerSchema, new Properties(), readerSchema).copy();
         } catch (IOException e) {
           throw new HoodieException(e);
         }

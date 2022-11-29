@@ -140,12 +140,11 @@ public class HoodieMergeHelper<T> extends
 
       wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), readerIterator,
           new UpdateHandler(mergeHandle), record -> {
-        HoodieRecord recordCopy = record.copy();
         if (!externalSchemaTransformation) {
-          return recordCopy;
+          return record.copy();
         }
         try {
-          return recordCopy.rewriteRecord(writerSchema, new Properties(), readerSchema);
+          return record.rewriteRecord(writerSchema, new Properties(), readerSchema).copy();
         } catch (IOException e) {
           throw new HoodieException(String.format("Failed to rewrite record. WriterSchema: %s; ReaderSchema: %s", writerSchema, readerSchema), e);
         }
