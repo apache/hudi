@@ -29,12 +29,14 @@ import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.io.storage.HoodieFileReader;
 
 import org.apache.avro.Schema;
@@ -81,10 +83,9 @@ public abstract class HoodieHiveFileSliceReader implements FileSliceReader {
   public HoodieHiveFileSliceReader(InputSplitWithLocationInfo split, JobConf jobConf) {
     this.split = (FileSplit) split;
     this.jobConf = jobConf;
-    HoodiePartitionMetadata metadata = null;
     try {
       Path path = this.split.getPath();
-      metadata = new HoodiePartitionMetadata(path.getFileSystem(jobConf), path);
+      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(path.getFileSystem(jobConf), path);
       metadata.readFromFS();
       String basePath = String.valueOf(HoodieHiveUtils.getNthParent(path, metadata.getPartitionDepth()));
       this.metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(basePath).build();
@@ -98,10 +99,10 @@ public abstract class HoodieHiveFileSliceReader implements FileSliceReader {
   }
 
   @Override
-  public FileSliceReader project(InternalSchema schema) {
-    // should we convert to avro Schema?
-    // TODO: implement me
-    return this;
+  public FileSliceReader project(InternalSchema internalSchema) {
+    String tableName = StringUtils.isNullOrEmpty(schema.getName()) ? StringUtils.EMPTY_STRING : schema.getName();
+    String namespace = StringUtils.isNullOrEmpty(schema.getNamespace()) ? StringUtils.EMPTY_STRING : schema.getNamespace();
+    return project(AvroInternalSchemaConverter.convert(internalSchema, tableName, namespace));
   }
 
   @Override
