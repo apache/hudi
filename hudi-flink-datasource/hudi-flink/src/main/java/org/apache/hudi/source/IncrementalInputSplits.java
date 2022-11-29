@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
@@ -474,7 +475,8 @@ public class IncrementalInputSplits implements Serializable {
    * @param issuedInstant  The last issued instant that has already been delivered to downstream
    * @return the filtered hoodie instants
    */
-  private List<HoodieInstant> filterInstantsWithRange(
+  @VisibleForTesting
+  public List<HoodieInstant> filterInstantsWithRange(
       HoodieTimeline commitTimeline,
       final String issuedInstant) {
     HoodieTimeline completedTimeline = commitTimeline.filterCompletedInstants();
@@ -487,6 +489,15 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     Stream<HoodieInstant> instantStream = completedTimeline.getInstantsAsStream();
+
+    if (OptionsResolver.hasNoSpecificReadCommits(this.conf)) {
+      // by default read from the latest commit
+      List<HoodieInstant> instants = completedTimeline.getInstants().collect(Collectors.toList());
+      if (instants.size() > 1) {
+        return Collections.singletonList(instants.get(instants.size() - 1));
+      }
+      return instants;
+    }
 
     if (OptionsResolver.isSpecificStartCommit(this.conf)) {
       final String startCommit = this.conf.get(FlinkOptions.READ_START_COMMIT);
