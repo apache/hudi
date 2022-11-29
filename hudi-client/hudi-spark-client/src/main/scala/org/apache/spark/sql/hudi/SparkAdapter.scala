@@ -51,7 +51,7 @@ trait SparkAdapter extends Serializable {
 
   /**
    * Creates Catalyst [[Metadata]] for Hudi's meta-fields (designating these w/
-   * [[METADATA_COL_ATTR_KEY]] if available (available in Spark >- 3.1)
+   * [[METADATA_COL_ATTR_KEY]] if available (available in Spark >= 3.2)
    */
   def createCatalystMetadataForMetaField: Metadata
 

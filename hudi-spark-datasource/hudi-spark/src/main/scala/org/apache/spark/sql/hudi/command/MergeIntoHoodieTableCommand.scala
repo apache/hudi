@@ -281,7 +281,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       case _ => // no-op
     }
 
-    sourceDF
+    // NOTE: We have to manually strip meta-fields since Spark < 3.2 doesn't support
+    //       [[StructField]] metadata (of [[METADATA_COL_ATTR_KEY]]) enabling Spark to differentiate
+    //       meta columns from the data columns omitting them by default (unless explicitly ref'd)
+    removeMetaFields(sourceDF)
   }
 
   /**
@@ -378,7 +381,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           val boundAssignmentExprs = reorderedAssignments.map {
             case Assignment(attr: Attribute, value) =>
               val boundExpr = bindReferences(value)
-              validateAssignmentExpression(boundExpr)
+              validator(boundExpr)
               // Alias resulting expression w/ target table's expected column name, as well as
               // do casting if necessary
               Alias(castIfNeeded(boundExpr, attr.dataType, sparkSession.sqlContext.conf), attr.name)()
@@ -443,6 +446,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       of its output attributes
     val joinedExpectedOutputAttributes = joinedExpectedOutput
 
+    // TODO replace w/ BindReference.bindReference
     expr transform {
       case attr: AttributeReference =>
         val index = joinedExpectedOutputAttributes.indexWhere(attributeEquals(_, attr))
