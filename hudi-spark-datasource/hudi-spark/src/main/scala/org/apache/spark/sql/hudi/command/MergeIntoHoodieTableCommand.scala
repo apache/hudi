@@ -39,7 +39,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{encodeAsBase64String, toStructType}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
-import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
+import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS, _}
 import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
@@ -316,26 +316,32 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key -> getTableSchema.toString) +
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
-    // Append (encoded) updating actions
-    writeParams += PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
-      serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments)))
+    writeParams ++= Seq(
+      // Append (encoded) updating actions
+      PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
+        serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments))),
+      // Append (encoded) inserting actions
+      PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
+        serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)), validateInsertingAssignmentExpression)
+    )
+
     // Append (encoded) deleting actions
-    deletingActions.headOption match {
-      case Some(DeleteAction(condition)) =>
-        writeParams += PAYLOAD_DELETE_CONDITION -> serializeConditionalAssignments(Seq(condition -> Seq.empty))
-      case _ => // no-op
-    }
-    // Append (encoded) inserting actions
-    writeParams += PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
-      serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)), validateInsertingAssignmentExpression)
-    // Add a schema of the expected "joined" output of the [[sourceTable]] and [[targetTable]]
-    writeParams += PAYLOAD_EXPECTED_COMBINED_SCHEMA -> encodeAsBase64String(toStructType(joinedExpectedOutput))
+    writeParams ++= deletingActions.headOption.map {
+      case DeleteAction(condition) =>
+        PAYLOAD_DELETE_CONDITION -> serializeConditionalAssignments(Seq(condition -> Seq.empty))
+    }.toSeq
+
     // Remove the meta fields from the sourceDF as we do not need these when writing.
     val trimmedSourceDF = removeMetaFields(sourceDF)
 
-    // Supply original record's Avro schema to provided to [[ExpressionPayload]]
-    writeParams += (PAYLOAD_RECORD_AVRO_SCHEMA ->
-      convertStructTypeToAvroSchema(trimmedSourceDF.schema, "record", "").toString)
+    // Append
+    //  - Original [[sourceTable]] (Avro) schema
+    //  - Schema of the expected "joined" output of the [[sourceTable]] and [[targetTable]]
+    writeParams ++= Seq(
+      PAYLOAD_RECORD_AVRO_SCHEMA ->
+        convertStructTypeToAvroSchema(trimmedSourceDF.schema, "record", "").toString,
+      PAYLOAD_EXPECTED_COMBINED_SCHEMA -> encodeAsBase64String(toStructType(joinedExpectedOutput))
+    )
 
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, trimmedSourceDF)
     if (!success) {
