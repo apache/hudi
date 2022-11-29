@@ -534,7 +534,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
             DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "timestamp",
             "hoodie.schema.on.read.enable" -> "true",
-            "hoodie.datasource.write.reconcile.schema" -> "true",
             DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY -> "true"
           )
 

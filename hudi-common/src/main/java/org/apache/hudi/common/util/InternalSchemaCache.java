@@ -209,8 +209,17 @@ public class InternalSchemaCache {
     }
     // step2:
     FileBasedInternalSchemaStorageManager fileBasedInternalSchemaStorageManager = new FileBasedInternalSchemaStorageManager(hadoopConf, new Path(tablePath));
-    String lastestHistorySchema = fileBasedInternalSchemaStorageManager.getHistorySchemaStrByGivenValidCommits(validateCommitList);
-    return InternalSchemaUtils.searchSchema(versionId, SerDeHelper.parseSchemas(lastestHistorySchema));
+    String latestHistorySchema = fileBasedInternalSchemaStorageManager.getHistorySchemaStrByGivenValidCommits(validateCommitList);
+    if (latestHistorySchema.isEmpty()) {
+      return InternalSchema.getEmptyInternalSchema();
+    }
+    return InternalSchemaUtils.searchSchema(versionId, SerDeHelper.parseSchemas(latestHistorySchema));
+  }
+
+  public static InternalSchema getInternalSchemaByVersionId(long versionId, HoodieTableMetaClient metaClient) {
+    String validCommitLists = metaClient
+        .getCommitsAndCompactionTimeline().filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getFileName).collect(Collectors.joining(","));
+    return getInternalSchemaByVersionId(versionId, metaClient.getBasePathV2().toString(), metaClient.getHadoopConf(), validCommitLists);
   }
 }
 

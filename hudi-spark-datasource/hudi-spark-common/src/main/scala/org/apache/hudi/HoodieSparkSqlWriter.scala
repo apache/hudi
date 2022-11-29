@@ -206,7 +206,10 @@ object HoodieSparkSqlWriter {
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
         if (shouldReconcileSchema && schemaEvolutionEnabled) {
-          Some(AvroInternalSchemaConverter.convert(sourceSchema))
+          val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields().filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
+          // in case sourceSchema contains HoodieRecord.HOODIE_META_COLUMNS
+          val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
+          Some(AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(latestTableSchemaOpt.getOrElse(sourceSchema), allowOperationMetaDataField)))
         } else {
           None
         }
@@ -351,7 +354,7 @@ object HoodieSparkSqlWriter {
             }).toJavaRDD()
 
             val client = hoodieWriteClient.getOrElse {
-              val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key
+              val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema)) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key
               // TODO(HUDI-4772) proper writer-schema has to be specified here
               DataSourceUtils.createHoodieClient(jsc, dataFileSchemaStr, path, tblName, mapAsJavaMap(finalOpts))
             }.asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
@@ -423,8 +426,9 @@ object HoodieSparkSqlWriter {
             case Some(internalSchema) =>
               // Apply schema evolution, by auto-merging write schema and read schema
               val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema)
-              AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
-
+              val evolvedSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
+              val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields().filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
+              if (shouldRemoveMetaDataFromInternalSchema) HoodieAvroUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
             case None =>
               // In case schema reconciliation is enabled we will employ (legacy) reconciliation
               // strategy to produce target writer's schema (see definition below)
@@ -513,10 +517,18 @@ object HoodieSparkSqlWriter {
     HoodieAvroUtils.removeFields(schema, partitionColumns.toSet.asJava)
   }
 
-  def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema]): Map[String, String] = {
+  def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema], writeSchemaOpt: Option[Schema] = None): Map[String, String] = {
     val schemaEvolutionEnable = if (internalSchemaOpt.isDefined) "true" else "false"
-    parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key -> SerDeHelper.toJson(internalSchemaOpt.orNull),
-      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> schemaEvolutionEnable)
+    // correct internalSchema, internalSchema should contain hoodie metadata columns.
+    val correctInternalSchema = internalSchemaOpt.map { internalSchema =>
+      if (internalSchema.findField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null && writeSchemaOpt.isDefined) {
+        val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
+        AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(writeSchemaOpt.get, allowOperationMetaDataField))
+      } else {
+        internalSchema
+      }
+    }
+    parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> SerDeHelper.toJson(correctInternalSchema.getOrElse(null)), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaEvolutionEnable)
   }
 
   private def reconcileSchemasLegacy(tableSchema: Schema, newSchema: Schema): (Schema, Boolean) = {
