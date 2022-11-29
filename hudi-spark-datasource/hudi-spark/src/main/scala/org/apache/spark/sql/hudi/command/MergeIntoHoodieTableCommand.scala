@@ -205,7 +205,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
-
     // TODO move to analysis phase
     validate(mergeInto)
 
@@ -214,19 +213,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val parameters = buildMergeIntoConfig(hoodieCatalogTable)
     // TODO Remove it when we implement ExpressionPayload for SparkRecord
     val parametersWithAvroRecordMerger = parameters ++ Map(HoodieWriteConfig.MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName)
-    if (mergeInto.matchedActions.nonEmpty) { // Do the upsert
-      executeUpsert(sourceDF, parametersWithAvroRecordMerger)
-    } else { // If there is no match actions in the statement, execute insert operation only.
-      val targetDF = Dataset.ofRows(sparkSession, mergeInto.targetTable)
-      val primaryKeys = hoodieCatalogTable.tableConfig.getRecordKeyFieldProp.split(",")
-      // Only records that are not included in the target table can be inserted
-      val insertSourceDF = sourceDF.join(targetDF, primaryKeys,"left_anti")
-
-      // column order changed after left anti join , we should keep column order of source dataframe
-      val cols = sourceDF.columns
-      executeInsertOnly(insertSourceDF.select(cols.head, cols.tail:_*), parameters)
-    }
-
+    // Do the upsert
+    executeUpsert(sourceDF, parametersWithAvroRecordMerger)
+    // Refresh the table in the catalog
     sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
 
     Seq.empty[Row]
@@ -349,24 +338,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     }
   }
 
-  /**
-   * If there are not matched actions, we only execute the insert operation.
-   *
-   * TODO unify w/ executeUpsert
-   */
-  private def executeInsertOnly(sourceDF: DataFrame, parameters: Map[String, String]): Unit = {
-    var writeParams = parameters +
-      (OPERATION.key -> INSERT_OPERATION_OPT_VAL) +
-      (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key -> getTableSchema.toString)
-
-    writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
-      serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments))))
-
-    // Remove the meta fields from the sourceDF as we do not need these when writing.
-    val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
-    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
-  }
-
   private def getTableSchema: Schema = {
     val (structName, nameSpace) = AvroConversionUtils
       .getAvroRecordNameAndNamespace(hoodieCatalogTable.tableName)
@@ -388,7 +359,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * </ol>
    */
   private def serializeConditionalAssignments(conditionalAssignments: Seq[(Option[Expression], Seq[Assignment])],
-                                              validateAssignmentExpression: Function[Expression, Unit] = _ => {}): String = {
+                                              validator: Function[Expression, Unit] = _ => {}): String = {
     val boundConditionalAssignments =
       conditionalAssignments.map {
         case (condition, assignments) =>
