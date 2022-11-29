@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.types.StringType
@@ -170,6 +170,58 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             Seq("11")
           )
         }
+      }
+    }
+  }
+
+  test("Test Enable and Disable Schema on read") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      if (HoodieSparkUtils.gteqSpark3_1) {
+        spark.sql("set hoodie.schema.on.read.enable=true")
+        // Create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+
+        // Insert data to the new table.
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
+
+        // add column
+        spark.sql(s"alter table $tableName add columns(new_col string)")
+        val catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))
+        assertResult(Seq("id", "name", "price", "ts", "new_col")) {
+          HoodieSqlCommonUtils.removeMetaFields(catalogTable.schema).fields.map(_.name)
+        }
+        checkAnswer(s"select id, name, price, ts, new_col from $tableName")(
+          Seq(1, "a1", 10.0, 1000, null)
+        )
+        // disable schema on read.
+        spark.sql("set hoodie.schema.on.read.enable=false")
+        spark.sql(s"refresh table $tableName")
+        // Insert data to the new table.
+        spark.sql(s"insert into $tableName values(2, 'a2', 12, 2000, 'e0')")
+        // write should succeed. and subsequent read should succeed as well.
+        checkAnswer(s"select id, name, price, ts, new_col from $tableName")(
+          Seq(1, "a1", 10.0, 1000, null),
+          Seq(2, "a2", 12.0, 2000, "e0")
+        )
       }
     }
   }
