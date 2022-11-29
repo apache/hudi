@@ -83,6 +83,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
@@ -1756,8 +1757,29 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     return allRecords.getLeft().getLeft();
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testFailWritesOnInlineTableServiceExceptions(boolean shouldFail) throws IOException {
+    try {
+      Properties properties = new Properties();
+      properties.setProperty("hoodie.fail.writes.on.inline.table.service.exception", String.valueOf(shouldFail));
+      properties.setProperty("hoodie.auto.commit", "false");
+      properties.setProperty("hoodie.clustering.inline.max.commits", "1");
+      properties.setProperty("hoodie.clustering.inline", "true");
+      testInsertTwoBatches(true, "2015/03/16", properties, true);
+      assertFalse(shouldFail);
+    } catch (HoodieException e) {
+      assertEquals(CLUSTERING_FAILURE, e.getMessage());
+      assertTrue(shouldFail);
+    }
+  }
+
   private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields) throws IOException {
     return testInsertTwoBatches(populateMetaFields, "2015/03/16");
+  }
+
+  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields, String partitionPath) throws IOException {
+    return testInsertTwoBatches(populateMetaFields, partitionPath, new Properties(), false);
   }
 
   /**
@@ -1766,20 +1788,31 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    * 2. Commit instants of the two batches.
    * 3. List of new file group ids that were written in the two batches.
    */
-  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields, String partitionPath) throws IOException {
+  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields, String partitionPath, Properties props,
+                                                                                                    boolean failInlineClustering) throws IOException {
     // create config to not update small files.
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false, populateMetaFields,
-        populateMetaFields ? new Properties() : getPropertiesForKeyGen());
-    SparkRDDWriteClient client = getHoodieWriteClient(config);
+        populateMetaFields ? props : getPropertiesForKeyGen());
+    SparkRDDWriteClient client;
+    if (failInlineClustering) {
+      if (null != writeClient) {
+        writeClient.close();
+        writeClient = null;
+      }
+      client = new WriteClientBrokenClustering(context, config);
+    } else {
+      client = getHoodieWriteClient(config);
+    }
+
     dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
     String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
-    List<WriteStatus> statuses1 = writeAndVerifyBatch(client, records1, commitTime1, populateMetaFields);
+    List<WriteStatus> statuses1 = writeAndVerifyBatch(client, records1, commitTime1, populateMetaFields, failInlineClustering);
     Set<HoodieFileGroupId> fileIds1 = getFileGroupIdsFromWriteStatus(statuses1);
 
     String commitTime2 = HoodieActiveTimeline.createNewInstantTime();
     List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
-    List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields);
+    List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields, failInlineClustering);
     Set<HoodieFileGroupId> fileIds2 = getFileGroupIdsFromWriteStatus(statuses2);
     Set<HoodieFileGroupId> fileIdsUnion = new HashSet<>(fileIds1);
     fileIdsUnion.addAll(fileIds2);
@@ -2077,11 +2110,20 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private List<WriteStatus> writeAndVerifyBatch(SparkRDDWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields) throws IOException {
+    return writeAndVerifyBatch(client, inserts, commitTime, populateMetaFields, false);
+  }
+
+  private List<WriteStatus> writeAndVerifyBatch(SparkRDDWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields, boolean autoCommitOff) throws IOException {
     client.startCommitWithTime(commitTime);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts, 2);
-    List<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime).collect();
+    JavaRDD<WriteStatus> statusRDD = client.upsert(insertRecordsRDD1, commitTime);
+    if (autoCommitOff) {
+      client.commit(commitTime, statusRDD);
+    }
+    List<WriteStatus> statuses = statusRDD.collect();
     assertNoWriteErrors(statuses);
     verifyRecordsWritten(commitTime, populateMetaFields, inserts, statuses, client.getConfig());
+
     return statuses;
   }
 
@@ -2757,4 +2799,18 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
+  public static class WriteClientBrokenClustering<T extends HoodieRecordPayload> extends org.apache.hudi.client.SparkRDDWriteClient<T>   {
+
+    public WriteClientBrokenClustering(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+      super(context, clientConfig);
+    }
+
+    @Override
+    protected Option<String> inlineClustering(Option<Map<String, String>> extraMetadata) {
+      throw new HoodieException(CLUSTERING_FAILURE);
+    }
+
+  }
+
+  public static  String CLUSTERING_FAILURE = "CLUSTERING FAILURE";
 }
