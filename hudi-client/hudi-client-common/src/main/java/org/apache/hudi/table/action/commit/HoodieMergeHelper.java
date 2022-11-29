@@ -100,7 +100,11 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
-      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(readSchema, querySchemaOpt.get());
+      List<Schema.Field> nonHudiFields = readSchema.getFields().stream().filter(field -> !field.name().startsWith("_hoodie_"))
+          .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal())).collect(Collectors.toList());
+      Schema readerSchemaWithoutHudiMeta = Schema.createRecord(readSchema.getName(), readSchema.getDoc(),
+          readSchema.getNamespace(), readSchema.isError(), nonHudiFields);
+      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(readerSchemaWithoutHudiMeta, querySchemaOpt.get());
       long commitInstantTime = Long.valueOf(FSUtils.getCommitTime(mergeHandle.getOldFilePath().getName()));
       InternalSchema writeInternalSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, table.getMetaClient(), table.getConfig().getInternalSchemaCacheEnable());
       if (writeInternalSchema.isEmptySchema()) {
