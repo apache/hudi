@@ -20,11 +20,11 @@ import org.antlr.v4.runtime.tree.ParseTree
 import org.apache.hudi.spark.sql.parser.HoodieSqlBaseBaseVisitor
 import org.apache.hudi.spark.sql.parser.HoodieSqlBaseParser._
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface, ParserUtils}
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.internal.SQLConf
 
 import scala.collection.JavaConverters._

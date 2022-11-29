@@ -19,6 +19,7 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.client.utils.ConcatenatingIterator;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

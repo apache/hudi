@@ -21,8 +21,6 @@ import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.hudi.command.procedures.{Procedure, ProcedureArgs}
 import org.apache.spark.sql.{Row, SparkSession}
 
-import scala.collection.Seq
-
 case class CallProcedureHoodieCommand(
    procedure: Procedure,
    args: ProcedureArgs) extends HoodieLeafRunnableCommand {

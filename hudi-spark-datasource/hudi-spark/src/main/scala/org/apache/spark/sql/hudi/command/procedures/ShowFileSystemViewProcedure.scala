@@ -30,7 +30,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util.function.{Function, Supplier}
 import java.util.stream.Collectors
 import scala.collection.JavaConversions
-import scala.collection.JavaConverters.{asJavaIterableConverter, asJavaIteratorConverter, asScalaIteratorConverter}
+import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS_ALL: Array[ProcedureParameter] = Array[ProcedureParameter](

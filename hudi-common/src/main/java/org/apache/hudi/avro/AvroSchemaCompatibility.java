@@ -18,12 +18,13 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.Either;
+import org.apache.hudi.common.util.Option;
+
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
-import org.apache.hudi.common.util.Either;
-import org.apache.hudi.common.util.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

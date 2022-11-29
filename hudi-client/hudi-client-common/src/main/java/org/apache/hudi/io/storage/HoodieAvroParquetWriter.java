@@ -18,11 +18,12 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 
 import javax.annotation.concurrent.NotThreadSafe;
 

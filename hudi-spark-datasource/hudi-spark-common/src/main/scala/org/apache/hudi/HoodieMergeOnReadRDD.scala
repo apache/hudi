@@ -20,13 +20,11 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
-
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
 import org.apache.hudi.LogFileIterator.CONFIG_INSTANTIATION_LOCK
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}

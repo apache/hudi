@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -27,6 +26,8 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.HiveSchemaProvider;
 import org.apache.hudi.utilities.testutils.SparkClientFunctionalTestHarnessWithHiveSupport;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
+import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.sql.SparkSession;

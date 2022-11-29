@@ -17,28 +17,24 @@
 
 package org.apache.hudi.functional.cdc
 
+import org.apache.avro.Schema
+import org.apache.avro.generic.{GenericRecord, IndexedRecord}
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieKey, HoodieLogFile, HoodieRecord}
-import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
-
-import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-
-import org.apache.hadoop.fs.Path
-
 import org.apache.spark.sql.{DataFrame, SparkSession}
-
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull, assertTrue}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._

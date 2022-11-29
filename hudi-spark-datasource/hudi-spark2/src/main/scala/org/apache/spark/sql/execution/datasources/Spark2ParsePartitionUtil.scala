@@ -17,12 +17,11 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import java.util.TimeZone
-
 import org.apache.hadoop.fs.Path
-
-import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.types._
+
+import java.util.TimeZone
 
 object Spark2ParsePartitionUtil extends SparkParsePartitionUtil {
 

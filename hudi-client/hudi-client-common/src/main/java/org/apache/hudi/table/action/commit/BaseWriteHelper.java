@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.time.Duration;

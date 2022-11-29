@@ -18,11 +18,13 @@
 
 package org.apache.hudi.integ.testsuite.dag;
 
-import java.io.Serializable;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
+
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.Serializable;
 
 /**
  * This wraps the context needed for an execution of

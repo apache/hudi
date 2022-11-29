@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 
-
 import java.util.Properties
 
 /**

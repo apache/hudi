@@ -22,10 +22,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 

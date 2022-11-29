@@ -41,7 +41,6 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
-import scala.Tuple2;
 
 import java.util.Iterator;
 import java.util.List;
@@ -49,6 +48,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import scala.Tuple2;
 
 /**
  * A Spark engine implementation of HoodieEngineContext.

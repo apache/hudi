@@ -19,7 +19,6 @@
 
 package org.apache.hudi.sync.datahub;
 
-import com.linkedin.common.Status;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -27,6 +26,7 @@ import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
+import com.linkedin.common.Status;
 import com.linkedin.common.urn.DatasetUrn;
 import com.linkedin.data.template.SetMode;
 import com.linkedin.data.template.StringMap;
@@ -52,6 +52,7 @@ import datahub.event.MetadataChangeProposalWrapper;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.parquet.schema.MessageType;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;

@@ -18,12 +18,11 @@
 
 package org.apache.hudi.examples.quickstart;
 
-import static org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations.sql;
-import java.util.Collection;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
+import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
+
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -37,11 +36,15 @@ import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.types.Row;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
-import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations.sql;
 
 public final class HoodieFlinkQuickstart {
   private EnvironmentSettings settings = null;

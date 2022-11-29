@@ -18,15 +18,17 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
+import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
+import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
-import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Base abstraction of an compute node in the DAG of operations for a workflow.

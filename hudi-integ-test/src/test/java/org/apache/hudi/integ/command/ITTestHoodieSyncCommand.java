@@ -20,7 +20,6 @@ package org.apache.hudi.integ.command;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
-
 import org.apache.hudi.integ.HoodieTestHiveBase;
 
 import org.junit.jupiter.api.Test;

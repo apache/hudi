@@ -20,6 +20,7 @@ package org.apache.hudi.examples.common;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.transform.Transformer;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;

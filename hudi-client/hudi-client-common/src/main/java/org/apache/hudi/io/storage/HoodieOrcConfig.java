@@ -18,8 +18,9 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.bloom.BloomFilter;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.orc.CompressionKind;
 
 public class HoodieOrcConfig {

@@ -24,7 +24,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.internal.SQLConf
 
 import java.io.File
 

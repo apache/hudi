@@ -17,9 +17,9 @@
 
 package org.apache.spark.hudi.benchmark
 
-import java.io.{File, FileOutputStream, OutputStream}
-
 import org.apache.spark.util.Utils
+
+import java.io.{File, FileOutputStream, OutputStream}
 
 /**
  * Reference from spark.

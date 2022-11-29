@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.format.cow;
 
-import java.util.Comparator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
 import org.apache.hudi.util.DataTypeUtils;
@@ -43,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;

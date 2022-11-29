@@ -18,10 +18,11 @@
 
 package org.apache.hudi.integ.testsuite.writer;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.hudi.common.util.collection.Pair;
 
 /**
  * This class holds the write statistics for {@link DeltaInputWriter}.

@@ -18,9 +18,11 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
-import java.util.Iterator;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.utils.LazyIterableIterator;
+
+import org.apache.avro.generic.GenericRecord;
+
+import java.util.Iterator;
 
 /**
  * A lazy record generator to generate {@link GenericRecord}s lazily and not hold a list of records in memory.

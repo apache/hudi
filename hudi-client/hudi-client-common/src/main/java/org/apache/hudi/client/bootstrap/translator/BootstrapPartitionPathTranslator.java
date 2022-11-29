@@ -18,8 +18,9 @@
 
 package org.apache.hudi.client.bootstrap.translator;
 
-import java.io.Serializable;
 import org.apache.hudi.common.config.TypedProperties;
+
+import java.io.Serializable;
 
 public abstract class BootstrapPartitionPathTranslator implements Serializable {
 

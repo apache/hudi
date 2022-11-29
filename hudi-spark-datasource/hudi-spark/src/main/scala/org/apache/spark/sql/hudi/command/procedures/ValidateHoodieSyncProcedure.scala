@@ -29,7 +29,6 @@ import org.joda.time.DateTime
 import java.io.IOException
 import java.sql.{Connection, DriverManager, ResultSet, SQLException}
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 
 class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder with Logging {

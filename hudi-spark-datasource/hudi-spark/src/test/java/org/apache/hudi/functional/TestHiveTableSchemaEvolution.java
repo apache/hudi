@@ -18,14 +18,6 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
-import org.apache.hadoop.hive.serde.serdeConstants;
-import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
@@ -34,18 +26,27 @@ import org.apache.hudi.hadoop.realtime.HoodieEmptyRecordReader;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeCompactedRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
+
+import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
+import org.apache.hadoop.hive.serde.serdeConstants;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
 
 import java.io.File;
 import java.util.Date;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
 public class TestHiveTableSchemaEvolution {

@@ -23,11 +23,10 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.scalatest.BeforeAndAfter
 
 import java.io.File
 import java.nio.file.{Files, Paths}
-
-import org.scalatest.BeforeAndAfter
 
 class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
 

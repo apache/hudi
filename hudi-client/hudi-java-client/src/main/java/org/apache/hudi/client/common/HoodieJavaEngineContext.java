@@ -18,8 +18,6 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hadoop.conf.Configuration;
-
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
@@ -34,9 +32,10 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
-
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.hadoop.conf.Configuration;
 
 import java.util.Collections;
 import java.util.Iterator;

@@ -18,15 +18,17 @@
 
 package org.apache.hudi.integ.testsuite.utils;
 
-import java.util.List;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.List;
 
 /**
  * A utility class for testing purpose.

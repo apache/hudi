@@ -18,8 +18,9 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.Schema;
 
 /**
  * A schema provider which applies schema post process hook on schema.

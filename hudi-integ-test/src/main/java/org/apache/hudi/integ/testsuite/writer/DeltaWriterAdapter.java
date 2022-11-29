@@ -18,10 +18,11 @@
 
 package org.apache.hudi.integ.testsuite.writer;
 
+import org.apache.spark.api.java.JavaRDD;
+
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
-import org.apache.spark.api.java.JavaRDD;
 
 /**
  * Adapter use Delta Writer.
