@@ -19,11 +19,10 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.commons.lang.exception.ExceptionUtils;
-
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,12 +37,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -141,9 +138,9 @@ public class CollectionUtils {
 
   /**
    * Combines provided {@link Map}s into one, returning new instance of {@link HashMap}.
-   *
+   * <p>
    * NOTE: That values associated with overlapping keys from the second map, will override
-   *       values from the first one
+   * values from the first one
    */
   public static <K, V> HashMap<K, V> combine(Map<K, V> one, Map<K, V> another) {
     HashMap<K, V> combined = new HashMap<>(one.size() + another.size());
@@ -154,9 +151,9 @@ public class CollectionUtils {
 
   /**
    * Combines provided {@link Map}s into one, returning new instance of {@link HashMap}.
-   *
+   * <p>
    * NOTE: That values associated with overlapping keys from the second map, will override
-   *       values from the first one
+   * values from the first one
    */
   public static <K, V> HashMap<K, V> combine(Map<K, V> one, Map<K, V> another, BiFunction<V, V, V> merge) {
     HashMap<K, V> combined = new HashMap<>(one.size() + another.size());
@@ -176,9 +173,9 @@ public class CollectionUtils {
 
   /**
    * Returns difference b/w {@code one} {@link List} of elements and {@code another}
-   *
+   * <p>
    * NOTE: This is less optimal counterpart to {@link #diff(Collection, Collection)}, accepting {@link List}
-   *       as a holding collection to support duplicate elements use-cases
+   * as a holding collection to support duplicate elements use-cases
    */
   public static <E> List<E> diff(List<E> one, List<E> another) {
     List<E> diff = new ArrayList<>(one);
@@ -229,7 +226,7 @@ public class CollectionUtils {
     return Stream.of(elements).collect(Collectors.toSet());
   }
 
-  public static <K,V> Map<K, V> createImmutableMap(final K key, final V value) {
+  public static <K, V> Map<K, V> createImmutableMap(final K key, final V value) {
     return Collections.unmodifiableMap(Collections.singletonMap(key, value));
   }
 
@@ -238,14 +235,14 @@ public class CollectionUtils {
     return Collections.unmodifiableList(Stream.of(elements).collect(Collectors.toList()));
   }
 
-  public static <K,V> Map<K,V> createImmutableMap(final Map<K,V> map) {
+  public static <K, V> Map<K, V> createImmutableMap(final Map<K, V> map) {
     return Collections.unmodifiableMap(map);
   }
 
   @SafeVarargs
-  public static <K,V> Map<K,V> createImmutableMap(final Pair<K,V>... elements) {
-    Map<K,V> map = new HashMap<>();
-    for (Pair<K,V> pair: elements) {
+  public static <K, V> Map<K, V> createImmutableMap(final Pair<K, V>... elements) {
+    Map<K, V> map = new HashMap<>();
+    for (Pair<K, V> pair : elements) {
       map.put(pair.getLeft(), pair.getRight());
     }
     return Collections.unmodifiableMap(map);
@@ -280,69 +277,50 @@ public class CollectionUtils {
   }
 
   public static <T> void forEachParallel(Collection<T> inputs, Consumer<T> function) {
-    forEachParallel(inputs, function, 4, 1000);
+    forEachParallel(inputs, function, 4);
   }
 
   /**
    * Executes forEach loops in parallel. The input function will run on all inputs even if exceptions are thrown during the execution of any individual input.
    * Execution of inputs is not guaranteed to occur if the timeout is reached. Don't use this if your consumer function isn't thread safe
-   * */
-  public static <T> void forEachParallel(Collection<T> inputs, Consumer<T> function, int nThreads, long msTimeout) {
-    long timeoutTime = System.currentTimeMillis() + msTimeout;
+   */
+  public static <T> void forEachParallel(Collection<T> inputs, Consumer<T> function, int nThreads) {
+    //Create futures
     ExecutorService executorService = Executors.newFixedThreadPool(nThreads);
+    List<CompletableFuture<String>> futures = inputs.stream().map(input -> CompletableFuture.supplyAsync(() -> {
+      function.accept(input);
+      return "";
+    }, executorService).exceptionally(e -> {
+      StringWriter sw = new StringWriter();
+      PrintWriter pw = new PrintWriter(sw);
+      e.printStackTrace(pw);
+      return e.getMessage() + "\n" + sw;
+    })).collect(Collectors.toList());
 
-    //Queue up all consumer functions to run, they may start at any time
-    List<Future<Boolean>> futures = inputs.stream().map(t ->
-        executorService.submit(() -> {
-          function.accept(t);
-          return true;
-        })).collect(Collectors.toList());
-
-    //List of exceptions that consumer functions throw
-    List<Throwable> exceptions = new ArrayList<>();
-
-    boolean cancelAll = false;
-    for (Future<Boolean> future : futures) {
-      if (cancelAll) {
-        //We have a timeout exception so cancel every task we haven't processed
-        future.cancel(true);
-        continue;
-      }
-      try {
-        //Calculate remaining time left and throw if we are out
-        long timeout =  timeoutTime - System.currentTimeMillis();
-        if (timeout <= 0) {
-          future.cancel(true);
-          throw new TimeoutException();
-        }
-        //wait until task completes or times out
-        future.get(timeout, TimeUnit.MILLISECONDS);
-      } catch (ExecutionException e) {
-        //task had an exception. Add it to the list. Don't stop the other tasks
-        exceptions.add(e.getCause());
-      } catch (TimeoutException e) {
-        //cancel this task and set the cancel flag
-        future.cancel(true);
-        cancelAll = true;
-      } catch (InterruptedException e) {
-        // ¯\_(ツ)_/¯
-        throw new RuntimeException(e);
-      }
+    //timeout if a thread is stuck for more than 15 seconds.
+    CompletableFuture<Void> combinedFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]));
+    try {
+      combinedFutures.get(15, TimeUnit.SECONDS);
+    } catch (Exception e) {
+      futures.forEach(f -> f.cancel(true));
+      //If this hits something bad has happened
+      throw new RuntimeException(e);
     }
-    if (cancelAll) {
-      throw new HoodieException("Timeout hit before executors completed");
-    }
+
+    //Collect exception strings if any
+    List<String> exceptions = futures.stream().map(CompletableFuture::join).filter(s -> !s.isEmpty()).collect(Collectors.toList());
     if (exceptions.isEmpty()) {
       return;
     }
+
+    //Throw exception with info for all exceptions that occurred
     StringBuilder sb = new StringBuilder();
     sb.append("Exceptions that occurred:\n********************\n");
     exceptions.forEach(e -> {
-      sb.append(e.getMessage());
-      sb.append("\n");
-      sb.append(ExceptionUtils.getFullStackTrace(e));
+      sb.append(e);
       sb.append("********************\n");
     });
     throw new HoodieException(sb.toString());
   }
+
 }

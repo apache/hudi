@@ -35,8 +35,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.CollectionUtils
-import org.apache.hudi.common.util.{CommitUtils, StringUtils}
+import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME, KEYGEN_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
