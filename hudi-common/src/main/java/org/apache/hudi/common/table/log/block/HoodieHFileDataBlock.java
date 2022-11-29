@@ -41,8 +41,6 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -61,7 +59,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * base file format.
  */
 public class HoodieHFileDataBlock extends HoodieDataBlock {
-  private static final Logger LOG = LogManager.getLogger(HoodieHFileDataBlock.class);
 
   private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
 
