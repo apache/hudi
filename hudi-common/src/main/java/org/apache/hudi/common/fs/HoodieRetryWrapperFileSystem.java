@@ -258,4 +258,9 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
   public Configuration getConf() {
     return fileSystem.getConf();
   }
+
+  @Override
+  public String getScheme() {
+    return fileSystem.getScheme();
+  }
 }
