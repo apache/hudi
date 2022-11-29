@@ -492,7 +492,7 @@ public class IncrementalInputSplits implements Serializable {
 
     if (OptionsResolver.hasNoSpecificReadCommits(this.conf)) {
       // by default read from the latest commit
-      List<HoodieInstant> instants = completedTimeline.getInstants().collect(Collectors.toList());
+      List<HoodieInstant> instants = completedTimeline.getInstants().stream().collect(Collectors.toList());
       if (instants.size() > 1) {
         return Collections.singletonList(instants.get(instants.size() - 1));
       }
