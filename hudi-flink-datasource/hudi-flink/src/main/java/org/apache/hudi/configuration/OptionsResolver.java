@@ -195,6 +195,13 @@ public class OptionsResolver {
         && !conf.get(FlinkOptions.READ_START_COMMIT).equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST);
   }
 
+  /**
+   * Returns true if there are no explicit start and end commits.
+   */
+  public static boolean hasNoSpecificReadCommits(Configuration conf) {
+    return !conf.contains(FlinkOptions.READ_START_COMMIT) && !conf.contains(FlinkOptions.READ_END_COMMIT);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
