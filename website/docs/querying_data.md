@@ -125,7 +125,7 @@ in the filter. Filters push down is not supported yet (already on the roadmap).
 
 For MERGE_ON_READ table, in order to query hudi table as a streaming, you need to add option `'read.streaming.enabled' = 'true'`,
 when querying the table, a Flink streaming pipeline starts and never ends until the user cancel the job manually.
-You can specify the start commit with option `read.streaming.start-commit` and source monitoring interval with option
+You can specify the start commit with option `read.start-commit` and source monitoring interval with option
 `read.streaming.check-interval`.
 
 ### Streaming Query
@@ -138,14 +138,29 @@ value as `earliest` if you want to consume all the history data set.
 |  -----------  | -------  | ------- | ------- |
 | `read.streaming.enabled` | false | `false` | Specify `true` to read as streaming |
 | `read.start-commit` | false | the latest commit | Start commit time in format 'yyyyMMddHHmmss', use `earliest` to consume from the start commit |
-| `read.streaming.skip_compaction` | false | `false` | Whether to skip compaction commits while reading, generally for two purposes: 1) Avoid consuming duplications from the compaction instants 2) When change log mode is enabled, to only consume change logs for right semantics. |
+| `read.streaming.skip_compaction` | false | `false` | Whether to skip compaction instants for streaming read, generally for two purpose: 1) Avoid consuming duplications from compaction instants created for created by Hudi versions < 0.11.0 or when `hoodie.compaction.preserve.commit.metadata` is disabled 2) When change log mode is enabled, to only consume change for right semantics. |
 | `clean.retain_commits` | false | `10` | The max number of commits to retain before cleaning, when change log mode is enabled, tweaks this option to adjust the change log live time. For example, the default strategy keeps 50 minutes of change logs if the checkpoint interval is set up as 5 minutes. |
 
 :::note
-When option `read.streaming.skip_compaction` turns on and the streaming reader lags behind by commits of number
-`clean.retain_commits`, the data loss may occur. The compaction keeps the original instant time as the per-record metadata,
-the streaming reader would read and skip the whole base files if the log has been consumed. For efficiency, option `read.streaming.skip_compaction`
-is till suggested being `true`.
+When option `read.streaming.skip_compaction` is enabled and the streaming reader lags behind by commits of number
+`clean.retain_commits`, data loss may occur. 
+
+The compaction table service action preserves the original commit time for each row. When iterating through the parquet files, 
+the streaming reader will perform a check on whether the row's commit time falls within the specified instant range to 
+skip over rows that have been read before. 
+
+For efficiency, option `read.streaming.skip_compaction` can be enabled to skip reading of parquet files entirely.
+:::
+
+:::note
+`read.streaming.skip_compaction` should only be enabled if the MOR table is compacted by Hudi with versions `< 0.11.0`. 
+
+This is so as the `hoodie.compaction.preserve.commit.metadata` feature is only introduced in Hudi versions `>=0.11.0`.
+Older versions will overwrite the original commit time for each row with the compaction plan's instant time.
+
+This will render Hudi-on-Flink's stream reader's row-level instant-range checks to not work properly. 
+When the original instant time is overwritten with a newer instant time, the stream reader will not be able to 
+differentiate rows that have already been read before with actual new rows.
 :::
 
 ### Incremental Query
