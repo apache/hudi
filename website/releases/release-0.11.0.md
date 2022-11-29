@@ -7,6 +7,27 @@ last_modified_at: 2022-01-27T22:07:00+08:00
 ---
 # [Release 0.11.0](https://github.com/apache/hudi/releases/tag/release-0.11.0) ([docs](/docs/quick-start-guide))
 
+## Migration Guide
+
+### Bundle usage updates
+
+- Spark bundle for 3.0.x is no longer officially supported. Users are encouraged to upgrade to Spark 3.2 or 3.1.
+- Users are encouraged to use bundles with specific Spark version in the name (`hudi-sparkX.Y-bundle`) and move away
+  from the legacy bundles (`hudi-spark-bundle` and `hudi-spark3-bundle`).
+- Spark or Utilities bundle no longer requires additional `spark-avro` package at runtime; the
+  option `--package org.apache.spark:spark-avro_2.1*:*` can be dropped.
+
+### Configuration updates
+
+- For MOR tables, `hoodie.datasource.write.precombine.field` is required for both write and read.
+- Only set `hoodie.datasource.write.drop.partition.columns=true` when work
+  with [BigQuery integration](/docs/gcp_bigquery).
+- For Spark readers that rely on extracting physical partition path,
+  set `hoodie.datasource.read.extract.partition.values.from.path=true` to stay compatible with existing behaviors.
+- Default index type for Spark was changed from `BLOOM`
+  to `SIMPLE` ([HUDI-3091](https://issues.apache.org/jira/browse/HUDI-3091)). If you currently rely on the default `BLOOM`
+  index type, please update your configuration accordingly.
+
 ## Release Highlights
 
 ### Multi-Modal Index
@@ -179,27 +200,6 @@ detailed settings.
 
 In 0.11.0, `org.apache.hudi.utilities.schema.HiveSchemaProvider` is added for getting schema from user-defined hive
 tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead of having to provide avro schema files.
-
-## Migration Guide
-
-### Bundle usage updates
-
-- Spark bundle for 3.0.x is no longer officially supported. Users are encouraged to upgrade to Spark 3.2 or 3.1.
-- Users are encouraged to use bundles with specific Spark version in the name (`hudi-sparkX.Y-bundle`) and move away
-  from the legacy bundles (`hudi-spark-bundle` and `hudi-spark3-bundle`).
-- Spark or Utilities bundle no longer requires additional `spark-avro` package at runtime; the
-  option `--package org.apache.spark:spark-avro_2.1*:*` can be dropped.
-
-### Configuration updates
-
-- For MOR tables, `hoodie.datasource.write.precombine.field` is required for both write and read.
-- Only set `hoodie.datasource.write.drop.partition.columns=true` when work
-  with [BigQuery integration](/docs/gcp_bigquery).
-- For Spark readers that rely on extracting physical partition path,
-  set `hoodie.datasource.read.extract.partition.values.from.path=true` to stay compatible with existing behaviors.
-- Default index type for Spark was changed from `BLOOM`
-  to `SIMPLE` ([HUDI-3091](https://issues.apache.org/jira/browse/HUDI-3091)). If you currently rely on the default `BLOOM`
-  index type, please update your configuration accordingly.
 
 ## Raw Release Notes
 
