@@ -90,10 +90,14 @@ class IncrementalRelation(val sqlContext: SQLContext,
   val (usedSchema, internalSchema) = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val iSchema = if (useEndInstantSchema && !commitsToReturn.isEmpty) {
-      InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getTimestamp.toLong, metaClient, hoodieTable.getConfig.getInternalSchemaCacheEnable)
+    val iSchema = if (isSchemaEvolutionEnabledOnRead) {
+      if (useEndInstantSchema && !commitsToReturn.isEmpty) {
+          InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getTimestamp.toLong, metaClient, hoodieTable.getConfig.getInternalSchemaCacheEnable)
+      } else {
+        schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(null)
+      }
     } else {
-      schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(null)
+      Option.empty.asInstanceOf[InternalSchema]
     }
 
     val tableSchema = if (useEndInstantSchema && iSchema.isEmptySchema) {
@@ -120,6 +124,13 @@ class IncrementalRelation(val sqlContext: SQLContext,
     DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS.defaultValue).split(",").filter(!_.isEmpty)
 
   override def schema: StructType = usedSchema
+
+  private def isSchemaEvolutionEnabledOnRead = {
+    optParams.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean ||
+      sqlContext.sparkSession.conf.get(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+        DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+  }
 
   override def buildScan(): RDD[Row] = {
     if (usedSchema == StructType(Nil)) {

@@ -35,7 +35,6 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{CommitUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME, KEYGEN_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
@@ -66,7 +65,6 @@ import org.apache.spark.{SPARK_VERSION, SparkContext}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters.setAsJavaSetConverter
 import scala.collection.mutable
-import scala.util.matching.Regex
 
 object HoodieSparkSqlWriter {
 
@@ -200,16 +198,20 @@ object HoodieSparkSqlWriter {
         .getOrElse(getAvroRecordNameAndNamespace(tblName))
 
       val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
-      val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext).orElse {
-        val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
-          DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
-        // In case we need to reconcile the schema and schema evolution is enabled,
-        // we will force-apply schema evolution to the writer's schema
-        if (shouldReconcileSchema && schemaEvolutionEnabled) {
-          Some(AvroInternalSchemaConverter.convert(sourceSchema))
-        } else {
-          None
+      val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+        DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+      val internalSchemaOpt = if (schemaEvolutionEnabled) {
+        getLatestTableInternalSchema(fs, basePath, sparkContext).orElse {
+          // In case we need to reconcile the schema and schema evolution is enabled,
+          // we will force-apply schema evolution to the writer's schema
+          if (shouldReconcileSchema) {
+            Some(AvroInternalSchemaConverter.convert(sourceSchema))
+          } else {
+            None
+          }
         }
+      } else {
+        None
       }
 
       // NOTE: Target writer's schema is deduced based on
@@ -249,7 +251,13 @@ object HoodieSparkSqlWriter {
             }
 
             // Create a HoodieWriteClient & issue the delete.
-            val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
+            // Create a HoodieWriteClient & issue the delete.
+            val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
+            val internalSchemaOpt : Option[org.apache.hudi.internal.schema.InternalSchema]= if (schemaEvolutionEnabled) {
+              getLatestTableInternalSchema(fs, basePath, sparkContext)
+            } else {
+              None
+            }
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
               mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
@@ -291,8 +299,6 @@ object HoodieSparkSqlWriter {
             client.startCommitWithTime(instantTime, commitActionType)
             val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeStatuses, client)
-
-
           case _ =>
             // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
             //
