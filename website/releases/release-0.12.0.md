@@ -7,6 +7,61 @@ last_modified_at: 2022-08-17T10:30:00+05:30
 ---
 # [Release 0.12.0](https://github.com/apache/hudi/releases/tag/release-0.12.0) ([docs](/docs/quick-start-guide))
 
+## Migration Guide
+
+In this release, there have been a few API and configuration updates listed below that warranted a new table version.
+Hence, the latest [table version](https://github.com/apache/hudi/blob/bf86efef719b7760ea379bfa08c537431eeee09a/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java#L41)
+is `5`. For existing Hudi tables on older version, a one-time upgrade step will be executed automatically. Please take
+note of the following updates before upgrading to Hudi 0.12.0.
+
+### Configuration Updates
+
+In this release, the default value for a few configurations have been changed. They are as follows:
+
+- `hoodie.bulkinsert.sort.mode`: This config is used to determine mode for sorting records for bulk insert. Its default value has been changed from `GLOBAL_SORT` to `NONE`, which means no sorting is done and it matches `spark.write.parquet()` in terms of overhead.
+- `hoodie.datasource.hive_sync.partition_value_extractor`: This config is used to extract and transform partition value during Hive sync. Its default value has been changed from `SlashEncodedDayPartitionValueExtractor` to `MultiPartKeysValueExtractor`. If you relied on the previous default value (i.e., have not set it explicitly), you are required to set the config to `org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor`. From this release, if this config is not set and Hive sync is enabled, then partition value extractor class will be **automatically inferred** on the basis of number of partition fields and whether or not hive style partitioning is enabled.
+- The following configs will be inferred, if not set manually, from other configs' values:
+    - `META_SYNC_BASE_FILE_FORMAT`: infer from `org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT`
+
+    - `META_SYNC_ASSUME_DATE_PARTITION`: infer from `org.apache.hudi.common.config.HoodieMetadataConfig.ASSUME_DATE_PARTITIONING`
+
+    - `META_SYNC_DECODE_PARTITION`: infer from `org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING`
+
+    - `META_SYNC_USE_FILE_LISTING_FROM_METADATA`: infer from `org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE`
+
+### API Updates
+
+In `SparkKeyGeneratorInterface`, return type of the `getRecordKey` API has been changed from String to UTF8String.
+```java
+// Before
+String getRecordKey(InternalRow row, StructType schema); 
+
+
+// After
+UTF8String getRecordKey(InternalRow row, StructType schema); 
+```
+
+### Fallback Partition
+
+If partition field value was null, Hudi has a fallback mechanism instead of failing the write. Until 0.9.0,
+`__HIVE_DEFAULT_PARTITION__`  was used as the fallback partition. After 0.9.0, due to some refactoring, fallback
+partition changed to `default`. This default partition does not sit well with some of the query engines. So, we are
+switching the fallback partition to `__HIVE_DEFAULT_PARTITION__`  from 0.12.0. We have added an upgrade step where in,
+we fail the upgrade if the existing Hudi table has a partition named `default`. Users are expected to rewrite the data
+in this partition to a partition named [\_\_HIVE_DEFAULT_PARTITION\_\_](https://github.com/apache/hudi/blob/0d0a4152cfd362185066519ae926ac4513c7a152/hudi-common/src/main/java/org/apache/hudi/common/util/PartitionPathEncodeUtils.java#L29).
+However, if you had intentionally named your partition as `default`, you can bypass this using the config `hoodie.skip.default.partition.validation`.
+
+### Bundle Updates
+
+- `hudi-aws-bundle` extracts away aws-related dependencies from hudi-utilities-bundle or hudi-spark-bundle. In order to use features such as Glue sync, Cloudwatch metrics reporter or DynamoDB lock provider, users need to provide hudi-aws-bundle jar along with hudi-utilities-bundle or hudi-spark-bundle jars.
+- Spark 3.3 support is added; users who are on Spark 3.3 can use `hudi-spark3.3-bundle` or `hudi-spark3-bundle` (legacy bundle name).
+- Spark 3.2 will continue to be supported via `hudi-spark3.2-bundle`.
+- Spark 3.1 will continue to be supported via `hudi-spark3.1-bundle`.
+- Spark 2.4 will continue to be supported via `hudi-spark2.4-bundle` or `hudi-spark-bundle` (legacy bundle name).
+- Flink 1.15 support is added; users who are on Flink 1.15 can use `hudi-flink1.15-bundle`.
+- Flink 1.14 will continue to be supported via `hudi-flink1.14-bundle`.
+- Flink 1.13 will continue to be supported via `hudi-flink1.13-bundle`.
+
 ## Release Highlights
 
 ### Presto-Hudi Connector
@@ -104,61 +159,6 @@ This version brings more improvements to make Hudi the most performant lake stor
 
 We recently benchmarked Hudi against TPC-DS workload.
 Please check out [our blog](/blog/2022/06/29/Apache-Hudi-vs-Delta-Lake-transparent-tpc-ds-lakehouse-performance-benchmarks) for more details.
-
-### Migration Guide
-
-In this release, there have been a few API and configuration updates listed below that warranted a new table version.
-Hence, the latest [table version](https://github.com/apache/hudi/blob/bf86efef719b7760ea379bfa08c537431eeee09a/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java#L41) 
-is `5`. For existing Hudi tables on older version, a one-time upgrade step will be executed automatically. Please take 
-note of the following updates before upgrading to Hudi 0.12.0.
-
-#### Configuration Updates
-
-In this release, the default value for a few configurations have been changed. They are as follows:
-
-- `hoodie.bulkinsert.sort.mode`: This config is used to determine mode for sorting records for bulk insert. Its default value has been changed from `GLOBAL_SORT` to `NONE`, which means no sorting is done and it matches `spark.write.parquet()` in terms of overhead.
-- `hoodie.datasource.hive_sync.partition_value_extractor`: This config is used to extract and transform partition value during Hive sync. Its default value has been changed from `SlashEncodedDayPartitionValueExtractor` to `MultiPartKeysValueExtractor`. If you relied on the previous default value (i.e., have not set it explicitly), you are required to set the config to `org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor`. From this release, if this config is not set and Hive sync is enabled, then partition value extractor class will be **automatically inferred** on the basis of number of partition fields and whether or not hive style partitioning is enabled.
-- The following configs will be inferred, if not set manually, from other configs' values:
-  - `META_SYNC_BASE_FILE_FORMAT`: infer from `org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT`
-
-  - `META_SYNC_ASSUME_DATE_PARTITION`: infer from `org.apache.hudi.common.config.HoodieMetadataConfig.ASSUME_DATE_PARTITIONING`
-
-  - `META_SYNC_DECODE_PARTITION`: infer from `org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING`
-
-  - `META_SYNC_USE_FILE_LISTING_FROM_METADATA`: infer from `org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE`
-
-#### API Updates
-
-In `SparkKeyGeneratorInterface`, return type of the `getRecordKey` API has been changed from String to UTF8String.
-```java
-// Before
-String getRecordKey(InternalRow row, StructType schema); 
-
-
-// After
-UTF8String getRecordKey(InternalRow row, StructType schema); 
-```
-
-#### Fallback Partition
-
-If partition field value was null, Hudi has a fallback mechanism instead of failing the write. Until 0.9.0, 
-`__HIVE_DEFAULT_PARTITION__`  was used as the fallback partition. After 0.9.0, due to some refactoring, fallback 
-partition changed to `default`. This default partition does not sit well with some of the query engines. So, we are 
-switching the fallback partition to `__HIVE_DEFAULT_PARTITION__`  from 0.12.0. We have added an upgrade step where in, 
-we fail the upgrade if the existing Hudi table has a partition named `default`. Users are expected to rewrite the data 
-in this partition to a partition named [\_\_HIVE_DEFAULT_PARTITION\_\_](https://github.com/apache/hudi/blob/0d0a4152cfd362185066519ae926ac4513c7a152/hudi-common/src/main/java/org/apache/hudi/common/util/PartitionPathEncodeUtils.java#L29). 
-However, if you had intentionally named your partition as `default`, you can bypass this using the config `hoodie.skip.default.partition.validation`.
-
-#### Bundle Updates
-
-- `hudi-aws-bundle` extracts away aws-related dependencies from hudi-utilities-bundle or hudi-spark-bundle. In order to use features such as Glue sync, Cloudwatch metrics reporter or DynamoDB lock provider, users need to provide hudi-aws-bundle jar along with hudi-utilities-bundle or hudi-spark-bundle jars.
-- Spark 3.3 support is added; users who are on Spark 3.3 can use `hudi-spark3.3-bundle` or `hudi-spark3-bundle` (legacy bundle name).
-- Spark 3.2 will continue to be supported via `hudi-spark3.2-bundle`.
-- Spark 3.1 will continue to be supported via `hudi-spark3.1-bundle`.
-- Spark 2.4 will continue to be supported via `hudi-spark2.4-bundle` or `hudi-spark-bundle` (legacy bundle name).
-- Flink 1.15 support is added; users who are on Flink 1.15 can use `hudi-flink1.15-bundle`.
-- Flink 1.14 will continue to be supported via `hudi-flink1.14-bundle`.
-- Flink 1.13 will continue to be supported via `hudi-flink1.13-bundle`.
 
 ## Known Regressions:
 
