@@ -96,7 +96,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
 
     // NOTE: We're accessing toRdd here directly to avoid [[InternalRow]] to [[Row]] conversion
     //       Additionally, we have to explicitly wrap around resulting [[RDD]] into the one
-    //       injecting [[SQLConf]], which by default isn't propgated by Spark to the executor(s).
+    //       injecting [[SQLConf]], which by default isn't propagated by Spark to the executor(s).
     //       [[SQLConf]] is required by [[AvroSerializer]]
     injectSQLConf(df.queryExecution.toRdd.mapPartitions { rows =>
       if (rows.isEmpty) {
