@@ -105,7 +105,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   public MultipleSparkJobExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
     this.clusteringExecutorService = Executors.newFixedThreadPool(writeConfig.getClusteringMaxThreads(),
-        new CustomizedThreadFactory("clustering-submit-job-pool", true));
+        new CustomizedThreadFactory("clustering-submit-job", true));
   }
 
   @Override
