@@ -29,11 +29,12 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
-import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
-import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
+import org.apache.hudi.table.format.HoodieParquetReader;
+import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.RowDataProjection;
@@ -138,13 +139,16 @@ public class MergeOnReadInputFormat
    */
   private boolean closed = true;
 
+  private final InternalSchemaManager internalSchemaManager;
+
   protected MergeOnReadInputFormat(
       Configuration conf,
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
       String defaultPartName,
       long limit,
-      boolean emitDelete) {
+      boolean emitDelete,
+      InternalSchemaManager internalSchemaManager) {
     this.conf = conf;
     this.tableState = tableState;
     this.fieldNames = tableState.getRowType().getFieldNames();
@@ -155,6 +159,7 @@ public class MergeOnReadInputFormat
     this.requiredPos = tableState.getRequiredPositions();
     this.limit = limit;
     this.emitDelete = emitDelete;
+    this.internalSchemaManager = internalSchemaManager;
   }
 
   /**
@@ -205,6 +210,7 @@ public class MergeOnReadInputFormat
           this.tableState.getRequiredRowType(),
           new Schema.Parser().parse(this.tableState.getAvroSchema()),
           new Schema.Parser().parse(this.tableState.getRequiredAvroSchema()),
+          internalSchemaManager.getQuerySchema(),
           this.requiredPos,
           this.emitDelete,
           this.tableState.getOperationPos(),
@@ -289,7 +295,7 @@ public class MergeOnReadInputFormat
     }
   }
 
-  protected ParquetColumnarRowSplitReader getFullSchemaReader(String path) {
+  protected HoodieParquetReader getFullSchemaReader(String path) {
     try {
       return getReader(path, IntStream.range(0, this.tableState.getRowType().getFieldCount()).toArray());
     } catch (IOException e) {
@@ -297,11 +303,11 @@ public class MergeOnReadInputFormat
     }
   }
 
-  protected ParquetColumnarRowSplitReader getRequiredSchemaReader(String path) throws IOException {
+  protected HoodieParquetReader getRequiredSchemaReader(String path) throws IOException {
     return getReader(path, this.requiredPos);
   }
 
-  private ParquetColumnarRowSplitReader getReader(String path, int[] requiredPos) throws IOException {
+  private HoodieParquetReader getReader(String path, int[] requiredPos) throws IOException {
     // generate partition specs.
     LinkedHashMap<String, String> partSpec = FilePathUtils.extractPartitionKeyValues(
         new org.apache.hadoop.fs.Path(path).getParent(),
@@ -323,7 +329,8 @@ public class MergeOnReadInputFormat
       }
     });
 
-    return ParquetSplitReaderUtil.genPartColumnarRowReader(
+    return HoodieParquetReader.getReader(
+        internalSchemaManager,
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
         true,
         HadoopConfigurations.getParquetConf(this.conf, hadoopConf),
@@ -343,7 +350,7 @@ public class MergeOnReadInputFormat
     final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
     final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
         AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
-    final HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(split, tableSchema, conf, hadoopConf);
+    final HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(split, tableSchema, internalSchemaManager.getQuerySchema(), conf, hadoopConf);
     final Iterator<String> logRecordsKeyIterator = scanner.getRecords().keySet().iterator();
     final int[] pkOffset = tableState.getPkOffsetsInRequired();
     // flag saying whether the pk semantics has been dropped by user specified
@@ -423,7 +430,7 @@ public class MergeOnReadInputFormat
     final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
     final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
         AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
-    final FormatUtils.BoundedMemoryRecords records = new FormatUtils.BoundedMemoryRecords(split, tableSchema, hadoopConf, conf);
+    final FormatUtils.BoundedMemoryRecords records = new FormatUtils.BoundedMemoryRecords(split, tableSchema, internalSchemaManager.getQuerySchema(), hadoopConf, conf);
     final Iterator<HoodieRecord<?>> recordsIterator = records.getRecordsIterator();
 
     return new ClosableIterator<RowData>() {
@@ -470,7 +477,7 @@ public class MergeOnReadInputFormat
     final Schema tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
     final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
         AvroToRowDataConverters.createRowConverter(tableState.getRowType());
-    final HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(split, tableSchema, conf, hadoopConf);
+    final HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(split, tableSchema, InternalSchema.getEmptyInternalSchema(), conf, hadoopConf);
     final Iterator<String> logRecordsKeyIterator = scanner.getRecords().keySet().iterator();
 
     return new ClosableIterator<RowData>() {
@@ -532,9 +539,9 @@ public class MergeOnReadInputFormat
 
   protected static class BaseFileOnlyIterator implements RecordIterator {
     // base file reader
-    private final ParquetColumnarRowSplitReader reader;
+    private final HoodieParquetReader reader;
 
-    public BaseFileOnlyIterator(ParquetColumnarRowSplitReader reader) {
+    public BaseFileOnlyIterator(HoodieParquetReader reader) {
       this.reader = reader;
     }
 
@@ -561,7 +568,7 @@ public class MergeOnReadInputFormat
    */
   static class BaseFileOnlyFilteringIterator implements RecordIterator {
     // base file reader
-    private final ParquetColumnarRowSplitReader reader;
+    private final HoodieParquetReader reader;
     private final InstantRange instantRange;
     private final RowDataProjection projection;
 
@@ -570,7 +577,7 @@ public class MergeOnReadInputFormat
     BaseFileOnlyFilteringIterator(
         Option<InstantRange> instantRange,
         RowType requiredRowType,
-        ParquetColumnarRowSplitReader reader) {
+        HoodieParquetReader reader) {
       this.reader = reader;
       this.instantRange = instantRange.orElse(null);
       int[] positions = IntStream.range(1, 1 + requiredRowType.getFieldCount()).toArray();
@@ -635,7 +642,7 @@ public class MergeOnReadInputFormat
 
   static class SkipMergeIterator implements RecordIterator {
     // base file reader
-    private final ParquetColumnarRowSplitReader reader;
+    private final HoodieParquetReader reader;
     // iterator for log files
     private final ClosableIterator<RowData> iterator;
 
@@ -646,7 +653,7 @@ public class MergeOnReadInputFormat
 
     private RowData currentRecord;
 
-    SkipMergeIterator(ParquetColumnarRowSplitReader reader, ClosableIterator<RowData> iterator) {
+    SkipMergeIterator(HoodieParquetReader reader, ClosableIterator<RowData> iterator) {
       this.reader = reader;
       this.iterator = iterator;
     }
@@ -683,7 +690,7 @@ public class MergeOnReadInputFormat
 
   protected static class MergeIterator implements RecordIterator {
     // base file reader
-    private final ParquetColumnarRowSplitReader reader;
+    private final HoodieParquetReader reader;
     // log keys used for merging
     private final Iterator<String> logKeysIterator;
     // scanner
@@ -719,11 +726,13 @@ public class MergeOnReadInputFormat
         RowType requiredRowType,
         Schema tableSchema,
         Schema requiredSchema,
+        InternalSchema querySchema,
         int[] requiredPos,
         boolean emitDelete,
         int operationPos,
-        ParquetColumnarRowSplitReader reader) { // the reader should be with full schema
+        HoodieParquetReader reader) { // the reader should be with full schema
       this(flinkConf, hadoopConf, split, tableRowType, requiredRowType, tableSchema,
+          querySchema,
           Option.of(RowDataProjection.instance(requiredRowType, requiredPos)),
           Option.of(record -> buildAvroRecordBySchema(record, requiredSchema, requiredPos, new GenericRecordBuilder(requiredSchema))),
           emitDelete, operationPos, reader);
@@ -736,14 +745,15 @@ public class MergeOnReadInputFormat
         RowType tableRowType,
         RowType requiredRowType,
         Schema tableSchema,
+        InternalSchema querySchema,
         Option<RowDataProjection> projection,
         Option<Function<IndexedRecord, GenericRecord>> avroProjection,
         boolean emitDelete,
         int operationPos,
-        ParquetColumnarRowSplitReader reader) { // the reader should be with full schema
+        HoodieParquetReader reader) { // the reader should be with full schema
       this.tableSchema = tableSchema;
       this.reader = reader;
-      this.scanner = FormatUtils.logScanner(split, tableSchema, flinkConf, hadoopConf);
+      this.scanner = FormatUtils.logScanner(split, tableSchema, querySchema, flinkConf, hadoopConf);
       this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
       this.logKeysIterator = scanner.getRecords().keySet().iterator();
       this.emitDelete = emitDelete;
@@ -855,6 +865,7 @@ public class MergeOnReadInputFormat
     protected String defaultPartName;
     protected long limit = -1;
     protected boolean emitDelete = false;
+    protected InternalSchemaManager internalSchemaManager = InternalSchemaManager.DISABLED;
 
     public Builder config(Configuration conf) {
       this.conf = conf;
@@ -886,9 +897,14 @@ public class MergeOnReadInputFormat
       return this;
     }
 
+    public Builder internalSchemaManager(InternalSchemaManager internalSchemaManager) {
+      this.internalSchemaManager = internalSchemaManager;
+      return this;
+    }
+
     public MergeOnReadInputFormat build() {
       return new MergeOnReadInputFormat(conf, tableState, fieldTypes,
-          defaultPartName, limit, emitDelete);
+          defaultPartName, limit, emitDelete, internalSchemaManager);
     }
   }
 

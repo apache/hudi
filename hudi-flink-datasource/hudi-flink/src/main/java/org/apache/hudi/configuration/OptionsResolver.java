@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -209,6 +210,13 @@ public class OptionsResolver {
   public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
     String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE);
     return HoodieCDCSupplementalLoggingMode.parse(mode);
+  }
+
+  /**
+   * Returns whether comprehensive schema evolution enabled.
+   */
+  public static boolean isSchemaEvolutionEnabled(Configuration conf) {
+    return conf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), false);
   }
 
   // -------------------------------------------------------------------------
