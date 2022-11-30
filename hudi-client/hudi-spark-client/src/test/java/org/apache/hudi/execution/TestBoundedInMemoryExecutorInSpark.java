@@ -135,22 +135,21 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
           }
         };
 
-    BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
-    try {
-      executor = new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-          getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
-      BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> finalExecutor = executor;
+    BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor =
+        new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
+            getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
 
-      Thread.currentThread().interrupt();
+    // Interrupt the current thread (therefore triggering executor to throw as soon as it
+    // invokes [[get]] on the [[CompletableFuture]])
+    Thread.currentThread().interrupt();
 
-      assertThrows(HoodieException.class, () -> finalExecutor.execute());
-      assertTrue(Thread.interrupted());
-    } finally {
-      if (executor != null) {
-        executor.shutdownNow();
-        executor.awaitTermination();
-      }
-    }
+    assertThrows(HoodieException.class, executor::execute);
+
+    // Validate that interrupted flag is reset, after [[InterruptedException]] is thrown
+    assertTrue(Thread.interrupted());
+
+    executor.shutdownNow();
+    executor.awaitTermination();
   }
 
   @Test
