@@ -66,7 +66,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   public HoodieHiveRecord(HoodieKey key, ArrayWritable arrayWritable, HoodieOperation operation, Schema schema) {
-    super(key, arrayWritable, operation);
+    super(key, arrayWritable, operation, Option.empty());
     this.schema = schema;
   }
 
