@@ -489,10 +489,9 @@ public class HoodieTableSource implements
         this.schema.getColumnNames().toArray(new String[0]),
         this.schema.getColumnDataTypes().toArray(new DataType[0]),
         this.requiredPos,
-        this.conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
+        this.conf,
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
-        getParquetConf(this.conf, this.hadoopConf),
-        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE)
+        getParquetConf(this.conf, this.hadoopConf)
     );
   }
 
