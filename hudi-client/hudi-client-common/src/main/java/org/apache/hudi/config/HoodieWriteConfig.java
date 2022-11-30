@@ -1634,6 +1634,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME);
   }
 
+  public int getClusteringMaxThreads() {
+    return getInt(HoodieClusteringConfig.CLUSTERING_MAX_THREADS);
+  }
+
   public ClusteringPlanPartitionFilterMode getClusteringPlanPartitionFilterMode() {
     String mode = getString(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME);
     return ClusteringPlanPartitionFilterMode.valueOf(mode);

@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -82,6 +83,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -97,8 +100,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
   private static final Logger LOG = LoggerFactory.getLogger(MultipleSparkJobExecutionStrategy.class);
 
+  private final ExecutorService clusteringExecutorService;
+
   public MultipleSparkJobExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
+    this.clusteringExecutorService = Executors.newFixedThreadPool(writeConfig.getClusteringMaxThreads(),
+        new CustomizedThreadFactory("clustering-submit-job-pool", true));
   }
 
   @Override
@@ -229,7 +236,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           .collect(Collectors.toList());
       return performClusteringWithRecordsRDD(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, preserveHoodieMetadata,
           clusteringGroup.getExtraMetadata());
-    });
+    }, clusteringExecutorService);
   }
 
   /**
@@ -248,7 +255,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           .collect(Collectors.toList());
       return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, shouldPreserveHoodieMetadata,
           clusteringGroup.getExtraMetadata());
-    });
+    }, clusteringExecutorService);
   }
 
   /**

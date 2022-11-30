@@ -154,6 +154,15 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
 
+  public static final ConfigProperty<Integer> CLUSTERING_MAX_THREADS = ConfigProperty
+      .key("hoodie.clustering.max.threads")
+      .defaultValue(10)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Maximum number of parallelism jobs submitted in clustering operation. "
+          + "If the resource is sufficient(Like Spark engine has enough idle executors), increasing this "
+          + "value will let the clustering job run faster, while it will give additional pressure to the "
+          + "execution engines to manage more concurrent running jobs.");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
       .defaultValue("0")
