@@ -34,20 +34,17 @@ import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
-
+import org.apache.hudi.util.CachingIterator
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
 import java.util.Properties
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.util.Try
@@ -61,7 +58,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
                       requiredSchema: HoodieTableSchema,
                       tableState: HoodieTableState,
                       config: Configuration)
-  extends Iterator[InternalRow] with Closeable with AvroDeserializerSupport {
+  extends CachingIterator[InternalRow] with Closeable with AvroDeserializerSupport {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
@@ -77,8 +74,6 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
   protected override val structTypeSchema: StructType = requiredSchema.structTypeSchema
 
   protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
-
-  protected var recordToLoad: InternalRow = _
 
   private val requiredSchemaSafeAvroProjection = SafeAvroProjection.create(logFileReaderAvroSchema, avroSchema)
 
@@ -107,7 +102,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
   protected def removeLogRecord(key: String): Option[HoodieRecord[_ <: HoodieRecordPayload[_]]] =
     logRecords.remove(key)
 
-  override def hasNext: Boolean = hasNextInternal
+  protected def doHasNext: Boolean = hasNextInternal
 
   // NOTE: It's crucial for this method to be annotated w/ [[@tailrec]] to make sure
   //       that recursion is unfolded into a loop to avoid stack overflows while
@@ -120,13 +115,11 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
         this.hasNextInternal
       } else {
         val projectedAvroRecord = requiredSchemaSafeAvroProjection(avroRecordOpt.get)
-        recordToLoad = deserialize(projectedAvroRecord)
+        nextRecord = deserialize(projectedAvroRecord)
         true
       }
     }
   }
-
-  override final def next(): InternalRow = recordToLoad
 
   override def close(): Unit =
     if (logScanner != null) {
@@ -155,13 +148,13 @@ private class SkipMergeIterator(split: HoodieMergeOnReadFileSplit,
 
   private val baseFileIterator = baseFileReader(split.dataFile.get)
 
-  override def hasNext: Boolean = {
+  override def doHasNext: Boolean = {
     if (baseFileIterator.hasNext) {
       // No merge is required, simply load current row and project into required schema
-      recordToLoad = requiredSchemaUnsafeProjection(baseFileIterator.next())
+      nextRecord = requiredSchemaUnsafeProjection(baseFileIterator.next())
       true
     } else {
-      super[LogFileIterator].hasNext
+      super[LogFileIterator].doHasNext
     }
   }
 }
@@ -196,7 +189,7 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
 
   private val baseFileIterator = baseFileReader(split.dataFile.get)
 
-  override def hasNext: Boolean = hasNextInternal
+  override def doHasNext: Boolean = hasNextInternal
 
   // NOTE: It's crucial for this method to be annotated w/ [[@tailrec]] to make sure
   //       that recursion is unfolded into a loop to avoid stack overflows while
@@ -208,7 +201,7 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
       val updatedRecordOpt = removeLogRecord(curKey)
       if (updatedRecordOpt.isEmpty) {
         // No merge is required, simply load current row and project into required schema
-        recordToLoad = requiredSchemaUnsafeProjection(curRow)
+        nextRecord = requiredSchemaUnsafeProjection(curRow)
         true
       } else {
         val mergedAvroRecordOpt = merge(serialize(curRow), updatedRecordOpt.get)
@@ -218,12 +211,12 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
         } else {
           val projectedAvroRecord = projectAvroUnsafe(mergedAvroRecordOpt.get.asInstanceOf[GenericRecord],
             avroSchema, reusableRecordBuilder)
-          recordToLoad = deserialize(projectedAvroRecord)
+          nextRecord = deserialize(projectedAvroRecord)
           true
         }
       }
     } else {
-      super[LogFileIterator].hasNext
+      super[LogFileIterator].doHasNext
     }
   }
 
