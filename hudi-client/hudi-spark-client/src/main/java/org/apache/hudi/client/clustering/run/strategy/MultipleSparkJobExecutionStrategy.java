@@ -220,6 +220,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
       HoodieData<HoodieRecord<T>> inputRecords = readRecordsForGroup(jsc, clusteringGroup, instantTime);
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
+      // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+      //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+      //       it since these records will be shuffled later.
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
           .collect(Collectors.toList());
@@ -331,6 +334,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
               HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
               Option<BaseKeyGenerator> keyGeneratorOp =
                   writeConfig.populateMetaFields() ? Option.empty() : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
+              // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+              //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+              //       it since these records will be shuffled later.
               MappingIterator mappingIterator = new MappingIterator((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
                   rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema,
                       writeConfig.getProps(), keyGeneratorOp));

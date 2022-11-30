@@ -157,6 +157,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       T oldValue = oldRecord.getData();
       HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(oldRecord, readerSchema,
           newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
+      // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+      //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+      //       it since these records will be put into records(Map).
       // If combinedValue is oldValue, no need rePut oldRecord
       if (combinedRecord.getData() != oldValue) {
         records.put(key, combinedRecord.copy());

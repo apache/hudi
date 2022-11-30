@@ -151,6 +151,9 @@ public abstract class SingleSparkJobExecutionStrategy<T>
           HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
           Option<BaseKeyGenerator> keyGeneratorOp =
               writeConfig.populateMetaFields() ? Option.empty() : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
+          // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+          //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+          //       it since these records will be shuffled later.
           MappingIterator mappingIterator = new MappingIterator((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
               rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema,
                   getWriteConfig().getProps(), keyGeneratorOp));

@@ -72,6 +72,9 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
           reader.getRecordIterator(), new BootstrapRecordConsumer(bootstrapHandle), record -> {
         try {
           String recKey = record.getRecordKey(reader.getSchema(), Option.of(keyGenerator));
+          // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+          //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+          //       it since these records will be inserted into the queue later.
           HoodieRecord hoodieRecord = record
               .rewriteRecord(reader.getSchema(), config.getProps(), HoodieAvroUtils.RECORD_KEY_SCHEMA)
               .copy();

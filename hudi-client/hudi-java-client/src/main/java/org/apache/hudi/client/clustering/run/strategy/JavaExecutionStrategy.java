@@ -216,6 +216,9 @@ public abstract class JavaExecutionStrategy<T>
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
         HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
         Iterator<HoodieRecord> recordIterator = baseFileReader.getRecordIterator(readerSchema);
+        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+        //       it since these records will be put into the records(List).
         recordIterator.forEachRemaining(record -> records.add(record.copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema, new Properties(), Option.empty())));
       } catch (IOException e) {
         throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
