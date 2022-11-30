@@ -30,7 +30,6 @@
         <checkstyle.skip>true</checkstyle.skip>
         <main.basedir>${project.parent.basedir}</main.basedir>
         <skipTests>true</skipTests>
-        <javax.servlet.version>3.1.0</javax.servlet.version>
     </properties>
 
     <build>
@@ -89,10 +88,6 @@
                                     <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
 
                                     <!-- cli related dependencies -->
-                                    <include>commons-collections:commons-collections</include>
-                                    <include>commons-configuration:*</include>
-                                    <include>commons-lang:*</include>
-                                    <include>commons-logging:*</include>
                                     <include>com.fasterxml:classmate</include>
                                     <include>com.fasterxml.woodstox:woodstox-core</include>
                                     <include>com.google.code.gson:gson</include>
@@ -106,14 +101,12 @@
                                     <include>org.apache.httpcomponents:httpclient</include>
                                     <include>org.apache.httpcomponents:httpcore</include>
                                     <include>org.apache.httpcomponents:fluent-hc</include>
-                                    <include>org.apache.logging.log4j:*</include>
                                     <include>org.codehaus.woodstox:stax2-api</include>
                                     <include>org.fusesource.jansi:jansi</include>
                                     <include>org.glassfish:jakarta.el</include>
                                     <include>org.hibernate.validator:hibernate-validator</include>
                                     <include>org.jboss.logging:jboss-logging</include>
                                     <include>org.jline:*</include>
-                                    <include>org.scala-lang:scala-library</include>
                                     <include>org.springframework*:*</include>
                                     <include>org.springframework.boot:*</include>
                                     <include>org.yaml:*</include>
@@ -164,11 +157,6 @@
         </dependency>
 
         <dependency>
-            <groupId>javax.servlet</groupId>
-            <artifactId>javax.servlet-api</artifactId>
-            <version>${javax.servlet.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
             <version>${springboot.version}</version>
@@ -216,22 +204,6 @@
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-auth</artifactId>
             <version>${hadoop.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <!-- Logging -->
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-1.2-api</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-api</artifactId>
             <scope>compile</scope>
         </dependency>
         <dependency>
