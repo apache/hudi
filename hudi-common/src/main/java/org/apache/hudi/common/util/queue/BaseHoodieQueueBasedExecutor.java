@@ -167,8 +167,15 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
           })
           .thenApply(ignored -> consumer.get().finish())
           // Block until producing and consuming both finish
-          .join();
+          .get();
     } catch (Exception e) {
+      if (e instanceof InterruptedException) {
+        // In case {@code InterruptedException} was thrown, resetting the interrupted flag
+        // of the thread, we reset it (to true) again to permit subsequent handlers
+        // to be interrupted as well
+        Thread.currentThread().interrupt();
+      }
+
       throw new HoodieException(e);
     }
   }
