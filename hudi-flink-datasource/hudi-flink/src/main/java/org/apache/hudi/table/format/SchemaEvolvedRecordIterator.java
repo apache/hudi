@@ -18,36 +18,35 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.util.RowDataProjection;
 
 import org.apache.flink.table.data.RowData;
 
-import java.io.IOException;
-
 /**
- * Decorates origin hoodie parquet reader with cast projection.
+ * Decorates origin record iterator with cast projection.
  */
-public final class HoodieParquetEvolvedSplitReader implements HoodieParquetReader {
-  private final HoodieParquetReader originReader;
+public final class SchemaEvolvedRecordIterator implements ClosableIterator<RowData> {
+  private final ClosableIterator<RowData> nested;
   private final RowDataProjection castProjection;
 
-  public HoodieParquetEvolvedSplitReader(HoodieParquetReader originReader, RowDataProjection castProjection) {
-    this.originReader = originReader;
+  public SchemaEvolvedRecordIterator(ClosableIterator<RowData> nested, RowDataProjection castProjection) {
+    this.nested = nested;
     this.castProjection = castProjection;
   }
 
   @Override
-  public boolean reachedEnd() throws IOException {
-    return originReader.reachedEnd();
+  public boolean hasNext() {
+    return nested.hasNext();
   }
 
   @Override
-  public RowData nextRecord() {
-    return castProjection.project(originReader.nextRecord());
+  public RowData next() {
+    return castProjection.project(nested.next());
   }
 
   @Override
-  public void close() throws IOException {
-    originReader.close();
+  public void close() {
+    nested.close();
   }
 }

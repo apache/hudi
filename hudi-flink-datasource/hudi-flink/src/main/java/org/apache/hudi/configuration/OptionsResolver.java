@@ -216,7 +216,7 @@ public class OptionsResolver {
    * Returns whether comprehensive schema evolution enabled.
    */
   public static boolean isSchemaEvolutionEnabled(Configuration conf) {
-    return conf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), false);
+    return conf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue());
   }
 
   // -------------------------------------------------------------------------

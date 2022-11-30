@@ -49,14 +49,17 @@ import static org.apache.flink.table.types.logical.LogicalTypeRoot.VARCHAR;
 
 /**
  * CastMap is responsible for conversion of flink types when full schema evolution enabled.
- * Supported cast conversions:
- * Integer => Long, Float, Double, Decimal, String
- * Long => Float, Double, Decimal, String
- * Float => Double, Decimal, String
- * Double => Decimal, String
- * Decimal => Decimal, String
- * String => Decimal, Date
- * Date => String
+ *
+ * <p>Supported cast conversions:
+ * <ul>
+ *   <li>Integer => Long, Float, Double, Decimal, String</li>
+ *   <li>Long => Float, Double, Decimal, String</li>
+ *   <li>Float => Double, Decimal, String</li>
+ *   <li>Double => Decimal, String</li>
+ *   <li>Decimal => Decimal, String</li>
+ *   <li>String => Decimal, Date</li>
+ *   <li>Date => String</li>
+ * </ul>
  */
 public final class CastMap implements Serializable {
 
