@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -67,8 +68,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                 Option<Schema> readerSchema,
                                 Map<HeaderMetadataType, String> header,
                                 Map<HeaderMetadataType, String> footer,
-                                String keyField) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
+                                String keyField, InternalSchema internalSchema) {
+    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false, internalSchema);
 
     this.compressionCodecName = Option.empty();
   }
@@ -150,8 +151,17 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
+    Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    if (!internalSchema.isEmptySchema()) {
+      // we should use write schema to read log file,
+      // since when we have done some DDL operation, the readerSchema maybe different from writeSchema, avro reader will throw exception.
+      // eg: origin writeSchema is: "a String, b double" then we add a new column now the readerSchema will be: "a string, c int, b double". it's wrong to use readerSchema to read old log file.
+      // after we read those record by writeSchema,  we rewrite those record with readerSchema in AbstractHoodieLogRecordReader
+      readerSchema = writerSchema;
+    }
+
     ClosableIterator<HoodieRecord<T>> iterator = HoodieFileReaderFactory.getReaderFactory(type).getFileReader(inlineConf, inlineLogFilePath, PARQUET)
-        .getRecordIterator(readerSchema, readerSchema);
+        .getRecordIterator(writerSchema, readerSchema);
     return iterator;
   }
 

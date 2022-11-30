@@ -23,7 +23,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{HoodieInternalRowUtils, Row, SparkSession}
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
 
 class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAfterAll {
@@ -85,18 +85,5 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     assert(newRow.get(3, IntegerType) == null)
   }
 
-  test("test rewrite with metaDataFiled value") {
-    val data = sparkSession.sparkContext.parallelize(Seq(Row("like", 18)))
-    val oldRow = sparkSession.createDataFrame(data, schema1).queryExecution.toRdd.first()
-    val newRow = HoodieInternalRowUtils.rewriteRecordWithMetadata(oldRow, schema1, schema1WithMetaData, "file1")
-    assert(newRow.get(0, StringType) == null)
-    assert(newRow.get(1, StringType) == null)
-    assert(newRow.get(2, StringType) == null)
-    assert(newRow.get(3, StringType) == null)
-    assert(newRow.get(4, StringType).toString.equals("file1"))
-    assert(newRow.get(5, StringType) == null)
-    assert(newRow.get(6, BooleanType) == null)
-    assert(newRow.get(7, StringType).toString.equals("like"))
-    assert(newRow.get(8, IntegerType) == 18)
-  }
+
 }

@@ -165,6 +165,7 @@ trait ProvidesHoodieConfig extends Logging {
       tableType == COW_TABLE_TYPE_OPT_VAL && insertMode == InsertMode.STRICT) {
       // Only validate duplicate key for COW, for MOR it will do the merge with the DefaultHoodieRecordPayload
       // on reading.
+      // TODO use HoodieSparkValidateDuplicateKeyRecordMerger when SparkRecordMerger is default
       classOf[ValidateDuplicateKeyPayload].getCanonicalName
     } else {
       classOf[OverwriteWithLatestAvroPayload].getCanonicalName

@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.HiveSyncConfigHolder
@@ -41,7 +42,6 @@ import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
 import org.apache.spark.sql.types.{BooleanType, StructType}
 
 import java.util.Base64
-
 
 /**
  * The Command for hoodie MergeIntoTable.
@@ -185,9 +185,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     // Create the write parameters
     val parameters = buildMergeIntoConfig(hoodieCatalogTable)
+    // TODO Remove it when we implement ExpressionPayload for SparkRecord
+    val parametersWithAvroRecordMerger = parameters ++ Map(HoodieWriteConfig.MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName)
 
     if (mergeInto.matchedActions.nonEmpty) { // Do the upsert
-      executeUpsert(sourceDF, parameters)
+      executeUpsert(sourceDF, parametersWithAvroRecordMerger)
     } else { // If there is no match actions in the statement, execute insert operation only.
       val targetDF = Dataset.ofRows(sparkSession, mergeInto.targetTable)
       val primaryKeys = hoodieCatalogTable.tableConfig.getRecordKeyFieldProp.split(",")
@@ -196,7 +198,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
       // column order changed after left anti join , we should keep column order of source dataframe
       val cols = removeMetaFields(sourceDF).columns
-      executeInsertOnly(insertSourceDF.select(cols.head, cols.tail:_*), parameters)
+      executeInsertOnly(insertSourceDF.select(cols.head, cols.tail:_*), parametersWithAvroRecordMerger)
     }
     sparkSession.catalog.refreshTable(targetTableIdentify.unquotedString)
     Seq.empty[Row]

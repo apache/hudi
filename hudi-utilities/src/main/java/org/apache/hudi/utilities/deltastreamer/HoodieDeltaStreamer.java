@@ -33,8 +33,6 @@ import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -275,14 +273,6 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--payload-class"}, description = "subclass of HoodieRecordPayload, that works off "
         + "a GenericRecord. Implement your own, if you want to do something other than overwriting existing value")
     public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
-
-    @Parameter(names = {"--merger-impls"}, description = "List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
-        + "These merger impls will filter by merger-strategy "
-        + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)")
-    public String mergerImpls = HoodieAvroRecordMerger.class.getName();
-
-    @Parameter(names = {"--merger-strategy"}, description = "Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in merger-impls which has the same merger strategy id")
-    public String mergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 
     @Parameter(names = {"--schemaprovider-class"}, description = "subclass of org.apache.hudi.utilities.schema"
         + ".SchemaProvider to attach schemas to input & target table data, built in options: "

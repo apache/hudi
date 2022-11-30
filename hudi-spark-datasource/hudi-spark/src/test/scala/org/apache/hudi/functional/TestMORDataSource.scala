@@ -35,9 +35,9 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieInternalRowUtils, HoodieSparkRecordMerger, SparkDatasetMixin}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, SparkDatasetMixin}
 import org.apache.log4j.LogManager
-import org.apache.spark.sql._
+import org.apache.spark.sql.{HoodieInternalRowUtils, _}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.BooleanType
@@ -98,8 +98,8 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @CsvSource(Array("AVRO, AVRO, avro", "AVRO, SPARK, parquet", "SPARK, AVRO, parquet", "SPARK, SPARK, parquet"))
   def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String) {
-    var (_, readOpts) = getOpts(readType)
-    var (writeOpts, _) = getOpts(writeType)
+    var (_, readOpts) = getWriterReaderOpts(readType)
+    var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
     writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
 
@@ -318,7 +318,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
   @Test
   def testSpill() {
-    val (writeOpts, readOpts) = getOpts(HoodieRecordType.SPARK)
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.SPARK)
 
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -350,7 +350,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testPayloadDelete(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     // First Operation:
     // Producing parquet files to three default partitions.
@@ -426,7 +426,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testPrunedFiltered(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     // First Operation:
     // Producing parquet files to three default partitions.
@@ -533,7 +533,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testVectorizedReader(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     spark.conf.set("spark.sql.parquet.enableVectorizedReader", true)
     assertTrue(spark.conf.get("spark.sql.parquet.enableVectorizedReader").toBoolean)
@@ -584,7 +584,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testNoPrecombine(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     // Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala
@@ -610,7 +610,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testPreCombineFiledForReadMOR(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     writeData((1, "a0", 10, 100, false), writeOpts)
     checkAnswer((1, "a0", 10, 100, false), readOpts)
@@ -697,7 +697,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     "true,false,SPARK", "true,true,SPARK", "false,true,SPARK", "false,false,SPARK"
   ))
   def testQueryMORWithBasePathAndFileIndex(partitionEncode: Boolean, isMetadataEnabled: Boolean, recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     val N = 20
     // Test query with partition prune if URL_ENCODE_PARTITIONING has enable
@@ -758,7 +758,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     "true, false, SPARK", "false, true, SPARK", "false, false, SPARK", "true, true, SPARK"
   ))
   def testMORPartitionPrune(partitionEncode: Boolean, hiveStylePartition: Boolean, recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     val partitions = Array("2021/03/01", "2021/03/02", "2021/03/03", "2021/03/04", "2021/03/05")
     val newDataGen =  new HoodieTestDataGenerator(partitions)
@@ -830,7 +830,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testReadPathsForMergeOnReadTable(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     // Paths only baseFiles
     val records1 = dataGen.generateInserts("001", 100)
@@ -880,7 +880,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testReadPathsForOnlyLogFiles(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     initMetaClient(HoodieTableType.MERGE_ON_READ)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
@@ -927,7 +927,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testReadLogOnlyMergeOnReadTable(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     initMetaClient(HoodieTableType.MERGE_ON_READ)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
@@ -951,7 +951,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testTempFilesCleanForClustering(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     val records1 = recordsToStrings(dataGen.generateInserts("001", 1000)).asScala
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -972,7 +972,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testClusteringOnNullableColumn(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     val records1 = recordsToStrings(dataGen.generateInserts("001", 1000)).asScala
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -997,7 +997,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testHoodieIsDeletedMOR(recordType: HoodieRecordType): Unit =  {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     val numRecords = 100
     val numRecordsToDelete = 2
@@ -1045,7 +1045,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testPrunePartitionForTimestampBasedKeyGenerator(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     val options = commonOpts ++ Map(
       "hoodie.compact.inline" -> "false",
@@ -1138,8 +1138,9 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
    *
    * The read-optimized query should read `fg1_dc1.parquet` only in this case.
    */
-  @Test
-  def testReadOptimizedQueryAfterInflightCompactionAndCompletedDeltaCommit(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testReadOptimizedQueryAfterInflightCompactionAndCompletedDeltaCommit(recordType: HoodieRecordType): Unit = {
     val (tableName, tablePath) = ("hoodie_mor_ro_read_test_table", s"${basePath}_mor_test_table")
     val precombineField = "col3"
     val recordKeyField = "key"
@@ -1156,6 +1157,8 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       "hoodie.insert.shuffle.parallelism" -> "1",
       "hoodie.upsert.shuffle.parallelism" -> "1")
 
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, options)
+
     // First batch with all inserts
     // Deltacommit1 (DC1, completed), writing file group 1 (fg1)
     // fg1_dc1.parquet written to storage
@@ -1165,7 +1168,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .withColumn(dataField, expr(recordKeyField + " + 1000"))
 
     firstDf.write.format("hudi")
-      .options(options)
+      .options(writeOpts)
       .mode(SaveMode.Overwrite)
       .save(tablePath)
 
@@ -1178,10 +1181,10 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .withColumn(dataField, expr(recordKeyField + " + 2000"))
 
     secondDf.write.format("hudi")
-      .options(options)
+      .options(writeOpts)
       .mode(SaveMode.Append).save(tablePath)
 
-    val compactionOptions = options ++ Map(
+    val compactionOptions = writeOpts ++ Map(
       HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY.key -> CompactionTriggerStrategy.NUM_COMMITS.name,
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1",
       DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key -> "false",
@@ -1211,11 +1214,12 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .withColumn(dataField, expr(recordKeyField + " + 3000"))
 
     thirdDf.write.format("hudi")
-      .options(options)
+      .options(writeOpts)
       .mode(SaveMode.Append).save(tablePath)
 
     // Read-optimized query on MOR
     val roDf = spark.read.format("org.apache.hudi")
+      .options(readOpts)
       .option(
         DataSourceReadOptions.QUERY_TYPE.key,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
@@ -1228,18 +1232,10 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       roDf.where(col(recordKeyField) === 0).select(dataField).collect()(0).getLong(0))
   }
 
-  def getOpts(recordType: HoodieRecordType): (Map[String, String], Map[String, String]) = {
-    val writeOpts = if (recordType == HoodieRecordType.SPARK) {
-      commonOpts ++ sparkOpts
-    } else {
-      commonOpts
+  def getWriterReaderOpts(recordType: HoodieRecordType, opt: Map[String, String] = commonOpts): (Map[String, String], Map[String, String]) = {
+    recordType match {
+      case HoodieRecordType.SPARK => (opt ++ sparkOpts, sparkOpts)
+      case _ => (opt, Map.empty[String, String])
     }
-    val readOpts = if (recordType == HoodieRecordType.SPARK) {
-      sparkOpts
-    } else {
-      Map.empty[String, String]
-    }
-
-    (writeOpts, readOpts)
   }
 }

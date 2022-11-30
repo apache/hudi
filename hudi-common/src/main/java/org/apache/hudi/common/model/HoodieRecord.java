@@ -141,17 +141,23 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   protected HoodieOperation operation;
 
+  /**
+   * The metaData of the record.
+   */
+  protected Option<Map<String, String>> metaData;
+
   public HoodieRecord(HoodieKey key, T data) {
-    this(key, data, null);
+    this(key, data, null, Option.empty());
   }
 
-  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation) {
+  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation, Option<Map<String, String>> metaData) {
     this.key = key;
     this.data = data;
     this.currentLocation = null;
     this.newLocation = null;
     this.sealed = false;
     this.operation = operation;
+    this.metaData = metaData;
   }
 
   public HoodieRecord(
@@ -168,7 +174,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   }
 
   public HoodieRecord(HoodieRecord<T> record) {
-    this(record.key, record.data, record.operation);
+    this(record.key, record.data, record.operation, record.metaData);
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;

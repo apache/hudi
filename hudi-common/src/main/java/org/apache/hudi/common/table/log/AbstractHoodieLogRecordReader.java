@@ -394,7 +394,14 @@ public abstract class AbstractHoodieLogRecordReader {
       while (recordIterator.hasNext()) {
         HoodieRecord currentRecord = recordIterator.next();
         Schema schema = schemaOption.isPresent() ? schemaOption.get() : dataBlock.getSchema();
-        HoodieRecord record = schemaOption.isPresent() ? currentRecord.rewriteRecordWithNewSchema(dataBlock.getSchema(), new Properties(), schemaOption.get()) : currentRecord;
+        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+        //       it since these records will be put into records(Map).
+        HoodieRecord record = schemaOption.isPresent()
+            ? currentRecord
+            .rewriteRecordWithNewSchema(dataBlock.getSchema(), new Properties(), schemaOption.get())
+            .copy()
+            : currentRecord;
         HoodieRecord completedRecord = record.wrapIntoHoodieRecordPayloadWithParams(schema, hoodieTableMetaClient.getTableConfig().getProps(), this.simpleKeyGenFields,
             this.withOperationField, this.partitionName, getPopulateMetaFields());
         processNextRecord(completedRecord);

@@ -16,23 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.hudi
+package org.apache.spark.sql
 
 import java.nio.charset.StandardCharsets
 import java.util.HashMap
 import java.util.concurrent.ConcurrentHashMap
 import org.apache.avro.Schema
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
+import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
-import org.apache.hudi.client.model.HoodieInternalRow
-import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.exception.HoodieException
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieUnsafeRowUtils}
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, UnsafeProjection}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.types._
+import org.apache.spark.unsafe.types.UTF8String
 import scala.collection.mutable
 
 object HoodieInternalRowUtils {
@@ -53,10 +52,12 @@ object HoodieInternalRowUtils {
 
     for ((field, pos) <- newSchema.fields.zipWithIndex) {
       var oldValue: AnyRef = null
-      if (HoodieCatalystExpressionUtils.existField(oldSchema, field.name)) {
+      var oldType: DataType = null
+      if (existField(oldSchema, field.name)) {
         val oldField = oldSchema(field.name)
         val oldPos = oldSchema.fieldIndex(field.name)
-        oldValue = oldRecord.get(oldPos, oldField.dataType)
+        oldType = oldField.dataType
+        oldValue = oldRecord.get(oldPos, oldType)
       }
       if (oldValue != null) {
         field.dataType match {
@@ -72,8 +73,45 @@ object HoodieInternalRowUtils {
             } else {
               newRow.update(pos, oldValue)
             }
-          case _ =>
-            newRow.update(pos, oldValue)
+          case t if t == oldType => newRow.update(pos, oldValue)
+          // Type promotion
+          case _: ShortType =>
+            oldType match {
+              case _: ByteType => newRow.update(pos, oldValue.asInstanceOf[Byte].toShort)
+              case _ => throw new IllegalArgumentException(s"$oldSchema and $newSchema are incompatible")
+            }
+          case _: IntegerType =>
+            oldType match {
+              case _: ByteType => newRow.update(pos, oldValue.asInstanceOf[Byte].toInt)
+              case _: ShortType => newRow.update(pos, oldValue.asInstanceOf[Short].toInt)
+              case _ => throw new IllegalArgumentException(s"$oldSchema and $newSchema are incompatible")
+            }
+          case _: LongType =>
+            oldType match {
+              case _: ByteType => newRow.update(pos, oldValue.asInstanceOf[Byte].toLong)
+              case _: ShortType => newRow.update(pos, oldValue.asInstanceOf[Short].toLong)
+              case _: IntegerType => newRow.update(pos, oldValue.asInstanceOf[Int].toLong)
+              case _ => throw new IllegalArgumentException(s"$oldSchema and $newSchema are incompatible")
+            }
+          case _: FloatType =>
+            oldType match {
+              case _: ByteType => newRow.update(pos, oldValue.asInstanceOf[Byte].toFloat)
+              case _: ShortType => newRow.update(pos, oldValue.asInstanceOf[Short].toFloat)
+              case _: IntegerType => newRow.update(pos, oldValue.asInstanceOf[Int].toFloat)
+              case _: LongType => newRow.update(pos, oldValue.asInstanceOf[Long].toFloat)
+              case _ => throw new IllegalArgumentException(s"$oldSchema and $newSchema are incompatible")
+            }
+          case _: DoubleType =>
+            oldType match {
+              case _: ByteType => newRow.update(pos, oldValue.asInstanceOf[Byte].toDouble)
+              case _: ShortType => newRow.update(pos, oldValue.asInstanceOf[Short].toDouble)
+              case _: IntegerType => newRow.update(pos, oldValue.asInstanceOf[Int].toDouble)
+              case _: LongType => newRow.update(pos, oldValue.asInstanceOf[Long].toDouble)
+              case _: FloatType => newRow.update(pos, oldValue.asInstanceOf[Float].toDouble)
+              case _ => throw new IllegalArgumentException(s"$oldSchema and $newSchema are incompatible")
+            }
+          case _: BinaryType if oldType.isInstanceOf[StringType] => newRow.update(pos, oldValue.asInstanceOf[String].getBytes)
+          case _ => newRow.update(pos, oldValue)
         }
       } else {
         // TODO default value in newSchema
@@ -108,7 +146,7 @@ object HoodieInternalRowUtils {
           val oldStrucType = oldSchema.asInstanceOf[StructType]
           targetSchema.fields.zipWithIndex.foreach { case (field, i) =>
             fieldNames.push(field.name)
-            if (HoodieCatalystExpressionUtils.existField(oldStrucType, field.name)) {
+            if (existField(oldStrucType, field.name)) {
               val oldField = oldStrucType(field.name)
               val oldPos = oldStrucType.fieldIndex(field.name)
               helper(i) = rewriteRecordWithNewSchema(oldRow.get(oldPos, oldField.dataType), oldField.dataType, field.dataType, renameCols, fieldNames)
@@ -117,7 +155,7 @@ object HoodieInternalRowUtils {
               val colNamePartsFromOldSchema = renameCols.getOrDefault(fieldFullName, "").split("\\.")
               val lastColNameFromOldSchema = colNamePartsFromOldSchema(colNamePartsFromOldSchema.length - 1)
               // deal with rename
-              if (!HoodieCatalystExpressionUtils.existField(oldStrucType, field.name) && HoodieCatalystExpressionUtils.existField(oldStrucType, lastColNameFromOldSchema)) {
+              if (!existField(oldStrucType, field.name) && existField(oldStrucType, lastColNameFromOldSchema)) {
                 // find rename
                 val oldField = oldStrucType(lastColNameFromOldSchema)
                 val oldPos = oldStrucType.fieldIndex(lastColNameFromOldSchema)
@@ -162,7 +200,7 @@ object HoodieInternalRowUtils {
           val newValueArray = new GenericArrayData(Array.fill(oldMap.valueArray().numElements())(null).asInstanceOf[Array[Any]])
           val newMap = new ArrayBasedMapData(newKeyArray, newValueArray)
           fieldNames.push("value")
-          oldMap.keyArray().toSeq[Any](oldKeyType).zipWithIndex.foreach { case (value, i) => newKeyArray.update(i, value) }
+          oldMap.keyArray().toSeq[Any](oldKeyType).zipWithIndex.foreach { case (value, i) => newKeyArray.update(i, rewritePrimaryType(value, oldKeyType, oldKeyType)) }
           oldMap.valueArray().toSeq[Any](oldValueType).zipWithIndex.foreach { case (value, i) => newValueArray.update(i, rewriteRecordWithNewSchema(value.asInstanceOf[AnyRef], oldValueType, newValueType, renameCols, fieldNames)) }
           fieldNames.pop()
 
@@ -170,26 +208,6 @@ object HoodieInternalRowUtils {
         case _ => rewritePrimaryType(oldRecord, oldSchema, newSchema)
       }
     }
-  }
-
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecordWithMetadata(org.apache.avro.generic.GenericRecord, org.apache.avro.Schema, java.lang.String)
-   */
-  def rewriteRecordWithMetadata(record: InternalRow, oldSchema: StructType, newSchema: StructType, fileName: String): InternalRow = {
-    val newRecord = rewriteRecord(record, oldSchema, newSchema)
-    newRecord.update(HoodieMetadataField.FILENAME_METADATA_FIELD.ordinal, CatalystTypeConverters.convertToCatalyst(fileName))
-
-    newRecord
-  }
-
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteEvolutionRecordWithMetadata(org.apache.avro.generic.GenericRecord, org.apache.avro.Schema, java.lang.String)
-   */
-  def rewriteEvolutionRecordWithMetadata(record: InternalRow, oldSchema: StructType, newSchema: StructType, fileName: String): InternalRow = {
-    val newRecord = rewriteRecordWithNewSchema(record, oldSchema, newSchema, new java.util.HashMap[String, String]())
-    newRecord.update(HoodieMetadataField.FILENAME_METADATA_FIELD.ordinal, CatalystTypeConverters.convertToCatalyst(fileName))
-
-    newRecord
   }
 
   def getCachedPosList(structType: StructType, field: String): NestedFieldPath = {
@@ -219,11 +237,22 @@ object HoodieInternalRowUtils {
     schemaMap.get(schema)
   }
 
+  def existField(structType: StructType, name: String): Boolean = {
+    try {
+      HoodieUnsafeRowUtils.composeNestedFieldPath(structType, name)
+      true
+    } catch {
+      case _: IllegalArgumentException => false
+    }
+  }
+
   private def rewritePrimaryType(oldValue: Any, oldSchema: DataType, newSchema: DataType) = {
     if (oldSchema.equals(newSchema) || (oldSchema.isInstanceOf[DecimalType] && newSchema.isInstanceOf[DecimalType])) {
       oldSchema match {
-        case NullType | BooleanType | IntegerType | LongType | FloatType | DoubleType | StringType | DateType | TimestampType | BinaryType =>
+        case NullType | BooleanType | IntegerType | LongType | FloatType | DoubleType | DateType | TimestampType | BinaryType =>
           oldValue
+        // Copy UTF8String before putting into GenericInternalRow
+        case StringType => UTF8String.fromString(oldValue.toString)
         case DecimalType() =>
           Decimal.fromDecimal(oldValue.asInstanceOf[Decimal].toBigDecimal.setScale(newSchema.asInstanceOf[DecimalType].scale))
         case _ =>

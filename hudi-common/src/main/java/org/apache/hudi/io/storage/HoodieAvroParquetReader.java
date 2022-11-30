@@ -105,8 +105,11 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   }
 
   private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(Schema schema, Option<Schema> requestedSchema) throws IOException {
-    AvroReadSupport.setAvroReadSchema(conf, schema);
-    if (requestedSchema.isPresent()) {
+    if (!requestedSchema.isPresent()) {
+      AvroReadSupport.setAvroReadSchema(conf, schema);
+    } else {
+      // Make record schema the same as requestedSchema(reader schema)
+      AvroReadSupport.setAvroReadSchema(conf, requestedSchema.get());
       AvroReadSupport.setRequestedProjection(conf, requestedSchema.get());
     }
     ParquetReader<IndexedRecord> reader = AvroParquetReader.<IndexedRecord>builder(path).withConf(conf).build();

@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.HoodieInternalRowUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.commmon.model.HoodieSparkRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -30,12 +30,18 @@ import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.ParquetReaderIterator;
+import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.StringUtils;
+
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.api.ReadSupport;
+import org.apache.parquet.schema.MessageType;
+import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
+import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaConverter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.StructType;
 
@@ -45,6 +51,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
+import static org.apache.parquet.avro.AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS;
 
 public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
@@ -55,7 +62,9 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   public HoodieSparkParquetReader(Configuration conf, Path path) {
     this.path = path;
-    this.conf = conf;
+    this.conf = new Configuration(conf);
+    // Avoid adding record in list element when convert parquet schema to avro schema
+    conf.set(ADD_LIST_ELEMENT_RECORDS, "false");
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
   }
 
@@ -108,7 +117,13 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public Schema getSchema() {
-    return parquetUtils.readAvroSchema(conf, path);
+    // Some types in avro are not compatible with parquet.
+    // Avro only supports representing Decimals as fixed byte array
+    // and therefore if we convert to Avro directly we'll lose logical type-info.
+    MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(conf, path);
+    StructType structType = new ParquetToSparkSchemaConverter(conf).convert(messageType);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getAvroSchemaConverters()
+        .toAvroType(structType, true, messageType.getName(), StringUtils.EMPTY_STRING);
   }
 
   @Override

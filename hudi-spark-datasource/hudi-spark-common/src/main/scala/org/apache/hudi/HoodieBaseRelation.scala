@@ -29,14 +29,14 @@ import org.apache.hudi.HoodieBaseRelation._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableConfiguration}
+import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, SerializableConfiguration}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{ConfigUtils, HoodieRecordUtils, StringUtils}
+import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
@@ -45,7 +45,6 @@ import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.io.storage.HoodieAvroHFileReader
 
-import org.apache.spark.SerializableWritable
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -461,9 +460,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   protected def getTableState: HoodieTableState = {
-    val mergerImpls = ConfigUtils.getMergerImpls(optParams.asJava).asScala.toList
-    val mergerStrategy = optParams.getOrElse(HoodieWriteConfig.MERGER_STRATEGY.key(),
-      sqlContext.getConf(HoodieWriteConfig.MERGER_STRATEGY.key(), HoodieWriteConfig.MERGER_STRATEGY.defaultValue()))
+    val mergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.MERGER_IMPLS)).asScala.toList
+
+    val mergerStrategy = getConfigValue(HoodieWriteConfig.MERGER_STRATEGY,
+      Option(metaClient.getTableConfig.getMergerStrategy))
 
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(
@@ -656,6 +656,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean ||
       sparkSession.conf.get(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
         DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+  }
+
+  private def getConfigValue(config: ConfigProperty[String],
+                             defaultValueOption: Option[String]=Option.empty): String = {
+    optParams.getOrElse(config.key(),
+      sqlContext.getConf(config.key(), defaultValueOption.getOrElse(config.defaultValue())))
   }
 }
 

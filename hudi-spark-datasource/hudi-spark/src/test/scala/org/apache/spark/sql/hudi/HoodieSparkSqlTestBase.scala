@@ -18,8 +18,12 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.{HoodieSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.config.HoodieStorageConfig
+import org.apache.hudi.common.model.HoodieAvroRecordMerger
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.log4j.Level
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -169,5 +173,46 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     val path = new Path(filePath)
     val fs = FSUtils.getFs(filePath, spark.sparkContext.hadoopConfiguration)
     fs.exists(path)
+  }
+
+  protected def withSQLConf(pairs: (String, String)*)(f: => Unit): Unit = {
+    val conf = spark.sessionState.conf
+    val currentValues = pairs.unzip._1.map { k =>
+      if (conf.contains(k)) {
+        Some(conf.getConfString(k))
+      } else None
+    }
+    pairs.foreach { case(k, v) => conf.setConfString(k, v) }
+    try f finally {
+      pairs.unzip._1.zip(currentValues).foreach {
+        case (key, Some(value)) => conf.setConfString(key, value)
+        case (key, None) => conf.unsetConf(key)
+      }
+    }
+  }
+
+  protected def withRecordType(recordConfig: Map[HoodieRecordType, Map[String, String]]=Map.empty)(f: => Unit) {
+    // TODO HUDI-5264 Test parquet log with avro record in spark sql test
+    Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK).foreach { recordType =>
+      val (merger, format) = recordType match {
+        case HoodieRecordType.SPARK => (classOf[HoodieSparkRecordMerger].getName, "parquet")
+        case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")
+      }
+      val config = Map(
+        HoodieWriteConfig.MERGER_IMPLS.key -> merger,
+        HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> format) ++ recordConfig.getOrElse(recordType, Map.empty)
+      withSQLConf(config.toList:_*) {
+        f
+      }
+    }
+  }
+
+  protected def getRecordType(): HoodieRecordType = {
+    val merger = spark.sessionState.conf.getConfString(HoodieWriteConfig.MERGER_IMPLS.key, HoodieWriteConfig.MERGER_IMPLS.defaultValue())
+    if (merger.equals(classOf[HoodieSparkRecordMerger].getName)) {
+      HoodieRecordType.SPARK
+    } else {
+      HoodieRecordType.AVRO
+    }
   }
 }

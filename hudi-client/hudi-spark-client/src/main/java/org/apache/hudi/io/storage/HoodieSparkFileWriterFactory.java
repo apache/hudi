@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -34,6 +33,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.spark.sql.HoodieInternalRowUtils;
 
 import java.io.IOException;
 
