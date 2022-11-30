@@ -35,8 +35,19 @@ import static org.apache.hudi.common.util.FutureUtils.allOf;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
- * HoodieExecutorBase holds common elements producerExecutorService, consumerExecutorService, producers and a single consumer.
- * Also HoodieExecutorBase control the lifecycle of producerExecutorService and consumerExecutorService.
+ * Base class for multi-threaded queue-based executor which
+ *
+ * <ul>
+ *   <li>Can be ingesting instances of type {@link I} from multiple {@link HoodieProducer}s
+ *   into the {@link HoodieMessageQueue}</li>
+ *   <li>Can be ingesting instances of type {@link I} into an (optional) {@link HoodieConsumer}
+ *   from the internal {@link HoodieMessageQueue} (when no consumer is provided records are
+ *   simply accumulated into internal queue)</li>
+ * </ul>
+ *
+ * Such executors are allowing to setup an ingestion pipeline w/ N:1 configuration, where data
+ * is ingested from multiple sources (ie producers) into a singular sink (ie consumer), using
+ * an internal queue to stage the records ingested from producers before these are consumed
  */
 public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
 
