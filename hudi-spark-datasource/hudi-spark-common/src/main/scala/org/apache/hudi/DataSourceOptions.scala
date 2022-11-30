@@ -179,7 +179,7 @@ object DataSourceReadOptions {
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
-    .defaultValue("false")
+    .defaultValue("true")
     .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
 
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
