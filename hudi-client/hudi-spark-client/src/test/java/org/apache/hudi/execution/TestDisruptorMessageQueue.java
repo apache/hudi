@@ -18,8 +18,6 @@
 
 package org.apache.hudi.execution;
 
-import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformFunction;
-
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,11 +25,11 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.queue.DisruptorExecutor;
 import org.apache.hudi.common.util.queue.DisruptorMessageQueue;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
-import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
-import org.apache.hudi.common.util.queue.DisruptorExecutor;
+import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.common.util.queue.WaitStrategyFactory;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -43,6 +41,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -56,12 +55,11 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import scala.Tuple2;
-
+import static org.apache.hudi.exception.ExceptionUtil.getRootCause;
+import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformFunction;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -332,6 +330,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,
         "exception is expected");
-    assertTrue(thrown.getMessage().contains("Error producing records in disruptor executor"));
+
+    assertEquals("Exception when produce records!!!", getRootCause(thrown).getMessage());
   }
 }

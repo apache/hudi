@@ -88,7 +88,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
     // Produce
     Future<Boolean> resFuture = executorService.submit(() -> {
       new IteratorBasedQueueProducer<>(hoodieRecords.iterator()).produce(queue);
-      queue.close();
+      queue.seal();
       return true;
     });
     final Iterator<HoodieRecord> originalRecordIterator = hoodieRecords.iterator();
@@ -174,7 +174,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
         for (Future f : futureList) {
           f.get();
         }
-        queue.close();
+        queue.seal();
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
