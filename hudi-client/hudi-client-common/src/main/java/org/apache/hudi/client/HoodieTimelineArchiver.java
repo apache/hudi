@@ -537,15 +537,14 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
     LOG.info("Deleting instants " + archivedInstants);
 
-    List<String> pendingInstantFiles = new ArrayList<>();
-    List<String> completedInstantFiles = new ArrayList<>();
+    List<HoodieInstant> pendingInstants = new ArrayList<>();
+    List<HoodieInstant> completedInstants = new ArrayList<>();
 
     for (HoodieInstant instant : archivedInstants) {
-      String filePath = new Path(metaClient.getMetaPath(), instant.getFileName()).toString();
       if (instant.isCompleted()) {
-        completedInstantFiles.add(filePath);
+        completedInstants.add(instant);
       } else {
-        pendingInstantFiles.add(filePath);
+        pendingInstants.add(instant);
       }
     }
 
@@ -556,27 +555,30 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // other monitors on the timeline(such as the compaction or clustering services) would
     // mistakenly recognize the pending file as a pending operation,
     // then all kinds of weird bugs occur.
-    boolean success = deleteArchivedInstantFiles(context, true, pendingInstantFiles);
-    success &= deleteArchivedInstantFiles(context, success, completedInstantFiles);
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    if (!pendingInstants.isEmpty()) {
+      context.foreach(
+          pendingInstants,
+          instant -> activeTimeline.deleteInstantFileIfExists(instant),
+          Math.min(pendingInstants.size(), config.getArchiveDeleteParallelism())
+      );
+    }
+    if (!completedInstants.isEmpty()) {
+      context.foreach(
+          completedInstants,
+          instant -> activeTimeline.deleteInstantFileIfExists(instant),
+          Math.min(completedInstants.size(), config.getArchiveDeleteParallelism())
+      );
+    }
 
     // Remove older meta-data from auxiliary path too
     Option<HoodieInstant> latestCommitted = Option.fromJavaOptional(archivedInstants.stream().filter(i -> i.isCompleted() && (i.getAction().equals(HoodieTimeline.COMMIT_ACTION)
         || (i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)))).max(Comparator.comparing(HoodieInstant::getTimestamp)));
     LOG.info("Latest Committed Instant=" + latestCommitted);
     if (latestCommitted.isPresent()) {
-      success &= deleteAllInstantsOlderOrEqualsInAuxMetaFolder(latestCommitted.get());
+      return deleteAllInstantsOlderOrEqualsInAuxMetaFolder(latestCommitted.get());
     }
-    return success;
-  }
-
-  private boolean deleteArchivedInstantFiles(HoodieEngineContext context, boolean success, List<String> files) {
-    Map<String, Boolean> resultDeleteInstantFiles = deleteFilesParallelize(metaClient, files, context, false);
-
-    for (Map.Entry<String, Boolean> result : resultDeleteInstantFiles.entrySet()) {
-      LOG.info("Archived and deleted instant file " + result.getKey() + " : " + result.getValue());
-      success &= result.getValue();
-    }
-    return success;
+    return true;
   }
 
   /**
