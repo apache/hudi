@@ -41,6 +41,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 /**
   * Hoodie Spark Datasource, for reading and writing hoodie tables
@@ -93,15 +94,6 @@ class DefaultSource extends RelationProvider
       Seq.empty
     }
 
-    // Add default options for unspecified read options keys.
-    val parameters = (if (globPaths.nonEmpty) {
-      Map(
-        "glob.paths" -> globPaths.mkString(",")
-      )
-    } else {
-      Map()
-    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
-
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
       DataSourceUtils.getTablePath(fs, globPaths.toArray)
@@ -111,8 +103,36 @@ class DefaultSource extends RelationProvider
     log.info("Obtained hudi table path: " + tablePath)
 
     val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
+    val sqlConf = sqlContext.sparkSession.sessionState.conf.getAllConfs
+    val queryConf = getQueryConf(sqlConf, metaClient)
+
+    // Add default options for unspecified read options keys.
+    val parameters = (if (globPaths.nonEmpty) {
+      Map(
+        "glob.paths" -> globPaths.mkString(",")
+      )
+    } else {
+      Map()
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(queryConf ++ optParams)
 
     DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
+  }
+
+  def getQueryConf(conf: Map[String, String], metaClient: HoodieTableMetaClient): Map[String,String] = {
+    val queryConf = new mutable.HashMap[String,String]
+
+    val isQueryUseDatabase = conf.getOrElse(QUERY_USE_DATABASE.key(), QUERY_USE_DATABASE.defaultValue().toString).toBoolean
+    val tableConfig = metaClient.getTableConfig
+    val tableName = if (isQueryUseDatabase) {
+      s"${tableConfig.getDatabaseName}.${tableConfig.getTableName}"
+    } else {
+      tableConfig.getTableName
+    }
+
+    conf.keySet.filter(_.contains(s"$tableName.")).foreach( key => {
+       queryConf.put(key.replace(s"$tableName.",""), conf.get(key).get)
+    })
+    queryConf.toMap
   }
 
   def getValidCommits(metaClient: HoodieTableMetaClient): String = {
