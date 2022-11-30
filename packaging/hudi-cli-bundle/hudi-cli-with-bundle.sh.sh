@@ -18,13 +18,19 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 echo "DIR is ${DIR}"
-HOODIE_JAR=`ls $DIR/target/hudi-cli-bundle*.jar | grep -v source | grep -v javadoc`
+CLI_BUNDLE_JAR=`ls $DIR/target/hudi-cli-bundle*.jar | grep -v source | grep -v javadoc`
+SPARK_BUNDLE_JAR=`ls $DIR/../hudi-spark-bundle/target/hudi-spark*-bundle*.jar | grep -v source | grep -v javadoc`
 
 . "${DIR}"/conf/hudi-env.sh
+
+if [ -z "$SPARK_HOME" ]; then
+  echo "setting spark home"
+  export SPARK_HOME="/usr/local/spark/"
+fi
 
 if [ -z "$CLIENT_JAR" ]; then
   echo "Client jar location not set, please set it in conf/hudi-env.sh"
 fi
 
-echo "Running : java -cp ${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${HOODIE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@"
-java -cp ${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${HOODIE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@
+echo "Running : java -cp /usr/local/spark/jars/*:${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${CLI_BUNDLE_JAR}:${SPARK_BUNDLE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@"
+java -cp /usr/local/spark/*:/usr/local/spark/jars/*:${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${CLI_BUNDLE_JAR}:${SPARK_BUNDLE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@

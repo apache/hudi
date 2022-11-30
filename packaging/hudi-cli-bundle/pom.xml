@@ -92,21 +92,18 @@
                                     <include>org.springframework.boot:*</include>
                                     <include>org.apache.logging.log4j:*</include>
                                     <include>org.scala-lang:scala-library</include>
-                                    <include>org.apache.parquet:parquet-hadoop</include>
-                                    <include>com.google.guava:guava</include>
                                     <include>org.apache.httpcomponents:httpclient</include>
                                     <include>org.apache.httpcomponents:httpcore</include>
                                     <include>org.apache.httpcomponents:fluent-hc</include>
                                     <include>org.jline:*</include>
                                     <include>org.yaml:*</include>
                                     <include>commons-logging:*</include>
-                                    <include>org.apache.avro:avro</include>
                                     <include>org.hibernate.validator:hibernate-validator</include>
-                                    <include>javax.validation:validation-api</include>
                                     <include>jakarta.validation:jakarta.validation-api</include>
                                     <include>org.jboss.logging:jboss-logging</include>
                                     <include>com.fasterxml:classmate</include>
                                     <include>org.glassfish:jakarta.el</include>
+                                    <include>jakarta.el:jakarta.el-api</include>
                                     <include>com.fasterxml.woodstox:woodstox-core</include>
                                     <include>org.codehaus.woodstox:stax2-api</include>
                                     <include>commons-collections:commons-collections</include>
@@ -117,9 +114,14 @@
                                     <include>net.java.dev.jna:jna</include>
                                     <include>com.jakewharton.fliptables:fliptables</include>
                                     <include>com.google.re2j:re2j</include>
-                                    <include>org.openjdk.jol:jol-core</include>
                                 </includes>
                             </artifactSet>
+                            <relocations>
+                                <relocation>
+                                    <pattern>com.google.code.gson.</pattern>
+                                    <shadedPattern>org.apache.hudi.com.google.code.gson.</shadedPattern>
+                                </relocation>
+                            </relocations>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
@@ -132,7 +134,6 @@
                                     </excludes>
                                 </filter>
                             </filters>
-                            <finalName>${project.artifactId}-${project.version}</finalName>
                         </configuration>
                     </execution>
                 </executions>
@@ -200,10 +201,10 @@
             </exclusions>
         </dependency>
 
-        <!-- Avro -->
         <dependency>
-            <groupId>org.apache.avro</groupId>
-            <artifactId>avro</artifactId>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.6.2</version>
             <scope>compile</scope>
         </dependency>
 
@@ -230,15 +231,21 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>javax.validation</groupId>
-            <artifactId>validation-api</artifactId>
-            <version>1.1.0.Final</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
             <groupId>org.glassfish</groupId>
             <artifactId>jakarta.el</artifactId>
             <version>3.0.3</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.el</groupId>
+            <artifactId>jakarta.el-api</artifactId>
+            <version>3.0.3</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+            <version>2.0.2</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
