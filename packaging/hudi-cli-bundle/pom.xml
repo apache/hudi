@@ -84,36 +84,40 @@
                             </transformers>
                             <artifactSet>
                                 <includes combine.children="append">
+                                    <!-- hudi -->
                                     <include>org.apache.hudi:hudi-cli</include>
                                     <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
 
                                     <!-- cli related dependencies -->
-                                    <include>org.springframework*:*</include>
-                                    <include>org.springframework.boot:*</include>
-                                    <include>org.apache.logging.log4j:*</include>
-                                    <include>org.scala-lang:scala-library</include>
-                                    <include>org.apache.httpcomponents:httpclient</include>
-                                    <include>org.apache.httpcomponents:httpcore</include>
-                                    <include>org.apache.httpcomponents:fluent-hc</include>
-                                    <include>org.jline:*</include>
-                                    <include>org.yaml:*</include>
-                                    <include>commons-logging:*</include>
-                                    <include>org.hibernate.validator:hibernate-validator</include>
-                                    <include>jakarta.validation:jakarta.validation-api</include>
-                                    <include>org.jboss.logging:jboss-logging</include>
-                                    <include>com.fasterxml:classmate</include>
-                                    <include>org.glassfish:jakarta.el</include>
-                                    <include>jakarta.el:jakarta.el-api</include>
-                                    <include>com.fasterxml.woodstox:woodstox-core</include>
-                                    <include>org.codehaus.woodstox:stax2-api</include>
                                     <include>commons-collections:commons-collections</include>
                                     <include>commons-configuration:*</include>
                                     <include>commons-lang:*</include>
+                                    <include>commons-logging:*</include>
+                                    <include>com.fasterxml:classmate</include>
+                                    <include>com.fasterxml.woodstox:woodstox-core</include>
                                     <include>com.google.code.gson:gson</include>
-                                    <include>org.fusesource.jansi:jansi</include>
-                                    <include>net.java.dev.jna:jna</include>
-                                    <include>com.jakewharton.fliptables:fliptables</include>
                                     <include>com.google.re2j:re2j</include>
+                                    <include>com.jakewharton.fliptables:fliptables</include>
+
+                                    <include>jakarta.el:jakarta.el-api</include>
+                                    <include>jakarta.validation:jakarta.validation-api</include>
+                                    <include>net.java.dev.jna:jna</include>
+
+                                    <include>org.apache.httpcomponents:httpclient</include>
+                                    <include>org.apache.httpcomponents:httpcore</include>
+                                    <include>org.apache.httpcomponents:fluent-hc</include>
+                                    <include>org.apache.logging.log4j:*</include>
+                                    <include>org.codehaus.woodstox:stax2-api</include>
+                                    <include>org.fusesource.jansi:jansi</include>
+                                    <include>org.glassfish:jakarta.el</include>
+                                    <include>org.hibernate.validator:hibernate-validator</include>
+                                    <include>org.jboss.logging:jboss-logging</include>
+                                    <include>org.jline:*</include>
+                                    <include>org.scala-lang:scala-library</include>
+                                    <include>org.springframework*:*</include>
+                                    <include>org.springframework.boot:*</include>
+                                    <include>org.yaml:*</include>
+
                                 </includes>
                             </artifactSet>
                             <relocations>

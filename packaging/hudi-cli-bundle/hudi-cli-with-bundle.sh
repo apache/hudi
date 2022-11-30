@@ -32,5 +32,5 @@ if [ -z "$CLIENT_JAR" ]; then
   echo "Client jar location not set, please set it in conf/hudi-env.sh"
 fi
 
-echo "Running : java -cp /usr/local/spark/jars/*:${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${CLI_BUNDLE_JAR}:${SPARK_BUNDLE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@"
+echo "Running : java -cp /usr/local/spark/*:/usr/local/spark/jars/*:${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${CLI_BUNDLE_JAR}:${SPARK_BUNDLE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@"
 java -cp /usr/local/spark/*:/usr/local/spark/jars/*:${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${CLI_BUNDLE_JAR}:${SPARK_BUNDLE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@
