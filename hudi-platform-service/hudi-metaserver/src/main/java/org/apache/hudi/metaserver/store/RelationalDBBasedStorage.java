@@ -232,7 +232,7 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
 
   public static void validate(List<?> list, String errMsg) throws MetaserverStorageException {
     try {
-      ValidationUtils.checkState(list != null && list.size() > 1, "Found multiple records of " + errMsg + " , expected one");
+      ValidationUtils.checkState(!(list != null && list.size() > 1), "Found multiple records of " + errMsg + " , expected one");
     } catch (IllegalStateException e) {
       throw new MetaserverStorageException(e.getMessage());
     }

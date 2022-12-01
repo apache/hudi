@@ -20,7 +20,6 @@ package org.apache.hudi.metaserver.store;
 
 import org.apache.hudi.metaserver.HoodieMetaserver;
 import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
-import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 import org.apache.hudi.metaserver.thrift.TAction;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
@@ -55,7 +54,7 @@ public class TestRelationalDBBasedStore {
     testTimelineRelatedAPIs();
   }
 
-  private void testTableRelatedAPIs() throws MetaserverStorageException, NoSuchObjectException {
+  private void testTableRelatedAPIs() throws MetaserverStorageException {
     assertTrue(store.createDatabase(db));
     Long dbId = store.getDatabaseId(db);
     assertNotNull(dbId);

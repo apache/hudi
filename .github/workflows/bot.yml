@@ -41,9 +41,6 @@ jobs:
           java-version: '8'
           distribution: 'adopt'
           architecture: x64
-      - name: Generate Thrift Source Code
-        run:
-          sh hudi-metaserver/bin/compile_thrift_by_docker.sh
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -131,4 +128,8 @@ jobs:
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
-
+      - name: Platform Service Build and Test
+        run:
+          sh hudi-platform-service/hudi-metaserver/bin/compile_thrift_by_docker.sh &&
+          mvn install -pl :hudi-metaserver -DskipTests=true -Phudi-platform-service &&
+          mvn test -Phudi-platform-service -pl :hudi-metaserver

@@ -16,8 +16,11 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-THRIFT_FILE_PATH=$PWD/hudi-metaserver/src/main/thrift
+mkdir $PWD/hudi-platform-service/hudi-metaserver/target
+mkdir $PWD/hudi-platform-service/hudi-metaserver/target/generated-sources
+THRIFT_FILE_PATH=$PWD/hudi-platform-service/hudi-metaserver/src/main/thrift
+THRIFT_OUT_PATH=$PWD/hudi-platform-service/hudi-metaserver/target/generated-sources
 THRIFT_VERSION=0.12.0
 THRIFT_IMAGE=thrift:$THRIFT_VERSION
 docker pull $THRIFT_IMAGE
-docker run -v "$THRIFT_FILE_PATH:/thrift" $THRIFT_IMAGE thrift -o /thrift/ --gen java /thrift/hudi-metaserver.thrift
+docker run -v "$THRIFT_FILE_PATH:/thrift" -v "$THRIFT_OUT_PATH:/output" $THRIFT_IMAGE thrift -o /output/ --gen java /thrift/hudi-metaserver.thrift

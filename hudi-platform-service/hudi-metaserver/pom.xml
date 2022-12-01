@@ -51,6 +51,43 @@
             <artifactId>hudi-client-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-1.2-api</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jul-to-slf4j</artifactId>
+            <version>${slf4j.version}</version>
+            <scope>compile</scope>
+        </dependency>
         <!-- Apache License 2.0 https://github.com/apache/thrift/blob/master/LICENSE-->
         <dependency>
             <groupId>org.apache.thrift</groupId>
@@ -118,7 +155,7 @@
                         <configuration>
                             <thriftExecutable>${thrift.home}/bin/thrift</thriftExecutable>
                             <thriftSourceRoot>src/main/thrift</thriftSourceRoot>
-                            <outputDirectory>target/generated-sources/thrift/gen-java</outputDirectory>
+                            <outputDirectory>target/generated-sources/gen-java</outputDirectory>
                             <generator>java</generator>
                         </configuration>
                         <executions>
@@ -156,7 +193,7 @@
                         <configuration>
                             <sources>
                                 <source>src/main/java</source>
-                                <source>src/main/thrift/gen-java</source>
+                                <source>target/generated-sources/gen-java</source>
                             </sources>
                         </configuration>
                     </execution>
@@ -170,7 +207,7 @@
                             <sources>
                                 <source>src/test/java</source>
                                 <source>src/main/java</source>
-                                <source>src/main/thrift/gen-java</source>
+                                <source>target/generated-sources/gen-java</source>
                             </sources>
                         </configuration>
                     </execution>
@@ -207,7 +244,26 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <artifactSet>
+                                <includes>
+                                    <include>org.apache.hudi:hudi-common</include>
+                                    <include>org.apache.hudi:hudi-client-common</include>
+                                    <include>org.apache.thrift:libthrift</include>
+                                    <include>org.apache.logging.log4j:log4j-api</include>
+                                    <include>org.apache.logging.log4j:log4j-core</include>
+                                    <include>org.apache.logging.log4j:log4j-1.2-api</include>
+                                    <include>org.apache.logging.log4j:log4j-slf4j-impl</include>
+                                    <include>org.slf4j:slf4j-api</include>
+                                    <include>org.slf4j:jul-to-slf4j</include>
+                                    <include>org.apache.thrift:libthrift</include>
+                                    <include>org.mybatis:mybatis</include>
+                                    <include>com.zaxxer:HikariCP</include>
+                                    <include>mysql:mysql-connector-java</include>
+                                </includes>
+                            </artifactSet>
                             <createSourcesJar>${shadeSources}</createSourcesJar>
+                            <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
+                            </dependencyReducedPomLocation>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>org.apache.hudi.metaserver.HoodieMetaserver</mainClass>
@@ -223,7 +279,6 @@
                             </transformers>
                             <filters>
                                 <filter>
-                                    <artifact>*:*</artifact>
                                     <excludes>
                                         <exclude>META-INF/*.SF</exclude>
                                         <exclude>META-INF/*.DSA</exclude>
