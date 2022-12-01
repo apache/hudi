@@ -166,8 +166,6 @@ class TestStructTypeSchemaEvolutionUtils extends FunSuite with Matchers with Bef
     doubles.add(2.0d)
     doubles.add(3.0d)
     avroRecord.put("doubles", doubles)
-    // do check
-    assert(GenericData.get.validate(schema, avroRecord))
     // create newSchema
     val newRecord = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get), Types.Field.get(1, true, "data", Types.StringType.get), Types.Field.get(2, true, "preferences", Types.RecordType.get(Types.Field.get(5, false, "feature1", Types.BooleanType.get), Types.Field.get(5, true, "featurex", Types.BooleanType.get), Types.Field.get(6, true, "feature2", Types.BooleanType.get))), Types.Field.get(3, false, "doubles", Types.ArrayType.get(7, false, Types.DoubleType.get)), Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get, Types.RecordType.get(Types.Field.get(10, true, "laty", Types.FloatType.get), Types.Field.get(11, false, "long", Types.FloatType.get)), false)))
     val newAvroSchema = AvroInternalSchemaConverter.convert(newRecord, schema.getName)

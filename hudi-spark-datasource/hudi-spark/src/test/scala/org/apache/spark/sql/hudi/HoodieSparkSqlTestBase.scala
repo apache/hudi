@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.log4j.Level
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -203,6 +204,8 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> format) ++ recordConfig.getOrElse(recordType, Map.empty)
       withSQLConf(config.toList:_*) {
         f
+        // We need to clear indexed location in memory after each test.
+        HoodieInMemoryHashIndex.clear()
       }
     }
   }
