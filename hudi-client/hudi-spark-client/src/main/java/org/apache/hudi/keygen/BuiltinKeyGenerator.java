@@ -48,6 +48,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.CollectionUtils.tail;
+import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_COMPOSITE_KEY_FILED_VALUE;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
@@ -151,11 +152,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final String combineRecordKey(Object... recordKeyParts) {
+  protected final String combineRecordKey(List<String> fieldNames, List<Object> recordKeyParts) {
     return combineRecordKeyInternal(
         StringPartitionPathFormatter.JavaStringBuilder::new,
         BuiltinKeyGenerator::toString,
         BuiltinKeyGenerator::handleNullRecordKey,
+        fieldNames,
         recordKeyParts
     );
   }
@@ -164,11 +166,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final UTF8String combineRecordKeyUnsafe(Object... recordKeyParts) {
+  protected final UTF8String combineRecordKeyUnsafe(List<String> fieldNames, List<Object> recordKeyParts) {
     return combineRecordKeyInternal(
         UTF8StringPartitionPathFormatter.UTF8StringBuilder::new,
         BuiltinKeyGenerator::toUTF8String,
         BuiltinKeyGenerator::handleNullRecordKey,
+        fieldNames,
         recordKeyParts
     );
   }
@@ -205,18 +208,20 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       Supplier<PartitionPathFormatterBase.StringBuilder<S>> builderFactory,
       Function<Object, S> converter,
       Function<S, S> emptyKeyPartHandler,
-      Object... recordKeyParts
+      List<String> fieldNames,
+      List<Object> recordKeyParts
   ) {
-    if (recordKeyParts.length == 1) {
-      return emptyKeyPartHandler.apply(converter.apply(recordKeyParts[0]));
+    if (recordKeyParts.size() == 1) {
+      return emptyKeyPartHandler.apply(converter.apply(recordKeyParts.get(0)));
     }
 
     PartitionPathFormatterBase.StringBuilder<S> sb = builderFactory.get();
-    for (int i = 0; i < recordKeyParts.length; ++i) {
+    for (int i = 0; i < recordKeyParts.size(); ++i) {
+      sb.appendJava(fieldNames.get(i)).appendJava(DEFAULT_COMPOSITE_KEY_FILED_VALUE);
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
-      sb.append(emptyKeyPartHandler.apply(converter.apply(recordKeyParts[i])));
+      sb.append(emptyKeyPartHandler.apply(converter.apply(recordKeyParts.get(i))));
 
-      if (i < recordKeyParts.length - 1) {
+      if (i < recordKeyParts.size() - 1) {
         sb.appendJava(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       }
     }
