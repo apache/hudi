@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
@@ -26,23 +27,17 @@ import org.apache.hudi.util.RowDataProjection;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
-
 import org.apache.hadoop.conf.Configuration;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.Map;
 
 /**
- * Base interface for hoodie parquet readers.
+ * Factory clazz for record iterators.
  */
-public interface HoodieParquetReader extends Closeable {
+public abstract class RecordIterators {
 
-  boolean reachedEnd() throws IOException;
-
-  RowData nextRecord();
-
-  static HoodieParquetReader getReader(
+  public static ClosableIterator<RowData> getParquetRecordIterator(
       InternalSchemaManager internalSchemaManager,
       boolean utcTimestamp,
       boolean caseSensitive,
@@ -55,10 +50,9 @@ public interface HoodieParquetReader extends Closeable {
       Path path,
       long splitStart,
       long splitLength) throws IOException {
-    Option<RowDataProjection> castProjection;
     InternalSchema fileSchema = internalSchemaManager.getFileSchema(path.getName());
     if (fileSchema.isEmptySchema()) {
-      return new HoodieParquetSplitReader(
+      return new ParquetSplitRecordIterator(
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,
               caseSensitive,
@@ -73,27 +67,25 @@ public interface HoodieParquetReader extends Closeable {
               splitLength));
     } else {
       CastMap castMap = internalSchemaManager.getCastMap(fileSchema, fieldNames, fieldTypes, selectedFields);
-      castProjection = castMap.toRowDataProjection(selectedFields);
-      fieldNames = internalSchemaManager.getFileFieldNames(fileSchema, fieldNames);
-      fieldTypes = castMap.getFileFieldTypes();
-    }
-    HoodieParquetReader reader = new HoodieParquetSplitReader(
-        ParquetSplitReaderUtil.genPartColumnarRowReader(
-          utcTimestamp,
-          caseSensitive,
-          conf,
-          fieldNames,
-          fieldTypes,
-          partitionSpec,
-          selectedFields,
-          batchSize,
-          path,
-          splitStart,
-          splitLength));
-    if (castProjection.isPresent()) {
-      return new HoodieParquetEvolvedSplitReader(reader, castProjection.get());
-    } else {
-      return reader;
+      Option<RowDataProjection> castProjection = castMap.toRowDataProjection(selectedFields);
+      ClosableIterator<RowData> itr = new ParquetSplitRecordIterator(
+          ParquetSplitReaderUtil.genPartColumnarRowReader(
+              utcTimestamp,
+              caseSensitive,
+              conf,
+              internalSchemaManager.getFileFieldNames(fileSchema, fieldNames), // the reconciled field names
+              castMap.getFileFieldTypes(),                                     // the reconciled field types
+              partitionSpec,
+              selectedFields,
+              batchSize,
+              path,
+              splitStart,
+              splitLength));
+      if (castProjection.isPresent()) {
+        return new SchemaEvolvedRecordIterator(itr, castProjection.get());
+      } else {
+        return itr;
+      }
     }
   }
 }

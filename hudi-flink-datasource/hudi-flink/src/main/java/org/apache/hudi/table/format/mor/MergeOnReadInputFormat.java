@@ -29,12 +29,13 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
-import org.apache.hudi.table.format.HoodieParquetReader;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.RowDataProjection;
@@ -94,7 +95,7 @@ public class MergeOnReadInputFormat
   /**
    * Uniform iterator view for the underneath records.
    */
-  private transient RecordIterator iterator;
+  private transient ClosableIterator<RowData> iterator;
 
   // for project push down
   /**
@@ -178,17 +179,17 @@ public class MergeOnReadInputFormat
     mayShiftInputSplit(split);
   }
 
-  protected RecordIterator initIterator(MergeOnReadInputSplit split) throws IOException {
+  protected ClosableIterator<RowData> initIterator(MergeOnReadInputSplit split) throws IOException {
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
       if (split.getInstantRange() != null) {
         // base file only with commit time filtering
         return new BaseFileOnlyFilteringIterator(
             split.getInstantRange(),
             this.tableState.getRequiredRowType(),
-            getReader(split.getBasePath().get(), getRequiredPosWithCommitTime(this.requiredPos)));
+            getBaseFileIterator(split.getBasePath().get(), getRequiredPosWithCommitTime(this.requiredPos)));
       } else {
         // base file only
-        return new BaseFileOnlyIterator(getRequiredSchemaReader(split.getBasePath().get()));
+        return getBaseFileIterator(split.getBasePath().get());
       }
     } else if (!split.getBasePath().isPresent()) {
       // log files only
@@ -199,7 +200,7 @@ public class MergeOnReadInputFormat
       }
     } else if (split.getMergeType().equals(FlinkOptions.REALTIME_SKIP_MERGE)) {
       return new SkipMergeIterator(
-          getRequiredSchemaReader(split.getBasePath().get()),
+          getBaseFileIterator(split.getBasePath().get()),
           getLogFileIterator(split));
     } else if (split.getMergeType().equals(FlinkOptions.REALTIME_PAYLOAD_COMBINE)) {
       return new MergeIterator(
@@ -214,7 +215,7 @@ public class MergeOnReadInputFormat
           this.requiredPos,
           this.emitDelete,
           this.tableState.getOperationPos(),
-          getFullSchemaReader(split.getBasePath().get()));
+          getBaseFileIteratorWithMetadata(split.getBasePath().get()));
     } else {
       throw new HoodieException("Unable to select an Iterator to read the Hoodie MOR File Split for "
           + "file path: " + split.getBasePath()
@@ -253,14 +254,14 @@ public class MergeOnReadInputFormat
       return true;
     } else {
       // log file reaches end ?
-      return this.iterator.reachedEnd();
+      return !this.iterator.hasNext();
     }
   }
 
   @Override
   public RowData nextRecord(RowData o) {
     currentReadCount++;
-    return this.iterator.nextRecord();
+    return this.iterator.next();
   }
 
   @Override
@@ -295,19 +296,19 @@ public class MergeOnReadInputFormat
     }
   }
 
-  protected HoodieParquetReader getFullSchemaReader(String path) {
+  protected ClosableIterator<RowData> getBaseFileIteratorWithMetadata(String path) {
     try {
-      return getReader(path, IntStream.range(0, this.tableState.getRowType().getFieldCount()).toArray());
+      return getBaseFileIterator(path, IntStream.range(0, this.tableState.getRowType().getFieldCount()).toArray());
     } catch (IOException e) {
       throw new HoodieException("Get reader error for path: " + path);
     }
   }
 
-  protected HoodieParquetReader getRequiredSchemaReader(String path) throws IOException {
-    return getReader(path, this.requiredPos);
+  protected ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
+    return getBaseFileIterator(path, this.requiredPos);
   }
 
-  private HoodieParquetReader getReader(String path, int[] requiredPos) throws IOException {
+  private ClosableIterator<RowData> getBaseFileIterator(String path, int[] requiredPos) throws IOException {
     // generate partition specs.
     LinkedHashMap<String, String> partSpec = FilePathUtils.extractPartitionKeyValues(
         new org.apache.hadoop.fs.Path(path).getParent(),
@@ -329,7 +330,7 @@ public class MergeOnReadInputFormat
       }
     });
 
-    return HoodieParquetReader.getReader(
+    return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
         true,
@@ -529,46 +530,12 @@ public class MergeOnReadInputFormat
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
-  protected interface RecordIterator {
-    boolean reachedEnd() throws IOException;
-
-    RowData nextRecord();
-
-    void close() throws IOException;
-  }
-
-  protected static class BaseFileOnlyIterator implements RecordIterator {
-    // base file reader
-    private final HoodieParquetReader reader;
-
-    public BaseFileOnlyIterator(HoodieParquetReader reader) {
-      this.reader = reader;
-    }
-
-    @Override
-    public boolean reachedEnd() throws IOException {
-      return this.reader.reachedEnd();
-    }
-
-    @Override
-    public RowData nextRecord() {
-      return this.reader.nextRecord();
-    }
-
-    @Override
-    public void close() throws IOException {
-      if (this.reader != null) {
-        this.reader.close();
-      }
-    }
-  }
-
   /**
-   * Similar with {@link BaseFileOnlyIterator} but with instant time filtering.
+   * Base record iterator with instant time filtering.
    */
-  static class BaseFileOnlyFilteringIterator implements RecordIterator {
-    // base file reader
-    private final HoodieParquetReader reader;
+  static class BaseFileOnlyFilteringIterator implements ClosableIterator<RowData> {
+    // base file record iterator
+    private final ClosableIterator<RowData> nested;
     private final InstantRange instantRange;
     private final RowDataProjection projection;
 
@@ -577,44 +544,44 @@ public class MergeOnReadInputFormat
     BaseFileOnlyFilteringIterator(
         Option<InstantRange> instantRange,
         RowType requiredRowType,
-        HoodieParquetReader reader) {
-      this.reader = reader;
+        ClosableIterator<RowData> nested) {
+      this.nested = nested;
       this.instantRange = instantRange.orElse(null);
       int[] positions = IntStream.range(1, 1 + requiredRowType.getFieldCount()).toArray();
       projection = RowDataProjection.instance(requiredRowType, positions);
     }
 
     @Override
-    public boolean reachedEnd() throws IOException {
-      while (!this.reader.reachedEnd()) {
-        currentRecord = this.reader.nextRecord();
+    public boolean hasNext() {
+      while (this.nested.hasNext()) {
+        currentRecord = this.nested.next();
         if (instantRange != null) {
           boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
           if (isInRange) {
-            return false;
+            return true;
           }
         } else {
-          return false;
+          return true;
         }
       }
-      return true;
+      return false;
     }
 
     @Override
-    public RowData nextRecord() {
+    public RowData next() {
       // can promote: no need to project with null instant range
       return projection.project(currentRecord);
     }
 
     @Override
-    public void close() throws IOException {
-      if (this.reader != null) {
-        this.reader.close();
+    public void close() {
+      if (this.nested != null) {
+        this.nested.close();
       }
     }
   }
 
-  protected static class LogFileOnlyIterator implements RecordIterator {
+  protected static class LogFileOnlyIterator implements ClosableIterator<RowData> {
     // iterator for log files
     private final ClosableIterator<RowData> iterator;
 
@@ -623,12 +590,12 @@ public class MergeOnReadInputFormat
     }
 
     @Override
-    public boolean reachedEnd() {
-      return !this.iterator.hasNext();
+    public boolean hasNext() {
+      return this.iterator.hasNext();
     }
 
     @Override
-    public RowData nextRecord() {
+    public RowData next() {
       return this.iterator.next();
     }
 
@@ -640,9 +607,9 @@ public class MergeOnReadInputFormat
     }
   }
 
-  static class SkipMergeIterator implements RecordIterator {
-    // base file reader
-    private final HoodieParquetReader reader;
+  static class SkipMergeIterator implements ClosableIterator<RowData> {
+    // base file record iterator
+    private final ClosableIterator<RowData> nested;
     // iterator for log files
     private final ClosableIterator<RowData> iterator;
 
@@ -653,34 +620,34 @@ public class MergeOnReadInputFormat
 
     private RowData currentRecord;
 
-    SkipMergeIterator(HoodieParquetReader reader, ClosableIterator<RowData> iterator) {
-      this.reader = reader;
+    SkipMergeIterator(ClosableIterator<RowData> nested, ClosableIterator<RowData> iterator) {
+      this.nested = nested;
       this.iterator = iterator;
     }
 
     @Override
-    public boolean reachedEnd() throws IOException {
-      if (!readLogs && !this.reader.reachedEnd()) {
-        currentRecord = this.reader.nextRecord();
-        return false;
+    public boolean hasNext() {
+      if (!readLogs && this.nested.hasNext()) {
+        currentRecord = this.nested.next();
+        return true;
       }
       readLogs = true;
       if (this.iterator.hasNext()) {
         currentRecord = this.iterator.next();
-        return false;
+        return true;
       }
-      return true;
+      return false;
     }
 
     @Override
-    public RowData nextRecord() {
+    public RowData next() {
       return currentRecord;
     }
 
     @Override
-    public void close() throws IOException {
-      if (this.reader != null) {
-        this.reader.close();
+    public void close() {
+      if (this.nested != null) {
+        this.nested.close();
       }
       if (this.iterator != null) {
         this.iterator.close();
@@ -688,9 +655,9 @@ public class MergeOnReadInputFormat
     }
   }
 
-  protected static class MergeIterator implements RecordIterator {
-    // base file reader
-    private final HoodieParquetReader reader;
+  protected static class MergeIterator implements ClosableIterator<RowData> {
+    // base file record iterator
+    private final ClosableIterator<RowData> nested;
     // log keys used for merging
     private final Iterator<String> logKeysIterator;
     // scanner
@@ -730,12 +697,12 @@ public class MergeOnReadInputFormat
         int[] requiredPos,
         boolean emitDelete,
         int operationPos,
-        HoodieParquetReader reader) { // the reader should be with full schema
+        ClosableIterator<RowData> nested) { // the iterator should be with full schema
       this(flinkConf, hadoopConf, split, tableRowType, requiredRowType, tableSchema,
           querySchema,
           Option.of(RowDataProjection.instance(requiredRowType, requiredPos)),
           Option.of(record -> buildAvroRecordBySchema(record, requiredSchema, requiredPos, new GenericRecordBuilder(requiredSchema))),
-          emitDelete, operationPos, reader);
+          emitDelete, operationPos, nested);
     }
 
     public MergeIterator(
@@ -750,9 +717,9 @@ public class MergeOnReadInputFormat
         Option<Function<IndexedRecord, GenericRecord>> avroProjection,
         boolean emitDelete,
         int operationPos,
-        HoodieParquetReader reader) { // the reader should be with full schema
+        ClosableIterator<RowData> nested) { // the iterator should be with full schema
       this.tableSchema = tableSchema;
-      this.reader = reader;
+      this.nested = nested;
       this.scanner = FormatUtils.logScanner(split, tableSchema, querySchema, flinkConf, hadoopConf);
       this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
       this.logKeysIterator = scanner.getRecords().keySet().iterator();
@@ -766,9 +733,9 @@ public class MergeOnReadInputFormat
     }
 
     @Override
-    public boolean reachedEnd() throws IOException {
-      while (!readLogs && !this.reader.reachedEnd()) {
-        currentRecord = this.reader.nextRecord();
+    public boolean hasNext() {
+      while (!readLogs && this.nested.hasNext()) {
+        currentRecord = this.nested.next();
         if (instantRange != null) {
           boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
           if (!isInRange) {
@@ -794,14 +761,14 @@ public class MergeOnReadInputFormat
                 : mergedAvroRecord.get();
             this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
             this.currentRecord.setRowKind(rowKind);
-            return false;
+            return true;
           }
         }
         // project the full record in base with required positions
         if (projection.isPresent()) {
           currentRecord = projection.get().project(currentRecord);
         }
-        return false;
+        return true;
       }
       // read the logs
       readLogs = true;
@@ -816,42 +783,48 @@ public class MergeOnReadInputFormat
                 : insertAvroRecord.get();
             this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
             FormatUtils.setRowKind(this.currentRecord, insertAvroRecord.get(), this.operationPos);
-            return false;
+            return true;
           }
         }
       }
-      return true;
+      return false;
     }
 
-    private Option<IndexedRecord> getInsertValue(String curKey) throws IOException {
+    private Option<IndexedRecord> getInsertValue(String curKey) {
       final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       if (!emitDelete && HoodieOperation.isDelete(record.getOperation())) {
         return Option.empty();
       }
-      return record.getData().getInsertValue(tableSchema);
+      try {
+        return record.getData().getInsertValue(tableSchema);
+      } catch (IOException e) {
+        throw new HoodieIOException("Get insert value from payload exception", e);
+      }
     }
 
     @Override
-    public RowData nextRecord() {
+    public RowData next() {
       return currentRecord;
     }
 
     @Override
-    public void close() throws IOException {
-      if (this.reader != null) {
-        this.reader.close();
+    public void close() {
+      if (this.nested != null) {
+        this.nested.close();
       }
       if (this.scanner != null) {
         this.scanner.close();
       }
     }
 
-    private Option<IndexedRecord> mergeRowWithLog(
-        RowData curRow,
-        String curKey) throws IOException {
+    private Option<IndexedRecord> mergeRowWithLog(RowData curRow, String curKey) {
       final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
-      return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema, payloadProps);
+      try {
+        return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema, payloadProps);
+      } catch (IOException e) {
+        throw new HoodieIOException("Merge base and delta payloads exception", e);
+      }
     }
   }
 
