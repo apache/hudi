@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
 
 import org.apache.flink.table.data.RowData;
@@ -27,25 +29,33 @@ import java.io.IOException;
 /**
  * Hoodie wrapper for flink parquet reader.
  */
-public final class HoodieParquetSplitReader implements HoodieParquetReader {
+public final class ParquetSplitRecordIterator implements ClosableIterator<RowData> {
   private final ParquetColumnarRowSplitReader reader;
 
-  public HoodieParquetSplitReader(ParquetColumnarRowSplitReader reader) {
+  public ParquetSplitRecordIterator(ParquetColumnarRowSplitReader reader) {
     this.reader = reader;
   }
 
   @Override
-  public boolean reachedEnd() throws IOException {
-    return reader.reachedEnd();
+  public boolean hasNext() {
+    try {
+      return !reader.reachedEnd();
+    } catch (IOException e) {
+      throw new HoodieIOException("Decides whether the parquet columnar row split reader reached end exception", e);
+    }
   }
 
   @Override
-  public RowData nextRecord() {
+  public RowData next() {
     return reader.nextRecord();
   }
 
   @Override
-  public void close() throws IOException {
-    reader.close();
+  public void close() {
+    try {
+      reader.close();
+    } catch (IOException e) {
+      throw new HoodieIOException("Close the parquet columnar row split reader exception", e);
+    }
   }
 }

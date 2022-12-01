@@ -20,8 +20,9 @@ package org.apache.hudi.table.format.cow;
 
 import java.util.Comparator;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.table.format.HoodieParquetReader;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.api.common.io.FileInputFormat;
@@ -75,7 +76,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final SerializableConfiguration conf;
   private final long limit;
 
-  private transient HoodieParquetReader reader;
+  private transient ClosableIterator<RowData> itr;
   private transient long currentReadCount;
 
   /**
@@ -128,7 +129,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       }
     });
 
-    this.reader = HoodieParquetReader.getReader(
+    this.itr = RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
         utcTimestamp,
         true,
@@ -276,26 +277,26 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   }
 
   @Override
-  public boolean reachedEnd() throws IOException {
+  public boolean reachedEnd() {
     if (currentReadCount >= limit) {
       return true;
     } else {
-      return reader.reachedEnd();
+      return !itr.hasNext();
     }
   }
 
   @Override
   public RowData nextRecord(RowData reuse) {
     currentReadCount++;
-    return reader.nextRecord();
+    return itr.next();
   }
 
   @Override
   public void close() throws IOException {
-    if (reader != null) {
-      this.reader.close();
+    if (itr != null) {
+      this.itr.close();
     }
-    this.reader = null;
+    this.itr = null;
   }
 
   /**
