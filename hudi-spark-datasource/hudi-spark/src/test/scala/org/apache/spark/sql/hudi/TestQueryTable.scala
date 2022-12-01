@@ -57,8 +57,8 @@ class TestQueryTable extends HoodieSparkSqlTestBase {
     val commits = spark.sql(s"call show_commits(table => '$tableName')").select("commit_time").map(k => k.getString(0)).take(10)
     val beginTime = commits(commits.length - 2)
 
-    spark.sql(s"set hoodie.$tableName.datasource.query.type=incremental")
-    spark.sql(s"set hoodie.$tableName.datasource.read.begin.instanttime=$beginTime")
+    spark.sql(s"set hoodie.$tableName.datasource.query.type = incremental")
+    spark.sql(s"set hoodie.$tableName.datasource.read.begin.instanttime = $beginTime")
     spark.sql(s"refresh table $tableName")
     checkAnswer(s"select id, name, price, ts, dt from $tableName")(
       Seq(3, "a3", 30.0, 3000, "2022-11-26"),
@@ -66,25 +66,127 @@ class TestQueryTable extends HoodieSparkSqlTestBase {
       Seq(5, "a5", 50.0, 5000, "2022-12-27")
     )
 
-    spark.sql(s"set hoodie.query.use.database=true")
+    spark.sql(s"set hoodie.query.use.database = true")
     spark.sql(s"refresh table $tableName")
     val cnt = spark.sql(s"select * from $tableName").count()
     assertResult(5)(cnt)
 
-    spark.sql(s"set hoodie.default.$tableName.datasource.query.type=incremental")
-    spark.sql(s"set hoodie.default.$tableName.datasource.read.begin.instanttime=$beginTime")
+    spark.sql(s"set hoodie.default.$tableName.datasource.query.type = incremental")
+    spark.sql(s"set hoodie.default.$tableName.datasource.read.begin.instanttime = $beginTime")
     val endTime = commits(1)
-    spark.sql(s"set hoodie.default.$tableName.datasource.read.end.instanttime=$endTime")
+    spark.sql(s"set hoodie.default.$tableName.datasource.read.end.instanttime = $endTime")
     spark.sql(s"refresh table $tableName")
     checkAnswer(s"select id, name, price, ts, dt from $tableName")(
       Seq(3, "a3", 30.0, 3000, "2022-11-26"),
       Seq(4, "a4", 40.0, 4000, "2022-12-26")
     )
 
-    spark.sql(s"set hoodie.default.$tableName.datasource.read.incr.path.glob=/dt=2022-11*/*")
+    spark.sql(s"set hoodie.default.$tableName.datasource.read.incr.path.glob = /dt=2022-11*/*")
     spark.sql(s"refresh table $tableName")
     checkAnswer(s"select id, name, price, ts, dt from $tableName")(
       Seq(3, "a3", 30.0, 3000, "2022-11-26")
+    )
+  }
+
+  test("Test snapshot query with set parameters") {
+    val tableName = generateTableName
+
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  dt string
+         |) using hudi
+         | partitioned by (dt)
+         | options (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts',
+         |  type = 'cow'
+         | )
+         |""".stripMargin)
+
+    spark.sql(s"insert into $tableName values (1,'a1', 10, 1000, '2022-11-25')")
+    spark.sql(s"insert into $tableName values (2,'a2', 20, 2000, '2022-11-25')")
+    spark.sql(s"update $tableName set price = 22 where id = 2")
+
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2022-11-25"),
+      Seq(2, "a2", 22.0, 2000, "2022-11-25")
+    )
+
+    import spark.implicits._
+    val commits = spark.sql(s"call show_commits(table => '$tableName')").select("commit_time").map(k => k.getString(0)).take(10)
+    val beginTime = commits(commits.length - 2)
+
+    spark.sql(s"set $tableName.as.of.instant = $beginTime")
+    spark.sql(s"refresh table $tableName")
+    checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 2")(
+      Seq(2, "a2", 20, 2000, "2022-11-25")
+    )
+    spark.sql(s"set hoodie.query.use.database = true")
+    spark.sql(s"refresh table $tableName")
+    checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 2")(
+      Seq(2, "a2", 22, 2000, "2022-11-25")
+    )
+
+    spark.sql(s"set default.$tableName.as.of.instant = $beginTime")
+    spark.sql(s"refresh table $tableName")
+    checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 2")(
+      Seq(2, "a2", 20, 2000, "2022-11-25")
+    )
+  }
+
+  test("Test read_optimized query with set parameters") {
+    val tableName = generateTableName
+
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  dt string
+         |) using hudi
+         | partitioned by (dt)
+         | options (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts',
+         |  type = 'mor'
+         | )
+         |""".stripMargin)
+
+    spark.sql(s"insert into $tableName values (1,'a1', 10, 1000, '2022-11-25')")
+    spark.sql(s"insert into $tableName values (2,'a2', 20, 2000, '2022-11-25')")
+    spark.sql(s"update $tableName set price = 22 where id = 2")
+
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2022-11-25"),
+      Seq(2, "a2", 22.0, 2000, "2022-11-25")
+    )
+
+    spark.sql(s"set hoodie.$tableName.datasource.query.type = read_optimized")
+    spark.sql(s"refresh table $tableName")
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2022-11-25"),
+      Seq(2, "a2", 20.0, 2000, "2022-11-25")
+    )
+
+    spark.sql(s"set hoodie.query.use.database = true")
+    spark.sql(s"refresh table $tableName")
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2022-11-25"),
+      Seq(2, "a2", 22.0, 2000, "2022-11-25")
+    )
+
+    spark.sql(s"set hoodie.default.$tableName.datasource.query.type = read_optimized")
+    spark.sql(s"refresh table $tableName")
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2022-11-25"),
+      Seq(2, "a2", 20.0, 2000, "2022-11-25")
     )
   }
 }
