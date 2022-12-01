@@ -202,6 +202,24 @@ public class OptionsResolver {
     return !conf.contains(FlinkOptions.READ_START_COMMIT) && !conf.contains(FlinkOptions.READ_END_COMMIT);
   }
 
+<<<<<<< HEAD
+=======
+  /**
+   * Returns the supplemental logging mode.
+   */
+  public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
+    String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE);
+    return HoodieCDCSupplementalLoggingMode.parse(mode);
+  }
+
+  /**
+   * Returns whether comprehensive schema evolution enabled.
+   */
+  public static boolean isSchemaEvolutionEnabled(Configuration conf) {
+    return conf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue());
+  }
+
+>>>>>>> 07cc3e89a7 ([HUDI-5306] Unify RecordIterator and HoodieParquetReader with ClosableIterator (#7340))
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -167,6 +168,33 @@ public class FormatUtils {
                 HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
         .withInstantRange(split.getInstantRange())
         .withLogRecordScannerCallback(callback)
+        .build();
+  }
+
+  public static HoodieMergedLogRecordScanner logScanner(
+      MergeOnReadInputSplit split,
+      Schema logSchema,
+      InternalSchema internalSchema,
+      org.apache.flink.configuration.Configuration flinkConf,
+      Configuration hadoopConf) {
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
+    FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
+    return HoodieMergedLogRecordScanner.newBuilder()
+        .withFileSystem(fs)
+        .withBasePath(split.getTablePath())
+        .withLogFilePaths(split.getLogPaths().get())
+        .withReaderSchema(logSchema)
+        .withInternalSchema(internalSchema)
+        .withLatestInstantTime(split.getLatestCommit())
+        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
+        .withReverseReader(false)
+        .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
+        .withMaxMemorySizeInBytes(split.getMaxCompactionMemoryInBytes())
+        .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
+        .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+        .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
+        .withInstantRange(split.getInstantRange())
+        .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
         .build();
   }
 
