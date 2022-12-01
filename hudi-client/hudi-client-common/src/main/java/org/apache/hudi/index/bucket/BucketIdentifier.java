@@ -21,14 +21,13 @@ package org.apache.hudi.index.bucket;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.keygen.KeyGenUtils;
 
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class BucketIdentifier implements Serializable {
   // Compatible with the spark bucket name
@@ -69,11 +68,7 @@ public class BucketIdentifier implements Serializable {
   }
 
   private static List<String> getHashKeysUsingIndexFields(String recordKey, List<String> indexKeyFields) {
-    Map<String, String> recordKeyPairs = Arrays.stream(recordKey.split(","))
-        .map(p -> p.split(":"))
-        .collect(Collectors.toMap(p -> p[0], p -> p[1]));
-    return indexKeyFields.stream()
-        .map(recordKeyPairs::get).collect(Collectors.toList());
+    return Arrays.asList(KeyGenUtils.extractRecordKeysByFields(recordKey, indexKeyFields));
   }
 
   public static String partitionBucketIdStr(String partition, int bucketId) {
