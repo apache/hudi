@@ -39,9 +39,7 @@
     <mappers>
         <mapper resource="mybatis/DDLMapper.xml"/>
         <mapper resource="mybatis/TableMapper.xml"/>
-        <mapper resource="mybatis/PartitionMapper.xml"/>
         <mapper resource="mybatis/TimelineMapper.xml"/>
-        <mapper resource="mybatis/FileMapper.xml"/>
     </mappers>
 
 </configuration>

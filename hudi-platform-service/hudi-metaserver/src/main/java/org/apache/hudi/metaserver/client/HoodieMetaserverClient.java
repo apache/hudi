@@ -18,7 +18,8 @@
 
 package org.apache.hudi.metaserver.client;
 
-import org.apache.hadoop.fs.FileStatus;
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metaserver.thrift.Table;
@@ -28,6 +29,7 @@ import java.util.List;
 /**
  * Hoodie meta server client, is to get/put instants, instant meta, snapshot from/to hoodie meta server.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface HoodieMetaserverClient {
 
   Table getTable(String db, String tb);
@@ -45,10 +47,6 @@ public interface HoodieMetaserverClient {
   void transitionInstantState(String db, String tb, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> content);
 
   void deleteInstant(String db, String tb, HoodieInstant instant);
-
-  FileStatus[] listFilesInPartition(String db, String tb, String partition, String timestamp);
-
-  List<String> listAllPartitions(String db, String tb);
 
   boolean isLocal();
 

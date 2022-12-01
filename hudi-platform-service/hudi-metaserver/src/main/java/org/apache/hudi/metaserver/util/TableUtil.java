@@ -18,12 +18,12 @@
 
 package org.apache.hudi.metaserver.util;
 
-import org.apache.hudi.metaserver.store.MetadataStore;
-import org.apache.hudi.metaserver.thrift.MetaStoreException;
+import org.apache.hudi.metaserver.store.MetaserverStorage;
+import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 
 public class TableUtil {
-  public static Long getTableId(String db, String tb, MetadataStore store) throws NoSuchObjectException, MetaStoreException {
+  public static Long getTableId(String db, String tb, MetaserverStorage store) throws NoSuchObjectException, MetaserverStorageException {
     Long tableId = store.getTableId(db, tb);
     if (tableId == null) {
       throw new NoSuchObjectException(db + "." + tb + " does not exist");

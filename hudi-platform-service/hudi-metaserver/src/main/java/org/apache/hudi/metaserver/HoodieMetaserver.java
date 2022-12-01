@@ -18,15 +18,15 @@
 
 package org.apache.hudi.metaserver;
 
+import jdk.jfr.Experimental;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metaserver.service.HoodieMetaserverService;
 import org.apache.hudi.metaserver.service.HoodieMetaserverProxyHandler;
-import org.apache.hudi.metaserver.service.PartitionService;
 import org.apache.hudi.metaserver.service.TableService;
 import org.apache.hudi.metaserver.service.TimelineService;
-import org.apache.hudi.metaserver.store.RelationDBBasedStore;
-import org.apache.hudi.metaserver.store.MetadataStore;
-import org.apache.hudi.metaserver.thrift.MetaStoreException;
+import org.apache.hudi.metaserver.store.RelationalDBBasedStorage;
+import org.apache.hudi.metaserver.store.MetaserverStorage;
+import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.ThriftHoodieMetaserver;
 import org.apache.hudi.metaserver.util.TServerSocketWrapper;
 import org.apache.log4j.LogManager;
@@ -40,13 +40,14 @@ import java.lang.reflect.Proxy;
 /**
  * Main class of hoodie meta server.
  */
+@Experimental
 public class HoodieMetaserver {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMetaserver.class);
 
   private static TServer server;
   private static Thread serverThread;
-  private static MetadataStore metadataStore;
+  private static MetaserverStorage metaserverStorage;
   private static HoodieMetaserverService metaserverService;
 
   public static void main(String[] args) {
@@ -58,13 +59,11 @@ public class HoodieMetaserver {
       if (server != null) {
         return;
       }
-      metadataStore = new RelationDBBasedStore();
+      metaserverStorage = new RelationalDBBasedStorage();
       // service
-      TableService tableService = new TableService(metadataStore);
-      PartitionService partitionService = new PartitionService(metadataStore);
-      TimelineService timelineService = new TimelineService(metadataStore);
-      HoodieMetaserverService hoodieMetaserverService = new HoodieMetaserverService(tableService,
-          partitionService, timelineService);
+      TableService tableService = new TableService(metaserverStorage);
+      TimelineService timelineService = new TimelineService(metaserverStorage);
+      HoodieMetaserverService hoodieMetaserverService = new HoodieMetaserverService(tableService, timelineService);
       HoodieMetaserverProxyHandler proxyHandler = new HoodieMetaserverProxyHandler(hoodieMetaserverService);
 
       // start a thrift server
@@ -84,20 +83,19 @@ public class HoodieMetaserver {
   }
 
   public static ThriftHoodieMetaserver.Iface getEmbeddedMetaserver() {
-    if (metadataStore == null) {
+    if (metaserverStorage == null) {
       synchronized (HoodieMetaserver.class) {
-        if (metadataStore == null) {
+        if (metaserverStorage == null) {
           // TODO: add metastore factory.
-          metadataStore = new RelationDBBasedStore();
+          metaserverStorage = new RelationalDBBasedStorage();
           try {
-            metadataStore.initStore();
-          } catch (MetaStoreException e) {
+            metaserverStorage.initStorage();
+          } catch (MetaserverStorageException e) {
             throw new HoodieIOException("Fail to init the embedded metastore," + e);
           }
-          TableService tableService = new TableService(metadataStore);
-          PartitionService partitionService = new PartitionService(metadataStore);
-          TimelineService timelineService = new TimelineService(metadataStore);
-          metaserverService = new HoodieMetaserverService(tableService, partitionService, timelineService);
+          TableService tableService = new TableService(metaserverStorage);
+          TimelineService timelineService = new TimelineService(metaserverStorage);
+          metaserverService = new HoodieMetaserverService(tableService, timelineService);
         }
       }
     }
@@ -105,8 +103,8 @@ public class HoodieMetaserver {
   }
 
   // only for test
-  public static MetadataStore getMetadataStore() {
-    return metadataStore;
+  public static MetaserverStorage getMetadataStore() {
+    return metaserverStorage;
   }
 
   public static void stop() {
@@ -116,8 +114,8 @@ public class HoodieMetaserver {
       serverThread.interrupt();
       server = null;
     }
-    if (metadataStore != null) {
-      metadataStore.close();
+    if (metaserverStorage != null) {
+      metaserverStorage.close();
     }
   }
 }

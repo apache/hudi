@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieMetaserverBasedTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metaserver.client.HoodieMetaserverClient;
@@ -58,7 +59,7 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
                                      String databaseName, String tableName, HoodieMetaserverConfig config) {
     super(conf, config.getString(HoodieWriteConfig.BASE_PATH), false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
         config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), fileSystemRetryConfig);
-    if (databaseName == null || tableName == null) {
+    if (StringUtils.isNullOrEmpty(databaseName) || StringUtils.isNullOrEmpty(tableName)) {
       throw new HoodieException("The database and table name have to be specified");
     }
     this.databaseName = databaseName;

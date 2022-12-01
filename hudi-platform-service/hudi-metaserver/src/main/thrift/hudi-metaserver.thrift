@@ -68,11 +68,11 @@ struct HoodieInstantChangeResult {
   4: optional string msg
 }
 
-exception MetaStoreException {
+exception MetaserverStorageException {
   1: string message
 }
 
-exception MetaException {
+exception MetaserverException {
   1: string message
 }
 
@@ -86,21 +86,15 @@ exception AlreadyExistException {
 
 service ThriftHoodieMetaserver {
   // table related
-  void create_database(1:string db)
-  void create_table(1:Table table)
-  Table get_table(1:string db, 2:string tb)
+  void createDatabase(1:string db)
+  void createTable(1:Table table)
+  Table getTable(1:string db, 2:string tb)
 
   // timeline related
-  list<THoodieInstant> list_instants(1:string db, 2:string tb, 3:i32 num)
-  binary get_instant_meta(1:string db, 2:string tb, 3:THoodieInstant instant)
-  string create_new_instant_time(1:string db, 2:string tb)
-  HoodieInstantChangeResult create_new_instant_with_time(1:string db, 2:string tb, 3:THoodieInstant instant, 4:optional binary content)
-  HoodieInstantChangeResult transition_instant_state(1:string db, 2:string tb, 3: THoodieInstant fromInstant, 4: THoodieInstant toInstant, 5:optional binary metadata)
-  HoodieInstantChangeResult delete_instant(1:string db, 2:string tb, 3:THoodieInstant instant)
-
-  // snapshot related
-  binary list_files_in_partition(1:string db, 2:string tb, 3:string partition, 4:optional string timestamp)
-
-  // partition related
-  list<string> list_all_partitions(1:string db, 2:string tb)
+  list<THoodieInstant> listInstants(1:string db, 2:string tb, 3:i32 num)
+  binary getInstantMeta(1:string db, 2:string tb, 3:THoodieInstant instant)
+  string createNewInstantTime(1:string db, 2:string tb)
+  HoodieInstantChangeResult createNewInstantWithTime(1:string db, 2:string tb, 3:THoodieInstant instant, 4:optional binary content)
+  HoodieInstantChangeResult transitionInstantState(1:string db, 2:string tb, 3: THoodieInstant fromInstant, 4: THoodieInstant toInstant, 5:optional binary metadata)
+  HoodieInstantChangeResult deleteInstant(1:string db, 2:string tb, 3:THoodieInstant instant)
 }

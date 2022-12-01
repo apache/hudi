@@ -30,9 +30,9 @@ Then compile the module with maven options `-Pthrift`.
 
 Firstly, make sure there is a docker in the local.
 
-Secondly run the script `sh hudi-metaserver/bin/compile_thrift_by_docker.sh`.
+Secondly run the script `sh hudi-platform-service/hudi-metaserver/bin/compile_thrift_by_docker.sh`.
 
-Then the source code of thrift file generates and it is under the `src/main/thrift/gen-java`.
+Then the source code of thrift file generates and it is under the `target/generated-sources/thrift/gen-java`.
 ```shell
 ├── gen-java
 │   └── org
@@ -43,16 +43,14 @@ Then the source code of thrift file generates and it is under the `src/main/thri
 │                       ├── AlreadyExistException.java
 │                       ├── FieldSchema.java
 │                       ├── ...
-└── hudi-metaserver.thrift
-
 ```
 
-After source code generates, just compile the module with common maven commands.
+After source code generates, just compile the module with common maven commands(exclude `mvn clean`).
 
 
-# How to run a job with Hudi meta server
+# How to run a job with Hudi Metaserver
 
-### Start Hudi meta server
+### Start Hudi Metaserver
 1. modify the `hikariPool.properties` and config the mysql address. For example,
 ```text
 jdbcUrl=jdbc:mysql://localhost:3306
@@ -78,11 +76,9 @@ hoodie.metaserver.uris=thrift://${serverIP}:9090
 
 # How to test
 
-### Run a unit test with hudi meta server
+### Run a unit test with Hudi Metaserver
 Add the configurations mentioned in the `Write client configurations` part, and
 set `hoodie.metaserver.uris=""`.
 
 The meta server runs as an embedded one with h2 database that performs like mysql running locally.
-
-
 

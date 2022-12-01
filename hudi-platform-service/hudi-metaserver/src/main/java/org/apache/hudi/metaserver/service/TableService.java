@@ -19,10 +19,10 @@
 package org.apache.hudi.metaserver.service;
 
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.metaserver.store.MetadataStore;
+import org.apache.hudi.metaserver.store.MetaserverStorage;
 import org.apache.hudi.metaserver.thrift.AlreadyExistException;
-import org.apache.hudi.metaserver.thrift.MetaException;
-import org.apache.hudi.metaserver.thrift.MetaStoreException;
+import org.apache.hudi.metaserver.thrift.MetaserverException;
+import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 import org.apache.hudi.metaserver.thrift.Table;
 
@@ -32,23 +32,23 @@ import java.io.Serializable;
  * Handle all database / table related requests.
  */
 public class TableService implements Serializable {
-  private MetadataStore store;
+  private MetaserverStorage store;
 
-  public TableService(MetadataStore metadataStore) {
-    this.store = metadataStore;
+  public TableService(MetaserverStorage metaserverStorage) {
+    this.store = metaserverStorage;
   }
 
-  public void createDatabase(String db) throws AlreadyExistException, MetaStoreException, MetaException {
+  public void createDatabase(String db) throws AlreadyExistException, MetaserverStorageException, MetaserverException {
     // todo: define the database entry in the thrift
     if (databaseExists(db)) {
       throw new AlreadyExistException("Database " + db + " already exists");
     }
     if (!store.createDatabase(db)) {
-      throw new MetaException("Fail to create the database: " + db);
+      throw new MetaserverException("Fail to create the database: " + db);
     }
   }
 
-  public Table getTable(String db, String tb) throws MetaStoreException, NoSuchObjectException {
+  public Table getTable(String db, String tb) throws MetaserverStorageException, NoSuchObjectException {
     Table table = store.getTable(db, tb);
     if (table == null) {
       throw new NoSuchObjectException(db + "." + tb + " does not exist");
@@ -58,7 +58,7 @@ public class TableService implements Serializable {
     return table;
   }
 
-  public void createTable(Table table) throws MetaStoreException, NoSuchObjectException, AlreadyExistException, MetaException {
+  public void createTable(Table table) throws MetaserverStorageException, NoSuchObjectException, AlreadyExistException, MetaserverException {
     Long dbId = store.getDatabaseId(table.getDbName());
     if (dbId == null) {
       createDatabase(table.getDbName());
@@ -68,16 +68,16 @@ public class TableService implements Serializable {
       throw new AlreadyExistException(table.getDbName() + "." + table.getTableName() + " already exists");
     }
     if (!store.createTable(dbId, table)) {
-      throw new MetaException("Fail to create the table: " + table);
+      throw new MetaserverException("Fail to create the table: " + table);
     }
     // todo: add params
   }
 
-  private boolean databaseExists(String db) throws MetaStoreException {
+  private boolean databaseExists(String db) throws MetaserverStorageException {
     return store.getDatabaseId(db) != null;
   }
 
-  private boolean tableExists(String db, String tb) throws MetaStoreException {
+  private boolean tableExists(String db, String tb) throws MetaserverStorageException {
     return store.getTableId(db, tb) != null;
   }
 }

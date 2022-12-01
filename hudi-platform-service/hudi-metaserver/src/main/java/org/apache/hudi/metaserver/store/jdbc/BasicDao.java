@@ -18,7 +18,7 @@ package org.apache.hudi.metaserver.store.jdbc;
  * limitations under the License.
  */
 
-import org.apache.hudi.metaserver.thrift.MetaStoreException;
+import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.ibatis.session.SqlSession;
 
 import java.io.Serializable;
@@ -64,7 +64,7 @@ public class BasicDao implements Serializable {
     }
   }
 
-  public void batchOperateBySql(List<BatchDaoOperation> batchDaoOperations) throws MetaStoreException {
+  public void batchOperateBySql(List<BatchDaoOperation> batchDaoOperations) throws MetaserverStorageException {
     try (SqlSession session = SqlSessionFactoryUtil.openSqlSession()) {
       for (BatchDaoOperation batchDaoOperation: batchDaoOperations) {
         switch (batchDaoOperation.getOperationType()) {
@@ -78,7 +78,7 @@ public class BasicDao implements Serializable {
             session.delete(statement(batchDaoOperation.getNamespace(), batchDaoOperation.getSqlID()), batchDaoOperation.getParameter());
             break;
           default:
-            throw new MetaStoreException("Unsupported type: " + batchDaoOperation.getOperationType());
+            throw new MetaserverStorageException("Unsupported type: " + batchDaoOperation.getOperationType());
         }
       }
       session.commit();

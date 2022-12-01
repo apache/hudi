@@ -104,7 +104,7 @@
             ts VARCHAR(17) COMMENT 'instant timestamp',
             action TINYINT COMMENT 'commit, deltacommit, compaction, replace etc',
             state TINYINT COMMENT 'completed, requested, inflight, invalid etc',
-            data LONGBLOB COMMENT 'instant metadate',
+            data LONGBLOB COMMENT 'instant metadata',
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'instant meta created time',
             UNIQUE KEY uniq_inst3 (tbl_id, state, ts, action)
         ) COMMENT 'instant meta';
@@ -122,6 +122,6 @@
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
             update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',
             UNIQUE KEY uniq_name (part_id, name)
-        ) COMMENT 'snapshot 文件表';
+        ) COMMENT 'snapshot files';
     </update>
 </mapper>

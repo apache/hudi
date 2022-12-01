@@ -33,68 +33,55 @@ import java.util.List;
  */
 public class HoodieMetaserverService implements ThriftHoodieMetaserver.Iface, Serializable {
   private TableService tableService;
-  private PartitionService partitionService;
   private TimelineService timelineService;
 
-  public HoodieMetaserverService(TableService tableService, PartitionService partitionService,
-                                 TimelineService timelineService) {
+  public HoodieMetaserverService(TableService tableService, TimelineService timelineService) {
     this.tableService = tableService;
-    this.partitionService = partitionService;
     this.timelineService = timelineService;
   }
 
   @Override
-  public void create_database(String db) throws TException {
+  public void createDatabase(String db) throws TException {
     tableService.createDatabase(db);
   }
 
   @Override
-  public void create_table(Table table) throws TException {
+  public void createTable(Table table) throws TException {
     tableService.createTable(table);
   }
 
   @Override
-  public Table get_table(String db, String tb) throws TException {
+  public Table getTable(String db, String tb) throws TException {
     return tableService.getTable(db, tb);
   }
 
   @Override
-  public List<THoodieInstant> list_instants(String db, String tb, int num) throws TException {
+  public List<THoodieInstant> listInstants(String db, String tb, int num) throws TException {
     return timelineService.listInstants(db, tb, num);
   }
 
   @Override
-  public ByteBuffer get_instant_meta(String db, String tb, THoodieInstant instant) throws TException {
+  public ByteBuffer getInstantMeta(String db, String tb, THoodieInstant instant) throws TException {
     return timelineService.getInstantMeta(db, tb, instant);
   }
 
   @Override
-  public String create_new_instant_time(String db, String tb) throws TException {
+  public String createNewInstantTime(String db, String tb) throws TException {
     return timelineService.createNewInstantTime(db, tb);
   }
 
   @Override
-  public HoodieInstantChangeResult create_new_instant_with_time(String db, String tb, THoodieInstant instant, ByteBuffer content) throws TException {
+  public HoodieInstantChangeResult createNewInstantWithTime(String db, String tb, THoodieInstant instant, ByteBuffer content) throws TException {
     return timelineService.createNewInstantWithTime(db, tb, instant, content);
   }
 
   @Override
-  public HoodieInstantChangeResult transition_instant_state(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata) throws TException {
+  public HoodieInstantChangeResult transitionInstantState(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata) throws TException {
     return timelineService.transitionInstantState(db, tb, fromInstant, toInstant, metadata);
   }
 
   @Override
-  public HoodieInstantChangeResult delete_instant(String db, String tb, THoodieInstant instant) throws TException {
+  public HoodieInstantChangeResult deleteInstant(String db, String tb, THoodieInstant instant) throws TException {
     return timelineService.deleteInstant(db, tb, instant);
-  }
-
-  @Override
-  public ByteBuffer list_files_in_partition(String db, String tb, String partition, String timestamp) throws TException {
-    throw new TException("not supported");
-  }
-
-  @Override
-  public List<String> list_all_partitions(String db, String tb) throws TException {
-    return partitionService.listAllPartitions(db, tb);
   }
 }

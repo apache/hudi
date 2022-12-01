@@ -18,11 +18,11 @@
 
 package org.apache.hudi.metaserver.store;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metaserver.store.bean.InstantBean;
 import org.apache.hudi.metaserver.store.bean.TableBean;
 import org.apache.hudi.metaserver.store.jdbc.WrapperDao;
-import org.apache.hudi.metaserver.thrift.MetaStoreException;
-import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
+import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 /**
  * Metadata store based on relation database.
  */
-public class RelationDBBasedStore implements MetadataStore, Serializable {
+public class RelationalDBBasedStorage implements MetaserverStorage, Serializable {
 
   private final WrapperDao tableDao = new WrapperDao.TableDao();
   private final WrapperDao partitionDao = new WrapperDao.PartitionDao();
@@ -48,7 +48,7 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
   private final WrapperDao fileDao = new WrapperDao.FileDao();
 
   @Override
-  public void initStore() throws MetaStoreException {
+  public void initStorage() throws MetaserverStorageException {
     WrapperDao dao = new WrapperDao("DDLMapper");
     dao.updateBySql("createDBs", null);
     dao.updateBySql("createTables", null);
@@ -61,21 +61,21 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
   }
 
   @Override
-  public boolean createDatabase(String db) throws MetaStoreException {
+  public boolean createDatabase(String db) throws MetaserverStorageException {
     Map<String, Object> params = new HashMap<>();
     params.put("databaseName", db);
     return tableDao.insertBySql("insertDB", params) == 1;
   }
 
   @Override
-  public Long getDatabaseId(String db) throws MetaStoreException {
+  public Long getDatabaseId(String db) throws MetaserverStorageException {
     List<Long> ids = tableDao.queryForListBySql("selectDBId", db);
-    assertIfNotSingle(ids, "db " + db);
+    validate(ids, "db " + db);
     return ids.isEmpty() ? null : ids.get(0);
   }
 
   @Override
-  public boolean createTable(Long dbId, Table table) throws MetaStoreException {
+  public boolean createTable(Long dbId, Table table) throws MetaserverStorageException {
     Map<String, Object> params = new HashMap<>();
     params.put("dbId", dbId);
     TableBean tableBean = new TableBean(table);
@@ -84,33 +84,27 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
   }
 
   @Override
-  public Table getTable(String db, String tb) throws MetaStoreException, NoSuchObjectException {
+  public Table getTable(String db, String tb) throws MetaserverStorageException {
     Map<String, Object> params = new HashMap<>();
     params.put("databaseName", db);
     params.put("tableName", tb);
     List<TableBean> table = tableDao.queryForListBySql("selectTable", params);
-    assertIfNotSingle(table, "table " + db + "." + tb);
+    validate(table, "table " + db + "." + tb);
     return table.isEmpty() ? null : table.get(0).toTable();
   }
 
   @Override
-  public Long getTableId(String db, String tb) throws MetaStoreException {
+  public Long getTableId(String db, String tb) throws MetaserverStorageException {
     Map<String, Object> params = new HashMap<>();
     params.put("databaseName", db);
     params.put("tableName", tb);
     List<Long> ids = tableDao.queryForListBySql("selectTableId", params);
-    assertIfNotSingle(ids, "table " + db + "." + tb);
+    validate(ids, "table " + db + "." + tb);
     return ids.isEmpty() ? null : ids.get(0);
   }
 
   @Override
-  public List<String> getAllPartitions(long tableId) throws MetaStoreException {
-    List<String> partitionNames = partitionDao.queryForListBySql("selectAllPartitions", tableId);
-    return partitionNames;
-  }
-
-  @Override
-  public String createNewTimestamp(long tableId) throws MetaStoreException {
+  public String createNewTimestamp(long tableId) throws MetaserverStorageException {
     // todo: support SSS
     SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
     String oldTimestamp;
@@ -133,19 +127,19 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
         }
       } while (!success);
     } catch (ParseException e) {
-      throw new MetaStoreException("Fail to parse the timestamp, " + e.getMessage());
+      throw new MetaserverStorageException("Fail to parse the timestamp, " + e.getMessage());
     }
     return newTimestamp;
   }
 
-  private String getLatestTimestamp(long tableId) throws MetaStoreException {
+  private String getLatestTimestamp(long tableId) throws MetaserverStorageException {
     List<String> timestamps = timelineDao.queryForListBySql("selectTimestampByTableId", tableId);
-    assertIfNotSingle(timestamps, "timestamp");
+    validate(timestamps, "timestamp");
     return timestamps.isEmpty() ? null : timestamps.get(0);
   }
 
   @Override
-  public boolean createInstant(long tableId, THoodieInstant instant) throws MetaStoreException {
+  public boolean createInstant(long tableId, THoodieInstant instant) throws MetaserverStorageException {
     InstantBean instantBean = new InstantBean(tableId, instant);
     Map<String, Object> params = new HashMap<>();
     params.put("instant", instantBean);
@@ -156,7 +150,7 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
   }
 
   @Override
-  public boolean updateInstant(long tableId, THoodieInstant fromInstant, THoodieInstant toInstant) throws MetaStoreException {
+  public boolean updateInstant(long tableId, THoodieInstant fromInstant, THoodieInstant toInstant) throws MetaserverStorageException {
     InstantBean oldInstant = new InstantBean(tableId, fromInstant);
     InstantBean newInstant = new InstantBean(tableId, toInstant);
     Map<String, Object> params = new HashMap<>();
@@ -166,7 +160,7 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
   }
 
   @Override
-  public boolean deleteInstant(long tableId, THoodieInstant instant) throws MetaStoreException {
+  public boolean deleteInstant(long tableId, THoodieInstant instant) throws MetaserverStorageException {
     Map<String, Object> params = new HashMap<>();
     params.put("tableId", tableId);
     params.put("ts", instant.getTimestamp());
@@ -174,9 +168,9 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
   }
 
   @Override
-  public List<THoodieInstant> scanInstants(long tableId, List<TState> states, int limit) throws MetaStoreException {
+  public List<THoodieInstant> scanInstants(long tableId, List<TState> states, int limit) throws MetaserverStorageException {
     if (states == null || states.isEmpty()) {
-      throw new MetaStoreException("State has to be specified when scan instants");
+      throw new MetaserverStorageException("State has to be specified when scan instants");
     }
     Map<String, Object> params = new HashMap<>();
     params.put("tableId", tableId);
@@ -187,21 +181,21 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
   }
 
   @Override
-  public List<THoodieInstant> scanInstants(long tableId, TState state, int limit) throws MetaStoreException {
+  public List<THoodieInstant> scanInstants(long tableId, TState state, int limit) throws MetaserverStorageException {
     return scanInstants(tableId, Arrays.asList(state), limit);
   }
 
   @Override
-  public boolean instantExists(long tableId, THoodieInstant instant) throws MetaStoreException {
+  public boolean instantExists(long tableId, THoodieInstant instant) throws MetaserverStorageException {
     InstantBean instantBean = new InstantBean(tableId, instant);
     List<Long> ids = timelineDao.queryForListBySql("selectInstantId", instantBean);
-    assertIfNotSingle(ids, instantBean.toString());
+    validate(ids, instantBean.toString());
     return !ids.isEmpty();
   }
 
   // todo: check correctness
   @Override
-  public void saveInstantMeta(long tableId, THoodieInstant instant, byte[] metadata) throws MetaStoreException {
+  public void saveInstantMeta(long tableId, THoodieInstant instant, byte[] metadata) throws MetaserverStorageException {
     InstantBean instantBean = new InstantBean(tableId, instant);
     Map<String, Object> params = new HashMap<>();
     params.put("instant", instantBean);
@@ -211,13 +205,13 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
   }
 
   @Override
-  public boolean deleteInstantMeta(long tableId, THoodieInstant instant) throws MetaStoreException {
+  public boolean deleteInstantMeta(long tableId, THoodieInstant instant) throws MetaserverStorageException {
     InstantBean instantBean = new InstantBean(tableId, instant);
     return timelineDao.deleteBySql("deleteInstantMeta", instantBean) == 1;
   }
 
   @Override
-  public boolean deleteInstantAllMeta(long tableId, String timestamp) throws MetaStoreException {
+  public boolean deleteInstantAllMeta(long tableId, String timestamp) throws MetaserverStorageException {
     Map<String, Object> params = new HashMap<>();
     params.put("tableId", tableId);
     params.put("ts", timestamp);
@@ -225,7 +219,7 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
   }
 
   @Override
-  public byte[] getInstantMeta(long tableId, THoodieInstant instant) throws MetaStoreException {
+  public byte[] getInstantMeta(long tableId, THoodieInstant instant) throws MetaserverStorageException {
     InstantBean instantBean = new InstantBean(tableId, instant);
     Map<String, Object> result = timelineDao.queryForObjectBySql("selectInstantMeta", instantBean);
     return result == null ? null : (byte[]) result.get("data");
@@ -236,9 +230,11 @@ public class RelationDBBasedStore implements MetadataStore, Serializable {
 
   }
 
-  public static void assertIfNotSingle(List<?> list, String errMsg) throws MetaStoreException {
-    if (list != null && list.size() > 1) {
-      throw new MetaStoreException("Found multiple records of " + errMsg + " , expected one");
+  public static void validate(List<?> list, String errMsg) throws MetaserverStorageException {
+    try {
+      ValidationUtils.checkState(list != null && list.size() > 1, "Found multiple records of " + errMsg + " , expected one");
+    } catch (IllegalStateException e) {
+      throw new MetaserverStorageException(e.getMessage());
     }
   }
 }

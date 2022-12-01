@@ -18,15 +18,11 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.metaserver.client.HoodieMetaserverClient;
 import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
-
-import java.io.IOException;
 
 /**
  * TableFileSystemView Implementations based on in-memory storage and
@@ -45,10 +41,4 @@ public class HoodieMetaserverFileSystemView extends HoodieTableFileSystemView {
     this.databaseName = metaClient.getTableConfig().getDatabaseName();
     this.tableName = metaClient.getTableConfig().getTableName();
   }
-
-  protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    // TODO: support get snapshot from meta server
-    return new FileStatus[0];
-  }
-
 }

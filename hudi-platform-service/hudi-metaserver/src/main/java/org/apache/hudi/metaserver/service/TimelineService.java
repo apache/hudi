@@ -19,10 +19,10 @@
 package org.apache.hudi.metaserver.service;
 
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.metaserver.store.MetadataStore;
+import org.apache.hudi.metaserver.store.MetaserverStorage;
 import org.apache.hudi.metaserver.thrift.HoodieInstantChangeResult;
-import org.apache.hudi.metaserver.thrift.MetaException;
-import org.apache.hudi.metaserver.thrift.MetaStoreException;
+import org.apache.hudi.metaserver.thrift.MetaserverException;
+import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 import org.apache.hudi.metaserver.thrift.TAction;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
@@ -43,13 +43,13 @@ public class TimelineService implements Serializable {
 
   private static final Logger LOG = Logger.getLogger(TimelineService.class);
 
-  private MetadataStore store;
+  private MetaserverStorage store;
   private static final List<TAction> ALL_ACTIONS = Arrays.asList(TAction.COMMIT, TAction.DELTACOMMIT,
       TAction.CLEAN, TAction.ROLLBACK, TAction.SAVEPOINT, TAction.REPLACECOMMIT, TAction.COMPACTION, TAction.RESTORE);
   private static final List<TState> PENDING_STATES = Arrays.asList(TState.REQUESTED, TState.INFLIGHT);
 
-  public TimelineService(MetadataStore metadataStore) {
-    this.store = metadataStore;
+  public TimelineService(MetaserverStorage metaserverStorage) {
+    this.store = metaserverStorage;
   }
 
   public List<THoodieInstant> listInstants(String db, String tb, int num) throws TException {
@@ -65,7 +65,7 @@ public class TimelineService implements Serializable {
     return ByteBuffer.wrap(store.getInstantMeta(tableId, instant));
   }
 
-  public String createNewInstantTime(String db, String tb) throws MetaStoreException, NoSuchObjectException {
+  public String createNewInstantTime(String db, String tb) throws MetaserverStorageException, NoSuchObjectException {
     Long tableId = TableUtil.getTableId(db, tb, store);
     return store.createNewTimestamp(tableId);
   }
@@ -91,7 +91,7 @@ public class TimelineService implements Serializable {
       case INFLIGHT:
         return transitionInflightToCompleted(db, tb, fromInstant, toInstant, metadata);
       default:
-        throw new MetaException("Unsupported state " + fromInstant.getState() + " when do the state transition.");
+        throw new MetaserverException("Unsupported state " + fromInstant.getState() + " when do the state transition.");
     }
   }
 

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metaserver.service;
 
-import org.apache.hudi.metaserver.thrift.MetaException;
+import org.apache.hudi.metaserver.thrift.MetaserverException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
@@ -56,7 +56,7 @@ public class HoodieMetaserverProxyHandler implements InvocationHandler {
       if (err instanceof TException) {
         throw err;
       } else {
-        throw new MetaException(err.getMessage());
+        throw new MetaserverException(err.getMessage());
       }
     }
     return null;

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metaserver.store.jdbc;
 
-import org.apache.hudi.metaserver.thrift.MetaStoreException;
+import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.ibatis.exceptions.PersistenceException;
 
 import java.util.List;
@@ -34,47 +34,47 @@ public class WrapperDao extends BasicDao {
     this.namespace = namespace;
   }
 
-  public <T> List<T> queryForListBySql(String sqlID, Object parameter) throws MetaStoreException {
+  public <T> List<T> queryForListBySql(String sqlID, Object parameter) throws MetaserverStorageException {
     try {
       return queryForListBySql(namespace, sqlID, parameter);
     } catch (PersistenceException e) {
-      throw new MetaStoreException(e.getMessage());
+      throw new MetaserverStorageException(e.getMessage());
     }
   }
 
-  public <T> T queryForObjectBySql(String sqlID, Object parameter) throws MetaStoreException {
+  public <T> T queryForObjectBySql(String sqlID, Object parameter) throws MetaserverStorageException {
     try {
       return queryForObjectBySql(namespace, sqlID, parameter);
     } catch (PersistenceException e) {
-      throw new MetaStoreException(e.getMessage());
+      throw new MetaserverStorageException(e.getMessage());
     }
   }
 
-  public int insertBySql(String sqlID, Object parameter) throws MetaStoreException {
+  public int insertBySql(String sqlID, Object parameter) throws MetaserverStorageException {
     try {
       return insertBySql(namespace, sqlID, parameter);
     } catch (PersistenceException e) {
-      throw new MetaStoreException(e.getMessage());
+      throw new MetaserverStorageException(e.getMessage());
     }
   }
 
-  public int deleteBySql(String sqlID, Object parameter) throws MetaStoreException {
+  public int deleteBySql(String sqlID, Object parameter) throws MetaserverStorageException {
     try {
       return deleteBySql(namespace, sqlID, parameter);
     } catch (PersistenceException e) {
-      throw new MetaStoreException(e.getMessage());
+      throw new MetaserverStorageException(e.getMessage());
     }
   }
 
-  public int updateBySql(String sqlID, Object parameter) throws MetaStoreException {
+  public int updateBySql(String sqlID, Object parameter) throws MetaserverStorageException {
     try {
       return updateBySql(namespace, sqlID, parameter);
     } catch (PersistenceException e) {
-      throw new MetaStoreException(e.getMessage());
+      throw new MetaserverStorageException(e.getMessage());
     }
   }
 
-  public void batchOperateBySql(List<BatchDaoOperation> batchDaoOperations) throws MetaStoreException {
+  public void batchOperateBySql(List<BatchDaoOperation> batchDaoOperations) throws MetaserverStorageException {
     try {
       batchDaoOperations.forEach(x -> {
         if (x.getNamespace() == null) {
@@ -83,7 +83,7 @@ public class WrapperDao extends BasicDao {
       });
       super.batchOperateBySql(batchDaoOperations);
     } catch (PersistenceException e) {
-      throw new MetaStoreException(e.getMessage());
+      throw new MetaserverStorageException(e.getMessage());
     }
   }
 

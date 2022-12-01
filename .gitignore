@@ -2,7 +2,6 @@
 /build/
 target/
 .mvn/
-hudi-metaserver/src/main/thrift/gen-java/
 
 # OS Files #
 .DS_Store

@@ -20,9 +20,12 @@ package org.apache.hudi.metaserver;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 public class TestHoodieMetaserver {
   @Test
   public void testEmbeddedServer() {
-    HoodieMetaserver.getMetadataStore();
+    assertNotNull(HoodieMetaserver.getEmbeddedMetaserver());
+    assertNotNull(HoodieMetaserver.getMetadataStore());
   }
 }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metaserver.client;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -37,7 +36,6 @@ import org.apache.thrift.transport.TTransportException;
 
 import java.io.Serializable;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.Supplier;
@@ -76,14 +74,12 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, Serial
     TTransportException exception = null;
     for (int i = 0; !isConnected && i < retryLimit; i++) {
       try {
-        URI msUri = new URI(uri);
+        URI msUri = URI.create(uri);
         this.transport = new TSocket(msUri.getHost(), msUri.getPort());
         this.client = new ThriftHoodieMetaserver.Client(new TBinaryProtocol(transport));
         transport.open();
         this.isConnected = true;
         LOG.info("Connected to meta server: " + msUri);
-      } catch (URISyntaxException e) {
-        throw new HoodieException("Invalid meta server uri: " + uri, e);
       } catch (TTransportException e) {
         exception = e;
         LOG.warn("Fail to connect to the meta server.", e);
@@ -100,55 +96,47 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, Serial
 
   @Override
   public Table getTable(String db, String tb) {
-    return exceptionWrapper(() -> this.client.get_table(db, tb)).get();
+    return exceptionWrapper(() -> this.client.getTable(db, tb)).get();
   }
 
   @Override
   public void createTable(Table table) {
     try {
-      this.client.create_table(table);
+      this.client.createTable(table);
     } catch (TException e) {
       throw new HoodieException(e);
     }
   }
 
   public List<HoodieInstant> listInstants(String db, String tb, int commitNum) {
-    return exceptionWrapper(() -> this.client.list_instants(db, tb, commitNum).stream()
+    return exceptionWrapper(() -> this.client.listInstants(db, tb, commitNum).stream()
         .map(EntityConvertor::fromTHoodieInstant)
         .collect(Collectors.toList())).get();
   }
 
   public Option<byte[]> getInstantMeta(String db, String tb, HoodieInstant instant) {
-    ByteBuffer bytes = exceptionWrapper(() -> this.client.get_instant_meta(db, tb, EntityConvertor.toTHoodieInstant(instant))).get();
+    ByteBuffer bytes = exceptionWrapper(() -> this.client.getInstantMeta(db, tb, EntityConvertor.toTHoodieInstant(instant))).get();
     Option<byte[]> res = bytes.capacity() == 0 ? Option.empty() : Option.of(bytes.array());
     return res;
   }
 
   public String createNewTimestamp(String db, String tb) {
-    return exceptionWrapper(() -> this.client.create_new_instant_time(db, tb)).get();
+    return exceptionWrapper(() -> this.client.createNewInstantTime(db, tb)).get();
   }
 
   public void createNewInstant(String db, String tb, HoodieInstant instant, Option<byte[]> content) {
-    exceptionWrapper(() -> this.client.create_new_instant_with_time(db, tb, EntityConvertor.toTHoodieInstant(instant), getByteBuffer(content))).get();
+    exceptionWrapper(() -> this.client.createNewInstantWithTime(db, tb, EntityConvertor.toTHoodieInstant(instant), getByteBuffer(content))).get();
   }
 
   public void transitionInstantState(String db, String tb, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> content) {
-    exceptionWrapper(() -> this.client.transition_instant_state(db, tb,
+    exceptionWrapper(() -> this.client.transitionInstantState(db, tb,
         EntityConvertor.toTHoodieInstant(fromInstant),
         EntityConvertor.toTHoodieInstant(toInstant),
         getByteBuffer(content))).get();
   }
 
   public void deleteInstant(String db, String tb, HoodieInstant instant) {
-    exceptionWrapper(() -> this.client.delete_instant(db, tb, EntityConvertor.toTHoodieInstant(instant))).get();
-  }
-
-  public FileStatus[] listFilesInPartition(String db, String tb, String partition, String timestamp) {
-    throw new HoodieException("not supported");
-  }
-
-  public List<String> listAllPartitions(String db, String tb) {
-    return exceptionWrapper(() -> this.client.list_all_partitions(db, tb)).get();
+    exceptionWrapper(() -> this.client.deleteInstant(db, tb, EntityConvertor.toTHoodieInstant(instant))).get();
   }
 
   private ByteBuffer getByteBuffer(Option<byte[]> content) {

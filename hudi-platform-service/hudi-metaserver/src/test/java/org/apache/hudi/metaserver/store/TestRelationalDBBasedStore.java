@@ -19,7 +19,7 @@
 package org.apache.hudi.metaserver.store;
 
 import org.apache.hudi.metaserver.HoodieMetaserver;
-import org.apache.hudi.metaserver.thrift.MetaStoreException;
+import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 import org.apache.hudi.metaserver.thrift.TAction;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 public class TestRelationalDBBasedStore {
 
-  private MetadataStore store;
+  private MetaserverStorage store;
   private final String db = "test_db";
   private final String tb = "test_tb";
 
@@ -55,7 +55,7 @@ public class TestRelationalDBBasedStore {
     testTimelineRelatedAPIs();
   }
 
-  private void testTableRelatedAPIs() throws MetaStoreException, NoSuchObjectException {
+  private void testTableRelatedAPIs() throws MetaserverStorageException, NoSuchObjectException {
     assertTrue(store.createDatabase(db));
     Long dbId = store.getDatabaseId(db);
     assertNotNull(dbId);
@@ -72,14 +72,14 @@ public class TestRelationalDBBasedStore {
     assertEquals(store.getTable(db, tb).toString(), table.toString());
   }
 
-  private void testTimelineRelatedAPIs() throws MetaStoreException {
+  private void testTimelineRelatedAPIs() throws MetaserverStorageException {
     Long tableId = store.getTableId(db, tb);
     String ts = store.createNewTimestamp(tableId);
     assertTrue(Long.valueOf(store.createNewTimestamp(tableId)) > Long.valueOf(ts));
     THoodieInstant requested = new THoodieInstant(ts, TAction.COMMIT, TState.REQUESTED);
     assertTrue(store.createInstant(tableId, requested));
     assertTrue(store.instantExists(tableId, requested));
-    assertThrows(MetaStoreException.class,
+    assertThrows(MetaserverStorageException.class,
         () -> store.createInstant(tableId, new THoodieInstant(ts, TAction.REPLACECOMMIT, TState.REQUESTED)));
     // update instant and check it
     THoodieInstant inflight = new THoodieInstant(ts, TAction.COMMIT, TState.INFLIGHT);
