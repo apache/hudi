@@ -98,7 +98,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
     // In case Advanced Schema Evolution is enabled we might need to rewrite currently
     // persisted records to adhere to an evolved schema
-    Option<Pair<Function<HoodieRecord, HoodieRecord>, Schema>> schemaEvolutionTransformerOpt =
+    Option<Pair<Function<Schema, Function<HoodieRecord, HoodieRecord>>, Schema>> schemaEvolutionTransformerOpt =
         composeSchemaEvolutionTransformer(writerSchema, baseFile, writeConfig, table.getMetaClient());
 
     // Check whether the writer schema is simply a projection of the file's one, ie
@@ -131,7 +131,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             bootstrapFileReader.getRecordIterator(),
             (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));      } else if (schemaEvolutionTransformerOpt.isPresent()) {
         recordIterator = new MappingIterator<>(baseFileRecordIterator,
-            schemaEvolutionTransformerOpt.get().getLeft());
+            schemaEvolutionTransformerOpt.get().getLeft().apply(isPureProjection ? writerSchema : readerSchema));
         recordSchema = schemaEvolutionTransformerOpt.get().getRight();
       } else {
         recordIterator = baseFileRecordIterator;
@@ -172,7 +172,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     }
   }
 
-  private Option<Pair<Function<HoodieRecord, HoodieRecord>, Schema>> composeSchemaEvolutionTransformer(Schema writerSchema,
+  private Option<Pair<Function<Schema, Function<HoodieRecord, HoodieRecord>>, Schema>> composeSchemaEvolutionTransformer(Schema writerSchema,
                                                                                            HoodieBaseFile baseFile,
                                                                                            HoodieWriteConfig writeConfig,
                                                                                            HoodieTableMetaClient metaClient) {
@@ -214,10 +214,10 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       if (needToReWriteRecord) {
         Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
         return Option.of(Pair.of(
-            (record) -> {
+            (schema) -> (record) -> {
               try {
                 return record.rewriteRecordWithNewSchema(
-                    writerSchema,
+                    schema,
                     writeConfig.getProps(),
                     newWriterSchema, renameCols);
               } catch (IOException e) {
