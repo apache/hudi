@@ -140,7 +140,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   protected lazy val (tableAvroSchema: Schema, internalSchemaOpt: Option[InternalSchema]) = {
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val internalSchemaOpt = if (!isSchemaEvolutionEnabled) {
+    val internalSchemaOpt = if (!HoodieParamUtils.isSchemaEvolutionEnabledOnRead(optParams, sparkSession)) {
       None
     } else {
       Try {
@@ -639,15 +639,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   private def prunePartitionColumns(dataStructSchema: StructType): StructType =
     StructType(dataStructSchema.filterNot(f => partitionColumns.contains(f.name)))
-
-  private def isSchemaEvolutionEnabled = {
-    // NOTE: Schema evolution could be configured both t/h optional parameters vehicle as well as
-    //       t/h Spark Session configuration (for ex, for Spark SQL)
-    optParams.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
-      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean ||
-      sparkSession.conf.get(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
-        DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
-  }
 }
 
 object HoodieBaseRelation extends SparkAdapterSupport {

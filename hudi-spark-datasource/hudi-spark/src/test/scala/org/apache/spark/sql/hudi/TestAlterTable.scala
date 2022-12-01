@@ -169,56 +169,6 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Enable and Disable Schema on read") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-      // Create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | location '$tablePath'
-           | tblproperties (
-           |  type = 'cow',
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           | )
-       """.stripMargin)
-
-      // Insert data to the new table.
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      checkAnswer(s"select id, name, price, ts from $tableName")(
-        Seq(1, "a1", 10.0, 1000)
-      )
-
-      // add column
-      spark.sql(s"alter table $tableName add columns(new_col string)")
-      val catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))
-      assertResult(Seq("id", "name", "price", "ts", "new_col")) {
-        HoodieSqlCommonUtils.removeMetaFields(catalogTable.schema).fields.map(_.name)
-      }
-      checkAnswer(s"select id, name, price, ts, new_col from $tableName")(
-        Seq(1, "a1", 10.0, 1000, null)
-      )
-      // disable schema on read.
-      spark.sessionState.conf.setConfString(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false")
-      spark.sql(s"refresh table $tableName")
-      // Insert data to the new table.
-      spark.sql(s"insert into $tableName values(2, 'a2', 12, 2000, 'e0')")
-      // write should succeed. and subsequent read should succeed as well.
-      checkAnswer(s"select id, name, price, ts, new_col from $tableName")(
-        Seq(1, "a1", 10.0, 1000, null),
-        Seq(2, "a2", 12.0, 2000, "e0")
-      )
-    }
-  }
-
-
   test("Test Alter Rename Table") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>

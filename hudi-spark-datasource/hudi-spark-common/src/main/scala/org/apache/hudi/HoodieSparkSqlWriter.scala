@@ -149,37 +149,41 @@ object HoodieSparkSqlWriter {
       handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
       val partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, toProperties(parameters))
       // Create the table if not present
-      if (!tableExists) {
-        val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
-        val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
-        val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
-        val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
-
-        val tableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(tableType)
-          .setDatabaseName(databaseName)
-          .setTableName(tblName)
-          .setBaseFileFormat(baseFileFormat)
-          .setArchiveLogFolder(archiveLogFolder)
-          .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS_NAME))
-          // we can't fetch preCombine field from hoodieConfig object, since it falls back to "ts" as default value,
-          // but we are interested in what user has set, hence fetching from optParams.
-          .setPreCombineField(optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
-          .setPartitionFields(partitionColumns)
-          .setPopulateMetaFields(populateMetaFields)
-          .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
-          .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
-          .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
-          .setKeyGeneratorClassProp(originKeyGeneratorClassName)
-          .set(timestampKeyGeneratorConfigs)
-          .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
-          .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
-          .setPartitionMetafileUseBaseFormat(useBaseFormatMetaFile)
-          .setShouldDropPartitionColumns(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.DROP_PARTITION_COLUMNS))
-          .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)))
-          .initTable(sparkContext.hadoopConfiguration, path)
-        tableConfig = tableMetaClient.getTableConfig
-      }
+      var tableMetaClient : HoodieTableMetaClient = null
+        if (!tableExists) {
+          val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
+          val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
+          val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
+          val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT); tableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
+            .setTableType(tableType)
+            .setDatabaseName(databaseName)
+            .setTableName(tblName)
+            .setBaseFileFormat(baseFileFormat)
+            .setArchiveLogFolder(archiveLogFolder)
+            .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS_NAME))
+            // we can't fetch preCombine field from hoodieConfig object, since it falls back to "ts" as default value,
+            // but we are interested in what user has set, hence fetching from optParams.
+            .setPreCombineField(optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
+            .setPartitionFields(partitionColumns)
+            .setPopulateMetaFields(populateMetaFields)
+            .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
+            .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
+            .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
+            .setKeyGeneratorClassProp(originKeyGeneratorClassName)
+            .set(timestampKeyGeneratorConfigs)
+            .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
+            .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
+            .setPartitionMetafileUseBaseFormat(useBaseFormatMetaFile)
+            .setShouldDropPartitionColumns(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.DROP_PARTITION_COLUMNS))
+            .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)))
+            .initTable(sparkContext.hadoopConfiguration, path)
+          tableConfig = tableMetaClient.getTableConfig
+        } else {
+          tableMetaClient = HoodieTableMetaClient.builder
+            .setConf(sparkContext.hadoopConfiguration)
+            .setBasePath(path)
+            .build()
+        }
 
       val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
 
@@ -189,8 +193,8 @@ object HoodieSparkSqlWriter {
           classOf[Schema]))
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
-
-      val latestTableSchemaOpt = getLatestTableSchema(spark, basePath, tableIdentifier, sparkContext.hadoopConfiguration)
+      val latestTableSchemaOpt = getLatestTableSchema(spark, basePath, tableIdentifier, sparkContext.hadoopConfiguration,
+        tableMetaClient)
       // NOTE: We need to make sure that upon conversion of the schemas b/w Catalyst's [[StructType]] and
       //       Avro's [[Schema]] we're preserving corresponding "record-name" and "record-namespace" that
       //       play crucial role in establishing compatibility b/w schemas
@@ -198,10 +202,7 @@ object HoodieSparkSqlWriter {
         .getOrElse(getAvroRecordNameAndNamespace(tblName))
 
       val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
-      val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
-        DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
-      val internalSchemaOpt = if (schemaEvolutionEnabled) {
-        getLatestTableInternalSchema(fs, basePath, sparkContext).orElse {
+      val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext, hoodieConfig, tableMetaClient).orElse {
           // In case we need to reconcile the schema and schema evolution is enabled,
           // we will force-apply schema evolution to the writer's schema
           if (shouldReconcileSchema) {
@@ -209,9 +210,6 @@ object HoodieSparkSqlWriter {
           } else {
             None
           }
-        }
-      } else {
-        None
       }
 
       // NOTE: Target writer's schema is deduced based on
@@ -251,13 +249,7 @@ object HoodieSparkSqlWriter {
             }
 
             // Create a HoodieWriteClient & issue the delete.
-            // Create a HoodieWriteClient & issue the delete.
-            val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
-            val internalSchemaOpt : Option[org.apache.hudi.internal.schema.InternalSchema]= if (schemaEvolutionEnabled) {
-              getLatestTableInternalSchema(fs, basePath, sparkContext)
-            } else {
-              None
-            }
+            val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext, hoodieConfig, tableMetaClient)
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
               mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
@@ -554,18 +546,18 @@ object HoodieSparkSqlWriter {
     * @param sparkContext instance of spark context.
     * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
     */
-  def getLatestTableInternalSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext): Option[InternalSchema] = {
-    try {
-      if (FSUtils.isTableExists(basePath.toString, fs)) {
-        val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
+  def getLatestTableInternalSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext, config: HoodieConfig,
+                                   tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
+    if (!config.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
+       Option.empty[InternalSchema]
+    } else {
+      try {
         val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
         val internalSchemaOpt = tableSchemaResolver.getTableInternalSchemaFromCommitMetadata
         if (internalSchemaOpt.isPresent) Some(internalSchemaOpt.get()) else None
-      } else {
-        None
+      } catch {
+        case _: Exception => None
       }
-    } catch {
-      case _: Exception => None
     }
   }
 
@@ -576,20 +568,11 @@ object HoodieSparkSqlWriter {
   private def getLatestTableSchema(spark: SparkSession,
                                    tableBasePath: Path,
                                    tableId: TableIdentifier,
-                                   hadoopConf: Configuration): Option[Schema] = {
-    val fs = tableBasePath.getFileSystem(hadoopConf)
+                                   hadoopConf: Configuration,
+                                   tableMetaClient: HoodieTableMetaClient): Option[Schema] = {
+    val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
     val latestTableSchemaFromCommitMetadata =
-      if (FSUtils.isTableExists(tableBasePath.toString, fs)) {
-        val tableMetaClient = HoodieTableMetaClient.builder
-          .setConf(hadoopConf)
-          .setBasePath(tableBasePath.toString)
-          .build()
-        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-        toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
-      } else {
-        None
-      }
-
+      toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
     latestTableSchemaFromCommitMetadata.orElse {
       getCatalogTable(spark, tableId).map { catalogTable =>
         val (structName, namespace) = getAvroRecordNameAndNamespace(tableId.table)
