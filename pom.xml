@@ -2325,9 +2325,9 @@
     </profile>
 
     <profile>
-      <id>hudi-metaserver</id>
+      <id>hudi-platform-service</id>
       <modules>
-        <module>hudi-metaserver</module>
+        <module>hudi-platform-service/hudi-metaserver</module>
       </modules>
     </profile>
   </profiles>

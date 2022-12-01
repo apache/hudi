@@ -19,7 +19,7 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieMetaServerConfig;
+import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -116,7 +116,7 @@ public class HoodieTableMetaClient implements Serializable {
   protected HoodieActiveTimeline activeTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
-  protected HoodieMetaServerConfig metaServerConfig;
+  protected HoodieMetaserverConfig metaserverConfig;
 
   /**
    *
@@ -378,11 +378,11 @@ public class HoodieTableMetaClient implements Serializable {
     return getArchivedTimeline(StringUtils.EMPTY_STRING);
   }
 
-  public HoodieMetaServerConfig getMetaServerConfig() {
-    if (metaServerConfig == null) {
-      metaServerConfig = new HoodieMetaServerConfig();
+  public HoodieMetaserverConfig getMetaserverConfig() {
+    if (metaserverConfig == null) {
+      metaserverConfig = new HoodieMetaserverConfig();
     }
-    return metaServerConfig;
+    return metaserverConfig;
   }
 
   /**
@@ -681,12 +681,12 @@ public class HoodieTableMetaClient implements Serializable {
   private static HoodieTableMetaClient newMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
       ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
       String payloadClassName, String mergerStrategy, FileSystemRetryConfig fileSystemRetryConfig, Properties props) {
-    HoodieMetastoreConfig metastoreConfig = null == props
-        ? new HoodieMetastoreConfig.Builder().build()
-        : new HoodieMetastoreConfig.Builder().fromProperties(props).build();
-    return metastoreConfig.enableMetastore()
-        ? (HoodieTableMetaClient) ReflectionUtils.loadClass("org.apache.hudi.common.table.HoodieTableMetastoreClient",
-            new Class<?>[]{Configuration.class, ConsistencyGuardConfig.class, FileSystemRetryConfig.class, String.class, String.class, HoodieMetaServerConfig.class},
+    HoodieMetaserverConfig metastoreConfig = null == props
+        ? new HoodieMetaserverConfig.Builder().build()
+        : new HoodieMetaserverConfig.Builder().fromProperties(props).build();
+    return metastoreConfig.enableMetaserver()
+        ? (HoodieTableMetaClient) ReflectionUtils.loadClass("org.apache.hudi.common.table.HoodieTableMetaserverClient",
+            new Class<?>[]{Configuration.class, ConsistencyGuardConfig.class, FileSystemRetryConfig.class, String.class, String.class, HoodieMetaserverConfig.class},
             conf, consistencyGuardConfig, fileSystemRetryConfig,
             props.getProperty(HoodieTableConfig.DATABASE_NAME.key()), props.getProperty(HoodieTableConfig.NAME.key()), metastoreConfig)
         : new HoodieTableMetaClient(conf, basePath,
