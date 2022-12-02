@@ -86,6 +86,10 @@ class TestQueryTable extends HoodieSparkSqlTestBase {
     checkAnswer(s"select id, name, price, ts, dt from $tableName")(
       Seq(3, "a3", 30.0, 3000, "2022-11-26")
     )
+
+    spark.conf.unset("hoodie.query.use.database")
+    spark.conf.unset(s"hoodie.$tableName.datasource.query.type")
+    spark.conf.unset(s"hoodie.default.$tableName.datasource.query.type")
   }
 
   test("Test snapshot query with set parameters") {
@@ -137,6 +141,10 @@ class TestQueryTable extends HoodieSparkSqlTestBase {
     checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 2")(
       Seq(2, "a2", 20, 2000, "2022-11-25")
     )
+
+    spark.conf.unset("hoodie.query.use.database")
+    spark.conf.unset(s"hoodie.$tableName.datasource.query.type")
+    spark.conf.unset(s"hoodie.default.$tableName.datasource.query.type")
   }
 
   test("Test read_optimized query with set parameters") {
@@ -188,5 +196,9 @@ class TestQueryTable extends HoodieSparkSqlTestBase {
       Seq(1, "a1", 10.0, 1000, "2022-11-25"),
       Seq(2, "a2", 20.0, 2000, "2022-11-25")
     )
+
+    spark.conf.unset("hoodie.query.use.database")
+    spark.conf.unset(s"hoodie.$tableName.datasource.query.type")
+    spark.conf.unset(s"hoodie.default.$tableName.datasource.query.type")
   }
 }
