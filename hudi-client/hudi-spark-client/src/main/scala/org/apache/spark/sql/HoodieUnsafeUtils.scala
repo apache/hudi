@@ -30,6 +30,10 @@ import org.apache.spark.util.MutablePair
  */
 object HoodieUnsafeUtils {
 
+  // TODO scala-doc
+  def createDataFrameFrom(spark: SparkSession, plan: LogicalPlan): DataFrame =
+    Dataset.ofRows(spark, plan)
+
   /**
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[Row]]s with provided [[schema]]
    *
