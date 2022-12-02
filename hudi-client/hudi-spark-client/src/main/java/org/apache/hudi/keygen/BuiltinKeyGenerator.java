@@ -428,8 +428,11 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     private final HoodieUnsafeRowUtils.NestedFieldPath[] partitionPathFieldsPaths;
 
     SparkRowAccessor(StructType schema) {
-      this.recordKeyFieldsPaths = resolveNestedFieldPaths(getRecordKeyFieldNames(), schema);
-      this.partitionPathFieldsPaths = resolveNestedFieldPaths(getPartitionPathFields(), schema);
+      this.recordKeyFieldsPaths = resolveNestedFieldPaths(getRecordKeyFieldNames(), schema, false);
+      // Sometimes, we need to extract the recordKey from the partition-dropped data
+      // To be consistent with avro key generator
+      // ParquetBootstrapMetadataHandler
+      this.partitionPathFieldsPaths = resolveNestedFieldPaths(getPartitionPathFields(), schema, true);
     }
 
     public Object[] getRecordKeyParts(Row row) {
@@ -437,6 +440,9 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
 
     public Object[] getRecordPartitionPathValues(Row row) {
+      if (partitionPathFieldsPaths == null) {
+        throw new HoodieException("Failed to resolve nested partition field");
+      }
       return getNestedFieldValues(row, partitionPathFieldsPaths);
     }
 
@@ -445,6 +451,9 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
 
     public Object[] getRecordPartitionPathValues(InternalRow row) {
+      if (partitionPathFieldsPaths == null) {
+        throw new HoodieException("Failed to resolve nested partition field");
+      }
       return getNestedFieldValues(row, partitionPathFieldsPaths);
     }
 
@@ -468,12 +477,15 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       return nestedFieldValues;
     }
 
-    private HoodieUnsafeRowUtils.NestedFieldPath[] resolveNestedFieldPaths(List<String> fieldPaths, StructType schema) {
+    private HoodieUnsafeRowUtils.NestedFieldPath[] resolveNestedFieldPaths(List<String> fieldPaths, StructType schema, boolean returnNull) {
       try {
         return fieldPaths.stream()
             .map(fieldPath -> HoodieUnsafeRowUtils$.MODULE$.composeNestedFieldPath(schema, fieldPath))
             .toArray(HoodieUnsafeRowUtils.NestedFieldPath[]::new);
       } catch (Exception e) {
+        if (returnNull) {
+          return null;
+        }
         LOG.error(String.format("Failed to resolve nested field-paths (%s) in schema (%s)", fieldPaths, schema), e);
         throw new HoodieException("Failed to resolve nested field-paths", e);
       }
