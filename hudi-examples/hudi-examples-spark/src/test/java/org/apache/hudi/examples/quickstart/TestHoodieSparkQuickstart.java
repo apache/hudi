@@ -22,7 +22,7 @@ import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
-import org.apache.spark.HoodieSparkKryoRegistrar$;
+import org.apache.spark.HoodieSparkKryoProvider$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -84,7 +84,7 @@ public class TestHoodieSparkQuickstart implements SparkProvider {
     initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
+      HoodieSparkKryoProvider$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();

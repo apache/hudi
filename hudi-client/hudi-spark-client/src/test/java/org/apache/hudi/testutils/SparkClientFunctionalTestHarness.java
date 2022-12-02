@@ -60,7 +60,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.HoodieSparkKryoRegistrar$;
+import org.apache.spark.HoodieSparkKryoProvider$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -186,7 +186,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
+      HoodieSparkKryoProvider$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();

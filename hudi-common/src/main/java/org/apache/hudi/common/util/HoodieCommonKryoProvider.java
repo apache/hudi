@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import com.esotericsoftware.kryo.Kryo;
-import org.apache.avro.util.Utf8;
 import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -54,36 +52,36 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
  *   or renamed (w/o correspondingly updating such usages)</li>
  * </ol>
  */
-public class HoodieCommonKryoRegistrar {
+public class HoodieCommonKryoProvider {
 
-  public void registerClasses(Kryo kryo) {
+  public Class<?>[] registerClasses() {
     ///////////////////////////////////////////////////////////////////////////
     // NOTE: DO NOT REORDER REGISTRATIONS
     ///////////////////////////////////////////////////////////////////////////
 
-    kryo.register(HoodieAvroRecord.class);
-    kryo.register(HoodieAvroIndexedRecord.class);
-    kryo.register(HoodieEmptyRecord.class);
+    return new Class<?>[] {
+        HoodieAvroRecord.class,
+        HoodieAvroIndexedRecord.class,
+        HoodieEmptyRecord.class,
 
-    kryo.register(OverwriteWithLatestAvroPayload.class);
-    kryo.register(DefaultHoodieRecordPayload.class);
-    kryo.register(OverwriteNonDefaultsWithLatestAvroPayload.class);
-    kryo.register(RewriteAvroPayload.class);
-    kryo.register(EventTimeAvroPayload.class);
-    kryo.register(PartialUpdateAvroPayload.class);
-    kryo.register(MySqlDebeziumAvroPayload.class);
-    kryo.register(PostgresDebeziumAvroPayload.class);
-    // TODO need to relocate to hudi-common
-    //kryo.register(BootstrapRecordPayload.class);
-    kryo.register(AWSDmsAvroPayload.class);
-    kryo.register(HoodieAvroPayload.class);
-    kryo.register(HoodieJsonPayload.class);
-    kryo.register(HoodieMetadataPayload.class);
+        OverwriteWithLatestAvroPayload.class,
+        DefaultHoodieRecordPayload.class,
+        OverwriteNonDefaultsWithLatestAvroPayload.class,
+        RewriteAvroPayload.class,
+        EventTimeAvroPayload.class,
+        PartialUpdateAvroPayload.class,
+        MySqlDebeziumAvroPayload.class,
+        PostgresDebeziumAvroPayload.class,
+        // TODO need to relocate to hudi-common
+        //kryo.register(BootstrapRecordPayload.class);
+        AWSDmsAvroPayload.class,
+        HoodieAvroPayload.class,
+        HoodieJsonPayload.class,
+        HoodieMetadataPayload.class,
 
-    kryo.register(HoodieRecordLocation.class);
-    kryo.register(HoodieRecordGlobalLocation.class);
-
-    kryo.register(Utf8.class, new SerializationUtils.AvroUtf8Serializer());
+        HoodieRecordLocation.class,
+        HoodieRecordGlobalLocation.class
+    };
   }
 
 }

@@ -25,7 +25,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.apache.spark.HoodieSparkKryoRegistrar$;
+import org.apache.spark.HoodieSparkKryoProvider$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
@@ -116,7 +116,7 @@ public class SparkUtil {
   }
 
   public static JavaSparkContext initJavaSparkContext(SparkConf sparkConf) {
-    HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
+    HoodieSparkKryoProvider$.MODULE$.register(sparkConf);
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     jsc.hadoopConfiguration().setBoolean(HoodieCliSparkConfig.CLI_PARQUET_ENABLE_SUMMARY_METADATA, false);
     FSUtils.prepareHadoopConf(jsc.hadoopConfiguration());

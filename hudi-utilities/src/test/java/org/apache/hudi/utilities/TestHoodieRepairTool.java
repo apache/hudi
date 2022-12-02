@@ -35,7 +35,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.HoodieSparkKryoRegistrar$;
+import org.apache.spark.HoodieSparkKryoProvider$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -93,7 +93,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     boolean initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
+      HoodieSparkKryoProvider$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
