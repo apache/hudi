@@ -600,7 +600,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "id",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieWriteConfig.RECORD_SIZE_DYNAMIC_SAMPLING_ENABLE.key() -> "false"
     ) ++ writeMetadataOpts
 
     // If there are any failures in the Data Skipping flow, test should fail

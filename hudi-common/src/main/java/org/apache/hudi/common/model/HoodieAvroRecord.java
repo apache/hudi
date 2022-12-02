@@ -229,4 +229,13 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   protected final T readRecordPayload(Kryo kryo, Input input) {
     return (T) kryo.readClassAndObject(input);
   }
+
+  @Override
+  public long estimateSerializedDataSize() {
+    if (data instanceof BaseAvroPayload) {
+      return ((BaseAvroPayload) data).recordBytes.length;
+    }
+    return super.estimateSerializedDataSize();
+  }
+
 }

@@ -332,6 +332,14 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     return kryo.readObjectOrNull(input, UnsafeRow.class);
   }
 
+  @Override
+  public long estimateSerializedDataSize() {
+    if (data instanceof UnsafeRow) {
+      return ((UnsafeRow) data).getSizeInBytes();
+    }
+    return super.estimateSerializedDataSize();
+  }
+
   private static UnsafeRow convertToUnsafeRow(InternalRow payload, StructType schema) {
     if (payload == null) {
       return null;

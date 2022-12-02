@@ -98,7 +98,8 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieWriteConfig.RECORD_SIZE_DYNAMIC_SAMPLING_ENABLE.key() -> "false"
     ) ++ metadataOpts
 
     doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
@@ -194,7 +195,8 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-      HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true"
+      HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true",
+      HoodieWriteConfig.RECORD_SIZE_DYNAMIC_SAMPLING_ENABLE.key() -> "false"
     ) ++ metadataOpts
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString

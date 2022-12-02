@@ -92,6 +92,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
 import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT;
+import static org.apache.hudi.config.HoodieWriteConfig.RECORD_SIZE_DYNAMIC_SAMPLING_ENABLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -232,6 +233,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
             .build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, enableMetadata);
+    writeConfig.setValue(RECORD_SIZE_DYNAMIC_SAMPLING_ENABLE, "false");
     return writeConfig;
   }
 

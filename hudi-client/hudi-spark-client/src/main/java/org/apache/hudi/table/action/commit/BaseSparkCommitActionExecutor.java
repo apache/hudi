@@ -40,6 +40,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
@@ -79,6 +80,7 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
+import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 public abstract class BaseSparkCommitActionExecutor<T> extends
@@ -165,6 +167,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
       workloadProfile = new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
       LOG.debug("Input workload profile :" + workloadProfile);
+    }
+
+    // first commit, need sample data from inputRDD to estimate average bytes per record.
+    if (config.getRecordSizeDynamicSamplingEnable() && table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants().empty()) {
+      int realSampleRecordAvgSize = dynamicSampleRecordSize(inputRDD);
+      config.setValue(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE, String.valueOf(realSampleRecordAvgSize));
+      LOG.info(String.format("EstimateRecordSize was reset by SampleRecordAvgSize, SampleRecordAvgSize is %s bytes.",realSampleRecordAvgSize));
     }
 
     // partition using the insert partitioner
@@ -419,4 +428,21 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected void runPrecommitValidators(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
     SparkValidatorUtils.runValidators(config, writeMetadata, context, table, instantTime);
   }
+
+  private int dynamicSampleRecordSize(JavaRDD<HoodieRecord<T>> inputRecords) {
+    int dynamicSampleRecordSize = config.getCopyOnWriteRecordSizeEstimate();
+    int maxSampleRecordNum =  config.getRecordSizeDynamicSamplingMaxnum();
+    try {
+      List<HoodieRecord<T>> sampleRecords = inputRecords.takeSample(false, maxSampleRecordNum);
+      if (sampleRecords.size() == 0) {
+        return dynamicSampleRecordSize;
+      }
+      long totalSampleRecordSize = sampleRecords.stream().mapToLong(HoodieRecord::estimateSerializedDataSize).sum();
+      dynamicSampleRecordSize = (int) (totalSampleRecordSize / sampleRecords.size());
+    } catch (Exception ex) {
+      throw new HoodieException("Dynamic sample record size error.");
+    }
+    return dynamicSampleRecordSize;
+  }
+
 }

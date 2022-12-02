@@ -613,6 +613,18 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When table is upgraded from pre 0.12 to 0.12, we check for \"default\" partition and fail if found one. "
           + "Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation");
 
+  public static final ConfigProperty<String> RECORD_SIZE_DYNAMIC_SAMPLING_MAXNUM = ConfigProperty
+          .key("hoodie.record.size.dynamic.sampling.maxnum")
+          .defaultValue(String.valueOf(100))
+          .withDocumentation("In the first time to write, if the user estimated the size of the record and the actual deviation is large, and write a huge amount of data, "
+                  + "it may cause a lot of small files. "
+                  + "This parameter is used for the first time to write data sampling, in turn to dynamically estimate the size of the record, so that more accurate.");
+
+  public static final ConfigProperty<String> RECORD_SIZE_DYNAMIC_SAMPLING_ENABLE = ConfigProperty
+          .key("hoodie.record.size.dynamic.sampling.enable")
+          .defaultValue(String.valueOf(true))
+          .withDocumentation("Control to enable dynamic sampling record size when write in first time.");
+
   public static final ConfigProperty<String> EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.detection.strategy")
       .noDefaultValue()
@@ -1419,6 +1431,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getCopyOnWriteRecordSizeEstimate() {
     return getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
+  }
+
+  public int getRecordSizeDynamicSamplingMaxnum() {
+    return getInt(HoodieWriteConfig.RECORD_SIZE_DYNAMIC_SAMPLING_MAXNUM);
+  }
+
+  public boolean getRecordSizeDynamicSamplingEnable() {
+    return getBoolean(HoodieWriteConfig.RECORD_SIZE_DYNAMIC_SAMPLING_ENABLE);
   }
 
   public boolean allowMultipleCleans() {

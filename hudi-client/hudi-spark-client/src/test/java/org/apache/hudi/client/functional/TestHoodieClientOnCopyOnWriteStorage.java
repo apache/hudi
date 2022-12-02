@@ -1203,6 +1203,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     Properties props = new Properties();
     props.setProperty(ASYNC_CLUSTERING_ENABLE.key(), "true");
+    props.setProperty(HoodieWriteConfig.RECORD_SIZE_DYNAMIC_SAMPLING_ENABLE.key(), "false");
     HoodieWriteConfig config = getSmallInsertWriteConfig(100,
         TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), true, props);
     SparkRDDWriteClient client = getHoodieWriteClient(config);

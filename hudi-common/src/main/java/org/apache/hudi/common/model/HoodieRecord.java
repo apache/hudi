@@ -25,6 +25,7 @@ import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -390,6 +391,11 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   protected static boolean hasMetaFields(Schema schema) {
     return schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) != null;
   }
+
+  public long estimateSerializedDataSize() {
+    return ObjectSizeCalculator.getObjectSize(this.data);
+  }
+
 
   /**
    * A special record returned by {@link HoodieRecordPayload}, which means we should just skip this record.
