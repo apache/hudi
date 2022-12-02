@@ -43,6 +43,7 @@ import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -124,6 +125,7 @@ public class HoodieTableSource implements
   private final String defaultPartName;
   private final Configuration conf;
   private final FileIndex fileIndex;
+  private final InternalSchemaManager internalSchemaManager;
 
   private int[] requiredPos;
   private long limit;
@@ -136,7 +138,7 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf) {
-    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, null, null);
+    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, null, null, null);
   }
 
   public HoodieTableSource(
@@ -149,7 +151,8 @@ public class HoodieTableSource implements
       @Nullable List<Map<String, String>> requiredPartitions,
       @Nullable int[] requiredPos,
       @Nullable Long limit,
-      @Nullable HoodieTableMetaClient metaClient) {
+      @Nullable HoodieTableMetaClient metaClient,
+      @Nullable InternalSchemaManager internalSchemaManager) {
     this.schema = schema;
     this.tableRowType = (RowType) schema.toPhysicalRowDataType().notNull().getLogicalType();
     this.path = path;
@@ -167,6 +170,9 @@ public class HoodieTableSource implements
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.metaClient = metaClient == null ? StreamerUtil.metaClientForReader(conf, hadoopConf) : metaClient;
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
+    this.internalSchemaManager = internalSchemaManager == null
+        ? InternalSchemaManager.get(this.conf, this.metaClient)
+        : internalSchemaManager;
   }
 
   @Override
@@ -216,7 +222,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, fileIndex, requiredPartitions, requiredPos, limit, metaClient);
+        conf, fileIndex, requiredPartitions, requiredPos, limit, metaClient, internalSchemaManager);
   }
 
   @Override
@@ -469,6 +475,7 @@ public class HoodieTableSource implements
         .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
         .limit(this.limit)
         .emitDelete(emitDelete)
+        .internalSchemaManager(internalSchemaManager)
         .build();
   }
 
@@ -492,7 +499,8 @@ public class HoodieTableSource implements
         this.conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf),
-        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE)
+        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
+        this.internalSchemaManager
     );
   }
 
