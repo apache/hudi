@@ -72,8 +72,6 @@ case class CreateHoodieTableAsSelectCommand(
       }
     }
 
-    // ReOrder the query which move the partition columns to the last of the project list
-    val reOrderedQuery = reOrderPartitionColumn(query, table.partitionColumnNames)
     // Remove some properties should not be used
     val newStorage = new CatalogStorageFormat(
       table.storage.locationUri,
@@ -85,7 +83,8 @@ case class CreateHoodieTableAsSelectCommand(
     val newTable = table.copy(
       identifier = tableIdentWithDB,
       storage = newStorage,
-      schema = reOrderedQuery.schema,
+      // TODO add meta-fields
+      schema = query.schema,
       properties = table.properties.--(needFilterProps)
     )
 
@@ -107,7 +106,7 @@ case class CreateHoodieTableAsSelectCommand(
         DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true"
       )
       val partitionSpec = newTable.partitionColumnNames.map((_, None)).toMap
-      val success = InsertIntoHoodieTableCommand.run(sparkSession, newTable, reOrderedQuery, partitionSpec,
+      val success = InsertIntoHoodieTableCommand.run(sparkSession, newTable, query, partitionSpec,
         mode == SaveMode.Overwrite, refreshTable = false, extraOptions = options)
       if (success) {
         // If write success, create the table in catalog if it has not synced to the
@@ -131,17 +130,5 @@ case class CreateHoodieTableAsSelectCommand(
     val path = new Path(tablePath)
     val fs = path.getFileSystem(conf)
     fs.delete(path, true)
-  }
-
-  private def reOrderPartitionColumn(query: LogicalPlan,
-    partitionColumns: Seq[String]): LogicalPlan = {
-    if (partitionColumns.isEmpty) {
-      query
-    } else {
-      val nonPartitionAttrs = query.output.filter(p => !partitionColumns.contains(p.name))
-      val partitionAttrs = query.output.filter(p => partitionColumns.contains(p.name))
-      val reorderAttrs = nonPartitionAttrs ++ partitionAttrs
-      Project(reorderAttrs, query)
-    }
   }
 }

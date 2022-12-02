@@ -749,8 +749,7 @@ object HoodieSparkSqlWriter {
       val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
       if (userDefinedBulkInsertPartitionerOpt.isPresent) {
         userDefinedBulkInsertPartitionerOpt.get
-      }
-      else {
+      } else {
         BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
       }
     } else {
@@ -777,7 +776,9 @@ object HoodieSparkSqlWriter {
         + " To use row writer please switch to spark 2 or spark 3")
     }
 
-    hoodieDF.write.format(targetFormat)
+    hoodieDF
+      .repartitionByRange()
+      .write.format(targetFormat)
       .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
       .options(opts ++ customOpts ++ optsOverrides)
       .mode(SaveMode.Append)
