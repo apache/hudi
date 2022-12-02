@@ -21,9 +21,9 @@ package org.apache.hudi.metaserver.store;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
-import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
+import org.apache.hudi.metaserver.thrift.Table;
 
 import java.util.List;
 
@@ -31,7 +31,8 @@ import java.util.List;
  * Metadata store for meta server, stores all entities like database, table, instant and so on.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
-public interface MetaserverStorage {
+public interface MetaserverStorage extends AutoCloseable {
+
   void initStorage() throws MetaserverStorageException;
 
   // table related

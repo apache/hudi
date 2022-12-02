@@ -25,7 +25,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metaserver.HoodieMetaserver;
 import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.hudi.metaserver.thrift.ThriftHoodieMetaserver;
-import org.apache.hudi.metaserver.util.EntityConvertor;
+import org.apache.hudi.metaserver.util.EntityConversions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 /**
  * HoodieMetaserverClientImp based on thrift.
  */
-public class HoodieMetaserverClientImp implements HoodieMetaserverClient, Serializable {
+public class HoodieMetaserverClientImp implements HoodieMetaserverClient, AutoCloseable, Serializable {
 
   private static final Logger LOG =  LogManager.getLogger(HoodieMetaserverClientImp.class);
   private final HoodieMetaserverConfig config;
@@ -82,7 +82,7 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, Serial
         LOG.info("Connected to meta server: " + msUri);
       } catch (TTransportException e) {
         exception = e;
-        LOG.warn("Fail to connect to the meta server.", e);
+        LOG.warn("Failed to connect to the meta server.", e);
       }
     }
     if (!isConnected) {
@@ -91,7 +91,7 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, Serial
   }
 
   private boolean isLocalEmbeddedMetaserver(String uri) {
-    return uri == null ? true : uri.trim().isEmpty();
+    return uri == null || uri.trim().isEmpty();
   }
 
   @Override
@@ -108,35 +108,42 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, Serial
     }
   }
 
+  @Override
   public List<HoodieInstant> listInstants(String db, String tb, int commitNum) {
     return exceptionWrapper(() -> this.client.listInstants(db, tb, commitNum).stream()
-        .map(EntityConvertor::fromTHoodieInstant)
+        .map(EntityConversions::fromTHoodieInstant)
         .collect(Collectors.toList())).get();
   }
 
+  @Override
   public Option<byte[]> getInstantMeta(String db, String tb, HoodieInstant instant) {
-    ByteBuffer bytes = exceptionWrapper(() -> this.client.getInstantMeta(db, tb, EntityConvertor.toTHoodieInstant(instant))).get();
-    Option<byte[]> res = bytes.capacity() == 0 ? Option.empty() : Option.of(bytes.array());
-    return res;
+    ByteBuffer byteBuffer = exceptionWrapper(() -> this.client.getInstantMeta(db, tb, EntityConversions.toTHoodieInstant(instant))).get();
+    byte[] bytes = new byte[byteBuffer.remaining()];
+    byteBuffer.get(bytes);
+    return byteBuffer.hasRemaining() ? Option.empty() : Option.of(bytes);
   }
 
+  @Override
   public String createNewTimestamp(String db, String tb) {
     return exceptionWrapper(() -> this.client.createNewInstantTime(db, tb)).get();
   }
 
+  @Override
   public void createNewInstant(String db, String tb, HoodieInstant instant, Option<byte[]> content) {
-    exceptionWrapper(() -> this.client.createNewInstantWithTime(db, tb, EntityConvertor.toTHoodieInstant(instant), getByteBuffer(content))).get();
+    exceptionWrapper(() -> this.client.createNewInstantWithTime(db, tb, EntityConversions.toTHoodieInstant(instant), getByteBuffer(content))).get();
   }
 
+  @Override
   public void transitionInstantState(String db, String tb, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> content) {
     exceptionWrapper(() -> this.client.transitionInstantState(db, tb,
-        EntityConvertor.toTHoodieInstant(fromInstant),
-        EntityConvertor.toTHoodieInstant(toInstant),
+        EntityConversions.toTHoodieInstant(fromInstant),
+        EntityConversions.toTHoodieInstant(toInstant),
         getByteBuffer(content))).get();
   }
 
+  @Override
   public void deleteInstant(String db, String tb, HoodieInstant instant) {
-    exceptionWrapper(() -> this.client.deleteInstant(db, tb, EntityConvertor.toTHoodieInstant(instant))).get();
+    exceptionWrapper(() -> this.client.deleteInstant(db, tb, EntityConversions.toTHoodieInstant(instant))).get();
   }
 
   private ByteBuffer getByteBuffer(Option<byte[]> content) {
@@ -150,14 +157,17 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, Serial
   }
 
   // used for test
+  @Override
   public boolean isLocal() {
     return isLocal;
   }
 
+  @Override
   public boolean isConnected() {
     return isConnected;
   }
 
+  @Override
   public void close() {
     isConnected = false;
     if (transport != null && transport.isOpen()) {

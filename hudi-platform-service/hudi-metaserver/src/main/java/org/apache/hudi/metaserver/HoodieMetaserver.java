@@ -18,8 +18,7 @@
 
 package org.apache.hudi.metaserver;
 
-import jdk.jfr.Experimental;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metaserver.service.HoodieMetaserverService;
 import org.apache.hudi.metaserver.service.HoodieMetaserverProxyHandler;
 import org.apache.hudi.metaserver.service.TableService;
@@ -39,15 +38,17 @@ import java.lang.reflect.Proxy;
 
 /**
  * Main class of hoodie meta server.
+ *
+ * @since 0.13.0
+ * @Experimental
  */
-@Experimental
 public class HoodieMetaserver {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMetaserver.class);
 
   private static TServer server;
   private static Thread serverThread;
-  private static MetaserverStorage metaserverStorage;
+  private static volatile MetaserverStorage metaserverStorage;
   private static HoodieMetaserverService metaserverService;
 
   public static void main(String[] args) {
@@ -77,7 +78,7 @@ public class HoodieMetaserver {
       serverThread = new Thread(() -> server.serve());
       serverThread.start();
     } catch (Exception e) {
-      LOG.error("Fail to start the server", e);
+      LOG.error("Failed to start Metaserver.", e);
       System.exit(1);
     }
   }
@@ -91,7 +92,7 @@ public class HoodieMetaserver {
           try {
             metaserverStorage.initStorage();
           } catch (MetaserverStorageException e) {
-            throw new HoodieIOException("Fail to init the embedded metastore," + e);
+            throw new HoodieException("Fail to init the Metaserver's storage." + e);
           }
           TableService tableService = new TableService(metaserverStorage);
           TimelineService timelineService = new TimelineService(metaserverStorage);
@@ -103,11 +104,11 @@ public class HoodieMetaserver {
   }
 
   // only for test
-  public static MetaserverStorage getMetadataStore() {
+  public static MetaserverStorage getMetaserverStorage() {
     return metaserverStorage;
   }
 
-  public static void stop() {
+  public static void stopServer() {
     if (server != null) {
       LOG.info("Stop the server...");
       server.stop();

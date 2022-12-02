@@ -42,7 +42,7 @@ public class TestHoodieMetaserverClient {
   @Test
   public void testRemoteClient() {
     HoodieMetaserver.startServer();
-    assertNotNull(HoodieMetaserver.getMetadataStore());
+    assertNotNull(HoodieMetaserver.getMetaserverStorage());
     HoodieMetaserverConfig config = HoodieMetaserverConfig.newBuilder().build();
     HoodieMetaserverClient client = new HoodieMetaserverClientImp(config);
     assertFalse(client.isLocal());

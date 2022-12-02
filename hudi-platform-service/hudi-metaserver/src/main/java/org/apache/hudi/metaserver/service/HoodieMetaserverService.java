@@ -32,8 +32,8 @@ import java.util.List;
  * A proxy for meta server, accepts all thrift calls and routes them to the corresponding service.
  */
 public class HoodieMetaserverService implements ThriftHoodieMetaserver.Iface, Serializable {
-  private TableService tableService;
-  private TimelineService timelineService;
+  private final TableService tableService;
+  private final TimelineService timelineService;
 
   public HoodieMetaserverService(TableService tableService, TimelineService timelineService) {
     this.tableService = tableService;

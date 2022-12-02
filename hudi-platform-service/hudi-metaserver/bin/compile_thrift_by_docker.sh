@@ -16,8 +16,7 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-mkdir $PWD/hudi-platform-service/hudi-metaserver/target
-mkdir $PWD/hudi-platform-service/hudi-metaserver/target/generated-sources
+mkdir -p $PWD/hudi-platform-service/hudi-metaserver/target/generated-sources
 THRIFT_FILE_PATH=$PWD/hudi-platform-service/hudi-metaserver/src/main/thrift
 THRIFT_OUT_PATH=$PWD/hudi-platform-service/hudi-metaserver/target/generated-sources
 THRIFT_VERSION=0.12.0

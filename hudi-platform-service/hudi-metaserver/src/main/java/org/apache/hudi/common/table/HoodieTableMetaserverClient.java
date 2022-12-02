@@ -18,9 +18,6 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
@@ -30,13 +27,16 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieMetaserverBasedTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metaserver.client.HoodieMetaserverClient;
 import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
 import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 import org.apache.hudi.metaserver.thrift.Table;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -44,24 +44,26 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+
 /**
- * HoodieTableMetaClient implementation for hoodie table whose metadata is stored in the hoodie meta server.
+ * HoodieTableMetaClient implementation for hoodie table whose metadata is stored in the hoodie metaserver.
  */
 public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetaserverClient.class);
 
-  private String databaseName;
-  private String tableName;
-  private Table table;
-  private HoodieMetaserverClient metaserverClient;
+  private final String databaseName;
+  private final String tableName;
+  private final Table table;
+  private final HoodieMetaserverClient metaserverClient;
 
   public HoodieTableMetaserverClient(Configuration conf, ConsistencyGuardConfig consistencyGuardConfig, FileSystemRetryConfig fileSystemRetryConfig,
                                      String databaseName, String tableName, HoodieMetaserverConfig config) {
     super(conf, config.getString(HoodieWriteConfig.BASE_PATH), false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
         config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), fileSystemRetryConfig);
-    if (StringUtils.isNullOrEmpty(databaseName) || StringUtils.isNullOrEmpty(tableName)) {
-      throw new HoodieException("The database and table name have to be specified");
-    }
+    checkArgument(nonEmpty(databaseName), "database name is required.");
+    checkArgument(nonEmpty(tableName), "table name is required.");
     this.databaseName = databaseName;
     this.tableName = tableName;
     this.metaserverConfig = config;
@@ -69,7 +71,7 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
     this.table = initOrGetTable(databaseName, tableName, config);
     // TODO: transfer table parameters to table config
     this.tableConfig = new HoodieTableConfig();
-    tableConfig.setTableVersion(HoodieTableVersion.THREE);
+    tableConfig.setTableVersion(HoodieTableVersion.current());
     tableConfig.setAll(config.getProps());
   }
 

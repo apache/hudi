@@ -29,19 +29,19 @@ import java.util.List;
  */
 public class BasicDao implements Serializable {
   public <T> List<T> queryForListBySql(String namespace, String sqlID, Object parameter) {
-    try (SqlSession session = SqlSessionFactoryUtil.openSqlSession()) {
+    try (SqlSession session = SqlSessionFactoryUtils.openSqlSession()) {
       return session.selectList(statement(namespace, sqlID), parameter);
     }
   }
 
   public <T> T queryForObjectBySql(String namespace, String sqlID, Object parameter) {
-    try (SqlSession session = SqlSessionFactoryUtil.openSqlSession()) {
+    try (SqlSession session = SqlSessionFactoryUtils.openSqlSession()) {
       return session.selectOne(statement(namespace, sqlID), parameter);
     }
   }
 
   public int insertBySql(String namespace, String sqlID, Object parameter) {
-    try (SqlSession session = SqlSessionFactoryUtil.openSqlSession()) {
+    try (SqlSession session = SqlSessionFactoryUtils.openSqlSession()) {
       int res = session.insert(statement(namespace, sqlID), parameter);
       session.commit();
       return res;
@@ -49,7 +49,7 @@ public class BasicDao implements Serializable {
   }
 
   public int deleteBySql(String namespace, String sqlID, Object parameter) {
-    try (SqlSession session = SqlSessionFactoryUtil.openSqlSession()) {
+    try (SqlSession session = SqlSessionFactoryUtils.openSqlSession()) {
       int res = session.delete(statement(namespace, sqlID), parameter);
       session.commit();
       return res;
@@ -57,7 +57,7 @@ public class BasicDao implements Serializable {
   }
 
   public int updateBySql(String namespace, String sqlID, Object parameter) {
-    try (SqlSession session = SqlSessionFactoryUtil.openSqlSession()) {
+    try (SqlSession session = SqlSessionFactoryUtils.openSqlSession()) {
       int res = session.update(statement(namespace, sqlID), parameter);
       session.commit();
       return res;
@@ -65,7 +65,7 @@ public class BasicDao implements Serializable {
   }
 
   public void batchOperateBySql(List<BatchDaoOperation> batchDaoOperations) throws MetaserverStorageException {
-    try (SqlSession session = SqlSessionFactoryUtil.openSqlSession()) {
+    try (SqlSession session = SqlSessionFactoryUtils.openSqlSession()) {
       for (BatchDaoOperation batchDaoOperation: batchDaoOperations) {
         switch (batchDaoOperation.getOperationType()) {
           case BatchDaoOperation.OPERATION_TYPE_INSERT:

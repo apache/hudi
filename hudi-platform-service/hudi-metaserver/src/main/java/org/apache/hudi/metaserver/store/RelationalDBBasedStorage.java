@@ -18,24 +18,26 @@
 
 package org.apache.hudi.metaserver.store;
 
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metaserver.store.bean.InstantBean;
 import org.apache.hudi.metaserver.store.bean.TableBean;
 import org.apache.hudi.metaserver.store.jdbc.WrapperDao;
 import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
-import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
+import org.apache.hudi.metaserver.thrift.Table;
 
 import java.io.Serializable;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Metadata store based on relation database.
@@ -169,7 +171,7 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
 
   @Override
   public List<THoodieInstant> scanInstants(long tableId, List<TState> states, int limit) throws MetaserverStorageException {
-    if (states == null || states.isEmpty()) {
+    if (isNullOrEmpty(states)) {
       throw new MetaserverStorageException("State has to be specified when scan instants");
     }
     Map<String, Object> params = new HashMap<>();
@@ -182,7 +184,7 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
 
   @Override
   public List<THoodieInstant> scanInstants(long tableId, TState state, int limit) throws MetaserverStorageException {
-    return scanInstants(tableId, Arrays.asList(state), limit);
+    return scanInstants(tableId, Collections.singletonList(state), limit);
   }
 
   @Override
@@ -230,9 +232,9 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
 
   }
 
-  public static void validate(List<?> list, String errMsg) throws MetaserverStorageException {
+  public static void validate(List<?> entities, String entityName) throws MetaserverStorageException {
     try {
-      ValidationUtils.checkState(!(list != null && list.size() > 1), "Found multiple records of " + errMsg + " , expected one");
+      checkState(isNullOrEmpty(entities) || entities.size() == 1, "Found multiple records of " + entityName + " , expected one");
     } catch (IllegalStateException e) {
       throw new MetaserverStorageException(e.getMessage());
     }

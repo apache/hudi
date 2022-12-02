@@ -31,25 +31,25 @@ import java.util.Properties;
     description = "Configurations used by the Hudi Metastore.")
 public class HoodieMetaserverConfig extends HoodieConfig {
 
-  public static final String META_SERVER_PREFIX = "hoodie.metaserver";
+  public static final String METASERVER_PREFIX = "hoodie.metaserver";
 
-  public static final ConfigProperty<Boolean> META_SERVER_ENABLE = ConfigProperty
-      .key(META_SERVER_PREFIX + ".enable")
+  public static final ConfigProperty<Boolean> METASERVER_ENABLE = ConfigProperty
+      .key(METASERVER_PREFIX + ".enabled")
       .defaultValue(false)
-      .withDocumentation("Use metastore server to store hoodie table metadata");
+      .withDocumentation("Enable Hudi metaserver for storing Hudi tables' metadata.");
 
-  public static final ConfigProperty<String> META_SERVER_URLS = ConfigProperty
-      .key(META_SERVER_PREFIX + ".uris")
+  public static final ConfigProperty<String> METASERVER_URLS = ConfigProperty
+      .key(METASERVER_PREFIX + ".uris")
       .defaultValue("thrift://localhost:9090")
       .withDocumentation("Metastore server uris");
 
-  public static final ConfigProperty<Integer> META_SERVER_CONNECTION_RETRIES = ConfigProperty
-      .key(META_SERVER_PREFIX + ".connect.retries")
+  public static final ConfigProperty<Integer> METASERVER_CONNECTION_RETRIES = ConfigProperty
+      .key(METASERVER_PREFIX + ".connect.retries")
       .defaultValue(3)
       .withDocumentation("Number of retries while opening a connection to metastore");
 
-  public static final ConfigProperty<Integer> META_SERVER_CONNECTION_RETRY_DELAY = ConfigProperty
-      .key(META_SERVER_PREFIX + ".connect.retry.delay")
+  public static final ConfigProperty<Integer> METASERVER_CONNECTION_RETRY_DELAY = ConfigProperty
+      .key(METASERVER_PREFIX + ".connect.retry.delay")
       .defaultValue(1)
       .withDocumentation("Number of seconds for the client to wait between consecutive connection attempts");
 
@@ -57,24 +57,24 @@ public class HoodieMetaserverConfig extends HoodieConfig {
     return new HoodieMetaserverConfig.Builder();
   }
 
-  public boolean enableMetaserver() {
-    return getBoolean(META_SERVER_ENABLE);
+  public boolean isMetaserverEnabled() {
+    return getBoolean(METASERVER_ENABLE);
   }
 
   public String getMetaserverUris() {
-    return getStringOrDefault(META_SERVER_URLS);
+    return getStringOrDefault(METASERVER_URLS);
   }
 
   public int getConnectionRetryLimit() {
-    return getIntOrDefault(META_SERVER_CONNECTION_RETRIES);
+    return getIntOrDefault(METASERVER_CONNECTION_RETRIES);
   }
 
   public int getConnectionRetryDelay() {
-    return getIntOrDefault(META_SERVER_CONNECTION_RETRY_DELAY);
+    return getIntOrDefault(METASERVER_CONNECTION_RETRY_DELAY);
   }
 
   /**
-   * Builder for {@link HoodieMetastoreConfig}.
+   * Builder for {@link HoodieMetaserverConfig}.
    */
   public static class Builder {
     private final HoodieMetaserverConfig config = new HoodieMetaserverConfig();
@@ -85,7 +85,7 @@ public class HoodieMetaserverConfig extends HoodieConfig {
     }
 
     public Builder setUris(String uris) {
-      config.setValue(META_SERVER_URLS, uris);
+      config.setValue(METASERVER_URLS, uris);
       return this;
     }
 

@@ -26,6 +26,6 @@ public class TestHoodieMetaserver {
   @Test
   public void testEmbeddedServer() {
     assertNotNull(HoodieMetaserver.getEmbeddedMetaserver());
-    assertNotNull(HoodieMetaserver.getMetadataStore());
+    assertNotNull(HoodieMetaserver.getMetaserverStorage());
   }
 }

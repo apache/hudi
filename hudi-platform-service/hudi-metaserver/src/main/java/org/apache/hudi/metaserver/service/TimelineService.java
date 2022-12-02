@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metaserver.service;
 
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metaserver.store.MetaserverStorage;
 import org.apache.hudi.metaserver.thrift.HoodieInstantChangeResult;
 import org.apache.hudi.metaserver.thrift.MetaserverException;
@@ -27,7 +26,8 @@ import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 import org.apache.hudi.metaserver.thrift.TAction;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
-import org.apache.hudi.metaserver.util.TableUtil;
+import org.apache.hudi.metaserver.util.MetaserverTableUtils;
+
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
 
@@ -36,24 +36,26 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+
 /**
  * Handle all timeline / instant / instant meta related requests.
  */
 public class TimelineService implements Serializable {
 
   private static final Logger LOG = Logger.getLogger(TimelineService.class);
-
-  private MetaserverStorage store;
   private static final List<TAction> ALL_ACTIONS = Arrays.asList(TAction.COMMIT, TAction.DELTACOMMIT,
       TAction.CLEAN, TAction.ROLLBACK, TAction.SAVEPOINT, TAction.REPLACECOMMIT, TAction.COMPACTION, TAction.RESTORE);
   private static final List<TState> PENDING_STATES = Arrays.asList(TState.REQUESTED, TState.INFLIGHT);
+
+  private final MetaserverStorage store;
 
   public TimelineService(MetaserverStorage metaserverStorage) {
     this.store = metaserverStorage;
   }
 
   public List<THoodieInstant> listInstants(String db, String tb, int num) throws TException {
-    Long tableId = TableUtil.getTableId(db, tb, store);
+    Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     List<THoodieInstant> completeds = store.scanInstants(tableId, TState.COMPLETED, num);
     List<THoodieInstant> pendings = store.scanInstants(tableId, PENDING_STATES, -1);
     completeds.addAll(pendings);
@@ -61,18 +63,18 @@ public class TimelineService implements Serializable {
   }
 
   public ByteBuffer getInstantMeta(String db, String tb, THoodieInstant instant) throws TException {
-    Long tableId = TableUtil.getTableId(db, tb, store);
+    Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     return ByteBuffer.wrap(store.getInstantMeta(tableId, instant));
   }
 
   public String createNewInstantTime(String db, String tb) throws MetaserverStorageException, NoSuchObjectException {
-    Long tableId = TableUtil.getTableId(db, tb, store);
+    Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     return store.createNewTimestamp(tableId);
   }
 
   public HoodieInstantChangeResult createNewInstantWithTime(String db, String tb, THoodieInstant instant, ByteBuffer content) throws TException {
-    ValidationUtils.checkArgument(instant.getState().equals(TState.REQUESTED));
-    Long tableId = TableUtil.getTableId(db, tb, store);
+    checkArgument(instant.getState().equals(TState.REQUESTED));
+    Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
     result.setInstant(instant);
     if (store.instantExists(tableId, instant)) {
@@ -96,10 +98,10 @@ public class TimelineService implements Serializable {
   }
 
   private HoodieInstantChangeResult transitionRequestedToInflight(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata) throws TException {
-    ValidationUtils.checkArgument(fromInstant.getState().equals(TState.REQUESTED));
-    ValidationUtils.checkArgument(toInstant.getState().equals(TState.INFLIGHT));
+    checkArgument(fromInstant.getState().equals(TState.REQUESTED));
+    checkArgument(toInstant.getState().equals(TState.INFLIGHT));
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
-    Long tableId = TableUtil.getTableId(db, tb, store);
+    Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     if (store.instantExists(tableId, toInstant)) {
       LOG.info("Instant " + toInstant + " has been already changed to");
       result.setSuccess(true);
@@ -112,10 +114,10 @@ public class TimelineService implements Serializable {
   }
 
   private HoodieInstantChangeResult transitionInflightToCompleted(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata) throws TException {
-    ValidationUtils.checkArgument(fromInstant.getState().equals(TState.INFLIGHT));
-    ValidationUtils.checkArgument(toInstant.getState().equals(TState.COMPLETED));
+    checkArgument(fromInstant.getState().equals(TState.INFLIGHT));
+    checkArgument(toInstant.getState().equals(TState.COMPLETED));
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
-    Long tableId = TableUtil.getTableId(db, tb, store);
+    Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     if (store.instantExists(tableId, toInstant)) {
       LOG.info("Instant " + toInstant + " has been already changed to");
       result.setSuccess(true);
@@ -129,7 +131,7 @@ public class TimelineService implements Serializable {
   }
 
   public HoodieInstantChangeResult deleteInstant(String db, String tb, THoodieInstant instant) throws TException {
-    Long tableId = TableUtil.getTableId(db, tb, store);
+    Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
     if (store.instantExists(tableId, instant)) {
       switch (instant.getState()) {

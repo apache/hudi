@@ -49,7 +49,7 @@ public class TestRelationalDBBasedStore {
   @Test
   public void testAPIs() throws TException {
     HoodieMetaserver.getEmbeddedMetaserver();
-    store = HoodieMetaserver.getMetadataStore();
+    store = HoodieMetaserver.getMetaserverStorage();
     testTableRelatedAPIs();
     testTimelineRelatedAPIs();
   }

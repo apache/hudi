@@ -2274,7 +2274,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Metastore configs.
    */
   public boolean isMetaserverEnabled() {
-    return metaserverConfig.enableMetaserver();
+    return metaserverConfig.isMetaserverEnabled();
   }
 
   /**

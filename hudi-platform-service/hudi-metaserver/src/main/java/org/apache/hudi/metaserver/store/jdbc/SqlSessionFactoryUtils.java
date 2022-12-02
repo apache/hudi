@@ -22,6 +22,8 @@ import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,33 +31,31 @@ import java.io.InputStream;
 /**
  * Utils for sql session's life cycle.
  */
-public class SqlSessionFactoryUtil {
+public class SqlSessionFactoryUtils {
+  private static final Logger LOG = LogManager.getLogger(SqlSessionFactoryUtils.class);
   private static final String CONFIG_PATH = "mybatis-config.xml";
+  private static volatile SqlSessionFactory sqlSessionFactory;
 
-  private static SqlSessionFactory sqlSessionFactory;
-  private static final Class<?> CLASS_LOCK = SqlSessionFactoryUtil.class;
-
-  private SqlSessionFactoryUtil(){
+  private SqlSessionFactoryUtils() {
 
   }
 
-  public static SqlSessionFactory initSqlSessionFactory() {
-    try (InputStream inputStream = Resources.getResourceAsStream(CONFIG_PATH)) {
-      synchronized (CLASS_LOCK) {
+  private static void initSqlSessionFactory() {
+    if (sqlSessionFactory == null) {
+      synchronized (SqlSessionFactoryUtils.class) {
         if (sqlSessionFactory == null) {
-          sqlSessionFactory = new SqlSessionFactoryBuilder().build(inputStream);
+          try (InputStream inputStream = Resources.getResourceAsStream(CONFIG_PATH)) {
+            sqlSessionFactory = new SqlSessionFactoryBuilder().build(inputStream);
+          } catch (IOException e) {
+            LOG.error("Failed to init SQL session.", e);
+          }
         }
       }
-    } catch (IOException e) {
-      e.printStackTrace();
     }
-    return sqlSessionFactory;
   }
 
   public static SqlSession openSqlSession() {
-    if (sqlSessionFactory == null) {
-      initSqlSessionFactory();
-    }
+    initSqlSessionFactory();
     return sqlSessionFactory.openSession();
   }
 }

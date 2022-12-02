@@ -33,10 +33,9 @@ import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
  * Active timeline for hoodie table whose metadata is stored in the hoodie meta server instead of file system.
  */
 public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
-  private String databaseName;
-  private String tableName;
-
-  private HoodieMetaserverClient metaserverClient;
+  private final String databaseName;
+  private final String tableName;
+  private final HoodieMetaserverClient metaserverClient;
   
   public HoodieMetaserverBasedTimeline(HoodieTableMetaClient metaClient, HoodieMetaserverConfig config) {
     this.metaClient = metaClient;
@@ -46,15 +45,18 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
     this.setInstants(metaserverClient.listInstants(databaseName, tableName, 24));
   }
 
+  @Override
   protected void deleteInstantFile(HoodieInstant instant) {
     metaserverClient.deleteInstant(databaseName, tableName, instant);
   }
 
+  @Override
   public void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data, boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant, data);
   }
 
+  @Override
   public void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
     FileStatus status = new FileStatus();
     status.setPath(new Path(filename));
@@ -63,6 +65,7 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
     metaserverClient.createNewInstant(databaseName, tableName, instant, Option.empty());
   }
 
+  @Override
   protected void revertCompleteToInflight(HoodieInstant completed, HoodieInstant inflight) {
     throw new HoodieException("Unsupported now");
   }
@@ -74,6 +77,7 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
     return metaserverClient.getInstantMeta(databaseName, tableName, instant);
   }
 
+  @Override
   public HoodieMetaserverBasedTimeline reload() {
     return new HoodieMetaserverBasedTimeline(metaClient, metaClient.getMetaserverConfig());
   }

@@ -34,7 +34,7 @@ import java.util.Arrays;
 public class HoodieMetaserverProxyHandler implements InvocationHandler {
   private static final Logger LOG = LogManager.getLogger(HoodieMetaserverProxyHandler.class);
 
-  private HoodieMetaserverService metaserverService;
+  private final HoodieMetaserverService metaserverService;
 
   public HoodieMetaserverProxyHandler(HoodieMetaserverService metaserverService) {
     this.metaserverService = metaserverService;
@@ -42,17 +42,16 @@ public class HoodieMetaserverProxyHandler implements InvocationHandler {
 
   @Override
   public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-    Throwable err = null;
+    Throwable err;
     try {
-      Object res = method.invoke(metaserverService, args);
-      return res;
+      return method.invoke(metaserverService, args);
     } catch (IllegalAccessException | InvocationTargetException e) {
       err = e.getCause();
     } catch (Throwable e) {
       err = e;
     }
     if (err != null) {
-      LOG.error("Call hudi meta server method=" + method.getName() + " args=" +  Arrays.toString(args) + " error", err);
+      LOG.error("Error in calling metaserver method=" + method.getName() + " args=" +  Arrays.toString(args) + " error", err);
       if (err instanceof TException) {
         throw err;
       } else {

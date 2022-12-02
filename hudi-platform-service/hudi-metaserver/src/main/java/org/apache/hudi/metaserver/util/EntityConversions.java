@@ -27,9 +27,10 @@ import org.apache.hudi.metaserver.thrift.TState;
 import java.util.Locale;
 
 /**
- * A convertor between hoodie entity and thrift entity.
+ * Conversion helpers to convert between hoodie entity and thrift entity.
  */
-public class EntityConvertor {
+public class EntityConversions {
+
   public static THoodieInstant toTHoodieInstant(HoodieInstant instant) {
     return new THoodieInstant(instant.getTimestamp(), toTAction(instant.getAction()), toTState(instant.getState()));
   }

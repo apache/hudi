@@ -22,11 +22,12 @@ import org.apache.hudi.metaserver.store.MetaserverStorage;
 import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 
-public class TableUtil {
-  public static Long getTableId(String db, String tb, MetaserverStorage store) throws NoSuchObjectException, MetaserverStorageException {
-    Long tableId = store.getTableId(db, tb);
+public class MetaserverTableUtils {
+
+  public static Long getTableId(MetaserverStorage store, String databaseName, String tableName) throws NoSuchObjectException, MetaserverStorageException {
+    Long tableId = store.getTableId(databaseName, tableName);
     if (tableId == null) {
-      throw new NoSuchObjectException(db + "." + tb + " does not exist");
+      throw new NoSuchObjectException(databaseName + "." + tableName + " does not exist");
     }
     return tableId;
   }

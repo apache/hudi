@@ -26,7 +26,7 @@ import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
 
 /**
  * TableFileSystemView Implementations based on in-memory storage and
- * is specifically for hoodie table whose metadata is stored in the hoodie meta server.
+ * is specifically for hoodie table whose metadata is stored in the hoodie metaserver.
  */
 public class HoodieMetaserverFileSystemView extends HoodieTableFileSystemView {
   private String databaseName;

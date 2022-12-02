@@ -61,7 +61,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class FileSystemViewManager {
   private static final Logger LOG = LogManager.getLogger(FileSystemViewManager.class);
 
-  private static final String HOODIE_META_SERVER_FILE_SYSTEM_VIEW_CLASS = "org.apache.hudi.common.table.view.HoodieMetaserverFileSystemView";
+  private static final String HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS = "org.apache.hudi.common.table.view.HoodieMetaserverFileSystemView";
 
   private final SerializableConfiguration conf;
   // The View Storage config used to store file-system views
@@ -169,8 +169,8 @@ public class FileSystemViewManager {
       return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(),
           metadataSupplier.get());
     }
-    if (metaClient.getMetaserverConfig().enableMetaserver()) {
-      return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_META_SERVER_FILE_SYSTEM_VIEW_CLASS,
+    if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
+      return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
           new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetaserverConfig.class},
           metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetaserverConfig());
     }
@@ -193,8 +193,8 @@ public class FileSystemViewManager {
     if (metadataConfig.enabled()) {
       return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline, metadataConfig);
     }
-    if (metaClient.getMetaserverConfig().enableMetaserver()) {
-      return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_META_SERVER_FILE_SYSTEM_VIEW_CLASS,
+    if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
+      return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
           new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetadataConfig.class},
           metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetaserverConfig());
     }

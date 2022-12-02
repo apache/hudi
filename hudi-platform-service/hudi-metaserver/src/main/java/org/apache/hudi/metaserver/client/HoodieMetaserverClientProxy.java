@@ -19,8 +19,6 @@
 package org.apache.hudi.metaserver.client;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.lang.reflect.InvocationHandler;
@@ -34,7 +32,6 @@ import java.lang.reflect.UndeclaredThrowableException;
  */
 public class HoodieMetaserverClientProxy implements InvocationHandler, Serializable {
 
-  private static final Logger LOG =  LogManager.getLogger(HoodieMetaserverClientProxy.class);
   private final HoodieMetaserverClient client;
   private final int retryLimit;
   private final int retryDelaySeconds;
@@ -54,14 +51,13 @@ public class HoodieMetaserverClientProxy implements InvocationHandler, Serializa
   @Override
   public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
     int retry = 0;
-    Throwable err = null;
+    Throwable err;
     do {
       try {
-        Object res = method.invoke(client, args);
-        return res;
+        return method.invoke(client, args);
       } catch (IllegalAccessException | InvocationTargetException | UndeclaredThrowableException e) {
         throw e.getCause();
-      } catch (Exception e) {
+      } catch (Throwable e) {
         err = e;
       }
       retry++;
