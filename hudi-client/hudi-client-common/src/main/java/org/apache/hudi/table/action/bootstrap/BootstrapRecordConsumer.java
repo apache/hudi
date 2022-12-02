@@ -36,7 +36,7 @@ public class BootstrapRecordConsumer implements HoodieConsumer<HoodieRecord, Voi
 
   @Override
   public void consume(HoodieRecord record) {
-    bootstrapHandle.write(record, bootstrapHandle.getWriterSchemaWithMetaFields(), new TypedProperties());
+    bootstrapHandle.write(record, bootstrapHandle.getWriterSchema(), new TypedProperties());
   }
 
   @Override
