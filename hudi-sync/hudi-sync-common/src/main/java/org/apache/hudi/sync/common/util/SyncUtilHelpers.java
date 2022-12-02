@@ -30,6 +30,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Collection;
 import java.util.Properties;
 
 /**
@@ -103,5 +106,23 @@ public class SyncUtilHelpers {
       throw new HoodieException("Could not load meta sync class " + syncToolClassName
           + ": no valid constructor found.");
     }
+  }
+
+  public static HoodieException getExceptionFromList(Collection<HoodieException> exceptions) {
+    if (exceptions.size() == 1) {
+      return exceptions.stream().findFirst().get();
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("Multiple exceptions during meta sync:\n********\n");
+    exceptions.forEach(e -> {
+      StringWriter sw = new StringWriter();
+      PrintWriter pw = new PrintWriter(sw);
+      e.printStackTrace(pw);
+      sb.append(e.getMessage());
+      sb.append("\n");
+      sb.append(sw);
+      sb.append("********\n");
+    });
+    return new HoodieException(sb.toString());
   }
 }
