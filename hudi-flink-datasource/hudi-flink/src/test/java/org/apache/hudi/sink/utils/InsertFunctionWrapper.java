@@ -168,6 +168,6 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.open(conf);
 
     // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
+    coordinator.handleEventFromOperator(0, 0, getNextEvent());
   }
 }

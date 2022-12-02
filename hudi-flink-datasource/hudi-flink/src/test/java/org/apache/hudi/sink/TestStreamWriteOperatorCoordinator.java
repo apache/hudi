@@ -81,8 +81,8 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
-    coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
-    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+    coordinator.handleEventFromOperator(0, 0, WriteMetadataEvent.emptyBootstrap(0));
+    coordinator.handleEventFromOperator(1, 0, WriteMetadataEvent.emptyBootstrap(1));
   }
 
   @AfterEach
@@ -97,8 +97,8 @@ public class TestStreamWriteOperatorCoordinator {
 
     OperatorEvent event0 = createOperatorEvent(0, instant, "par1", true, 0.1);
     OperatorEvent event1 = createOperatorEvent(1, instant, "par2", false, 0.2);
-    coordinator.handleEventFromOperator(0, event0);
-    coordinator.handleEventFromOperator(1, event1);
+    coordinator.handleEventFromOperator(0, 0, event0);
+    coordinator.handleEventFromOperator(1, 0, event1);
 
     coordinator.notifyCheckpointComplete(1);
     String inflight = TestUtils.getLastPendingInstant(tempFile.getAbsolutePath());
@@ -134,7 +134,7 @@ public class TestStreamWriteOperatorCoordinator {
         .writeStatus(Collections.emptyList())
         .build();
 
-    assertError(() -> coordinator.handleEventFromOperator(0, event),
+    assertError(() -> coordinator.handleEventFromOperator(0, 0, event),
         "Receive an unexpected event for instant abc from task 0");
   }
 
@@ -148,7 +148,7 @@ public class TestStreamWriteOperatorCoordinator {
         .instantTime(instant)
         .writeStatus(Collections.emptyList())
         .build();
-    coordinator.handleEventFromOperator(0, event);
+    coordinator.handleEventFromOperator(0, 0, event);
 
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1),
         "Returns early for empty write results");
@@ -157,7 +157,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertNull(coordinator.getEventBuffer()[0]);
 
     OperatorEvent event1 = createOperatorEvent(1, instant, "par2", false, 0.2);
-    coordinator.handleEventFromOperator(1, event1);
+    coordinator.handleEventFromOperator(1, 0, event1);
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(2),
         "Commits the instant with partial events anyway");
     lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
@@ -178,7 +178,7 @@ public class TestStreamWriteOperatorCoordinator {
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
-    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(0, 0, event0);
 
     String instant = mockWriteWithMetadata();
     assertNotEquals("", instant);
@@ -202,7 +202,7 @@ public class TestStreamWriteOperatorCoordinator {
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
-    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(0, 0, event0);
 
     String instant = coordinator.getInstant();
     assertNotEquals("", instant);
@@ -273,7 +273,7 @@ public class TestStreamWriteOperatorCoordinator {
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
-    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(0, 0, event0);
 
     String instant = coordinator.getInstant();
     assertNotEquals("", instant);
@@ -312,12 +312,12 @@ public class TestStreamWriteOperatorCoordinator {
     try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, context)) {
       coordinator.start();
       coordinator.setExecutor(executor);
-      coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
+      coordinator.handleEventFromOperator(0, 0, WriteMetadataEvent.emptyBootstrap(0));
       TimeUnit.SECONDS.sleep(5); // wait for handled bootstrap event
 
       int eventCount = 20_000; // big enough to fill executor's queue
       for (int i = 0; i < eventCount; i++) {
-        coordinator.handleEventFromOperator(0, createOperatorEvent(0, coordinator.getInstant(), "par1", true, 0.1));
+        coordinator.handleEventFromOperator(0, 0, createOperatorEvent(0, coordinator.getInstant(), "par1", true, 0.1));
       }
 
       WriteMetadataEvent endInput = WriteMetadataEvent.builder()
@@ -326,7 +326,7 @@ public class TestStreamWriteOperatorCoordinator {
           .writeStatus(Collections.emptyList())
           .endInput(true)
           .build();
-      coordinator.handleEventFromOperator(0, endInput);
+      coordinator.handleEventFromOperator(0, 0, endInput);
 
       // wait for submitted events completed
       executor.close();
@@ -344,7 +344,7 @@ public class TestStreamWriteOperatorCoordinator {
     final String instant = coordinator.getInstant();
     OperatorEvent event = createOperatorEvent(0, instant, "par1", true, 0.1);
 
-    coordinator.handleEventFromOperator(0, event);
+    coordinator.handleEventFromOperator(0, 0, event);
     coordinator.notifyCheckpointComplete(0);
     return instant;
   }

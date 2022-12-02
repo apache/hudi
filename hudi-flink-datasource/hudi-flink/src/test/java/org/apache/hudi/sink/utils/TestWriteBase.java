@@ -170,7 +170,7 @@ public class TestWriteBase {
     public TestHarness assertNextEvent() {
       final OperatorEvent nextEvent = this.pipeline.getNextEvent();
       MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
-      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
+      this.pipeline.getCoordinator().handleEventFromOperator(0, 0, nextEvent);
       assertNotNull(this.pipeline.getEventBuffer()[0], "The coordinator missed the event");
       return this;
     }
@@ -191,7 +191,7 @@ public class TestWriteBase {
               .map(WriteStatus::getPartitionPath).sorted(Comparator.naturalOrder())
               .collect(Collectors.joining(",")),
           is(partitions));
-      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
+      this.pipeline.getCoordinator().handleEventFromOperator(0, 0, nextEvent);
       assertNotNull(this.pipeline.getEventBuffer()[0], "The coordinator missed the event");
       return this;
     }
@@ -207,7 +207,7 @@ public class TestWriteBase {
       List<WriteStatus> writeStatuses = ((WriteMetadataEvent) nextEvent).getWriteStatuses();
       assertNotNull(writeStatuses);
       MatcherAssert.assertThat(writeStatuses.size(), is(0));
-      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
+      this.pipeline.getCoordinator().handleEventFromOperator(0, 0, nextEvent);
       assertNotNull(this.pipeline.getEventBuffer()[0], "The coordinator missed the event");
       return this;
     }
@@ -245,7 +245,7 @@ public class TestWriteBase {
       for (int i = 0; i < numEvents; i++) {
         final OperatorEvent event = this.pipeline.getNextEvent(); // remove the first event first
         assertThat("The operator expect to send an event", event, instanceOf(WriteMetadataEvent.class));
-        this.pipeline.getCoordinator().handleEventFromOperator(0, event);
+        this.pipeline.getCoordinator().handleEventFromOperator(0, 0, event);
       }
       assertNotNull(this.pipeline.getEventBuffer()[0], "The coordinator missed the event");
       return this;

@@ -52,6 +52,6 @@ public class SortOperatorGen {
     for (int sortIndex : sortIndices) {
       builder.addField(sortIndex, true, true);
     }
-    return new SortCodeGenerator(tableConfig, rowType, builder.build());
+    return new SortCodeGenerator(tableConfig, Thread.currentThread().getContextClassLoader(), rowType, builder.build());
   }
 }

@@ -215,7 +215,8 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void subTaskFails(int taskID) throws Exception {
-    coordinator.subtaskFailed(taskID, new RuntimeException("Dummy exception"));
+    int attemptNumber = 0;
+    coordinator.executionAttemptFailed(taskID, attemptNumber, new RuntimeException("Dummy exception"));
     setupWriteFunction();
   }
 
@@ -261,7 +262,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.open(conf);
 
     // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
+    coordinator.handleEventFromOperator(0, 0, getNextEvent());
   }
 
   // -------------------------------------------------------------------------

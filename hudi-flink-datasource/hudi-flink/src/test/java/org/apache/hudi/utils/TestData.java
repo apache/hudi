@@ -427,7 +427,7 @@ public class TestData {
     funcWrapper.checkpointFunction(1);
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    funcWrapper.getCoordinator().handleEventFromOperator(0, 0, nextEvent);
     funcWrapper.checkpointComplete(1);
 
     funcWrapper.close();
@@ -459,7 +459,7 @@ public class TestData {
     funcWrapper.endInput();
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    funcWrapper.getCoordinator().handleEventFromOperator(0, 0, nextEvent);
 
     funcWrapper.close();
   }

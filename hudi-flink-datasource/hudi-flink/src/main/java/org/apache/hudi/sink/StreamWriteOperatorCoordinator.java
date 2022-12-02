@@ -268,7 +268,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void handleEventFromOperator(int i, OperatorEvent operatorEvent) {
+  public void handleEventFromOperator(int i, int attemptNumber, OperatorEvent operatorEvent) {
     ValidationUtils.checkState(operatorEvent instanceof WriteMetadataEvent,
         "The coordinator can only handle WriteMetaEvent");
     WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;
@@ -291,19 +291,19 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void subtaskFailed(int i, @Nullable Throwable throwable) {
+  public void subtaskReset(int i, long l) {
+    // no operation
+  }
+
+  @Override
+  public void executionAttemptFailed(int i, int attemptNumber, @Nullable Throwable throwable) {
     // reset the event
     this.eventBuffer[i] = null;
     LOG.warn("Reset the event for task [" + i + "]", throwable);
   }
 
   @Override
-  public void subtaskReset(int i, long l) {
-    // no operation
-  }
-
-  @Override
-  public void subtaskReady(int i, SubtaskGateway subtaskGateway) {
+  public void executionAttemptReady(int i, int attemptNumber, SubtaskGateway subtaskGateway) {
     this.gateways[i] = subtaskGateway;
   }
 
