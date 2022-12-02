@@ -75,11 +75,19 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
     LOG.info("Scheduling clustering for " + metaClient.getBasePath());
     HoodieWriteConfig config = getWriteConfig();
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(getEngineContext(), config.getMetadataConfig(), metaClient.getBasePath());
 
-    // get matched partitions if set
-    partitionPaths = getMatchedPartitions(config, partitionPaths);
-    // filter the partition paths if needed to reduce list status
+    String partitionSelected = config.getClusteringPartitionSelected();
+    List<String> partitionPaths;
+
+    if (StringUtils.isNullOrEmpty(partitionSelected)) {
+      partitionPaths = FSUtils.getAllPartitionPaths(getEngineContext(), config.getMetadataConfig(), metaClient.getBasePath());
+      // get matched partitions if set
+      partitionPaths = getRegexPatternMatchedPartitions(config, partitionPaths);
+      // filter the partition paths if needed to reduce list status
+    } else {
+      partitionPaths = Arrays.asList(partitionSelected.split(","));
+    }
+
     partitionPaths = filterPartitionPaths(partitionPaths);
 
     if (partitionPaths.isEmpty()) {
