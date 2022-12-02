@@ -121,6 +121,7 @@ object HoodieSparkSqlWriter {
     }
     val tableType = HoodieTableType.valueOf(hoodieConfig.getString(TABLE_TYPE))
     var operation = WriteOperationType.fromValue(hoodieConfig.getString(OPERATION))
+    // TODO clean up
     // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS is true
     // Auto-correct the operation to "insert" if OPERATION is set to "upsert" wrongly
     // or not set (in which case it will be set as "upsert" by parametersWithWriteDefaults()) .
@@ -776,9 +777,7 @@ object HoodieSparkSqlWriter {
         + " To use row writer please switch to spark 2 or spark 3")
     }
 
-    hoodieDF
-      .repartitionByRange()
-      .write.format(targetFormat)
+    hoodieDF.write.format(targetFormat)
       .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
       .options(opts ++ customOpts ++ optsOverrides)
       .mode(SaveMode.Append)
