@@ -34,6 +34,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -142,6 +143,7 @@ public class FormatUtils {
   public static HoodieMergedLogRecordScanner logScanner(
       MergeOnReadInputSplit split,
       Schema logSchema,
+      InternalSchema internalSchema,
       org.apache.flink.configuration.Configuration flinkConf,
       Configuration hadoopConf) {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
@@ -151,6 +153,7 @@ public class FormatUtils {
         .withBasePath(split.getTablePath())
         .withLogFilePaths(split.getLogPaths().get())
         .withReaderSchema(logSchema)
+        .withInternalSchema(internalSchema)
         .withLatestInstantTime(split.getLatestCommit())
         .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
@@ -167,6 +170,7 @@ public class FormatUtils {
   private static HoodieUnMergedLogRecordScanner unMergedLogScanner(
       MergeOnReadInputSplit split,
       Schema logSchema,
+      InternalSchema internalSchema,
       org.apache.flink.configuration.Configuration flinkConf,
       Configuration hadoopConf,
       HoodieUnMergedLogRecordScanner.LogRecordScannerCallback callback) {
@@ -176,6 +180,7 @@ public class FormatUtils {
         .withBasePath(split.getTablePath())
         .withLogFilePaths(split.getLogPaths().get())
         .withReaderSchema(logSchema)
+        .withInternalSchema(internalSchema)
         .withLatestInstantTime(split.getLatestCommit())
         .withReadBlocksLazily(
             string2Boolean(
@@ -206,6 +211,7 @@ public class FormatUtils {
     public BoundedMemoryRecords(
         MergeOnReadInputSplit split,
         Schema logSchema,
+        InternalSchema internalSchema,
         Configuration hadoopConf,
         org.apache.flink.configuration.Configuration flinkConf) {
       this.executor = new BoundedInMemoryExecutor<>(
@@ -217,7 +223,7 @@ public class FormatUtils {
           Functions.noop());
       // Consumer of this record reader
       this.iterator = this.executor.getQueue().iterator();
-      this.scanner = FormatUtils.unMergedLogScanner(split, logSchema, flinkConf, hadoopConf,
+      this.scanner = FormatUtils.unMergedLogScanner(split, logSchema, internalSchema, flinkConf, hadoopConf,
           record -> executor.getQueue().insertRecord(record));
       // Start reading and buffering
       this.executor.startProducers();
