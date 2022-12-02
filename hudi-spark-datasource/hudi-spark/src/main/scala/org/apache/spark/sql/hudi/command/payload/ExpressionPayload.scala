@@ -26,13 +26,13 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
 import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.hudi.sql.IExpressionEvaluator
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.avro.{AvroSerializer, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hudi.SerDeUtils
-import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{PAYLOAD_RECORD_AVRO_SCHEMA, getEvaluator, getMergedSchema, parseSchema}
+import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{PAYLOAD_RECORD_AVRO_SCHEMA, PAYLOAD_WRITE_SCHEMA_OVERRIDE, getEvaluator, getMergedSchema, parseSchema}
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import java.util.function.Function
@@ -225,9 +225,9 @@ class ExpressionPayload(record: GenericRecord,
 
   private def init(props: Properties): Unit = {
     if (writeSchema == null) {
-      ValidationUtils.checkArgument(props.containsKey(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key),
-        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key} property")
-      writeSchema = parseSchema(props.getProperty(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key))
+      ValidationUtils.checkArgument(props.containsKey(PAYLOAD_WRITE_SCHEMA_OVERRIDE),
+        s"Missing ${PAYLOAD_WRITE_SCHEMA_OVERRIDE} property")
+      writeSchema = parseSchema(props.getProperty(PAYLOAD_WRITE_SCHEMA_OVERRIDE))
     }
 
     if (recordSchema == null) {
@@ -236,6 +236,7 @@ class ExpressionPayload(record: GenericRecord,
       recordSchema = parseSchema(props.getProperty(PAYLOAD_RECORD_AVRO_SCHEMA))
     }
   }
+
 
   /**
    * Join the source record with the target record.
@@ -289,6 +290,11 @@ object ExpressionPayload {
   val PAYLOAD_RECORD_AVRO_SCHEMA = "hoodie.payload.record.schema"
 
   /**
+   * Property holding record's write override schema
+   */
+  val PAYLOAD_WRITE_SCHEMA_OVERRIDE = "hoodie.payload.write.schema.override"
+
+  /**
    * A cache for the serializedConditionAssignments to the compiled class after CodeGen.
    * The Map[IExpressionEvaluator, IExpressionEvaluator] is the map of the condition expression
    * to the assignments expression.
@@ -300,11 +306,15 @@ object ExpressionPayload {
   private val schemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[String, Schema]()
 
-  private def parseSchema(schemaStr: String): Schema = {
-    schemaCache.get(schemaStr,
+  private def parseSchema(serialized: String): Schema = {
+    schemaCache.get(serialized,
       new Function[String, Schema] {
-        override def apply(t: String): Schema = new Schema.Parser().parse(t)
-    })
+        override def apply(t: String): Schema = {
+          val serializedBytes = Base64.getDecoder.decode(t)
+          val broadCastVar = SerDeUtils.toObject(serializedBytes).asInstanceOf[Broadcast[Schema]]
+          broadCastVar.value
+        }
+      })
   }
 
   /**

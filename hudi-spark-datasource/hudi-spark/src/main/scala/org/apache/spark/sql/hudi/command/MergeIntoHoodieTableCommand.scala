@@ -298,10 +298,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Append the table schema to the parameters. In the case of merge into, the schema of sourceDF
     // may be different from the target table, because the are transform logical in the update or
     // insert actions.
+    val writeSchemaOverride = getTableSchema
     var writeParams = parameters +
       (OPERATION.key -> operation) +
-      (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key -> getTableSchema.toString) +
+      (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key -> writeSchemaOverride.toString) +
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
+    //Broadcast the schema as well
+    val writeSchemaOverrideBroadcast = sparkSession.sparkContext.broadcast(writeSchemaOverride)
+    val serializedPayloadWriteSchemaOverrideBroadcast = Base64.getEncoder
+      .encodeToString(SerDeUtils.toBytes(writeSchemaOverrideBroadcast))
+    writeParams += (PAYLOAD_WRITE_SCHEMA_OVERRIDE -> serializedPayloadWriteSchemaOverrideBroadcast)
 
     val updateActions = mergeInto.matchedActions.filter(_.isInstanceOf[UpdateAction])
       .map(_.asInstanceOf[UpdateAction])
@@ -351,8 +357,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val trimmedSourceDF = removeMetaFields(sourceDF)
 
     // Supply original record's Avro schema to provided to [[ExpressionPayload]]
-    writeParams += (PAYLOAD_RECORD_AVRO_SCHEMA ->
-      convertStructTypeToAvroSchema(trimmedSourceDF.schema, "record", "").toString)
+    val payloadAvroSchema = convertStructTypeToAvroSchema(trimmedSourceDF.schema, "record", "")
+    val payloadSchemaBroadcast = sparkSession.sparkContext.broadcast(payloadAvroSchema)
+    val serializedPayloadSchemaBroadcast = Base64.getEncoder.encodeToString(SerDeUtils.toBytes(payloadSchemaBroadcast))
+    writeParams += (PAYLOAD_RECORD_AVRO_SCHEMA -> serializedPayloadSchemaBroadcast)
+
+    //Broadcast the schemas
+
+
 
     HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, trimmedSourceDF)
   }
