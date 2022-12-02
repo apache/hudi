@@ -15,42 +15,45 @@
   limitations under the License.
 -->
 
-# How to compile
+## How to compile
 
 There are two ways, if there is a thrift binary in the local, please see the first one.
 If docker is more convenient for you, please see the other way.
 
-### Way1: Compile with thrift binary
+### Compile with thrift binary
 
 Firstly, make sure `/usr/local/bin/thrift` exists, and its version is the same with the one declared in the pom.xml.
 
 Then compile the module with maven options `-Pthrift`.
 
-### Way2: Compile with docker
+### Compile with docker
 
 Firstly, make sure there is a docker in the local.
 
 Secondly run the script `sh hudi-platform-service/hudi-metaserver/bin/compile_thrift_by_docker.sh`.
 
-Then the source code of thrift file generates and it is under the `target/generated-sources/thrift/gen-java`.
+## Generated sources
+
+The generated source code are placed in `target/generated-sources/thrift/gen-java`.
+
 ```shell
 ├── gen-java
-│   └── org
-│       └── apache
-│           └── hudi
-│               └── metaserver
-│                   └── thrift
-│                       ├── AlreadyExistException.java
-│                       ├── FieldSchema.java
-│                       ├── ...
+│       └── org
+│           └── apache
+│               └── hudi
+│                   └── metaserver
+│                       └── thrift
+│                           ├── AlreadyExistException.java
+│                           ├── FieldSchema.java
+│                           ├── ...
 ```
 
-After source code generates, just compile the module with common maven commands(exclude `mvn clean`).
+After source code generates, just compile the module with common maven commands. Note that `mvn clean` will clean the generated source code.
 
-
-# How to run a job with Hudi Metaserver
+## How to run a job with Hudi Metaserver
 
 ### Start Hudi Metaserver
+
 1. modify the `hikariPool.properties` and config the mysql address. For example,
 ```text
 jdbcUrl=jdbc:mysql://localhost:3306
@@ -65,6 +68,7 @@ sh start_hudi_metaserver.sh
 ```
 
 ### Write client configurations
+
 ```shell
 hoodie.database.name=default
 hoodie.table.name=test
@@ -74,11 +78,10 @@ hoodie.metadata.enabled=false
 hoodie.metaserver.uris=thrift://${serverIP}:9090
 ```
 
-# How to test
+## How to test
 
 ### Run a unit test with Hudi Metaserver
-Add the configurations mentioned in the `Write client configurations` part, and
-set `hoodie.metaserver.uris=""`.
 
-The meta server runs as an embedded one with h2 database that performs like mysql running locally.
+Add the configurations mentioned in the `Write client configurations` part, and then set `hoodie.metaserver.uris=""`.
 
+The metaserver runs as an embedded one with h2 database that performs like mysql running locally.
