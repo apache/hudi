@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier
 import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.keygen.{BuiltinKeyGenerator, SparkKeyGeneratorInterface}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
@@ -150,8 +151,8 @@ object HoodieDatasetBulkInsertHelper extends Logging {
       }
 
       writer.getWriteStatuses.asScala.map(_.toWriteStatus).iterator
-    }).collect()
-    table.getContext.parallelize(writeStatuses.toList.asJava)
+    })
+    HoodieJavaRDD.of(writeStatuses)
   }
 
   private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean): RDD[InternalRow] = {
