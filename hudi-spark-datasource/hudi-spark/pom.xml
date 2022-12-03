@@ -135,6 +135,9 @@
       <plugin>
         <groupId>org.scalatest</groupId>
         <artifactId>scalatest-maven-plugin</artifactId>
+        <configuration>
+          <tagsToExclude>org.apache.hudi.functional.SparkSQLCoreFlow</tagsToExclude>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.scalastyle</groupId>
