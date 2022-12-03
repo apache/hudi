@@ -469,7 +469,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   private void validateClusteringCommit(HoodieWriteMetadata<JavaRDD<WriteStatus>> clusteringMetadata, String clusteringCommitTime, HoodieTable table) {
-    if (clusteringMetadata.getWriteStatuses().isEmpty()) {
+    if (!clusteringMetadata.getWriteStats().isPresent() || clusteringMetadata.getWriteStats().get().isEmpty()) {
       HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
               table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(clusteringCommitTime))
           .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
