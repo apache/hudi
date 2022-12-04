@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.SchemaEvolutionContext;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -72,6 +73,8 @@ public abstract class AbstractRealtimeRecordReader {
   protected boolean supportPayload = true;
   // handle hive type to avro record
   protected HiveAvroSerializer serializer;
+  // support timestamp
+  private final boolean supportTimestamp;
 
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
@@ -80,6 +83,8 @@ public abstract class AbstractRealtimeRecordReader {
     LOG.info("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
     LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     this.supportPayload = Boolean.parseBoolean(job.get("hoodie.support.payload", "true"));
+    // get timestamp columns
+    supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
     try {
       metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
       if (metaClient.getTableConfig().getPreCombineField() != null) {
@@ -218,5 +223,9 @@ public abstract class AbstractRealtimeRecordReader {
 
   public void setHiveSchema(Schema hiveSchema) {
     this.hiveSchema = hiveSchema;
+  }
+
+  public boolean isSupportTimestamp() {
+    return supportTimestamp;
   }
 }
