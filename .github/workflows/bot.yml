@@ -21,26 +21,38 @@ jobs:
           - scalaProfile: "scala-2.11"
             sparkProfile: "spark2.4"
             flinkProfile: "flink1.13"
+            skipBundleValidation: true # TODO: remove this var to validate spark2.4 bundle combinations
+            buildOnly: false
 
           - scalaProfile: "scala-2.11"
             sparkProfile: "spark2.4"
             flinkProfile: "flink1.14"
+            skipBundleValidation: true
+            buildOnly: true
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark2.4"
             flinkProfile: "flink1.13"
+            skipBundleValidation: true
+            buildOnly: true
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.1"
             flinkProfile: "flink1.14"
+            skipBundleValidation: false
+            buildOnly: false
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.2"
             flinkProfile: "flink1.14"
+            skipBundleValidation: false
+            buildOnly: false
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.3"
             flinkProfile: "flink1.14"
+            skipBundleValidation: false
+            buildOnly: false
 
     steps:
       - uses: actions/checkout@v2
@@ -69,7 +81,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
+        if: ${{ !buildOnly && !matrix.skipBundleValidation }}
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
@@ -78,7 +90,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
+        if: ${{ !buildOnly }}
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" '-Dtest=Test*' -pl hudi-common $MVN_ARGS
       - name: Spark SQL Test
@@ -86,6 +98,6 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
+        if: ${{ !buildOnly }}
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" '-Dtest=Test*' -pl hudi-spark-datasource/hudi-spark $MVN_ARGS
