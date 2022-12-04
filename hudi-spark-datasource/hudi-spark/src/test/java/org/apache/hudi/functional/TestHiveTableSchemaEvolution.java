@@ -18,14 +18,6 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
-import org.apache.hadoop.hive.serde.serdeConstants;
-import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
@@ -34,27 +26,44 @@ import org.apache.hudi.hadoop.realtime.HoodieEmptyRecordReader;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeCompactedRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
+
+import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
+import org.apache.hadoop.hive.serde.serdeConstants;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
-
-import java.io.File;
-import java.util.Date;
 
 @Tag("functional")
 public class TestHiveTableSchemaEvolution {
 
-  private SparkSession sparkSession = null;
+  private SparkSession sparkSession;
+  @TempDir
+  java.nio.file.Path tempDir;
+  String basePath;
 
   @BeforeEach
   public void setUp() {
     initSparkContexts("HiveSchemaEvolution");
+    basePath = tempDir.toAbsolutePath().toString();
+  }
+
+  @AfterEach
+  public void tearDown() {
+    sparkSession.close();
   }
 
   private void initSparkContexts(String appName) {
@@ -79,11 +88,10 @@ public class TestHiveTableSchemaEvolution {
 
   @Test
   public void testCopyOnWriteTableForHive() throws Exception {
-    String tableName = "huditest" + new Date().getTime();
-    File file = new File(System.getProperty("java.io.tmpdir") + tableName);
+    String tableName = "huditesttable" + System.currentTimeMillis();
     if (HoodieSparkUtils.gteqSpark3_1()) {
       sparkSession.sql("set hoodie.schema.on.read.enable=true");
-      String path = new Path(file.getCanonicalPath()).toUri().toString();
+      String path = new Path(basePath, tableName).toUri().toString();
       sparkSession.sql("create table " + tableName + "(col0 int, col1 float, col2 string) using hudi options(type='cow', primaryKey='col0', preCombineField='col1') location '" + path + "'");
       sparkSession.sql("insert into " + tableName + " values(1, 1.1, 'text')");
       sparkSession.sql("alter table " + tableName + " alter column col1 type double");
@@ -100,11 +108,10 @@ public class TestHiveTableSchemaEvolution {
 
   @Test
   public void testMergeOnReadTableForHive() throws Exception {
-    String tableName = "huditest" + new Date().getTime();
-    File file = new File(System.getProperty("java.io.tmpdir") + tableName);
+    String tableName = "huditesttable" + System.currentTimeMillis();
     if (HoodieSparkUtils.gteqSpark3_1()) {
       sparkSession.sql("set hoodie.schema.on.read.enable=true");
-      String path = new Path(file.getCanonicalPath()).toUri().toString();
+      String path = new Path(basePath, tableName).toUri().toString();
       sparkSession.sql("create table " + tableName + "(col0 int, col1 float, col2 string) using hudi options(type='cow', primaryKey='col0', preCombineField='col1') location '" + path + "'");
       sparkSession.sql("insert into " + tableName + " values(1, 1.1, 'text')");
       sparkSession.sql("insert into " + tableName + " values(2, 1.2, 'text2')");
