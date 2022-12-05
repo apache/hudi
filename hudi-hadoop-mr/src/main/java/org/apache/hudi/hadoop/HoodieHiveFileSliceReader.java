@@ -146,7 +146,7 @@ public abstract class HoodieHiveFileSliceReader implements FileSliceReader {
     try (HoodieFileReader baseFileReader = getReaderFactory(HoodieRecord.HoodieRecordType.HIVE).getFileReader(jobConf, split.getPath())) {
       Iterator<HoodieRecord> baseRecordIterator = baseFileReader.getRecordIterator(readerSchema);
       if (split instanceof RealtimeSplit) {
-        HoodieMergedLogRecordScanner logRecordScanner = getMergedLogRecordScanner((RealtimeSplit) split, jobConf, readerSchema);
+        HoodieMergedLogRecordScanner logRecordScanner = getMergedLogRecordScanner((RealtimeSplit) split, jobConf, readerSchema, HoodieHiveRecordMerger.class.getName());
         while (baseRecordIterator.hasNext()) {
           logRecordScanner.processNextRecord(baseRecordIterator.next());
         }

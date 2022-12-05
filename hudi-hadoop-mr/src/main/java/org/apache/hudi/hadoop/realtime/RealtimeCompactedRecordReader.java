@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
@@ -57,10 +58,10 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   private Iterator<String> deltaItr;
 
   public RealtimeCompactedRecordReader(RealtimeSplit split, JobConf job,
-      RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
+                                       RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
     super(split, job);
     this.parquetReader = realReader;
-    this.mergedLogRecordScanner = getMergedLogRecordScanner(split, job, usesCustomPayload ? getWriterSchema() : getReaderSchema());
+    this.mergedLogRecordScanner = getMergedLogRecordScanner(split, job, usesCustomPayload ? getWriterSchema() : getReaderSchema(), HoodieAvroRecordMerger.class.getName());
     this.deltaRecordMap = mergedLogRecordScanner.getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
     this.recordKeyIndex = split.getVirtualKeyInfo()

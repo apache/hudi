@@ -20,6 +20,7 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
@@ -63,7 +64,7 @@ public class HoodieRealtimeMergedRecordReader extends HoodieHiveFileSliceReader
   public HoodieRealtimeMergedRecordReader(RealtimeSplit split, JobConf job, RecordReader<NullWritable, ArrayWritable> baseRecordReader) {
     super(split, job);
     this.baseRecordReader = baseRecordReader;
-    this.mergedLogRecordScanner = getMergedLogRecordScanner(split, job, useCustomPayload() ? getWriterSchema() : getReaderSchema());
+    this.mergedLogRecordScanner = getMergedLogRecordScanner(split, job, useCustomPayload() ? getWriterSchema() : getReaderSchema(), HoodieAvroRecordMerger.class.getName());
     this.deltaRecordMap = mergedLogRecordScanner.getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
     this.recordKeyIndex = split.getVirtualKeyInfo()

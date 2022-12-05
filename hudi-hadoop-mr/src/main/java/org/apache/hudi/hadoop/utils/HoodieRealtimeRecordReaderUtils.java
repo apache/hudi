@@ -20,7 +20,6 @@ package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -178,7 +177,7 @@ public class HoodieRealtimeRecordReaderUtils {
       case STRING:
         return new Text(value.toString());
       case BYTES:
-        return new BytesWritable(((ByteBuffer)value).array());
+        return new BytesWritable(((ByteBuffer) value).array());
       case INT:
         if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
           return new DateWritable((Integer) value);
@@ -318,7 +317,7 @@ public class HoodieRealtimeRecordReaderUtils {
     return appendFieldsToSchema(schema, newFields);
   }
 
-  public static HoodieMergedLogRecordScanner getMergedLogRecordScanner(RealtimeSplit split, JobConf jobConf, Schema schema) {
+  public static HoodieMergedLogRecordScanner getMergedLogRecordScanner(RealtimeSplit split, JobConf jobConf, Schema schema, String mergerClass) {
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
@@ -336,7 +335,7 @@ public class HoodieRealtimeRecordReaderUtils {
         .withDiskMapType(jobConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue()))
         .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
             HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(mergerClass))
         .build();
   }
 }
