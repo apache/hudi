@@ -56,14 +56,14 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hive.ql.exec.vector.ColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.orc.OrcFile;
 import org.apache.orc.TypeDescription;
 import org.apache.orc.Writer;
-import org.apache.hadoop.hive.ql.exec.vector.ColumnVector;
-import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter.Mode;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -86,6 +86,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+
+import scala.Tuple2;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
@@ -435,6 +437,16 @@ public class UtilitiesTestBase {
 
     public static String[] jsonifyRecords(List<HoodieRecord> records) {
       return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
+    }
+
+    public static Tuple2<String, String>[] jsonifyRecordsByPartitions(List<HoodieRecord> records, int partitions) {
+      Tuple2<String, String>[] data = new Tuple2[records.size()];
+      for (int i = 0; i < records.size(); i++) {
+        int key = i % partitions;
+        String value = Helpers.toJsonString(records.get(i));
+        data[i] = new Tuple2<>(Long.toString(key), value);
+      }
+      return data;
     }
 
     private static void addAvroRecord(

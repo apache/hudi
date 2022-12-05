@@ -38,6 +38,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecords;
+import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecordsByPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -173,6 +174,6 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   @Override
   void sendMessagesToKafka(String topic, int count, int numPartitions) {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", count)));
+    testUtils.sendMessages(topic, jsonifyRecordsByPartitions(dataGenerator.generateInserts("000", count), numPartitions));
   }
 }
