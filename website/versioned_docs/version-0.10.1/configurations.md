@@ -565,7 +565,7 @@ Flink jobs using the SQL can be configured through the options in WITH clause. T
 ---
 
 > #### hoodie.datasource.write.keygenerator.type
-> Key generator type, that implements will extract the key out of incoming record<br></br>
+> Key generator type, that implements will extract the key out of incoming record. **Note** This is being actively worked on. Please use `hoodie.datasource.write.keygenerator.class` instead.<br></br>
 > **Default Value**: SIMPLE (Optional)<br></br>
 > `Config Param: KEYGEN_TYPE`<br></br>
 
@@ -2040,7 +2040,7 @@ Configurations that control write behavior on Hudi tables. These can be directly
 ---
 
 > #### hoodie.datasource.write.keygenerator.type
-> Easily configure one the built-in key generators, instead of specifying the key generator class.Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE<br></br>
+> Easily configure one the built-in key generators, instead of specifying the key generator class.Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE. **Note** This is being actively worked on. Please use `hoodie.datasource.write.keygenerator.class` instead.<br></br>
 > **Default Value**: SIMPLE (Optional)<br></br>
 > `Config Param: KEYGENERATOR_TYPE`<br></br>
 
