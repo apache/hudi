@@ -29,13 +29,12 @@ import org.apache.spark.sql.{Dataset, Row}
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.junit.jupiter.api.Disabled
 import org.scalatest.Inspectors.forAll
 
 import java.io.File
 import scala.collection.JavaConversions._
 
-@Disabled("HUDI-5304 Disabling to avoid CI timing out")
+@SparkSQLCoreFlow
 class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   val colsToCompare = "timestamp, _row_key, partition_path, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare.amount, fare.currency, _hoodie_is_deleted"
 

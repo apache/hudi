@@ -21,6 +21,9 @@ package org.apache.hudi.keygen;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class TestKeyGenUtils {
 
   @Test
@@ -41,5 +44,20 @@ public class TestKeyGenUtils {
     // test simple key form: val1
     String[] s5 = KeyGenUtils.extractRecordKeys("1");
     Assertions.assertArrayEquals(new String[] {"1"}, s5);
+
+    String[] s6 = KeyGenUtils.extractRecordKeys("id:1,id2:2,2");
+    Assertions.assertArrayEquals(new String[]{"1", "2", "2"}, s6);
+  }
+
+  @Test
+  public void testExtractRecordKeysWithFields() {
+    List<String> fields = new ArrayList<>(1);
+    fields.add("id2");
+
+    String[] s1 = KeyGenUtils.extractRecordKeysByFields("id1:1,id2:2,id3:3", fields);
+    Assertions.assertArrayEquals(new String[] {"2"}, s1);
+
+    String[] s2 = KeyGenUtils.extractRecordKeysByFields("id1:1,id2:2,2,id3:3", fields);
+    Assertions.assertArrayEquals(new String[] {"2", "2"}, s2);
   }
 }
