@@ -187,10 +187,13 @@ public class HoodieRealtimeRecordReaderUtils {
         return new IntWritable((Integer) value);
       case LONG:
         LogicalType logicalType = schema.getLogicalType();
-        boolean lttsm = LogicalTypes.timestampMillis().equals(logicalType);
         // If there is a specified timestamp or under normal cases, we will process it
-        if (lttsm || (supportTimestamp && LogicalTypes.timestampMicros().equals(logicalType))) {
-          return HoodieHiveUtils.getTimestampWriteable((Long) value, lttsm);
+        if (supportTimestamp) {
+          if (LogicalTypes.timestampMillis().equals(logicalType)) {
+            return HoodieHiveUtils.getTimestampWriteable((Long) value, true);
+          } else if (LogicalTypes.timestampMicros().equals(logicalType)) {
+            return HoodieHiveUtils.getTimestampWriteable((Long) value, false);
+          }
         }
         return new LongWritable((Long) value);
       case FLOAT:
