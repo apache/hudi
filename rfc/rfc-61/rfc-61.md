@@ -58,7 +58,7 @@ Create Snapshot view based on Hudi Savepoint
 * Use External Metastore(such as HMS) to store external view 
 
 Build periodic snapshots based on the time period required by the user
-These Shapshots are stored as partitions in the metadata management system
+These Snapshots are stored as tables in the metadata management system
 Users can easily use SQL to access this data in Flink Spark or Presto.
 Because the data store is complete and has no merged details,
 So the data itself is to support the full amount of data calculation, also support incremental processing
@@ -108,7 +108,6 @@ new Savepoint Metadata should look like below:
 		"type": {
 			"type": "string",
 			"avro.java.string": "String"
-		}
 	}, {
 		"name": "savepointedAt",
 		"type": "long"
@@ -149,31 +148,27 @@ new Savepoint Metadata should look like below:
 		"type": ["int", "null"],
 		"default": 1
 +	}, {
-+		"name": "tag",
-+		"type": "record",
-+	    "fields": [{
-+		        "name": "tag_name",
-+			    "type": "string",
-+		    	"avro.java.string": "String"
-+		    }, 
-+           {
-+    		    "name": "retain_days",
-+    	    	"type": ["int", "null"],
-+    	    	"default": 0
-+    	    },
-+           {
-+		        "name": "database",
-+			    "type": "string",
-+		    	"avro.java.string": "String"
-+		    }, 
-+           {
-+		        "name": "table_name", // will infer tag_name's value if doesn't specific
-+			    "type": "string",
-+		    	"avro.java.string": "String"
-+		    }, 
-+	    ]
-+     }
-+	]
++	    "name": "tagName",
++	    "type": "string",
++	 	"avro.java.string": "String"
++	 }, 
++    {
++       "name": "expiryTimestamp",
++    	"type": ["long", "null"],
++    	"default": 0
++    },
++    {
++       "name": "database",
++	    "type": "string",
++	 	"avro.java.string": "String"
++	 }, 
++    {
++       "name": "tableName", // will infer tagName's value if doesn't specific
++	    "type": "string",
++	 	"avro.java.string": "String"
++	 }
+  ]
+  }
 }
 ```
 
