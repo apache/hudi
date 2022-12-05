@@ -98,7 +98,8 @@ case class CreateHoodieTableAsSelectCommand(
       hoodieCatalogTable.initHoodieTable()
 
       val tblProperties = hoodieCatalogTable.catalogProperties
-      val options = Map(
+      // TODO elaborate
+      val options = tblProperties ++ Map(
         HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE.key -> (table.tableType == CatalogTableType.MANAGED).toString,
         HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES.key -> ConfigUtils.configToString(tblProperties.asJava),
         HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES.key -> ConfigUtils.configToString(newTable.properties.asJava),
