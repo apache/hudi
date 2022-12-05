@@ -171,7 +171,15 @@ new Savepoint Metadata should look like below:
   }
 }
 ```
+### MergeOnRead table snapshot query support
+* Problem
+the savepoints are only related to base files not delta logs, so if we query on a _rt table's savepoint, data still can increase after that savepoint
 
+* there are two solutions for MergeOnRead table snapshot query
+  * also create a full table compaction request when create a savepoint. since log will be wrote into another file after comapction request, so we can exclude those files
+but it will take effect on compaction plan, full table compaction is slow at big tables
+  * should write data to another log if base file's instant lesser than savepoint and commit time larger than savepoint. it will take effect on read path and compaction logic
+  
 ### Meta Sync
 Create a snapshot view also will create a new external table into the Catalogs, and add a timestamp into tbl properties to identify which savepoint you are using.
 for example, if you choose Hive Metastore as the catalog and create a snapshot view on a Hudi table, following steps will be process:
