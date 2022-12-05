@@ -22,6 +22,8 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.FileSliceReader;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,9 +31,11 @@ import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -62,7 +66,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMergedLogRecordScanner;
 import static org.apache.hudi.io.storage.HoodieFileReaderFactory.getReaderFactory;
 
-public abstract class HoodieHiveFileSliceReader implements FileSliceReader {
+public class HoodieHiveFileSliceReader implements FileSliceReader {
 
   private static final Logger LOG = LogManager.getLogger(HoodieHiveFileSliceReader.class);
 
@@ -143,19 +147,56 @@ public abstract class HoodieHiveFileSliceReader implements FileSliceReader {
 
   @Override
   public Iterator<HoodieRecord> open(FileSlice fileSlice) {
-    try (HoodieFileReader baseFileReader = getReaderFactory(HoodieRecord.HoodieRecordType.HIVE).getFileReader(jobConf, split.getPath())) {
-      Iterator<HoodieRecord> baseRecordIterator = baseFileReader.getRecordIterator(readerSchema);
-      if (split instanceof RealtimeSplit) {
-        HoodieMergedLogRecordScanner logRecordScanner = getMergedLogRecordScanner((RealtimeSplit) split, jobConf, readerSchema, HoodieHiveRecordMerger.class.getName());
-        while (baseRecordIterator.hasNext()) {
-          logRecordScanner.processNextRecord(baseRecordIterator.next());
-        }
-        return logRecordScanner.iterator();
+    if (fileSlice.isEmpty() || !fileSlice.getBaseFile().isPresent()) {
+      throw new HoodieIOException("Reading empty file slice or file slice has no base file: %s" + fileSlice);
+    }
+    HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
+    HoodieRealtimeFileSplit split = null;
+
+    try {
+      split = new HoodieRealtimeFileSplit(
+          new FileSplit(baseFile.getHadoopPath(), 0, baseFile.getFileLen(), jobConf),
+          metaClient.getBasePath(),
+          fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+              .collect(Collectors.toList()),
+          baseFile.getCommitTime(),
+          false,
+          Option.empty());
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create realtime file split for file slice: " + fileSlice);
+    }
+
+    return getRecordIteratorFromSplit(split);
+  }
+
+  @Override
+  public Iterator<HoodieRecord> open(FileSplit fileSplit) {
+    return getRecordIteratorFromSplit(fileSplit);
+  }
+
+  private Iterator<HoodieRecord> getRecordIteratorFromSplit(FileSplit fileSplit) {
+    try (HoodieFileReader baseFileReader = getReaderFactory(HoodieRecord.HoodieRecordType.HIVE).getFileReader(jobConf, fileSplit.getPath())) {
+      Iterator<HoodieRecord> baseFileIterator = baseFileReader.getRecordIterator(readerSchema);
+      if (fileSplit instanceof RealtimeSplit) {
+        HoodieMergedLogRecordScanner logRecordScanner = getMergedLogRecordScanner(
+            (RealtimeSplit) fileSplit,
+            jobConf,
+            readerSchema,
+            HoodieHiveRecordMerger.class.getName());
+
+        return new HoodieLogFileIterator(
+            (RealtimeSplit) fileSplit,
+            jobConf,
+            baseFileReader,
+            logRecordScanner.getRecords(),
+            schema,
+            readerSchema,
+            metaClient);
       } else {
-        return baseRecordIterator;
+        return baseFileIterator;
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to open file slice: " + fileSlice);
+      throw new HoodieIOException("Failed to open file slice: " + fileSplit);
     }
   }
 

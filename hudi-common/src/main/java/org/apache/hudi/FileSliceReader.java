@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.mapred.FileSplit;
 
 import java.util.Iterator;
 import java.util.Set;
@@ -57,4 +58,9 @@ public interface FileSliceReader extends AutoCloseable {
    * Produces an iterable sequence of records from the given file slice.
    */
   Iterator<HoodieRecord> open(FileSlice fileSlice);
+
+  /**
+   * Produces an iterable sequence of records from the given file split.
+   */
+  Iterator<HoodieRecord> open(FileSplit fileSplit);
 }

@@ -31,6 +31,7 @@ import org.apache.hudi.hadoop.HoodieHiveRecord;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
@@ -50,8 +51,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMergedLogRecordScanner;
 
-public class HoodieRealtimeMergedRecordReader extends HoodieHiveFileSliceReader
-    implements RecordReader<NullWritable, ArrayWritable> {
+public class HoodieRealtimeMergedRecordReader implements RecordReader<NullWritable, ArrayWritable> {
   private static final Logger LOG = LogManager.getLogger(HoodieRealtimeMergedRecordReader.class);
 
   private final RecordReader<NullWritable, ArrayWritable> baseRecordReader;
@@ -59,12 +59,16 @@ public class HoodieRealtimeMergedRecordReader extends HoodieHiveFileSliceReader
   private final Set<String> deltaRecordKeys;
   private final HoodieMergedLogRecordScanner mergedLogRecordScanner;
   private final int recordKeyIndex;
+  private final HoodieHiveFileSliceReader fileSliceReader;
+  private final Schema requiredSchema;
+  private Iterator<HoodieRecord> mergedRecordIterator;
   private Iterator<String> deltaItr;
 
   public HoodieRealtimeMergedRecordReader(RealtimeSplit split, JobConf job, RecordReader<NullWritable, ArrayWritable> baseRecordReader) {
-    super(split, job);
     this.baseRecordReader = baseRecordReader;
-    this.mergedLogRecordScanner = getMergedLogRecordScanner(split, job, useCustomPayload() ? getWriterSchema() : getReaderSchema(), HoodieAvroRecordMerger.class.getName());
+    this.fileSliceReader = new HoodieHiveFileSliceReader(split, job);
+    this.requiredSchema = fileSliceReader.useCustomPayload() ? fileSliceReader.getWriterSchema() : fileSliceReader.getReaderSchema();
+    this.mergedLogRecordScanner = getMergedLogRecordScanner(split, job, requiredSchema, HoodieAvroRecordMerger.class.getName());
     this.deltaRecordMap = mergedLogRecordScanner.getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
     this.recordKeyIndex = split.getVirtualKeyInfo()
@@ -120,15 +124,16 @@ public class HoodieRealtimeMergedRecordReader extends HoodieHiveFileSliceReader
       }
     }
 
+    // TODO: Replace the above logic by the below one. Also, check if file index can be made use of to collect file slices,
+    //       which can then be passed to fileSliceReader#open(fileSlice) instead of fileSliceReader#open(fileSplit).
+    /*if (mergedRecordIterator == null) {
+      mergedRecordIterator = fileSliceReader.open(fileSliceReader.getSplit());
+    }*/
     return false;
   }
 
   private Option<HoodieAvroIndexedRecord> buildGenericRecordWithCustomPayload(HoodieRecord record) throws IOException {
-    if (useCustomPayload()) {
-      return record.toIndexedRecord(getWriterSchema(), getPayloadProps());
-    } else {
-      return record.toIndexedRecord(getReaderSchema(), getPayloadProps());
-    }
+    return record.toIndexedRecord(requiredSchema, fileSliceReader.getPayloadProps());
   }
 
   private void setUpWritable(HoodieRecord rec, ArrayWritable arrayWritable, String key) {
