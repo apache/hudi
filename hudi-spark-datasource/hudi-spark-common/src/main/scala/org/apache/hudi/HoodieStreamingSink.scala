@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.ValidationUtils.{checkArgument, checkState}
 import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, JsonUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
-import org.apache.hudi.table.HoodieTable
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.execution.streaming.{Sink, StreamExecution}
@@ -114,13 +113,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     var updatedOptions = options.updated(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.DIRECT.name())
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
     updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
-    // Add batchId as checkpoint to the extra metadata. To enable same checkpoint metadata structure for multi-writers,
-    // SINK_CHECKPOINT_KEY holds a map of batchId to writer context (composed of applicationId and queryId), e.g.
-    // "_hudi_streaming_sink_checkpoint" : "{\"$batchId\":\"${sqlContext.sparkContext.applicationId}-$queryId\"}"
-    // NOTE: In case of multi-writers, this map should be mutable and sorted by key to facilitate merging of batchIds.
-    // HUDI-4432 tracks the implementation of checkpoint management for multi-writer.
-    val checkpointMap = Map(batchId.toString -> s"${sqlContext.sparkContext.applicationId}-$queryId")
-    updatedOptions = updatedOptions.updated(SINK_CHECKPOINT_KEY, HoodieSinkCheckpoint.toJson(checkpointMap))
 
     retry(retryCnt, retryIntervalMs)(
       Try(
