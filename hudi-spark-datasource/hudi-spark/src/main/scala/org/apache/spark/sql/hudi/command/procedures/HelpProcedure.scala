@@ -34,6 +34,12 @@ class HelpProcedure extends BaseProcedure with ProcedureBuilder with Logging {
     StructField("result", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
+
+  /**
+   * Returns the description of this procedure.
+   */
+  override def description: String = s"The procedure help command allows you to view all the commands currently provided, as well as their parameters and output fields."
+
   def parameters: Array[ProcedureParameter] = PARAMETERS
 
   def outputType: StructType = OUTPUT_TYPE
