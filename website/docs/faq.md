@@ -664,6 +664,11 @@ With each commit, Hudi creates a new table version in the metastore. This can be
 [hoodie.datasource.meta_sync.condition.sync](https://hudi.apache.org/docs/configurations#hoodiedatasourcemeta_syncconditionsync) to true.
 This will ensure that hive sync is triggered on schema or partitions changes.
 
+### Can I change keygenerator for an existing table?
+No. There are small set of properties that cannot change once chosen. KeyGenerator is one among them. [Here](https://github.com/apache/hudi/blob/3f37d4fb08169c95930f9cc32389abf4e5cd5551/hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/HoodieWriterUtils.scala#L128) is a code referecne where we
+validate the properties.
+
+
 ## Contributing to FAQ
 
 A good and usable FAQ should be community-driven and crowd source questions/thoughts across everyone.
