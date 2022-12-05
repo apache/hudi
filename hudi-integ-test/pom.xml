@@ -123,6 +123,22 @@
       <scope>provided</scope>
       <exclusions>
         <exclusion>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-aws</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-gcp</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client-runtime</artifactId>
+        </exclusion>
+        <exclusion>
           <groupId>org.mortbay.jetty</groupId>
           <artifactId>*</artifactId>
         </exclusion>
@@ -226,6 +242,22 @@
       <type>test-jar</type>
       <scope>test</scope>
       <exclusions>
+        <exclusion>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-aws</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-gcp</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client-runtime</artifactId>
+        </exclusion>
         <exclusion>
           <groupId>org.mortbay.jetty</groupId>
           <artifactId>*</artifactId>
