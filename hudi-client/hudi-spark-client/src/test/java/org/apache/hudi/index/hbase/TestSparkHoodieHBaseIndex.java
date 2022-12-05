@@ -56,7 +56,6 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.zookeeper.server.persistence.FileTxnLog;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -117,7 +116,6 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     System.setProperty("zookeeper.preAllocSize", "100");
     System.setProperty("zookeeper.maxCnxns", "60");
     System.setProperty("zookeeper.4lw.commands.whitelist", "*");
-    FileTxnLog.setPreallocSize(100 * 1024);
     hbaseConfig = HBaseConfiguration.create();
     hbaseConfig.set(ZOOKEEPER_ZNODE_PARENT, "/hudi-hbase-test");
 
