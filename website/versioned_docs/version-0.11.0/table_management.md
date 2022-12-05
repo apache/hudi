@@ -183,6 +183,12 @@ ALTER TABLE tableIdentifier ADD COLUMNS(colAndType (,colAndType)*)
 -- Alter table column type
 ALTER TABLE tableIdentifier CHANGE COLUMN colName colName colType
 ```
+
+:::note
+`ALTER TABLE ... RENAME TO ...` is not supported when using AWS Glue Data Catalog as hive metastore as Glue itself does 
+not support table renames.
+:::
+
 ### Examples
 ```sql
 alter table h0 rename to h0_1;
