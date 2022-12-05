@@ -18,6 +18,11 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.catalog.ObjectPath;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
@@ -26,6 +31,9 @@ import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
+import org.apache.hudi.table.catalog.CatalogOptions;
+import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
+import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.HoodiePipeline;
 import org.apache.hudi.util.StreamerUtil;
@@ -419,6 +427,124 @@ public class ITTestDataStreamWrite extends TestLogger {
         .column("`ts` timestamp(3)")
         .column("`partition` string")
         .pk("uuid")
+        .partition("partition")
+        .options(options);
+
+    builder.sink(dataStream, false);
+
+    execute(execEnv, false, "Api_Sink_Test");
+    TestData.checkWrittenDataCOW(tempFile, EXPECTED);
+  }
+
+  @Test
+  public void testHoodiePipelineBuilderSourceWithSchemaSet() throws Exception {
+    //create a StreamExecutionEnvironment instance.
+    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
+    execEnv.getConfig().disableObjectReuse();
+    execEnv.setParallelism(1);
+    // set up checkpoint interval
+    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
+    conf.setString(FlinkOptions.TABLE_NAME, "t1");
+    conf.setString(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
+
+    // write 3 batches of data set
+    TestData.writeData(TestData.dataSetInsert(1, 2), conf);
+    TestData.writeData(TestData.dataSetInsert(3, 4), conf);
+    TestData.writeData(TestData.dataSetInsert(5, 6), conf);
+
+    String latestCommit = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
+
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.toURI().toString());
+    options.put(FlinkOptions.READ_START_COMMIT.key(), latestCommit);
+
+    HiveConf hiveConf = new HiveConf();
+    hiveConf.setVar(HiveConf.ConfVars.METASTORECONNECTURLKEY, String.format("jdbc:derby:;databaseName=%s;create=true", tempFile.toURI() + "metastore_db"));
+
+    conf.setBoolean(CatalogOptions.TABLE_EXTERNAL, false);
+    HoodieHiveCatalog hoodieCatalog = new HoodieHiveCatalog(
+        "test_catalog",
+        conf,
+        hiveConf,
+        true);
+    hoodieCatalog.open();
+    List<String> strings = hoodieCatalog.listDatabases();
+    List<String> stringss = hoodieCatalog.listTables(strings.get(0));
+    ObjectPath tablePath = new ObjectPath("default", "test_source");
+
+    //read a hoodie table use low-level source api.
+    HoodiePipeline.Builder builder = HoodiePipeline.builder("test_source")
+        .schema(hoodieCatalog.getTable(tablePath).getUnresolvedSchema())
+//        .column("uuid string not null")
+//        .column("name string")
+//        .column("age int")
+//        .column("`ts` timestamp(3)")
+//        .column("`partition` string")
+        .pk("uuid")
+        .partition("partition")
+        .options(options);
+    DataStream<RowData> rowDataDataStream = builder.source(execEnv);
+    List<RowData> result = new ArrayList<>();
+    rowDataDataStream.executeAndCollect().forEachRemaining(result::add);
+    TimeUnit.SECONDS.sleep(2);//sleep 2 second for collect data
+    TestData.assertRowDataEquals(result, TestData.dataSetInsert(5, 6));
+  }
+
+  @Test
+  public void testHoodiePipelineBuilderSinkWithSchemaSet() throws Exception {
+    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
+    Map<String, String> options = new HashMap<>();
+    execEnv.getConfig().disableObjectReuse();
+    execEnv.setParallelism(4);
+    // set up checkpoint interval
+    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+
+    options.put(FlinkOptions.PATH.key(), tempFile.toURI().toString());
+    options.put(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource("test_read_schema.avsc")).toString());
+    Configuration conf = Configuration.fromMap(options);
+    // Read from file source
+    RowType rowType =
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
+            .getLogicalType();
+
+    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
+        rowType,
+        InternalTypeInfo.of(rowType),
+        false,
+        true,
+        TimestampFormat.ISO_8601
+    );
+    String sourcePath = Objects.requireNonNull(Thread.currentThread()
+        .getContextClassLoader().getResource("test_source.data")).toString();
+
+    TextInputFormat format = new TextInputFormat(new Path(sourcePath));
+    format.setFilesFilter(FilePathFilter.createDefaultFilter());
+    format.setCharsetName("UTF-8");
+
+    DataStream dataStream = execEnv
+        // use continuous file source to trigger checkpoint
+        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
+        .name("continuous_file_source")
+        .setParallelism(1)
+        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+        .setParallelism(4);
+
+    Schema schema =
+        Schema.newBuilder()
+            .column("uuid", DataTypes.STRING().notNull())
+            .column("name", DataTypes.STRING())
+            .column("age", DataTypes.INT())
+            .column("ts", DataTypes.TIMESTAMP(3))
+            .column("partition", DataTypes.STRING())
+            .primaryKey("uuid")
+            .build();
+
+    //sink to hoodie table use low-level sink api.
+    HoodiePipeline.Builder builder = HoodiePipeline.builder("test_sink")
+        .schema(schema)
         .partition("partition")
         .options(options);
 

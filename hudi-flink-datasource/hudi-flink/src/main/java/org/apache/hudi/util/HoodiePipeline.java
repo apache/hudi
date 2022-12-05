@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.utils.EncodingUtils;
 import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTableFactory;
@@ -122,6 +124,18 @@ public class HoodiePipeline {
      */
     public Builder partition(String... partitions) {
       this.partitions = new ArrayList<>(Arrays.asList(partitions));
+      return this;
+    }
+
+    public Builder schema(Schema schema) {
+      for (Schema.UnresolvedColumn column : schema.getColumns()) {
+        column(column.toString());
+      }
+
+      if (schema.getPrimaryKey().isPresent()) {
+        pk(schema.getPrimaryKey().get().getColumnNames().stream().map(EncodingUtils::escapeIdentifier).collect(Collectors.joining(", ")));
+      }
+
       return this;
     }
 
