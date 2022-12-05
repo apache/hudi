@@ -46,7 +46,6 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -258,11 +257,11 @@ public abstract class TestHoodieReaderWriterBase {
     if ("/exampleEvolvedSchemaColumnType.avsc".equals(schemaPath)) {
       assertEquals(Integer.toString(index), record.get("number").toString());
     } else if ("/exampleEvolvedSchemaDeleteColumn.avsc".equals(schemaPath)) {
-      assertNull(record.get("number"));
+      assertFalse(record.hasField("number"));
     } else {
       assertEquals(index, record.get("number"));
     }
     // TODO temp disable
-//    assertNull(record.get("added_field"));
+    // assertNull(record.get("added_field"));
   }
 }
