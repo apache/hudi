@@ -17,21 +17,16 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.config.HoodieClusteringConfig.{ClusteringOperator, LayoutOptimizationStrategy}
 import org.apache.hudi.exception.HoodieClusteringException
-import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.{resolveExpr, splitPartitionAndDataPredicates}
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.expressions.PredicateHelper
-import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.types._
 
 import java.util.Locale
@@ -40,7 +35,7 @@ import scala.collection.JavaConverters._
 
 class RunClusteringProcedure extends BaseProcedure
   with ProcedureBuilder
-  with PredicateHelper
+  with ProcedurePredicateHelper
   with Logging {
 
   /**
@@ -89,10 +84,10 @@ class RunClusteringProcedure extends BaseProcedure
     var conf: Map[String, String] = Map.empty
     predicate match {
       case Some(p) =>
-        val prunedPartitions = prunePartition(metaClient, p.asInstanceOf[String])
+        val prunedPartitions = prunePartition(spark, metaClient, p.asInstanceOf[String])
         conf = conf ++ Map(
           HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
-          HoodieClusteringConfig.PARTITION_SELECTED.key() -> prunedPartitions
+          HoodieClusteringConfig.PARTITION_SELECTED.key() -> prunedPartitions.mkString(",")
         )
         logInfo(s"Partition predicates: $p, partition selected: $prunedPartitions")
       case _ =>
@@ -208,25 +203,6 @@ class RunClusteringProcedure extends BaseProcedure
   }
 
   override def build: Procedure = new RunClusteringProcedure()
-
-  def prunePartition(metaClient: HoodieTableMetaClient, predicate: String): String = {
-    val options = Map(QUERY_TYPE.key() -> QUERY_TYPE_SNAPSHOT_OPT_VAL, "path" -> metaClient.getBasePath)
-    val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, None, options,
-      FileStatusCache.getOrCreate(sparkSession))
-
-    // Resolve partition predicates
-    val schemaResolver = new TableSchemaResolver(metaClient)
-    val tableSchema = AvroConversionUtils.convertAvroSchemaToStructType(schemaResolver.getTableAvroSchema)
-    val condition = resolveExpr(sparkSession, predicate, tableSchema)
-    val partitionColumns = metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())
-    val (partitionPredicates, dataPredicates) = splitPartitionAndDataPredicates(
-      sparkSession, splitConjunctivePredicates(condition).toArray, partitionColumns)
-    checkArgument(dataPredicates.isEmpty, "Only partition predicates are allowed")
-
-    // Get all partitions and prune partition by predicates
-    val prunedPartitions = hoodieFileIndex.getPartitionPaths(partitionPredicates)
-    prunedPartitions.map(partitionPath => partitionPath.getPath).toSet.mkString(",")
-  }
 
   private def validateOrderColumns(orderColumns: String, metaClient: HoodieTableMetaClient): Unit = {
     if (orderColumns == null) {

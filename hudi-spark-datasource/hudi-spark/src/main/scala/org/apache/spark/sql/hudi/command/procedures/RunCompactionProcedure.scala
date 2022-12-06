@@ -117,6 +117,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
         }
       case _ => throw new UnsupportedOperationException(s"Unsupported compaction operation: $operation")
     }
+    client.close()
 
     val compactionInstants = metaClient.reloadActiveTimeline().getInstantsAsStream.iterator().asScala
       .filter(instant => willCompactionInstants.contains(instant.getTimestamp))
