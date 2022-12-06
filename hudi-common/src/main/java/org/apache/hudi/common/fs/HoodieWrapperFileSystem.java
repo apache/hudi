@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.CachingPath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
@@ -49,7 +50,6 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Progressable;
-import org.apache.hudi.hadoop.CachingPath;
 
 import java.io.IOException;
 import java.net.URI;
@@ -73,6 +73,9 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   private static final String TMP_PATH_POSTFIX = ".tmp";
 
+  /**
+   * Names for metrics.
+   */
   protected enum MetricName {
     create, rename, delete, listStatus, mkdirs, getFileStatus, globStatus, listFiles, read, write
   }
@@ -91,6 +94,11 @@ public class HoodieWrapperFileSystem extends FileSystem {
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
 
+  /**
+   * Checked function interface.
+   *
+   * @param <R> Type of return value.
+   */
   @FunctionalInterface
   public interface CheckedFunction<R> {
     R get() throws IOException;
@@ -102,7 +110,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   protected static <R> R executeFuncWithTimeMetrics(String metricName, Path p, CheckedFunction<R> func) throws IOException {
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     R res = func.get();
 
     Registry registry = getMetricRegistryForPath(p);

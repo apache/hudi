@@ -105,7 +105,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
 
     val completedCommits = hoodieMetaClient.getCommitsTimeline.filterCompletedInstants() // C4 to C9
     val archivedInstants = hoodieMetaClient.getArchivedTimeline.filterCompletedInstants()
-      .getInstants.distinct().toArray // C0 to C3
+      .getInstantsAsStream.distinct().toArray // C0 to C3
 
     //Anything less than 2 is a valid commit in the sense no cleanup has been done for those commit files
     val startUnarchivedCommitTs = completedCommits.nthInstant(0).get().getTimestamp //C4

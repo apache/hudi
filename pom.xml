@@ -116,11 +116,14 @@
     <hadoop.version>2.10.1</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.1</hive.version>
+    <hive.parquet.version>1.10.1</hive.parquet.version>
+    <hive.avro.version>1.8.2</hive.avro.version>
     <presto.version>0.273</presto.version>
     <trino.version>390</trino.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
-    <orc.version>1.6.0</orc.version>
+    <orc.spark.version>1.6.0</orc.spark.version>
+    <orc.flink.version>1.5.6</orc.flink.version>
     <airlift.version>0.16</airlift.version>
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
@@ -168,7 +171,8 @@
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
-    <jetty.version>9.4.33.v20201020</jetty.version>
+    <javalin.version>4.6.7</javalin.version>
+    <jetty.version>9.4.48.v20220622</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
     <hbase.version>2.4.9</hbase.version>
     <h2.version>1.4.199</h2.version>
@@ -194,6 +198,7 @@
     <trino.bundle.bootstrap.shade.prefix>org.apache.hudi.</trino.bundle.bootstrap.shade.prefix>
     <shadeSources>true</shadeSources>
     <zk-curator.version>2.7.1</zk-curator.version>
+    <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.7</antlr.version>
     <aws.sdk.version>1.12.22</aws.sdk.version>
     <proto.version>3.21.5</proto.version>
@@ -827,6 +832,14 @@
         </exclusions>
       </dependency>
 
+      <!-- Orc -->
+      <dependency>
+        <groupId>org.apache.orc</groupId>
+        <artifactId>orc-core</artifactId>
+        <version>${orc.spark.version}</version>
+        <scope>compile</scope>
+      </dependency>
+
       <!-- Spark -->
       <dependency>
         <groupId>org.apache.spark</groupId>
@@ -949,7 +962,7 @@
       <dependency>
         <groupId>com.beust</groupId>
         <artifactId>jcommander</artifactId>
-        <version>1.72</version>
+        <version>1.78</version>
       </dependency>
 
       <dependency>
@@ -2069,9 +2082,13 @@
         <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
+        <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
+                   hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
+                   bringing these file-formats as dependencies as well, we need to make sure that versions are
+                   synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
+        <orc.spark.version>1.7.4</orc.spark.version>
         <avro.version>1.11.1</avro.version>
-        <orc.version>1.7.4</orc.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2106,6 +2123,13 @@
         <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
+        <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
+                   hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
+                   bringing these file-formats as dependencies as well, we need to make sure that versions are
+                   synchronized to avoid classpath ambiguity -->
+        <parquet.version>1.10.1</parquet.version>
+        <orc.spark.version>1.5.13</orc.spark.version>
+        <avro.version>1.8.2</avro.version>
         <antlr.version>4.8-1</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
@@ -2140,9 +2164,13 @@
         <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
+        <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
+                   hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
+                   bringing these file-formats as dependencies as well, we need to make sure that versions are
+                   synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
+        <orc.spark.version>1.6.12</orc.spark.version>
         <avro.version>1.10.2</avro.version>
-        <orc.version>1.6.12</orc.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
@@ -2178,9 +2206,13 @@
         <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
+        <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
+                   hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
+                   bringing these file-formats as dependencies as well, we need to make sure that versions are
+                   synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
+        <orc.spark.version>1.7.4</orc.spark.version>
         <avro.version>1.11.1</avro.version>
-        <orc.version>1.7.4</orc.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2205,6 +2237,9 @@
 
     <profile>
       <id>flink1.15</id>
+      <properties>
+        <orc.flink.version>1.5.6</orc.flink.version>
+      </properties>
       <activation>
         <property>
           <name>flink1.15</name>
@@ -2217,6 +2252,7 @@
         <flink.version>${flink1.14.version}</flink.version>
         <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
         <flink.bundle.version>1.14</flink.bundle.version>
+        <orc.flink.version>1.5.6</orc.flink.version>
         <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
         <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
         <flink.parquet.artifactId>flink-parquet_${scala.binary.version}</flink.parquet.artifactId>
@@ -2239,6 +2275,7 @@
         <flink.version>${flink1.13.version}</flink.version>
         <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
         <flink.bundle.version>1.13</flink.bundle.version>
+        <orc.flink.version>1.5.6</orc.flink.version>
         <flink.runtime.artifactId>flink-runtime_${scala.binary.version}</flink.runtime.artifactId>
         <flink.table.runtime.artifactId>flink-table-runtime-blink_${scala.binary.version}</flink.table.runtime.artifactId>
         <flink.table.planner.artifactId>flink-table-planner-blink_${scala.binary.version}</flink.table.planner.artifactId>

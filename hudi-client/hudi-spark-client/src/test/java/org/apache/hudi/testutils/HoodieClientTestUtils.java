@@ -92,7 +92,9 @@ public class HoodieClientTestUtils {
    */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
-        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[8]");
+        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[4]")
+        .set("spark.sql.shuffle.partitions", "4")
+        .set("spark.default.parallelism", "4");
 
     String evlogDir = System.getProperty("SPARK_EVLOG_DIR");
     if (evlogDir != null) {
@@ -155,8 +157,8 @@ public class HoodieClientTestUtils {
   public static long countRecordsOptionallySince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
                                                  HoodieTimeline commitTimeline, Option<String> lastCommitTimeOpt) {
     List<HoodieInstant> commitsToReturn =
-        lastCommitTimeOpt.isPresent() ? commitTimeline.findInstantsAfter(lastCommitTimeOpt.get(), Integer.MAX_VALUE).getInstants().collect(Collectors.toList()) :
-            commitTimeline.getInstants().collect(Collectors.toList());
+        lastCommitTimeOpt.isPresent() ? commitTimeline.findInstantsAfter(lastCommitTimeOpt.get(), Integer.MAX_VALUE).getInstants() :
+            commitTimeline.getInstants();
     try {
       // Go over the commit metadata, and obtain the new files that need to be read.
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);

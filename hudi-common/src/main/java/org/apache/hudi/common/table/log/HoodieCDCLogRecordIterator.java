@@ -25,13 +25,15 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-
 import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 
+/**
+ * Record iterator for Hudi logs in CDC format.
+ */
 public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecord> {
 
   private final FileSystem fs;

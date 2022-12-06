@@ -47,9 +47,9 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    this.dfsRoot = dfsBasePath + "/parquetFiles";
+    this.dfsRoot = basePath + "/parquetFiles";
     this.fileSuffix = ".parquet";
-    dfs.mkdirs(new Path(dfsRoot));
+    fs.mkdirs(new Path(dfsRoot));
   }
 
   @AfterEach

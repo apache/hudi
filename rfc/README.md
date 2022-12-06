@@ -99,3 +99,5 @@ The list of all RFCs can be found here.
 | 60 | [Federated Storage Layer](./rfc-60/rfc-60.md)                                                                                                                                                                        | `UNDER REVIEW` |
 | 61 | [Snapshot view management](./rfc-61/rfc-61.md)                                                                                                                                                                       | `UNDER REVIEW` |
 | 62 | [Diagnostic Reporter](./rfc-62/rfc-62.md)                                                                                                                                                                       | `UNDER REVIEW` |
+| 63 | [Index on Function and Logical Partitioning](./rfc-63/rfc-63.md)                                                                                                                                                     | `UNDER REVIEW` |
+| 64 | [New Hudi Table Spec API for Query Integrations](./rfc-64/rfc-64.md) | `UNDER REVIEW` |

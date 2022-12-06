@@ -43,12 +43,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.util.DataTypeUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructType;
 
@@ -281,7 +281,7 @@ public class DataSourceUtils {
    * @param schema schema of the dataset being written
    */
   public static void tryOverrideParquetWriteLegacyFormatProperty(Map<String, String> properties, StructType schema) {
-    if (DataTypeUtils.hasSmallPrecisionDecimalType(schema)
+    if (HoodieDataTypeUtils.hasSmallPrecisionDecimalType(schema)
         && properties.get(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key()) == null) {
       // ParquetWriteSupport writes DecimalType to parquet as INT32/INT64 when the scale of decimalType
       // is less than {@code Decimal.MAX_LONG_DIGITS}, but {@code AvroParquetReader} which is used by

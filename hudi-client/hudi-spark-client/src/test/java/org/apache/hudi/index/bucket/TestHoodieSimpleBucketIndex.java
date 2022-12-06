@@ -78,6 +78,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
   public void testBucketIndexValidityCheck() {
     Properties props = new Properties();
     props.setProperty(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key(), "_row_key");
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
     assertThrows(HoodieIndexException.class, () -> {
       HoodieIndexConfig.newBuilder().fromProperties(props)
           .withIndexType(HoodieIndex.IndexType.BUCKET)

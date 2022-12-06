@@ -70,7 +70,7 @@ public abstract class SparkPreCommitValidator<T extends HoodieRecordPayload, I, 
    * Throw HoodieValidationException if any unexpected data is written (Example: data files are not readable for some reason).
    */
   public void validate(String instantTime, HoodieWriteMetadata<O> writeResult, Dataset<Row> before, Dataset<Row> after) throws HoodieValidationException {
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     try {
       validateRecordsBeforeAndAfter(before, after, getPartitionsModified(writeResult));
     } finally {

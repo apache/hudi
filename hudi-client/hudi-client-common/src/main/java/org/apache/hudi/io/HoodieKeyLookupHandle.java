@@ -60,7 +60,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
 
   private BloomFilter getBloomFilter() {
     BloomFilter bloomFilter = null;
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     try {
       if (config.getBloomIndexUseMetadata()
           && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()

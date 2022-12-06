@@ -141,12 +141,10 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
-    <!-- ORC -->
+    <!-- Orc -->
     <dependency>
       <groupId>org.apache.orc</groupId>
       <artifactId>orc-core</artifactId>
-      <version>${orc.version}</version>
-      <classifier>nohive</classifier>
     </dependency>
 
     <!-- Httpcomponents -->
@@ -298,6 +296,12 @@
       <groupId>joda-time</groupId>
       <artifactId>joda-time</artifactId>
       <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.lmax</groupId>
+      <artifactId>disruptor</artifactId>
+      <version>${disruptor.version}</version>
     </dependency>
   </dependencies>
 </project>

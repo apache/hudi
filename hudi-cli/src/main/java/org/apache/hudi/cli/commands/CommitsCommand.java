@@ -65,7 +65,7 @@ public class CommitsCommand {
     final List<Comparable[]> rows = new ArrayList<>();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
+        .getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
@@ -103,7 +103,7 @@ public class CommitsCommand {
     final List<Comparable[]> rows = new ArrayList<>();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
+        .getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
@@ -372,20 +372,20 @@ public class CommitsCommand {
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String targetLatestCommit =
-        targetTimeline.getInstants().iterator().hasNext() ? targetTimeline.lastInstant().get().getTimestamp() : "0";
+        targetTimeline.getInstantsAsStream().iterator().hasNext() ? targetTimeline.lastInstant().get().getTimestamp() : "0";
     String sourceLatestCommit =
-        sourceTimeline.getInstants().iterator().hasNext() ? sourceTimeline.lastInstant().get().getTimestamp() : "0";
+        sourceTimeline.getInstantsAsStream().iterator().hasNext() ? sourceTimeline.lastInstant().get().getTimestamp() : "0";
 
     if (sourceLatestCommit != null
         && HoodieTimeline.compareTimestamps(targetLatestCommit, HoodieTimeline.GREATER_THAN, sourceLatestCommit)) {
       // source is behind the target
       List<String> commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
-          .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+          .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
       return "Source " + source.getTableConfig().getTableName() + " is behind by " + commitsToCatchup.size()
           + " commits. Commits to catch up - " + commitsToCatchup;
     } else {
       List<String> commitsToCatchup = sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE)
-          .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+          .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
       return "Source " + source.getTableConfig().getTableName() + " is ahead by " + commitsToCatchup.size()
           + " commits. Commits to catch up - " + commitsToCatchup;
     }

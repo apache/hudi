@@ -126,7 +126,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     writeSchemaToTmpFile(schemaPath);
 
     Object result2 = shell.evaluate(() ->
-            String.format("compaction run --parallelism %s --schemaFilePath %s --sparkMaster %s",
+            String.format("compaction run --parallelism %s --schemaFilePath %s --sparkMaster %s --hoodieConfigs hoodie.embed.timeline.server=false",
             2, schemaPath, "local"));
 
     assertAll("Command run failed",
@@ -136,7 +136,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
 
     // assert compaction complete
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
-        .filterCompletedInstants().getInstants()
+        .filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList()).contains(instance),
         "Pending compaction must be completed");
   }
@@ -164,7 +164,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
 
     // assert compaction complete
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
-            .filterCompletedInstants().getInstants()
+            .filterCompletedInstants().getInstantsAsStream()
             .map(HoodieInstant::getTimestamp).count() > 0,
         "Completed compaction couldn't be 0");
   }

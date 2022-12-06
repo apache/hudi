@@ -64,6 +64,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -117,6 +118,12 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, false);
     basePath = metaClient.getBasePath();
     refreshFsView();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    closeFsView();
+    cleanMetaClient();
   }
 
   protected void refreshFsView() throws IOException {
@@ -1400,6 +1407,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         .filter(dfile -> dfile.getFileId().equals(fileId3)).count());
     assertEquals(1, filteredView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId4)).count());
+    filteredView.close();
 
     // ensure replacedFileGroupsBefore works with all instants
     List<HoodieFileGroup> replacedOnInstant1 = fsView.getReplacedFileGroupsBeforeOrOn("1", partitionPath1).collect(Collectors.toList());
@@ -1858,6 +1866,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     // Verify file system view after 4th commit which is logcompaction.requested.
     verifyFileSystemView(partitionPath, expectedState, fileSystemView);
+
+    fileSystemView.close();
   }
 
   private HoodieCompactionPlan getHoodieCompactionPlan(List<CompactionOperation> operations) {
