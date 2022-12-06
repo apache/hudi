@@ -17,19 +17,13 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema}
-import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.executor.InputMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen._
 import org.apache.spark.sql.catalyst.expressions.{Cast, Expression, GenericInternalRow, UnsafeArrayData, UnsafeMapData, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
-import org.apache.spark.sql.types.{Decimal, StructType}
+import org.apache.spark.sql.types.Decimal
 import org.apache.spark.unsafe.Platform
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 import org.apache.spark.util.ParentClassLoader
@@ -48,15 +42,10 @@ import java.util.UUID
  */
 object ExpressionCodeGen extends Logging {
 
-  private trait CatalystExpressionInternalEvaluator {
-    def eval(ir: InternalRow): InternalRow
-    def code: String
-  }
-
   /**
    * TODO scala-doc
    */
-  def doCodeGen(exprs: Seq[Expression], inputStructType: StructType, targetSchema: Schema): IExpressionEvaluator = {
+  def doCodeGen(exprs: Seq[Expression]): UnsafeCatalystExpressionEvaluator = {
     val ctx = new CodegenContext()
 
     val className = s"ExpressionPayloadEvaluator_${UUID.randomUUID().toString.replace("-", "_")}"
@@ -74,7 +63,7 @@ object ExpressionCodeGen extends Logging {
          |  this.code = code;
          |}
          |
-         |public InternalRow eval(InternalRow ${ctx.INPUT_ROW}) {
+         |public InternalRow doEval(InternalRow ${ctx.INPUT_ROW}) {
          |    ${exprEvalCodes.map(_.code).mkString("\n")}
          |    Object[] results = new Object[${exprEvalCodes.length}];
          |    ${(for (i <- exprEvalCodes.indices) yield {
@@ -120,7 +109,7 @@ object ExpressionCodeGen extends Logging {
       classOf[TaskKilledException].getName,
       classOf[InputMetrics].getName
     )
-    classBodyEvaluator.setImplementedInterfaces(Array(classOf[CatalystExpressionInternalEvaluator]))
+    classBodyEvaluator.setImplementedInterfaces(Array(classOf[UnsafeCatalystExpressionEvaluator]))
     try {
       classBodyEvaluator.cook(codeBody)
     } catch {
@@ -134,35 +123,25 @@ object ExpressionCodeGen extends Logging {
 
     val references = ctx.references.toArray.map(_.asInstanceOf[Object])
 
-    val internalEvaluator =
-      classBodyEvaluator.getClazz.getConstructor(classOf[Object], classOf[String])
-          .newInstance(references, codeBody)
-          .asInstanceOf[CatalystExpressionInternalEvaluator]
-
-    new IExpressionEvaluator {
-
-      private val avroSerializer =
-        sparkAdapter.createAvroSerializer(convertAvroSchemaToStructType(targetSchema), targetSchema, nullable = true)
-
-      private val avroDeserializer =
-        sparkAdapter.createAvroDeserializer(convertStructTypeToAvroSchema(inputStructType, "record"), inputStructType)
-
-      override def eval(record: IndexedRecord): GenericRecord = {
-        avroDeserializer.deserialize(record) match {
-          case Some(inputRow) =>
-            val result = internalEvaluator.eval(inputRow.asInstanceOf[InternalRow])
-            avroSerializer.serialize(result).asInstanceOf[GenericRecord]
-
-          case None =>
-            logError(s"Failed to deserialize Avro record `${record.toString}` as Catalyst row")
-            throw new HoodieException("Failed to deserialize Avro record as Catalyst row")
-        }
-
-      }
-
-      override def getCode: String = internalEvaluator.code
-    }
+    classBodyEvaluator.getClazz.getConstructor(classOf[Object], classOf[String])
+      .newInstance(references, codeBody)
+      .asInstanceOf[UnsafeCatalystExpressionEvaluator]
   }
 }
+
+// TODO scala-doc
+trait UnsafeCatalystExpressionEvaluator {
+  def eval(ir: InternalRow): InternalRow = {
+    try doEval(ir) catch {
+      case e: Throwable =>
+        throw new RuntimeException(s"Encountered exception execute generated code: ${e.getMessage}.\n" +
+          s"Code:\n$code", e)
+    }
+  }
+
+  protected def doEval(ir: InternalRow): InternalRow
+  protected def code: String
+}
+
 
 

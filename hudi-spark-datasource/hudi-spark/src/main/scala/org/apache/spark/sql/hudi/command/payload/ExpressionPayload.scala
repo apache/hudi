@@ -20,19 +20,25 @@ package org.apache.spark.sql.hudi.command.payload
 import com.github.benmanes.caffeine.cache.Caffeine
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
+import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.io.HoodieWriteHandle
-import org.apache.hudi.sql.IExpressionEvaluator
-import org.apache.spark.sql.avro.SchemaConverters
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, SchemaConverters}
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hudi.SerDeUtils
-import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{PAYLOAD_RECORD_AVRO_SCHEMA, getEvaluator, getMergedSchema, parseSchema}
-import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
+import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.function.Function
 import java.util.{Base64, Properties}
@@ -86,7 +92,7 @@ class ExpressionPayload(record: GenericRecord,
     val sourceRecord = bytesToAvro(recordBytes, recordSchema)
     val joinedRecord = joinRecord(sourceRecord, targetRecord)
 
-    processMatchedRecord(joinedRecord, Some(targetRecord), properties)
+    processMatchedRecord(ConvertibleRecord(joinedRecord), Some(targetRecord), properties)
   }
 
   /**
@@ -99,29 +105,35 @@ class ExpressionPayload(record: GenericRecord,
    * @param properties   The properties.
    * @return The result of the record to update or delete.
    */
-  private def processMatchedRecord(inputRecord: IndexedRecord,
+  private def processMatchedRecord(inputRecord: ConvertibleRecord,
                                    targetRecord: Option[IndexedRecord],
                                    properties: Properties): HOption[IndexedRecord] = {
     // Process update
     val updateConditionAndAssignmentsText =
       properties.get(ExpressionPayload.PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS)
-    assert(updateConditionAndAssignmentsText != null,
-      s"${ExpressionPayload.PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS} have not set")
+
+    checkState(updateConditionAndAssignmentsText != null,
+      s"${ExpressionPayload.PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS} have to be set")
 
     var resultRecordOpt: HOption[IndexedRecord] = null
 
     // Get the Evaluator for each condition and update assignments.
-    val updateConditionAndAssignments = getEvaluator(updateConditionAndAssignmentsText.toString, inputRecord.getSchema, writeSchema)
+    val updateConditionAndAssignments =
+      getEvaluator(updateConditionAndAssignmentsText.toString, inputRecord.avro.getSchema)
+
     for ((conditionEvaluator, assignmentEvaluator) <- updateConditionAndAssignments
          if resultRecordOpt == null) {
-      val conditionVal = evaluate(conditionEvaluator, inputRecord).get(0).asInstanceOf[Boolean]
+      val conditionVal = conditionEvaluator.eval(inputRecord.row).get(0, BooleanType).asInstanceOf[Boolean]
       // If the update condition matched  then execute assignment expression
       // to compute final record to update. We will return the first matched record.
       if (conditionVal) {
-        val resultRecord = evaluate(assignmentEvaluator, inputRecord)
+        val resultingRow = assignmentEvaluator.eval(inputRecord.row)
+        lazy val resultingAvroRecord = getAvroSerializerFor(writeSchema)
+          .serialize(resultingRow)
+          .asInstanceOf[GenericRecord]
 
-        if (targetRecord.isEmpty || needUpdatingPersistedRecord(targetRecord.get, resultRecord, properties)) {
-          resultRecordOpt = HOption.of(resultRecord)
+        if (targetRecord.isEmpty || needUpdatingPersistedRecord(targetRecord.get, resultingAvroRecord, properties)) {
+          resultRecordOpt = HOption.of(resultingAvroRecord)
         } else {
           // if the PreCombine field value of targetRecord is greater
           // than the new incoming record, just keep the old record value.
@@ -129,13 +141,14 @@ class ExpressionPayload(record: GenericRecord,
         }
       }
     }
+
     if (resultRecordOpt == null) {
       // Process delete
       val deleteConditionText = properties.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
       if (deleteConditionText != null) {
-        val deleteCondition = getEvaluator(deleteConditionText.toString, inputRecord.getSchema, writeSchema).head._1
-        val deleteConditionVal = evaluate(deleteCondition, inputRecord).get(0).asInstanceOf[Boolean]
-        if (deleteConditionVal) {
+        val (deleteConditionEvaluator, _) = getEvaluator(deleteConditionText.toString, inputRecord.avro.getSchema).head
+        val deleteConditionResult = deleteConditionEvaluator.eval(inputRecord.row).get(0, BooleanType).asInstanceOf[Boolean]
+        if (deleteConditionResult) {
           resultRecordOpt = HOption.empty()
         }
       }
@@ -149,6 +162,16 @@ class ExpressionPayload(record: GenericRecord,
     }
   }
 
+  // TODO elaborate on laziness
+  case class ConvertibleRecord(avro: GenericRecord) extends Logging {
+    lazy val row: InternalRow = getAvroDeserializerFor(avro.getSchema).deserialize(avro) match {
+      case Some(row) => row.asInstanceOf[InternalRow]
+      case None =>
+        logError(s"Failed to deserialize Avro record `${record.toString}` as Catalyst row")
+        throw new HoodieException("Failed to deserialize Avro record as Catalyst row")
+    }
+  }
+
   /**
    * Process the not-matched record. Test if the record matched any of insert-conditions,
    * if matched then return the result of insert-assignment. Or else return a
@@ -158,21 +181,25 @@ class ExpressionPayload(record: GenericRecord,
    * @param properties  The properties.
    * @return The result of the record to insert.
    */
-  private def processNotMatchedRecord(inputRecord: IndexedRecord, properties: Properties): HOption[IndexedRecord] = {
+  private def processNotMatchedRecord(inputRecord: ConvertibleRecord, properties: Properties): HOption[IndexedRecord] = {
     val insertConditionAndAssignmentsText =
       properties.get(ExpressionPayload.PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS)
     // Get the evaluator for each condition and insert assignment.
     val insertConditionAndAssignments =
-      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText.toString, inputRecord.getSchema, writeSchema)
+      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText.toString, inputRecord.avro.getSchema)
     var resultRecordOpt: HOption[IndexedRecord] = null
     for ((conditionEvaluator, assignmentEvaluator) <- insertConditionAndAssignments
          if resultRecordOpt == null) {
-      val conditionVal = evaluate(conditionEvaluator, inputRecord).get(0).asInstanceOf[Boolean]
+      val conditionVal = conditionEvaluator.eval(inputRecord.row).get(0, BooleanType).asInstanceOf[Boolean]
       // If matched the insert condition then execute the assignment expressions to compute the
       // result record. We will return the first matched record.
       if (conditionVal) {
-        val resultRecord = evaluate(assignmentEvaluator, inputRecord)
-        resultRecordOpt = HOption.of(resultRecord)
+        val resultingRow = assignmentEvaluator.eval(inputRecord.row)
+        val resultingAvroRecord = getAvroSerializerFor(writeSchema)
+          .serialize(resultingRow)
+          .asInstanceOf[GenericRecord]
+
+        resultRecordOpt = HOption.of(resultingAvroRecord)
       }
     }
     if (resultRecordOpt != null) {
@@ -187,8 +214,8 @@ class ExpressionPayload(record: GenericRecord,
   override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
     init(properties)
 
-    val incomingRecord = bytesToAvro(recordBytes, recordSchema)
-    if (isDeleteRecord(incomingRecord)) {
+    val incomingRecord = ConvertibleRecord(bytesToAvro(recordBytes, recordSchema))
+    if (isDeleteRecord(incomingRecord.avro)) {
       HOption.empty[IndexedRecord]()
     } else if (isMORTable(properties)) {
       // For the MOR table, both the matched and not-matched record will step into the getInsertValue() method.
@@ -211,7 +238,7 @@ class ExpressionPayload(record: GenericRecord,
     properties.getProperty(TABLE_TYPE.key, null) == MOR_TABLE_TYPE_OPT_VAL
   }
 
-  private def convertToRecord(values: Array[AnyRef], schema: Schema): IndexedRecord = {
+  private def convertToRecord(values: Array[AnyRef], schema: Schema): GenericRecord = {
     assert(values.length == schema.getFields.size())
     val writeRecord = new GenericData.Record(schema)
     for (i <- values.indices) {
@@ -239,7 +266,7 @@ class ExpressionPayload(record: GenericRecord,
    *
    * @return
    */
-  private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord): IndexedRecord = {
+  private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord): GenericRecord = {
     val leftSchema = sourceRecord.getSchema
     val joinSchema = getMergedSchema(leftSchema, targetRecord.getSchema)
 
@@ -254,14 +281,6 @@ class ExpressionPayload(record: GenericRecord,
       values += value
     }
     convertToRecord(values.toArray, joinSchema)
-  }
-
-  private def evaluate(evaluator: IExpressionEvaluator, avroRecord: IndexedRecord): GenericRecord = {
-    try evaluator.eval(avroRecord) catch {
-      case e: Throwable =>
-        throw new RuntimeException(s"Encountered exception execute generated code: ${e.getMessage}.\n" +
-          s"Code:\n${evaluator.getCode}", e)
-    }
   }
 }
 
@@ -291,16 +310,24 @@ object ExpressionPayload {
    * A cache for the serializedConditionAssignments to the compiled class after CodeGen.
    * The Map[IExpressionEvaluator, IExpressionEvaluator] is the map of the condition expression
    * to the assignments expression.
+   *
+   * TODO elaborate why key has to contain schema
    */
   private val cache = Caffeine.newBuilder()
     .maximumSize(1024)
-    .build[(String, Schema), Map[IExpressionEvaluator, IExpressionEvaluator]]()
+    .build[(String, Schema), Map[UnsafeCatalystExpressionEvaluator, UnsafeCatalystExpressionEvaluator]]()
 
   private val schemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[String, Schema]()
 
   private val mergedSchemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[(Schema, Schema), Schema]()
+
+  private val avroDeserializerCache = Caffeine.newBuilder()
+    .maximumSize(16).build[Schema, HoodieAvroDeserializer]()
+
+  private val avroSerializerCache = Caffeine.newBuilder()
+    .maximumSize(16).build[Schema, HoodieAvroSerializer]()
 
   private def parseSchema(schemaStr: String): Schema = {
     schemaCache.get(schemaStr,
@@ -309,16 +336,29 @@ object ExpressionPayload {
     })
   }
 
+  private def getAvroDeserializerFor(schema: Schema) = {
+    avroDeserializerCache.get(schema, new Function[Schema, HoodieAvroDeserializer] {
+      override def apply(t: Schema): HoodieAvroDeserializer =
+        sparkAdapter.createAvroDeserializer(schema, convertAvroSchemaToStructType(schema))
+    })
+  }
+
+  private def getAvroSerializerFor(schema: Schema) = {
+    avroSerializerCache.get(schema, new Function[Schema, HoodieAvroSerializer] {
+      override def apply(t: Schema): HoodieAvroSerializer =
+        sparkAdapter.createAvroSerializer(convertAvroSchemaToStructType(schema), schema, isNullable(schema))
+    })
+  }
+
   /**
    * Do the CodeGen for each condition and assignment expressions.We will cache it to reduce
    * the compile time for each method call.
    */
   def getEvaluator(serializedConditionAssignments: String,
-                   inputSchema: Schema,
-                   writerSchema: Schema): Map[IExpressionEvaluator, IExpressionEvaluator] = {
+                   inputSchema: Schema): Map[UnsafeCatalystExpressionEvaluator, UnsafeCatalystExpressionEvaluator] = {
     cache.get((serializedConditionAssignments, inputSchema),
-      new Function[(String, Schema), Map[IExpressionEvaluator, IExpressionEvaluator]] {
-        override def apply(key: (String, Schema)): Map[IExpressionEvaluator, IExpressionEvaluator] = {
+      new Function[(String, Schema), Map[UnsafeCatalystExpressionEvaluator, UnsafeCatalystExpressionEvaluator]] {
+        override def apply(key: (String, Schema)): Map[UnsafeCatalystExpressionEvaluator, UnsafeCatalystExpressionEvaluator] = {
           val (encodedConditionalAssignments, _) = key
           val serializedBytes = Base64.getDecoder.decode(encodedConditionalAssignments)
           val conditionAssignments = SerDeUtils.toObject(serializedBytes)
@@ -326,13 +366,8 @@ object ExpressionPayload {
           // Do the CodeGen for condition expression and assignment expression
           conditionAssignments.map {
             case (condition, assignments) =>
-              val inputStructType = SchemaConverters.toSqlType(inputSchema).dataType.asInstanceOf[StructType]
-
-              val conditionType = StructType(Seq(StructField("_col0", condition.dataType, nullable = true)))
-              val avroConditionType = SchemaConverters.toAvroType(conditionType)
-              val conditionEvaluator = ExpressionCodeGen.doCodeGen(Seq(condition), inputStructType, avroConditionType)
-
-              val assignmentEvaluator = ExpressionCodeGen.doCodeGen(assignments, inputStructType, writerSchema)
+              val conditionEvaluator = ExpressionCodeGen.doCodeGen(Seq(condition))
+              val assignmentEvaluator = ExpressionCodeGen.doCodeGen(assignments)
 
               conditionEvaluator -> assignmentEvaluator
           }
