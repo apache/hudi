@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.command.payload
 import com.github.benmanes.caffeine.cache.Caffeine
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
-import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
@@ -29,7 +28,7 @@ import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.hudi.sql.IExpressionEvaluator
-import org.apache.spark.sql.avro.{AvroSerializer, SchemaConverters}
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{PAYLOAD_RECORD_AVRO_SCHEMA, getEvaluator, getMergedSchema, parseSchema}
@@ -295,12 +294,13 @@ object ExpressionPayload {
    */
   private val cache = Caffeine.newBuilder()
     .maximumSize(1024)
-    .build[String, Map[IExpressionEvaluator, IExpressionEvaluator]]()
+    .build[(String, Schema), Map[IExpressionEvaluator, IExpressionEvaluator]]()
 
   private val schemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[String, Schema]()
 
-  private val mergedSchemaCache = Caffeine.newBuilder().maximumSize(16).build[TupleSchema, Schema]()
+  private val mergedSchemaCache = Caffeine.newBuilder()
+    .maximumSize(16).build[(Schema, Schema), Schema]()
 
   private def parseSchema(schemaStr: String): Schema = {
     schemaCache.get(schemaStr,
@@ -316,10 +316,11 @@ object ExpressionPayload {
   def getEvaluator(serializedConditionAssignments: String,
                    inputSchema: Schema,
                    writerSchema: Schema): Map[IExpressionEvaluator, IExpressionEvaluator] = {
-    cache.get(serializedConditionAssignments,
-      new Function[String, Map[IExpressionEvaluator, IExpressionEvaluator]] {
-        override def apply(t: String): Map[IExpressionEvaluator, IExpressionEvaluator] = {
-          val serializedBytes = Base64.getDecoder.decode(t)
+    cache.get((serializedConditionAssignments, inputSchema),
+      new Function[(String, Schema), Map[IExpressionEvaluator, IExpressionEvaluator]] {
+        override def apply(key: (String, Schema)): Map[IExpressionEvaluator, IExpressionEvaluator] = {
+          val (encodedConditionalAssignments, _) = key
+          val serializedBytes = Base64.getDecoder.decode(encodedConditionalAssignments)
           val conditionAssignments = SerDeUtils.toObject(serializedBytes)
             .asInstanceOf[Map[Expression, Seq[Expression]]]
           // Do the CodeGen for condition expression and assignment expression
@@ -340,10 +341,10 @@ object ExpressionPayload {
   }
 
   def getMergedSchema(source: Schema, target: Schema): Schema = {
-    mergedSchemaCache.get(TupleSchema(source, target), new Function[TupleSchema, Schema] {
-      override def apply(t: TupleSchema): Schema = {
-        val rightSchema = HoodieAvroUtils.removeMetadataFields(t.second)
-        mergeSchema(t.first, rightSchema)
+    mergedSchemaCache.get((source, target), new Function[(Schema, Schema), Schema] {
+      override def apply(t: (Schema, Schema)): Schema = {
+        val rightSchema = HoodieAvroUtils.removeMetadataFields(t._2)
+        mergeSchema(t._1, rightSchema)
       }
     })
   }
@@ -358,7 +359,5 @@ object ExpressionPayload {
             field.schema, field.doc, field.defaultVal, field.order))
     Schema.createRecord(a.getName, a.getDoc, a.getNamespace, a.isError, mergedFields.asJava)
   }
-
-  case class TupleSchema(first: Schema, second: Schema)
 }
 
