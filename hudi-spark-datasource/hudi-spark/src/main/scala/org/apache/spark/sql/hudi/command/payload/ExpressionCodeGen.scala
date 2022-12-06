@@ -77,15 +77,12 @@ object ExpressionCodeGen extends Logging {
          |public GenericRecord eval(IndexedRecord $RECORD_NAME) {
          |    ${resultVars.map(_.code).mkString("\n")}
          |    Object[] results = new Object[${resultVars.length}];
-         |    ${
-                (for (i <- resultVars.indices) yield {
-                          s"""
-                             |if (${resultVars(i).isNull}) {
-                             |  results[$i] = null;
-                             |} else {
-                             |  results[$i] = ${resultVars(i).value.code};
-                             |}
-                       """.stripMargin
+         |    ${(for (i <- resultVars.indices) yield {
+                  s"""if (${resultVars(i).isNull}) {
+                     |  results[$i] = null;
+                     |} else {
+                     |  results[$i] = ${resultVars(i).value.code};
+                     |}""".stripMargin
                  }).mkString("\n")
               }
               InternalRow row = new GenericInternalRow(results);
@@ -151,43 +148,42 @@ object ExpressionCodeGen extends Logging {
    * doGenCode method.
    */
   private def replaceBoundReference(expression: Expression): Expression = {
-    expression transformDown  {
+    expression.transformDown  {
       case BoundReference(ordinal, dataType, nullable) =>
-         RecordBoundReference(ordinal, dataType, nullable)
-      case other =>
-        other
+         AvroRecordBoundReference(ordinal, dataType, nullable)
     }
   }
 }
 
-case class RecordBoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)
+/**
+ * Replaces [[BoundReference]] generating code extracting values from the Avro's [[IndexedRecord]],
+ * instead of Catalyst's [[InternalRow]]
+ */
+private case class AvroRecordBoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)
   extends LeafExpression {
 
-  /**
-   * Do the CodeGen for RecordBoundReference.
-   * Use "IndexedRecord" as the input object but not a "Row"
-   */
   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
     val javaType = JavaCode.javaType(dataType)
     val boxType = JavaCode.boxedType(dataType)
 
-    val value = s"($boxType)$RECORD_NAME.get($ordinal)"
+    val fieldValueCode = s"$RECORD_NAME.get($ordinal)"
+    val castedFieldValueCode = s"($boxType) $fieldValueCode"
+
     if (nullable) {
       ev.copy(code =
         code"""
-              | boolean ${ev.isNull} = $RECORD_NAME.get($ordinal) == null;
-              | $javaType ${ev.value} = ${ev.isNull} ?
-              | ${CodeGenerator.defaultValue(dataType)} : ($value);
+              |boolean ${ev.isNull} = $fieldValueCode == null;
+              |$javaType ${ev.value} = ${ev.isNull}
+              |   ? ${CodeGenerator.defaultValue(dataType)} : $castedFieldValueCode";
           """
       )
     } else {
-      ev.copy(code = code"$javaType ${ev.value} = $value;", isNull = FalseLiteral)
+      ev.copy(code = code"$javaType ${ev.value} = $castedFieldValueCode;", isNull = FalseLiteral)
     }
   }
 
   override def eval(input: InternalRow): Any = {
-    throw new IllegalArgumentException(s"Should not call eval method for " +
-      s"${getClass.getCanonicalName}")
+    throw new UnsupportedOperationException()
   }
 }
 
