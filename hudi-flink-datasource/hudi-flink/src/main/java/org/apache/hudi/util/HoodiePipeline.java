@@ -127,15 +127,16 @@ public class HoodiePipeline {
       return this;
     }
 
+    /**
+     * Add table schema.
+     */
     public Builder schema(Schema schema) {
       for (Schema.UnresolvedColumn column : schema.getColumns()) {
         column(column.toString());
       }
-
       if (schema.getPrimaryKey().isPresent()) {
         pk(schema.getPrimaryKey().get().getColumnNames().stream().map(EncodingUtils::escapeIdentifier).collect(Collectors.joining(", ")));
       }
-
       return this;
     }
 

@@ -18,22 +18,17 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.api.Schema;
-import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.catalog.ObjectPath;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
-import org.apache.hudi.table.catalog.CatalogOptions;
-import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
-import org.apache.hudi.table.catalog.HoodieHiveCatalog;
+import org.apache.hudi.table.catalog.HoodieCatalog;
+import org.apache.hudi.table.catalog.TableOptionProperties;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.HoodiePipeline;
 import org.apache.hudi.util.StreamerUtil;
@@ -57,6 +52,10 @@ import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
+import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.catalog.CatalogBaseTable;
+import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
@@ -77,6 +76,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
+import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
 
 /**
  * Integration test for Flink Hoodie stream sink.
@@ -445,8 +447,15 @@ public class ITTestDataStreamWrite extends TestLogger {
     // set up checkpoint interval
     execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
-    conf.setString(FlinkOptions.TABLE_NAME, "t1");
+
+    // create table dir
+    final String dbName = DEFAULT_DATABASE.defaultValue();
+    final String tableName = "t1";
+    File testTable = new File(tempFile, dbName + Path.SEPARATOR + tableName);
+    testTable.mkdir();
+
+    Configuration conf = TestConfigurations.getDefaultConf(testTable.toURI().toString());
+    conf.setString(FlinkOptions.TABLE_NAME, tableName);
     conf.setString(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
 
     // write 3 batches of data set
@@ -454,34 +463,26 @@ public class ITTestDataStreamWrite extends TestLogger {
     TestData.writeData(TestData.dataSetInsert(3, 4), conf);
     TestData.writeData(TestData.dataSetInsert(5, 6), conf);
 
-    String latestCommit = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
+    String latestCommit = TestUtils.getLastCompleteInstant(testTable.toURI().toString());
 
     Map<String, String> options = new HashMap<>();
-    options.put(FlinkOptions.PATH.key(), tempFile.toURI().toString());
+    options.put(FlinkOptions.PATH.key(), testTable.toURI().toString());
     options.put(FlinkOptions.READ_START_COMMIT.key(), latestCommit);
 
-    HiveConf hiveConf = new HiveConf();
-    hiveConf.setVar(HiveConf.ConfVars.METASTORECONNECTURLKEY, String.format("jdbc:derby:;databaseName=%s;create=true", tempFile.toURI() + "metastore_db"));
-
-    conf.setBoolean(CatalogOptions.TABLE_EXTERNAL, false);
-    HoodieHiveCatalog hoodieCatalog = new HoodieHiveCatalog(
-        "test_catalog",
-        conf,
-        hiveConf,
-        true);
-    hoodieCatalog.open();
-    List<String> strings = hoodieCatalog.listDatabases();
-    List<String> stringss = hoodieCatalog.listTables(strings.get(0));
-    ObjectPath tablePath = new ObjectPath("default", "test_source");
+    // create hoodie catalog, in order to get the table schema
+    Configuration catalogConf = new Configuration();
+    catalogConf.setString(CATALOG_PATH.key(), tempFile.toURI().toString());
+    catalogConf.setString(DEFAULT_DATABASE.key(), DEFAULT_DATABASE.defaultValue());
+    HoodieCatalog catalog = new HoodieCatalog("hudi", catalogConf);
+    catalog.open();
+    // get hoodieTable
+    ObjectPath tablePath = new ObjectPath(dbName, tableName);
+    TableOptionProperties.createProperties(testTable.toURI().toString(), HadoopConfigurations.getHadoopConf(catalogConf), options);
+    CatalogBaseTable hoodieTable = catalog.getTable(tablePath);
 
     //read a hoodie table use low-level source api.
     HoodiePipeline.Builder builder = HoodiePipeline.builder("test_source")
-        .schema(hoodieCatalog.getTable(tablePath).getUnresolvedSchema())
-//        .column("uuid string not null")
-//        .column("name string")
-//        .column("age int")
-//        .column("`ts` timestamp(3)")
-//        .column("`partition` string")
+        .schema(hoodieTable.getUnresolvedSchema())
         .pk("uuid")
         .partition("partition")
         .options(options);
