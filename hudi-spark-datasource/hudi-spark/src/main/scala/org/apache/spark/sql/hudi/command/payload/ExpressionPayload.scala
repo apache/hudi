@@ -85,9 +85,9 @@ class ExpressionPayload(record: GenericRecord,
     init(properties)
 
     val sourceRecord = bytesToAvro(recordBytes, recordSchema)
-    val joinSqlRecord = new SqlTypedRecord(joinRecord(sourceRecord, targetRecord))
+    val joinedRecord = joinRecord(sourceRecord, targetRecord)
 
-    processMatchedRecord(joinSqlRecord, Some(targetRecord), properties)
+    processMatchedRecord(joinedRecord, Some(targetRecord), properties)
   }
 
   /**
@@ -100,8 +100,9 @@ class ExpressionPayload(record: GenericRecord,
    * @param properties   The properties.
    * @return The result of the record to update or delete.
    */
-  private def processMatchedRecord(inputRecord: SqlTypedRecord,
-    targetRecord: Option[IndexedRecord], properties: Properties): HOption[IndexedRecord] = {
+  private def processMatchedRecord(inputRecord: IndexedRecord,
+                                   targetRecord: Option[IndexedRecord],
+                                   properties: Properties): HOption[IndexedRecord] = {
     // Process update
     val updateConditionAndAssignmentsText =
       properties.get(ExpressionPayload.PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS)
@@ -158,7 +159,7 @@ class ExpressionPayload(record: GenericRecord,
    * @param properties  The properties.
    * @return The result of the record to insert.
    */
-  private def processNotMatchedRecord(inputRecord: SqlTypedRecord, properties: Properties): HOption[IndexedRecord] = {
+  private def processNotMatchedRecord(inputRecord: IndexedRecord, properties: Properties): HOption[IndexedRecord] = {
     val insertConditionAndAssignmentsText =
       properties.get(ExpressionPayload.PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS)
     // Get the evaluator for each condition and insert assignment.
@@ -190,23 +191,20 @@ class ExpressionPayload(record: GenericRecord,
     val incomingRecord = bytesToAvro(recordBytes, recordSchema)
     if (isDeleteRecord(incomingRecord)) {
       HOption.empty[IndexedRecord]()
-    } else {
-      val sqlTypedRecord = new SqlTypedRecord(incomingRecord)
-      if (isMORTable(properties)) {
-        // For the MOR table, both the matched and not-matched record will step into the getInsertValue() method.
-        // We call the processMatchedRecord() method if current is a Update-Record to process
-        // the matched record. Or else we call processNotMatchedRecord() method to process the not matched record.
-        val isUpdateRecord = properties.getProperty(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, "false").toBoolean
-        if (isUpdateRecord) {
-          processMatchedRecord(sqlTypedRecord, Option.empty, properties)
-        } else {
-          processNotMatchedRecord(sqlTypedRecord, properties)
-        }
+    } else if (isMORTable(properties)) {
+      // For the MOR table, both the matched and not-matched record will step into the getInsertValue() method.
+      // We call the processMatchedRecord() method if current is a Update-Record to process
+      // the matched record. Or else we call processNotMatchedRecord() method to process the not matched record.
+      val isUpdateRecord = properties.getProperty(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, "false").toBoolean
+      if (isUpdateRecord) {
+        processMatchedRecord(incomingRecord, Option.empty, properties)
       } else {
-        // For COW table, only the not-matched record will step into the getInsertValue method, So just call
-        // the processNotMatchedRecord() here.
-        processNotMatchedRecord(sqlTypedRecord, properties)
+        processNotMatchedRecord(incomingRecord, properties)
       }
+    } else {
+      // For COW table, only the not-matched record will step into the getInsertValue method, So just call
+      // the processNotMatchedRecord() here.
+      processNotMatchedRecord(incomingRecord, properties)
     }
   }
 
@@ -258,8 +256,8 @@ class ExpressionPayload(record: GenericRecord,
     convertToRecord(values.toArray, joinSchema)
   }
 
-  private def evaluate(evaluator: IExpressionEvaluator, sqlTypedRecord: SqlTypedRecord): GenericRecord = {
-    try evaluator.eval(sqlTypedRecord) catch {
+  private def evaluate(evaluator: IExpressionEvaluator, avroRecord: IndexedRecord): GenericRecord = {
+    try evaluator.eval(avroRecord) catch {
       case e: Throwable =>
         throw new RuntimeException(s"Error in execute expression: ${e.getMessage}.\n${evaluator.getCode}", e)
     }
