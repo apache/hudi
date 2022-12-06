@@ -112,7 +112,7 @@ class ExpressionPayload(record: GenericRecord,
     var resultRecordOpt: HOption[IndexedRecord] = null
 
     // Get the Evaluator for each condition and update assignments.
-    val updateConditionAndAssignments = getEvaluator(updateConditionAndAssignmentsText.toString, writeSchema)
+    val updateConditionAndAssignments = getEvaluator(updateConditionAndAssignmentsText.toString, inputRecord.getSchema, writeSchema)
     for ((conditionEvaluator, assignmentEvaluator) <- updateConditionAndAssignments
          if resultRecordOpt == null) {
       val conditionVal = evaluate(conditionEvaluator, inputRecord).get(0).asInstanceOf[Boolean]
@@ -134,7 +134,7 @@ class ExpressionPayload(record: GenericRecord,
       // Process delete
       val deleteConditionText = properties.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
       if (deleteConditionText != null) {
-        val deleteCondition = getEvaluator(deleteConditionText.toString, writeSchema).head._1
+        val deleteCondition = getEvaluator(deleteConditionText.toString, inputRecord.getSchema, writeSchema).head._1
         val deleteConditionVal = evaluate(deleteCondition, inputRecord).get(0).asInstanceOf[Boolean]
         if (deleteConditionVal) {
           resultRecordOpt = HOption.empty()
@@ -164,7 +164,7 @@ class ExpressionPayload(record: GenericRecord,
       properties.get(ExpressionPayload.PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS)
     // Get the evaluator for each condition and insert assignment.
     val insertConditionAndAssignments =
-      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText.toString, writeSchema)
+      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText.toString, inputRecord.getSchema, writeSchema)
     var resultRecordOpt: HOption[IndexedRecord] = null
     for ((conditionEvaluator, assignmentEvaluator) <- insertConditionAndAssignments
          if resultRecordOpt == null) {
@@ -244,7 +244,8 @@ class ExpressionPayload(record: GenericRecord,
     val leftSchema = sourceRecord.getSchema
     val joinSchema = getMergedSchema(leftSchema, targetRecord.getSchema)
 
-    val values = new ArrayBuffer[AnyRef]()
+    // TODO rebase onto JoinRecord
+    val values = new ArrayBuffer[AnyRef](joinSchema.getFields.size())
     for (i <- 0 until joinSchema.getFields.size()) {
       val value = if (i < leftSchema.getFields.size()) {
         sourceRecord.get(i)
@@ -259,7 +260,8 @@ class ExpressionPayload(record: GenericRecord,
   private def evaluate(evaluator: IExpressionEvaluator, avroRecord: IndexedRecord): GenericRecord = {
     try evaluator.eval(avroRecord) catch {
       case e: Throwable =>
-        throw new RuntimeException(s"Error in execute expression: ${e.getMessage}.\n${evaluator.getCode}", e)
+        throw new RuntimeException(s"Encountered exception execute generated code: ${e.getMessage}.\n" +
+          s"Code:\n${evaluator.getCode}", e)
     }
   }
 }
@@ -298,6 +300,8 @@ object ExpressionPayload {
   private val schemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[String, Schema]()
 
+  private val mergedSchemaCache = Caffeine.newBuilder().maximumSize(16).build[TupleSchema, Schema]()
+
   private def parseSchema(schemaStr: String): Schema = {
     schemaCache.get(schemaStr,
       new Function[String, Schema] {
@@ -309,7 +313,9 @@ object ExpressionPayload {
    * Do the CodeGen for each condition and assignment expressions.We will cache it to reduce
    * the compile time for each method call.
    */
-  def getEvaluator(serializedConditionAssignments: String, writeSchema: Schema): Map[IExpressionEvaluator, IExpressionEvaluator] = {
+  def getEvaluator(serializedConditionAssignments: String,
+                   inputSchema: Schema,
+                   writerSchema: Schema): Map[IExpressionEvaluator, IExpressionEvaluator] = {
     cache.get(serializedConditionAssignments,
       new Function[String, Map[IExpressionEvaluator, IExpressionEvaluator]] {
         override def apply(t: String): Map[IExpressionEvaluator, IExpressionEvaluator] = {
@@ -319,24 +325,21 @@ object ExpressionPayload {
           // Do the CodeGen for condition expression and assignment expression
           conditionAssignments.map {
             case (condition, assignments) =>
-              val conditionType = StructType(Seq(StructField("_col0", condition.dataType, nullable = true)))
-              val conditionSerializer = new AvroSerializer(conditionType,
-                SchemaConverters.toAvroType(conditionType), false)
-              val conditionEvaluator = ExpressionCodeGen.doCodeGen(Seq(condition), conditionSerializer)
+              val inputStructType = SchemaConverters.toSqlType(inputSchema).dataType.asInstanceOf[StructType]
 
-              val assignSqlType = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
-              val assignSerializer = new AvroSerializer(assignSqlType, writeSchema, false)
-              val assignmentEvaluator = ExpressionCodeGen.doCodeGen(assignments, assignSerializer)
+              val conditionType = StructType(Seq(StructField("_col0", condition.dataType, nullable = true)))
+              val avroConditionType = SchemaConverters.toAvroType(conditionType)
+              val conditionEvaluator = ExpressionCodeGen.doCodeGen(Seq(condition), inputStructType, avroConditionType)
+
+              val assignmentEvaluator = ExpressionCodeGen.doCodeGen(assignments, inputStructType, writerSchema)
+
               conditionEvaluator -> assignmentEvaluator
           }
         }
       })
   }
 
-  private val mergedSchemaCache = Caffeine.newBuilder().maximumSize(16).build[TupleSchema, Schema]()
-
   def getMergedSchema(source: Schema, target: Schema): Schema = {
-
     mergedSchemaCache.get(TupleSchema(source, target), new Function[TupleSchema, Schema] {
       override def apply(t: TupleSchema): Schema = {
         val rightSchema = HoodieAvroUtils.removeMetadataFields(t.second)

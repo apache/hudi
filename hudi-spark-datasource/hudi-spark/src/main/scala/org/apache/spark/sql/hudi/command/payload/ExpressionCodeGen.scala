@@ -17,18 +17,19 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
+import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
+import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema}
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.executor.InputMetrics
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.avro.AvroSerializer
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
 import org.apache.spark.sql.catalyst.expressions.codegen._
-import org.apache.spark.sql.catalyst.expressions.{BoundReference, Cast, Expression, GenericInternalRow, LeafExpression, UnsafeArrayData, UnsafeMapData, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{Cast, Expression, GenericInternalRow, UnsafeArrayData, UnsafeMapData, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
-import org.apache.spark.sql.hudi.command.payload.ExpressionCodeGen.RECORD_NAME
-import org.apache.spark.sql.types.{DataType, Decimal}
+import org.apache.spark.sql.types.{Decimal, StructType}
 import org.apache.spark.unsafe.Platform
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 import org.apache.spark.util.ParentClassLoader
@@ -43,67 +44,64 @@ import java.util.UUID
  * The mainly difference with the spark's CodeGen for expression is that
  * the expression's input is a IndexedRecord but not a Row.
  *
+ * TODO update
  */
 object ExpressionCodeGen extends Logging {
 
-  val RECORD_NAME = "record"
+  private trait CatalystExpressionInternalEvaluator {
+    def eval(ir: InternalRow): InternalRow
+    def code: String
+  }
 
   /**
-   * CodeGen for expressions.
-   * @param exprs The expression list to CodeGen.
-   * @return An IExpressionEvaluator generate by CodeGen which take a IndexedRecord as input
-   *         param and return a Array of results for each expression.
+   * TODO scala-doc
    */
-  def doCodeGen(exprs: Seq[Expression], serializer: AvroSerializer): IExpressionEvaluator = {
+  def doCodeGen(exprs: Seq[Expression], inputStructType: StructType, targetSchema: Schema): IExpressionEvaluator = {
     val ctx = new CodegenContext()
-    // Set the input_row to null as we do not use row as the input object but Record.
-    ctx.INPUT_ROW = null
 
-    val replacedExprs = exprs.map(replaceBoundReference)
-    val resultVars = replacedExprs.map(_.genCode(ctx))
     val className = s"ExpressionPayloadEvaluator_${UUID.randomUUID().toString.replace("-", "_")}"
+
+    val exprEvalCodes = exprs.map(_.genCode(ctx))
     val codeBody =
       s"""
          |private Object[] references;
          |private String code;
-         |private AvroSerializer serializer;
          |
-         |public $className(Object references, String code, AvroSerializer serializer) {
+         |public $className(Object references, String code) {
          |  this.references = (Object[])references;
          |  this.code = code;
-         |  this.serializer = serializer;
          |}
          |
-         |public GenericRecord eval(IndexedRecord $RECORD_NAME) {
-         |    ${resultVars.map(_.code).mkString("\n")}
-         |    Object[] results = new Object[${resultVars.length}];
-         |    ${(for (i <- resultVars.indices) yield {
-                  s"""if (${resultVars(i).isNull}) {
+         |public InternalRow eval(InternalRow ${ctx.INPUT_ROW}) {
+         |    ${exprEvalCodes.map(_.code).mkString("\n")}
+         |    Object[] results = new Object[${exprEvalCodes.length}];
+         |    ${(for (i <- exprEvalCodes.indices) yield {
+                  s"""if (${exprEvalCodes(i).isNull}) {
                      |  results[$i] = null;
                      |} else {
-                     |  results[$i] = ${resultVars(i).value.code};
+                     |  results[$i] = ${exprEvalCodes(i).value.code};
                      |}""".stripMargin
                  }).mkString("\n")
               }
-              InternalRow row = new GenericInternalRow(results);
-              return (GenericRecord) serializer.serialize(row);
+              return new GenericInternalRow(results);
          |  }
          |
-         |public String getCode() {
+         |public String code() {
          |  return code;
          |}
-     """.stripMargin
+      """.stripMargin
 
-    val evaluator = new ClassBodyEvaluator()
+    val classBodyEvaluator = new ClassBodyEvaluator()
     val parentClassLoader = new ParentClassLoader(
       Option(Thread.currentThread().getContextClassLoader).getOrElse(getClass.getClassLoader))
 
-    evaluator.setParentClassLoader(parentClassLoader)
+    classBodyEvaluator.setParentClassLoader(parentClassLoader)
     // Cannot be under package codegen, or fail with java.lang.InstantiationException
-    evaluator.setClassName(s"org.apache.hudi.sql.payload.$className")
-    evaluator.setDefaultImports(
+    classBodyEvaluator.setClassName(s"org.apache.hudi.sql.payload.$className")
+    classBodyEvaluator.setDefaultImports(
       classOf[Platform].getName,
       classOf[InternalRow].getName,
+      classOf[GenericInternalRow].getName,
       classOf[UnsafeRow].getName,
       classOf[UTF8String].getName,
       classOf[Decimal].getName,
@@ -113,77 +111,54 @@ object ExpressionCodeGen extends Logging {
       classOf[MapData].getName,
       classOf[UnsafeMapData].getName,
       classOf[Expression].getName,
+      classOf[Cast].getName,
       classOf[TaskContext].getName,
       classOf[TaskKilledException].getName,
-      classOf[InputMetrics].getName,
-      classOf[IndexedRecord].getName,
-      classOf[AvroSerializer].getName,
-      classOf[GenericRecord].getName,
-      classOf[GenericInternalRow].getName,
-      classOf[Cast].getName
+      classOf[InputMetrics].getName
     )
-    evaluator.setImplementedInterfaces(Array(classOf[IExpressionEvaluator]))
+    classBodyEvaluator.setImplementedInterfaces(Array(classOf[CatalystExpressionInternalEvaluator]))
     try {
-      evaluator.cook(codeBody)
+      classBodyEvaluator.cook(codeBody)
     } catch {
       case e: InternalCompilerException =>
-        val msg = s"failed to compile: $e"
-        logError(msg, e)
-        throw new InternalCompilerException(msg, e)
+        logError("Encountered internal compiler failure during code generation", e)
+        throw e
       case e: CompileException =>
-        val msg = s"failed to compile: $e"
-        logError(msg, e)
-        throw new CompileException(msg, e.getLocation)
+        logError(s"Encountered compilation failure during code generation", e)
+        throw e
     }
-    val referenceArray = ctx.references.toArray.map(_.asInstanceOf[Object])
-    val expressionSql = exprs.map(_.sql).mkString("  ")
 
-    evaluator.getClazz.getConstructor(classOf[Object], classOf[String], classOf[AvroSerializer])
-      .newInstance(referenceArray, s"Expressions is: [$expressionSql]\nCodeBody is: {\n$codeBody\n}", serializer)
-      .asInstanceOf[IExpressionEvaluator]
-  }
+    val references = ctx.references.toArray.map(_.asInstanceOf[Object])
 
-  /**
-   * Replace the BoundReference to the Record implement which will override the
-   * doGenCode method.
-   */
-  private def replaceBoundReference(expression: Expression): Expression = {
-    expression.transformDown  {
-      case BoundReference(ordinal, dataType, nullable) =>
-         AvroRecordBoundReference(ordinal, dataType, nullable)
+    val internalEvaluator =
+      classBodyEvaluator.getClazz.getConstructor(classOf[Object], classOf[String])
+          .newInstance(references, codeBody)
+          .asInstanceOf[CatalystExpressionInternalEvaluator]
+
+    new IExpressionEvaluator {
+
+      private val avroSerializer =
+        sparkAdapter.createAvroSerializer(convertAvroSchemaToStructType(targetSchema), targetSchema, nullable = true)
+
+      private val avroDeserializer =
+        sparkAdapter.createAvroDeserializer(convertStructTypeToAvroSchema(inputStructType, "record"), inputStructType)
+
+      override def eval(record: IndexedRecord): GenericRecord = {
+        avroDeserializer.deserialize(record) match {
+          case Some(inputRow) =>
+            val result = internalEvaluator.eval(inputRow.asInstanceOf[InternalRow])
+            avroSerializer.serialize(result).asInstanceOf[GenericRecord]
+
+          case None =>
+            logError(s"Failed to deserialize Avro record `${record.toString}` as Catalyst row")
+            throw new HoodieException("Failed to deserialize Avro record as Catalyst row")
+        }
+
+      }
+
+      override def getCode: String = internalEvaluator.code
     }
   }
 }
 
-/**
- * Replaces [[BoundReference]] generating code extracting values from the Avro's [[IndexedRecord]],
- * instead of Catalyst's [[InternalRow]]
- */
-private case class AvroRecordBoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)
-  extends LeafExpression {
-
-  override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
-    val javaType = JavaCode.javaType(dataType)
-    val boxType = JavaCode.boxedType(dataType)
-
-    val fieldValueCode = s"$RECORD_NAME.get($ordinal)"
-    val castedFieldValueCode = s"($boxType) $fieldValueCode"
-
-    if (nullable) {
-      ev.copy(code =
-        code"""
-              |boolean ${ev.isNull} = $fieldValueCode == null;
-              |$javaType ${ev.value} = ${ev.isNull}
-              |   ? ${CodeGenerator.defaultValue(dataType)} : $castedFieldValueCode";
-          """
-      )
-    } else {
-      ev.copy(code = code"$javaType ${ev.value} = $castedFieldValueCode;", isNull = FalseLiteral)
-    }
-  }
-
-  override def eval(input: InternalRow): Any = {
-    throw new UnsupportedOperationException()
-  }
-}
 
