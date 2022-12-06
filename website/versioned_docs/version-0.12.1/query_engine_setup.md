@@ -104,5 +104,5 @@ for more details.
 ## StarRocks
 Copy on Write tables in Apache Hudi 0.10.0 and above can be queried via StarRocks external tables from StarRocks version 2.2.0.
 Only snapshot queries are supported currently. In future releases Merge on Read tables will also be supported.
-Please refer to [StarRocks Hudi external table](https://docs.starrocks.com/en-us/2.2/using_starrocks/External_table#hudi-external-table)
+Please refer to [StarRocks Hudi external table](https://docs.starrocks.io/en-us/2.2/data_source/External_table#hudi-external-table)
 for more details on the setup.
