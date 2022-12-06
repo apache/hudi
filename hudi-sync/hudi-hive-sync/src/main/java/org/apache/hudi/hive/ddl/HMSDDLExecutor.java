@@ -30,6 +30,7 @@ import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.common.StatsSetupConst;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.Database;
@@ -78,7 +79,14 @@ public class HMSDDLExecutor implements DDLExecutor {
   public HMSDDLExecutor(HiveSyncConfig syncConfig) throws HiveException, MetaException {
     this.syncConfig = syncConfig;
     this.databaseName = syncConfig.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    this.client = Hive.get(syncConfig.getHiveConf()).getMSC();
+    HiveConf hiveConf = syncConfig.getHiveConf();
+    IMetaStoreClient tempMetaStoreClient;
+    try {
+      tempMetaStoreClient = ((Hive) Hive.class.getMethod("getWithoutRegisterFns", HiveConf.class).invoke(null, hiveConf)).getMSC();
+    } catch (Exception ex) {
+      tempMetaStoreClient = Hive.get(hiveConf).getMSC();
+    }
+    this.client = tempMetaStoreClient;
     try {
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
