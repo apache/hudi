@@ -66,11 +66,13 @@ class HelpProcedure extends BaseProcedure with ProcedureBuilder with Logging {
       result.append("You can use 'call help(cmd=>[command])' to view the detailed parameters of the command").append(line)
       Seq(Row(result.toString()))
     } else {
-      val trimCmd: String = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String].trim
+      val cmdOpt: Option[Any] = getArgValueOrDefault(args, PARAMETERS(0))
+      assert(cmdOpt.isDefined, "The cmd parameter is required")
+      val cmd: String = cmdOpt.get.asInstanceOf[String]
       val procedures: Map[String, Supplier[ProcedureBuilder]] = HoodieProcedures.procedures()
-      val builderSupplier: Option[Supplier[ProcedureBuilder]] = procedures.get(trimCmd)
+      val builderSupplier: Option[Supplier[ProcedureBuilder]] = procedures.get(cmd.trim)
       if (builderSupplier.isEmpty) {
-        throw new HoodieException(s"can not find $trimCmd command in procedures.")
+        throw new HoodieException(s"can not find $cmd command in procedures.")
       }
       val procedure: Procedure = builderSupplier.get.get().build
       val result = new StringBuilder
