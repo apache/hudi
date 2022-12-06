@@ -61,6 +61,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -366,8 +367,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param statuses List of FIle-Status
    */
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
-    Predicate<FileStatus> rtFilePredicate = fileStatus -> fileStatus.getPath().getName()
-        .contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
+    Predicate<FileStatus> rtFilePredicate = fileStatus ->  {
+      Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileStatus.getPath().getName());
+      return matcher.find();
+    };
     return Arrays.stream(statuses).filter(rtFilePredicate).map(HoodieLogFile::new);
   }
 
