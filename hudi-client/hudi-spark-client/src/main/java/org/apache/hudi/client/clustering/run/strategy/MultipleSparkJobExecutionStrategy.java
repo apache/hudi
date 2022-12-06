@@ -70,6 +70,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.sources.BaseRelation;
+import org.apache.spark.storage.StorageLevel;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -122,6 +123,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         .stream();
     JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusesStream.map(HoodieJavaRDD::getJavaRDD));
     JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
+    // Persist writeStatus, since it may be reused
+    writeStatusRDD.persist(StorageLevel.MEMORY_AND_DISK());
 
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
     writeMetadata.setWriteStatuses(HoodieJavaRDD.of(writeStatusRDD));
