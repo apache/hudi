@@ -52,9 +52,14 @@ import scala.collection.mutable.ArrayBuffer
  *
  * If there is no condition match the record, ExpressionPayload will return
  * a HoodieWriteHandle.IGNORE_RECORD, and the write handles will ignore this record.
+ *
+ * NOTE: Please note that, ctor parameter SHOULD NOT be used w/in the class body as
+ *       otherwise Scala will instantiate them as fields making whole [[ExpressionPayload]]
+ *       non-serializable. As an additional hedge, these are annotated as [[transient]] to
+ *       prevent this from happening.
  */
-class ExpressionPayload(record: GenericRecord,
-                        orderingVal: Comparable[_])
+class ExpressionPayload(@transient record: GenericRecord,
+                        @transient orderingVal: Comparable[_])
   extends DefaultHoodieRecordPayload(record, orderingVal) {
 
   def this(recordOpt: HOption[GenericRecord]) {
@@ -167,7 +172,7 @@ class ExpressionPayload(record: GenericRecord,
     lazy val row: InternalRow = getAvroDeserializerFor(avro.getSchema).deserialize(avro) match {
       case Some(row) => row.asInstanceOf[InternalRow]
       case None =>
-        logError(s"Failed to deserialize Avro record `${record.toString}` as Catalyst row")
+        logError(s"Failed to deserialize Avro record `${avro.toString}` as Catalyst row")
         throw new HoodieException("Failed to deserialize Avro record as Catalyst row")
     }
   }
