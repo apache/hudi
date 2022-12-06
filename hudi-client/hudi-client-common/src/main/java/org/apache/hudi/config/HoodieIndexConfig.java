@@ -255,7 +255,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket."
           + "Possible options are [SIMPLE | CONSISTENT_HASHING]."
           + "Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size "
-          + "issues of the SIMPLE hashing engine.");
+          + "issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables, only use simple hashing on COW tables.");
 
   /**
    * Bucket num equals file groups num in each partition.
@@ -677,10 +677,10 @@ public class HoodieIndexConfig extends HoodieConfig {
         // check the bucket index hash field
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD))) {
           hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD,
-              hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
+              hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
         } else {
           boolean valid = Arrays
-              .stream(hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).split(","))
+              .stream(hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).split(","))
               .collect(Collectors.toSet())
               .containsAll(Arrays.asList(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD).split(",")));
           if (!valid) {

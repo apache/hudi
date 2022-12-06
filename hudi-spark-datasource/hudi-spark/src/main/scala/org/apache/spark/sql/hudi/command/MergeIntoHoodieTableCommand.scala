@@ -18,10 +18,11 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
+import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, TBL_NAME}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
@@ -299,7 +300,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // insert actions.
     var writeParams = parameters +
       (OPERATION.key -> operation) +
-      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString) +
+      (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key -> getTableSchema.toString) +
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
     val updateActions = mergeInto.matchedActions.filter(_.isInstanceOf[UpdateAction])
@@ -347,8 +348,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       serializedInsertConditionAndExpressions(insertActions))
 
     // Remove the meta fields from the sourceDF as we do not need these when writing.
-    val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
-    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
+    val trimmedSourceDF = removeMetaFields(sourceDF)
+
+    // Supply original record's Avro schema to provided to [[ExpressionPayload]]
+    writeParams += (PAYLOAD_RECORD_AVRO_SCHEMA ->
+      convertStructTypeToAvroSchema(trimmedSourceDF.schema, "record", "").toString)
+
+    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, trimmedSourceDF)
   }
 
   private def checkUpdateAssignments(updateActions: Seq[UpdateAction]): Unit = {
@@ -515,7 +521,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "200"), // set the default parallelism to 200 for sql
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "200"),
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key, "200"),
-        SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
+        SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
+
+        // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
+        //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
+        //       compatibility b/w table's schema and incoming one is not necessary in this case since we can
+        //       be cherry-picking only selected columns from the incoming dataset to be inserted/updated in the
+        //       target table, ie partially updating)
+        AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
+        RECONCILE_SCHEMA.key -> "false",
+        "hoodie.datasource.write.schema.canonicalize" -> "false"
       )
         .filter { case (_, v) => v != null }
     }

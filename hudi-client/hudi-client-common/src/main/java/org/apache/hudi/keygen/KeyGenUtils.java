@@ -33,6 +33,7 @@ import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class KeyGenUtils {
@@ -43,6 +44,7 @@ public class KeyGenUtils {
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
+  public static final String DEFAULT_COMPOSITE_KEY_FILED_VALUE = ":";
 
   /**
    * Fetches record key from the GenericRecord.
@@ -72,19 +74,24 @@ public class KeyGenUtils {
    * @see org.apache.hudi.keygen.ComplexAvroKeyGenerator
    */
   public static String[] extractRecordKeys(String recordKey) {
-    String[] fieldKV = recordKey.split(",");
-    return Arrays.stream(fieldKV).map(kv -> {
-      final String[] kvArray = kv.split(":", 2);
-      if (kvArray.length == 1) {
-        return kvArray[0];
-      } else if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
-        return null;
-      } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
-        return "";
-      } else {
-        return kvArray[1];
-      }
-    }).toArray(String[]::new);
+    return extractRecordKeysByFields(recordKey, Collections.emptyList());
+  }
+
+  public static String[] extractRecordKeysByFields(String recordKey, List<String> fields) {
+    String[] fieldKV = recordKey.split(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+    return Arrays.stream(fieldKV).map(kv -> kv.split(DEFAULT_COMPOSITE_KEY_FILED_VALUE, 2))
+            .filter(kvArray -> kvArray.length == 1 || fields.isEmpty() || (fields.contains(kvArray[0])))
+            .map(kvArray -> {
+              if (kvArray.length == 1) {
+                return kvArray[0];
+              } else if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
+                return null;
+              } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
+                return "";
+              } else {
+                return kvArray[1];
+              }
+            }).toArray(String[]::new);
   }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
@@ -93,11 +100,11 @@ public class KeyGenUtils {
     for (String recordKeyField : recordKeyFields) {
       String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
       if (recordKeyValue == null) {
-        recordKey.append(recordKeyField + ":" + NULL_RECORDKEY_PLACEHOLDER + ",");
+        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + NULL_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       } else if (recordKeyValue.isEmpty()) {
-        recordKey.append(recordKeyField + ":" + EMPTY_RECORDKEY_PLACEHOLDER + ",");
+        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + EMPTY_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       } else {
-        recordKey.append(recordKeyField + ":" + recordKeyValue + ",");
+        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + recordKeyValue + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
         keyIsNullEmpty = false;
       }
     }

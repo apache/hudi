@@ -279,9 +279,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   private Option<IndexedRecord> getInsertValue(HoodieRecord<T> hoodieRecord) throws IOException {
     if (useWriterSchema) {
-      return hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, recordProperties);
+      return hoodieRecord.getData().getInsertValue(writeSchemaWithMetaFields, recordProperties);
     } else {
-      return hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
+      return hoodieRecord.getData().getInsertValue(writeSchema, recordProperties);
     }
   }
 
@@ -396,7 +396,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangesMetadataMap =
           collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath());
 
-      stat.setRecordsStats(columnRangesMetadataMap);
+      stat.putRecordsStats(columnRangesMetadataMap);
     }
 
     resetWriteCounts();
@@ -608,7 +608,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         return new HoodieHFileDataBlock(
             recordList, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()));
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(recordList, header, keyField, writeConfig.getParquetCompressionCodec());
+        return new HoodieParquetDataBlock(
+            recordList,
+            header,
+            keyField,
+            writeConfig.getParquetCompressionCodec(),
+            writeConfig.getParquetCompressionRatio(),
+            writeConfig.parquetDictionaryEnabled());
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }

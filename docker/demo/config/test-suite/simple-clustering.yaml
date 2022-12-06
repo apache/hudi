@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 dag_name: simple-clustering.yaml
-dag_rounds: 30
+dag_rounds: 15
 dag_intermittent_delay_mins: 0
 dag_content:
   first_insert:
@@ -54,7 +54,7 @@ dag_content:
     deps: first_delete
   first_cluster:
     config:
-      execute_itr_count: 25
+      execute_itr_count: 10
     type: ClusteringNode
     deps: first_validate
   second_validate:
@@ -62,3 +62,15 @@ dag_content:
       validate_hive: false
     type: ValidateDatasetNode
     deps: first_cluster
+  first_presto_query:
+    config:
+      validate_once_every_itr: 5
+      presto_props:
+        prop1: "SET SESSION hive.parquet_use_column_names = true"
+      presto_queries:
+        query1: "select count(*) from testdb.table1"
+        result1: 8300
+        query2: "select count(*) from testdb.table1 group by _row_key having count(*) > 1"
+        result2: 0
+    type: PrestoQueryNode
+    deps: second_validate

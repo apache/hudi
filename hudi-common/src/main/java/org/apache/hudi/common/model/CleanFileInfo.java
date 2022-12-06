@@ -22,6 +22,9 @@ import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 
 import java.io.Serializable;
 
+/**
+ * File info for clean action.
+ */
 public class CleanFileInfo implements Serializable {
 
   private final String filePath;

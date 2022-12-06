@@ -18,8 +18,9 @@
 
 package org.apache.hudi.common.fs.inline;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
+
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;

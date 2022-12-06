@@ -18,12 +18,13 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -34,6 +35,9 @@ import java.util.Map;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Tests {@link HoodieMetadataPayload}.
+ */
 public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
 
   @Test

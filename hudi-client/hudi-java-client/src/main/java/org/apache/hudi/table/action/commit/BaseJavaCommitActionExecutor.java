@@ -278,7 +278,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      JavaMergeHelper.newInstance().runMerge(table, upsertHandle);
+      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle);
     }
 
     List<WriteStatus> statuses = upsertHandle.writeStatuses();

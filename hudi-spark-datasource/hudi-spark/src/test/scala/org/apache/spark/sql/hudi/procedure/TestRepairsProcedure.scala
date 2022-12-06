@@ -178,7 +178,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
       // first, there are four instants
       assertResult(4) {
-        metaClient.getActiveTimeline.filterInflightsAndRequested.getInstants.count
+        metaClient.getActiveTimeline.filterInflightsAndRequested.countInstants
       }
 
       checkAnswer(s"""call repair_corrupted_clean_files(table => '$tableName')""")(Seq(true))
@@ -187,7 +187,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
       // after clearing, there should be 0 instant
       assertResult(0) {
-        metaClient.getActiveTimeline.filterInflightsAndRequested.getInstants.count
+        metaClient.getActiveTimeline.filterInflightsAndRequested.getInstantsAsStream.count
       }
     }
   }
