@@ -64,6 +64,8 @@ object ExpressionCodeGen extends Logging {
     val exprEvalCodes = exprs.map(_.genCode(ctx))
     val codeBody =
       s"""
+         |${ctx.declareMutableStates()}
+         |
          |private Object[] references;
          |private String code;
          |
@@ -89,6 +91,8 @@ object ExpressionCodeGen extends Logging {
          |public String code() {
          |  return code;
          |}
+         |
+         |${ctx.declareAddedFunctions()}
       """.stripMargin
 
     val classBodyEvaluator = new ClassBodyEvaluator()
