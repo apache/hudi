@@ -128,7 +128,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       spark.sql(sql)
     } catch {
       case e: Throwable =>
-        assertResult(errorMsg)(e.getMessage)
+        assertResult(errorMsg.trim)(e.getMessage.trim)
         hasException = true
     }
     assertResult(true)(hasException)
