@@ -68,6 +68,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -363,7 +364,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("current_date", (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
     rec.put("current_ts", randomMillis);
 
-    BigDecimal bigDecimal = new BigDecimal(String.format("%5f", rand.nextFloat()));
+    BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, "%5f", rand.nextFloat()));
     Schema decimalSchema = AVRO_SCHEMA.getField("height").schema();
     Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
     GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
