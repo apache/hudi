@@ -151,7 +151,7 @@ public class CommitUtils {
    * @return An optional commit metadata with latest checkpoint.
    */
   public static Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline, String checkpointKey) {
-    return (Option<HoodieCommitMetadata>) timeline.getReverseOrderedInstants().map(instant -> {
+    return (Option<HoodieCommitMetadata>) timeline.filterCompletedInstants().getReverseOrderedInstants().map(instant -> {
       try {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
