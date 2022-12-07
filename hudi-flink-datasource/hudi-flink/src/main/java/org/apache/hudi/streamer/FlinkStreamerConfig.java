@@ -18,6 +18,7 @@
 
 package org.apache.hudi.streamer;
 
+import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -246,8 +247,8 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--compaction-async-enabled"}, description = "Async Compaction, enabled by default for MOR")
   public Boolean compactionAsyncEnabled = true;
 
-  @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is 10")
-  public Integer compactionTasks = 10;
+  @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is -1")
+  public Integer compactionTasks = -1;
 
   @Parameter(names = {"--compaction-trigger-strategy"},
       description = "Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits;\n"
@@ -257,8 +258,8 @@ public class FlinkStreamerConfig extends Configuration {
           + "Default is 'num_commits'")
   public String compactionTriggerStrategy = FlinkOptions.NUM_COMMITS;
 
-  @Parameter(names = {"--compaction-delta-commits"}, description = "Max delta commits needed to trigger compaction, default 5 commits")
-  public Integer compactionDeltaCommits = 5;
+  @Parameter(names = {"--compaction-delta-commits"}, description = "Max delta commits needed to trigger compaction, default 1 commit")
+  public Integer compactionDeltaCommits = 1;
 
   @Parameter(names = {"--compaction-delta-seconds"}, description = "Max delta seconds time needed to trigger compaction, default 1 hour")
   public Integer compactionDeltaSeconds = 3600;
@@ -268,6 +269,39 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write), default 500 GB")
   public Long compactionTargetIo = 512000L;
+
+  @Parameter(names = {"--clustering-async-enabled"}, description = "Async Clustering, disable by default")
+  public Boolean clusteringAsyncEnabled = false;
+
+  @Parameter(names = {"--clustering-tasks"}, description = "Parallelism of tasks that do actual clustering, default is -1")
+  public Integer clusteringTasks = -1;
+
+  @Parameter(names = {"--clustering-delta-commits"}, description = "Max delta commits needed to trigger clustering, default 1 commit")
+  public Integer clusteringDeltaCommits = 1;
+
+  @Parameter(names = {"--plan-strategy-class"}, description = "Config to provide a strategy class to generator clustering plan")
+  public String planStrategyClass = FlinkSizeBasedClusteringPlanStrategy.class.getName();
+
+  @Parameter(names = {"--plan-partition-filter-mode"}, description = "Partition filter mode used in the creation of clustering plan")
+  public String planPartitionFilterMode = "NONE";
+
+  @Parameter(names = {"--target-file-max-bytes"}, description = "Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB")
+  public Long targetFileMaxBytes = 1024 * 1024 * 1024L;
+
+  @Parameter(names = {"--small-file-limit"}, description = "Files smaller than the size specified here are candidates for clustering, default 600 MB")
+  public Long smallFileLimit = 600L;
+
+  @Parameter(names = {"--skip-from-latest-partitions"}, description = "Number of partitions to skip from latest when choosing partitions to create ClusteringPlan, default 0")
+  public Integer skipFromLatestPartitions = 0;
+
+  @Parameter(names = {"--sort-columns"}, description = "Columns to sort the data by when clustering.")
+  public String sortColumns = "";
+
+  @Parameter(names = {"--max-num-groups"}, description = "Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism. default 30")
+  public Integer maxNumGroups = 30;
+
+  @Parameter(names = {"--target-partitions"}, description = "Number of partitions to list to create ClusteringPlan, default 2")
+  public Integer targetPartitions = 2;
 
   @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default")
   public Boolean cleanAsyncEnabled = true;
@@ -420,6 +454,17 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_SECONDS, config.compactionDeltaSeconds);
     conf.setInteger(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
     conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
+    conf.setBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED, config.clusteringAsyncEnabled);
+    conf.setInteger(FlinkOptions.CLUSTERING_TASKS, config.clusteringTasks);
+    conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, config.clusteringDeltaCommits);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS, config.planStrategyClass);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME, config.planPartitionFilterMode);
+    conf.setLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES, config.targetFileMaxBytes);
+    conf.setLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT, config.smallFileLimit);
+    conf.setInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST, config.skipFromLatestPartitions);
+    conf.setString(FlinkOptions.CLUSTERING_SORT_COLUMNS, config.sortColumns);
+    conf.setInteger(FlinkOptions.CLUSTERING_MAX_NUM_GROUPS, config.maxNumGroups);
+    conf.setInteger(FlinkOptions.CLUSTERING_TARGET_PARTITIONS, config.targetPartitions);
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnabled);
     conf.setString(FlinkOptions.CLEAN_POLICY, config.cleanPolicy);
     conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
