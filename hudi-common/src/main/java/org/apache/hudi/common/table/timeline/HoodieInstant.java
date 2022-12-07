@@ -18,8 +18,9 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -74,7 +75,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private State state = State.COMPLETED;
   private String action;
   private String timestamp;
-  private Option<String> markerFileAccessTimestamp ;
+  private Option<String> markerFileAccessTimestamp;
 
   /**
    * Load the instant from the meta FileStatus.
@@ -137,7 +138,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     return timestamp;
   }
 
-  public Option<String> getMarkerFileAccessTimestamp(){
+  public Option<String> getMarkerFileAccessTimestamp() {
     return markerFileAccessTimestamp;
   }
 
