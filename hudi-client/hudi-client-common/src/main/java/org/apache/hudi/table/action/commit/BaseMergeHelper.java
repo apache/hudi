@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.utils.MergingIterator;
-import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
+import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -65,7 +65,7 @@ public abstract class BaseMergeHelper {
   /**
    * Consumer that dequeues records from queue and sends to Merge Handle.
    */
-  protected static class UpdateHandler extends IteratorBasedQueueConsumer<GenericRecord, Void> {
+  protected static class UpdateHandler implements HoodieConsumer<GenericRecord, Void> {
 
     private final HoodieMergeHandle upsertHandle;
 
@@ -74,15 +74,12 @@ public abstract class BaseMergeHelper {
     }
 
     @Override
-    public void consumeOneRecord(GenericRecord record) {
+    public void consume(GenericRecord record) {
       upsertHandle.write(record);
     }
 
     @Override
-    public void finish() {}
-
-    @Override
-    protected Void getResult() {
+    public Void finish() {
       return null;
     }
   }

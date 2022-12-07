@@ -49,7 +49,7 @@ import java.util.function.Function;
  * @param <I> input payload data type
  * @param <O> output payload data type
  */
-public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQueue<I, O> {
+public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Iterable<O> {
 
   /** Interval used for polling records in the queue. **/
   public static final int RECORD_POLL_INTERVAL_SEC = 1;
@@ -60,7 +60,7 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
   /** Maximum records that will be cached. **/
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
 
-  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueueIterable.class);
+  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueue.class);
 
   /**
    * It indicates number of records to cache. We will be using sampled record's average size to
@@ -116,7 +116,7 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
    * @param memoryLimit MemoryLimit in bytes
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
    */
-  public BoundedInMemoryQueueIterable(final long memoryLimit, final Function<I, O> transformFunction) {
+  public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction) {
     this(memoryLimit, transformFunction, new DefaultSizeEstimator() {});
   }
 
@@ -127,8 +127,8 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
    * @param payloadSizeEstimator Payload Size Estimator
    */
-  public BoundedInMemoryQueueIterable(final long memoryLimit, final Function<I, O> transformFunction,
-                                      final SizeEstimator<O> payloadSizeEstimator) {
+  public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction,
+                              final SizeEstimator<O> payloadSizeEstimator) {
     this.memoryLimit = memoryLimit;
     this.transformFunction = transformFunction;
     this.payloadSizeEstimator = payloadSizeEstimator;
@@ -241,9 +241,15 @@ public class BoundedInMemoryQueueIterable<I, O> extends HoodieIterableMessageQue
    * Puts an empty entry to queue to denote termination.
    */
   @Override
-  public void close() {
+  public void seal() {
     // done queueing records notifying queue-reader.
     isWriteDone.set(true);
+  }
+
+  @Override
+  public void close() {
+    // NOTE: Closing is a no-op to support the 1-sided case, when the queue
+    //       is just populated (for subsequent reading), but never consumed
   }
 
   private void throwExceptionIfFailed() {

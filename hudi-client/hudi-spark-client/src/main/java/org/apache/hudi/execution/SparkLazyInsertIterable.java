@@ -35,6 +35,8 @@ import org.apache.hudi.util.QueueBasedExecutorFactory;
 import java.util.Iterator;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
 
   private boolean useWriterSchema;
@@ -89,7 +91,7 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
           getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
 
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
-      assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
+      checkState(result != null && !result.isEmpty());
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);

@@ -22,7 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
+import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenResult;
 import org.apache.hudi.io.HoodieWriteHandle;
@@ -34,25 +34,27 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
  */
 public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
-    extends IteratorBasedQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
+    implements HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
-  private HoodieWriteConfig config;
-  private String instantTime;
-  private boolean areRecordsSorted;
-  private HoodieTable hoodieTable;
-  private String idPrefix;
-  private TaskContextSupplier taskContextSupplier;
-  private WriteHandleFactory writeHandleFactory;
+  private final HoodieWriteConfig config;
+  private final String instantTime;
+  private final boolean areRecordsSorted;
+  private final HoodieTable hoodieTable;
+  private final String idPrefix;
+  private final TaskContextSupplier taskContextSupplier;
+  private final WriteHandleFactory writeHandleFactory;
 
   private final List<WriteStatus> statuses = new ArrayList<>();
   // Stores the open HoodieWriteHandle for each table partition path
   // If the records are consumed in order, there should be only one open handle in this mapping.
   // Otherwise, there may be multiple handles.
-  private Map<String, HoodieWriteHandle> handles = new HashMap<>();
+  private final Map<String, HoodieWriteHandle> handles = new HashMap<>();
 
   public CopyOnWriteInsertHandler(HoodieWriteConfig config, String instantTime,
                                   boolean areRecordsSorted, HoodieTable hoodieTable, String idPrefix,
@@ -68,7 +70,7 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
+  public void consume(HoodieInsertValueGenResult<HoodieRecord> payload) {
     final HoodieRecord insertPayload = payload.record;
     String partitionPath = insertPayload.getPartitionPath();
     HoodieWriteHandle<?,?,?,?> handle = handles.get(partitionPath);
@@ -97,13 +99,9 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void finish() {
+  public List<WriteStatus> finish() {
     closeOpenHandles();
-    assert statuses.size() > 0;
-  }
-
-  @Override
-  public List<WriteStatus> getResult() {
+    checkState(statuses.size() > 0);
     return statuses;
   }
 

@@ -167,41 +167,10 @@ public class FormatUtils {
         .build();
   }
 
-  private static HoodieUnMergedLogRecordScanner unMergedLogScanner(
-      MergeOnReadInputSplit split,
-      Schema logSchema,
-      InternalSchema internalSchema,
-      org.apache.flink.configuration.Configuration flinkConf,
-      Configuration hadoopConf,
-      HoodieUnMergedLogRecordScanner.LogRecordScannerCallback callback) {
-    FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
-    return HoodieUnMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
-        .withBasePath(split.getTablePath())
-        .withLogFilePaths(split.getLogPaths().get())
-        .withReaderSchema(logSchema)
-        .withInternalSchema(internalSchema)
-        .withLatestInstantTime(split.getLatestCommit())
-        .withReadBlocksLazily(
-            string2Boolean(
-                flinkConf.getString(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
-                    HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
-        .withReverseReader(false)
-        .withBufferSize(
-            flinkConf.getInteger(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
-                HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
-        .withInstantRange(split.getInstantRange())
-        .withLogRecordScannerCallback(callback)
-        .build();
-  }
-
   /**
    * Utility to read and buffer the records in the unMerged log record scanner.
    */
   public static class BoundedMemoryRecords {
-    // Log Record unmerged scanner
-    private final HoodieUnMergedLogRecordScanner scanner;
-
     // Executor that runs the above producers in parallel
     private final BoundedInMemoryExecutor<HoodieRecord<?>, HoodieRecord<?>, ?> executor;
 
@@ -214,19 +183,34 @@ public class FormatUtils {
         InternalSchema internalSchema,
         Configuration hadoopConf,
         org.apache.flink.configuration.Configuration flinkConf) {
+      HoodieUnMergedLogRecordScanner.Builder scannerBuilder = HoodieUnMergedLogRecordScanner.newBuilder()
+          .withFileSystem(FSUtils.getFs(split.getTablePath(), hadoopConf))
+          .withBasePath(split.getTablePath())
+          .withLogFilePaths(split.getLogPaths().get())
+          .withReaderSchema(logSchema)
+          .withInternalSchema(internalSchema)
+          .withLatestInstantTime(split.getLatestCommit())
+          .withReadBlocksLazily(
+              string2Boolean(
+                  flinkConf.getString(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
+                      HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
+          .withReverseReader(false)
+          .withBufferSize(
+              flinkConf.getInteger(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
+                  HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
+          .withInstantRange(split.getInstantRange());
+
       this.executor = new BoundedInMemoryExecutor<>(
           StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf),
-          getParallelProducers(),
+          getParallelProducers(scannerBuilder),
           Option.empty(),
           Function.identity(),
           new DefaultSizeEstimator<>(),
           Functions.noop());
-      // Consumer of this record reader
-      this.iterator = this.executor.getQueue().iterator();
-      this.scanner = FormatUtils.unMergedLogScanner(split, logSchema, internalSchema, flinkConf, hadoopConf,
-          record -> executor.getQueue().insertRecord(record));
+      this.iterator = this.executor.getRecordIterator();
+
       // Start reading and buffering
-      this.executor.startProducers();
+      this.executor.startProducingAsync();
     }
 
     public Iterator<HoodieRecord<?>> getRecordsIterator() {
@@ -236,12 +220,18 @@ public class FormatUtils {
     /**
      * Setup log and parquet reading in parallel. Both write to central buffer.
      */
-    private List<HoodieProducer<HoodieRecord<?>>> getParallelProducers() {
+    private List<HoodieProducer<HoodieRecord<?>>> getParallelProducers(
+        HoodieUnMergedLogRecordScanner.Builder scannerBuilder
+    ) {
       List<HoodieProducer<HoodieRecord<?>>> producers = new ArrayList<>();
-      producers.add(new FunctionBasedQueueProducer<>(buffer -> {
+      producers.add(new FunctionBasedQueueProducer<>(queue -> {
+        HoodieUnMergedLogRecordScanner scanner =
+            scannerBuilder.withLogRecordScannerCallback(queue::insertRecord).build();
+        // Scan all the delta-log files, filling in the queue
         scanner.scan();
         return null;
       }));
+
       return producers;
     }
 
