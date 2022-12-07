@@ -21,7 +21,9 @@ import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, TBL_NAME}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
@@ -348,7 +350,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     // Remove the meta fields from the sourceDF as we do not need these when writing.
     val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
-    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
+    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
+    if (!success) {
+      throw new HoodieException("Merge into Hoodie table command failed")
+    }
   }
 
   private def checkUpdateAssignments(updateActions: Seq[UpdateAction]): Unit = {
