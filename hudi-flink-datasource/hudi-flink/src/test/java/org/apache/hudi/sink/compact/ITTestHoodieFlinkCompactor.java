@@ -39,7 +39,6 @@ import org.apache.hudi.utils.TestSQL;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
@@ -158,7 +157,7 @@ public class ITTestHoodieFlinkCompactor {
         .rebalance()
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
-            new ProcessOperator<>(new CompactFunction(conf)))
+            new CompactOperator(conf))
         .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
         .addSink(new CompactionCommitSink(conf))
         .name("clean_commits")
@@ -282,7 +281,7 @@ public class ITTestHoodieFlinkCompactor {
         .rebalance()
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
-            new ProcessOperator<>(new CompactFunction(conf)))
+            new CompactOperator(conf))
         .setParallelism(1)
         .addSink(new CompactionCommitSink(conf))
         .name("compaction_commit")
