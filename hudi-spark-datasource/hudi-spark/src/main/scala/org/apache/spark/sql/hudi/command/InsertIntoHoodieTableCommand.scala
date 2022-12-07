@@ -100,6 +100,10 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
 
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, Dataset.ofRows(sparkSession, alignedQuery))
 
+    if (!success) {
+      throw new HoodieException("Insert Into to Hudi table failed")
+    }
+
     if (success && refreshTable) {
       sparkSession.catalog.refreshTable(table.identifier.unquotedString)
     }
