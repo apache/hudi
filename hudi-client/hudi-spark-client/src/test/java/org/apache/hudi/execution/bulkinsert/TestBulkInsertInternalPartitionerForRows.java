@@ -67,23 +67,27 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
 
   private static Stream<Arguments> configParams() {
     Object[][] data = new Object[][] {
-        {BulkInsertSortMode.GLOBAL_SORT, true, true},
-        {BulkInsertSortMode.PARTITION_SORT, false, true},
-        {BulkInsertSortMode.NONE, false, false}
+        {BulkInsertSortMode.GLOBAL_SORT, true, true, true},
+        {BulkInsertSortMode.PARTITION_SORT, true, false, true},
+        {BulkInsertSortMode.PARTITION_PATH_REDISTRIBUTE, true, false, false},
+        {BulkInsertSortMode.PARTITION_PATH_REDISTRIBUTE, false, false, false},
+        {BulkInsertSortMode.NONE, true, false, false}
     };
     return Stream.of(data).map(Arguments::of);
   }
 
-  @ParameterizedTest(name = "[{index}] {0}")
+  @ParameterizedTest(name = "[{index}] {0} isTablePartitioned={1}")
   @MethodSource("configParams")
   public void testBulkInsertInternalPartitioner(BulkInsertSortMode sortMode,
-      boolean isGloballySorted, boolean isLocallySorted)
+                                                boolean isTablePartitioned,
+                                                boolean isGloballySorted,
+                                                boolean isLocallySorted)
       throws Exception {
     Dataset<Row> records1 = generateTestRecords();
     Dataset<Row> records2 = generateTestRecords();
-    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerWithRowsFactory.get(sortMode),
+    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerWithRowsFactory.get(sortMode, isTablePartitioned),
         records1, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records1), Option.empty());
-    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerWithRowsFactory.get(sortMode),
+    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerWithRowsFactory.get(sortMode, isTablePartitioned),
         records2, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records2), Option.empty());
   }
 
@@ -158,7 +162,8 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
   public Dataset<Row> generateTestRecords() {
     Dataset<Row> rowsPart1 = SparkDatasetTestUtils.getRandomRows(sqlContext, 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, false);
     Dataset<Row> rowsPart2 = SparkDatasetTestUtils.getRandomRows(sqlContext, 150, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, false);
-    return rowsPart1.union(rowsPart2);
+    Dataset<Row> rowsPart3 = SparkDatasetTestUtils.getRandomRows(sqlContext, 200, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, false);
+    return rowsPart1.union(rowsPart2).union(rowsPart3);
   }
 
   private void verifyRowsAscendingOrder(List<Row> records, Option<Comparator<Row>> comparator) {

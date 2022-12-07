@@ -79,9 +79,11 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
 
   private static Stream<Arguments> configParams() {
     Object[][] data = new Object[][] {
-        {BulkInsertSortMode.GLOBAL_SORT, true, true},
-        {BulkInsertSortMode.PARTITION_SORT, false, true},
-        {BulkInsertSortMode.NONE, false, false}
+        {BulkInsertSortMode.GLOBAL_SORT, true, true, true},
+        {BulkInsertSortMode.PARTITION_SORT, true, false, true},
+        {BulkInsertSortMode.PARTITION_PATH_REDISTRIBUTE, true, false, false},
+        {BulkInsertSortMode.PARTITION_PATH_REDISTRIBUTE, false, false, false},
+        {BulkInsertSortMode.NONE, true, false, false}
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -133,15 +135,17 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     assertEquals(expectedPartitionNumRecords, actualPartitionNumRecords);
   }
 
-  @ParameterizedTest(name = "[{index}] {0}")
+  @ParameterizedTest(name = "[{index}] {0} isTablePartitioned={1}")
   @MethodSource("configParams")
   public void testBulkInsertInternalPartitioner(BulkInsertSortMode sortMode,
-                                                boolean isGloballySorted, boolean isLocallySorted) {
+                                                boolean isTablePartitioned,
+                                                boolean isGloballySorted,
+                                                boolean isLocallySorted) {
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
-    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode),
+    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode, isTablePartitioned),
         records1, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records1));
-    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode),
+    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode, isTablePartitioned),
         records2, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records2));
   }
 

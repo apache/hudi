@@ -22,7 +22,8 @@ package org.apache.hudi.execution.bulkinsert;
  * Bulk insert sort mode.
  */
 public enum BulkInsertSortMode {
-    NONE,
-    GLOBAL_SORT,
-    PARTITION_SORT
+  NONE,
+  GLOBAL_SORT,
+  PARTITION_SORT,
+  PARTITION_PATH_REDISTRIBUTE
 }

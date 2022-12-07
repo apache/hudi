@@ -521,6 +521,10 @@ public class HoodieTableConfig extends HoodieConfig {
     return Option.empty();
   }
 
+  public boolean isTablePartitioned() {
+    return getPartitionFields().map(pfs -> pfs.length > 0).orElse(false);
+  }
+
   public Option<String> getSecondaryIndexesMetadata() {
     if (contains(SECONDARY_INDEXES_METADATA)) {
       return Option.of(getString(SECONDARY_INDEXES_METADATA));
