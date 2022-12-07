@@ -288,7 +288,7 @@
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
-      <version>3.16.1</version>
+      <version>${proto.version}</version>
       <scope>${trino.bundle.bootstrap.scope}</scope>
     </dependency>
 
