@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
+import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
@@ -71,26 +71,23 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
   @Test
   public void testExecutor() {
 
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
+    final int recordNumber = 100;
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, recordNumber);
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
-    BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
           private int count = 0;
 
           @Override
-          protected void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
             count++;
           }
 
           @Override
-          protected void finish() {
-          }
-
-          @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return count;
           }
         };
@@ -100,10 +97,10 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
       executor = new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
           getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
       int result = executor.execute();
-      // It should buffer and write 100 records
+
       assertEquals(100, result);
       // There should be no remaining records in the buffer
-      assertFalse(executor.isRemaining());
+      assertFalse(executor.isRunning());
     } finally {
       if (executor != null) {
         executor.shutdownNow();
@@ -118,11 +115,11 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
-    BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
           @Override
-          protected void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
             try {
               while (true) {
                 Thread.sleep(1000);
@@ -133,31 +130,26 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
           }
 
           @Override
-          protected void finish() {
-          }
-
-          @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return 0;
           }
         };
 
-    BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
-    try {
-      executor = new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-          getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
-      BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> finalExecutor = executor;
+    BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor =
+        new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
+            getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
 
-      Thread.currentThread().interrupt();
+    // Interrupt the current thread (therefore triggering executor to throw as soon as it
+    // invokes [[get]] on the [[CompletableFuture]])
+    Thread.currentThread().interrupt();
 
-      assertThrows(HoodieException.class, () -> finalExecutor.execute());
-      assertTrue(Thread.interrupted());
-    } finally {
-      if (executor != null) {
-        executor.shutdownNow();
-        executor.awaitTermination();
-      }
-    }
+    assertThrows(HoodieException.class, executor::execute);
+
+    // Validate that interrupted flag is reset, after [[InterruptedException]] is thrown
+    assertTrue(Thread.interrupted());
+
+    executor.shutdownNow();
+    executor.awaitTermination();
   }
 
   @Test
@@ -176,18 +168,14 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
       }
     };
 
-    BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
           @Override
-          protected void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
           }
 
           @Override
-          protected void finish() {
-          }
-
-          @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return 0;
           }
         };

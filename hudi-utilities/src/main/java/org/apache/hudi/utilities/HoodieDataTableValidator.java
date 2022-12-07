@@ -321,7 +321,7 @@ public class HoodieDataTableValidator implements Serializable {
         Map<String, List<String>> instantToFilesMap = RepairUtils.tagInstantsOfBaseAndLogFiles(
             metaClient.getBasePath(), allDataFilePaths);
         HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-        List<HoodieInstant> hoodieInstants = activeTimeline.filterCompletedInstants().getInstants().collect(Collectors.toList());
+        List<HoodieInstant> hoodieInstants = activeTimeline.filterCompletedInstants().getInstants();
 
         List<String> danglingFiles = engineContext.flatMap(hoodieInstants, instant -> {
           Option<Set<String>> filesFromTimeline = RepairUtils.getBaseAndLogFilePathsFromTimeline(

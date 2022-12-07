@@ -18,16 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.util.Utf8;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.BooleanWrapper;
 import org.apache.hudi.avro.model.BytesWrapper;
 import org.apache.hudi.avro.model.DateWrapper;
@@ -57,6 +47,17 @@ import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.util.Lazy;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.util.Utf8;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -81,7 +82,7 @@ import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.hadoop.CachingPath.createPathUnsafe;
+import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionIdentifier;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
@@ -487,7 +488,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .map(e -> {
           // NOTE: Since we know that the Metadata Table's Payload is simply a file-name we're
           //       creating Hadoop's Path using more performant unsafe variant
-          CachingPath filePath = new CachingPath(partitionPath, createPathUnsafe(e.getKey()));
+          CachingPath filePath = new CachingPath(partitionPath, createRelativePathUnsafe(e.getKey()));
           return new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
               null, null, null, filePath);
         })
@@ -625,7 +626,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     checkArgument(Objects.equals(prevColumnStats.getFileName(), newColumnStats.getFileName()));
     checkArgument(Objects.equals(prevColumnStats.getColumnName(), newColumnStats.getColumnName()));
 
-    if (newColumnStats.getIsDeleted()) {
+    // We're handling 2 cases in here
+    //  - New record is a tombstone: in this case it simply overwrites previous state
+    //  - Previous record is a tombstone: in that case new proper record would also
+    //    be simply overwriting previous state
+    if (newColumnStats.getIsDeleted() || prevColumnStats.getIsDeleted()) {
       return newColumnStats;
     }
 
@@ -639,8 +644,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     Comparable maxValue =
         (Comparable) Stream.of(
-            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMinValue()),
-            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMinValue()))
+            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMaxValue()),
+            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMaxValue()))
         .filter(Objects::nonNull)
         .max(Comparator.naturalOrder())
         .orElse(null);
@@ -656,6 +661,28 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .setTotalUncompressedSize(prevColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
         .setIsDeleted(newColumnStats.getIsDeleted())
         .build();
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other == this) {
+      return true;
+    } else if (!(other instanceof HoodieMetadataPayload)) {
+      return false;
+    }
+
+    HoodieMetadataPayload otherMetadataPayload = (HoodieMetadataPayload) other;
+
+    return this.type == otherMetadataPayload.type
+        && Objects.equals(this.key, otherMetadataPayload.key)
+        && Objects.equals(this.filesystemMetadata, otherMetadataPayload.filesystemMetadata)
+        && Objects.equals(this.bloomFilterMetadata, otherMetadataPayload.bloomFilterMetadata)
+        && Objects.equals(this.columnStatMetadata, otherMetadataPayload.columnStatMetadata);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(key, type, filesystemMetadata, bloomFilterMetadata, columnStatMetadata);
   }
 
   @Override

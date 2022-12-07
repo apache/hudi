@@ -28,6 +28,10 @@ object HoodieProcedures {
     if (builderSupplier.isDefined) builderSupplier.get.get() else null
   }
 
+  def procedures(): Map[String, Supplier[ProcedureBuilder]] = {
+    BUILDERS
+  }
+
   private def initProcedureBuilders: Map[String, Supplier[ProcedureBuilder]] = {
     Map((RunCompactionProcedure.NAME, RunCompactionProcedure.builder)
       ,(ShowCompactionProcedure.NAME, ShowCompactionProcedure.builder)
@@ -80,6 +84,10 @@ object HoodieProcedures {
       ,(ValidateHoodieSyncProcedure.NAME, ValidateHoodieSyncProcedure.builder)
       ,(ShowInvalidParquetProcedure.NAME, ShowInvalidParquetProcedure.builder)
       ,(HiveSyncProcedure.NAME, HiveSyncProcedure.builder)
+      ,(CopyToTempView.NAME, CopyToTempView.builder)
+      ,(ShowCommitExtraMetadataProcedure.NAME, ShowCommitExtraMetadataProcedure.builder)
+      ,(ShowTablePropertiesProcedure.NAME, ShowTablePropertiesProcedure.builder)
+      ,(HelpProcedure.NAME, HelpProcedure.builder)
     )
   }
 }

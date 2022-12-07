@@ -106,7 +106,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
           Instant instant = Instant.now();
           ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
           String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
-          return table.getCompletedCommitsTimeline().getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
+          return table.getCompletedCommitsTimeline().getInstantsAsStream().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
               HoodieTimeline.LESSER_THAN, earliestTimeToRetain)).count() > 0;
         } else if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
           // if cleaner policy is KEEP_LATEST_BY_HOURS then

@@ -262,7 +262,7 @@ public class WriteProfile {
     oldFsView.close();
 
     recordProfile();
-    cleanMetadataCache(this.metaClient.getCommitsTimeline().filterCompletedInstants().getInstants());
+    cleanMetadataCache(this.metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream());
     this.smallFilesMap.clear();
     this.reloadedCheckpointId = checkpointId;
   }

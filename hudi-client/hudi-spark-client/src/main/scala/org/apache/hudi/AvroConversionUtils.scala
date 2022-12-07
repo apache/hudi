@@ -22,7 +22,7 @@ import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
@@ -133,12 +133,28 @@ object AvroConversionUtils {
   }
 
   /**
+   * Converts [[StructType]] into Avro's [[Schema]]
    *
-   * Returns avro schema from spark StructType.
+   * @param structType    Catalyst's [[StructType]]
+   * @param qualifiedName Avro's schema qualified name
+   * @return Avro schema corresponding to given struct type.
+   */
+  def convertStructTypeToAvroSchema(structType: DataType,
+                                    qualifiedName: String): Schema = {
+    val (namespace, name) = {
+      val parts = qualifiedName.split('.')
+      (parts.init.mkString("."), parts.last)
+    }
+    convertStructTypeToAvroSchema(structType, name, namespace)
+  }
+
+
+  /**
+   * Converts [[StructType]] into Avro's [[Schema]]
    *
-   * @param structType      Dataframe Struct Type.
-   * @param structName      Avro record name.
-   * @param recordNamespace Avro record namespace.
+   * @param structType      Catalyst's [[StructType]]
+   * @param structName      Avro record name
+   * @param recordNamespace Avro record namespace
    * @return Avro schema corresponding to given struct type.
    */
   def convertStructTypeToAvroSchema(structType: DataType,
@@ -211,8 +227,13 @@ object AvroConversionUtils {
     }
   }
 
+  /**
+   * Please use [[AvroSchemaUtils.getAvroRecordQualifiedName(String)]]
+   */
+  @Deprecated
   def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {
-    val name = HoodieAvroUtils.sanitizeName(tableName)
-    (s"${name}_record", s"hoodie.${name}")
+    val qualifiedName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
+    val nameParts = qualifiedName.split('.')
+    (nameParts.last, nameParts.init.mkString("."))
   }
 }

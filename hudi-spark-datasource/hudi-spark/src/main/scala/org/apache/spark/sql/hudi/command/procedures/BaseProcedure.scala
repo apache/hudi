@@ -22,7 +22,7 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieClusteringException
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
@@ -111,7 +111,7 @@ abstract class BaseProcedure extends Procedure {
       t => HoodieCLIUtils.getHoodieCatalogTable(sparkSession, t.asInstanceOf[String]).tableLocation)
       .getOrElse(
         tablePath.map(p => p.asInstanceOf[String]).getOrElse(
-          throw new HoodieClusteringException("Table name or table path must be given one"))
+          throw new HoodieException("Table name or table path must be given one"))
       )
   }
 

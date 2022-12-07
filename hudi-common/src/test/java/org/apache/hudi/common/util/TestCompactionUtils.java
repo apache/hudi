@@ -245,14 +245,14 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     Pair<HoodieTimeline, HoodieInstant> actual =
         CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline).get();
     if (hasCompletedCompaction) {
-      Stream<HoodieInstant> instants = actual.getLeft().getInstants();
+      Stream<HoodieInstant> instants = actual.getLeft().getInstantsAsStream();
       assertEquals(
           Stream.of(
               new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
               new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
               new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
               .collect(Collectors.toList()),
-          actual.getLeft().getInstants().collect(Collectors.toList()));
+          actual.getLeft().getInstants());
       assertEquals(
           new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "06"),
           actual.getRight());
@@ -268,7 +268,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
               new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
               new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
               .collect(Collectors.toList()),
-          actual.getLeft().getInstants().collect(Collectors.toList()));
+          actual.getLeft().getInstants());
       assertEquals(
           new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"),
           actual.getRight());

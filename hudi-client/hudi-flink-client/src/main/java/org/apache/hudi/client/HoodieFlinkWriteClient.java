@@ -58,6 +58,7 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.util.FlinkClientUtil;
+import org.apache.hudi.util.WriteStatMerger;
 
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
@@ -115,7 +116,13 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public boolean commit(String instantTime, List<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata, String commitActionType, Map<String, List<String>> partitionToReplacedFileIds) {
     List<HoodieWriteStat> writeStats = writeStatuses.parallelStream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
+    // for eager flush, multiple write stat may share one file path.
+    List<HoodieWriteStat> merged = writeStats.stream()
+        .collect(Collectors.groupingBy(writeStat -> writeStat.getPartitionPath() + writeStat.getPath()))
+        .values().stream()
+        .map(duplicates -> duplicates.stream().reduce(WriteStatMerger::merge).get())
+        .collect(Collectors.toList());
+    return commitStats(instantTime, merged, extraMetadata, commitActionType, partitionToReplacedFileIds);
   }
 
   @Override
@@ -254,6 +261,14 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     return postWrite(result, instantTime, table);
   }
 
+  public List<WriteStatus> deletePartitions(List<String> partitions, String instantTime) {
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime));
+    preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
+    HoodieWriteMetadata<List<WriteStatus>> result = table.deletePartitions(context, instantTime, partitions);
+    return postWrite(result, instantTime, table);
+  }
+
   @Override
   public void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
@@ -268,21 +283,14 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     if (this.metadataWriter == null) {
       initMetadataWriter();
     }
-    try {
-      // guard the metadata writer with concurrent lock
-      this.txnManager.getLockManager().lock();
+    // refresh the timeline
 
-      // refresh the timeline
-
-      // Note: the data meta client is not refreshed currently, some code path
-      // relies on the meta client for resolving the latest data schema,
-      // the schema expects to be immutable for SQL jobs but may be not for non-SQL
-      // jobs.
-      this.metadataWriter.initTableMetadata();
-      this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
-    } finally {
-      this.txnManager.getLockManager().unlock();
-    }
+    // Note: the data meta client is not refreshed currently, some code path
+    // relies on the meta client for resolving the latest data schema,
+    // the schema expects to be immutable for SQL jobs but may be not for non-SQL
+    // jobs.
+    this.metadataWriter.initTableMetadata();
+    this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
   }
 
   /**

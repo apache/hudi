@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -26,10 +27,14 @@ import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 
+import javax.annotation.Nullable;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Utilities for {@link org.apache.flink.table.types.DataType}.
@@ -123,4 +128,43 @@ public class DataTypeUtils {
                 "Can not convert %s to type %s for partition value", partition, type));
     }
   }
+
+  /**
+   * Ensures the give columns of the row data type are not nullable(for example, the primary keys).
+   *
+   * @param dataType  The row data type, datatype logicaltype must be rowtype
+   * @param pkColumns The primary keys
+   * @return a new row data type if any column nullability is tweaked or the original data type
+   */
+  public static DataType ensureColumnsAsNonNullable(DataType dataType, @Nullable List<String> pkColumns) {
+    if (pkColumns == null || pkColumns.isEmpty()) {
+      return dataType;
+    }
+    LogicalType dataTypeLogicalType = dataType.getLogicalType();
+    if (!(dataTypeLogicalType instanceof RowType)) {
+      throw new RuntimeException("The datatype to be converted must be row type, but this type is :" + dataTypeLogicalType.getClass());
+    }
+    RowType rowType = (RowType) dataTypeLogicalType;
+    List<DataType> originalFieldTypes = dataType.getChildren();
+    List<String> fieldNames = rowType.getFieldNames();
+    List<DataType> fieldTypes = new ArrayList<>();
+    boolean tweaked = false;
+    for (int i = 0; i < fieldNames.size(); i++) {
+      if (pkColumns.contains(fieldNames.get(i)) && rowType.getTypeAt(i).isNullable()) {
+        fieldTypes.add(originalFieldTypes.get(i).notNull());
+        tweaked = true;
+      } else {
+        fieldTypes.add(originalFieldTypes.get(i));
+      }
+    }
+    if (!tweaked) {
+      return dataType;
+    }
+    List<DataTypes.Field> fields = new ArrayList<>();
+    for (int i = 0; i < fieldNames.size(); i++) {
+      fields.add(DataTypes.FIELD(fieldNames.get(i), fieldTypes.get(i)));
+    }
+    return DataTypes.ROW(fields.stream().toArray(DataTypes.Field[]::new)).notNull();
+  }
+
 }

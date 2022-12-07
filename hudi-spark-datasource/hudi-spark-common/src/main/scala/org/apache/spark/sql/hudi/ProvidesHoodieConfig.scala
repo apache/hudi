@@ -162,12 +162,17 @@ trait ProvidesHoodieConfig extends Logging {
 
     val payloadClassName = if (operation == UPSERT_OPERATION_OPT_VAL &&
       tableType == COW_TABLE_TYPE_OPT_VAL && insertMode == InsertMode.STRICT) {
-      // Only validate duplicate key for COW, for MOR it will do the merge with the DefaultHoodieRecordPayload
+      // Validate duplicate key for COW, for MOR it will do the merge with the DefaultHoodieRecordPayload
       // on reading.
+      classOf[ValidateDuplicateKeyPayload].getCanonicalName
+    } else if (operation == INSERT_OPERATION_OPT_VAL && tableType == COW_TABLE_TYPE_OPT_VAL &&
+      insertMode == InsertMode.STRICT){
+      // Validate duplicate key for inserts to COW table when using strict insert mode.
       classOf[ValidateDuplicateKeyPayload].getCanonicalName
     } else {
       classOf[OverwriteWithLatestAvroPayload].getCanonicalName
     }
+
 
     logInfo(s"Insert statement use write operation type: $operation, payloadClass: $payloadClassName")
 

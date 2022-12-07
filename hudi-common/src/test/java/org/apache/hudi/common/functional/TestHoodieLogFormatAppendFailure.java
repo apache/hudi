@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -56,11 +55,6 @@ import java.util.concurrent.TimeoutException;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
-/**
- * This class is intentionally using a different way of setting up the MiniDFSCluster and not relying on
- * {@link MiniClusterUtil} to reproduce append() issue : https://issues.apache.org/jira/browse/HDFS-6325 Reference :
- * https://issues.apache.org/jira/secure/attachment/12645053/HDFS-6325.patch.
- */
 public class TestHoodieLogFormatAppendFailure {
 
   private static File baseDir;
@@ -69,7 +63,7 @@ public class TestHoodieLogFormatAppendFailure {
   @BeforeAll
   public static void setUpClass() throws IOException {
     // NOTE : The MiniClusterDFS leaves behind the directory under which the cluster was created
-    baseDir = new File("/tmp/" + UUID.randomUUID().toString());
+    baseDir = new File("/tmp/" + UUID.randomUUID());
     FileUtil.fullyDelete(baseDir);
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     Configuration conf = new Configuration();
@@ -148,6 +142,7 @@ public class TestHoodieLogFormatAppendFailure {
     writer.appendBlock(new HoodieCommandBlock(header));
     // The log version should be different for this new writer
     assertNotEquals(writer.getLogFile().getLogVersion(), logFileVersion);
+    writer.close();
   }
 
 }

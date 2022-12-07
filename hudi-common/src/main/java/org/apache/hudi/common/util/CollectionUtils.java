@@ -42,6 +42,9 @@ import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
+/**
+ * Utils for Java Collection.
+ */
 public class CollectionUtils {
 
   private static final Properties EMPTY_PROPERTIES = new Properties();
@@ -155,7 +158,7 @@ public class CollectionUtils {
   /**
    * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
    */
-  public static <E> Set<E> diff(Set<E> one, Set<E> another) {
+  public static <E> Set<E> diff(Collection<E> one, Collection<E> another) {
     Set<E> diff = new HashSet<>(one);
     diff.removeAll(another);
     return diff;
@@ -164,7 +167,7 @@ public class CollectionUtils {
   /**
    * Returns difference b/w {@code one} {@link List} of elements and {@code another}
    *
-   * NOTE: This is less optimal counterpart to {@link #diff(Set, Set)}, accepting {@link List}
+   * NOTE: This is less optimal counterpart to {@link #diff(Collection, Collection)}, accepting {@link List}
    *       as a holding collection to support duplicate elements use-cases
    */
   public static <E> List<E> diff(List<E> one, List<E> another) {

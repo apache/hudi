@@ -40,7 +40,7 @@ public class BatchedMarkerCreationRunnable implements Runnable {
   @Override
   public void run() {
     LOG.debug("Start processing create marker requests");
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
 
     for (BatchedMarkerCreationContext requestContext : requestContextList) {
       requestContext.getMarkerDirState().processMarkerCreationRequests(

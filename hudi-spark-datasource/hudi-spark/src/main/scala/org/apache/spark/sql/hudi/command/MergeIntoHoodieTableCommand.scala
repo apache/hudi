@@ -18,10 +18,11 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
+import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, TBL_NAME}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
@@ -185,19 +186,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     // Create the write parameters
     val parameters = buildMergeIntoConfig(hoodieCatalogTable)
+    executeUpsert(sourceDF, parameters)
 
-    if (mergeInto.matchedActions.nonEmpty) { // Do the upsert
-      executeUpsert(sourceDF, parameters)
-    } else { // If there is no match actions in the statement, execute insert operation only.
-      val targetDF = Dataset.ofRows(sparkSession, mergeInto.targetTable)
-      val primaryKeys = hoodieCatalogTable.tableConfig.getRecordKeyFieldProp.split(",")
-      // Only records that are not included in the target table can be inserted
-      val insertSourceDF = sourceDF.join(targetDF, primaryKeys,"leftanti")
-
-      // column order changed after left anti join , we should keep column order of source dataframe
-      val cols = removeMetaFields(sourceDF).columns
-      executeInsertOnly(insertSourceDF.select(cols.head, cols.tail:_*), parameters)
-    }
     sparkSession.catalog.refreshTable(targetTableIdentify.unquotedString)
     Seq.empty[Row]
   }
@@ -299,6 +289,20 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * expressions to the ExpressionPayload#getInsertValue.
    */
   private def executeUpsert(sourceDF: DataFrame, parameters: Map[String, String]): Unit = {
+    val operation = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, ""))) {
+      INSERT_OPERATION_OPT_VAL
+    } else {
+      UPSERT_OPERATION_OPT_VAL
+    }
+
+    // Append the table schema to the parameters. In the case of merge into, the schema of sourceDF
+    // may be different from the target table, because the are transform logical in the update or
+    // insert actions.
+    var writeParams = parameters +
+      (OPERATION.key -> operation) +
+      (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key -> getTableSchema.toString) +
+      (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
+
     val updateActions = mergeInto.matchedActions.filter(_.isInstanceOf[UpdateAction])
       .map(_.asInstanceOf[UpdateAction])
     // Check for the update actions
@@ -308,25 +312,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       .map(_.asInstanceOf[DeleteAction])
     assert(deleteActions.size <= 1, "Should be only one delete action in the merge into statement.")
     val deleteAction = deleteActions.headOption
-
-    val insertActions =
-      mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction])
-
-    // Check for the insert actions
-    checkInsertAssignments(insertActions)
-
-    // Append the table schema to the parameters. In the case of merge into, the schema of sourceDF
-    // may be different from the target table, because the are transform logical in the update or
-    // insert actions.
-    val operation = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, ""))) {
-      INSERT_OPERATION_OPT_VAL
-    } else {
-      UPSERT_OPERATION_OPT_VAL
-    }
-    var writeParams = parameters +
-      (OPERATION.key -> operation) +
-      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString) +
-      (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
     // Map of Condition -> Assignments
     val updateConditionToAssignments =
@@ -352,34 +337,24 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       writeParams += (PAYLOAD_DELETE_CONDITION -> serializedDeleteCondition)
     }
 
+    val insertActions =
+      mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction])
+
+    // Check for the insert actions
+    checkInsertAssignments(insertActions)
+
     // Serialize the Map[InsertCondition, InsertAssignments] to base64 string
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions))
 
     // Remove the meta fields from the sourceDF as we do not need these when writing.
-    val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
-    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
-  }
+    val trimmedSourceDF = removeMetaFields(sourceDF)
 
-  /**
-   * If there are not matched actions, we only execute the insert operation.
-   * @param sourceDF
-   * @param parameters
-   */
-  private def executeInsertOnly(sourceDF: DataFrame, parameters: Map[String, String]): Unit = {
-    val insertActions = mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction])
-    checkInsertAssignments(insertActions)
+    // Supply original record's Avro schema to provided to [[ExpressionPayload]]
+    writeParams += (PAYLOAD_RECORD_AVRO_SCHEMA ->
+      convertStructTypeToAvroSchema(trimmedSourceDF.schema, "record", "").toString)
 
-    var writeParams = parameters +
-      (OPERATION.key -> INSERT_OPERATION_OPT_VAL) +
-      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString)
-
-    writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
-      serializedInsertConditionAndExpressions(insertActions))
-
-    // Remove the meta fields from the sourceDF as we do not need these when writing.
-    val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
-    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
+    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, trimmedSourceDF)
   }
 
   private def checkUpdateAssignments(updateActions: Seq[UpdateAction]): Unit = {
@@ -546,7 +521,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "200"), // set the default parallelism to 200 for sql
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "200"),
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key, "200"),
-        SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
+        SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
+
+        // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
+        //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
+        //       compatibility b/w table's schema and incoming one is not necessary in this case since we can
+        //       be cherry-picking only selected columns from the incoming dataset to be inserted/updated in the
+        //       target table, ie partially updating)
+        AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
+        RECONCILE_SCHEMA.key -> "false",
+        "hoodie.datasource.write.schema.canonicalize" -> "false"
       )
         .filter { case (_, v) => v != null }
     }

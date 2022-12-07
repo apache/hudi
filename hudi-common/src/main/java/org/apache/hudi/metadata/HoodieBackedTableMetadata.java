@@ -144,6 +144,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
+  public List<String> getPartitionPathsWithPrefixes(List<String> prefixes) throws IOException {
+    return getAllPartitionPaths().stream()
+        .filter(p -> prefixes.stream().anyMatch(p::startsWith))
+        .collect(Collectors.toList());
+  }
+
+  @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
                                                                                  String partitionName,
                                                                                  boolean shouldLoadInMemory) {
@@ -244,8 +251,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                   List<String> keys,
                                                                                   boolean fullKey,
                                                                                   List<Long> timings) {
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    timer.startTimer();
+    HoodieTimer timer = HoodieTimer.start();
 
     if (logRecordScanner == null) {
       timings.add(timer.endTimer());
@@ -285,8 +291,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                                              Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords,
                                                                                                              List<Long> timings,
                                                                                                              String partitionName) throws IOException {
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    timer.startTimer();
+    HoodieTimer timer = HoodieTimer.start();
 
     if (baseFileReader == null) {
       // No base file at all
@@ -304,8 +309,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     }
 
-    HoodieTimer readTimer = new HoodieTimer();
-    readTimer.startTimer();
+    HoodieTimer readTimer = HoodieTimer.start();
 
     Map<String, HoodieRecord<HoodieMetadataPayload>> records =
         fetchBaseFileRecordsByKeys(baseFileReader, keys, fullKeys, partitionName);
@@ -349,8 +353,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     return toStream(records)
         .map(record -> Pair.of(
-            (String) record.get(HoodieMetadataPayload.KEY_FIELD_NAME),
-            composeRecord(record, partitionName)))
+          (String) record.get(HoodieMetadataPayload.KEY_FIELD_NAME),
+          composeRecord(record, partitionName)))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
@@ -408,7 +412,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReaders(String partitionName, FileSlice slice) {
     try {
-      HoodieTimer timer = new HoodieTimer().startTimer();
+      HoodieTimer timer = HoodieTimer.start();
       // Open base file reader
       Pair<HoodieFileReader, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);
       HoodieFileReader baseFileReader = baseFileReaderOpenTimePair.getKey();
@@ -451,14 +455,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Only those log files which have a corresponding completed instant on the dataset should be read
     // This is because the metadata table is updated before the dataset instants are committed.
     HoodieActiveTimeline datasetTimeline = dataMetaClient.getActiveTimeline();
-    Set<String> validInstantTimestamps = datasetTimeline.filterCompletedInstants().getInstants()
+    Set<String> validInstantTimestamps = datasetTimeline.filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
     // For any rollbacks and restores, we cannot neglect the instants that they are rolling back.
     // The rollback instant should be more recent than the start of the timeline for it to have rolled back any
     // instant which we have a log block for.
     final String earliestInstantTime = validInstantTimestamps.isEmpty() ? SOLO_COMMIT_TIMESTAMP : Collections.min(validInstantTimestamps);
-    datasetTimeline.getRollbackAndRestoreTimeline().filterCompletedInstants().getInstants()
+    datasetTimeline.getRollbackAndRestoreTimeline().filterCompletedInstants().getInstantsAsStream()
         .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, earliestInstantTime))
         .forEach(instant -> {
           validInstantTimestamps.addAll(getRollbackedCommits(instant, datasetTimeline));
@@ -472,7 +476,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
                                                                              String partitionName,
                                                                              Option<Boolean> allowFullScanOverride) {
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     List<String> sortedLogFilePaths = logFiles.stream()
         .sorted(HoodieLogFile.getLogFileComparator())
         .map(o -> o.getPath().toString())

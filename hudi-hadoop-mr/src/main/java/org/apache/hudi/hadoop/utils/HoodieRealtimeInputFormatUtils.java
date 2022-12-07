@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.JobConf;
@@ -30,6 +31,10 @@ import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
@@ -78,7 +83,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     return conf;
   }
 
-  public static void addRequiredProjectionFields(Configuration configuration, Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {
+  public static void addRequiredProjectionFields(Configuration configuration, Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo, Option<String> preCombineKeyOpt) {
     // Need this to do merge records in HoodieRealtimeRecordReader
     if (!hoodieVirtualKeyInfo.isPresent()) {
       addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
@@ -91,6 +96,18 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         addProjectionField(configuration, hoodieVirtualKey.getPartitionPathField().get(), hoodieVirtualKey.getPartitionPathFieldIndex().get());
       }
     }
+
+    if (preCombineKeyOpt.isPresent()) {
+      // infer col pos
+      String preCombineKey = preCombineKeyOpt.get();
+      List<String> columnNameList = Arrays.stream(configuration.get(serdeConstants.LIST_COLUMNS).split(",")).collect(Collectors.toList());
+      int pos = columnNameList.indexOf(preCombineKey);
+      if (pos != -1) {
+        addProjectionField(configuration, preCombineKey, pos);
+        LOG.info(String.format("add preCombineKey: %s to project columns with position %s", preCombineKey, pos));
+      }
+    }
+
   }
 
   public static boolean requiredProjectionFieldsExistInConf(Configuration configuration, Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {

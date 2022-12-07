@@ -19,11 +19,25 @@ package org.apache.spark.sql.hive
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hive.client.HiveClient
 
 object HiveClientUtils {
 
+  /**
+   * A Hive client used to interact with the metastore.
+   */
+  @volatile private var client: HiveClient = null
+
   def newClientForMetadata(conf: SparkConf, hadoopConf: Configuration): HiveClient = {
     HiveUtils.newClientForMetadata(conf, hadoopConf)
+  }
+
+  def getSingletonClientForMetadata(sparkSession: SparkSession): HiveClient = synchronized {
+    if (client == null) {
+      client = HiveUtils.newClientForMetadata(sparkSession.sparkContext.conf,
+        sparkSession.sessionState.newHadoopConf())
+    }
+    client
   }
 }

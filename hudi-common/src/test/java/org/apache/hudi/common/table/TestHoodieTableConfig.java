@@ -26,6 +26,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -41,6 +42,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link HoodieTableConfig}.
+ */
 public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
   private FileSystem fs;
@@ -58,6 +62,11 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig.create(fs, metaPath, props);
     cfgPath = new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     backupCfgPath = new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    fs.close();
   }
 
   @Test

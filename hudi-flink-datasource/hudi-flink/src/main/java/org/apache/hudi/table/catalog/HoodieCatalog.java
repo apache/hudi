@@ -18,15 +18,21 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
@@ -382,7 +388,16 @@ public class HoodieCatalog extends AbstractCatalog {
 
   @Override
   public boolean partitionExists(ObjectPath tablePath, CatalogPartitionSpec catalogPartitionSpec) throws CatalogException {
-    return false;
+    if (!tableExists(tablePath)) {
+      return false;
+    }
+    String tablePathStr = inferTablePath(catalogPathStr, tablePath);
+    Map<String, String> options = TableOptionProperties.loadFromProperties(tablePathStr, hadoopConf);
+    boolean hiveStylePartitioning = Boolean.parseBoolean(options.getOrDefault(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), "false"));
+    return StreamerUtil.partitionExists(
+        inferTablePath(catalogPathStr, tablePath),
+        HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, catalogPartitionSpec),
+        hadoopConf);
   }
 
   @Override
@@ -394,7 +409,40 @@ public class HoodieCatalog extends AbstractCatalog {
   @Override
   public void dropPartition(ObjectPath tablePath, CatalogPartitionSpec catalogPartitionSpec, boolean ignoreIfNotExists)
       throws PartitionNotExistException, CatalogException {
-    throw new UnsupportedOperationException("dropPartition is not implemented.");
+    if (!tableExists(tablePath)) {
+      if (ignoreIfNotExists) {
+        return;
+      } else {
+        throw new PartitionNotExistException(getName(), tablePath, catalogPartitionSpec);
+      }
+    }
+
+    String tablePathStr = inferTablePath(catalogPathStr, tablePath);
+    Map<String, String> options = TableOptionProperties.loadFromProperties(tablePathStr, hadoopConf);
+    boolean hiveStylePartitioning = Boolean.parseBoolean(options.getOrDefault(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), "false"));
+    String partitionPathStr = HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, catalogPartitionSpec);
+
+    if (!StreamerUtil.partitionExists(tablePathStr, partitionPathStr, hadoopConf)) {
+      if (ignoreIfNotExists) {
+        return;
+      } else {
+        throw new PartitionNotExistException(getName(), tablePath, catalogPartitionSpec);
+      }
+    }
+
+    // enable auto-commit though ~
+    options.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
+    try (HoodieFlinkWriteClient<?> writeClient = createWriteClient(options, tablePathStr, tablePath)) {
+      writeClient.deletePartitions(Collections.singletonList(partitionPathStr), HoodieActiveTimeline.createNewInstantTime())
+          .forEach(writeStatus -> {
+            if (writeStatus.hasErrors()) {
+              throw new HoodieMetadataException(String.format("Failed to commit metadata table records at file id %s.", writeStatus.getFileId()));
+            }
+          });
+      fs.delete(new Path(tablePathStr, partitionPathStr), true);
+    } catch (Exception e) {
+      throw new CatalogException(String.format("Dropping partition %s of table %s exception.", partitionPathStr, tablePath), e);
+    }
   }
 
   @Override
@@ -505,7 +553,20 @@ public class HoodieCatalog extends AbstractCatalog {
     return newOptions;
   }
 
-  private String inferTablePath(String catalogPath, ObjectPath tablePath) {
+  private HoodieFlinkWriteClient<?> createWriteClient(
+      Map<String, String> options,
+      String tablePathStr,
+      ObjectPath tablePath) {
+    return FlinkWriteClients.createWriteClientV2(
+        Configuration.fromMap(options)
+            .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
+            .set(FlinkOptions.SOURCE_AVRO_SCHEMA,
+                StreamerUtil.createMetaClient(tablePathStr, hadoopConf)
+                    .getTableConfig().getTableCreateSchema().get().toString()));
+  }
+
+  @VisibleForTesting
+  protected String inferTablePath(String catalogPath, ObjectPath tablePath) {
     return String.format("%s/%s/%s", catalogPath, tablePath.getDatabaseName(), tablePath.getObjectName());
   }
 }

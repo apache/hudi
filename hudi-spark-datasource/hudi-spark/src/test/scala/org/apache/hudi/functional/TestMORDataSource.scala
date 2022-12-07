@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util
 import org.apache.hudi.common.util.CollectionUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
@@ -88,7 +89,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
-        JFunction.toJava((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
+        JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
 
   @Test def testCount() {
@@ -893,7 +894,10 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val df1 = snapshotDF0.limit(numRecordsToDelete)
     val dropDf = df1.drop(df1.columns.filter(_.startsWith("_hoodie_")): _*)
 
-    val df2 = dropDf.withColumn("_hoodie_is_deleted", lit(true).cast(BooleanType))
+    val df2 = convertColumnsToNullable(
+      dropDf.withColumn("_hoodie_is_deleted", lit(true).cast(BooleanType)),
+      "_hoodie_is_deleted"
+    )
     df2.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)

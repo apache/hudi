@@ -23,13 +23,13 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -65,7 +65,7 @@ public class CommitsCommand {
     final List<Comparable[]> rows = new ArrayList<>();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
+        .getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
@@ -103,7 +103,7 @@ public class CommitsCommand {
     final List<Comparable[]> rows = new ArrayList<>();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
+        .getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
@@ -372,20 +372,20 @@ public class CommitsCommand {
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String targetLatestCommit =
-        targetTimeline.getInstants().iterator().hasNext() ? targetTimeline.lastInstant().get().getTimestamp() : "0";
+        targetTimeline.getInstantsAsStream().iterator().hasNext() ? targetTimeline.lastInstant().get().getTimestamp() : "0";
     String sourceLatestCommit =
-        sourceTimeline.getInstants().iterator().hasNext() ? sourceTimeline.lastInstant().get().getTimestamp() : "0";
+        sourceTimeline.getInstantsAsStream().iterator().hasNext() ? sourceTimeline.lastInstant().get().getTimestamp() : "0";
 
     if (sourceLatestCommit != null
         && HoodieTimeline.compareTimestamps(targetLatestCommit, HoodieTimeline.GREATER_THAN, sourceLatestCommit)) {
       // source is behind the target
       List<String> commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
-          .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+          .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
       return "Source " + source.getTableConfig().getTableName() + " is behind by " + commitsToCatchup.size()
           + " commits. Commits to catch up - " + commitsToCatchup;
     } else {
       List<String> commitsToCatchup = sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE)
-          .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+          .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
       return "Source " + source.getTableConfig().getTableName() + " is ahead by " + commitsToCatchup.size()
           + " commits. Commits to catch up - " + commitsToCatchup;
     }
@@ -413,14 +413,8 @@ public class CommitsCommand {
 
   private Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTimeline timeline, Option<HoodieInstant> hoodieInstant) throws IOException {
     if (hoodieInstant.isPresent()) {
-      if (hoodieInstant.get().getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-        return Option.of(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get()).get(),
-            HoodieReplaceCommitMetadata.class));
-      }
-      return Option.of(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get()).get(),
-          HoodieCommitMetadata.class));
+      return Option.of(TimelineUtils.getCommitMetadata(hoodieInstant.get(), timeline));
     }
-
     return Option.empty();
   }
 }

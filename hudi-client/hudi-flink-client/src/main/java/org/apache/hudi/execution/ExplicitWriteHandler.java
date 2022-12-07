@@ -21,17 +21,19 @@ package org.apache.hudi.execution;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
+import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.io.HoodieWriteHandle;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * Consumes stream of hoodie records from in-memory queue and writes to one explicit create handle.
  */
 public class ExplicitWriteHandler<T extends HoodieRecordPayload>
-    extends BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
+    implements HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
   private final List<WriteStatus> statuses = new ArrayList<>();
 
@@ -42,19 +44,15 @@ public class ExplicitWriteHandler<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
+  public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
     final HoodieRecord insertPayload = payload.record;
     handle.write(insertPayload, payload.insertValue, payload.exception);
   }
 
   @Override
-  public void finish() {
+  public List<WriteStatus> finish() {
     closeOpenHandle();
-    assert statuses.size() > 0;
-  }
-
-  @Override
-  public List<WriteStatus> getResult() {
+    checkState(statuses.size() > 0);
     return statuses;
   }
 

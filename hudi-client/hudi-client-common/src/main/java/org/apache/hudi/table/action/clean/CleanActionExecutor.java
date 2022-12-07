@@ -18,9 +18,6 @@
 
 package org.apache.hudi.table.action.clean;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -45,6 +42,8 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -200,8 +199,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
 
     HoodieInstant inflightInstant = null;
     try {
-      final HoodieTimer timer = new HoodieTimer();
-      timer.startTimer();
+      final HoodieTimer timer = HoodieTimer.start();
       if (cleanInstant.isRequested()) {
         inflightInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant,
             TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
@@ -253,7 +251,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     List<HoodieCleanMetadata> cleanMetadataList = new ArrayList<>();
     // If there are inflight(failed) or previously requested clean operation, first perform them
     List<HoodieInstant> pendingCleanInstants = table.getCleanTimeline()
-        .filterInflightsAndRequested().getInstants().collect(Collectors.toList());
+        .filterInflightsAndRequested().getInstants();
     if (pendingCleanInstants.size() > 0) {
       // try to clean old history schema.
       try {

@@ -72,6 +72,10 @@
       </resource>
       <resource>
         <directory>src/test/resources</directory>
+        <excludes>
+          <exclude>*-site.xml</exclude>
+        </excludes>
+        <filtering>false</filtering>
       </resource>
     </resources>
   </build>

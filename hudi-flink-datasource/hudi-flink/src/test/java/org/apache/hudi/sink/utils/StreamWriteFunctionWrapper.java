@@ -117,7 +117,6 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     // one function
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
-    this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf);
     this.bucketAssignFunctionContext = new MockBucketAssignFunctionContext();
     this.stateInitializationContext = new MockStateInitializationContext();
     this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
@@ -127,6 +126,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
         .setConfig(new StreamConfig(conf))
         .setExecutionConfig(new ExecutionConfig().enableObjectReuse())
         .build();
+    this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf, this.streamTask, this.streamConfig);
   }
 
   public void openFunction() throws Exception {
