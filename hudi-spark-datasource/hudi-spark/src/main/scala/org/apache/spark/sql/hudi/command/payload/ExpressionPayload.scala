@@ -328,13 +328,17 @@ object ExpressionPayload {
   val PAYLOAD_RECORD_AVRO_SCHEMA = "hoodie.payload.record.schema"
 
   /**
-   * A cache for the serializedConditionAssignments to the compiled class after CodeGen.
-   * The Map[IExpressionEvaluator, IExpressionEvaluator] is the map of the condition expression
-   * to the assignments expression.
+   * To avoid compiling projections for Merge Into expressions for every record these
+   * are cached under a key of
+   * <ol>
+   *    <li>Expression's (textual) representation</li>
+   *    <li>Expected input-schema</li>
+   * </ol>
    *
-   * TODO elaborate why key has to contain schema
+   * NOTE: Schema is required b/c these cache is static and might be shared by multiple
+   *       executed statements w/in a single Spark session
    */
-  private val cache = Caffeine.newBuilder()
+  private val projectionsCache = Caffeine.newBuilder()
     .maximumSize(1024)
     .build[(String, Schema), Map[Projection, Projection]]()
 
@@ -372,22 +376,23 @@ object ExpressionPayload {
   }
 
   /**
-   * Do the CodeGen for each condition and assignment expressions.We will cache it to reduce
+   * Do the CodeGen for each condition and assignment expressions.We will projectionsCache it to reduce
    * the compile time for each method call.
    */
   private def getEvaluator(serializedConditionAssignments: String,
                    inputSchema: Schema): Map[Projection, Projection] = {
-    cache.get((serializedConditionAssignments, inputSchema),
+    projectionsCache.get((serializedConditionAssignments, inputSchema),
       new Function[(String, Schema), Map[Projection, Projection]] {
         override def apply(key: (String, Schema)): Map[Projection, Projection] = {
           val (encodedConditionalAssignments, _) = key
           val serializedBytes = Base64.getDecoder.decode(encodedConditionalAssignments)
           val conditionAssignments = SerDeUtils.toObject(serializedBytes)
             .asInstanceOf[Map[Expression, Seq[Expression]]]
-          // Do the CodeGen for condition expression and assignment expression
           conditionAssignments.map {
             case (condition, assignments) =>
-              // TODO elaborate
+              // NOTE: We reuse Spark's [[Projection]]s infra for actual evaluation of the
+              //       expressions, allowing us to execute arbitrary expression against input
+              //       [[InternalRow]] producing another [[InternalRow]] as an outcome
               val conditionEvaluator = GenerateSafeProjection.generate(Seq(condition))
               val assignmentEvaluator = GenerateSafeProjection.generate(assignments)
 
