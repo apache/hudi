@@ -33,12 +33,13 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, SchemaConverters}
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.codegen.GenerateSafeProjection
+import org.apache.spark.sql.catalyst.expressions.{Expression, Projection}
 import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
-import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
+import org.apache.spark.sql.types.BooleanType
 
 import java.util.function.Function
 import java.util.{Base64, Properties}
@@ -128,11 +129,14 @@ class ExpressionPayload(@transient record: GenericRecord,
 
     for ((conditionEvaluator, assignmentEvaluator) <- updateConditionAndAssignments
          if resultRecordOpt == null) {
-      val conditionVal = conditionEvaluator.eval(inputRecord.asRow).get(0, BooleanType).asInstanceOf[Boolean]
+      val conditionEvalResult = conditionEvaluator.apply(inputRecord.asRow)
+        .get(0, BooleanType)
+        .asInstanceOf[Boolean]
+
       // If the update condition matched  then execute assignment expression
       // to compute final record to update. We will return the first matched record.
-      if (conditionVal) {
-        val resultingRow = assignmentEvaluator.eval(inputRecord.asRow)
+      if (conditionEvalResult) {
+        val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
         lazy val resultingAvroRecord = getAvroSerializerFor(writeSchema)
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
@@ -152,8 +156,10 @@ class ExpressionPayload(@transient record: GenericRecord,
       val deleteConditionText = properties.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
       if (deleteConditionText != null) {
         val (deleteConditionEvaluator, _) = getEvaluator(deleteConditionText.toString, inputRecord.asAvro.getSchema).head
-        val deleteConditionResult = deleteConditionEvaluator.eval(inputRecord.asRow).get(0, BooleanType).asInstanceOf[Boolean]
-        if (deleteConditionResult) {
+        val deleteConditionEvalResult = deleteConditionEvaluator.apply(inputRecord.asRow)
+          .get(0, BooleanType)
+          .asInstanceOf[Boolean]
+        if (deleteConditionEvalResult) {
           resultRecordOpt = HOption.empty()
         }
       }
@@ -203,11 +209,13 @@ class ExpressionPayload(@transient record: GenericRecord,
     var resultRecordOpt: HOption[IndexedRecord] = null
     for ((conditionEvaluator, assignmentEvaluator) <- insertConditionAndAssignments
          if resultRecordOpt == null) {
-      val conditionVal = conditionEvaluator.eval(inputRecord.asRow).get(0, BooleanType).asInstanceOf[Boolean]
+      val conditionEvalResult = conditionEvaluator.apply(inputRecord.asRow)
+        .get(0, BooleanType)
+        .asInstanceOf[Boolean]
       // If matched the insert condition then execute the assignment expressions to compute the
       // result record. We will return the first matched record.
-      if (conditionVal) {
-        val resultingRow = assignmentEvaluator.eval(inputRecord.asRow)
+      if (conditionEvalResult) {
+        val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
         val resultingAvroRecord = getAvroSerializerFor(writeSchema)
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
@@ -328,7 +336,7 @@ object ExpressionPayload {
    */
   private val cache = Caffeine.newBuilder()
     .maximumSize(1024)
-    .build[(String, Schema), Map[UnsafeCatalystExpressionEvaluator, UnsafeCatalystExpressionEvaluator]]()
+    .build[(String, Schema), Map[Projection, Projection]]()
 
   private val schemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[String, Schema]()
@@ -367,11 +375,11 @@ object ExpressionPayload {
    * Do the CodeGen for each condition and assignment expressions.We will cache it to reduce
    * the compile time for each method call.
    */
-  def getEvaluator(serializedConditionAssignments: String,
-                   inputSchema: Schema): Map[UnsafeCatalystExpressionEvaluator, UnsafeCatalystExpressionEvaluator] = {
+  private def getEvaluator(serializedConditionAssignments: String,
+                   inputSchema: Schema): Map[Projection, Projection] = {
     cache.get((serializedConditionAssignments, inputSchema),
-      new Function[(String, Schema), Map[UnsafeCatalystExpressionEvaluator, UnsafeCatalystExpressionEvaluator]] {
-        override def apply(key: (String, Schema)): Map[UnsafeCatalystExpressionEvaluator, UnsafeCatalystExpressionEvaluator] = {
+      new Function[(String, Schema), Map[Projection, Projection]] {
+        override def apply(key: (String, Schema)): Map[Projection, Projection] = {
           val (encodedConditionalAssignments, _) = key
           val serializedBytes = Base64.getDecoder.decode(encodedConditionalAssignments)
           val conditionAssignments = SerDeUtils.toObject(serializedBytes)
@@ -379,8 +387,9 @@ object ExpressionPayload {
           // Do the CodeGen for condition expression and assignment expression
           conditionAssignments.map {
             case (condition, assignments) =>
-              val conditionEvaluator = ExpressionCodeGen.doCodeGen(Seq(condition))
-              val assignmentEvaluator = ExpressionCodeGen.doCodeGen(assignments)
+              // TODO elaborate
+              val conditionEvaluator = GenerateSafeProjection.generate(Seq(condition))
+              val assignmentEvaluator = GenerateSafeProjection.generate(assignments)
 
               conditionEvaluator -> assignmentEvaluator
           }
@@ -388,7 +397,7 @@ object ExpressionPayload {
       })
   }
 
-  def getMergedSchema(source: Schema, target: Schema): Schema = {
+  private def getMergedSchema(source: Schema, target: Schema): Schema = {
     mergedSchemaCache.get((source, target), new Function[(Schema, Schema), Schema] {
       override def apply(t: (Schema, Schema)): Schema = {
         val rightSchema = HoodieAvroUtils.removeMetadataFields(t._2)
@@ -397,7 +406,7 @@ object ExpressionPayload {
     })
   }
 
-  def mergeSchema(a: Schema, b: Schema): Schema = {
+  private def mergeSchema(a: Schema, b: Schema): Schema = {
     val mergedFields =
       a.getFields.asScala.map(field =>
         new Schema.Field("a_" + field.name,
