@@ -65,8 +65,6 @@ import org.apache.spark.{SPARK_VERSION, SparkContext}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters.setAsJavaSetConverter
 import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
-import scala.util.matching.Regex
 
 object HoodieSparkSqlWriter {
 
