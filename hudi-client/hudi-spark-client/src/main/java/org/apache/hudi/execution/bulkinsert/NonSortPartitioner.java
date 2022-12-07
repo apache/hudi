@@ -25,7 +25,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.api.java.JavaRDD;
 
 /**
- * A built-in partitioner that only does coalesce for input records for bulk insert operation,
+ * A built-in partitioner that returns input records as is for bulk insert operation,
  * corresponding to the {@code BulkInsertSortMode.NONE} mode.
  *
  * @param <T> HoodieRecordPayload type
@@ -36,7 +36,7 @@ public class NonSortPartitioner<T extends HoodieRecordPayload>
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    return records.coalesce(outputSparkPartitions);
+    return records;
   }
 
   @Override

@@ -24,15 +24,14 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 /**
- * A built-in partitioner that only does coalesce for input Rows for bulk insert operation,
+ * A built-in partitioner that returns input Rows as is for bulk insert operation,
  * corresponding to the {@code BulkInsertSortMode.NONE} mode.
- *
  */
 public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    return rows.coalesce(outputSparkPartitions);
+    return rows;
   }
 
   @Override
