@@ -30,8 +30,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.Collection;
 import java.util.Properties;
 
@@ -113,15 +111,10 @@ public class SyncUtilHelpers {
       return exceptions.stream().findFirst().get();
     }
     StringBuilder sb = new StringBuilder();
-    sb.append("Multiple exceptions during meta sync:\n********\n");
+    sb.append("Multiple exceptions during meta sync:\n");
     exceptions.forEach(e -> {
-      StringWriter sw = new StringWriter();
-      PrintWriter pw = new PrintWriter(sw);
-      e.printStackTrace(pw);
       sb.append(e.getMessage());
       sb.append("\n");
-      sb.append(sw);
-      sb.append("********\n");
     });
     return new HoodieException(sb.toString());
   }

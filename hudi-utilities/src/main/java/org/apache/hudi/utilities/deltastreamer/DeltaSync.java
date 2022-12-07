@@ -753,6 +753,7 @@ public class DeltaSync implements Serializable, Closeable {
           long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
           metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
         } catch (HoodieException e) {
+          LOG.info("SyncTool class " + impl.trim() + " failed with exception", e);
           metaSyncExceptions.add(e);
         }
       }
