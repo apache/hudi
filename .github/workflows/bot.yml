@@ -20,37 +20,43 @@ jobs:
         include:
           - scalaProfile: "scala-2.11"
             sparkProfile: "spark2.4"
-            flinkProfile: "flink1.13"
+            flinkProfile: "flink1.15"
+            sparkArchive: "spark-2.4.8/spark-2.4.8-bin-hadoop2.7.tgz"
             skipBundleValidation: "true" # TODO: remove this var to validate spark2.4 bundle combinations
             buildOnly: "false"
 
           - scalaProfile: "scala-2.11"
             sparkProfile: "spark2.4"
             flinkProfile: "flink1.14"
+            sparkArchive: ""
             skipBundleValidation: "true"
             buildOnly: "true"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark2.4"
             flinkProfile: "flink1.13"
+            sparkArchive: ""
             skipBundleValidation: "true"
             buildOnly: "true"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.1"
             flinkProfile: "flink1.14"
+            sparkArchive: ""
             skipBundleValidation: "false"
             buildOnly: "false"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.2"
             flinkProfile: "flink1.14"
+            sparkArchive: ""
             skipBundleValidation: "false"
             buildOnly: "false"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.3"
             flinkProfile: "flink1.14"
+            sparkArchive: ""
             skipBundleValidation: "false"
             buildOnly: "false"
 
@@ -101,3 +107,25 @@ jobs:
         if: ${{ matrix.buildOnly != 'true' }}
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark $MVN_ARGS
+      - name: 'UT integ-test'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        if: ${{ matrix.buildOnly != 'true' && matrix.archive != '' }}
+        run:
+          mvn test -Pintegration-test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
+      - name: 'IT'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
+        if: ${{ matrix.buildOnly != 'true' && matrix.archive != '' }}
+        run:
+          echo "Downloading $SPARK_ARCHIVE"
+          curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
+          tar -xvf $GITHUB_WORKSPACE/$SPARK_ARCHIVE.tgz -C $GITHUB_WORKSPACE/
+          mkdir /tmp/spark-events/
+          export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE%.*}
+          mvn verify -Pintegration-test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" $MVN_ARGS
