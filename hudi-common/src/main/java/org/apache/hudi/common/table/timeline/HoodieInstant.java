@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -73,6 +74,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private State state = State.COMPLETED;
   private String action;
   private String timestamp;
+  private Option<String> markerFileAccessTimestamp ;
 
   /**
    * Load the instant from the meta FileStatus.
@@ -82,6 +84,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     String fileName = fileStatus.getPath().getName();
     String fileExtension = getTimelineFileExtension(fileName);
     timestamp = fileName.replace(fileExtension, "");
+    markerFileAccessTimestamp = Option.ofNullable(HoodieInstantTimeGenerator.parseTimeMillisToInstantTime(fileStatus.getAccessTime()));
 
     // Next read the action for this marker
     action = fileExtension.replaceFirst(".", "");
@@ -104,12 +107,14 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     this.state = isInflight ? State.INFLIGHT : State.COMPLETED;
     this.action = action;
     this.timestamp = timestamp;
+    this.markerFileAccessTimestamp = Option.ofNullable(null);
   }
 
   public HoodieInstant(State state, String action, String timestamp) {
     this.state = state;
     this.action = action;
     this.timestamp = timestamp;
+    this.markerFileAccessTimestamp = Option.ofNullable(null);
   }
 
   public boolean isCompleted() {
@@ -130,6 +135,10 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   public String getTimestamp() {
     return timestamp;
+  }
+
+  public Option<String> getMarkerFileAccessTimestamp(){
+    return markerFileAccessTimestamp;
   }
 
   /**

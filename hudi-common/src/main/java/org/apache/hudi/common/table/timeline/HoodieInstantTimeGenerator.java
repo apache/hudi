@@ -81,6 +81,15 @@ public class HoodieInstantTimeGenerator {
     });
   }
 
+  public static String parseTimeMillisToInstantTime(long milliseconds){
+    try {
+      Date d = new Date(milliseconds);
+      return MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
+    } catch (DateTimeParseException e) {
+      throw e;
+    }
+  }
+
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
     try {
       // Enables backwards compatibility with non-millisecond granularity instants
