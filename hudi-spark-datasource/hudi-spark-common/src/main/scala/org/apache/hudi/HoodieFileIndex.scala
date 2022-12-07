@@ -134,21 +134,22 @@ case class HoodieFileIndex(spark: SparkSession,
     // NOTE: Non-partitioned tables are assumed to consist from a single partition
     //       encompassing the whole table
     val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
-    val listedPartitions = prunedPartitions.map { partition =>
-      val baseFileStatuses: Seq[FileStatus] =
-        getInputFileSlices(partition).asScala
-          .map(fs => fs.getBaseFile.orElse(null))
-          .filter(_ != null)
-          .map(_.getFileStatus)
+    val listedPartitions = getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map {
+      case (partition, fileSlices) =>
+        val baseFileStatuses: Seq[FileStatus] =
+          fileSlices.asScala
+            .map(fs => fs.getBaseFile.orElse(null))
+            .filter(_ != null)
+            .map(_.getFileStatus)
 
-      // Filter in candidate files based on the col-stats index lookup
-      val candidateFiles = baseFileStatuses.filter(fs =>
-        // NOTE: This predicate is true when {@code Option} is empty
-        candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
+        // Filter in candidate files based on the col-stats index lookup
+        val candidateFiles = baseFileStatuses.filter(fs =>
+          // NOTE: This predicate is true when {@code Option} is empty
+          candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
 
-      totalFileSize += baseFileStatuses.size
-      candidateFileSize += candidateFiles.size
-      PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
+        totalFileSize += baseFileStatuses.size
+        candidateFileSize += candidateFiles.size
+        PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
     }
 
     val skippingRatio =

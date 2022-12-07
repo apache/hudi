@@ -29,10 +29,14 @@ import java.util.Objects;
  * to do add support for localTime if avro version is updated
  */
 public interface Type extends Serializable {
+  /**
+   * Enums for type names.
+   */
   enum TypeID {
     RECORD, ARRAY, MAP, FIXED, STRING, BINARY,
     INT, LONG, FLOAT, DOUBLE, DATE, BOOLEAN, TIME, TIMESTAMP, DECIMAL, UUID;
     private String name;
+
     TypeID() {
       this.name = this.name().toLowerCase(Locale.ROOT);
     }
@@ -56,6 +60,9 @@ public interface Type extends Serializable {
     return false;
   }
 
+  /**
+   * The type of a schema for primitive fields.
+   */
   abstract class PrimitiveType implements Type {
     @Override
     public boolean isNestedType() {
@@ -84,6 +91,9 @@ public interface Type extends Serializable {
     }
   }
 
+  /**
+   * The type of a schema for nested fields.
+   */
   abstract class NestedType implements Type {
 
     @Override

@@ -54,7 +54,7 @@ public class HoodieMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K,
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
         fs,
-        tableSchema,
+        getWriterSchema(),
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
@@ -72,7 +72,7 @@ public class HoodieMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K,
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
         fs,
-        tableSchema,
+        getWriterSchema(),
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }

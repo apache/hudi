@@ -21,6 +21,9 @@ package org.apache.hudi.exception;
 
 import java.io.IOException;
 
+/**
+ * Exception for HoodieDebeziumAvroPayload.
+ */
 public class HoodieDebeziumAvroPayloadException extends IOException {
 
   public HoodieDebeziumAvroPayloadException(String msg) {

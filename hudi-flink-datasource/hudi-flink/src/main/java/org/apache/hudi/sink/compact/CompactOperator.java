@@ -32,7 +32,11 @@ import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.api.watermark.Watermark;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.table.runtime.operators.TableStreamOperator;
+import org.apache.flink.table.runtime.util.StreamRecordCollector;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,11 +45,12 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * Function to execute the actual compaction task assigned by the compaction plan task.
+ * Operator to execute the actual compaction task assigned by the compaction plan task.
  * In order to execute scalable, the input should shuffle by the compact event {@link CompactionPlanEvent}.
  */
-public class CompactFunction extends ProcessFunction<CompactionPlanEvent, CompactionCommitEvent> {
-  private static final Logger LOG = LoggerFactory.getLogger(CompactFunction.class);
+public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
+    implements OneInputStreamOperator<CompactionPlanEvent, CompactionCommitEvent> {
+  private static final Logger LOG = LoggerFactory.getLogger(CompactOperator.class);
 
   /**
    * Config options.
@@ -72,22 +77,34 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
    */
   private transient NonThrownExecutor executor;
 
-  public CompactFunction(Configuration conf) {
+  /**
+   * Output records collector.
+   */
+  private transient StreamRecordCollector<CompactionCommitEvent> collector;
+
+  public CompactOperator(Configuration conf) {
     this.conf = conf;
     this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
   }
 
   @Override
-  public void open(Configuration parameters) throws Exception {
+  public void open() throws Exception {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     if (this.asyncCompaction) {
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
+    this.collector = new StreamRecordCollector<>(output);
   }
 
   @Override
-  public void processElement(CompactionPlanEvent event, Context context, Collector<CompactionCommitEvent> collector) throws Exception {
+  public void processWatermark(Watermark mark) {
+    // no need to propagate the watermark
+  }
+
+  @Override
+  public void processElement(StreamRecord<CompactionPlanEvent> record) throws Exception {
+    final CompactionPlanEvent event = record.getValue();
     final String instantTime = event.getCompactionInstantTime();
     final CompactionOperation compactionOperation = event.getOperation();
     if (asyncCompaction) {

@@ -51,6 +51,9 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+/**
+ * Tests {@link TestHoodieTableFSViewWithClustering}.
+ */
 public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness {
 
   private static final String TEST_WRITE_TOKEN = "1-0-1";

@@ -16,33 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.testutils;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-
-import java.io.IOException;
+package org.apache.hudi.util
 
 /**
- * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests.
+ * Extension of the [[Iterator]] allowing for caching of the underlying record produced
+ * during iteration to provide for the idempotency of the [[hasNext]] invocation:
+ * meaning, that invoking [[hasNext]] multiple times consequently (w/o invoking [[next]]
+ * in between) will only make iterator step over a single element
+ *
+ * NOTE: [[hasNext]] and [[next]] are purposefully marked as final, requiring iteration
+ *       semantic to be implemented t/h overriding of a single [[doHasNext]] method
  */
-public class HoodieJavaClientTestBase extends HoodieJavaClientTestHarness {
+trait CachingIterator[T >: Null] extends Iterator[T] {
 
-  @BeforeEach
-  public void setUp() throws Exception {
-    initResources();
+  protected var nextRecord: T = _
+
+  protected def doHasNext: Boolean
+
+  override final def hasNext: Boolean = nextRecord != null || doHasNext
+
+  override final def next: T = {
+    val record = nextRecord
+    nextRecord = null
+    record
   }
 
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
-  }
-
-  // Functional Interfaces for passing lambda and Hoodie Write API contexts
-
-  @FunctionalInterface
-  public interface Function2<R, T1, T2> {
-
-    R apply(T1 v1, T2 v2) throws IOException;
-  }
 }

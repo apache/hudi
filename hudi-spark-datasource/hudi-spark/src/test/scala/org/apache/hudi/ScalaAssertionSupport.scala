@@ -31,7 +31,7 @@ trait ScalaAssertionSupport {
         return t.asInstanceOf[T]
       // scalastyle:on return
       case ot @ _ =>
-        fail(s"Expected exception of class $expectedExceptionClass, but ${ot.getClass} has been thrown")
+        fail(s"Expected exception of class $expectedExceptionClass, but ${ot.getClass} has been thrown: $ot\n${ot.getStackTrace.mkString("\n")}")
     }
 
     fail(s"Expected exception of class $expectedExceptionClass, but nothing has been thrown")

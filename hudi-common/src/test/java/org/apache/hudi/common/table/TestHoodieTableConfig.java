@@ -42,6 +42,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link HoodieTableConfig}.
+ */
 public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
   private FileSystem fs;

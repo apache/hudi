@@ -18,7 +18,15 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils$;
@@ -84,16 +92,6 @@ import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
 import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -146,8 +144,6 @@ import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
-import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
-import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -339,32 +335,32 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     static void assertAtleastNCompactionCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numCompactionCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numCompactionCommits = timeline.countInstants();
       assertTrue(minExpected <= numCompactionCommits, "Got=" + numCompactionCommits + ", exp >=" + minExpected);
     }
 
     static void assertAtleastNDeltaCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
 
     static void assertAtleastNCompactionCommitsAfterCommit(int minExpected, String lastSuccessfulCommit, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().findInstantsAfter(lastSuccessfulCommit).filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numCompactionCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numCompactionCommits = timeline.countInstants();
       assertTrue(minExpected <= numCompactionCommits, "Got=" + numCompactionCommits + ", exp >=" + minExpected);
     }
 
     static void assertAtleastNDeltaCommitsAfterCommit(int minExpected, String lastSuccessfulCommit, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.reloadActiveTimeline().getDeltaCommitTimeline().findInstantsAfter(lastSuccessfulCommit).filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
 
@@ -400,48 +396,48 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     static void assertAtLeastNCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
 
     static void assertAtLeastNReplaceCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
 
     static void assertPendingIndexCommit(String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterPendingIndexTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numIndexCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
     }
 
     static void assertCompletedIndexCommit(String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numIndexCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
     }
 
     static void assertNoReplaceCommits(String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertEquals(0, numDeltaCommits, "Got=" + numDeltaCommits + ", exp =" + 0);
     }
 
     static void assertAtLeastNReplaceRequests(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieTimeline timeline = meta.getActiveTimeline().filterPendingReplaceTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int) timeline.getInstants().count();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
   }
@@ -697,6 +693,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertCommitMetadata(metadata, tableBasePath, fs, totalCommits);
   }
 
+  // TODO add tests w/ disabled reconciliation
   @ParameterizedTest
   @MethodSource("schemaEvolArgs")
   public void testSchemaEvolution(String tableType, boolean useUserProvidedSchema, boolean useSchemaPostProcessor) throws Exception {
@@ -761,12 +758,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Schema tableSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields();
     assertNotNull(tableSchema);
 
-    Schema expectedSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source_evolved.avsc")));
-    if (!useUserProvidedSchema || useSchemaPostProcessor) {
-      expectedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
-          AvroConversionUtils.convertAvroSchemaToStructType(expectedSchema), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+    Schema expectedSchema;
+    if (!useSchemaPostProcessor) {
+      expectedSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source_evolved.avsc")));
+    } else {
+      expectedSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source_evolved_post_processed.avsc")));
     }
-    assertEquals(tableSchema, expectedSchema);
+    assertEquals(expectedSchema, tableSchema);
 
     // clean up and reinit
     UtilitiesTestBase.Helpers.deleteFileFromDfs(FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration()), basePath + "/" + PROPS_FILENAME_TEST_SOURCE);
@@ -937,7 +935,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieClusteringJob clusteringJob = initialHoodieClusteringJob(tableBasePath, null, false, "schedule");
     clusteringJob.cluster(0);
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
-    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants().collect(Collectors.toList());
+    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
     HoodieInstant clusteringRequest = hoodieClusteringInstants.get(0);
     meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
 
@@ -1035,7 +1033,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     ds.sync();
 
     // Step 5 : Make sure that firstReplaceHoodieInstant is archived.
-    long count = meta.reloadActiveTimeline().getCompletedReplaceTimeline().getInstants().filter(instant -> firstReplaceHoodieInstant.get().equals(instant)).count();
+    long count = meta.reloadActiveTimeline().getCompletedReplaceTimeline().getInstantsAsStream().filter(instant -> firstReplaceHoodieInstant.get().equals(instant)).count();
     assertEquals(0, count);
 
     // Step 6 : All the replaced files in firstReplaceHoodieInstant should be deleted through sync/async cleaner.
@@ -1283,7 +1281,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // convert clustering request into inflight, Simulate the last clustering failed scenario
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
-    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants().collect(Collectors.toList());
+    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
     HoodieInstant clusteringRequest = hoodieClusteringInstants.get(0);
     HoodieInstant hoodieInflightInstant = meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
 
@@ -1755,14 +1753,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     int parquetRecords = 10;
     prepareParquetDFSFiles(parquetRecords, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
 
-    prepareParquetDFSSource(true, false, "source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
+    prepareParquetDFSSource(true, true, "source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "driver");
     // delta streamer w/ parquet source
     String tableBasePath = basePath + "/test_dfs_to_kafka" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
             Collections.emptyList(), PROPS_FILENAME_TEST_PARQUET, false,
-            false, 100000, false, null, null, "timestamp", null), jsc);
+            true, 100000, false, null, null, "timestamp", null), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(parquetRecords, tableBasePath, sqlContext);
     deltaStreamer.shutdownGracefully();

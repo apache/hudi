@@ -16,14 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util.queue;
+package org.apache.hudi.common.util.collection;
 
 import java.util.Iterator;
+import java.util.function.Function;
 
-/**
- * IteratorBasedHoodieMessageQueue implements HoodieMessageQueue with Iterable
- */
-public abstract class HoodieIterableMessageQueue<I, O> implements HoodieMessageQueue<I, O>, Iterable<O> {
+// TODO java-docs
+public class MappingIterator<I, O> implements Iterator<O> {
 
-  public abstract Iterator<O> iterator();
+  protected final Iterator<I> source;
+  private final Function<I, O> mapper;
+
+  public MappingIterator(Iterator<I> source, Function<I, O> mapper) {
+    this.source = source;
+    this.mapper = mapper;
+  }
+
+  @Override
+  public boolean hasNext() {
+    return source.hasNext();
+  }
+
+  @Override
+  public O next() {
+    return mapper.apply(source.next());
+  }
 }

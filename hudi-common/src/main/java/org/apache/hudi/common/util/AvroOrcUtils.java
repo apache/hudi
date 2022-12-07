@@ -18,24 +18,14 @@
 
 package org.apache.hudi.common.util;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.sql.Timestamp;
-import java.util.Base64;
-import java.util.Date;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericData;
-import java.nio.charset.StandardCharsets;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData.StringType;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
@@ -50,8 +40,20 @@ import org.apache.hadoop.hive.ql.exec.vector.StructColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.TimestampColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.UnionColumnVector;
 import org.apache.hadoop.hive.serde2.io.DateWritable;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.orc.TypeDescription;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.avro.JsonProperties.NULL_VALUE;
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;

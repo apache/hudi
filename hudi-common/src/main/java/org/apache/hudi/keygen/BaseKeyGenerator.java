@@ -17,14 +17,19 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import org.apache.avro.generic.GenericRecord;
+
 import java.util.List;
 
+/**
+ * Base abstract class to extend for {@link KeyGenerator} with default logic of taking
+ * partitioning and timestamp configs.
+ */
 public abstract class BaseKeyGenerator extends KeyGenerator {
 
   protected List<String> recordKeyFields;

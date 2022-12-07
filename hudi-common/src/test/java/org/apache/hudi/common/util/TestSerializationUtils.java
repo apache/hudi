@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.avro.util.Utf8;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+
+import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -92,6 +93,9 @@ public class TestSerializationUtils {
     }
   }
 
+  /**
+   * A class for non-serializable.
+   */
   private static class NonSerializableClass {
     private String id;
     private String name;

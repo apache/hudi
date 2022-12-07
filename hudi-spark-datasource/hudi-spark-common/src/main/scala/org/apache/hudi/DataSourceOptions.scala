@@ -96,6 +96,12 @@ object DataSourceReadOptions {
     .withDocumentation("Enables use of the spark file index implementation for Hudi, "
       + "that speeds up listing of large tables.")
 
+  val START_OFFSET: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.streaming.startOffset")
+    .defaultValue("earliest")
+    .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
+      "specified start instant time")
+
   val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()
@@ -434,6 +440,17 @@ object DataSourceWriteOptions {
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
   val RECONCILE_SCHEMA: ConfigProperty[Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
+
+  // NOTE: This is an internal config that is not exposed to the public
+  private[hudi] val CANONICALIZE_SCHEMA: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.datasource.write.schema.canonicalize")
+      .defaultValue(true)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Controls whether incoming batch's schema's nullability constraints should be canonicalized "
+        + "relative to the table's schema. For ex, in case field A is marked as null-able in table's schema, but is marked "
+        + "as non-null in the incoming batch, w/o canonicalization such write might fail as we won't be able to read existing "
+        + "null records from the table (for updating, for ex). Note, that this config has only effect when "
+        + "'hoodie.datasource.write.reconcile.schema' is set to false.")
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes

@@ -43,6 +43,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/**
+ * Tests {@link PostgresDebeziumAvroPayload}.
+ */
 public class TestPostgresDebeziumAvroPayload {
 
   private static final String KEY_FIELD_NAME = "Key";

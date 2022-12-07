@@ -520,7 +520,7 @@ public class HoodieTableMetaClient implements Serializable {
    * @return {@code true} if any commits are found, else {@code false}.
    */
   public boolean isTimelineNonEmpty() {
-    return getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toList()).size() > 0;
+    return !getCommitsTimeline().filterCompletedInstants().empty();
   }
 
   /**
@@ -734,6 +734,9 @@ public class HoodieTableMetaClient implements Serializable {
     return new PropertyBuilder();
   }
 
+  /**
+   * Builder for {@link Properties}.
+   */
   public static class PropertyBuilder {
 
     private HoodieTableType tableType;
@@ -929,9 +932,9 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
-        .setTableName(metaClient.getTableConfig().getTableName())
-        .setArchiveLogFolder(metaClient.getArchivePath())
-        .setPayloadClassName(metaClient.getTableConfig().getPayloadClass());
+          .setTableName(metaClient.getTableConfig().getTableName())
+          .setArchiveLogFolder(metaClient.getArchivePath())
+          .setPayloadClassName(metaClient.getTableConfig().getPayloadClass());
     }
 
     public PropertyBuilder fromProperties(Properties properties) {
