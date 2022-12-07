@@ -46,7 +46,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
-import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
@@ -188,6 +187,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
             .map(listStr -> listStr.split(","));
 
+    HoodieTableConfig tableConfig = getHoodieTable().getMetaClient().getTableConfig();
+
     return orderByColumnsOpt.map(orderByColumns -> {
       HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
       switch (layoutOptStrategy) {
@@ -199,9 +200,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
                   getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema));
         case LINEAR:
           return isRowPartitioner
-              ? new RowCustomColumnsSortPartitioner(orderByColumns)
+              ? new RowCustomColumnsSortPartitioner(orderByColumns, tableConfig)
               : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
-                  getWriteConfig().isConsistentLogicalTimestampEnabled(), getHoodieTable().getMetaClient().getTableConfig());
+                  getWriteConfig().isConsistentLogicalTimestampEnabled(), tableConfig);
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
@@ -209,7 +210,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         .orElseGet(() ->
             BulkInsertInternalPartitionerFactory.get(
                 getWriteConfig().getBulkInsertSortMode(),
-                getHoodieTable().getMetaClient().getTableConfig()));
+                tableConfig));
   }
 
   /**

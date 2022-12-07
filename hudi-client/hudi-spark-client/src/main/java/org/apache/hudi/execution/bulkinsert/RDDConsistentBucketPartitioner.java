@@ -235,8 +235,8 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
     final String[] sortColumns = sortColumnNames;
     final SerializableSchema schema = new SerializableSchema(HoodieAvroUtils.addMetadataFields((new Schema.Parser().parse(table.getConfig().getSchema()))));
     Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
-      Object obj1 = HoodieAvroUtils.getRecordColumnValues(t1, sortColumns, schema, consistentLogicalTimestampEnabled);
-      Object obj2 = HoodieAvroUtils.getRecordColumnValues(t2, sortColumns, schema, consistentLogicalTimestampEnabled);
+      Object obj1 = HoodieAvroUtils.getRecordColumnValues(t1, sortColumns, schema.get(), consistentLogicalTimestampEnabled);
+      Object obj2 = HoodieAvroUtils.getRecordColumnValues(t2, sortColumns, schema.get(), consistentLogicalTimestampEnabled);
       return ((Comparable) obj1).compareTo(obj2);
     };
 

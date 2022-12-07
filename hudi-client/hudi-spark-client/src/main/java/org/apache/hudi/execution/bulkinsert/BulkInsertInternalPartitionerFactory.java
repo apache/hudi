@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -35,7 +36,7 @@ public abstract class BulkInsertInternalPartitionerFactory {
         && config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)) {
       return new RDDConsistentBucketPartitioner(table);
     }
-    return get(config.getBulkInsertSortMode());
+    return get(config.getBulkInsertSortMode(), table.getMetaClient().getTableConfig());
   }
 
   public static BulkInsertPartitioner get(BulkInsertSortMode bulkInsertMode, HoodieTableConfig tableConfig) {

@@ -31,9 +31,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -68,15 +65,6 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
 
     return jsc.parallelize(isPartitionedTable ? rawRecordsFirstBatch : stripPartitionPath(rawRecordsFirstBatch), 1)
         .union(jsc.parallelize(isPartitionedTable ? rawRecordsSecondBatch : stripPartitionPath(rawRecordsSecondBatch), 1));
-  }
-
-  public static Map<String, Long> generateExpectedPartitionNumRecords(JavaRDD<HoodieRecord> records) {
-    return records.map(record -> record.getPartitionPath()).countByValue();
-  }
-
-  private static JavaRDD<HoodieRecord> generateTripleTestRecordsForBulkInsert(JavaSparkContext jsc) {
-    return generateTestRecordsForBulkInsert(jsc).union(generateTestRecordsForBulkInsert(jsc))
-        .union(generateTestRecordsForBulkInsert(jsc));
   }
 
   private static Stream<Arguments> configParams() {
@@ -145,7 +133,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
   public void testBulkInsertInternalPartitioner(BulkInsertSortMode sortMode,
                                                 boolean isPartitionedTable,
                                                 boolean isGloballySorted,
-                                                boolean isLocallySorted)  {
+                                                boolean isLocallySorted) throws Exception {
     HoodieTableConfig tableConfig = genTableConfig(isPartitionedTable);
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc, isPartitionedTable);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc, isPartitionedTable);
@@ -158,7 +146,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
 
   @ParameterizedTest
   @ValueSource(booleans = { true, false })
-  public void testCustomColumnSortPartitioner(boolean isPartitionedTable) {
+  public void testCustomColumnSortPartitioner(boolean isPartitionedTable) throws Exception {
     String sortColumnString = "rider";
     String[] sortColumns = sortColumnString.split(",");
 
