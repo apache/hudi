@@ -124,15 +124,15 @@ class ExpressionPayload(@transient record: GenericRecord,
 
     // Get the Evaluator for each condition and update assignments.
     val updateConditionAndAssignments =
-      getEvaluator(updateConditionAndAssignmentsText.toString, inputRecord.avro.getSchema)
+      getEvaluator(updateConditionAndAssignmentsText.toString, inputRecord.asAvro.getSchema)
 
     for ((conditionEvaluator, assignmentEvaluator) <- updateConditionAndAssignments
          if resultRecordOpt == null) {
-      val conditionVal = conditionEvaluator.eval(inputRecord.row).get(0, BooleanType).asInstanceOf[Boolean]
+      val conditionVal = conditionEvaluator.eval(inputRecord.asRow).get(0, BooleanType).asInstanceOf[Boolean]
       // If the update condition matched  then execute assignment expression
       // to compute final record to update. We will return the first matched record.
       if (conditionVal) {
-        val resultingRow = assignmentEvaluator.eval(inputRecord.row)
+        val resultingRow = assignmentEvaluator.eval(inputRecord.asRow)
         lazy val resultingAvroRecord = getAvroSerializerFor(writeSchema)
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
@@ -151,8 +151,8 @@ class ExpressionPayload(@transient record: GenericRecord,
       // Process delete
       val deleteConditionText = properties.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
       if (deleteConditionText != null) {
-        val (deleteConditionEvaluator, _) = getEvaluator(deleteConditionText.toString, inputRecord.avro.getSchema).head
-        val deleteConditionResult = deleteConditionEvaluator.eval(inputRecord.row).get(0, BooleanType).asInstanceOf[Boolean]
+        val (deleteConditionEvaluator, _) = getEvaluator(deleteConditionText.toString, inputRecord.asAvro.getSchema).head
+        val deleteConditionResult = deleteConditionEvaluator.eval(inputRecord.asRow).get(0, BooleanType).asInstanceOf[Boolean]
         if (deleteConditionResult) {
           resultRecordOpt = HOption.empty()
         }
@@ -167,14 +167,22 @@ class ExpressionPayload(@transient record: GenericRecord,
     }
   }
 
-  // TODO elaborate on laziness
-  case class ConvertibleRecord(avro: GenericRecord) extends Logging {
-    lazy val row: InternalRow = getAvroDeserializerFor(avro.getSchema).deserialize(avro) match {
+  /**
+   * Holding wrapper record providing for lazy conversion into Catalyst's [[InternalRow]] from Avro
+   *
+   * NOTE: This wrapper is necessary to avoid converting Avro record into [[InternalRow]]
+   *       multiple times for different expression evaluation invocations
+   */
+  case class ConvertibleRecord(private val avro: GenericRecord) extends Logging {
+    private lazy val row: InternalRow = getAvroDeserializerFor(avro.getSchema).deserialize(avro) match {
       case Some(row) => row.asInstanceOf[InternalRow]
       case None =>
         logError(s"Failed to deserialize Avro record `${avro.toString}` as Catalyst row")
         throw new HoodieException("Failed to deserialize Avro record as Catalyst row")
     }
+
+    def asAvro = avro
+    def asRow = row
   }
 
   /**
@@ -191,15 +199,15 @@ class ExpressionPayload(@transient record: GenericRecord,
       properties.get(ExpressionPayload.PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS)
     // Get the evaluator for each condition and insert assignment.
     val insertConditionAndAssignments =
-      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText.toString, inputRecord.avro.getSchema)
+      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText.toString, inputRecord.asAvro.getSchema)
     var resultRecordOpt: HOption[IndexedRecord] = null
     for ((conditionEvaluator, assignmentEvaluator) <- insertConditionAndAssignments
          if resultRecordOpt == null) {
-      val conditionVal = conditionEvaluator.eval(inputRecord.row).get(0, BooleanType).asInstanceOf[Boolean]
+      val conditionVal = conditionEvaluator.eval(inputRecord.asRow).get(0, BooleanType).asInstanceOf[Boolean]
       // If matched the insert condition then execute the assignment expressions to compute the
       // result record. We will return the first matched record.
       if (conditionVal) {
-        val resultingRow = assignmentEvaluator.eval(inputRecord.row)
+        val resultingRow = assignmentEvaluator.eval(inputRecord.asRow)
         val resultingAvroRecord = getAvroSerializerFor(writeSchema)
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
@@ -220,7 +228,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     init(properties)
 
     val incomingRecord = ConvertibleRecord(bytesToAvro(recordBytes, recordSchema))
-    if (isDeleteRecord(incomingRecord.avro)) {
+    if (isDeleteRecord(incomingRecord.asAvro)) {
       HOption.empty[IndexedRecord]()
     } else if (isMORTable(properties)) {
       // For the MOR table, both the matched and not-matched record will step into the getInsertValue() method.
