@@ -55,7 +55,7 @@ jobs:
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.3"
-            flinkProfile: "flink1.14"
+            flinkProfile: "flink1.15"
             sparkArchive: ""
             skipBundleValidation: "false"
             buildOnly: "false"
