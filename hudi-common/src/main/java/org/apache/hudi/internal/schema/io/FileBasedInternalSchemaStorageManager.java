@@ -40,6 +40,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -101,7 +102,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
           try {
             Path residualFile = new Path(getMetaClient().getSchemaFolderName(), f);
             fs.delete(residualFile);
-            LOG.info(String.format("clean residual schema file: %s", residualFile));
+            LOG.debug(String.format("clean residual schema file: %s", residualFile));
           } catch (IOException o) {
             throw new HoodieException(o);
           }
@@ -122,9 +123,9 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
         for (int i = 0; i < validateSchemaFiles.size(); i++) {
           Path cleanFile = new Path(getMetaClient().getSchemaFolderName(), validateSchemaFiles.get(i));
           fs.delete(cleanFile);
-          LOG.info(String.format("clean schema file: %s", cleanFile));
+          LOG.debug(String.format("clean schema file: %s", cleanFile));
         }
-        LOG.info(String.format("finish clean old history schema files: %s", String.join(",", validateSchemaFiles)));
+        LOG.debug(String.format("finish clean old history schema files: %s", String.join(",", validateSchemaFiles)));
       }
     } catch (IOException e) {
       throw new HoodieException(e);
@@ -138,31 +139,14 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   @Override
   public String getHistorySchemaStr() {
-    try {
-      FileSystem fs = FSUtils.getFs(baseSchemaPath.toString(), conf);
-      if (fs.exists(baseSchemaPath)) {
-        List<String> historySchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath))
-            .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
-            .map(file -> file.getPath().getName()).sorted().collect(Collectors.toList());
-        if (!historySchemaFiles.isEmpty()) {
-          // no need to fetch the latest historySchemaFile, since we will get latest table schema from commit/deltacommit file.
-          // this function will be called, only when we cannot fetch schema from commit file(eg: archived)
-          String schemaFile = historySchemaFiles.get(historySchemaFiles.size() > 1 ? historySchemaFiles.size() - 2 : historySchemaFiles.size() - 1);
-          return readSchemaFromFile(fs, new Path(baseSchemaPath, schemaFile));
-        }
-      }
-    } catch (IOException io) {
-      throw new HoodieException(io);
-    }
-    LOG.error("failed to read history schema");
-    return "";
+    return getHistorySchemaStrByGivenValidCommits(Collections.EMPTY_LIST);
   }
 
   private String readSchemaFromFile(FileSystem fs, Path filePath) throws HoodieIOException {
     byte[] content;
     try (FSDataInputStream is = fs.open(filePath)) {
       content = FileIOUtils.readAsByteArray(is);
-      LOG.info(String.format("read history schema success from file : %s", filePath));
+      LOG.debug(String.format("read history schema success from file : %s", filePath));
       return new String(content, StandardCharsets.UTF_8);
     } catch (IOException e) {
       throw new HoodieIOException("Could not read history schema from " + filePath, e);
@@ -185,8 +169,8 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     } catch (IOException io) {
       throw new HoodieException(io);
     }
-    LOG.error(String.format("unable to verify the validity of historical schema files by given commits: %s", String.join(",", validCommits)));
-    return getHistorySchemaStr();
+    LOG.warn(String.format("unable to verify the validity of historical schema files by given commits: %s", String.join(",", validCommits)));
+    return "";
   }
 
   @Override

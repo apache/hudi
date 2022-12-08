@@ -48,7 +48,6 @@ import org.apache.log4j.Logger;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -249,7 +248,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
             .getActiveTimeline()
             .filterCompletedAndCompactionInstants()
             .getInstantsAsStream()
-            .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed())
+            .sorted(HoodieInstant.COMPARATOR.reversed())
             .skip(versionsRetained > 0 ? versionsRetained : 1).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
         fss.cleanOldFiles(validCommits);
       } catch (Exception e) {

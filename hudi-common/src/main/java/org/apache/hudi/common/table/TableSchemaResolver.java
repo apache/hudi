@@ -67,7 +67,6 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -468,7 +467,7 @@ public class TableSchemaResolver {
   public Option<String> getTableHistorySchemaStrFromCommitMetadata() {
     // now we only support FileBaseInternalSchemaManager
     FileBasedInternalSchemaStorageManager manager = new FileBasedInternalSchemaStorageManager(metaClient);
-    String result = manager.getHistorySchemaStrByGivenValidCommits(Collections.emptyList());
+    String result = manager.getHistorySchemaStr();
     return result.isEmpty() ? Option.empty() : Option.of(result);
   }
 
