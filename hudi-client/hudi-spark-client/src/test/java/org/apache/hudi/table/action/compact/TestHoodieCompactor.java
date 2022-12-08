@@ -24,8 +24,12 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -43,10 +48,14 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -208,8 +217,74 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     }
   }
 
+  @Test
+  public void compactOnDropPartitionFieldsCase() {
+    String partitionPath ="001";
+    // insert records that partition fields  was removed.
+    HoodieWriteConfig config = getConfigBuilder()
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
+    config.setValue(HoodieTableConfig.DROP_PARTITION_COLUMNS.key(),"true");
+    config.setValue(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPath);
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
+      String newCommitTime = "100";
+      writeClient.startCommitWithTime(newCommitTime);
+      String recordSchema = "{\"type\":\"record\",\"name\":\"records\",\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"\"},{\"name\":\"ts\",\"type\":\"long\",\"doc\":\"\"},{\"name\":\"score\",\"type\":\"int\",\"doc\":\"\"}]}";
+      config.setSchema(recordSchema);
+
+      List<HoodieRecord> records = generateInsertsWithoutPartitionFields(recordSchema,partitionPath);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      writeClient.insert(recordsRDD, newCommitTime).collect();
+
+      // Update records that partition fields  was removed
+      HoodieTable table = HoodieSparkTable.create(config, context);
+      newCommitTime = "101";
+
+      List<HoodieRecord> updatedRecords = generateUpdatesWithoutPartitionFields(recordSchema,partitionPath);
+      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+      HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+      JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
+
+      writeClient.startCommitWithTime(newCommitTime);
+      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
+      metaClient.reloadActiveTimeline();
+
+      // Do a compaction
+      //original schema with partition fields
+      String originalSchema =  "{\"type\":\"record\",\"name\":\"records\",\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"\"},{\"name\":\"partitionpath\",\"type\":\"string\",\"doc\":\"\"},{\"name\":\"ts\",\"type\":\"long\",\"doc\":\"\"},{\"name\":\"score\",\"type\":\"int\",\"doc\":\"\"}]}";
+      config.setSchema(originalSchema);
+      table = HoodieSparkTable.create(config, context);
+      String compactionInstantTime = "102";
+      table.scheduleCompaction(context, compactionInstantTime, Option.empty());
+      table.getMetaClient().reloadActiveTimeline();
+      table.compact(context, compactionInstantTime);
+    }
+  }
+
   @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
+  }
+
+  private List<HoodieRecord> generateInsertsWithoutPartitionFields(String recordSchema,String partitionPath){
+    Schema schema = new Schema.Parser().parse(recordSchema);
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("ts", 0L);
+    record.put("score", 10);
+    Option<GenericRecord> recordOption = Option.of(record);
+    return CollectionUtils.createImmutableList(new HoodieAvroRecord(new HoodieKey("1",partitionPath),
+            new HoodieAvroPayload(recordOption)));
+  }
+
+  private List<HoodieRecord> generateUpdatesWithoutPartitionFields(String recordSchema,String partitionPath){
+    Schema schema = new Schema.Parser().parse(recordSchema);
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("ts", 1L);
+    record.put("score", 20);
+    Option<GenericRecord> recordOption = Option.of(record);
+    return CollectionUtils.createImmutableList(new HoodieAvroRecord(new HoodieKey("1",partitionPath),
+            new HoodieAvroPayload(recordOption)));
   }
 }
