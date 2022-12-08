@@ -18,13 +18,16 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, TABLE_NAME}
+import org.apache.hudi.QuickstartUtils.{DataGenerator, convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.functions.{arrays_zip, col}
+import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
+import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 
 import scala.collection.JavaConversions._
@@ -511,7 +514,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test schema auto evolution") {
+  test("Test schema auto evolution complex") {
     withTempDir { tmp =>
       Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
         val tableName = generateTableName
@@ -534,7 +537,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
             DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "timestamp",
             "hoodie.schema.on.read.enable" -> "true",
-            "hoodie.datasource.write.reconcile.schema" -> "true",
             DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY -> "true"
           )
 
@@ -546,7 +548,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             .save(tablePath)
 
           val oldView = spark.read.format("hudi").load(tablePath)
-          oldView.show(false)
+          oldView.show(5, false)
 
           val records2 = RawTripTestPayload.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).toList
           val inputD2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
@@ -566,6 +568,102 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           assertResult((false, false, false, true, true))(checkResult(0))
           checkAnswer(spark.sql(s"select fare,height from newView where _row_key='$checkRowKey'").collect())(
             Seq(null, null)
+          )
+        }
+      }
+    }
+  }
+
+  test("Test schema auto evolution") {
+    withTempDir { tmp =>
+      Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+        // for complex schema.
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          val dataGen = new DataGenerator
+          val inserts = convertToStringList(dataGen.generateInserts(10))
+          val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+          df.write.format("hudi").
+            options(getQuickstartWriteConfigs).
+            option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, tableType).
+            option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+            option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+            option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+            option("hoodie.schema.on.read.enable","true").
+            option(TABLE_NAME.key(), tableName).
+            option("hoodie.table.name", tableName).
+            mode("overwrite").
+            save(tablePath)
+
+          val updates = convertToStringList(dataGen.generateUpdates(10))
+          // type change: fare (double -> String)
+          // add new column and drop a column
+          val dfUpdate = spark.read.json(spark.sparkContext.parallelize(updates, 2))
+            .withColumn("fare", expr("cast(fare as string)"))
+            .withColumn("addColumn", lit("new"))
+          dfUpdate.drop("begin_lat").write.format("hudi").
+            options(getQuickstartWriteConfigs).
+            option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, tableType).
+            option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+            option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+            option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+            option("hoodie.schema.on.read.enable","true").
+            option("hoodie.datasource.write.reconcile.schema","true").
+            option(TABLE_NAME.key(), tableName).
+            option("hoodie.table.name", tableName).
+            mode("append").
+            save(tablePath)
+          spark.sql("set hoodie.schema.on.read.enable=true")
+
+          val snapshotDF = spark.read.format("hudi").load(tablePath)
+
+          assertResult(StringType)(snapshotDF.schema.fields.filter(_.name == "fare").head.dataType)
+          assertResult("addColumn")(snapshotDF.schema.fields.last.name)
+          val checkRowKey = dfUpdate.select("fare").collectAsList().map(_.getString(0)).get(0)
+          snapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
+          checkAnswer(spark.sql(s"select fare, addColumn from  hudi_trips_snapshot where fare = ${checkRowKey}").collect())(
+            Seq(checkRowKey, "new")
+          )
+
+          spark.sql(s"select * from  hudi_trips_snapshot").show(false)
+          //  test insert_over_write  + update again
+          val overwrite = convertToStringList(dataGen.generateInserts(10))
+          val dfOverWrite = spark.
+            read.json(spark.sparkContext.parallelize(overwrite, 2)).
+            filter("partitionpath = 'americas/united_states/san_francisco'")
+            .withColumn("fare", expr("cast(fare as string)")) // fare now in table is string type, we forbid convert string to double.
+          dfOverWrite.write.format("hudi").
+            options(getQuickstartWriteConfigs).
+            option("hoodie.datasource.write.operation","insert_overwrite").
+            option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+            option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+            option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+            option("hoodie.schema.on.read.enable","true").
+            option("hoodie.datasource.write.reconcile.schema","true").
+            option(TABLE_NAME.key(), tableName).
+            option("hoodie.table.name", tableName).
+            mode("append").
+            save(tablePath)
+          spark.read.format("hudi").load(tablePath).show(false)
+
+          val updatesAgain = convertToStringList(dataGen.generateUpdates(10))
+          val dfAgain = spark.read.json(spark.sparkContext.parallelize(updatesAgain, 2)).withColumn("fare", expr("cast(fare as string)"))
+          dfAgain.write.format("hudi").
+            options(getQuickstartWriteConfigs).
+            option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+            option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+            option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+            option("hoodie.schema.on.read.enable","true").
+            option("hoodie.datasource.write.reconcile.schema","true").
+            option(TABLE_NAME.key(), tableName).
+            option("hoodie.table.name", tableName).
+            mode("append").
+            save(tablePath)
+          spark.read.format("hudi").load(tablePath).createOrReplaceTempView("hudi_trips_snapshot1")
+          val checkKey = dfAgain.select("fare").collectAsList().map(_.getString(0)).get(0)
+          checkAnswer(spark.sql(s"select fare, addColumn from  hudi_trips_snapshot1 where fare = ${checkKey}").collect())(
+            Seq(checkKey, null)
           )
         }
       }

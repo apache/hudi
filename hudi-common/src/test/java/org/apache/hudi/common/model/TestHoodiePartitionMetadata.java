@@ -39,6 +39,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link HoodiePartitionMetadata}.
+ */
 public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
 
   FileSystem fs;

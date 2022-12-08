@@ -18,12 +18,12 @@
 
 package org.apache.hudi.common.util.queue;
 
-import java.io.Closeable;
-
 /**
  * HoodieExecutor which orchestrates concurrent producers and consumers communicating through a bounded in message queue.
+ *
+ * TODO cleanup unused generics
  */
-public interface HoodieExecutor<I, O, E> extends Closeable {
+public interface HoodieExecutor<I, O, E>  {
 
   /**
    * Main API to
@@ -33,12 +33,13 @@ public interface HoodieExecutor<I, O, E> extends Closeable {
    */
   E execute();
 
-  boolean isRemaining();
-
   /**
-   * Shutdown all the consumers and producers.
+   * Shuts executor down immediately, cleaning up any allocated resources
    */
   void shutdownNow();
 
+  /**
+   * Allows to gracefully await the termination of the executor
+   */
   boolean awaitTermination();
 }

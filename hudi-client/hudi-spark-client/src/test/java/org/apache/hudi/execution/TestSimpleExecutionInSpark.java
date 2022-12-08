@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.queue.IteratorBasedQueueConsumer;
+import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.common.util.queue.SimpleHoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -77,19 +77,18 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getDisruptorWriteBufferSize()).thenReturn(Option.of(8));
-    IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
-
+    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
           private int count = 0;
 
           @Override
-          public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) throws Exception {
             consumedRecords.add(record.record);
             count++;
           }
 
           @Override
-          protected Integer getResult() {
+          public Integer finish() {
             return count;
           }
         };
@@ -103,7 +102,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
       // It should buffer and write 100 records
       assertEquals(128, result);
       // There should be no remaining records in the buffer
-      assertFalse(exec.isRemaining());
+      assertFalse(exec.isRunning());
 
       // collect all records and assert that consumed records are identical to produced ones
       // assert there's no tampering, and that the ordering is preserved
@@ -126,18 +125,17 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getDisruptorWriteBufferSize()).thenReturn(Option.of(1024));
-    IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new IteratorBasedQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+          int count = 0;
 
-      int count = 0;
+          @Override
+          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) throws Exception {
+            count++;
+          }
 
-      @Override
-      public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
-        count++;
-      }
-
-      @Override
-      protected Integer getResult() {
+          @Override
+          public Integer finish() {
             return count;
           }
     };

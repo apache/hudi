@@ -18,26 +18,28 @@
 
 package org.apache.hudi.common.util.queue;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 /**
  * Wrapper of input records iterator
  */
-public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<I, O> {
+public class SimpleHoodieMessageQueue<I, O> implements HoodieMessageQueue<I, O>, Iterable<O> {
 
-  private static final Logger LOG = LogManager.getLogger(SimpleHoodieQueueIterable.class);
+  private static final Logger LOG = LogManager.getLogger(SimpleHoodieMessageQueue.class);
   private final Iterator<I> inputItr;
   private final InnerIterator innerIterator;
   private final Function<I, O> transformFunction;
   private final AtomicBoolean isWriteDone = new AtomicBoolean(false);
+  private final AtomicLong recordNumber = new AtomicLong(0);
 
-  public SimpleHoodieQueueIterable(Iterator<I> inputItr, Function<I, O> transformFunction) {
+  public SimpleHoodieMessageQueue(Iterator<I> inputItr, Function<I, O> transformFunction) {
     this.inputItr = inputItr;
     this.transformFunction = transformFunction;
     this.innerIterator = new InnerIterator();
@@ -45,19 +47,43 @@ public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<
 
   @Override
   public Iterator<O> iterator() {
-    return innerIterator;
+    return this.innerIterator;
   }
 
   @Override
-  public void close() throws IOException {
-    while (!isWriteDone.get()) {
-      isWriteDone.compareAndSet(false, true);
-    }
+  public long size() {
+    return this.recordNumber.get();
   }
 
   @Override
   public void insertRecord(I t) throws Exception {
-    // no action is needed here.
+    // no-op
+  }
+
+  @Override
+  public Option<O> readNextRecord() {
+    // no-op
+    return null;
+  }
+
+  @Override
+  public void markAsFailed(Throwable e) {
+    // no-op
+  }
+
+  @Override
+  public boolean isEmpty() {
+    return !innerIterator.hasNext();
+  }
+
+  @Override
+  public void seal() {
+    isWriteDone.set(true);
+  }
+
+  @Override
+  public void close() {
+    // no-op
   }
 
   /**
@@ -72,10 +98,12 @@ public class SimpleHoodieQueueIterable<I, O> extends HoodieIterableMessageQueue<
 
     @Override
     public O next() {
+
       if (isWriteDone.get()) {
         throw new IllegalStateException("Queue closed for getting new entries");
       }
 
+      recordNumber.incrementAndGet();
       return transformFunction.apply(inputItr.next());
     }
   }

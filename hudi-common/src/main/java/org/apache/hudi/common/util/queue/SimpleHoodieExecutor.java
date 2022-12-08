@@ -20,14 +20,11 @@ package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 /**
@@ -38,79 +35,28 @@ import java.util.function.Function;
  * Advantages: there is no need for additional memory and cpu resources due to lock or multithreading.
  * Disadvantages: lost some benefits such as speed limit. And maybe lower throughput.
  */
-public class SimpleHoodieExecutor<I, O, E> extends HoodieExecutorBase<I, O, E> {
+public class SimpleHoodieExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(SimpleHoodieExecutor.class);
-  private final HoodieMessageQueue<I, O> queue;
 
-  public SimpleHoodieExecutor(final Iterator<I> inputItr, IteratorBasedQueueConsumer<O, E> consumer,
+  public SimpleHoodieExecutor(final Iterator<I> inputItr, HoodieConsumer<O, E> consumer,
                               Function<I, O> transformFunction, Runnable preExecuteRunnable) {
-    super(new ArrayList<>(), Option.of(consumer), preExecuteRunnable);
-    this.queue = new SimpleHoodieQueueIterable<>(inputItr, transformFunction);
-  }
-
-  /**
-   * No producer is needed here.
-   */
-  @Override
-  public CompletableFuture<Void> startProducers() {
-    return CompletableFuture.completedFuture(null);
-  }
-
-  /**
-   * Start only consumer. And consume from SimpleHoodieQueueIterable which is a wrapper of input records iterator directly
-   */
-  @Override
-  protected CompletableFuture<E> startConsumer() {
-    return consumer.map(consumer -> {
-      return CompletableFuture.supplyAsync(() -> {
-        LOG.info("starting consumer thread");
-        try {
-          E result = consumer.consume(queue);
-          LOG.info("Queue Consumption is done; notifying producer threads");
-          return result;
-        } catch (Exception e) {
-          LOG.error("error consuming records", e);
-          throw new HoodieException(e);
-        }
-      }, consumerExecutorService);
-    }).orElse(CompletableFuture.completedFuture(null));
+    super(new ArrayList<>(), Option.of(consumer), new SimpleHoodieMessageQueue<>(inputItr, transformFunction), preExecuteRunnable);
   }
 
   @Override
-  public boolean isRemaining() {
-    return getQueue().iterator().hasNext();
-  }
-
-  @Override
-  protected void postAction() {
-    super.close();
+  protected void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
+    LOG.info("Starting consumer, consuming records from the queue");
     try {
-      queue.close();
-    } catch (IOException e) {
-      throw new HoodieIOException("Catch Exception when closing queue", e);
+      Iterator<O> it = ((SimpleHoodieMessageQueue<I, O>) queue).iterator();
+      while (it.hasNext()) {
+        consumer.consume(it.next());
+      }
+      LOG.info("All records from the queue have been consumed");
+    } catch (Exception e) {
+      LOG.error("Error consuming records", e);
+      queue.seal();
+      throw new HoodieException(e);
     }
-  }
-
-  @Override
-  public void shutdownNow() {
-    producerExecutorService.shutdownNow();
-    consumerExecutorService.shutdownNow();
-    // close queue to force producer stop
-    try {
-      queue.close();
-    } catch (IOException e) {
-      throw new HoodieIOException("catch IOException while closing HoodieMessageQueue", e);
-    }
-  }
-
-  @Override
-  public SimpleHoodieQueueIterable<I, O> getQueue() {
-    return (SimpleHoodieQueueIterable<I, O>) queue;
-  }
-
-  @Override
-  protected void setup() {
-    // do nothing.
   }
 }

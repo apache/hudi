@@ -1044,7 +1044,7 @@ public class TestHiveSyncTool {
     HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, getHiveConf());
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + hiveClient.getActiveTimeline().getInstants()
+        + hiveClient.getActiveTimeline().getInstantsAsStream()
         .filter(inst -> inst.getTimestamp().equals(commitTime2))
         .findFirst().get().getFileName());
     assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));
@@ -1088,7 +1088,7 @@ public class TestHiveSyncTool {
     reinitHiveSyncClient();
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + hiveClient.getActiveTimeline().getInstants()
+        + hiveClient.getActiveTimeline().getInstantsAsStream()
         .filter(inst -> inst.getTimestamp().equals(commitTime2))
         .findFirst().get().getFileName());
     assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));

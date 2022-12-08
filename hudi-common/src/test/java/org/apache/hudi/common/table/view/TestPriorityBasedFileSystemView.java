@@ -58,6 +58,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests {@link PriorityBasedFileSystemView}.
+ */
 @ExtendWith(MockitoExtension.class)
 public class TestPriorityBasedFileSystemView {
 
@@ -537,7 +540,7 @@ public class TestPriorityBasedFileSystemView {
   public void testGetPendingCompactionOperations() {
     Stream<Pair<String, CompactionOperation>> actual;
     Stream<Pair<String, CompactionOperation>> expected = Collections.singleton(
-        (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
+            (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
         .stream();
 
     when(primary.getPendingCompactionOperations()).thenReturn(expected);
@@ -566,7 +569,7 @@ public class TestPriorityBasedFileSystemView {
   public void testGetPendingLogCompactionOperations() {
     Stream<Pair<String, CompactionOperation>> actual;
     Stream<Pair<String, CompactionOperation>> expected = Collections.singleton(
-        (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
+            (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
         .stream();
 
     when(primary.getPendingLogCompactionOperations()).thenReturn(expected);

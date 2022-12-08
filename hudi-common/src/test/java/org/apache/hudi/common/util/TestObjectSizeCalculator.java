@@ -32,6 +32,9 @@ import java.util.List;
 import static org.apache.hudi.common.util.ObjectSizeCalculator.getObjectSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Tests {@link ObjectSizeCalculator}.
+ */
 public class TestObjectSizeCalculator {
 
   @Test
@@ -92,6 +95,9 @@ public class TestObjectSizeCalculator {
     private HoodieRecord record;
   }
 
+  /**
+   * Test class for object size estimation.
+   */
   class Person {
     private String name;
 
@@ -100,6 +106,9 @@ public class TestObjectSizeCalculator {
     }
   }
 
+  /**
+   * Test enum for object size estimation.
+   */
   public enum DayOfWeek {
     MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY
   }

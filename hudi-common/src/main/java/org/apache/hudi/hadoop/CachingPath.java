@@ -18,10 +18,12 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.hadoop.fs.Path;
+
 import javax.annotation.concurrent.ThreadSafe;
+
 import java.net.URI;
 import java.net.URISyntaxException;
 

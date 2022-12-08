@@ -18,8 +18,9 @@
 
 package org.apache.hudi.common.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.hudi.common.util.Option;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.util.ArrayList;
 import java.util.HashMap;

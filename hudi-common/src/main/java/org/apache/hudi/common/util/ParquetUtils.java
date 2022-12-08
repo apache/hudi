@@ -224,9 +224,9 @@ public class ParquetUtils extends BaseFileUtils {
   }
 
   @Override
-  public Schema readAvroSchema(Configuration configuration, Path parquetFilePath) {
-    MessageType parquetSchema = readSchema(configuration, parquetFilePath);
-    return new AvroSchemaConverter(configuration).convert(parquetSchema);
+  public Schema readAvroSchema(Configuration conf, Path parquetFilePath) {
+    MessageType parquetSchema = readSchema(conf, parquetFilePath);
+    return new AvroSchemaConverter(conf).convert(parquetSchema);
   }
 
   @Override

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -197,11 +198,25 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns true if there are no explicit start and end commits.
+   */
+  public static boolean hasNoSpecificReadCommits(Configuration conf) {
+    return !conf.contains(FlinkOptions.READ_START_COMMIT) && !conf.contains(FlinkOptions.READ_END_COMMIT);
+  }
+
+  /**
    * Returns the supplemental logging mode.
    */
   public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
     String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE);
     return HoodieCDCSupplementalLoggingMode.parse(mode);
+  }
+
+  /**
+   * Returns whether comprehensive schema evolution enabled.
+   */
+  public static boolean isSchemaEvolutionEnabled(Configuration conf) {
+    return conf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue());
   }
 
   // -------------------------------------------------------------------------

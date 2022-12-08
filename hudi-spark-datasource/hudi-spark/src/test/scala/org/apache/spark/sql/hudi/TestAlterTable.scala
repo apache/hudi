@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.catalyst.TableIdentifier
 

@@ -16,33 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.testutils;
+package org.apache.hudi.utilities.deltastreamer.multisync;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 
-import java.io.IOException;
+import org.apache.hadoop.conf.Configuration;
 
-/**
- * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests.
- */
-public class HoodieJavaClientTestBase extends HoodieJavaClientTestHarness {
+import java.util.Properties;
 
-  @BeforeEach
-  public void setUp() throws Exception {
-    initResources();
+public class MockSyncToolException1 extends HoodieSyncTool {
+
+  public MockSyncToolException1(Properties props, Configuration hadoopConf) {
+    super(props, hadoopConf);
   }
 
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
-  }
-
-  // Functional Interfaces for passing lambda and Hoodie Write API contexts
-
-  @FunctionalInterface
-  public interface Function2<R, T1, T2> {
-
-    R apply(T1 v1, T2 v2) throws IOException;
+  @Override
+  public void syncHoodieTable() {
+    throw new RuntimeException();
   }
 }

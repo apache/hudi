@@ -16,14 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util.queue;
+package org.apache.hudi.utilities.deltastreamer.multisync;
 
-import java.util.Iterator;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 
-/**
- * IteratorBasedHoodieMessageQueue implements HoodieMessageQueue with Iterable
- */
-public abstract class HoodieIterableMessageQueue<I, O> implements HoodieMessageQueue<I, O>, Iterable<O> {
+import org.apache.hadoop.conf.Configuration;
 
-  public abstract Iterator<O> iterator();
+import java.util.Properties;
+
+public class MockSyncTool2 extends HoodieSyncTool {
+
+  public static boolean syncSuccess;
+
+  public MockSyncTool2(Properties props, Configuration hadoopConf) {
+    super(props, hadoopConf);
+  }
+
+  @Override
+  public void syncHoodieTable() {
+    syncSuccess = true;
+  }
 }

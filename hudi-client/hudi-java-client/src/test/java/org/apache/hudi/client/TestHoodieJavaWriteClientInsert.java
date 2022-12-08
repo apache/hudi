@@ -7,18 +7,18 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.table.action.commit;
+package org.apache.hudi.client;
 
-import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
@@ -34,7 +34,7 @@ import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
-import org.apache.hudi.testutils.HoodieJavaClientTestBase;
+import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -50,25 +50,24 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
-  private static final Schema SCHEMA = getSchemaFromResource(TestJavaCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
+public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness {
+  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieJavaWriteClientInsert.class, "/exampleSchema.avsc");
 
-  private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
-    return makeHoodieClientConfigBuilder(SCHEMA.toString());
+  private static HoodieWriteConfig.Builder makeHoodieClientConfigBuilder(String basePath) {
+    return makeHoodieClientConfigBuilder(basePath, SCHEMA);
   }
 
-  private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder(String schema) {
-    // Prepare the AvroParquetIO
+  private static HoodieWriteConfig.Builder makeHoodieClientConfigBuilder(String basePath, Schema schema) {
     return HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
-        .withSchema(schema);
+        .withSchema(schema.toString());
   }
 
   private FileStatus[] getIncrementalFiles(String partitionPath, String startCommitTime, int numCommitsToPull)
@@ -99,7 +98,7 @@ public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
 
   @Test
   public void testInsert() throws Exception {
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withMergeAllowDuplicateOnInserts(true).build();
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder(basePath).withMergeAllowDuplicateOnInserts(true).build();
 
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -172,7 +171,7 @@ public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   public void testInsertWithDataGenerator(boolean mergeAllowDuplicateOnInsertsEnable) throws Exception {
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder(basePath, AVRO_SCHEMA)
         .withMergeAllowDuplicateOnInserts(mergeAllowDuplicateOnInsertsEnable).build();
 
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);

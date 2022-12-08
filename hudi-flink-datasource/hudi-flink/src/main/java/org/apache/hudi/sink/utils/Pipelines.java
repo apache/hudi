@@ -39,7 +39,7 @@ import org.apache.hudi.sink.clustering.ClusteringOperator;
 import org.apache.hudi.sink.clustering.ClusteringPlanEvent;
 import org.apache.hudi.sink.clustering.ClusteringPlanOperator;
 import org.apache.hudi.sink.common.WriteOperatorFactory;
-import org.apache.hudi.sink.compact.CompactFunction;
+import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
@@ -57,7 +57,6 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
-import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
@@ -372,7 +371,7 @@ public class Pipelines {
         .keyBy(plan -> plan.getOperation().getFileGroupId().getFileId())
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
-            new ProcessOperator<>(new CompactFunction(conf)))
+            new CompactOperator(conf))
         .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
         .addSink(new CompactionCommitSink(conf))
         .name("compact_commit")

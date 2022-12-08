@@ -18,10 +18,10 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.avro.JsonProperties;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;

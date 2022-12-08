@@ -18,8 +18,6 @@
 
 package org.apache.hudi;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -41,6 +39,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -207,14 +208,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    */
   protected Map<PartitionPath, List<FileSlice>> getAllInputFileSlices() {
     if (!areAllFileSlicesCached()) {
-      // Fetching file slices for partitions that have not been cached yet
-      List<PartitionPath> missingPartitions = getAllQueryPartitionPaths().stream()
-          .filter(p -> !cachedAllInputFileSlices.containsKey(p))
-          .collect(Collectors.toList());
-
-      // NOTE: Individual partitions are always cached in full, therefore if partition is cached
-      //       it will hold all the file-slices residing w/in the partition
-      cachedAllInputFileSlices.putAll(loadFileSlicesForPartitions(missingPartitions));
+      ensurePreloadedPartitions(getAllQueryPartitionPaths());
     }
 
     return cachedAllInputFileSlices;
@@ -223,12 +217,29 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   /**
    * Get input file slice for the given partition. Will use cache directly if it is computed before.
    */
-  protected List<FileSlice> getInputFileSlices(PartitionPath partition) {
-    return cachedAllInputFileSlices.computeIfAbsent(partition,
-        p -> loadFileSlicesForPartitions(Collections.singletonList(p)).get(p));
+  protected Map<PartitionPath, List<FileSlice>> getInputFileSlices(PartitionPath... partitions) {
+    ensurePreloadedPartitions(Arrays.asList(partitions));
+    return Arrays.stream(partitions).collect(
+        Collectors.toMap(Function.identity(), partition -> cachedAllInputFileSlices.get(partition))
+    );
+  }
+
+  private void ensurePreloadedPartitions(List<PartitionPath> partitionPaths) {
+    // Fetching file slices for partitions that have not been cached yet
+    List<PartitionPath> missingPartitions = partitionPaths.stream()
+        .filter(p -> !cachedAllInputFileSlices.containsKey(p))
+        .collect(Collectors.toList());
+
+    // NOTE: Individual partitions are always cached in full, therefore if partition is cached
+    //       it will hold all the file-slices residing w/in the partition
+    cachedAllInputFileSlices.putAll(loadFileSlicesForPartitions(missingPartitions));
   }
 
   private Map<PartitionPath, List<FileSlice>> loadFileSlicesForPartitions(List<PartitionPath> partitions) {
+    if (partitions.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
     FileStatus[] allFiles = listPartitionPathFiles(partitions);
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
@@ -363,10 +374,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // Reset it to null to trigger re-loading of all partition path
     this.cachedAllPartitionPaths = null;
-    List<PartitionPath> partitionPaths = getAllQueryPartitionPaths();
-
-    // Refresh the partitions & file slices
-    this.cachedAllInputFileSlices = loadFileSlicesForPartitions(partitionPaths);
+    ensurePreloadedPartitions(getAllQueryPartitionPaths());
 
     LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), timer.endTimer()));
   }
@@ -446,6 +454,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return arrays.stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
   }
 
+  /**
+   * Partition path information containing the relative partition path
+   * and values of partition columns.
+   */
   public static final class PartitionPath {
 
     final String path;
@@ -473,6 +485,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
+  /**
+   * APIs for caching {@link FileStatus}.
+   */
   protected interface FileStatusCache {
     Option<FileStatus[]> get(Path path);
 

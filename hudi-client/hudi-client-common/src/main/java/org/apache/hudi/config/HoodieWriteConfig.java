@@ -200,7 +200,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("Validate the schema used for the write against the latest schema, for backwards compatibility.");
 
   public static final ConfigProperty<String> INSERT_PARALLELISM_VALUE = ConfigProperty
@@ -388,6 +388,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Timeline archiving removes older instants from the timeline, after each write operation, to minimize metadata overhead. "
           + "Controls whether or not, the write should be failed as well, if such archiving fails.");
 
+  public static final ConfigProperty<String> FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION = ConfigProperty
+      .key("hoodie.fail.writes.on.inline.table.service.exception")
+      .defaultValue("true")
+      .withDocumentation("Table services such as compaction and clustering can fail and prevent syncing to "
+          + "the metaclient. Set this to true to fail writes when table services fail");
+
   public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
       .defaultValue(2000L)
@@ -440,15 +446,15 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "OPTIMISTIC_CONCURRENCY_CONTROL: Multiple writers can operate on the table and exactly one of them succeed "
           + "if a conflict (writes affect the same file group) is detected.");
 
-  /**
-   * Currently the  use this to specify the write schema.
-   */
-  public static final ConfigProperty<String> WRITE_SCHEMA = ConfigProperty
+  public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
       .key("hoodie.write.schema")
       .noDefaultValue()
-      .withDocumentation("The specified write schema. In most case, we do not need set this parameter,"
-          + " but for the case the write schema is not equal to the specified table schema, we can"
-          + " specify the write schema by this parameter. Used by MergeIntoHoodieTableCommand");
+      .withDocumentation("Config allowing to override writer's schema. This might be necessary in "
+          + "cases when writer's schema derived from the incoming dataset might actually be different from "
+          + "the schema we actually want to use when writing. This, for ex, could be the case for"
+          + "'partial-update' use-cases (like `MERGE INTO` Spark SQL statement for ex) where only "
+          + "a projection of the incoming dataset might be used to update the records in the existing table, "
+          + "prompting us to override the writer's schema");
 
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
@@ -940,6 +946,19 @@ public class HoodieWriteConfig extends HoodieConfig {
     setValue(AVRO_SCHEMA_STRING, schemaStr);
   }
 
+  /**
+   * Returns schema used for writing records
+   *
+   * NOTE: This method respects {@link HoodieWriteConfig#WRITE_SCHEMA_OVERRIDE} being
+   *       specified overriding original writing schema
+   */
+  public String getWriteSchema() {
+    if (props.containsKey(WRITE_SCHEMA_OVERRIDE.key())) {
+      return getString(WRITE_SCHEMA_OVERRIDE);
+    }
+    return getSchema();
+  }
+
   public String getInternalSchema() {
     return getString(INTERNAL_SCHEMA_STRING);
   }
@@ -964,21 +983,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     setValue(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
   }
 
-  /**
-   * Get the write schema for written records.
-   *
-   * If the WRITE_SCHEMA has specified, we use the WRITE_SCHEMA.
-   * Or else we use the AVRO_SCHEMA as the write schema.
-   * @return
-   */
-  public String getWriteSchema() {
-    if (props.containsKey(WRITE_SCHEMA.key())) {
-      return getString(WRITE_SCHEMA);
-    }
-    return getSchema();
-  }
-
-  public boolean getAvroSchemaValidate() {
+  public boolean shouldValidateAvroSchema() {
     return getBoolean(AVRO_SCHEMA_VALIDATE_ENABLE);
   }
 
@@ -1151,6 +1156,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isFailOnTimelineArchivingEnabled() {
     return getBoolean(FAIL_ON_TIMELINE_ARCHIVING_ENABLE);
+  }
+
+  public boolean isFailOnInlineTableServiceExceptionEnabled() {
+    return getBoolean(FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION);
   }
 
   public int getMaxConsistencyChecks() {
@@ -2357,6 +2366,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public  Builder withFailureOnInlineTableServiceException(boolean fail) {
+      writeConfig.setValue(FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION, String.valueOf(fail));
+      return this;
+    }
+
     public Builder withParallelism(int insertShuffleParallelism, int upsertShuffleParallelism) {
       writeConfig.setValue(INSERT_PARALLELISM_VALUE, String.valueOf(insertShuffleParallelism));
       writeConfig.setValue(UPSERT_PARALLELISM_VALUE, String.valueOf(upsertShuffleParallelism));
@@ -2796,7 +2810,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     private String getDefaultMarkersType(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return MarkerType.TIMELINE_SERVER_BASED.toString();
+          if (writeConfig.isEmbeddedTimelineServerEnabled()) {
+            return MarkerType.TIMELINE_SERVER_BASED.toString();
+          } else {
+            LOG.warn("Embedded timeline server is disabled, fallback to use direct marker type for spark");
+            return MarkerType.DIRECT.toString();
+          }
         case FLINK:
         case JAVA:
           // Timeline-server-based marker is not supported for Flink and Java engines

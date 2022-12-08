@@ -59,13 +59,13 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
         .getCommitsTimeline()
         .filterCompletedInstants()
         .findInstantsAfter(lastSuccessfulInstant.isPresent() ? lastSuccessfulInstant.get().getTimestamp() : HoodieTimeline.INIT_INSTANT_TS)
-        .getInstants();
+        .getInstantsAsStream();
 
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
         .getTimelineOfActions(CollectionUtils.createSet(REPLACE_COMMIT_ACTION, COMPACTION_ACTION))
         .findInstantsAfter(currentInstant.getTimestamp())
         .filterInflightsAndRequested()
-        .getInstants();
+        .getInstantsAsStream();
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
   }
 

@@ -167,9 +167,9 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   def listFileSlices(partitionFilters: Seq[Expression]): Map[String, Seq[FileSlice]] = {
     // Prune the partition path by the partition filters
     val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
-    prunedPartitions.map(partition => {
-      (partition.path, getInputFileSlices(partition).asScala)
-    }).toMap
+    getInputFileSlices(prunedPartitions: _*).asScala.map {
+      case (partition, fileSlices) => (partition.path, fileSlices.asScala)
+    }.toMap
   }
 
   /**

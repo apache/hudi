@@ -283,8 +283,7 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static Option<List<HoodieInstant>> getCommitsForIncrementalQuery(Job job, String tableName, HoodieTimeline timeline) {
-    return Option.of(getHoodieTimelineForIncrementalQuery(job, tableName, timeline)
-        .getInstants().collect(Collectors.toList()));
+    return Option.of(getHoodieTimelineForIncrementalQuery(job, tableName, timeline).getInstants());
   }
 
   /**

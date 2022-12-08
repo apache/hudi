@@ -39,6 +39,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Utils for Hudi base file.
+ */
 public abstract class BaseFileUtils {
 
   public static BaseFileUtils getInstance(String path) {

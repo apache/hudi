@@ -317,7 +317,7 @@ public class CompactionCommand {
         .collect(Collectors.toList());
 
     Set<String> committedInstants = timeline.getCommitTimeline().filterCompletedInstants()
-        .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+        .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
     List<Comparable[]> rows = new ArrayList<>();
     for (Pair<HoodieInstant, HoodieCompactionPlan> compactionPlan : compactionPlans) {

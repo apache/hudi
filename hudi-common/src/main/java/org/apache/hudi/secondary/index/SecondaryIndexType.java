@@ -23,6 +23,9 @@ import org.apache.hudi.exception.HoodieIndexException;
 
 import java.util.Arrays;
 
+/**
+ * Type of secondary index.
+ */
 public enum SecondaryIndexType {
   LUCENE((byte) 1);
 

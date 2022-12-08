@@ -845,6 +845,12 @@ public class FSUtils {
     return result;
   }
 
+  /**
+   * Serializable function interface.
+   *
+   * @param <T> Input value type.
+   * @param <R> Output value type.
+   */
   public interface SerializableFunction<T, R> extends Function<T, R>, Serializable {
   }
 

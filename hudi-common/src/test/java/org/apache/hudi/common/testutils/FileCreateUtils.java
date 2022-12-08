@@ -68,6 +68,9 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackPlan;
 
+/**
+ * Utils for creating dummy Hudi files in testing.
+ */
 public class FileCreateUtils {
 
   private static final Logger LOG = LogManager.getLogger(FileCreateUtils.class);

@@ -18,9 +18,10 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.hadoop.CachingPath;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.hadoop.CachingPath;
 
 import java.io.Serializable;
 import java.util.Objects;

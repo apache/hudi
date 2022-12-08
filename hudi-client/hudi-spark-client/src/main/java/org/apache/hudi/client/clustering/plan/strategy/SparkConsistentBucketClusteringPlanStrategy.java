@@ -86,7 +86,7 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
     HoodieTimeline timeline = getHoodieTable().getActiveTimeline().getDeltaCommitTimeline().filterInflightsAndRequested();
     if (!timeline.empty()) {
       LOG.warn("When using consistent bucket, clustering cannot be scheduled async if there are concurrent writers. "
-          + "Writer instant: " + timeline.getInstants().collect(Collectors.toList()));
+          + "Writer instant: " + timeline.getInstants());
       return false;
     }
     return true;

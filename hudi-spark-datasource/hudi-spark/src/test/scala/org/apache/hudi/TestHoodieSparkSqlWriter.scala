@@ -17,6 +17,11 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
+
+import java.io.IOException
+import java.time.Instant
+import java.util.{Collections, Date, UUID}
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
@@ -656,75 +661,111 @@ class TestHoodieSparkSqlWriter {
   @ParameterizedTest
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
   def testSchemaEvolutionForTableType(tableType: String): Unit = {
-    //create a new table
-    val fooTableModifier = getCommonParams(tempPath, hoodieFooTableName, tableType)
-      .updated(DataSourceWriteOptions.RECONCILE_SCHEMA.key, "true")
+    // Create new table
+    // NOTE: We disable Schema Reconciliation by default (such that Writer's
+    //       schema is favored over existing Table's schema)
+    val noReconciliationOpts = getCommonParams(tempPath, hoodieFooTableName, tableType)
+      .updated(DataSourceWriteOptions.RECONCILE_SCHEMA.key, "false")
 
-    // generate the inserts
+    // Generate 1st batch
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     var records = DataSourceTestUtils.generateRandomRows(10)
     var recordsSeq = convertRowListToSeq(records)
+
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableModifier, df1)
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, noReconciliationOpts, df1)
 
     val snapshotDF1 = spark.read.format("org.apache.hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF1.count())
 
-    // remove metadata columns so that expected and actual DFs can be compared as is
-    val trimmedDf1 = dropMetaFields(snapshotDF1)
-    assert(df1.except(trimmedDf1).count() == 0)
+    assertEquals(df1.except(dropMetaFields(snapshotDF1)).count(), 0)
 
-    // issue updates so that log files are created for MOR table
+    // Generate 2d batch (consisting of updates so that log files are created for MOR table)
     val updatesSeq = convertRowListToSeq(DataSourceTestUtils.generateUpdates(records, 5))
-    val updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
-    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, updatesDf)
+    val df2 = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df2)
 
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF2.count())
 
-    // remove metadata columns so that expected and actual DFs can be compared as is
-    val trimmedDf2 = dropMetaFields(snapshotDF2)
-    // ensure 2nd batch of updates matches.
-    assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
+    // Ensure 2nd batch of updates matches.
+    assertEquals(df2.intersect(dropMetaFields(snapshotDF2)).except(df2).count(), 0)
 
-    // getting new schema with new column
+    // Generate 3d batch (w/ evolved schema w/ added column)
     val evolSchema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
     val evolStructType = AvroConversionUtils.convertAvroSchemaToStructType(evolSchema)
     records = DataSourceTestUtils.generateRandomRowsEvolvedSchema(5)
     recordsSeq = convertRowListToSeq(records)
+
     val df3 = spark.createDataFrame(sc.parallelize(recordsSeq), evolStructType)
     // write to Hudi with new column
-    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df3)
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df3)
 
     val snapshotDF3 = spark.read.format("org.apache.hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(15, snapshotDF3.count())
 
-    // remove metadata columns so that expected and actual DFs can be compared as is
-    val trimmedDf3 = dropMetaFields(snapshotDF3)
-    // ensure 2nd batch of updates matches.
-    assert(df3.intersect(trimmedDf3).except(df3).count() == 0)
+    // Ensure 3d batch matches
+    assertEquals(df3.intersect(dropMetaFields(snapshotDF3)).except(df3).count(), 0)
 
-    // ingest new batch with old schema.
+    // Generate 4th batch (with a previous schema, Schema Reconciliation ENABLED)
+    //
+    // NOTE: This time we enable Schema Reconciliation such that the final Table's schema
+    //       is reconciled b/w incoming Writer's schema (old one, no new column) and the Table's
+    //       one (new one, w/ new column).
     records = DataSourceTestUtils.generateRandomRows(10)
     recordsSeq = convertRowListToSeq(records)
+
+    val reconciliationOpts = noReconciliationOpts ++ Map(DataSourceWriteOptions.RECONCILE_SCHEMA.key -> "true")
+
     val df4 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df4)
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, reconciliationOpts, df4)
 
     val snapshotDF4 = spark.read.format("org.apache.hudi")
       .load(tempBasePath + "/*/*/*/*")
+
     assertEquals(25, snapshotDF4.count())
 
-    val tableMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(tempBasePath).build()
-    val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
-    assertTrue(actualSchema != null)
-    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
-    val expectedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(evolStructType, structName, nameSpace)
-    assertEquals(expectedSchema, actualSchema)
+    // Evolve DF4 to match against the records read back
+    val reshapedDF4 = df4.withColumn("new_field", lit(null).cast("string"))
+
+    assertEquals(reshapedDF4.intersect(dropMetaFields(snapshotDF4)).except(reshapedDF4).count, 0)
+
+    val fourthBatchActualSchema = fetchActualSchema()
+    val fourthBatchExpectedSchema = {
+      val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
+      AvroConversionUtils.convertStructTypeToAvroSchema(evolStructType, structName, nameSpace)
+    }
+
+    assertEquals(fourthBatchExpectedSchema, fourthBatchActualSchema)
+
+    // Generate 5th batch (with a previous schema, Schema Reconciliation DISABLED)
+    //
+    // NOTE: This time we disable Schema Reconciliation (again) such that incoming Writer's schema is taken
+    //       as the Table's new schema (de-evolving schema back to where it was before 4th batch)
+    records = DataSourceTestUtils.generateRandomRows(10)
+    recordsSeq = convertRowListToSeq(records)
+
+    val df5 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df5)
+
+    val snapshotDF5 = spark.read.format("org.apache.hudi")
+      .load(tempBasePath + "/*/*/*/*")
+
+    assertEquals(35, snapshotDF5.count())
+
+    assertEquals(df5.intersect(dropMetaFields(snapshotDF5)).except(df5).count, 0)
+
+    val fifthBatchActualSchema = fetchActualSchema()
+    val fifthBatchExpectedSchema = {
+      val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
+      AvroConversionUtils.convertStructTypeToAvroSchema(df5.schema, structName, nameSpace)
+    }
+
+    assertEquals(fifthBatchExpectedSchema, fifthBatchActualSchema)
   }
 
   /**
@@ -913,7 +954,7 @@ class TestHoodieSparkSqlWriter {
   def testToWriteWithoutParametersIncludedInHoodieTableConfig(): Unit = {
     val _spark = spark
     import _spark.implicits._
-    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val df = Seq((1, "a1", 10, 1000L, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
@@ -927,7 +968,7 @@ class TestHoodieSparkSqlWriter {
          | create table $tableName1 (
          |   id int,
          |   name string,
-         |   price double,
+         |   value int,
          |   ts long,
          |   dt string
          | ) using hudi
@@ -965,7 +1006,7 @@ class TestHoodieSparkSqlWriter {
     assert(tableConfig2.getUrlEncodePartitioning == "true")
     assert(tableConfig2.getKeyGeneratorClassName == classOf[SimpleKeyGenerator].getName)
 
-    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val df2 = Seq((2, "a2", 20, 1000L, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     // raise exception when use params which is not same with HoodieTableConfig
     val configConflictException = intercept[HoodieException] {
       df2.write.format("hudi")
@@ -1164,6 +1205,14 @@ class TestHoodieSparkSqlWriter {
         .mode(SaveMode.Overwrite).save(tablePath1)
     }
     assert(exc.getMessage.contains("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table."))
+  }
+
+  private def fetchActualSchema(): Schema = {
+    val tableMetaClient = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(tempBasePath)
+      .build()
+    new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
   }
 }
 
