@@ -26,14 +26,13 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 /**
  * Utils for JSON serialization and deserialization.
  */
 public class JsonUtils {
 
-  private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   static {
     MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
