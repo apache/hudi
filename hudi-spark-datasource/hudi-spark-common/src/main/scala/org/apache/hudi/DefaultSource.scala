@@ -117,7 +117,7 @@ class DefaultSource extends RelationProvider
 
   def getValidCommits(metaClient: HoodieTableMetaClient): String = {
     metaClient
-      .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
+      .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
   }
 
   /**

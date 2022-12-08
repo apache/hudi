@@ -86,6 +86,9 @@ public class ConsistentHashingNode implements Serializable {
     return sb.toString();
   }
 
+  /**
+   * Node tag.
+   */
   public enum NodeTag {
     /**
      * Standard node.

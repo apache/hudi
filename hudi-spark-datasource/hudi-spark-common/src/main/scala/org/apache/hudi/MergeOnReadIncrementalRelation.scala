@@ -150,9 +150,9 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     if (!startInstantArchived || !endInstantArchived) {
       // If endTimestamp commit is not archived, will filter instants
       // before endTimestamp.
-      super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.iterator().asScala.toList
+      super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
     } else {
-      super.timeline.getInstants.iterator().asScala.toList
+      super.timeline.getInstants.asScala.toList
     }
   }
 

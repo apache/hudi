@@ -33,6 +33,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
+/**
+ * Utils for secondary index.
+ */
 public class SecondaryIndexUtils {
 
   /**

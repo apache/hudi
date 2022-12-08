@@ -24,7 +24,7 @@ import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.BaseDefaultSource;
 import org.apache.hudi.internal.DataSourceInternalWriterHelper;
-
+import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.connector.catalog.TableProvider;
 import org.apache.spark.sql.connector.expressions.Transform;
@@ -44,7 +44,8 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
 
   @Override
   public StructType inferSchema(CaseInsensitiveStringMap options) {
-    return StructType.fromDDL(options.get(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key()));
+    String jsonSchema = options.get(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key());
+    return HoodieDataTypeUtils.parseStructTypeFromJson(jsonSchema);
   }
 
   @Override

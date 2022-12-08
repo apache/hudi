@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.Option;
+
 import java.io.Closeable;
 
 /**
@@ -50,4 +51,15 @@ public interface HoodieMessageQueue<I, O> extends Closeable {
   void markAsFailed(Throwable e);
 
   boolean isEmpty();
+
+  /**
+   * Seals the queue (for writing) preventing new records to be enqueued
+   */
+  void seal();
+
+  /**
+   * Shuts down the queue, cleaning up the resources
+   */
+  @Override
+  void close();
 }

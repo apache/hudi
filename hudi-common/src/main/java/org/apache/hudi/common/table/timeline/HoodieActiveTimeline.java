@@ -266,22 +266,26 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     deleteInstantFile(instant);
   }
 
+  /**
+   * Note: This method should only be used in the case that delete requested/inflight instant or empty clean instant,
+   * and completed commit instant in an archive operation.
+   */
   public void deleteInstantFileIfExists(HoodieInstant instant) {
     LOG.info("Deleting instant " + instant);
-    Path inFlightCommitFilePath = getInstantFileNamePath(instant.getFileName());
+    Path commitFilePath = getInstantFileNamePath(instant.getFileName());
     try {
-      if (metaClient.getFs().exists(inFlightCommitFilePath)) {
-        boolean result = metaClient.getFs().delete(inFlightCommitFilePath, false);
+      if (metaClient.getFs().exists(commitFilePath)) {
+        boolean result = metaClient.getFs().delete(commitFilePath, false);
         if (result) {
           LOG.info("Removed instant " + instant);
         } else {
           throw new HoodieIOException("Could not delete instant " + instant);
         }
       } else {
-        LOG.warn("The commit " + inFlightCommitFilePath + " to remove does not exist");
+        LOG.warn("The commit " + commitFilePath + " to remove does not exist");
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not remove inflight commit " + inFlightCommitFilePath, e);
+      throw new HoodieIOException("Could not remove commit " + commitFilePath, e);
     }
   }
 
@@ -337,7 +341,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private Stream<Pair<HoodieInstant, HoodieCommitMetadata>> getCommitMetadataStream() {
     // NOTE: Streams are lazy
     return getCommitsTimeline().filterCompletedInstants()
-        .getInstants()
+        .getInstantsAsStream()
         .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed())
         .map(instant -> {
           try {

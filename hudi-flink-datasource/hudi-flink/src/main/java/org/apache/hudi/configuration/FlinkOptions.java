@@ -280,6 +280,14 @@ public class FlinkOptions extends HoodieConfig {
           + "usually with delta time compaction strategy that is long enough, for e.g, one week;\n"
           + "2) changelog mode is enabled, this option is a solution to keep data integrity");
 
+  // this option is experimental
+  public static final ConfigOption<Boolean> READ_STREAMING_SKIP_CLUSTERING = ConfigOptions
+          .key("read.streaming.skip_clustering")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to skip clustering instants for streaming read,\n"
+              + "to avoid reading duplicates");
+
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
       .key("read.start-commit")

@@ -25,6 +25,9 @@ package org.apache.hudi.common.config;
  * This class maintains the human readable name and description of each config group.
  */
 public class ConfigGroups {
+  /**
+   * Config group names.
+   */
   public enum Names {
     SPARK_DATASOURCE("Spark Datasource Configs"),
     FLINK_SQL("Flink Sql Configs"),

@@ -26,6 +26,9 @@ import java.io.IOException;
 import java.util.Locale;
 import java.util.Properties;
 
+/**
+ * Hudi configs used across engines.
+ */
 @ConfigClassProperty(name = "Common Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "The following set of configurations are common across Hudi.")
@@ -44,9 +47,13 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
-      .withDocumentation("When a new batch of write has records with old schema, but latest table schema got "
-        + "evolved, this config will upgrade the records to leverage latest table schema(default values will be "
-        + "injected to missing fields). If not, the write batch would fail.");
+      .withDocumentation("This config controls how writer's schema will be selected based on the incoming batch's "
+          + "schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's "
+          + "schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation "
+          + "is ENABLED, writer-schema will be picked such that table's schema (after txn) is either kept the same "
+          + "or extended, meaning that we'll always prefer the schema that either adds new columns or stays the same. "
+          + "This enables us, to always extend the table's schema during evolution and never lose the data (when, for "
+          + "ex, existing column is being dropped in a new batch)");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
@@ -76,6 +83,9 @@ public class HoodieCommonConfig extends HoodieConfig {
     return new HoodieCommonConfig.Builder();
   }
 
+  /**
+   * Builder for {@link HoodieCommonConfig}.
+   */
   public static class Builder {
 
     private final HoodieCommonConfig commonConfig = new HoodieCommonConfig();

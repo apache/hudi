@@ -279,9 +279,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   private Option<IndexedRecord> getInsertValue(HoodieRecord<T> hoodieRecord) throws IOException {
     if (useWriterSchema) {
-      return hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, recordProperties);
+      return hoodieRecord.getData().getInsertValue(writeSchemaWithMetaFields, recordProperties);
     } else {
-      return hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
+      return hoodieRecord.getData().getInsertValue(writeSchema, recordProperties);
     }
   }
 

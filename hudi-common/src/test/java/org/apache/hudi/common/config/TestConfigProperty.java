@@ -19,6 +19,7 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.util.Option;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
@@ -27,6 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link ConfigProperty}.
+ */
 public class TestConfigProperty extends HoodieConfig {
 
   public static ConfigProperty<String> FAKE_STRING_CONFIG = ConfigProperty

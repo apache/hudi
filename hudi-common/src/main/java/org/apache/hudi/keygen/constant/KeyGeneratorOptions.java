@@ -23,6 +23,9 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
+/**
+ * Key generator configs.
+ */
 @ConfigClassProperty(name = "Key Generator Options",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Hudi maintains keys (record key + partition path) "
