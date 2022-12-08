@@ -229,10 +229,10 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
-      String recordSchema = "{\"type\":\"record\",\"name\":\"records\"," +
-              "\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"\"}," +
-              "{\"name\":\"ts\",\"type\":\"long\",\"doc\":\"\"}," +
-              "{\"name\":\"score\",\"type\":\"int\",\"doc\":\"\"}]}";
+      String recordSchema = "{\"type\":\"record\",\"name\":\"records\","
+              + "\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"\"},"
+              + "{\"name\":\"ts\",\"type\":\"long\",\"doc\":\"\"},"
+              + "{\"name\":\"score\",\"type\":\"int\",\"doc\":\"\"}]}";
       config.setSchema(recordSchema);
 
       List<HoodieRecord> records = generateInsertsWithoutPartitionFields(recordSchema,partitionPath);
@@ -254,11 +254,11 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       // Do a compaction
       //original schema with partition fields
-      String originalSchema =  "{\"type\":\"record\",\"name\":\"records\"," +
-              "\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"\"}," +
-              "{\"name\":\"partitionpath\",\"type\":\"string\",\"doc\":\"\"}," +
-              "{\"name\":\"ts\",\"type\":\"long\",\"doc\":\"\"}," +
-              "{\"name\":\"score\",\"type\":\"int\",\"doc\":\"\"}]}";
+      String originalSchema =  "{\"type\":\"record\",\"name\":\"records\","
+              + "\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"\"},"
+              + "{\"name\":\"partitionpath\",\"type\":\"string\",\"doc\":\"\"},"
+              + "{\"name\":\"ts\",\"type\":\"long\",\"doc\":\"\"},"
+              + "{\"name\":\"score\",\"type\":\"int\",\"doc\":\"\"}]}";
       config.setSchema(originalSchema);
       table = HoodieSparkTable.create(config, context);
       String compactionInstantTime = "102";
