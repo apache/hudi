@@ -111,11 +111,14 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
 
+    // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
+    //       deferred updates), diverging from COW
     val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
       "index/colstats/cow-updated2-column-stats-index-table.json"
     } else {
       "index/colstats/mor-updated2-column-stats-index-table.json"
     }
+
     doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
@@ -332,15 +335,14 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    // Only parquet files are supported for the validation against the generated column stats,
-    // constructing the column stats  from parquet data files using Spark SQL and comparing that
-    // with column stats index. This means that the following operations are support for such
-    // validation: (1) COW: all operations; (2) MOR: insert only.
-    val validateColumnStatsAgainstDataFiles =
-    (testCase.tableType == HoodieTableType.COPY_ON_WRITE
-      || operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL))
+    // Currently, routine manually validating the column stats (by actually reading every column of every file)
+    // only supports parquet files. Therefore we skip such validation when delta-log files are present, and only
+    // validate in following cases: (1) COW: all operations; (2) MOR: insert only.
+    val shouldValidateColumnStatsManually = testCase.tableType == HoodieTableType.COPY_ON_WRITE ||
+      operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+
     validateColumnStatsIndex(
-      testCase, metadataOpts, expectedColStatsSourcePath, validateColumnStatsAgainstDataFiles)
+      testCase, metadataOpts, expectedColStatsSourcePath, shouldValidateColumnStatsManually)
   }
 
   private def buildColumnStatsTableManually(tablePath: String,
@@ -392,7 +394,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
   private def validateColumnStatsIndex(testCase: ColumnStatsTestCase,
                                        metadataOpts: Map[String, String],
                                        expectedColStatsSourcePath: String,
-                                       validateColumnStatsAgainstDataFiles: Boolean): Unit = {
+                                       validateColumnStatsManually: Boolean): Unit = {
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
       .build()
@@ -416,11 +418,11 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       assertEquals(asJson(sort(expectedColStatsIndexTableDf, validationSortColumns)),
         asJson(sort(transposedColStatsDF.drop("fileName"), validationSortColumns)))
 
-      if (validateColumnStatsAgainstDataFiles) {
+      if (validateColumnStatsManually) {
         // TODO(HUDI-4557): support validation of column stats of avro log files
         // Collect Column Stats manually (reading individual Parquet files)
         val manualColStatsTableDF =
-        buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, sourceTableSchema.fieldNames, expectedColStatsSchema)
+          buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, sourceTableSchema.fieldNames, expectedColStatsSchema)
 
         assertEquals(asJson(sort(manualColStatsTableDF, validationSortColumns)),
           asJson(sort(transposedColStatsDF, validationSortColumns)))
