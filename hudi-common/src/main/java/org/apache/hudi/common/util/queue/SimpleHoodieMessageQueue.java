@@ -78,12 +78,12 @@ public class SimpleHoodieMessageQueue<I, O> implements HoodieMessageQueue<I, O>,
 
   @Override
   public void seal() {
-    isWriteDone.set(true);
+    // no-op
   }
 
   @Override
   public void close() {
-    // no-op
+    isWriteDone.set(true);
   }
 
   /**

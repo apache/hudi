@@ -55,7 +55,7 @@ public class SimpleHoodieExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<
       LOG.info("All records from the queue have been consumed");
     } catch (Exception e) {
       LOG.error("Error consuming records", e);
-      queue.seal();
+      queue.close();
       throw new HoodieException(e);
     }
   }
