@@ -112,7 +112,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ matrix.buildOnly != 'true' && matrix.archive != '' }}
+        if: ${{ matrix.buildOnly != 'true' && matrix.sparkArchive != '' }}
         run:
           mvn test -Pintegration-test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
       - name: 'IT'
@@ -121,7 +121,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
-        if: ${{ matrix.buildOnly != 'true' && matrix.archive != '' }}
+        if: ${{ matrix.buildOnly != 'true' && matrix.sparkArchive != '' }}
         run:
           echo "Downloading $SPARK_ARCHIVE"
           curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
