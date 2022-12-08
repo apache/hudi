@@ -165,6 +165,9 @@ object AvroConversionUtils {
     getAvroSchemaWithDefaults(avroSchema, structType)
   }
 
+  /**
+   * Converts Avro's [[Schema]] to Catalyst's [[StructType]]
+   */
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
     val schemaConverters = sparkAdapter.getAvroSchemaConverters
     schemaConverters.toSqlType(avroSchema) match {
