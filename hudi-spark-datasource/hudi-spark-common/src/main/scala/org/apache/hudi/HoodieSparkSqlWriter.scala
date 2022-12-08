@@ -65,6 +65,7 @@ import org.apache.spark.{SPARK_VERSION, SparkContext}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters.setAsJavaSetConverter
 import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 
 object HoodieSparkSqlWriter {
 
@@ -840,7 +841,7 @@ object HoodieSparkSqlWriter {
       properties.put(HoodieSyncConfig.META_SYNC_SPARK_VERSION.key, SPARK_VERSION)
       properties.put(HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA.key, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
 
-      //Collect exceptions in list because we want all sync to run. Then we can throw
+      // Collect exceptions in list because we want all sync to run. Then we can throw
       val metaSyncExceptions = new ListBuffer[HoodieException]()
       syncClientToolClassSet.foreach(impl => {
         try {
