@@ -56,11 +56,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.AS_IS;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.BASE_FILE_DELETE;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.BASE_FILE_INSERT;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.LOG_FILE;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.REPLACE_COMMIT;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.AS_IS;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.BASE_FILE_DELETE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.BASE_FILE_INSERT;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.LOG_FILE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.REPLACE_COMMIT;
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.op_key_only;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -269,7 +269,7 @@ public class HoodieCDCExtractor {
           FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, Collections.emptyList());
           cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_DELETE, new ArrayList<>(), Option.empty(), Option.of(beforeFileSlice));
         } else if (writeStat.getNumUpdateWrites() == 0L && writeStat.getNumDeletes() == 0
-            && writeStat.getNumWrites() == writeStat.getNumInserts()) {
+            && writeStat.getNumWrites() > 0) {
           // all the records in this file are new.
           cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_INSERT, path);
         } else {
