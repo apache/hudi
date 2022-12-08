@@ -744,11 +744,21 @@ public class DeltaSync implements Serializable, Closeable {
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
       }
 
+      //Collect exceptions in list because we want all sync to run. Then we can throw
+      List<HoodieException> metaSyncExceptions = new ArrayList<>();
       for (String impl : syncClientToolClasses) {
-        Timer.Context syncContext = metrics.getMetaSyncTimerContext();
-        SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
-        long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
-        metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
+        try {
+          Timer.Context syncContext = metrics.getMetaSyncTimerContext();
+          SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
+          long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
+          metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
+        } catch (HoodieException e) {
+          LOG.info("SyncTool class " + impl.trim() + " failed with exception", e);
+          metaSyncExceptions.add(e);
+        }
+      }
+      if (!metaSyncExceptions.isEmpty()) {
+        throw SyncUtilHelpers.getExceptionFromList(metaSyncExceptions);
       }
     }
   }
