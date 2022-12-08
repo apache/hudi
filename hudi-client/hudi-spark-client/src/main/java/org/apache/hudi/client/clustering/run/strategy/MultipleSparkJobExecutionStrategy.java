@@ -276,9 +276,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
         long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config);
         LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
+        Option<HoodieFileReader> baseFileReader = Option.empty();
+        HoodieMergedLogRecordScanner scanner = null;
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-          HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+          scanner = HoodieMergedLogRecordScanner.newBuilder()
               .withFileSystem(table.getMetaClient().getFs())
               .withBasePath(table.getMetaClient().getBasePath())
               .withLogFilePaths(clusteringOp.getDeltaFilePaths())
@@ -295,7 +297,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
               .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .build();
 
-          Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
+          baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
               ? Option.empty()
               : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
           HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
@@ -307,6 +309,13 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);
+        } finally {
+          if (scanner != null) {
+            scanner.close();
+          }
+          if (baseFileReader.isPresent()) {
+            baseFileReader.get().close();
+          }
         }
       });
 
@@ -328,9 +337,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         .mapPartitions(clusteringOpsPartition -> {
           List<Iterator<IndexedRecord>> iteratorsForPartition = new ArrayList<>();
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
-            try {
+            try (HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()))) {
               Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
-              HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
               iteratorsForPartition.add(baseFileReader.getRecordIterator(readerSchema));
             } catch (IOException e) {
               throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()

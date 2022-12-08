@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -54,12 +55,15 @@ public abstract class BaseMergeHelper {
   protected Iterator<GenericRecord> getMergingIterator(HoodieTable<?, ?, ?, ?> table,
                                                        HoodieMergeHandle<?, ?, ?, ?> mergeHandle,
                                                        Path bootstrapFilePath,
-                                                       Iterator<GenericRecord> recordIterator) throws IOException {
+                                                       Iterator<GenericRecord> recordIterator) {
     Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
-    HoodieFileReader<GenericRecord> bootstrapReader =
-        HoodieFileReaderFactory.getFileReader(bootstrapFileConfig, bootstrapFilePath);
-    return new MergingIterator<>(recordIterator, bootstrapReader.getRecordIterator(),
-        (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));
+    try (HoodieFileReader<GenericRecord> bootstrapReader =
+        HoodieFileReaderFactory.getFileReader(bootstrapFileConfig, bootstrapFilePath)) {
+      return new MergingIterator<>(recordIterator, bootstrapReader.getRecordIterator(),
+          (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not create file reader for: " + bootstrapFilePath, e);
+    }
   }
 
   /**

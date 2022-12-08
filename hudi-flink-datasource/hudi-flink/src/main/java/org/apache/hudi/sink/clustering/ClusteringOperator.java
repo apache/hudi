@@ -264,11 +264,13 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
 
     for (ClusteringOperation clusteringOp : clusteringOps) {
+      Option<HoodieFileReader> baseFileReader = Option.empty();
+      HoodieMergedLogRecordScanner scanner = null;
       try {
-        Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
+        baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
             : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
-        HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+        scanner = HoodieMergedLogRecordScanner.newBuilder()
             .withFileSystem(table.getMetaClient().getFs())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(clusteringOp.getDeltaFilePaths())
@@ -300,6 +302,13 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       } catch (IOException e) {
         throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
             + " and " + clusteringOp.getDeltaFilePaths(), e);
+      } finally {
+        if (scanner != null) {
+          scanner.close();
+        }
+        if (baseFileReader.isPresent()) {
+          baseFileReader.get().close();
+        }
       }
     }
 
@@ -312,8 +321,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private Iterator<RowData> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
     List<Iterator<RowData>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
       Iterable<IndexedRecord> indexedRecords = () -> {
-        try {
-          return HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())).getRecordIterator(readerSchema);
+        try (HoodieFileReader fileReader = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath()))) {
+          return fileReader.getRecordIterator(readerSchema);
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);

@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -103,7 +104,6 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
     return writeMetadata;
   }
 
-
   /**
    * Submit job to execute clustering for the group.
    */
@@ -124,7 +124,6 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
         .flatMap(Collection::stream);
   }
 
-
   /**
    * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters.
    * The number of new file groups created is bounded by numOutputGroups.
@@ -144,8 +143,8 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
 
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
       Iterable<IndexedRecord> indexedRecords = () -> {
-        try {
-          return HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath())).getRecordIterator(readerSchema);
+        try (HoodieFileReader fileReader = HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()))) {
+          return fileReader.getRecordIterator(readerSchema);
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);
