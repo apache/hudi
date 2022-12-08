@@ -219,7 +219,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
   @Test
   public void compactOnDropPartitionFieldsCase() {
-    String partitionPath ="001";
+    String partitionPath = "001";
     // insert records that partition fields  was removed.
     HoodieWriteConfig config = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
@@ -229,7 +229,10 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
-      String recordSchema = "{\"type\":\"record\",\"name\":\"records\",\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"\"},{\"name\":\"ts\",\"type\":\"long\",\"doc\":\"\"},{\"name\":\"score\",\"type\":\"int\",\"doc\":\"\"}]}";
+      String recordSchema = "{\"type\":\"record\",\"name\":\"records\"," +
+              "\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"\"}," +
+              "{\"name\":\"ts\",\"type\":\"long\",\"doc\":\"\"}," +
+              "{\"name\":\"score\",\"type\":\"int\",\"doc\":\"\"}]}";
       config.setSchema(recordSchema);
 
       List<HoodieRecord> records = generateInsertsWithoutPartitionFields(recordSchema,partitionPath);
@@ -251,7 +254,11 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       // Do a compaction
       //original schema with partition fields
-      String originalSchema =  "{\"type\":\"record\",\"name\":\"records\",\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"\"},{\"name\":\"partitionpath\",\"type\":\"string\",\"doc\":\"\"},{\"name\":\"ts\",\"type\":\"long\",\"doc\":\"\"},{\"name\":\"score\",\"type\":\"int\",\"doc\":\"\"}]}";
+      String originalSchema =  "{\"type\":\"record\",\"name\":\"records\"," +
+              "\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"\"}," +
+              "{\"name\":\"partitionpath\",\"type\":\"string\",\"doc\":\"\"}," +
+              "{\"name\":\"ts\",\"type\":\"long\",\"doc\":\"\"}," +
+              "{\"name\":\"score\",\"type\":\"int\",\"doc\":\"\"}]}";
       config.setSchema(originalSchema);
       table = HoodieSparkTable.create(config, context);
       String compactionInstantTime = "102";
@@ -266,7 +273,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     return HoodieTableType.MERGE_ON_READ;
   }
 
-  private List<HoodieRecord> generateInsertsWithoutPartitionFields(String recordSchema,String partitionPath){
+  private List<HoodieRecord> generateInsertsWithoutPartitionFields(String recordSchema,String partitionPath) {
     Schema schema = new Schema.Parser().parse(recordSchema);
     GenericRecord record = new GenericData.Record(schema);
     record.put("id", "1");
@@ -277,7 +284,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
             new HoodieAvroPayload(recordOption)));
   }
 
-  private List<HoodieRecord> generateUpdatesWithoutPartitionFields(String recordSchema,String partitionPath){
+  private List<HoodieRecord> generateUpdatesWithoutPartitionFields(String recordSchema,String partitionPath) {
     Schema schema = new Schema.Parser().parse(recordSchema);
     GenericRecord record = new GenericData.Record(schema);
     record.put("id", "1");
