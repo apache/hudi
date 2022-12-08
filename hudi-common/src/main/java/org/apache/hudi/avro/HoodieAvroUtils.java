@@ -83,8 +83,10 @@ import java.util.stream.Collectors;
 
 import static org.apache.avro.Schema.Type.UNION;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Helper class to do common stuff across Avro.
@@ -644,19 +646,17 @@ public class HoodieAvroUtils {
    * @param fieldValue  avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
-  public static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue, boolean consistentLogicalTimestampEnabled) {
+  public static Object convertValueForSpecificDataTypes(Schema fieldSchema,
+                                                        Object fieldValue,
+                                                        boolean consistentLogicalTimestampEnabled) {
     if (fieldSchema == null) {
       return fieldValue;
+    } else if (fieldValue == null) {
+      checkState(isNullable(fieldSchema));
+      return null;
     }
 
-    if (fieldSchema.getType() == Schema.Type.UNION) {
-      for (Schema schema : fieldSchema.getTypes()) {
-        if (schema.getType() != Schema.Type.NULL) {
-          return convertValueForAvroLogicalTypes(schema, fieldValue, consistentLogicalTimestampEnabled);
-        }
-      }
-    }
-    return convertValueForAvroLogicalTypes(fieldSchema, fieldValue, consistentLogicalTimestampEnabled);
+    return convertValueForAvroLogicalTypes(resolveNullableSchema(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
   }
 
   /**
