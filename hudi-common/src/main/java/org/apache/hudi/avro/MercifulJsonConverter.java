@@ -101,14 +101,14 @@ public class MercifulJsonConverter {
   }
 
   private static GenericRecord convertJsonToAvro(Map<String, Object> inputJson, Schema schema) {
-    GenericRecordBuilder genericRecordBuilder = new GenericRecordBuilder(schema);
+    GenericRecord avroRecord = new GenericData.Record(schema);
     for (Schema.Field f : schema.getFields()) {
       Object val = getFieldFromJson(f, inputJson, schema.getFullName());
       if (val != null) {
-        genericRecordBuilder.set(f, convertJsonToAvroField(val, f.name(), f.schema()));
+        avroRecord.put(f.pos(), convertJsonToAvroField(val, f.name(), f.schema()));
       }
     }
-    return genericRecordBuilder.build();
+    return avroRecord;
   }
 
   private static Object getFieldFromJson(final Schema.Field fieldSchema, final Map<String, Object> inputJson, final String schemaFullName) {
