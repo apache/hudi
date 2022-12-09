@@ -100,14 +100,14 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
 
   private void testBulkInsertInternalPartitioner(BulkInsertPartitioner partitioner,
                                                  JavaRDD<HoodieRecord> records,
-                                                 boolean mustRespectNumOutputPartitions,
+                                                 boolean enforceNumOutputPartitions,
                                                  boolean isGloballySorted,
                                                  boolean isLocallySorted,
                                                  Map<String, Long> expectedPartitionNumRecords) {
     testBulkInsertInternalPartitioner(
         partitioner,
         records,
-        mustRespectNumOutputPartitions,
+        enforceNumOutputPartitions,
         isGloballySorted,
         isLocallySorted,
         expectedPartitionNumRecords,
@@ -116,7 +116,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
 
   private void testBulkInsertInternalPartitioner(BulkInsertPartitioner partitioner,
                                                  JavaRDD<HoodieRecord> records,
-                                                 boolean mustRespectNumOutputPartitions,
+                                                 boolean enforceNumOutputPartitions,
                                                  boolean isGloballySorted,
                                                  boolean isLocallySorted,
                                                  Map<String, Long> expectedPartitionNumRecords,
@@ -125,7 +125,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     JavaRDD<HoodieRecord<? extends HoodieRecordPayload>> actualRecords =
         (JavaRDD<HoodieRecord<? extends HoodieRecordPayload>>) partitioner.repartitionRecords(records, numPartitions);
     assertEquals(
-        mustRespectNumOutputPartitions ? numPartitions : records.getNumPartitions(),
+        enforceNumOutputPartitions ? numPartitions : records.getNumPartitions(),
         actualRecords.getNumPartitions());
     List<HoodieRecord<? extends HoodieRecordPayload>> collectedActualRecords = actualRecords.collect();
     if (isGloballySorted) {
@@ -151,28 +151,28 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     assertEquals(expectedPartitionNumRecords, actualPartitionNumRecords);
   }
 
-  @ParameterizedTest(name = "[{index}] {0} isTablePartitioned={1} mustRespectNumOutputPartitions={2}")
+  @ParameterizedTest(name = "[{index}] {0} isTablePartitioned={1} enforceNumOutputPartitions={2}")
   @MethodSource("configParams")
   public void testBulkInsertInternalPartitioner(BulkInsertSortMode sortMode,
                                                 boolean isTablePartitioned,
-                                                boolean mustRespectNumOutputPartitions,
+                                                boolean enforceNumOutputPartitions,
                                                 boolean isGloballySorted,
                                                 boolean isLocallySorted) {
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerFactory.get(sortMode, mustRespectNumOutputPartitions),
+        BulkInsertInternalPartitionerFactory.get(sortMode, enforceNumOutputPartitions),
         records1,
         isTablePartitioned,
-        mustRespectNumOutputPartitions,
+        enforceNumOutputPartitions,
         isGloballySorted,
         isLocallySorted,
         generateExpectedPartitionNumRecords(records1));
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerFactory.get(sortMode, mustRespectNumOutputPartitions),
+        BulkInsertInternalPartitionerFactory.get(sortMode, enforceNumOutputPartitions),
         records2,
         isTablePartitioned,
-        mustRespectNumOutputPartitions,
+        enforceNumOutputPartitions,
         isGloballySorted,
         isLocallySorted,
         generateExpectedPartitionNumRecords(records2));

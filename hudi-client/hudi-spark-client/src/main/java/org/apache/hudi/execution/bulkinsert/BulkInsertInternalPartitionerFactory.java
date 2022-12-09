@@ -35,12 +35,12 @@ public abstract class BulkInsertInternalPartitionerFactory {
   }
 
   public static BulkInsertPartitioner get(
-      HoodieTable table, HoodieWriteConfig config, boolean mustRespectNumOutputPartitions) {
+      HoodieTable table, HoodieWriteConfig config, boolean enforceNumOutputPartitions) {
     if (config.getIndexType().equals(HoodieIndex.IndexType.BUCKET)
         && config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)) {
       return new RDDConsistentBucketPartitioner(table);
     }
-    return get(config.getBulkInsertSortMode(), table.isPartitioned(), mustRespectNumOutputPartitions);
+    return get(config.getBulkInsertSortMode(), table.isPartitioned(), enforceNumOutputPartitions);
   }
 
   public static BulkInsertPartitioner get(BulkInsertSortMode sortMode, boolean isTablePartitioned) {
@@ -49,10 +49,10 @@ public abstract class BulkInsertInternalPartitionerFactory {
 
   public static BulkInsertPartitioner get(BulkInsertSortMode sortMode,
                                           boolean isTablePartitioned,
-                                          boolean mustRespectNumOutputPartitions) {
+                                          boolean enforceNumOutputPartitions) {
     switch (sortMode) {
       case NONE:
-        return new NonSortPartitioner(mustRespectNumOutputPartitions);
+        return new NonSortPartitioner(enforceNumOutputPartitions);
       case GLOBAL_SORT:
         return new GlobalSortPartitioner();
       case PARTITION_SORT:

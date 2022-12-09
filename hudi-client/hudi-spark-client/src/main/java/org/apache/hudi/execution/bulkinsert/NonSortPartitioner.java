@@ -28,7 +28,7 @@ import org.apache.spark.api.java.JavaRDD;
  * A built-in partitioner that avoids expensive sorting for the input records for bulk insert
  * operation, by doing either of the following:
  * <p>
- * - If respecting the outputSparkPartitions, only does coalesce for input records;
+ * - If enforcing the outputSparkPartitions, only does coalesce for input records;
  * <p>
  * - Otherwise, returns input records as is.
  * <p>
@@ -39,20 +39,28 @@ import org.apache.spark.api.java.JavaRDD;
 public class NonSortPartitioner<T extends HoodieRecordPayload>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
-  private final boolean mustRespectNumOutputPartitions;
+  private final boolean enforceNumOutputPartitions;
 
+  /**
+   * Default constructor without enforcing the number of output partitions.
+   */
   public NonSortPartitioner() {
     this(false);
   }
 
-  public NonSortPartitioner(boolean mustRespectNumOutputPartitions) {
-    this.mustRespectNumOutputPartitions = mustRespectNumOutputPartitions;
+  /**
+   * Constructor with `enforceNumOutputPartitions` config.
+   *
+   * @param enforceNumOutputPartitions Whether to enforce the number of output partitions.
+   */
+  public NonSortPartitioner(boolean enforceNumOutputPartitions) {
+    this.enforceNumOutputPartitions = enforceNumOutputPartitions;
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    if (mustRespectNumOutputPartitions) {
+    if (enforceNumOutputPartitions) {
       return records.coalesce(outputSparkPartitions);
     }
     return records;

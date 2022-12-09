@@ -27,7 +27,7 @@ import org.apache.spark.sql.Row;
  * A built-in partitioner that avoids expensive sorting for the input Rows for bulk insert
  * operation, by doing either of the following:
  * <p>
- * - If respecting the outputSparkPartitions, only does coalesce for input Rows;
+ * - If enforcing the outputSparkPartitions, only does coalesce for input Rows;
  * <p>
  * - Otherwise, returns input Rows as is.
  * <p>
@@ -35,19 +35,27 @@ import org.apache.spark.sql.Row;
  */
 public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
-  private final boolean mustRespectNumOutputPartitions;
+  private final boolean enforceNumOutputPartitions;
 
+  /**
+   * Default constructor without enforcing the number of output partitions.
+   */
   public NonSortPartitionerWithRows() {
     this(false);
   }
 
-  public NonSortPartitionerWithRows(boolean mustRespectNumOutputPartitions) {
-    this.mustRespectNumOutputPartitions = mustRespectNumOutputPartitions;
+  /**
+   * Constructor with `enforceNumOutputPartitions` config.
+   *
+   * @param enforceNumOutputPartitions Whether to enforce the number of output partitions.
+   */
+  public NonSortPartitionerWithRows(boolean enforceNumOutputPartitions) {
+    this.enforceNumOutputPartitions = enforceNumOutputPartitions;
   }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    if (mustRespectNumOutputPartitions) {
+    if (enforceNumOutputPartitions) {
       return rows.coalesce(outputSparkPartitions);
     }
     return rows;

@@ -37,7 +37,7 @@ public interface BulkInsertPartitioner<I> extends Serializable {
   /**
    * Partitions the input records based on the number of output partitions as a hint.
    * <p>
-   * Note that, the number of output partitions may or may not be respected, depending on the
+   * Note that, the number of output partitions may or may not be enforced, depending on the
    * specific implementation.
    *
    * @param records          Input Hoodie records.
