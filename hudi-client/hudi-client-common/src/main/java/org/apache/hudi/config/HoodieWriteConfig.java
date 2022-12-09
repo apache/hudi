@@ -344,7 +344,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. "
           + "PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing "
           + "lowest and best effort file sizing. "
-          + "PARTITION_PATH_REDISTRIBUTE: this ensures that the data for a single physical partition in the table is written "
+          + "PARTITION_PATH_REPARTITION: this ensures that the data for a single physical partition in the table is written "
           + "by the same Spark executor, best for input data evenly distributed across different partition paths. "
           + "This can cause imbalance among Spark executors if the input data is skewed, i.e., most records are intended for "
           + "a handful of partition paths among all. "

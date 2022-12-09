@@ -41,16 +41,16 @@ import scala.Tuple2;
  * - For physically non-partitioned table, simply does coalesce for the input records with
  * `outputSparkPartitions`
  * <p>
- * Corresponding to the {@code BulkInsertSortMode.PARTITION_PATH_REDISTRIBUTE} mode.
+ * Corresponding to the {@code BulkInsertSortMode.PARTITION_PATH_REPARTITION} mode.
  *
  * @param <T> HoodieRecordPayload type
  */
-public class PartitionPathRedistributePartitioner<T extends HoodieRecordPayload>
+public class PartitionPathRepartitionPartitioner<T extends HoodieRecordPayload>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean isTablePartitioned;
 
-  public PartitionPathRedistributePartitioner(boolean isTablePartitioned) {
+  public PartitionPathRepartitionPartitioner(boolean isTablePartitioned) {
     this.isTablePartitioned = isTablePartitioned;
   }
 
@@ -60,7 +60,8 @@ public class PartitionPathRedistributePartitioner<T extends HoodieRecordPayload>
     if (isTablePartitioned) {
       PartitionPathRDDPartitioner partitioner = new PartitionPathRDDPartitioner(
           (partitionPath) -> (String) partitionPath, outputSparkPartitions);
-      return records.mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record))
+      return records
+          .mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record))
           .partitionBy(partitioner)
           .values();
     }

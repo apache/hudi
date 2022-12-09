@@ -35,13 +35,13 @@ import org.apache.spark.sql.Row;
  * - For physically non-partitioned table, simply does coalesce for the input rows with
  * `outputSparkPartitions`
  * <p>
- * Corresponding to the {@code BulkInsertSortMode.PARTITION_PATH_REDISTRIBUTE} mode.
+ * Corresponding to the {@code BulkInsertSortMode.PARTITION_PATH_REPARTITION} mode.
  */
-public class PartitionPathRedistributePartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class PartitionPathRepartitionPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   private final boolean isTablePartitioned;
 
-  public PartitionPathRedistributePartitionerWithRows(boolean isTablePartitioned) {
+  public PartitionPathRepartitionPartitionerWithRows(boolean isTablePartitioned) {
     this.isTablePartitioned = isTablePartitioned;
   }
 

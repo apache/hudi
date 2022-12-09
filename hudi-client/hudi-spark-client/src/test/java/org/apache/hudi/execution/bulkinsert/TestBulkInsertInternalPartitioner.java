@@ -81,8 +81,8 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     Object[][] data = new Object[][] {
         {BulkInsertSortMode.GLOBAL_SORT, true, true, true},
         {BulkInsertSortMode.PARTITION_SORT, true, false, true},
-        {BulkInsertSortMode.PARTITION_PATH_REDISTRIBUTE, true, false, false},
-        {BulkInsertSortMode.PARTITION_PATH_REDISTRIBUTE, false, false, false},
+        {BulkInsertSortMode.PARTITION_PATH_REPARTITION, true, false, false},
+        {BulkInsertSortMode.PARTITION_PATH_REPARTITION, false, false, false},
         {BulkInsertSortMode.NONE, true, false, false}
     };
     return Stream.of(data).map(Arguments::of);
