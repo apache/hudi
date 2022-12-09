@@ -446,6 +446,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       return;
     }
 
+    IOUtils.checkParquetFileVaid(hoodieTable.getHadoopConf(), newFilePath);
+
     long oldNumWrites = 0;
     try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.config.getRecordMerger().getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath)) {
       oldNumWrites = reader.getTotalRecords();

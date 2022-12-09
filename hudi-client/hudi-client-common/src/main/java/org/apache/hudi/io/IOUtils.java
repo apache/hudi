@@ -18,11 +18,16 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.config.HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.config.HoodieMemoryConfig.DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION;
@@ -71,5 +76,14 @@ public class IOUtils {
     }
     String fraction = hoodieConfig.getStringOrDefault(MAX_MEMORY_FRACTION_FOR_COMPACTION);
     return getMaxMemoryAllowedForMerge(context, fraction);
+  }
+
+  public static void checkParquetFileVaid(Configuration hadoopConf, Path filePath) {
+    // Fast verify the integrity of the parquet file.
+    // only check the readable of parquet metadata.
+    final String extension = FSUtils.getFileExtension(filePath.toString());
+    if (PARQUET.getFileExtension().equals(extension)) {
+      new ParquetUtils().readMetadata(hadoopConf, filePath);
+    }
   }
 }
