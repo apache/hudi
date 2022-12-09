@@ -205,7 +205,7 @@ object HoodieSparkSqlWriter {
       val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext, hoodieConfig, tableMetaClient).orElse {
           // In case we need to reconcile the schema and schema evolution is enabled,
           // we will force-apply schema evolution to the writer's schema
-          if (shouldReconcileSchema) {
+          if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
             Some(AvroInternalSchemaConverter.convert(sourceSchema))
           } else {
             None
