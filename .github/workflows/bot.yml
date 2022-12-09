@@ -69,7 +69,7 @@ jobs:
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark $MVN_ARGS
 
-test-flink:
+  test-flink:
     runs-on: ubuntu-latest
     strategy:
       matrix:
