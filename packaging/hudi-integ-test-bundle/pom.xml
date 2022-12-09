@@ -165,6 +165,7 @@
                   <include>com.fasterxml.jackson.core:jackson-core</include>
                   <include>com.fasterxml.jackson.core:jackson-databind</include>
                   <include>com.fasterxml.jackson.dataformat:jackson-dataformat-yaml</include>
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
 
                   <include>org.apache.curator:curator-framework</include>
                   <include>org.apache.curator:curator-client</include>
