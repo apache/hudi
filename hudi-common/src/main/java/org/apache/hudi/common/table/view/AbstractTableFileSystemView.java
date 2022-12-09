@@ -368,8 +368,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
     Predicate<FileStatus> rtFilePredicate = fileStatus ->  {
-      Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileStatus.getPath().getName());
-      return matcher.find();
+      String fileName = fileStatus.getPath().getName();
+      Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileName);
+      return matcher.find() && fileName.contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
     };
     return Arrays.stream(statuses).filter(rtFilePredicate).map(HoodieLogFile::new);
   }
