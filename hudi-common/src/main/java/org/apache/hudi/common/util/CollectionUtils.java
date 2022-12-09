@@ -156,6 +156,15 @@ public class CollectionUtils {
   }
 
   /**
+   * Zip two lists into a Map. Will throw Exception if the size is different between these two lists.
+   */
+  public static <K, V> Map<K, V> zipToMap(List<K> keys, List<V> values) {
+    checkArgument(keys.size() == values.size(),
+        "keys' size must be equal with the values' size");
+    return IntStream.range(0, keys.size()).boxed().collect(Collectors.toMap(keys::get, values::get));
+  }
+
+  /**
    * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
    */
   public static <E> Set<E> diff(Collection<E> one, Collection<E> another) {
