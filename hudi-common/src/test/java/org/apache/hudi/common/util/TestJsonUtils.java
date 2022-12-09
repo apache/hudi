@@ -43,7 +43,10 @@ public class TestJsonUtils {
         100L);
 
     assertEquals(
-        "{\"filePath\":\"/dummpy/file\",\"columnName\":\"dt\",\"minValue\":{\"year\":2000,\"month\":1,\"day\":1},\"maxValue\":{\"year\":2022,\"month\":1,\"day\":1},\"nullCount\":0,\"valueCount\":2,\"totalSize\":100,\"totalUncompressedSize\":100}",
+        "{\"filePath\":\"/dummpy/file\",\"columnName\":\"dt\","
+            + "\"minValue\":{\"year\":2000,\"month\":1,\"day\":1},"
+            + "\"maxValue\":{\"year\":2022,\"month\":1,\"day\":1},"
+            + "\"nullCount\":0,\"valueCount\":2,\"totalSize\":100,\"totalUncompressedSize\":100}",
         JsonUtils.toString(colMetadata));
   }
 }
