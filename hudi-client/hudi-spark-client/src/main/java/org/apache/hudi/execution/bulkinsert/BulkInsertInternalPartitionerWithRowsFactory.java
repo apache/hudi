@@ -31,9 +31,14 @@ public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
   public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode,
                                                         boolean isTablePartitioned) {
+    return get(sortMode, isTablePartitioned, false);
+  }
+
+  public static BulkInsertPartitioner<Dataset<Row>> get(
+      BulkInsertSortMode sortMode, boolean isTablePartitioned, boolean mustRespectNumOutputPartitions) {
     switch (sortMode) {
       case NONE:
-        return new NonSortPartitionerWithRows();
+        return new NonSortPartitionerWithRows(mustRespectNumOutputPartitions);
       case GLOBAL_SORT:
         return new GlobalSortPartitionerWithRows();
       case PARTITION_SORT:

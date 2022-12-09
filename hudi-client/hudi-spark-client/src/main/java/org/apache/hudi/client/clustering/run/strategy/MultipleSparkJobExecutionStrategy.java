@@ -207,9 +207,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       }
     }).orElse(isRowPartitioner
         ? BulkInsertInternalPartitionerWithRowsFactory.get(
-        getWriteConfig().getBulkInsertSortMode(), getHoodieTable().isPartitioned())
+        getWriteConfig().getBulkInsertSortMode(), getHoodieTable().isPartitioned(), true)
         : BulkInsertInternalPartitionerFactory.get(
-        getWriteConfig().getBulkInsertSortMode(), getHoodieTable().isPartitioned()));
+        getWriteConfig().getBulkInsertSortMode(), getHoodieTable().isPartitioned(), true));
   }
 
   /**
