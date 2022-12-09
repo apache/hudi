@@ -2240,7 +2240,6 @@
     <profile>
       <id>flink1.15</id>
       <properties>
-        <avro.version>1.10.0</avro.version>
         <orc.flink.version>1.5.6</orc.flink.version>
       </properties>
       <activation>
@@ -2255,7 +2254,6 @@
         <flink.version>${flink1.14.version}</flink.version>
         <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
         <flink.bundle.version>1.14</flink.bundle.version>
-        <avro.version>1.10.0</avro.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
         <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
@@ -2279,7 +2277,6 @@
         <flink.version>${flink1.13.version}</flink.version>
         <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
         <flink.bundle.version>1.13</flink.bundle.version>
-        <avro.version>1.10.0</avro.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.runtime.artifactId>flink-runtime_${scala.binary.version}</flink.runtime.artifactId>
         <flink.table.runtime.artifactId>flink-table-runtime-blink_${scala.binary.version}</flink.table.runtime.artifactId>
