@@ -19,34 +19,38 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDate;
-import java.time.chrono.ChronoLocalDate;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestJsonUtils {
 
   @Test
-  void deserLocalDate() {
-    HoodieColumnRangeMetadata<ChronoLocalDate> colMetadata = HoodieColumnRangeMetadata.create(
-        "/dummpy/file",
-        "dt",
-        LocalDate.of(2000, 1, 1),
-        LocalDate.of(2022, 1, 1),
-        0L,
-        2L,
-        100L,
-        100L);
+  void deserDateTimeObjects() {
+    List<Object> dateTimeObjs = Arrays.asList(
+        java.time.Instant.ofEpochSecond(1),
+        java.time.LocalDate.of(1970, 1, 1),
+        java.time.LocalTime.of(0, 0, 1),
+        java.time.LocalDateTime.of(1970, 1, 1, 0, 0, 1, 0),
+        java.sql.Date.valueOf("1970-01-01"),
+        java.sql.Time.valueOf("00:00:01"),
+        java.sql.Timestamp.from(Instant.ofEpochSecond(1)),
+        java.util.Date.from(Instant.ofEpochSecond(1))
+    );
 
-    assertEquals(
-        "{\"filePath\":\"/dummpy/file\",\"columnName\":\"dt\","
-            + "\"minValue\":{\"year\":2000,\"month\":1,\"day\":1},"
-            + "\"maxValue\":{\"year\":2022,\"month\":1,\"day\":1},"
-            + "\"nullCount\":0,\"valueCount\":2,\"totalSize\":100,\"totalUncompressedSize\":100}",
-        JsonUtils.toString(colMetadata));
+    assertEquals("["
+            + "\"1970-01-01T00:00:01Z\","
+            + "\"1970-01-01\","
+            + "\"00:00:01\","
+            + "\"1970-01-01T00:00:01\","
+            + "\"1970-01-01\","
+            + "\"00:00:01\","
+            + "\"1970-01-01T00:00:01.000+0000\","
+            + "\"1970-01-01T00:00:01.000+0000\"]",
+        JsonUtils.toString(dateTimeObjs));
   }
 }
