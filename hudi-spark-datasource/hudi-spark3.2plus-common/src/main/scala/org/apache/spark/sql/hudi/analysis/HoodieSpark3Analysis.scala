@@ -23,7 +23,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute}
-import org.apache.spark.sql.catalyst.plans.logcal.HoodieQuery
+import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieQueryWithKV}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
@@ -73,9 +73,11 @@ class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
         } else {
           s
         }
-
     case query: HoodieQuery =>
       HoodieQuery.resolve(sparkSession, query)
+
+    case q: HoodieQueryWithKV =>
+      HoodieQueryWithKV.resolve(sparkSession, q)
   }
 
   /**
