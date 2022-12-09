@@ -89,7 +89,7 @@ jobs:
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -Pintegration-tests -Dscala-2.12 -D"$FLINK_PROFILE" -DskipTests=true $MVN_ARGS
+          mvn clean install -Pintegration-tests -Dscala-2.12 -D"$FLINK_PROFILE" -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
