@@ -137,6 +137,8 @@
     <flink.version>${flink1.15.version}</flink.version>
     <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
     <flink.bundle.version>1.15</flink.bundle.version>
+    <!-- This is fixed to match with version from flink-avro -->
+    <flink.avro.version>1.10.0</flink.avro.version>
     <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
