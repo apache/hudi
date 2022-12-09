@@ -195,6 +195,8 @@ public abstract class AbstractStreamWriteFunction<I>
   private void restoreWriteMetadata() throws Exception {
     boolean eventSent = false;
     for (WriteMetadataEvent event : this.writeMetadataState.get()) {
+      LOG.info("restoreWriteMetadata send event, instant {}, pending instant {}, task[{}].",
+          event.getInstantTime(), this.currentInstant, taskID);
       if (Objects.equals(this.currentInstant, event.getInstantTime())) {
         // Reset taskID for event
         event.setTaskID(taskID);
@@ -237,6 +239,8 @@ public abstract class AbstractStreamWriteFunction<I>
         .bootstrap(true)
         .build();
     this.writeMetadataState.add(event);
+    LOG.info("reloadWriteMetaState send event, instant {}, task[{}].",
+        event.getInstantTime(), taskID);
     writeStatuses.clear();
   }
 

@@ -108,7 +108,11 @@ public class CkpMetadata implements Serializable {
   private void bootstrap(HoodieTableMetaClient metaClient) throws IOException {
     fs.delete(path, true);
     fs.mkdirs(path);
+    // The last pending instant excluding compaction and replacecommit should start
+    // for recommits of the last inflight instant if the write metadata checkpoint successfully
+    // but was not committed due to some rare cases.
     metaClient.getActiveTimeline().reload().getCommitsTimeline().filterPendingExcludingCompaction()
+        .filter(instant -> !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction()))
         .lastInstant()
         .ifPresent(instant -> startInstant(instant.getTimestamp()));
   }

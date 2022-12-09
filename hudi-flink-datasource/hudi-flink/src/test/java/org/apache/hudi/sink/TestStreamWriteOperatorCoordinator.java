@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.metadata.CkpMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
@@ -163,6 +164,40 @@ public class TestStreamWriteOperatorCoordinator {
         "Commits the instant with partial events anyway");
     lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
     assertThat("Commits the instant with partial events anyway", lastCompleted, is(instant));
+  }
+
+  @Test
+  public void testRecommitWithCheckpointCompleteException() throws Exception {
+    // uncompleted meta events case
+    final CompletableFuture<byte[]> future = new CompletableFuture<>();
+    final String instant = coordinator.getInstant();
+    coordinator.checkpointCoordinator(1, future);
+    // not execute notify checkpoint complete to imitate failed commit even though it checkpoints successfully
+    OperatorEvent event1 = createOperatorEvent(0, instant, "par1", false, 0.2);
+    coordinator.handleEventFromOperator(0, event1);
+    OperatorEvent event2 = createOperatorEvent(1, instant, "par2", false, 0.2);
+    coordinator.handleEventFromOperator(1, event2);
+
+    // recover from last successful checkpoint
+    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
+    coordinator = new StreamWriteOperatorCoordinator(
+        TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), context);
+    coordinator.start();
+    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    // send bootstrap event based on CkpMetadata
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(tempFile.getAbsolutePath()).build();
+    CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient.getFs(), metaClient.getBasePathV2().toString());
+     String lastPendingInstant = StreamerUtil.getLastPendingInstant(metaClient);
+     String lastPendingInstantCached = ckpMetadata.lastPendingInstant();
+     assertThat("Pending instant to be recommitted", instant.equals(lastPendingInstant) && instant.equals(lastPendingInstantCached));
+    OperatorEvent event3 = createBootstrapEvent(0, lastPendingInstantCached, "par1", false, 0.2);
+    OperatorEvent event4 = createBootstrapEvent(1, lastPendingInstantCached, "par2", false, 0.2);
+    coordinator.handleEventFromOperator(0, event3);
+    coordinator.handleEventFromOperator(1, event4);
+    metaClient.reloadActiveTimeline();
+    String lastCompleted = StreamerUtil.getLastCompletedInstant(metaClient);
+    assertThat("Recommits the instant with bootstrap events from checkpoint metadata", lastCompleted, is(instant));
   }
 
   @Test
@@ -410,6 +445,33 @@ public class TestStreamWriteOperatorCoordinator {
         .instantTime(instant)
         .writeStatus(Collections.singletonList(writeStatus))
         .lastBatch(true)
+        .build();
+  }
+
+  private static WriteMetadataEvent createBootstrapEvent(
+      int taskId,
+      String instant,
+      String partitionPath,
+      boolean trackSuccessRecords,
+      double failureFraction) {
+    final WriteStatus writeStatus = new WriteStatus(trackSuccessRecords, failureFraction);
+    writeStatus.setPartitionPath(partitionPath);
+
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath(partitionPath);
+    writeStat.setFileId("fileId123");
+    writeStat.setPath("path123");
+    writeStat.setFileSizeInBytes(123);
+    writeStat.setTotalWriteBytes(123);
+    writeStat.setNumWrites(1);
+
+    writeStatus.setStat(writeStat);
+
+    return WriteMetadataEvent.builder()
+        .taskID(taskId)
+        .instantTime(instant)
+        .writeStatus(Collections.singletonList(writeStatus))
+        .bootstrap(true)
         .build();
   }
 
