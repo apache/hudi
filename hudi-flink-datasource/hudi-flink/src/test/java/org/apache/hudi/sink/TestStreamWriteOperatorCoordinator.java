@@ -188,9 +188,9 @@ public class TestStreamWriteOperatorCoordinator {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(tempFile.getAbsolutePath()).build();
     CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient.getFs(), metaClient.getBasePathV2().toString());
-     String lastPendingInstant = StreamerUtil.getLastPendingInstant(metaClient);
-     String lastPendingInstantCached = ckpMetadata.lastPendingInstant();
-     assertThat("Pending instant to be recommitted", instant.equals(lastPendingInstant) && instant.equals(lastPendingInstantCached));
+    String lastPendingInstant = StreamerUtil.getLastPendingInstant(metaClient);
+    String lastPendingInstantCached = ckpMetadata.lastPendingInstant();
+    assertThat("Pending instant to be recommitted", instant.equals(lastPendingInstant) && instant.equals(lastPendingInstantCached));
     OperatorEvent event3 = createBootstrapEvent(0, lastPendingInstantCached, "par1", false, 0.2);
     OperatorEvent event4 = createBootstrapEvent(1, lastPendingInstantCached, "par2", false, 0.2);
     coordinator.handleEventFromOperator(0, event3);
