@@ -128,7 +128,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       spark.sql(sql)
     } catch {
       case e: Throwable =>
-        assertResult(errorMsg)(e.getMessage)
+        assertResult(errorMsg.trim)(e.getMessage.trim)
         hasException = true
     }
     assertResult(true)(hasException)
@@ -139,7 +139,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       spark.sql(sql)
     } catch {
-      case e: Throwable if e.getMessage.contains(errorMsg) => hasException = true
+      case e: Throwable if e.getMessage.trim.contains(errorMsg.trim) => hasException = true
       case f: Throwable => fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
     }
     assertResult(true)(hasException)
