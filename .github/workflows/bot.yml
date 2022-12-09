@@ -114,7 +114,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         if: ${{ matrix.buildOnly != 'true' && matrix.sparkArchive != '' }}
         run:
-          mvn test -Pintegration-test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
+          mvn test -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
       - name: 'IT'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -128,4 +128,4 @@ jobs:
           tar -xvf $GITHUB_WORKSPACE/$SPARK_ARCHIVE.tgz -C $GITHUB_WORKSPACE/
           mkdir /tmp/spark-events/
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE%.*}
-          mvn verify -Pintegration-test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" $MVN_ARGS
+          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" $MVN_ARGS
