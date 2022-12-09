@@ -56,7 +56,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.exception.ExceptionUtil.getRootCause;
-import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformFunction;
+import static org.apache.hudi.execution.HoodieLazyInsertIterable.getCloningTransformer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

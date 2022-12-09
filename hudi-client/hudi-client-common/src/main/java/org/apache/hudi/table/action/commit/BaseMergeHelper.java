@@ -41,7 +41,7 @@ public abstract class BaseMergeHelper {
   /**
    * Consumer that dequeues records from queue and sends to Merge Handle.
    */
-  protected static class UpdateHandler extends HoodieConsumer<HoodieRecord, Void> {
+  protected static class UpdateHandler implements HoodieConsumer<HoodieRecord, Void> {
 
     private final HoodieMergeHandle upsertHandle;
 
