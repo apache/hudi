@@ -67,20 +67,6 @@ class ExpressionPayload(@transient record: GenericRecord,
     this(recordOpt.orElse(null), 0)
   }
 
-  /**
-   * Target schema used for writing records into the table
-   */
-  private var writeSchema: Schema = _
-
-  /**
-   * Original record's schema
-   *
-   * NOTE: To avoid excessive overhead of serializing original record's Avro schema along
-   *       w/ _every_ record, we instead make it to be provided along with every request
-   *       requiring this record to be deserialized
-   */
-  private var recordSchema: Schema = _
-
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
                                         schema: Schema): HOption[IndexedRecord] = {
     throw new IllegalStateException(s"Should not call this method for ${getClass.getCanonicalName}")
@@ -93,7 +79,7 @@ class ExpressionPayload(@transient record: GenericRecord,
   override def combineAndGetUpdateValue(targetRecord: IndexedRecord,
                                         schema: Schema,
                                         properties: Properties): HOption[IndexedRecord] = {
-    init(properties)
+    val recordSchema = getRecordSchema(properties)
 
     val sourceRecord = bytesToAvro(recordBytes, recordSchema)
     val joinedRecord = joinRecord(sourceRecord, targetRecord)
@@ -136,8 +122,9 @@ class ExpressionPayload(@transient record: GenericRecord,
       // If the update condition matched  then execute assignment expression
       // to compute final record to update. We will return the first matched record.
       if (conditionEvalResult) {
+        val writerSchema = getWriterSchema(properties)
         val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
-        lazy val resultingAvroRecord = getAvroSerializerFor(writeSchema)
+        lazy val resultingAvroRecord = getAvroSerializerFor(writerSchema)
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
 
@@ -215,8 +202,9 @@ class ExpressionPayload(@transient record: GenericRecord,
       // If matched the insert condition then execute the assignment expressions to compute the
       // result record. We will return the first matched record.
       if (conditionEvalResult) {
+        val writerSchema = getWriterSchema(properties)
         val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
-        val resultingAvroRecord = getAvroSerializerFor(writeSchema)
+        val resultingAvroRecord = getAvroSerializerFor(writerSchema)
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
 
@@ -233,9 +221,9 @@ class ExpressionPayload(@transient record: GenericRecord,
   }
 
   override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
-    init(properties)
-
+    val recordSchema = getRecordSchema(properties)
     val incomingRecord = ConvertibleRecord(bytesToAvro(recordBytes, recordSchema))
+
     if (isDeleteRecord(incomingRecord.asAvro)) {
       HOption.empty[IndexedRecord]()
     } else if (isMORTable(properties)) {
@@ -266,20 +254,6 @@ class ExpressionPayload(@transient record: GenericRecord,
       writeRecord.put(i, values(i))
     }
     writeRecord
-  }
-
-  private def init(props: Properties): Unit = {
-    if (writeSchema == null) {
-      ValidationUtils.checkArgument(props.containsKey(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key),
-        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key} property")
-      writeSchema = parseSchema(props.getProperty(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key))
-    }
-
-    if (recordSchema == null) {
-      ValidationUtils.checkArgument(props.containsKey(PAYLOAD_RECORD_AVRO_SCHEMA),
-        s"Missing ${PAYLOAD_RECORD_AVRO_SCHEMA} property")
-      recordSchema = parseSchema(props.getProperty(PAYLOAD_RECORD_AVRO_SCHEMA))
-    }
   }
 
   /**
@@ -359,6 +333,18 @@ object ExpressionPayload {
       new Function[String, Schema] {
         override def apply(t: String): Schema = new Schema.Parser().parse(t)
     })
+  }
+
+  private def getRecordSchema(props: Properties) = {
+    ValidationUtils.checkArgument(props.containsKey(PAYLOAD_RECORD_AVRO_SCHEMA),
+      s"Missing ${PAYLOAD_RECORD_AVRO_SCHEMA} property")
+    parseSchema(props.getProperty(PAYLOAD_RECORD_AVRO_SCHEMA))
+  }
+
+  private def getWriterSchema(props: Properties): Schema = {
+    ValidationUtils.checkArgument(props.containsKey(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key),
+      s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key} property")
+    parseSchema(props.getProperty(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key))
   }
 
   private def getAvroDeserializerFor(schema: Schema) = {
