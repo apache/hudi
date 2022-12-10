@@ -30,13 +30,24 @@ import org.apache.hudi.table.HoodieTable;
 public abstract class BulkInsertInternalPartitionerFactory {
 
   public static BulkInsertPartitioner get(HoodieTable table, HoodieWriteConfig config) {
-    return get(config.getBulkInsertSortMode(), table.isPartitioned());
+    return get(config.getBulkInsertSortMode(), table.isPartitioned(), false);
+  }
+
+  public static BulkInsertPartitioner get(
+      HoodieTable table, HoodieWriteConfig config, boolean enforceNumOutputPartitions) {
+    return get(config.getBulkInsertSortMode(), table.isPartitioned(), enforceNumOutputPartitions);
   }
 
   public static BulkInsertPartitioner get(BulkInsertSortMode sortMode, boolean isTablePartitioned) {
+    return get(sortMode, isTablePartitioned, false);
+  }
+
+  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode,
+                                          boolean isTablePartitioned,
+                                          boolean enforceNumOutputPartitions) {
     switch (sortMode) {
       case NONE:
-        return new NonSortPartitioner();
+        return new NonSortPartitioner(enforceNumOutputPartitions);
       case GLOBAL_SORT:
         return new GlobalSortPartitioner();
       case PARTITION_SORT:
