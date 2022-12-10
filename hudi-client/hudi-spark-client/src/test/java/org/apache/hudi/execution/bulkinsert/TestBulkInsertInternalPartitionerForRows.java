@@ -149,6 +149,10 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
                                                  Option<Comparator<Row>> comparator) {
     int numPartitions = 2;
     Dataset<Row> actualRecords = (Dataset<Row>) partitioner.repartitionRecords(rows, numPartitions);
+    assertEquals(
+        enforceNumOutputPartitions ? numPartitions : rows.rdd().getNumPartitions(),
+        actualRecords.rdd().getNumPartitions());
+
     List<Row> collectedActualRecords = actualRecords.collectAsList();
     if (isGloballySorted) {
       // Verify global order
