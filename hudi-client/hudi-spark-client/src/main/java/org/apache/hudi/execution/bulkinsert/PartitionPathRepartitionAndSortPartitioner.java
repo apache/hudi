@@ -31,21 +31,22 @@ import scala.Tuple2;
  * A built-in partitioner that does the following for input records for bulk insert operation
  * <p>
  * - For physically partitioned table, repartition the input records based on the partition path,
- * limiting the shuffle parallelism to specified `outputSparkPartitions`
+ * and sort records within Spark partitions, limiting the shuffle parallelism to specified
+ * `outputSparkPartitions`
  * <p>
  * - For physically non-partitioned table, simply does coalesce for the input records with
  * `outputSparkPartitions`
  * <p>
- * Corresponding to the {@code BulkInsertSortMode.PARTITION_PATH_REPARTITION} mode.
+ * Corresponding to the {@code BulkInsertSortMode.PARTITION_PATH_REPARTITION_AND_SORT} mode.
  *
  * @param <T> HoodieRecordPayload type
  */
-public class PartitionPathRepartitionPartitioner<T extends HoodieRecordPayload>
+public class PartitionPathRepartitionAndSortPartitioner<T extends HoodieRecordPayload>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean isTablePartitioned;
 
-  public PartitionPathRepartitionPartitioner(boolean isTablePartitioned) {
+  public PartitionPathRepartitionAndSortPartitioner(boolean isTablePartitioned) {
     this.isTablePartitioned = isTablePartitioned;
   }
 
@@ -57,7 +58,7 @@ public class PartitionPathRepartitionPartitioner<T extends HoodieRecordPayload>
           (partitionPath) -> (String) partitionPath, outputSparkPartitions);
       return records
           .mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record))
-          .partitionBy(partitioner)
+          .repartitionAndSortWithinPartitions(partitioner)
           .values();
     }
     return records.coalesce(outputSparkPartitions);
@@ -65,6 +66,6 @@ public class PartitionPathRepartitionPartitioner<T extends HoodieRecordPayload>
 
   @Override
   public boolean arePartitionRecordsSorted() {
-    return false;
+    return isTablePartitioned;
   }
 }

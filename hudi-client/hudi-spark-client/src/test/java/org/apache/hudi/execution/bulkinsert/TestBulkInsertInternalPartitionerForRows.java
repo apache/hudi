@@ -71,6 +71,9 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
         {BulkInsertSortMode.PARTITION_SORT, true, false, true},
         {BulkInsertSortMode.PARTITION_PATH_REPARTITION, true, false, false},
         {BulkInsertSortMode.PARTITION_PATH_REPARTITION, false, false, false},
+        {BulkInsertSortMode.PARTITION_PATH_REPARTITION_AND_SORT, true, false, false},
+        {BulkInsertSortMode.PARTITION_PATH_REPARTITION_AND_SORT, false, false, false},
+
         {BulkInsertSortMode.NONE, true, false, false}
     };
     return Stream.of(data).map(Arguments::of);

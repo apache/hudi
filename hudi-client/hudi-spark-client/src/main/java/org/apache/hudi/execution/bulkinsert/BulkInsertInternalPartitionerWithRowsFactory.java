@@ -40,6 +40,8 @@ public abstract class BulkInsertInternalPartitionerWithRowsFactory {
         return new PartitionSortPartitionerWithRows();
       case PARTITION_PATH_REPARTITION:
         return new PartitionPathRepartitionPartitionerWithRows(isTablePartitioned);
+      case PARTITION_PATH_REPARTITION_AND_SORT:
+        return new PartitionPathRepartitionAndSortPartitionerWithRows(isTablePartitioned);
       default:
         throw new UnsupportedOperationException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }
