@@ -120,6 +120,19 @@ object HoodieAnalysis {
     rules
   }
 
+  def customPreCBORules: Seq[RuleBuilder] = Seq(
+    // NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's
+    //       [[PruneFileSourcePartitions]] and as such should be executed at the same stage.
+    //       However, currently Spark doesn't allow [[SparkSessionExtensions]] to inject into
+    //       [[BaseSessionStateBuilder.customEarlyScanPushDownRules]] even though it could directly
+    //       inject into the Spark's [[Optimizer]]
+    //
+    //       To work this around, we injecting this as the rule that trails pre-CBO, ie it's
+    //          - Triggered before CBO, therefore have access to the same stats as CBO
+    //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
+    spark => HoodiePruneFileSourcePartitions(spark)
+  )
+
 }
 
 /**

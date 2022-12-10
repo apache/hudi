@@ -44,6 +44,10 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
       extensions.injectPostHocResolutionRule(ruleBuilder(_))
     }
 
+    HoodieAnalysis.customPreCBORules.foreach { ruleBuilder =>
+      extensions.injectPreCBORule(ruleBuilder(_))
+    }
+
     sparkAdapter.injectTableFunctions(extensions)
   }
 }
