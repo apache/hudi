@@ -148,7 +148,6 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
       Map<String, List<HoodieWriteStat>> commitWriteStatsMap = new HashMap<>();
       // Keep doing some writes and clean inline. Make sure we have expected number of files remaining.
       for (int i = 0; i < 8; i++) {
-        LOG.warn("i = " + i);
         String newCommitTime = makeNewCommitTime();
         client.startCommitWithTime(newCommitTime);
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newCommitTime, BATCH_SIZE);

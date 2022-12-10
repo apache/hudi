@@ -78,6 +78,12 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
   }
 
   private static Stream<Arguments> configParams() {
+    // Parameters:
+    //   BulkInsertSortMode sortMode,
+    //   boolean isTablePartitioned,
+    //   boolean enforceNumOutputPartitions,
+    //   boolean isGloballySorted,
+    //   boolean isLocallySorted
     Object[][] data = new Object[][] {
         {BulkInsertSortMode.GLOBAL_SORT, true, true, true, true},
         {BulkInsertSortMode.PARTITION_SORT, true, true, false, true},
@@ -161,17 +167,17 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerFactory.get(sortMode, enforceNumOutputPartitions),
+        BulkInsertInternalPartitionerFactory.get(
+            sortMode, isTablePartitioned, enforceNumOutputPartitions),
         records1,
-        isTablePartitioned,
         enforceNumOutputPartitions,
         isGloballySorted,
         isLocallySorted,
         generateExpectedPartitionNumRecords(records1));
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerFactory.get(sortMode, enforceNumOutputPartitions),
+        BulkInsertInternalPartitionerFactory.get(
+            sortMode, isTablePartitioned, enforceNumOutputPartitions),
         records2,
-        isTablePartitioned,
         enforceNumOutputPartitions,
         isGloballySorted,
         isLocallySorted,
