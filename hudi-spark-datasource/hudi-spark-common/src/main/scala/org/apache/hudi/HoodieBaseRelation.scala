@@ -237,7 +237,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * this variable itself is _lazy_ (and have to stay that way) which guarantees that it's not initialized, until
    * it's actually accessed
    */
-  protected lazy val fileIndex: HoodieFileIndex =
+  // TODO revert
+  lazy val fileIndex: HoodieFileIndex =
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
       FileStatusCache.getOrCreate(sparkSession))
 

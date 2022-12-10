@@ -1,0 +1,105 @@
+package org.apache.spark.sql.hudi.analysis
+
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.catalog.CatalogStatistics
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, AttributeSet, Expression, ExpressionSet, NamedExpression, PredicateHelper, SubqueryExpression}
+import org.apache.spark.sql.catalyst.planning.PhysicalOperation
+import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.FilterEstimation
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LeafNode, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.datasources.{DataSourceStrategy, HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.hudi.analysis.HoodiePruneFileSourcePartitions.{HoodieRelationMatcher, getPartitionFiltersAndDataFilters}
+import org.apache.spark.sql.sources.BaseRelation
+import org.apache.spark.sql.types.StructType
+
+/**
+ * Prune the partitions of Hudi table based relations by the means of pushing down the
+ * partition filters
+ *
+ * NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's [[PruneFileSourcePartitions]]
+ */
+case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[LogicalPlan] {
+
+  private def rebuildPhysicalOperation(projects: Seq[NamedExpression],
+                                       filters: Seq[Expression],
+                                       relation: LeafNode): Project = {
+    val withFilter = if (filters.nonEmpty) {
+      val filterExpression = filters.reduceLeft(And)
+      Filter(filterExpression, relation)
+    } else {
+      relation
+    }
+    Project(projects, withFilter)
+  }
+
+  override def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
+    case op @ PhysicalOperation(projects, filters,
+      lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _))
+        if filters.nonEmpty && fileIndex.partitionSchema.nonEmpty && sparkAdapter.isHoodieTable(lr, spark) =>
+
+      val deterministicFilters = filters.filter(f => f.deterministic && !SubqueryExpression.hasSubquery(f))
+      val normalizedFilters = DataSourceStrategy.normalizeExprs(deterministicFilters, lr.output)
+
+      val (partitionKeyFilters, _) =
+        getPartitionFiltersAndDataFilters(fileIndex.partitionSchema, normalizedFilters)
+
+      if (partitionKeyFilters.nonEmpty) {
+        // [[HudiFileIndex]] is a caching one, therefore we don't need to reconstruct new relation,
+        // instead we simply just refresh the index and update the stats
+        fileIndex.listFiles(partitionKeyFilters, Seq())
+
+        // Change table stats based on the sizeInBytes of pruned files
+        val filteredStats = FilterEstimation(Filter(partitionKeyFilters.reduce(And), lr)).estimate
+        val colStats = filteredStats.map {
+          _.attributeStats.map { case (attr, colStat) =>
+            (attr.name, colStat.toCatalogColumnStat(attr.name, attr.dataType))
+          }
+        }
+
+        val tableWithStats = lr.catalogTable.map(_.copy(
+          stats = Some(
+            CatalogStatistics(
+              sizeInBytes = BigInt(fileIndex.sizeInBytes),
+              rowCount = filteredStats.flatMap(_.rowCount),
+              colStats = colStats.getOrElse(Map.empty)))
+        ))
+
+        val prunedLogicalRelation = lr.copy(catalogTable = tableWithStats)
+        // Keep partition-pruning predicates so that they are visible in physical planning
+        rebuildPhysicalOperation(projects, filters, prunedLogicalRelation)
+      } else {
+        op
+      }
+  }
+}
+
+private object HoodiePruneFileSourcePartitions extends PredicateHelper {
+
+  private object HoodieRelationMatcher {
+    def unapply(relation: BaseRelation): Option[HoodieFileIndex] = relation match {
+      case HadoopFsRelation(fileIndex: HoodieFileIndex, _, _, _, _, _) => Some(fileIndex)
+      case r: HoodieBaseRelation => Some(r.fileIndex)
+      case _ => None
+    }
+  }
+
+  def getPartitionFiltersAndDataFilters(partitionSchema: StructType,
+                                        normalizedFilters: Seq[Expression]): (Seq[Expression], Seq[Expression]) = {
+    val partitionColumns = normalizedFilters.flatMap { expr =>
+      expr.collect {
+        case attr: AttributeReference if partitionSchema.names.contains(attr.name) =>
+          attr
+      }
+    }
+    val partitionSet = AttributeSet(partitionColumns)
+    val (partitionFilters, dataFilters) = normalizedFilters.partition(f =>
+      f.references.subsetOf(partitionSet)
+    )
+    val extraPartitionFilter =
+      dataFilters.flatMap(extractPredicatesWithinOutputSet(_, partitionSet))
+    (ExpressionSet(partitionFilters ++ extraPartitionFilter).toSeq, dataFilters)
+  }
+
+}
