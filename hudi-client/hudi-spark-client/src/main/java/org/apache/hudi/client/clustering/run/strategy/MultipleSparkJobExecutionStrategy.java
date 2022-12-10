@@ -194,7 +194,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     Option<String[]> orderByColumnsOpt =
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
             .map(listStr -> listStr.split(","));
-
+    
     return orderByColumnsOpt.map(orderByColumns -> {
       HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
       switch (layoutOptStrategy) {
@@ -203,17 +203,20 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
           return isRowPartitioner
               ? new RowSpatialCurveSortPartitioner(getWriteConfig())
               : new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns, layoutOptStrategy,
-                  getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema));
+              getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema));
         case LINEAR:
           return isRowPartitioner
               ? new RowCustomColumnsSortPartitioner(orderByColumns)
               : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
-                  getWriteConfig().isConsistentLogicalTimestampEnabled());
+              getWriteConfig().isConsistentLogicalTimestampEnabled());
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
-    }).orElse(isRowPartitioner ? BulkInsertInternalPartitionerWithRowsFactory.get(getWriteConfig().getBulkInsertSortMode()) :
-        BulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode()));
+    }).orElse(isRowPartitioner
+        ? BulkInsertInternalPartitionerWithRowsFactory.get(
+        getWriteConfig().getBulkInsertSortMode(), getHoodieTable().isPartitioned())
+        : BulkInsertInternalPartitionerFactory.get(
+        getWriteConfig().getBulkInsertSortMode(), getHoodieTable().isPartitioned()));
   }
 
   /**

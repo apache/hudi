@@ -499,6 +499,10 @@ public class HoodieTableConfig extends HoodieConfig {
     return Option.empty();
   }
 
+  public boolean isTablePartitioned() {
+    return getPartitionFields().map(pfs -> pfs.length > 0).orElse(false);
+  }
+
   /**
    * @returns the partition field prop.
    * @deprecated please use {@link #getPartitionFields()} instead
