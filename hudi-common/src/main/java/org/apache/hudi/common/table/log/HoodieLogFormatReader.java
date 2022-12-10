@@ -81,19 +81,20 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   public void close() throws IOException {
 
     for (HoodieLogFileReader reader : prevReadersInOpenState) {
+      LOG.warn("XXX Closing prev logFileReader " + reader.getLogFile().getFileName());
       reader.close();
     }
 
     prevReadersInOpenState.clear();
 
     if (currentReader != null) {
+      LOG.warn("XXX Closing logFileReader " + currentReader.getLogFile().getFileName());
       currentReader.close();
     }
   }
 
   @Override
   public boolean hasNext() {
-
     if (currentReader == null) {
       return false;
     } else if (currentReader.hasNext()) {

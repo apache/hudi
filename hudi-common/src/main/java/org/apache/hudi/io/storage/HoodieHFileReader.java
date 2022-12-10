@@ -215,6 +215,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   @Override
   public void close() {
     try {
+      LOG.warn("XXX Closing HFileReader for " + reader.getName());
       synchronized (this) {
         reader.close();
       }

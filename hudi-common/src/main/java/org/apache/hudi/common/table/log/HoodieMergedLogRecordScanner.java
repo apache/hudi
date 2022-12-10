@@ -113,7 +113,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     scan();
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = records.size();
-    LOG.info("Number of log files scanned => " + logFilePaths.size());
+    LOG.warn("XXX Number of log files scanned => " + logFilePaths.size());
     LOG.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
     LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
     LOG.info(

@@ -60,6 +60,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -208,6 +209,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys,
                                                                                           String partitionName) {
+    LOG.warn("XXX : reuse " + reuse + " Reading records from " + partitionName + ", for keys " + Arrays.toString(keys.toArray()));
     // Sort the columns so that keys are looked up in order
     List<String> sortedKeys = new ArrayList<>(keys);
     Collections.sort(sortedKeys);
@@ -239,7 +241,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeys.size() + " key : ", ioe);
       } finally {
         if (!reuse) {
+          LOG.warn("XXX : reuse " + reuse + " finally block in getRecordByKeys " + partitionName + ", " + Arrays.toString(keys.toArray()));
           closeReader(readers);
+        } else {
+          LOG.warn("XXX : reuse " + reuse + " finally block in getRecordByKeys " + partitionName + ", " + Arrays.toString(keys.toArray()));
         }
       }
     });
@@ -412,6 +417,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReaders(String partitionName, FileSlice slice) {
     try {
+      LOG.warn("XXX : reuse " + reuse + " Opening readers for " + partitionName + " for slice " + slice.toString());
       HoodieTimer timer = HoodieTimer.start();
       // Open base file reader
       Pair<HoodieFileReader, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);

@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
 public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O, R> implements Serializable {
@@ -74,7 +75,7 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * @param metadata rollback metadata of interest.
    */
   protected final void writeTableMetadata(HoodieRollbackMetadata metadata) {
-    table.getMetadataWriter(instantTime, Option.of(metadata)).ifPresent(w -> w.update(metadata, instantTime));
+    table.getMetadataWriter(instantTime, Option.of(metadata)).ifPresent(w ->  w.update(metadata, instantTime));
   }
 
   /**

@@ -49,6 +49,7 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -511,8 +512,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
    */
   private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
     if (config.isMetadataTableEnabled()) {
-      SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
+      HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
           context, Option.empty(), inFlightInstantTimestamp);
+      try {
+        writer.close();
+      } catch (Exception e) {
+        throw new HoodieException("Failed to instantiate Metadata table ", e);
+      }
     }
   }
 

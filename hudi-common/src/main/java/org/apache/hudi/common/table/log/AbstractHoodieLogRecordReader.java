@@ -249,7 +249,7 @@ public abstract class AbstractHoodieLogRecordReader {
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
-        LOG.info("Scanning log file " + logFile);
+        LOG.warn("XXX Scanning log file " + logFile);
         scannedLogFiles.add(logFile);
         totalLogFiles.set(scannedLogFiles.size());
         // Use the HoodieLogFileReader to iterate through the blocks in the log file
@@ -371,6 +371,7 @@ public abstract class AbstractHoodieLogRecordReader {
       }
       // Done
       progress = 1.0f;
+      LOG.warn("XXX Finished scanning all log blocks");
     } catch (IOException e) {
       LOG.error("Got IOException when reading log file", e);
       throw new HoodieIOException("IOException when reading log file ", e);
@@ -378,6 +379,7 @@ public abstract class AbstractHoodieLogRecordReader {
       LOG.error("Got exception when reading log file", e);
       throw new HoodieException("Exception when reading log file ", e);
     } finally {
+      LOG.warn("XXX Closing log record reader ");
       try {
         if (null != logFormatReaderWrapper) {
           logFormatReaderWrapper.close();

@@ -39,6 +39,8 @@ import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 
@@ -47,6 +49,7 @@ import java.io.IOException;
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
+  private static final Logger LOG = LogManager.getLogger(HoodieSparkTable.class);
   private volatile boolean isMetadataTableExists = false;
 
   protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
@@ -97,6 +100,7 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
+      LOG.warn("BBB Instantiated metadata writer ");
       final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           context.getHadoopConf().get(), config, context, actionMetadata, Option.of(triggeringInstantTimestamp));
       // even with metadata enabled, some index could have been disabled
