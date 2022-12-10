@@ -35,10 +35,10 @@ public abstract class BulkInsertInternalPartitionerFactory {
         && config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)) {
       return new RDDConsistentBucketPartitioner(table);
     }
-    return get(config.getBulkInsertSortMode());
+    return get(config.getBulkInsertSortMode(), table.isPartitioned());
   }
 
-  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode) {
+  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode, boolean isTablePartitioned) {
     switch (sortMode) {
       case NONE:
         return new NonSortPartitioner();
@@ -46,6 +46,10 @@ public abstract class BulkInsertInternalPartitionerFactory {
         return new GlobalSortPartitioner();
       case PARTITION_SORT:
         return new RDDPartitionSortPartitioner();
+      case PARTITION_PATH_REPARTITION:
+        return new PartitionPathRepartitionPartitioner(isTablePartitioned);
+      case PARTITION_PATH_REPARTITION_AND_SORT:
+        return new PartitionPathRepartitionAndSortPartitioner(isTablePartitioned);
       default:
         throw new HoodieException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }

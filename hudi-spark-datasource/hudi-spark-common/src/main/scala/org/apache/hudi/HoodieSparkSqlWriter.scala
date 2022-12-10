@@ -235,7 +235,7 @@ object HoodieSparkSqlWriter {
       // scalastyle:off
       if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tblName,
-          basePath, path, instantTime, writerSchema)
+          basePath, path, instantTime, writerSchema, tableConfig.isTablePartitioned)
         return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
       }
       // scalastyle:on
@@ -732,7 +732,8 @@ object HoodieSparkSqlWriter {
                       basePath: Path,
                       path: String,
                       instantTime: String,
-                      writerSchema: Schema): (Boolean, common.util.Option[String]) = {
+                      writerSchema: Schema,
+                      isTablePartitioned: Boolean): (Boolean, common.util.Option[String]) = {
     if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
       throw new HoodieException("Dropping duplicates with bulk_insert in row writer path is not supported yet")
     }
@@ -750,7 +751,8 @@ object HoodieSparkSqlWriter {
       if (userDefinedBulkInsertPartitionerOpt.isPresent) {
         userDefinedBulkInsertPartitionerOpt.get
       } else {
-        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
+        BulkInsertInternalPartitionerWithRowsFactory.get(
+          writeConfig.getBulkInsertSortMode, isTablePartitioned)
       }
     } else {
       // Sort modes are not yet supported when meta fields are disabled
