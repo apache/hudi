@@ -126,15 +126,6 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .build());
   }
 
-  public List<String> getMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
-    String partitionSelected = config.getClusteringPartitionSelected();
-    if (!StringUtils.isNullOrEmpty(partitionSelected)) {
-      return Arrays.asList(partitionSelected.split(","));
-    } else {
-      return getRegexPatternMatchedPartitions(config, partitionPaths);
-    }
-  }
-
   public List<String> getRegexPatternMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
     String pattern = config.getClusteringPartitionFilterRegexPattern();
     if (!StringUtils.isNullOrEmpty(pattern)) {
