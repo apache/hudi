@@ -82,7 +82,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
     if (StringUtils.isNullOrEmpty(partitionSelected)) {
       partitionPaths = FSUtils.getAllPartitionPaths(getEngineContext(), config.getMetadataConfig(), metaClient.getBasePath());
       // get matched partitions if set
-      partitionPaths = getRegexPatternMatchedPartitions(config, partitionPaths);
+      partitionPaths = getRegexPatternMatchedPartitions(config, FSUtils.getAllPartitionPaths(getEngineContext(), config.getMetadataConfig(), metaClient.getBasePath()));
       // filter the partition paths if needed to reduce list status
     } else {
       partitionPaths = Arrays.asList(partitionSelected.split(","));
