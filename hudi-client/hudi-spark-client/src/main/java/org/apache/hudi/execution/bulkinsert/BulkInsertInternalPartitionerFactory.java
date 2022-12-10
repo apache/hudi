@@ -18,8 +18,10 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.HoodieTable;
 
 /**
  * A factory to generate built-in partitioner to repartition input records into at least
@@ -27,7 +29,11 @@ import org.apache.hudi.table.BulkInsertPartitioner;
  */
 public abstract class BulkInsertInternalPartitionerFactory {
 
-  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode) {
+  public static BulkInsertPartitioner get(HoodieTable table, HoodieWriteConfig config) {
+    return get(config.getBulkInsertSortMode(), table.isPartitioned());
+  }
+
+  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode, boolean isTablePartitioned) {
     switch (sortMode) {
       case NONE:
         return new NonSortPartitioner();
@@ -35,6 +41,10 @@ public abstract class BulkInsertInternalPartitionerFactory {
         return new GlobalSortPartitioner();
       case PARTITION_SORT:
         return new RDDPartitionSortPartitioner();
+      case PARTITION_PATH_REPARTITION:
+        return new PartitionPathRepartitionPartitioner(isTablePartitioned);
+      case PARTITION_PATH_REPARTITION_AND_SORT:
+        return new PartitionPathRepartitionAndSortPartitioner(isTablePartitioned);
       default:
         throw new HoodieException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }
