@@ -279,6 +279,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     return metaClient;
   }
 
+  /**
+   * @return if the table is physically partitioned, based on the partition fields stored in the table config.
+   */
+  public boolean isPartitioned() {
+    return getMetaClient().getTableConfig().isTablePartitioned();
+  }
+
   public Configuration getHadoopConf() {
     return metaClient.getHadoopConf();
   }

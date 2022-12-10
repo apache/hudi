@@ -180,7 +180,7 @@ object HoodieSparkSqlWriter {
       if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) &&
         operation == WriteOperationType.BULK_INSERT) {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
-          basePath, path, instantTime, partitionColumns)
+          basePath, path, instantTime, partitionColumns, tableConfig.isTablePartitioned)
         return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
       }
       // scalastyle:on
@@ -572,7 +572,8 @@ object HoodieSparkSqlWriter {
                       basePath: Path,
                       path: String,
                       instantTime: String,
-                      partitionColumns: String): (Boolean, common.util.Option[String]) = {
+                      partitionColumns: String,
+                      isTablePartitioned: Boolean): (Boolean, common.util.Option[String]) = {
     val sparkContext = sqlContext.sparkContext
     val populateMetaFields = java.lang.Boolean.parseBoolean(parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(),
       String.valueOf(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue())))
@@ -601,7 +602,8 @@ object HoodieSparkSqlWriter {
       if (userDefinedBulkInsertPartitionerOpt.isPresent) {
         userDefinedBulkInsertPartitionerOpt.get
       } else {
-        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
+        BulkInsertInternalPartitionerWithRowsFactory.get(
+          writeConfig.getBulkInsertSortMode, isTablePartitioned)
       }
     } else {
       // Sort modes are not yet supported when meta fields are disabled
