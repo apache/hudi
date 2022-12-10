@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import com.github.benmanes.caffeine.cache.Caffeine
+import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
@@ -41,7 +41,7 @@ import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.BooleanType
 
-import java.util.function.Function
+import java.util.function.{Function, Supplier}
 import java.util.{Base64, Properties}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -302,6 +302,11 @@ object ExpressionPayload {
   val PAYLOAD_RECORD_AVRO_SCHEMA = "hoodie.payload.record.schema"
 
   /**
+   * NOTE: PLEASE READ CAREFULLY
+   *       Spark's [[SafeProjection]] are NOT thread-safe hence cache is scoped
+   *       down to be thread-local to support the multi-threaded executors (like
+   *       [[BoundedInMemoryQueueExecutor]], [[DisruptorExecutor]])
+   *
    * To avoid compiling projections for Merge Into expressions for every record these
    * are cached under a key of
    * <ol>
@@ -312,9 +317,14 @@ object ExpressionPayload {
    * NOTE: Schema is required b/c these cache is static and might be shared by multiple
    *       executed statements w/in a single Spark session
    */
-  private val projectionsCache = Caffeine.newBuilder()
-    .maximumSize(1024)
-    .build[(String, Schema), Map[Projection, Projection]]()
+  private val projectionsCache = ThreadLocal.withInitial(
+    new Supplier[Cache[(String, Schema), Seq[(Projection, Projection)]]] {
+      override def get(): Cache[(String, Schema), Seq[(Projection, Projection)]] = {
+        Caffeine.newBuilder()
+          .maximumSize(1024)
+          .build[(String, Schema), Seq[(Projection, Projection)]]()
+      }
+    })
 
   private val schemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[String, Schema]()
@@ -366,26 +376,27 @@ object ExpressionPayload {
    * the compile time for each method call.
    */
   private def getEvaluator(serializedConditionAssignments: String,
-                   inputSchema: Schema): Map[Projection, Projection] = {
-    projectionsCache.get((serializedConditionAssignments, inputSchema),
-      new Function[(String, Schema), Map[Projection, Projection]] {
-        override def apply(key: (String, Schema)): Map[Projection, Projection] = {
-          val (encodedConditionalAssignments, _) = key
-          val serializedBytes = Base64.getDecoder.decode(encodedConditionalAssignments)
-          val conditionAssignments = SerDeUtils.toObject(serializedBytes)
-            .asInstanceOf[Map[Expression, Seq[Expression]]]
-          conditionAssignments.map {
-            case (condition, assignments) =>
-              // NOTE: We reuse Spark's [[Projection]]s infra for actual evaluation of the
-              //       expressions, allowing us to execute arbitrary expression against input
-              //       [[InternalRow]] producing another [[InternalRow]] as an outcome
-              val conditionEvaluator = GenerateSafeProjection.generate(Seq(condition))
-              val assignmentEvaluator = GenerateSafeProjection.generate(assignments)
+                           inputSchema: Schema): Seq[(Projection, Projection)] = {
+    projectionsCache.get()
+      .get((serializedConditionAssignments, inputSchema),
+        new Function[(String, Schema), Seq[(Projection, Projection)]] {
+          override def apply(key: (String, Schema)): Seq[(Projection, Projection)] = {
+            val (encodedConditionalAssignments, _) = key
+            val serializedBytes = Base64.getDecoder.decode(encodedConditionalAssignments)
+            val conditionAssignments = SerDeUtils.toObject(serializedBytes)
+              .asInstanceOf[Map[Expression, Seq[Expression]]]
+            conditionAssignments.toSeq.map {
+              case (condition, assignments) =>
+                // NOTE: We reuse Spark's [[Projection]]s infra for actual evaluation of the
+                //       expressions, allowing us to execute arbitrary expression against input
+                //       [[InternalRow]] producing another [[InternalRow]] as an outcome
+                val conditionEvaluator = GenerateSafeProjection.generate(Seq(condition))
+                val assignmentEvaluator = GenerateSafeProjection.generate(assignments)
 
-              conditionEvaluator -> assignmentEvaluator
+                conditionEvaluator -> assignmentEvaluator
+            }
           }
-        }
-      })
+        })
   }
 
   private def getMergedSchema(source: Schema, target: Schema): Schema = {
