@@ -33,14 +33,14 @@ import java.util.function.Function;
 
 public class ExecutorFactory {
 
-  public static <I, O, E> HoodieExecutor<I, O, E> create(HoodieWriteConfig hoodieConfig,
+  public static <I, O, E> HoodieExecutor<E> create(HoodieWriteConfig hoodieConfig,
                                                          Iterator<I> inputItr,
                                                          HoodieConsumer<O, E> consumer,
                                                          Function<I, O> transformFunction) {
     return create(hoodieConfig, inputItr, consumer, transformFunction, Functions.noop());
   }
 
-  public static <I, O, E> HoodieExecutor<I, O, E> create(HoodieWriteConfig hoodieConfig,
+  public static <I, O, E> HoodieExecutor<E> create(HoodieWriteConfig hoodieConfig,
                                                          Iterator<I> inputItr,
                                                          HoodieConsumer<O, E> consumer,
                                                          Function<I, O> transformFunction,

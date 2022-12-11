@@ -80,7 +80,7 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
     this.fieldTypes = orcSchema.getChildren();
     this.fieldNames = orcSchema.getFieldNames();
     this.maxFileSize = config.getMaxFileSize();
-    this.batch = orcSchema.createRowBatch();
+    this.batch = null;
     OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(conf)
         .blockSize(config.getBlockSize())
         .stripeSize(config.getStripeSize())
@@ -121,7 +121,7 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
     // Batch size corresponds to the number of written rows out of 1024 total rows (by default)
     // in the row batch, add the batch to file once all rows are filled and reset.
     if (batch.size == batch.getMaxSize()) {
-      writer.addRowBatch(batch);
+      writer.addRowBatch(null);
       batch.reset();
       batch.size = 0;
     }
@@ -145,7 +145,7 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
   @Override
   public void close() throws IOException {
     if (batch.size != 0) {
-      writer.addRowBatch(batch);
+      writer.addRowBatch(null);
       batch.reset();
     }
 

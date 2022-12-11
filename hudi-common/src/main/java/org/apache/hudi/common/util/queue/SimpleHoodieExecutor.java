@@ -18,13 +18,15 @@
 
 package org.apache.hudi.common.util.queue;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 /**
@@ -35,28 +37,71 @@ import java.util.function.Function;
  * Advantages: there is no need for additional memory and cpu resources due to lock or multithreading.
  * Disadvantages: lost some benefits such as speed limit. And maybe lower throughput.
  */
-public class SimpleHoodieExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, O, E> {
+public class SimpleHoodieExecutor<I, O, E> implements HoodieExecutor<E> {
 
   private static final Logger LOG = LogManager.getLogger(SimpleHoodieExecutor.class);
 
+  // Consumer
+  protected final Option<HoodieConsumer<O, E>> consumer;
+  // records iterator
+  protected final Iterator<I> it;
+  private final Function<I, O> transformFunction;
+  private final Runnable preExecuteRunnable;
+  private final AtomicBoolean isWriteDone = new AtomicBoolean(false);
+  private final AtomicBoolean isShutdown = new AtomicBoolean(false);
+
   public SimpleHoodieExecutor(final Iterator<I> inputItr, HoodieConsumer<O, E> consumer,
                               Function<I, O> transformFunction, Runnable preExecuteRunnable) {
-    super(new ArrayList<>(), Option.of(consumer), new SimpleHoodieMessageQueue<>(inputItr, transformFunction), preExecuteRunnable);
+    this(inputItr, Option.of(consumer), transformFunction, preExecuteRunnable);
+  }
+
+  public SimpleHoodieExecutor(final Iterator<I> inputItr, Option<HoodieConsumer<O, E>> consumer,
+                              Function<I, O> transformFunction, Runnable preExecuteRunnable) {
+    this.it = inputItr;
+    this.consumer = consumer;
+    this.transformFunction = transformFunction;
+    this.preExecuteRunnable = preExecuteRunnable;
+  }
+
+  /**
+   * Consuming records from input iterator directly without any producers and inner message queue.
+   */
+  @Override
+  public E execute() {
+    checkState(this.consumer.isPresent());
+
+    try {
+      LOG.info("Starting consumer, consuming records from the records iterator directly");
+      preExecuteRunnable.run();
+      while (it.hasNext()) {
+        if (isShutdown.get()) {
+          LOG.warn("Call shutdown while getting new entries, stop consuming.");
+          break;
+        }
+        O payload = transformFunction.apply(it.next());
+        consumer.get().consume(payload);
+      }
+
+      return consumer.get().finish();
+    } catch (Exception e) {
+      LOG.error("Error consuming records in SimpleHoodieExecutor", e);
+      throw new HoodieException(e);
+    } finally {
+      isWriteDone.set(true);
+    }
   }
 
   @Override
-  protected void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
-    LOG.info("Starting consumer, consuming records from the queue");
-    try {
-      Iterator<O> it = ((SimpleHoodieMessageQueue<I, O>) queue).iterator();
-      while (it.hasNext()) {
-        consumer.consume(it.next());
-      }
-      LOG.info("All records from the queue have been consumed");
-    } catch (Exception e) {
-      LOG.error("Error consuming records", e);
-      queue.close();
-      throw new HoodieException(e);
-    }
+  public void shutdownNow() {
+    isShutdown.set(true);
+  }
+
+  @Override
+  public boolean awaitTermination() {
+    return isWriteDone.get();
+  }
+
+  public boolean isRunning() {
+    return it.hasNext();
   }
 }

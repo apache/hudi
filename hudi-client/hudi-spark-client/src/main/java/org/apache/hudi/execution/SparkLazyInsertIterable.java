@@ -80,7 +80,7 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
   @Override
   protected List<WriteStatus> computeNext() {
     // Executor service used for launching writer thread.
-    HoodieExecutor<?, ?, List<WriteStatus>> bufferedIteratorExecutor = null;
+    HoodieExecutor<List<WriteStatus>> bufferedIteratorExecutor = null;
     try {
       Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
       if (useWriterSchema) {

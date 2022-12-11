@@ -49,7 +49,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * is ingested from multiple sources (ie producers) into a singular sink (ie consumer), using
  * an internal queue to stage the records ingested from producers before these are consumed
  */
-public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
+public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExecutor<E> {
 
   private static final long TERMINATE_WAITING_TIME_SECS = 60L;
 

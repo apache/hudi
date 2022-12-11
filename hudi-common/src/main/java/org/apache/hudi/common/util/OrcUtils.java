@@ -183,7 +183,7 @@ public class OrcUtils extends BaseFileUtils {
       try (RecordReader recordReader = reader.rows(new Options(conf).schema(schema))) {
         Set<String> filteredRowKeys = new HashSet<>();
         List<String> fieldNames = schema.getFieldNames();
-        VectorizedRowBatch batch = schema.createRowBatch();
+        VectorizedRowBatch batch = null;
 
         // column index for the RECORD_KEY_METADATA_FIELD field
         int colIndex = -1;
@@ -196,7 +196,7 @@ public class OrcUtils extends BaseFileUtils {
         if (colIndex == -1) {
           throw new HoodieException(String.format("Couldn't find row keys in %s.", filePath));
         }
-        while (recordReader.nextBatch(batch)) {
+        while (recordReader.nextBatch(null)) {
           BytesColumnVector rowKeys = (BytesColumnVector) batch.cols[colIndex];
           for (int i = 0; i < batch.size; i++) {
             String rowKey = rowKeys.toString(i);

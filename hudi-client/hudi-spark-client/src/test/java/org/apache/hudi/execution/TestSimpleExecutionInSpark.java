@@ -21,6 +21,7 @@ package org.apache.hudi.execution;
 import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformFunction;
 
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -37,8 +38,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import scala.Tuple2;
 
@@ -118,19 +122,97 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     }
   }
 
+  // Test to ensure that we are reading all records from queue iterator in the same order
+  // without any exceptions.
+  @SuppressWarnings("unchecked")
   @Test
   @Timeout(value = 60)
-  public void testInterruptExecutor() {
+  public void testRecordReading() {
+
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
+    ArrayList<HoodieRecord> beforeRecord = new ArrayList<>();
+    ArrayList<IndexedRecord> beforeIndexedRecord = new ArrayList<>();
+    ArrayList<HoodieAvroRecord> afterRecord = new ArrayList<>();
+    ArrayList<IndexedRecord> afterIndexedRecord = new ArrayList<>();
+
+    hoodieRecords.forEach(record -> {
+      final HoodieAvroRecord originalRecord = (HoodieAvroRecord) record;
+      beforeRecord.add(originalRecord);
+      try {
+        final Option<IndexedRecord> originalInsertValue =
+            originalRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
+        beforeIndexedRecord.add(originalInsertValue.get());
+      } catch (IOException e) {
+        // ignore exception here.
+      }
+    });
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getDisruptorWriteBufferSize()).thenReturn(Option.of(1024));
+    when(hoodieWriteConfig.getDisruptorWriteBufferSize()).thenReturn(Option.of(16));
+    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+          private int count = 0;
+
+          @Override
+          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) throws Exception {
+            count++;
+            afterRecord.add((HoodieAvroRecord) record.record);
+            try {
+              IndexedRecord indexedRecord = (IndexedRecord)((HoodieAvroRecord) record.record)
+                  .getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get();
+              afterIndexedRecord.add(indexedRecord);
+            } catch (IOException e) {
+              //ignore exception here.
+            }
+          }
+
+          @Override
+          public Integer finish() {
+            return count;
+          }
+        };
+
+    SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
+
+    try {
+      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
+      int result = exec.execute();
+      // It should buffer and write 100 records
+      assertEquals(100, result);
+      // There should be no remaining records in the buffer
+      assertFalse(exec.isRunning());
+
+      assertEquals(beforeRecord, afterRecord);
+      assertEquals(beforeIndexedRecord, afterIndexedRecord);
+
+    } finally {
+      if (exec != null) {
+        exec.shutdownNow();
+      }
+    }
+  }
+
+  /**
+   * Test to ensure exception happend in iterator then we need to stop the simple ingestion.
+   */
+  @SuppressWarnings("unchecked")
+  @Test
+  @Timeout(value = 60)
+  public void testException() {
+    final int numRecords = 1000;
+    final String errorMessage = "Exception when iterating records!!!";
+
+    List<HoodieRecord> pRecs = dataGen.generateInserts(instantTime, numRecords);
+    InnerIterator iterator = new InnerIterator(pRecs.iterator(), errorMessage, numRecords / 10);
+
     HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
           int count = 0;
 
           @Override
-          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) throws Exception {
+          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) throws Exception {
+            // Read recs and ensure we have covered all producer recs.
+            final HoodieRecord rec = payload.record;
             count++;
           }
 
@@ -138,17 +220,42 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
           public Integer finish() {
             return count;
           }
-    };
+        };
 
-    SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor =
-        new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
+    SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec =
+        new SimpleHoodieExecutor(iterator, consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
 
-    try {
-      Thread.currentThread().interrupt();
-      assertThrows(HoodieException.class, executor::execute);
-      assertTrue(Thread.interrupted());
-    } catch (Exception e) {
-      // ignore here
+    final Throwable thrown = assertThrows(HoodieException.class, exec::execute,
+        "exception is expected");
+    assertTrue(thrown.getMessage().contains(errorMessage));
+  }
+
+  class InnerIterator implements Iterator<HoodieRecord> {
+
+    private Iterator<HoodieRecord> iterator;
+    private AtomicInteger count = new AtomicInteger(0);
+    private String errorMessage;
+    private int errorMessageCount;
+
+    public InnerIterator(Iterator<HoodieRecord> iterator, String errorMessage, int errorMessageCount) {
+      this.iterator = iterator;
+      this.errorMessage = errorMessage;
+      this.errorMessageCount = errorMessageCount;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iterator.hasNext();
+    }
+
+    @Override
+    public HoodieRecord next() {
+      if (count.get() == errorMessageCount) {
+        throw new HoodieException(errorMessage);
+      }
+
+      count.incrementAndGet();
+      return iterator.next();
     }
   }
 }

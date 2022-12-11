@@ -52,7 +52,7 @@ public class OrcReaderIterator<T> implements ClosableIterator<T> {
     this.avroFieldSchemas = fieldNames.stream()
         .map(fieldName -> avroSchema.getField(fieldName).schema())
         .toArray(Schema[]::new);
-    this.batch = orcSchema.createRowBatch();
+    this.batch = null;
     this.rowInBatch = 0;
   }
 
@@ -64,7 +64,7 @@ public class OrcReaderIterator<T> implements ClosableIterator<T> {
   private boolean ensureBatch() throws IOException {
     if (rowInBatch >= batch.size) {
       rowInBatch = 0;
-      return recordReader.nextBatch(batch);
+      return recordReader.nextBatch(null);
     }
     return true;
   }

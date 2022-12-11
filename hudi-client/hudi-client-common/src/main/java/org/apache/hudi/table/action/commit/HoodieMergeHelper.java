@@ -99,7 +99,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
         || !isPureProjection
         || baseFile.getBootstrapBaseFile().isPresent();
 
-    HoodieExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
+    HoodieExecutor<Void> wrapper = null;
 
     try {
       Iterator<GenericRecord> recordIterator;
