@@ -120,6 +120,7 @@ public class BaseRollbackHelper implements Serializable {
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
         HoodieLogFormat.Writer writer = null;
+        final Path filePath;
         try {
           String fileId = rollbackRequest.getFileId();
           String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
@@ -135,7 +136,10 @@ public class BaseRollbackHelper implements Serializable {
           if (doDelete) {
             Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
             // if update belongs to an existing log file
-            writer.appendBlock(new HoodieCommandBlock(header));
+            // use the log file path from AppendResult in case the file handle may roll over
+            filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
+          } else {
+            filePath = writer.getLogFile().getPath();
           }
         } catch (IOException | InterruptedException io) {
           throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
@@ -153,7 +157,7 @@ public class BaseRollbackHelper implements Serializable {
         // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
         // cloud-storage : HUDI-168
         Map<FileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
-            metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
+            metaClient.getFs().getFileStatus(Objects.requireNonNull(filePath)),
             1L
         );
 
@@ -210,7 +214,7 @@ public class BaseRollbackHelper implements Serializable {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, commit);
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     return header;
   }
 }

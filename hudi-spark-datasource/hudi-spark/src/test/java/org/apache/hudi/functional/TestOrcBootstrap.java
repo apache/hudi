@@ -19,6 +19,7 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
@@ -185,6 +186,11 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
   }
 
   private void testBootstrapCommon(boolean partitioned, boolean deltaCommit, EffectiveMode mode) throws Exception {
+    // NOTE: Hudi doesn't support Orc in Spark < 3.0
+    //       Please check HUDI-4496 for more details
+    if (!HoodieSparkUtils.gteqSpark3_0()) {
+      return;
+    }
 
     if (deltaCommit) {
       metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, bootstrapBasePath, HoodieFileFormat.ORC);

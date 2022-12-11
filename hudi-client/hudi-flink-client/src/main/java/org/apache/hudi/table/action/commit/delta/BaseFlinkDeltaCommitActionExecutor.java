@@ -34,6 +34,9 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+/**
+ * Base flink delta commit action executor.
+ */
 public abstract class BaseFlinkDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseFlinkCommitActionExecutor<T> {
 

@@ -223,7 +223,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
         success = true
       }
     } catch {
-      case te: TableNotFoundException =>
+      case _: TableNotFoundException =>
         log.info("Got table not found exception. Retrying")
     } finally {
       if (!success) {
@@ -312,7 +312,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
 
   @throws[InterruptedException]
   private def waitTillHasCompletedReplaceInstant(tablePath: String,
-                                                timeoutSecs: Int, sleepSecsAfterEachRun: Int) = {
+                                                 timeoutSecs: Int, sleepSecsAfterEachRun: Int) = {
     val beginTime = System.currentTimeMillis
     var currTime = beginTime
     val timeoutMsecs = timeoutSecs * 1000

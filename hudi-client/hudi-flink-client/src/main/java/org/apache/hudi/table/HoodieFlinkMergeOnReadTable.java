@@ -25,6 +25,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -45,6 +46,9 @@ import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Flink MERGE_ON_READ table.
+ */
 public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
     extends HoodieFlinkCopyOnWriteTable<T> {
 
@@ -104,8 +108,7 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
       String instantTime,
       Option<Map<String, String>> extraMetadata) {
     ScheduleCompactionActionExecutor scheduleCompactionExecutor = new ScheduleCompactionActionExecutor(
-        context, config, this, instantTime, extraMetadata,
-        new HoodieFlinkMergeOnReadTableCompactor());
+        context, config, this, instantTime, extraMetadata, WriteOperationType.COMPACT);
     return scheduleCompactionExecutor.execute();
   }
 
@@ -114,7 +117,7 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
         context, config, this, compactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor(),
-        new HoodieFlinkCopyOnWriteTable(config, context, getMetaClient()));
+        new HoodieFlinkCopyOnWriteTable(config, context, getMetaClient()), WriteOperationType.COMPACT);
     return convertMetadata(compactionExecutor.execute());
   }
 

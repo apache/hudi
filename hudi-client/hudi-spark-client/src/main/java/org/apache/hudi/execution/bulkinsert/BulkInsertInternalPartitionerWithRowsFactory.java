@@ -29,14 +29,24 @@ import org.apache.spark.sql.Row;
  */
 public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode) {
+  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode,
+                                                        boolean isTablePartitioned) {
+    return get(sortMode, isTablePartitioned, false);
+  }
+
+  public static BulkInsertPartitioner<Dataset<Row>> get(
+      BulkInsertSortMode sortMode, boolean isTablePartitioned, boolean enforceNumOutputPartitions) {
     switch (sortMode) {
       case NONE:
-        return new NonSortPartitionerWithRows();
+        return new NonSortPartitionerWithRows(enforceNumOutputPartitions);
       case GLOBAL_SORT:
         return new GlobalSortPartitionerWithRows();
       case PARTITION_SORT:
         return new PartitionSortPartitionerWithRows();
+      case PARTITION_PATH_REPARTITION:
+        return new PartitionPathRepartitionPartitionerWithRows(isTablePartitioned);
+      case PARTITION_PATH_REPARTITION_AND_SORT:
+        return new PartitionPathRepartitionAndSortPartitionerWithRows(isTablePartitioned);
       default:
         throw new UnsupportedOperationException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }

@@ -609,7 +609,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  preCombineField = 'ts'
            | )
        """.stripMargin)
-      spark.sql("set hoodie.merge.allow.duplicate.on.inserts = true")
       // Insert data
       spark.sql(s"insert into $tableName select 1, 1, 'a1', 1, 10, '2022-08-18'")
       checkAnswer(s"select id1, id2, name, price, ts, dt from $tableName")(
@@ -636,4 +635,251 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Merge Into For Source Table With Different Column Order") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a mor partitioned table.
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           | ) using hudi
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | partitioned by(dt)
+           | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+      // Insert data which matched insert-condition.
+      spark.sql(
+        s"""
+           | merge into $tableName as t0
+           | using (
+           |  select 'a1' as name, 1 as id, 10 as price, 1000 as ts, '2021-03-21' as dt
+           | ) as s0
+           | on t0.id = s0.id
+           | when not matched and s0.id % 2 = 1 then insert *
+         """.stripMargin
+      )
+      checkAnswer(s"select id,name,price,dt from $tableName")(
+        Seq(1, "a1", 10, "2021-03-21")
+      )
+    }
+  }
+
+  test ("Test Merge into with String cast to Double") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a cow partitioned table.
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           | ) using hudi
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | partitioned by(dt)
+           | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+      // Insert data
+      spark.sql(s"insert into $tableName select 1, 'a1', cast(10.0 as double), 999, '2021-03-21'")
+      spark.sql(
+        s"""
+           | merge into $tableName as t0
+           | using (
+           |  select 'a1' as name, 1 as id, '10.1' as price, 1000 as ts, '2021-03-21' as dt
+           | ) as s0
+           | on t0.id = s0.id
+           | when matched then update set t0.price = s0.price, t0.ts = s0.ts
+           | when not matched then insert *
+         """.stripMargin
+      )
+      checkAnswer(s"select id,name,price,dt from $tableName")(
+        Seq(1, "a1", 10.1, "2021-03-21")
+      )
+    }
+  }
+
+  test("Test Merge into where manually set DefaultHoodieRecordPayload") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a cow table with default payload class, check whether it will be overwritten by ExpressionPayload.
+      // if not, this ut cannot pass since DefaultHoodieRecordPayload can not promotion int to long when insert a ts with Integer value
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long
+           | ) using hudi
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload'
+           | ) location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+      // Insert data
+      spark.sql(s"insert into $tableName select 1, 'a1', 999")
+      spark.sql(
+        s"""
+           | merge into $tableName as t0
+           | using (
+           |  select 'a2' as name, 1 as id, 1000 as ts
+           | ) as s0
+           | on t0.id = s0.id
+           | when matched then update set t0.name = s0.name, t0.ts = s0.ts
+           | when not matched then insert *
+         """.stripMargin
+      )
+      checkAnswer(s"select id,name,ts from $tableName")(
+        Seq(1, "a2", 1000)
+      )
+    }
+  }
+
+  test("Test only insert for source table in dup key with preCombineField") {
+    Seq("cow", "mor").foreach {
+      tableType => {
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          // Create a cow partitioned table with preCombineField
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  dt string
+               | ) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+               | partitioned by(dt)
+               | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+          // Insert data without match condition
+          spark.sql(
+            s"""
+               | merge into $tableName as t0
+               | using (
+               |  select 1 as id, 'a1' as name, 10.1 as price, 1000 as ts, '2021-03-21' as dt
+               |  union all
+               |  select 1 as id, 'a2' as name, 10.2 as price, 1002 as ts, '2021-03-21' as dt
+               | ) as s0
+               | on t0.id = s0.id
+               | when not matched then insert *
+         """.stripMargin
+          )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a2", 10.2, 1002, "2021-03-21")
+          )
+
+          // Insert data with match condition
+          spark.sql(
+            s"""
+               | merge into $tableName as t0
+               | using (
+               |  select 1 as id, 'a1_new' as name, 10.1 as price, 1003 as ts, '2021-03-21' as dt
+               |  union all
+               |  select 3 as id, 'a3' as name, 10.3 as price, 1003 as ts, '2021-03-21' as dt
+               |  union all
+               |  select 3 as id, 'a3' as name, 10.3 as price, 1003 as ts, '2021-03-21' as dt
+               | ) as s0
+               | on t0.id = s0.id
+               | when matched then update set *
+               | when not matched then insert *
+         """.stripMargin
+          )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1_new", 10.1, 1003, "2021-03-21"),
+            Seq(3, "a3", 10.3, 1003, "2021-03-21")
+          )
+        }
+      }
+    }
+  }
+
+  test("Test only insert for source table in dup key without preCombineField") {
+    Seq("cow", "mor").foreach {
+      tableType => {
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  dt string
+               | ) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id'
+               | )
+               | partitioned by(dt)
+               | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+          // append records to small file is use update bucket, set this conf use concat handler
+          spark.sql("set hoodie.merge.allow.duplicate.on.inserts = true")
+
+          // Insert data without matched condition
+          spark.sql(
+            s"""
+               | merge into $tableName as t0
+               | using (
+               |  select 1 as id, 'a1' as name, 10.1 as price, 1000 as ts, '2021-03-21' as dt
+               |  union all
+               |  select 1 as id, 'a2' as name, 10.2 as price, 1002 as ts, '2021-03-21' as dt
+               | ) as s0
+               | on t0.id = s0.id
+               | when not matched then insert *
+         """.stripMargin
+          )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1", 10.1, 1000, "2021-03-21"),
+            Seq(1, "a2", 10.2, 1002, "2021-03-21")
+          )
+
+          // Insert data with matched condition
+          spark.sql(
+            s"""
+               | merge into $tableName as t0
+               | using (
+               |  select 3 as id, 'a3' as name, 10.3 as price, 1003 as ts, '2021-03-21' as dt
+               |  union all
+               |  select 1 as id, 'a2' as name, 10.2 as price, 1002 as ts, '2021-03-21' as dt
+               | ) as s0
+               | on t0.id = s0.id
+               | when matched then update set *
+               | when not matched then insert *
+         """.stripMargin
+          )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1", 10.1, 1000, "2021-03-21"),
+            Seq(1, "a2", 10.2, 1002, "2021-03-21"),
+            Seq(3, "a3", 10.3, 1003, "2021-03-21"),
+            Seq(1, "a2", 10.2, 1002, "2021-03-21")
+          )
+        }
+      }
+    }
+  }
 }

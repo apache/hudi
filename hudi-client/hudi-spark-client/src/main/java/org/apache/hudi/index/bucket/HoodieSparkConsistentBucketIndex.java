@@ -18,7 +18,10 @@
 
 package org.apache.hudi.index.bucket;
 
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -27,12 +30,16 @@ import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -42,13 +49,17 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
+import scala.Tuple2;
 
 /**
  * Consistent hashing bucket index implementation, with auto-adjust bucket number.
@@ -67,6 +78,63 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
                                                 HoodieEngineContext context,
                                                 HoodieTable hoodieTable)
       throws HoodieIndexException {
+    throw new HoodieIndexException("Consistent hashing index does not support update location without the instant parameter");
+  }
+
+  /**
+   * Persist hashing metadata to storage. Only clustering operations will modify the metadata.
+   * For example, splitting & merging buckets, or just sorting and producing a new bucket.
+   */
+  @Override
+  public HoodieData<WriteStatus> updateLocation(HoodieData<WriteStatus> writeStatuses,
+                                                HoodieEngineContext context,
+                                                HoodieTable hoodieTable,
+                                                String instantTime)
+      throws HoodieIndexException {
+    HoodieInstant instant = hoodieTable.getMetaClient().getActiveTimeline().findInstantsAfterOrEquals(instantTime, 1).firstInstant().get();
+    ValidationUtils.checkState(instant.getTimestamp().equals(instantTime), "Cannot get the same instant, instantTime: " + instantTime);
+    if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      return writeStatuses;
+    }
+
+    // Double-check if it is a clustering operation by trying to obtain the clustering plan
+    Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlanPair =
+        ClusteringUtils.getClusteringPlan(hoodieTable.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(instantTime));
+    if (!instantPlanPair.isPresent()) {
+      return writeStatuses;
+    }
+
+    HoodieClusteringPlan plan = instantPlanPair.get().getRight();
+    HoodieJavaRDD.getJavaRDD(context.parallelize(plan.getInputGroups().stream().map(HoodieClusteringGroup::getExtraMetadata).collect(Collectors.toList())))
+        .mapToPair(m -> new Tuple2<>(m.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_PARTITION_KEY), m)
+    ).groupByKey().foreach((input) -> {
+      // Process each partition
+      String partition = input._1();
+      List<ConsistentHashingNode> childNodes = new ArrayList<>();
+      int seqNo = 0;
+      for (Map<String, String> m: input._2()) {
+        String nodesJson = m.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY);
+        childNodes.addAll(ConsistentHashingNode.fromJsonString(nodesJson));
+        seqNo = Integer.parseInt(m.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_SEQUENCE_NUMBER_KEY));
+      }
+
+      Option<HoodieConsistentHashingMetadata> metadataOption = loadMetadata(hoodieTable, partition);
+      ValidationUtils.checkState(metadataOption.isPresent(), "Failed to load metadata for partition: " + partition);
+      HoodieConsistentHashingMetadata meta = metadataOption.get();
+      ValidationUtils.checkState(meta.getSeqNo() == seqNo,
+          "Non serialized update to hashing metadata, old seq: " + meta.getSeqNo() + ", new seq: " + seqNo);
+
+      // Get new metadata and save
+      meta.setChildrenNodes(childNodes);
+      List<ConsistentHashingNode> newNodes = (new ConsistentBucketIdentifier(meta)).getNodes().stream()
+          .map(n -> new ConsistentHashingNode(n.getValue(), n.getFileIdPrefix(), ConsistentHashingNode.NodeTag.NORMAL))
+          .collect(Collectors.toList());
+      HoodieConsistentHashingMetadata newMeta = new HoodieConsistentHashingMetadata(meta.getVersion(), meta.getPartitionPath(),
+          instantTime, meta.getNumBuckets(), seqNo + 1, newNodes);
+      // Overwrite to tolerate re-run of clustering operation
+      saveMetadata(hoodieTable, newMeta, true);
+    });
+
     return writeStatuses;
   }
 
@@ -94,22 +162,22 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
    * @return Consistent hashing metadata
    */
   public HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTable table, String partition) {
-    HoodieConsistentHashingMetadata metadata = loadMetadata(table, partition);
-    if (metadata != null) {
-      return metadata;
+    Option<HoodieConsistentHashingMetadata> metadataOption = loadMetadata(table, partition);
+    if (metadataOption.isPresent()) {
+      return metadataOption.get();
     }
 
     // There is no metadata, so try to create a new one and save it.
-    metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
+    HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
     if (saveMetadata(table, metadata, false)) {
       return metadata;
     }
 
     // The creation failed, so try load metadata again. Concurrent creation of metadata should have succeeded.
     // Note: the consistent problem of cloud storage is handled internal in the HoodieWrapperFileSystem, i.e., ConsistentGuard
-    metadata = loadMetadata(table, partition);
-    ValidationUtils.checkState(metadata != null, "Failed to load or create metadata, partition: " + partition);
-    return metadata;
+    metadataOption = loadMetadata(table, partition);
+    ValidationUtils.checkState(metadataOption.isPresent(), "Failed to load or create metadata, partition: " + partition);
+    return metadataOption.get();
   }
 
   /**
@@ -119,13 +187,10 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
    * @param partition table partition
    * @return Consistent hashing metadata or null if it does not exist
    */
-  public static HoodieConsistentHashingMetadata loadMetadata(HoodieTable table, String partition) {
+  public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable table, String partition) {
     Path metadataPath = FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), partition);
 
     try {
-      if (!table.getMetaClient().getFs().exists(metadataPath)) {
-        return null;
-      }
       FileStatus[] metaFiles = table.getMetaClient().getFs().listStatus(metadataPath);
       final HoodieTimeline completedCommits = table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
       Predicate<FileStatus> metaFilePredicate = fileStatus -> {
@@ -142,11 +207,13 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
           .max(Comparator.comparing(a -> a.getPath().getName())).orElse(null);
 
       if (metaFile == null) {
-        return null;
+        return Option.empty();
       }
 
       byte[] content = FileIOUtils.readAsByteArray(table.getMetaClient().getFs().open(metaFile.getPath()));
-      return HoodieConsistentHashingMetadata.fromBytes(content);
+      return Option.of(HoodieConsistentHashingMetadata.fromBytes(content));
+    } catch (FileNotFoundException e) {
+      return Option.empty();
     } catch (IOException e) {
       LOG.error("Error when loading hashing metadata, partition: " + partition, e);
       throw new HoodieIndexException("Error while loading hashing metadata", e);
@@ -192,7 +259,8 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
     }
 
     @Override
-    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key, String partitionPath) {
+    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key) {
+      String partitionPath = key.getPartitionPath();
       ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(key, indexKeyFields);
       if (!StringUtils.isNullOrEmpty(node.getFileIdPrefix())) {
         /**

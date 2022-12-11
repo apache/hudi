@@ -21,6 +21,9 @@ package org.apache.hudi.metadata;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Partition types for metadata table.
+ */
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-"),
   COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-"),

@@ -30,6 +30,9 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
+/**
+ * Flink upsert prepped commit action executor.
+ */
 public class FlinkUpsertPreppedCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseFlinkCommitActionExecutor<T> {
 
   private final List<HoodieRecord<T>> preppedRecords;

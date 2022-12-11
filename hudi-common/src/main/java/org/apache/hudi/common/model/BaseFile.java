@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.hadoop.CachingPath;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
@@ -64,6 +66,14 @@ public class BaseFile implements Serializable {
 
   public String getPath() {
     return fullPath;
+  }
+
+  public Path getHadoopPath() {
+    if (fileStatus != null) {
+      return fileStatus.getPath();
+    }
+
+    return new CachingPath(fullPath);
   }
 
   public String getFileName() {

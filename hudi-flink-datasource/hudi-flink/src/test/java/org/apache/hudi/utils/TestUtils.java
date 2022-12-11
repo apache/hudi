@@ -78,12 +78,12 @@ public class TestUtils {
   }
 
   @Nullable
-  public static String getNthCompleteInstant(String basePath, int n, boolean isDelta) {
+  public static String getNthCompleteInstant(String basePath, int n, String action) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
     return metaClient.getActiveTimeline()
         .filterCompletedInstants()
-        .filter(instant -> isDelta ? HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()) : HoodieTimeline.COMMIT_ACTION.equals(instant.getAction()))
+        .filter(instant -> action.equals(instant.getAction()))
         .nthInstant(n).map(HoodieInstant::getTimestamp)
         .orElse(null);
   }

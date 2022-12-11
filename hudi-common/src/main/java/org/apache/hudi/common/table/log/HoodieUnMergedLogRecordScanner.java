@@ -21,12 +21,15 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * A scanner used to scan hoodie unmerged log records.
@@ -37,8 +40,10 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
   private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
-                                         LogRecordScannerCallback callback, Option<InstantRange> instantRange) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, false);
+                                         LogRecordScannerCallback callback, Option<InstantRange> instantRange, InternalSchema internalSchema,
+                                         boolean useScanV2) {
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange,
+        false, true, Option.empty(), internalSchema, useScanV2);
     this.callback = callback;
   }
 
@@ -77,6 +82,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private String basePath;
     private List<String> logFilePaths;
     private Schema readerSchema;
+    private InternalSchema internalSchema;
     private String latestInstantTime;
     private boolean readBlocksLazily;
     private boolean reverseReader;
@@ -84,6 +90,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private Option<InstantRange> instantRange = Option.empty();
     // specific configurations
     private LogRecordScannerCallback callback;
+    private boolean useScanV2;
 
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -96,12 +103,20 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     public Builder withLogFilePaths(List<String> logFilePaths) {
-      this.logFilePaths = logFilePaths;
+      this.logFilePaths = logFilePaths.stream()
+          .filter(p -> !p.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+          .collect(Collectors.toList());
       return this;
     }
 
     public Builder withReaderSchema(Schema schema) {
       this.readerSchema = schema;
+      return this;
+    }
+
+    @Override
+    public Builder withInternalSchema(InternalSchema internalSchema) {
+      this.internalSchema = internalSchema;
       return this;
     }
 
@@ -136,9 +151,16 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     @Override
+    public Builder withUseScanV2(boolean useScanV2) {
+      this.useScanV2 = useScanV2;
+      return this;
+    }
+
+    @Override
     public HoodieUnMergedLogRecordScanner build() {
       return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
-          latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange);
+          latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange,
+          internalSchema, useScanV2);
     }
   }
 }

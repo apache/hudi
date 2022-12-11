@@ -85,6 +85,15 @@ import java.util.concurrent.TimeUnit;
 
 import scala.Tuple2;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_QUORUM;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_ZNODE_PARENT;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_CLIENT_PORT;
+import static org.apache.hadoop.hbase.security.SecurityConstants.MASTER_KRB_PRINCIPAL;
+import static org.apache.hadoop.hbase.security.SecurityConstants.REGIONSERVER_KRB_PRINCIPAL;
+import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_AUTHORIZATION_CONF_KEY;
+import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_CONF_KEY;
+
 /**
  * Hoodie Index implementation backed by HBase.
  */
@@ -145,22 +154,22 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   private Connection getHBaseConnection() {
     Configuration hbaseConfig = HBaseConfiguration.create();
     String quorum = config.getHbaseZkQuorum();
-    hbaseConfig.set("hbase.zookeeper.quorum", quorum);
+    hbaseConfig.set(ZOOKEEPER_QUORUM, quorum);
     String zkZnodeParent = config.getHBaseZkZnodeParent();
     if (zkZnodeParent != null) {
-      hbaseConfig.set("zookeeper.znode.parent", zkZnodeParent);
+      hbaseConfig.set(ZOOKEEPER_ZNODE_PARENT, zkZnodeParent);
     }
     String port = String.valueOf(config.getHbaseZkPort());
-    hbaseConfig.set("hbase.zookeeper.property.clientPort", port);
+    hbaseConfig.set(ZOOKEEPER_CLIENT_PORT, port);
 
     try {
       String authentication = config.getHBaseIndexSecurityAuthentication();
       if (authentication.equals("kerberos")) {
-        hbaseConfig.set("hbase.security.authentication", "kerberos");
-        hbaseConfig.set("hadoop.security.authentication", "kerberos");
-        hbaseConfig.set("hbase.security.authorization", "true");
-        hbaseConfig.set("hbase.regionserver.kerberos.principal", config.getHBaseIndexRegionserverPrincipal());
-        hbaseConfig.set("hbase.master.kerberos.principal", config.getHBaseIndexMasterPrincipal());
+        hbaseConfig.set(HBASE_SECURITY_CONF_KEY, "kerberos");
+        hbaseConfig.set(HADOOP_SECURITY_AUTHENTICATION, "kerberos");
+        hbaseConfig.set(HBASE_SECURITY_AUTHORIZATION_CONF_KEY, "true");
+        hbaseConfig.set(REGIONSERVER_KRB_PRINCIPAL, config.getHBaseIndexRegionserverPrincipal());
+        hbaseConfig.set(MASTER_KRB_PRINCIPAL, config.getHBaseIndexMasterPrincipal());
 
         String principal = config.getHBaseIndexKerberosUserPrincipal();
         String keytab = SparkFiles.get(config.getHBaseIndexKerberosUserKeytab());
@@ -205,7 +214,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   }
 
   private Get generateStatement(String key) throws IOException {
-    return new Get(Bytes.toBytes(getHBaseKey(key))).setMaxVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
+    return new Get(Bytes.toBytes(getHBaseKey(key))).readVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
         .addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN).addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN);
   }
 
@@ -418,7 +427,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     // Map each fileId that has inserts to a unique partition Id. This will be used while
     // repartitioning RDD<WriteStatus>
     final List<String> fileIds = writeStatusRDD.filter(w -> w.getStat().getNumInserts() > 0)
-                                   .map(w -> w.getFileId()).collect();
+                                   .map(WriteStatus::getFileId).collect();
     for (final String fileId : fileIds) {
       fileIdPartitionMap.put(fileId, partitionIndex++);
     }
@@ -436,7 +445,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
         writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
             .partitionBy(new WriteStatusPartitioner(fileIdPartitionMap,
                 this.numWriteStatusWithInserts))
-            .map(w -> w._2());
+            .map(Tuple2::_2);
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     acquireQPSResourcesAndSetBatchSize(desiredQPSFraction, jsc);
     JavaRDD<WriteStatus> writeStatusJavaRDD = partitionedRDD.mapPartitionsWithIndex(updateLocationFunction(),

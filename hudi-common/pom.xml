@@ -68,6 +68,7 @@
           <imports>
             <!-- import avro files -->
             <import>${basedir}/src/main/avro/HoodieCommitMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieCompactionStrategy.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCompactionOperation.avsc</import>
             <import>${basedir}/src/main/avro/HoodieSavePointMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCompactionMetadata.avsc</import>
@@ -101,26 +102,15 @@
   </build>
 
   <dependencies>
-    <!-- Logging dependencies -->
+    <dependency>
+      <groupId>org.openjdk.jol</groupId>
+      <artifactId>jol-core</artifactId>
+    </dependency>
+
+    <!-- Logging -->
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-1.2-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-slf4j-impl</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>jul-to-slf4j</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
     </dependency>
 
     <!-- Fasterxml -->
@@ -151,12 +141,10 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
-    <!-- ORC -->
+    <!-- Orc -->
     <dependency>
       <groupId>org.apache.orc</groupId>
       <artifactId>orc-core</artifactId>
-      <version>${orc.version}</version>
-      <classifier>nohive</classifier>
     </dependency>
 
     <!-- Httpcomponents -->
@@ -308,6 +296,12 @@
       <groupId>joda-time</groupId>
       <artifactId>joda-time</artifactId>
       <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.lmax</groupId>
+      <artifactId>disruptor</artifactId>
+      <version>${disruptor.version}</version>
     </dependency>
   </dependencies>
 </project>

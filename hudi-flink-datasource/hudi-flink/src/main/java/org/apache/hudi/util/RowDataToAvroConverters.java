@@ -32,7 +32,6 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.table.types.logical.TimestampType;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -157,8 +156,9 @@ public class RowDataToAvroConverters {
               }
             };
         break;
+      case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        final int precision = ((TimestampType) type).getPrecision();
+        final int precision = DataTypeUtils.precision(type);
         if (precision <= 3) {
           converter =
               new RowDataToAvroConverter() {
@@ -231,7 +231,7 @@ public class RowDataToAvroConverters {
             actualSchema = types.get(1);
           } else {
             throw new IllegalArgumentException(
-                "The Avro schema is not a nullable type: " + schema.toString());
+                "The Avro schema is not a nullable type: " + schema);
           }
         } else {
           actualSchema = schema;

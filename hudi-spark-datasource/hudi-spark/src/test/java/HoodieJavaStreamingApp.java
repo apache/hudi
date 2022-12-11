@@ -51,7 +51,6 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
@@ -198,9 +197,9 @@ public class HoodieJavaStreamingApp {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(tablePath).build();
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       // Ensure we have successfully completed one compaction commit
-      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().getInstants().count() == 1);
+      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().countInstants() == 1);
     } else {
-      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().getInstants().count() >= 1);
+      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().countInstants() >= 1);
     }
 
     // Deletes Stream
@@ -253,12 +252,12 @@ public class HoodieJavaStreamingApp {
     while ((currTime - beginTime) < timeoutMsecs) {
       try {
         HoodieTimeline timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, tablePath);
-        LOG.info("Timeline :" + timeline.getInstants().collect(Collectors.toList()));
+        LOG.info("Timeline :" + timeline.getInstants());
         if (timeline.countInstants() >= numCommits) {
           return;
         }
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
-        System.out.println("Instants :" + metaClient.getActiveTimeline().getInstants().collect(Collectors.toList()));
+        System.out.println("Instants :" + metaClient.getActiveTimeline().getInstants());
       } catch (TableNotFoundException te) {
         LOG.info("Got table not found exception. Retrying");
       } finally {
@@ -303,7 +302,9 @@ public class HoodieJavaStreamingApp {
     }
 
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
-      numExpCommits += 1;
+      if (inputDF2 != null) {
+        numExpCommits += 1;
+      }
       // Wait for compaction to also finish and track latest timestamp as commit timestamp
       waitTillNCommits(fs, numExpCommits, 180, 3);
       commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);

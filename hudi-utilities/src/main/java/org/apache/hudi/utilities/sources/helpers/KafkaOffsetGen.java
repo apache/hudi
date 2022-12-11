@@ -315,7 +315,9 @@ public class KafkaOffsetGen {
       // TODO(HUDI-4625) cleanup, introduce retrying client
       partitionInfos = consumer.partitionsFor(topicName);
       try {
-        TimeUnit.SECONDS.sleep(10);
+        if (partitionInfos == null) {
+          TimeUnit.SECONDS.sleep(10);
+        }
       } catch (InterruptedException e) {
         LOG.error("Sleep failed while fetching partitions");
       }

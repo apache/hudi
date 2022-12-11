@@ -28,20 +28,23 @@ import java.util.function.Function;
  *
  * @param <I> Type of entry produced for queue
  */
-public class FunctionBasedQueueProducer<I> implements BoundedInMemoryQueueProducer<I> {
+public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
 
   private static final Logger LOG = LogManager.getLogger(FunctionBasedQueueProducer.class);
 
-  private final Function<BoundedInMemoryQueue<I, ?>, Boolean> producerFunction;
+  private final Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction;
 
-  public FunctionBasedQueueProducer(Function<BoundedInMemoryQueue<I, ?>, Boolean> producerFunction) {
+  public FunctionBasedQueueProducer(Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction) {
     this.producerFunction = producerFunction;
   }
 
   @Override
-  public void produce(BoundedInMemoryQueue<I, ?> queue) {
-    LOG.info("starting function which will enqueue records");
+  public void produce(HoodieMessageQueue<I, ?> queue) {
+    LOG.info("Starting to produce records into the queue");
     producerFunction.apply(queue);
-    LOG.info("finished function which will enqueue records");
+    LOG.info("Finished producing records into the queue");
   }
+
+  @Override
+  public void close() { /* no-op */ }
 }

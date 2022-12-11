@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -71,6 +72,11 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     initMetaClient();
   }
 
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanMetaClient();
+  }
+
   @Test
   public void testLoadingInstantsFromFiles() throws IOException {
     HoodieInstant instant1 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
@@ -107,16 +113,16 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertEquals(5, timeline.countInstants(), "Total instants should be 5");
     assertStreamEquals(
         Stream.of(instant1Complete, instant2Complete, instant3Complete, instant4Complete, instant5),
-        timeline.getInstants(), "Check the instants stream");
+        timeline.getInstantsAsStream(), "Check the instants stream");
     assertStreamEquals(
         Stream.of(instant1Complete, instant2Complete, instant3Complete, instant4Complete, instant5),
-        timeline.getCommitTimeline().getInstants(), "Check the instants stream");
+        timeline.getCommitTimeline().getInstantsAsStream(), "Check the instants stream");
     assertStreamEquals(
         Stream.of(instant1Complete, instant2Complete, instant3Complete, instant4Complete),
-        timeline.getCommitTimeline().filterCompletedInstants().getInstants(),
+        timeline.getCommitTimeline().filterCompletedInstants().getInstantsAsStream(),
         "Check the instants stream");
     assertStreamEquals(Stream.of(instant5),
-        timeline.getCommitTimeline().filterPendingExcludingCompaction().getInstants(),
+        timeline.getCommitTimeline().filterPendingExcludingMajorAndMinorCompaction().getInstantsAsStream(),
         "Check the instants stream");
 
     // Backwards compatibility testing for reading compaction plans
@@ -169,18 +175,18 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         Stream.of("21", "23"));
     assertStreamEquals(Stream.of("05", "07", "09", "11"),
         timeline.getCommitTimeline().filterCompletedInstants().findInstantsInRange("04", "11")
-            .getInstants().map(HoodieInstant::getTimestamp),
+            .getInstantsAsStream().map(HoodieInstant::getTimestamp),
         "findInstantsInRange should return 4 instants");
     assertStreamEquals(Stream.of("09", "11"),
         timeline.getCommitTimeline().filterCompletedInstants().findInstantsAfter("07", 2)
-            .getInstants().map(HoodieInstant::getTimestamp),
+            .getInstantsAsStream().map(HoodieInstant::getTimestamp),
         "findInstantsAfter 07 should return 2 instants");
     assertStreamEquals(Stream.of("01", "03", "05"),
         timeline.getCommitTimeline().filterCompletedInstants().findInstantsBefore("07")
-            .getInstants().map(HoodieInstant::getTimestamp),
+            .getInstantsAsStream().map(HoodieInstant::getTimestamp),
         "findInstantsBefore 07 should return 3 instants");
     assertFalse(timeline.empty());
-    assertFalse(timeline.getCommitTimeline().filterPendingExcludingCompaction().empty());
+    assertFalse(timeline.getCommitTimeline().filterPendingExcludingMajorAndMinorCompaction().empty());
     assertEquals(12, timeline.countInstants());
     assertEquals("01", timeline.firstInstant(
         HoodieTimeline.COMMIT_ACTION, State.COMPLETED).get().getTimestamp());
@@ -551,7 +557,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.setInstants(allInstants);
     List<HoodieInstant> validReplaceInstants =
-        timeline.getCompletedReplaceTimeline().getInstants().collect(Collectors.toList());
+        timeline.getCompletedReplaceTimeline().getInstants();
 
     assertEquals(1, validReplaceInstants.size());
     assertEquals(instant.getTimestamp(), validReplaceInstants.get(0).getTimestamp());

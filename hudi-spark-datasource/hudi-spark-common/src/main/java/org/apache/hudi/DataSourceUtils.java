@@ -21,7 +21,7 @@ package org.apache.hudi;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -43,12 +43,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.util.DataTypeUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructType;
 
@@ -246,7 +246,7 @@ public class DataSourceUtils {
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
       HoodieWriteConfig writeConfig) {
     try {
-      HoodieReadClient client = new HoodieReadClient<>(new HoodieSparkEngineContext(jssc), writeConfig);
+      SparkRDDReadClient client = new SparkRDDReadClient<>(new HoodieSparkEngineContext(jssc), writeConfig);
       return client.tagLocation(incomingHoodieRecords)
           .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
     } catch (TableNotFoundException e) {
@@ -281,7 +281,7 @@ public class DataSourceUtils {
    * @param schema schema of the dataset being written
    */
   public static void tryOverrideParquetWriteLegacyFormatProperty(Map<String, String> properties, StructType schema) {
-    if (DataTypeUtils.hasSmallPrecisionDecimalType(schema)
+    if (HoodieDataTypeUtils.hasSmallPrecisionDecimalType(schema)
         && properties.get(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key()) == null) {
       // ParquetWriteSupport writes DecimalType to parquet as INT32/INT64 when the scale of decimalType
       // is less than {@code Decimal.MAX_LONG_DIGITS}, but {@code AvroParquetReader} which is used by

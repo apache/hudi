@@ -18,8 +18,6 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -36,11 +34,16 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.sink.utils.InsertFunctionWrapper;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
+import org.apache.hudi.sink.utils.TestFunctionWrapper;
 import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
@@ -68,11 +71,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.function.Predicate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -220,6 +224,36 @@ public class TestData {
           TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
       insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
+  // changelog details of test_source.data and test_source_2.data
+  public static List<RowData> DATA_SET_SOURCE_CHANGELOG = Arrays.asList(
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+          TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
+      updateAfterRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
+          TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
+      updateBeforeRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
+          TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
+      updateAfterRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
+          TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
+      updateBeforeRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
+      updateAfterRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
       insertRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
           TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
       insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
@@ -379,9 +413,10 @@ public class TestData {
   public static void writeData(
       List<RowData> dataBuffer,
       Configuration conf) throws Exception {
-    StreamWriteFunctionWrapper<RowData> funcWrapper = new StreamWriteFunctionWrapper<>(
-        conf.getString(FlinkOptions.PATH),
-        conf);
+    TestFunctionWrapper<RowData> funcWrapper =
+        OptionsResolver.isInsertOperation(conf)
+            ? new InsertFunctionWrapper<>(conf.getString(FlinkOptions.PATH), conf)
+            : new StreamWriteFunctionWrapper<>(conf.getString(FlinkOptions.PATH), conf);
     funcWrapper.openFunction();
 
     for (RowData rowData : dataBuffer) {
@@ -547,6 +582,25 @@ public class TestData {
       File baseFile,
       Map<String, String> expected,
       int partitions) throws IOException {
+    checkWrittenData(baseFile, expected, partitions, TestData::filterOutVariables);
+  }
+
+  /**
+   * Checks the source data set are written as expected.
+   *
+   * <p>Note: Replace it with the Flink reader when it is supported.
+   *
+   * @param baseFile   The file base to check, should be a directory
+   * @param expected   The expected results mapping, the key should be the partition path
+   *                   and value should be values list with the key partition
+   * @param partitions The expected partition number
+   * @param extractor  The fields extractor
+   */
+  public static void checkWrittenData(
+      File baseFile,
+      Map<String, String> expected,
+      int partitions,
+      Function<GenericRecord, String> extractor) throws IOException {
     assert baseFile.isDirectory();
     FileFilter filter = file -> !file.getName().startsWith(".");
     File[] partitionDirs = baseFile.listFiles(filter);
@@ -563,7 +617,7 @@ public class TestData {
       List<String> readBuffer = new ArrayList<>();
       GenericRecord nextRecord = reader.read();
       while (nextRecord != null) {
-        readBuffer.add(filterOutVariables(nextRecord));
+        readBuffer.add(extractor.apply(nextRecord));
         nextRecord = reader.read();
       }
       readBuffer.sort(Comparator.naturalOrder());
@@ -624,10 +678,26 @@ public class TestData {
   public static void checkWrittenDataCOW(
       File basePath,
       Map<String, List<String>> expected) throws IOException {
+    checkWrittenDataCOW(basePath, expected, TestData::filterOutVariables);
+  }
+
+  /**
+   * Checks the source data are written as expected.
+   *
+   * <p>Note: Replace it with the Flink reader when it is supported.
+   *
+   * @param basePath The file base to check, should be a directory
+   * @param expected The expected results mapping, the key should be the partition path
+   * @param extractor The extractor to extract the required fields from the avro row
+   */
+  public static void checkWrittenDataCOW(
+      File basePath,
+      Map<String, List<String>> expected,
+      Function<GenericRecord, String> extractor) throws IOException {
 
     // 1. init flink table
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.getAbsolutePath());
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath.getAbsolutePath()).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toURI().toString());
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath.toURI().toString()).build();
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
 
     // 2. check each partition data
@@ -642,7 +712,7 @@ public class TestData {
               ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(new Path(path)).build();
               GenericRecord nextRecord = reader.read();
               while (nextRecord != null) {
-                readBuffer.add(filterOutVariables(nextRecord));
+                readBuffer.add(extractor.apply(nextRecord));
                 nextRecord = reader.read();
               }
             } catch (IOException e) {
@@ -650,8 +720,11 @@ public class TestData {
             }
           });
 
-      assertTrue(partitionDataSet.size() == readBuffer.size() && partitionDataSet.containsAll(readBuffer));
-
+      assertThat("Unexpected records number under partition: " + partition,
+          readBuffer.size(), is(partitionDataSet.size()));
+      for (String record : readBuffer) {
+        assertTrue(partitionDataSet.contains(record), "Unexpected record: " + record);
+      }
     });
 
   }
@@ -677,8 +750,8 @@ public class TestData {
     assert hoodiePropertiesFile.exists();
     // 1. init flink table
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-            .fromFile(hoodiePropertiesFile)
-            .withPath(basePath).build();
+        .fromFile(hoodiePropertiesFile)
+        .withPath(basePath).build();
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, config.getProps());
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
@@ -734,8 +807,8 @@ public class TestData {
           for (String curKey : scanner.getRecords().keySet()) {
             if (!keyToSkip.contains(curKey)) {
               Option<GenericRecord> record = (Option<GenericRecord>) scanner.getRecords()
-                      .get(curKey).getData()
-                      .getInsertValue(schema, config.getProps());
+                  .get(curKey).getData()
+                  .getInsertValue(schema, config.getProps());
               if (record.isPresent()) {
                 readBuffer.add(filterOutVariables(record.get()));
               }
@@ -786,7 +859,7 @@ public class TestData {
     fields.add(genericRecord.get("age").toString());
     fields.add(genericRecord.get("ts").toString());
     fields.add(genericRecord.get("partition").toString());
-    return String.join(",",fields);
+    return String.join(",", fields);
   }
 
   public static BinaryRowData insertRow(Object... fields) {

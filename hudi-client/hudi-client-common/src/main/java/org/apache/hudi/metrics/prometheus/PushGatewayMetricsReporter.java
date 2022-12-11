@@ -18,12 +18,12 @@
 
 package org.apache.hudi.metrics.prometheus;
 
-import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.MetricsReporter;
 
-import java.io.Closeable;
+import com.codahale.metrics.MetricFilter;
+import com.codahale.metrics.MetricRegistry;
+
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -63,11 +63,6 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
   @Override
   public void report() {
     pushGatewayReporter.report(null, null, null, null, null);
-  }
-
-  @Override
-  public Closeable getReporter() {
-    return pushGatewayReporter;
   }
 
   @Override

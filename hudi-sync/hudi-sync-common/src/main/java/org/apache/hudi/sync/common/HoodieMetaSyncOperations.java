@@ -97,6 +97,15 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
+   * Get the metadata of partitions that belong to the specified table
+   * @param tableName
+   * @return
+   */
+  default List<Partition> getPartitionsByFilter(String tableName, String filter) {
+    return Collections.emptyList();
+  }
+
+  /**
    * Check if a database already exists in the metastore.
    */
   default boolean databaseExists(String databaseName) {
@@ -121,6 +130,15 @@ public interface HoodieMetaSyncOperations {
    * Get the schema from the Hudi table on storage.
    */
   default MessageType getStorageSchema() {
+    return null;
+  }
+
+  /**
+   * Get the schema from the Hudi table on storage.
+   *
+   * @param includeMetadataField true if to include metadata fields in the schema
+   */
+  default MessageType getStorageSchema(boolean includeMetadataField) {
     return null;
   }
 
@@ -170,6 +188,13 @@ public interface HoodieMetaSyncOperations {
    * Update the table properties in metastore.
    */
   default void updateTableProperties(String tableName, Map<String, String> tableProperties) {
+
+  }
+
+  /**
+   * Update the SerDe properties in metastore.
+   */
+  default void updateSerdeProperties(String tableName, Map<String, String> serdeProperties) {
 
   }
 

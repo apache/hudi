@@ -37,6 +37,8 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -54,11 +56,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link TimelineUtils}.
+ */
 public class TestTimelineUtils extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
     initMetaClient();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanMetaClient();
   }
 
   @Test
@@ -74,7 +84,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.createNewInstant(instant1);
     // create replace metadata only with replaced file Ids (no new files created)
     activeTimeline.saveAsComplete(instant1,
-        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2, 
+        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
             newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();
 
@@ -123,24 +133,24 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(5, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"0", "2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList("0", "2", "3", "4", "5"));
 
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertEquals(4, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"0", "2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList("0", "2", "3", "4"));
 
     // verify only commit actions
-    partitions = TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
+    partitions = TimelineUtils.getWrittenPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(4, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4", "5"));
 
-    partitions = TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
+    partitions = TimelineUtils.getWrittenPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertEquals(3, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4"));
   }
 
   @Test
-  public void testGetPartitionsUnpartitioned() throws IOException {
+  public void testGetPartitionsUnPartitioned() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertTrue(activeCommitTimeline.empty());
@@ -184,10 +194,10 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
 
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4", "5"));
 
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4"));
   }
 
   @Test
@@ -216,8 +226,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // verify modified partitions included cleaned data
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());
-    
-    // verify adding clustering commit doesnt change behavior of getExtraMetadataFromLatest
+
+    // verify adding clustering commit doesn't change behavior of getExtraMetadataFromLatest
     String ts2 = "2";
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts2);
     activeTimeline.createNewInstant(instant2);
@@ -227,7 +237,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         Option.of(getReplaceCommitMetadata(basePath, ts2, "p2", 0,
             "p2", 3, extraMetadata, WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();
-    
+
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
     verifyExtraMetadataLatestValue(extraMetadataKey, newValueForMetadata, true);
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());
@@ -240,10 +250,10 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertTrue(extraMetadataEntries.get("2").isPresent());
     assertEquals(newValueForMetadata, extraMetadataEntries.get("2").get());
   }
-  
+
   private void verifyExtraMetadataLatestValue(String extraMetadataKey, String expected, boolean includeClustering) {
     final Option<String> extraLatestValue;
-    if (includeClustering) {       
+    if (includeClustering) {
       extraLatestValue = TimelineUtils.getExtraMetadataFromLatestIncludeClustering(metaClient, extraMetadataKey);
     } else {
       extraLatestValue = TimelineUtils.getExtraMetadataFromLatest(metaClient, extraMetadataKey);
@@ -338,6 +348,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .setTotalFilesDeleted(1)
         .setStartCleanTime(time)
         .setEarliestCommitToRetain(time)
+        .setLastCompletedCommitTimestamp("")
         .setPartitionMetadata(partitionToFilesCleaned).build();
 
     return TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata);

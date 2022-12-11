@@ -45,7 +45,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.io.HoodieSortedMergeHandle;
+import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
@@ -53,6 +53,7 @@ import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.JavaExecuteClusteringCommitActionExecutor;
+import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 import org.apache.hudi.table.action.commit.JavaBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaDeleteCommitActionExecutor;
@@ -60,7 +61,6 @@ import org.apache.hudi.table.action.commit.JavaInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertOverwriteTableCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaMergeHelper;
 import org.apache.hudi.table.action.commit.JavaUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaUpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.index.RunIndexActionExecutor;
@@ -285,7 +285,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      JavaMergeHelper.newInstance().runMerge(this, upsertHandle);
+      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
     }
 
     // TODO(yihua): This needs to be revisited
@@ -299,13 +299,8 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
                                               Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
-    if (requireSortedRecords()) {
-      return new HoodieSortedMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged, taskContextSupplier, Option.empty());
-    } else {
-      return new HoodieMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged, taskContextSupplier, Option.empty());
-    }
+    return HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
+        dataFileToBeMerged, taskContextSupplier, Option.empty());
   }
 
   @Override

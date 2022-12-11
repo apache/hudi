@@ -25,6 +25,7 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -43,7 +44,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -63,8 +66,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test Cases for {@link DiffCommand}.
  */
 @Tag("functional")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class TestDiffCommand extends CLIFunctionalTestHarness {
 
+  @Autowired
+  private Shell shell;
   private String tableName;
   private String tablePath;
 
@@ -109,11 +115,11 @@ public class TestDiffCommand extends CLIFunctionalTestHarness {
 
     HoodieTableMetaClient.reload(metaClient);
 
-    CommandResult cr = shell().executeCommand(String.format("diff file --fileId %s", fileId1));
-    assertTrue(cr.isSuccess());
+    Object result =  shell.evaluate(() -> String.format("diff file --fileId %s", fileId1));
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
     String expected = generateExpectDataWithExtraMetadata(commits, fileId1, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 

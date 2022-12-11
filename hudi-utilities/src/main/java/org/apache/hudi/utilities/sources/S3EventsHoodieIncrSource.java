@@ -157,7 +157,9 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL()).load(srcPath)
           // add filtering so that only interested records are returned.
           .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              queryTypeAndInstantEndpts.getRight().getLeft()));
+              queryTypeAndInstantEndpts.getRight().getLeft()))
+          .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+              queryTypeAndInstantEndpts.getRight().getRight()));
     }
 
     if (source.isEmpty()) {

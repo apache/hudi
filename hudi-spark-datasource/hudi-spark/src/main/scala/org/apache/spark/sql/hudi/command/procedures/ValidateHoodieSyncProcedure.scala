@@ -95,7 +95,7 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
       sourceCount = countRecords(hiveServerUrl, srcMetaClient, srcDb, partitionCount, hiveUser, hivePass)
       targetCount = countRecords(hiveServerUrl, targetMetaClient, tgtDb, partitionCount, hiveUser, hivePass)
     } else {
-      logError(s"Unsupport mode ${mode}")
+      logError(s"Unsupport mode $mode")
     }
 
     val targetLatestCommit =
@@ -114,7 +114,7 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
                 sourceCount: Long, targetCount: Long, sourceLatestCommit: String): String = {
 
     val commitsToCatchup: List[HoodieInstant] =
-      targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE).getInstants.iterator().asScala.toList
+      targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE).getInstantsAsStream.iterator().asScala.toList
     if (commitsToCatchup.isEmpty) {
       s"Count difference now is count(${target.getTableConfig.getTableName}) - count(${source.getTableConfig.getTableName}) == ${targetCount - sourceCount}"
     } else {

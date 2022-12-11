@@ -18,10 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -33,6 +29,11 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -59,9 +60,10 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               String spillableMapBasePath,
                                               ExternalSpillableMap.DiskMapType diskMapType,
                                               boolean isBitCaskDiskMapCompressionEnabled,
-                                              Option<InstantRange> instantRange, boolean allowFullScan) {
+                                              Option<InstantRange> instantRange, boolean allowFullScan, boolean useScanV2) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, true, false, bufferSize,
-        spillableMapBasePath, instantRange, diskMapType, isBitCaskDiskMapCompressionEnabled, false, allowFullScan, Option.of(partitionName), InternalSchema.getEmptyInternalSchema());
+        spillableMapBasePath, instantRange, diskMapType, isBitCaskDiskMapCompressionEnabled, false, allowFullScan,
+            Option.of(partitionName), InternalSchema.getEmptyInternalSchema(), useScanV2);
   }
 
   @Override
@@ -106,7 +108,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     // processing log block records as part of scan.
     synchronized (this) {
       records.clear();
-      scanInternal(Option.of(new KeySpec(keyPrefixes, false)));
+      scanInternal(Option.of(new KeySpec(keyPrefixes, false)), false);
       return records.values().stream()
           .filter(Objects::nonNull)
           .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
@@ -137,7 +139,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
    * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
    */
   public static class Builder extends HoodieMergedLogRecordScanner.Builder {
+
     private boolean allowFullScan = HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
+
+    // Use scanV2 method.
+    private boolean useScanV2 = false;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -161,6 +167,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     public Builder withReaderSchema(Schema schema) {
       this.readerSchema = schema;
       return this;
+    }
+
+    @Override
+    public Builder withInternalSchema(InternalSchema internalSchema) {
+      throw new UnsupportedOperationException();
     }
 
     @Override
@@ -226,10 +237,16 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     }
 
     @Override
+    public Builder withUseScanV2(boolean useScanV2) {
+      this.useScanV2 = useScanV2;
+      return this;
+    }
+
+    @Override
     public HoodieMetadataMergedLogRecordReader build() {
       return new HoodieMetadataMergedLogRecordReader(fs, basePath, partitionName, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, allowFullScan);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, allowFullScan, useScanV2);
     }
   }
 

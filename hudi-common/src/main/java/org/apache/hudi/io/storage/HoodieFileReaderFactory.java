@@ -27,10 +27,13 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 
+/**
+ * Factory methods to create Hudi file reader.
+ */
 public class HoodieFileReaderFactory {
 
   public static <R extends IndexedRecord> HoodieFileReader<R> getFileReader(Configuration conf, Path path) throws IOException {
@@ -44,7 +47,6 @@ public class HoodieFileReaderFactory {
     if (ORC.getFileExtension().equals(extension)) {
       return newOrcFileReader(conf, path);
     }
-
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 

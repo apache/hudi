@@ -18,17 +18,7 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.generic.IndexedRecord;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -56,9 +46,16 @@ import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.io.storage.HoodieOrcReader;
 import org.apache.hudi.util.Lazy;
 
+import org.apache.avro.JsonProperties;
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -66,6 +63,7 @@ import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 
 import javax.annotation.concurrent.ThreadSafe;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -174,6 +172,15 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Gets users data schema for a hoodie table in Parquet format.
+   *
+   * @return Parquet schema for the table
+   */
+  public MessageType getTableParquetSchema(boolean includeMetadataField) throws Exception {
+    return convertAvroSchemaToParquet(getTableAvroSchema(includeMetadataField));
+  }
+
+  /**
    * Gets users data schema for a hoodie table in Avro format.
    *
    * @return  Avro user data schema
@@ -208,7 +215,7 @@ public class TableSchemaResolver {
     // TODO partition columns have to be appended in all read-paths
     if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
       return metaClient.getTableConfig().getPartitionFields()
-          .map(partitionFields -> appendPartitionColumns(schema, partitionFields))
+          .map(partitionFields -> appendPartitionColumns(schema, Option.ofNullable(partitionFields)))
           .orElse(schema);
     }
 
@@ -295,98 +302,6 @@ public class TableSchemaResolver {
   }
 
   /**
-   * HUDI specific validation of schema evolution. Ensures that a newer schema can be used for the dataset by
-   * checking if the data written using the old schema can be read using the new schema.
-   *
-   * HUDI requires a Schema to be specified in HoodieWriteConfig and is used by the HoodieWriteClient to
-   * create the records. The schema is also saved in the data files (parquet format) and log files (avro format).
-   * Since a schema is required each time new data is ingested into a HUDI dataset, schema can be evolved over time.
-   *
-   * New Schema is compatible only if:
-   * A1. There is no change in schema
-   * A2. A field has been added and it has a default value specified
-   *
-   * New Schema is incompatible if:
-   * B1. A field has been deleted
-   * B2. A field has been renamed (treated as delete + add)
-   * B3. A field's type has changed to be incompatible with the older type
-   *
-   * Issue with org.apache.avro.SchemaCompatibility:
-   *  org.apache.avro.SchemaCompatibility checks schema compatibility between a writer schema (which originally wrote
-   *  the AVRO record) and a readerSchema (with which we are reading the record). It ONLY guarantees that that each
-   *  field in the reader record can be populated from the writer record. Hence, if the reader schema is missing a
-   *  field, it is still compatible with the writer schema.
-   *
-   *  In other words, org.apache.avro.SchemaCompatibility was written to guarantee that we can read the data written
-   *  earlier. It does not guarantee schema evolution for HUDI (B1 above).
-   *
-   * Implementation: This function implements specific HUDI specific checks (listed below) and defers the remaining
-   * checks to the org.apache.avro.SchemaCompatibility code.
-   *
-   * Checks:
-   * C1. If there is no change in schema: success
-   * C2. If a field has been deleted in new schema: failure
-   * C3. If a field has been added in new schema: it should have default value specified
-   * C4. If a field has been renamed(treated as delete + add): failure
-   * C5. If a field type has changed: failure
-   *
-   * @param oldSchema Older schema to check.
-   * @param newSchema Newer schema to check.
-   * @return True if the schema validation is successful
-   *
-   * TODO revisit this method: it's implemented incorrectly as it might be applying different criteria
-   *      to top-level record and nested record (for ex, if that nested record is contained w/in an array)
-   */
-  public static boolean isSchemaCompatible(Schema oldSchema, Schema newSchema) {
-    if (oldSchema.getType() == newSchema.getType() && newSchema.getType() == Schema.Type.RECORD) {
-      // record names must match:
-      if (!SchemaCompatibility.schemaNameEquals(newSchema, oldSchema)) {
-        return false;
-      }
-
-      // Check that each field in the oldSchema can populated the newSchema
-      for (final Field oldSchemaField : oldSchema.getFields()) {
-        final Field newSchemaField = SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField);
-        if (newSchemaField == null) {
-          // C4 or C2: newSchema does not correspond to any field in the oldSchema
-          return false;
-        } else {
-          if (!isSchemaCompatible(oldSchemaField.schema(), newSchemaField.schema())) {
-            // C5: The fields do not have a compatible type
-            return false;
-          }
-        }
-      }
-
-      // Check that new fields added in newSchema have default values as they will not be
-      // present in oldSchema and hence cannot be populated on reading records from existing data.
-      for (final Field newSchemaField : newSchema.getFields()) {
-        final Field oldSchemaField = SchemaCompatibility.lookupWriterField(oldSchema, newSchemaField);
-        if (oldSchemaField == null) {
-          if (newSchemaField.defaultVal() == null) {
-            // C3: newly added field in newSchema does not have a default value
-            return false;
-          }
-        }
-      }
-
-      // All fields in the newSchema record can be populated from the oldSchema record
-      return true;
-    } else {
-      // Use the checks implemented by Avro
-      // newSchema is the schema which will be used to read the records written earlier using oldSchema. Hence, in the
-      // check below, use newSchema as the reader schema and oldSchema as the writer schema.
-      org.apache.avro.SchemaCompatibility.SchemaPairCompatibility compatResult =
-          org.apache.avro.SchemaCompatibility.checkReaderWriterCompatibility(newSchema, oldSchema);
-      return compatResult.getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
-    }
-  }
-
-  public static boolean isSchemaCompatible(String oldSchema, String newSchema) {
-    return isSchemaCompatible(new Schema.Parser().parse(oldSchema), new Schema.Parser().parse(newSchema));
-  }
-
-  /**
    * Returns table's latest Avro {@link Schema} iff table is non-empty (ie there's at least
    * a single commit)
    *
@@ -420,7 +335,7 @@ public class TableSchemaResolver {
         if (convertTableSchemaToAddNamespace && converterFn != null) {
           tableSchema = converterFn.apply(tableSchema);
         }
-        if (writeSchema.getFields().size() < tableSchema.getFields().size() && isSchemaCompatible(writeSchema, tableSchema)) {
+        if (writeSchema.getFields().size() < tableSchema.getFields().size() && AvroSchemaUtils.isSchemaCompatible(writeSchema, tableSchema)) {
           // if incoming schema is a subset (old schema) compared to table schema. For eg, one of the
           // ingestion pipeline is still producing events in old schema
           latestSchema = tableSchema;
@@ -650,18 +565,18 @@ public class TableSchemaResolver {
     }
   }
 
-  static Schema appendPartitionColumns(Schema dataSchema, String[] partitionFields) {
+  public static Schema appendPartitionColumns(Schema dataSchema, Option<String[]> partitionFields) {
     // In cases when {@link DROP_PARTITION_COLUMNS} config is set true, partition columns
     // won't be persisted w/in the data files, and therefore we need to append such columns
     // when schema is parsed from data files
     //
     // Here we append partition columns with {@code StringType} as the data type
-    if (partitionFields.length == 0) {
+    if (!partitionFields.isPresent() || partitionFields.get().length == 0) {
       return dataSchema;
     }
 
-    boolean hasPartitionColNotInSchema = Arrays.stream(partitionFields).anyMatch(pf -> !containsFieldInSchema(dataSchema, pf));
-    boolean hasPartitionColInSchema = Arrays.stream(partitionFields).anyMatch(pf -> containsFieldInSchema(dataSchema, pf));
+    boolean hasPartitionColNotInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> !containsFieldInSchema(dataSchema, pf));
+    boolean hasPartitionColInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> containsFieldInSchema(dataSchema, pf));
     if (hasPartitionColNotInSchema && hasPartitionColInSchema) {
       throw new HoodieIncompatibleSchemaException("Partition columns could not be partially contained w/in the data schema");
     }
@@ -670,7 +585,7 @@ public class TableSchemaResolver {
       // when hasPartitionColNotInSchema is true and hasPartitionColInSchema is false, all partition columns
       // are not in originSchema. So we create and add them.
       List<Field> newFields = new ArrayList<>();
-      for (String partitionField: partitionFields) {
+      for (String partitionField: partitionFields.get()) {
         newFields.add(new Schema.Field(
             partitionField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
       }

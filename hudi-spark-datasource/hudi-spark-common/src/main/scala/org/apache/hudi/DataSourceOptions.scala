@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.{ConfigProperty, DFSPropertiesConfiguration
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
@@ -31,6 +31,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.ConfigUtils
+import org.apache.hudi.util.JFunction
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
@@ -61,6 +62,16 @@ object DataSourceReadOptions {
       "(or) Read Optimized mode (obtain latest view, based on base files) (or) Snapshot mode " +
       "(obtain latest view, by merging base and (if any) log files)")
 
+  val INCREMENTAL_FORMAT_LATEST_STATE_VAL = "latest_state"
+  val INCREMENTAL_FORMAT_CDC_VAL = "cdc"
+  val INCREMENTAL_FORMAT: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.query.incremental.format")
+    .defaultValue(INCREMENTAL_FORMAT_LATEST_STATE_VAL)
+    .withValidValues(INCREMENTAL_FORMAT_LATEST_STATE_VAL, INCREMENTAL_FORMAT_CDC_VAL)
+    .withDocumentation("This config is used alone with the 'incremental' query type." +
+      "When set to 'latest_state', it returns the latest records' values." +
+      "When set to 'cdc', it returns the cdc data.")
+
   val REALTIME_SKIP_MERGE_OPT_VAL = "skip_merge"
   val REALTIME_PAYLOAD_COMBINE_OPT_VAL = "payload_combine"
   val REALTIME_MERGE: ConfigProperty[String] = ConfigProperty
@@ -84,6 +95,12 @@ object DataSourceReadOptions {
     .deprecatedAfter("0.11.0")
     .withDocumentation("Enables use of the spark file index implementation for Hudi, "
       + "that speeds up listing of large tables.")
+
+  val START_OFFSET: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.streaming.startOffset")
+    .defaultValue("earliest")
+    .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
+      "specified start instant time")
 
   val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
@@ -116,11 +133,7 @@ object DataSourceReadOptions {
     .withDocumentation("For the use-cases like users only want to incremental pull from certain partitions "
       + "instead of the full table. This option allows using glob pattern to directly filter on path.")
 
-  val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = ConfigProperty
-    .key("as.of.instant")
-    .noDefaultValue()
-    .withDocumentation("The query instant for time travel. Without specified this option," +
-      " we query the latest snapshot.")
+  val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = HoodieCommonConfig.TIMESTAMP_AS_OF
 
   val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.enable.data.skipping")
@@ -137,6 +150,32 @@ object DataSourceReadOptions {
         " from physical partition path (default Spark behavior). When set to false partition values will be" +
         " read from the data file (in Hudi partition columns are persisted by default)." +
         " This config is a fallback allowing to preserve existing behavior, and should not be used otherwise.")
+
+  val FILE_INDEX_LISTING_MODE_EAGER = "eager"
+  val FILE_INDEX_LISTING_MODE_LAZY = "lazy"
+
+  val FILE_INDEX_LISTING_MODE_OVERRIDE: ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.file.index.listing.mode.override")
+      .defaultValue(FILE_INDEX_LISTING_MODE_LAZY)
+      .withValidValues(FILE_INDEX_LISTING_MODE_LAZY, FILE_INDEX_LISTING_MODE_EAGER)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Overrides Hudi's file-index implementation's file listing mode: when set to 'eager'," +
+        " file-index will list all partition paths and corresponding file slices w/in them eagerly, during initialization," +
+        " prior to partition-pruning kicking in, meaning that all partitions will be listed including ones that might be " +
+        " subsequently pruned out; when set to 'lazy', partitions and file-slices w/in them will be listed" +
+        " lazily (ie when they actually accessed, instead of when file-index is initialized) allowing partition pruning" +
+        " to occur before that, only listing partitions that has already been pruned. Please note that, this config" +
+        " is provided purely to allow to fallback to behavior existing prior to 0.13.0 release, and will be deprecated" +
+        " soon after.")
+
+  val FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.datasource.read.file.index.listing.partition-path-prefix.analysis.enabled")
+      .defaultValue(true)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Controls whether partition-path prefix analysis is enabled w/in the file-index, allowing" +
+        " to avoid necessity to recursively list deep folder structures of partitioned tables w/ multiple partition columns," +
+        " by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from " +
+        " them (if possible).")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
@@ -325,14 +364,14 @@ object DataSourceWriteOptions {
   /**
     * Key generator class, that implements will extract the key out of incoming record.
     */
-  val keyGeneraterInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {
-    Option.of(DataSourceOptionsHelper.inferKeyGenClazz(p.getProps))
+  val keyGeneratorInferFunc = JFunction.toJavaFunction((config: HoodieConfig) => {
+    Option.of(DataSourceOptionsHelper.inferKeyGenClazz(config.getProps))
   })
 
   val KEYGENERATOR_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.keygenerator.class")
     .defaultValue(classOf[SimpleKeyGenerator].getName)
-    .withInferFunction(keyGeneraterInferFunc)
+    .withInferFunction(keyGeneratorInferFunc)
     .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
 
   val KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED: ConfigProperty[String] = KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED
@@ -373,7 +412,7 @@ object DataSourceWriteOptions {
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")
     .noDefaultValue()
-    .withDocumentation("Comma separated list of partitions to delete")
+    .withDocumentation("Comma separated list of partitions to delete. Allows use of wildcard *")
 
   val STREAMING_RETRY_CNT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.retry.count")
@@ -401,6 +440,17 @@ object DataSourceWriteOptions {
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
   val RECONCILE_SCHEMA: ConfigProperty[Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
+
+  // NOTE: This is an internal config that is not exposed to the public
+  private[hudi] val CANONICALIZE_SCHEMA: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.datasource.write.schema.canonicalize")
+      .defaultValue(true)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Controls whether incoming batch's schema's nullability constraints should be canonicalized "
+        + "relative to the table's schema. For ex, in case field A is marked as null-able in table's schema, but is marked "
+        + "as non-null in the incoming batch, w/o canonicalization such write might fail as we won't be able to read existing "
+        + "null records from the table (for updating, for ex). Note, that this config has only effect when "
+        + "'hoodie.datasource.write.reconcile.schema' is set to false.")
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
@@ -605,9 +655,6 @@ object DataSourceWriteOptions {
   val RECORDKEY_FIELD_OPT_KEY = KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()
   /** @deprecated Use {@link RECORDKEY_FIELD} and its methods instead */
   @Deprecated
-  val DEFAULT_RECORDKEY_FIELD_OPT_VAL = RECORDKEY_FIELD.defaultValue()
-  /** @deprecated Use {@link PARTITIONPATH_FIELD} and its methods instead */
-  @Deprecated
   val PARTITIONPATH_FIELD_OPT_KEY = KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()
   /** @deprecated Use {@link PARTITIONPATH_FIELD} and its methods instead */
   @Deprecated
@@ -787,9 +834,13 @@ object DataSourceOptionsHelper {
 
   def inferKeyGenClazz(props: TypedProperties): String = {
     val partitionFields = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), null)
-    if (partitionFields != null) {
+    val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), null)
+    inferKeyGenClazz(recordsKeyFields, partitionFields)
+  }
+
+  def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
+    if (!StringUtils.isNullOrEmpty(partitionFields)) {
       val numPartFields = partitionFields.split(",").length
-      val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
       val numRecordKeyFields = recordsKeyFields.split(",").length
       if (numPartFields == 1 && numRecordKeyFields == 1) {
         classOf[SimpleKeyGenerator].getName
@@ -798,12 +849,6 @@ object DataSourceOptionsHelper {
       }
     } else {
       classOf[NonpartitionedKeyGenerator].getName
-    }
-  }
-
-  implicit def scalaFunctionToJavaFunction[From, To](function: (From) => To): JavaFunction[From, To] = {
-    new JavaFunction[From, To] {
-      override def apply (input: From): To = function (input)
     }
   }
 

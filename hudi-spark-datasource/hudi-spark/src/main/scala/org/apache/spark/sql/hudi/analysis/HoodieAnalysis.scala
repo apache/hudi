@@ -79,10 +79,6 @@ object HoodieAnalysis {
       val spark3Analysis: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3AnalysisClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-      val spark3ResolveReferences: RuleBuilder =
-        session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
-
       val resolveAlterTableCommandsClass =
         if (HoodieSparkUtils.gteqSpark3_3)
           "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
@@ -94,10 +90,10 @@ object HoodieAnalysis {
       //
       // It's critical for this rules to follow in this order, so that DataSource V2 to V1 fallback
       // is performed prior to other rules being evaluated
-      rules ++= Seq(dataSourceV2ToV1Fallback, spark3Analysis, spark3ResolveReferences, resolveAlterTableCommands)
+      rules ++= Seq(dataSourceV2ToV1Fallback, spark3Analysis, resolveAlterTableCommands)
 
     } else if (HoodieSparkUtils.gteqSpark3_1) {
-      val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.Spark312ResolveHudiAlterTableCommand"
+      val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.Spark31ResolveHudiAlterTableCommand"
       val spark31ResolveAlterTableCommands: RuleBuilder =
         session => ReflectionUtils.loadClass(spark31ResolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
 
@@ -195,10 +191,10 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
         }
 
       // Convert to CreateIndexCommand
-      case CreateIndex(table, indexName, indexType, ignoreIfExists, columns, properties, output)
+      case CreateIndex(table, indexName, indexType, ignoreIfExists, columns, options, output)
         if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
         CreateIndexCommand(
-          getTableIdentifier(table), indexName, indexType, ignoreIfExists, columns, properties, output)
+          getTableIdentifier(table), indexName, indexType, ignoreIfExists, columns, options, output)
 
       // Convert to DropIndexCommand
       case DropIndex(table, indexName, ignoreIfNotExists, output)
@@ -268,6 +264,14 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       if sparkAdapter.isHoodieTable(target, sparkSession) && target.resolved =>
       val resolver = sparkSession.sessionState.conf.resolver
       val resolvedSource = analyzer.execute(source)
+      try {
+        analyzer.checkAnalysis(resolvedSource)
+      } catch {
+        case e: AnalysisException =>
+          val ae = new AnalysisException(e.message, e.line, e.startPosition, Option(resolvedSource))
+          ae.setStackTrace(e.getStackTrace)
+          throw ae
+      }
 
       def isInsertOrUpdateStar(assignments: Seq[Assignment]): Boolean = {
         if (assignments.isEmpty) {
@@ -282,13 +286,21 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           // the hoodie's meta field in sql statement, it is a system field, cannot set the value
           // by user.
           if (HoodieSparkUtils.isSpark3) {
-            val assignmentFieldNames = assignments.map(_.key).map {
+            val resolvedAssignments = assignments.map { assign =>
+              val resolvedKey = assign.key match {
+                case c if !c.resolved =>
+                  resolveExpressionFrom(target)(c)
+                case o => o
+              }
+              Assignment(resolvedKey, null)
+            }
+            val assignmentFieldNames = resolvedAssignments.map(_.key).map {
               case attr: AttributeReference =>
                 attr.name
               case _ => ""
             }.toArray
             val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala
-            if (metaFields.mkString(",").startsWith(assignmentFieldNames.take(metaFields.length).mkString(","))) {
+            if (assignmentFieldNames.take(metaFields.length).mkString(",").startsWith(metaFields.mkString(","))) {
               true
             } else {
               false
@@ -577,9 +589,9 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
         if sparkAdapter.isHoodieTable(table) =>
         CreateHoodieTableCommand(table, ignoreIfExists)
       // Rewrite the DropTableCommand to DropHoodieTableCommand
-      case DropTableCommand(tableName, ifExists, isView, purge)
+      case DropTableCommand(tableName, ifExists, false, purge)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
-        DropHoodieTableCommand(tableName, ifExists, isView, purge)
+        DropHoodieTableCommand(tableName, ifExists, false, purge)
       // Rewrite the AlterTableDropPartitionCommand to AlterHoodieTableDropPartitionCommand
       case AlterTableDropPartitionCommand(tableName, specs, ifExists, purge, retainData)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
@@ -606,6 +618,14 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       case TruncateTableCommand(tableName, partitionSpec)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
         TruncateHoodieTableCommand(tableName, partitionSpec)
+      // Rewrite RepairTableCommand to RepairHoodieTableCommand
+      case r if sparkAdapter.getCatalystPlanUtils.isRepairTable(r) =>
+        val (tableName, enableAddPartitions, enableDropPartitions, cmd) = sparkAdapter.getCatalystPlanUtils.getRepairTableChildren(r).get
+        if (sparkAdapter.isHoodieTable(tableName, sparkSession)) {
+          RepairHoodieTableCommand(tableName, enableAddPartitions, enableDropPartitions, cmd)
+        } else {
+          r
+        }
       case _ => plan
     }
   }

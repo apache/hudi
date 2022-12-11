@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
@@ -49,6 +50,7 @@ private[hudi] trait SparkVersionsSupport {
   def gteqSpark3_1_3: Boolean = getSparkVersion >= "3.1.3"
   def gteqSpark3_2: Boolean = getSparkVersion >= "3.2"
   def gteqSpark3_2_1: Boolean = getSparkVersion >= "3.2.1"
+  def gteqSpark3_2_2: Boolean = getSparkVersion >= "3.2.2"
   def gteqSpark3_3: Boolean = getSparkVersion >= "3.3"
 }
 
@@ -65,19 +67,14 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
   /**
    * @deprecated please use other overload [[createRdd]]
    */
+  @Deprecated
   def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
                 latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
-    var latestTableSchemaConverted : Option[Schema] = None
-
-    if (latestTableSchema.isPresent && reconcileToLatestSchema) {
-      latestTableSchemaConverted = Some(latestTableSchema.get())
-    } else {
-      // cases when users want to use latestTableSchema but have not turned on reconcileToLatestSchema explicitly
-      // for example, when using a Transformer implementation to transform source RDD to target RDD
-      latestTableSchemaConverted = if (latestTableSchema.isPresent) Some(latestTableSchema.get()) else None
-    }
-    createRdd(df, structName, recordNamespace, latestTableSchemaConverted)
+    createRdd(df, structName, recordNamespace, toScalaOption(latestTableSchema))
   }
+
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String): RDD[GenericRecord] =
+    createRdd(df, structName, recordNamespace, None)
 
   def createRdd(df: DataFrame, structName: String, recordNamespace: String, readerAvroSchemaOpt: Option[Schema]): RDD[GenericRecord] = {
     val writerSchema = df.schema
@@ -96,7 +93,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
 
     // NOTE: We're accessing toRdd here directly to avoid [[InternalRow]] to [[Row]] conversion
     //       Additionally, we have to explicitly wrap around resulting [[RDD]] into the one
-    //       injecting [[SQLConf]], which by default isn't propgated by Spark to the executor(s).
+    //       injecting [[SQLConf]], which by default isn't propagated by Spark to the executor(s).
     //       [[SQLConf]] is required by [[AvroSerializer]]
     injectSQLConf(df.queryExecution.toRdd.mapPartitions { rows =>
       if (rows.isEmpty) {

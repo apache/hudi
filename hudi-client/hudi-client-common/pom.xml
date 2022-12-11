@@ -30,6 +30,12 @@
   <packaging>jar</packaging>
 
   <dependencies>
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-1.2-api</artifactId>
+    </dependency>
+
     <!-- Hoodie -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -57,6 +63,12 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+    </dependency>
+
+    <!-- Orc -->
+    <dependency>
+      <groupId>org.apache.orc</groupId>
+      <artifactId>orc-core</artifactId>
     </dependency>
 
     <!-- Hilbert Curve -->

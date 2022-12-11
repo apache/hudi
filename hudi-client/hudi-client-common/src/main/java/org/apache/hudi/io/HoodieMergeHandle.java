@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
@@ -61,8 +62,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 @SuppressWarnings("Duplicates")
@@ -201,8 +202,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       createMarkerFile(partitionPath, newFilePath.getName());
 
       // Create the writer for writing the new version file
-      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config,
-        writeSchemaWithMetaFields, taskContextSupplier);
+      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable,
+          config, writeSchemaWithMetaFields, taskContextSupplier);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -229,7 +230,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(tableSchema),
+          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writeSchema),
           config.getCommonConfig().getSpillableDiskMapType(),
           config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
     } catch (IOException io) {
@@ -268,7 +269,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
   }
 
-  private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
+  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
     boolean isDelete = false;
     if (indexedRecord.isPresent()) {
       updatedRecordsWritten++;
@@ -285,12 +286,16 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord) throws IOException {
-    Schema schema = useWriterSchemaForCompaction ? tableSchemaWithMetaFields : tableSchema;
+    Schema schema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
     Option<IndexedRecord> insertRecord = hoodieRecord.getData().getInsertValue(schema, config.getProps());
     // just skip the ignored record
     if (insertRecord.isPresent() && insertRecord.get().equals(IGNORE_RECORD)) {
       return;
     }
+    writeInsertRecord(hoodieRecord, insertRecord);
+  }
+
+  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> insertRecord) {
     if (writeRecord(hoodieRecord, insertRecord, HoodieOperation.isDelete(hoodieRecord.getOperation()))) {
       insertRecordsWritten++;
     }
@@ -300,7 +305,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     return writeRecord(hoodieRecord, indexedRecord, false);
   }
 
-  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord, boolean isDelete) {
+  private boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord, boolean isDelete) {
     Option recordMetadata = hoodieRecord.getData().getMetadata();
     if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -341,7 +346,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       try {
         Option<IndexedRecord> combinedAvroRecord =
             hoodieRecord.getData().combineAndGetUpdateValue(oldRecord,
-              useWriterSchemaForCompaction ? tableSchemaWithMetaFields : tableSchema,
+              useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema,
                 config.getPayloadConfig().getProps());
 
         if (combinedAvroRecord.isPresent() && combinedAvroRecord.get().equals(IGNORE_RECORD)) {

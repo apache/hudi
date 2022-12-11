@@ -78,7 +78,7 @@ public class InternalSchemaMerger {
    */
   public InternalSchema mergeSchema() {
     Types.RecordType record = (Types.RecordType) mergeType(querySchema.getRecord(), 0);
-    return new InternalSchema(record.fields());
+    return new InternalSchema(record);
   }
 
   /**

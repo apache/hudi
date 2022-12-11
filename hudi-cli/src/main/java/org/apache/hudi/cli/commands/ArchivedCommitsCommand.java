@@ -23,6 +23,9 @@ import org.apache.hudi.avro.model.HoodieCommitMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
+import org.apache.hudi.cli.utils.InputStreamConsumer;
+import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -38,10 +41,13 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.spark.launcher.SparkLauncher;
+import org.apache.spark.util.Utils;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,17 +58,48 @@ import java.util.stream.Collectors;
 /**
  * CLI command to display archived commits and stats if available.
  */
-@Component
-public class ArchivedCommitsCommand implements CommandMarker {
+@ShellComponent
+public class ArchivedCommitsCommand {
+  private static final Logger LOG = LogManager.getLogger(ArchivedCommitsCommand.class);
+  @ShellMethod(key = "trigger archival", value = "trigger archival")
+  public String triggerArchival(
+      @ShellOption(value = {"--minCommits"},
+        help = "Minimum number of instants to retain in the active timeline. See hoodie.keep.min.commits",
+        defaultValue = "20") int minCommits,
+      @ShellOption(value = {"--maxCommits"},
+          help = "Maximum number of instants to retain in the active timeline. See hoodie.keep.max.commits",
+          defaultValue = "30") int maxCommits,
+      @ShellOption(value = {"--commitsRetainedByCleaner"}, help = "Number of commits to retain, without cleaning",
+          defaultValue = "10") int retained,
+      @ShellOption(value = {"--enableMetadata"},
+          help = "Enable the internal metadata table which serves table metadata like level file listings",
+          defaultValue = "true") boolean enableMetadata,
+      @ShellOption(value = "--sparkMemory", defaultValue = "1G",
+          help = "Spark executor memory") final String sparkMemory,
+      @ShellOption(value = "--sparkMaster", defaultValue = "local", help = "Spark Master") String master) throws Exception {
+    String sparkPropertiesPath =
+        Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    String cmd = SparkCommand.ARCHIVE.toString();
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, Integer.toString(minCommits), Integer.toString(maxCommits),
+        Integer.toString(retained), Boolean.toString(enableMetadata), HoodieCLI.basePath);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+    if (exitCode != 0) {
+      return "Failed to trigger archival";
+    }
+    return "Archival successfully triggered";
+  }
 
-  @CliCommand(value = "show archived commit stats", help = "Read commits from archived files and show details")
+  @ShellMethod(key = "show archived commit stats", value = "Read commits from archived files and show details")
   public String showArchivedCommits(
-      @CliOption(key = {"archiveFolderPattern"}, help = "Archive Folder", unspecifiedDefaultValue = "") String folder,
-      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--archiveFolderPattern"}, help = "Archive Folder", defaultValue = "") String folder,
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+              defaultValue = "false") final boolean headerOnly)
       throws IOException {
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     String basePath = HoodieCLI.getTableMetaClient().getBasePath();
@@ -128,15 +165,15 @@ public class ArchivedCommitsCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, allStats);
   }
 
-  @CliCommand(value = "show archived commits", help = "Read commits from archived files and show details")
+  @ShellMethod(key = "show archived commits", value = "Read commits from archived files and show details")
   public String showCommits(
-      @CliOption(key = {"skipMetadata"}, help = "Skip displaying commit metadata",
-          unspecifiedDefaultValue = "true") boolean skipMetadata,
-      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "10") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--skipMetadata"}, help = "Skip displaying commit metadata",
+          defaultValue = "true") boolean skipMetadata,
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "10") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+              defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
@@ -208,4 +245,5 @@ public class ArchivedCommitsCommand implements CommandMarker {
       return new Comparable[] {};
     }
   }
+
 }

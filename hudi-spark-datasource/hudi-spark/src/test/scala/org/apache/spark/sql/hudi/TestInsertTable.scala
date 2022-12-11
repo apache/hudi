@@ -24,7 +24,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.internal.SQLConf
 
 import java.io.File
 
@@ -267,6 +266,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
             throw root
         }
       }
+
       // Create table with dropDup is true
       val tableName2 = generateTableName
       spark.sql("set hoodie.datasource.write.insert.drop.duplicates = true")
@@ -293,6 +293,52 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       )
       // disable this config to avoid affect other test in this class.
       spark.sql("set hoodie.datasource.write.insert.drop.duplicates = false")
+      spark.sql(s"set hoodie.sql.insert.mode=upsert")
+    }
+  }
+
+  test("Test Insert Into None Partitioned Table strict mode with no preCombineField") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      // Create none partitioned cow table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id'
+           | )
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 10)")
+      checkAnswer(s"select id, name, price from $tableName")(
+        Seq(1, "a1", 10.0)
+      )
+      spark.sql(s"insert into $tableName select 2, 'a2', 12")
+      checkAnswer(s"select id, name, price from $tableName")(
+        Seq(1, "a1", 10.0),
+        Seq(2, "a2", 12.0)
+      )
+
+      assertThrows[HoodieDuplicateKeyException] {
+        try {
+          spark.sql(s"insert into $tableName select 1, 'a1', 10")
+        } catch {
+          case e: Exception =>
+            var root: Throwable = e
+            while (root.getCause != null) {
+              root = root.getCause
+            }
+            throw root
+        }
+      }
+
+      // disable this config to avoid affect other test in this class.
       spark.sql(s"set hoodie.sql.insert.mode=upsert")
     }
   }
@@ -483,17 +529,19 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          | tblproperties (primaryKey = 'id')
          | partitioned by (dt)
        """.stripMargin)
-    checkException(s"insert into $tableName partition(dt = '2021-06-20') select 1, 'a1', 10, '2021-06-20'") (
-      "Expected table's schema: " +
-        "[StructField(id,IntegerType,true), StructField(name,StringType,true), StructField(price,DoubleType,true), StructField(dt,StringType,true)], " +
-        "query's output (including static partition values): " +
-        "[StructField(1,IntegerType,false), StructField(a1,StringType,false), StructField(10,IntegerType,false), StructField(2021-06-20,StringType,false), StructField(dt,StringType,true)]"
+    checkExceptionContain(s"insert into $tableName partition(dt = '2021-06-20') select 1, 'a1', 10, '2021-06-20'") (
+      """
+        |too many data columns:
+        |Table columns: 'id', 'name', 'price'
+        |Data columns: '1', 'a1', '10', '2021-06-20'
+        |""".stripMargin
     )
-    checkException(s"insert into $tableName select 1, 'a1', 10")(
-      "Expected table's schema: " +
-        "[StructField(id,IntegerType,true), StructField(name,StringType,true), StructField(price,DoubleType,true), StructField(dt,StringType,true)], " +
-        "query's output (including static partition values): " +
-        "[StructField(1,IntegerType,false), StructField(a1,StringType,false), StructField(10,IntegerType,false)]"
+    checkExceptionContain(s"insert into $tableName select 1, 'a1', 10")(
+      """
+        |not enough data columns:
+        |Table columns: 'id', 'name', 'price', 'dt'
+        |Data columns: '1', 'a1', '10'
+        |""".stripMargin
     )
     spark.sql("set hoodie.sql.bulk.insert.enable = true")
     spark.sql("set hoodie.sql.insert.mode = strict")
@@ -899,6 +947,100 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           )
         }
       }
+    }
+  }
+
+  test("Test enable hoodie.merge.allow.duplicate.on.inserts when write") {
+    spark.sql("set hoodie.datasource.write.operation = insert")
+    Seq("mor", "cow").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             | ) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  type = '$tableType'
+             | )
+        """.stripMargin)
+        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a1', 10, 1000)")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10, 1000, "2021-12-25")
+        )
+        spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
+        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a2', 20, 1001)")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a2", 20, 1001, "2021-12-25")
+        )
+        spark.sql("set hoodie.merge.allow.duplicate.on.inserts = true")
+        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a3', 30, 1002)")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a2", 20, 1001, "2021-12-25"),
+          Seq(1, "a3", 30, 1002, "2021-12-25")
+        )
+      }
+    }
+    spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
+    spark.sql("set hoodie.datasource.write.operation = upsert")
+  }
+
+  test("Test Insert Into Bucket Index Table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a partitioned table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           | primaryKey = 'id,name',
+           | preCombineField = 'ts',
+           | hoodie.index.type = 'BUCKET',
+           | hoodie.bucket.index.hash.field = 'id,name')
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+      // Note: Do not write the field alias, the partition field must be placed last.
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1,1', 10, 1000, "2021-01-05"),
+           | (2, 'a2', 20, 2000, "2021-01-06"),
+           | (3, 'a3', 30, 3000, "2021-01-07")
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+      )
+
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1,1', 10, 1000, "2021-01-05")
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+      )
     }
   }
 }

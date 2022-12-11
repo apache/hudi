@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.config.HoodieCommonConfig
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.ResolvedTable

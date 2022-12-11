@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -44,6 +42,9 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -116,9 +117,20 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
       }
     });
 
-    // Add new completed instants found in the latest timeline
+    // Now remove pending log compaction instants which were completed or removed
+    diffResult.getFinishedOrRemovedLogCompactionInstants().stream().forEach(instant -> {
+      try {
+        removePendingLogCompactionInstant(timeline, instant);
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    });
+
+    // Add new completed instants found in the latest timeline, this also contains inflight instants.
     diffResult.getNewlySeenInstants().stream()
-        .filter(instant -> instant.isCompleted() || instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
+        .filter(instant -> instant.isCompleted()
+            || instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
+            || instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION))
         .forEach(instant -> {
           try {
             if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)
@@ -130,6 +142,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
               addCleanInstant(timeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
               addPendingCompactionInstant(timeline, instant);
+            } else if (instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION)) {
+              addPendingLogCompactionInstant(instant);
             } else if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
               addRollbackInstant(timeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
@@ -151,6 +165,21 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     LOG.info("Removing completed compaction instant (" + instant + ")");
     HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp());
     removePendingCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)
+        .map(instantPair -> Pair.of(instantPair.getValue().getKey(),
+            CompactionOperation.convertFromAvroRecordInstance(instantPair.getValue().getValue()))));
+  }
+
+  /**
+   * Remove Pending compaction instant. This is called when logcompaction is converted to delta commit,
+   * so you no longer need to track them as pending.
+   *
+   * @param timeline New Hoodie Timeline
+   * @param instant Log Compaction Instant to be removed
+   */
+  private void removePendingLogCompactionInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
+    LOG.info("Removing completed log compaction instant (" + instant + ")");
+    HoodieCompactionPlan plan = CompactionUtils.getLogCompactionPlan(metaClient, instant.getTimestamp());
+    removePendingLogCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)
         .map(instantPair -> Pair.of(instantPair.getValue().getKey(),
             CompactionOperation.convertFromAvroRecordInstance(instantPair.getValue().getValue()))));
   }
@@ -184,6 +213,24 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
             entry.getValue().stream().map(Pair::getValue).collect(Collectors.toList()), DeltaApplyMode.ADD);
       }
     });
+  }
+
+  /**
+   * Add newly found compaction instant.
+   *
+   * @param instant Compaction Instant
+   */
+  private void addPendingLogCompactionInstant(HoodieInstant instant) throws IOException {
+    LOG.info("Syncing pending log compaction instant (" + instant + ")");
+    HoodieCompactionPlan compactionPlan = CompactionUtils.getLogCompactionPlan(metaClient, instant.getTimestamp());
+    List<Pair<String, CompactionOperation>> pendingOps =
+        CompactionUtils.getPendingCompactionOperations(instant, compactionPlan)
+            .map(p -> Pair.of(p.getValue().getKey(),
+                CompactionOperation.convertFromAvroRecordInstance(p.getValue().getValue())))
+            .collect(Collectors.toList());
+    // Update Pending log compaction instants.
+    // Since logcompaction works similar to a deltacommit. Updating the partition view is not required.
+    addPendingLogCompactionOperations(pendingOps.stream());
   }
 
   /**

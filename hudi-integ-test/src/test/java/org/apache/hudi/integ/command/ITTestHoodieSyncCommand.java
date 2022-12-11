@@ -49,11 +49,11 @@ public class ITTestHoodieSyncCommand extends HoodieTestHiveBase {
         hiveTableName, HoodieTableType.COPY_ON_WRITE.name(), PartitionType.SINGLE_KEY_PARTITIONED, "append", hiveTableName);
 
     TestExecStartResultCallback result =
-        executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + SYNC_VALIDATE_COMMANDS, true);
+        executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " script --file " + SYNC_VALIDATE_COMMANDS, true);
 
     String expected = String.format("Count difference now is (count(%s) - count(%s) == %d. Catch up count is %d",
         hiveTableName, hiveTableName2, 100, 200);
-    assertTrue(result.getStderr().toString().contains(expected));
+    assertTrue(result.getStdout().toString().contains(expected));
 
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
     dropHiveTables(hiveTableName2, HoodieTableType.COPY_ON_WRITE.name());

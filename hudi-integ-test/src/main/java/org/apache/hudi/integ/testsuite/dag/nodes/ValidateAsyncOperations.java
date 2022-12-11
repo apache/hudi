@@ -62,14 +62,14 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
         
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
             .setConf(executionContext.getJsc().hadoopConfiguration()).build();
-        Option<HoodieInstant> latestCleanInstant = metaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.CLEAN_ACTION)).lastInstant();
+        Option<HoodieInstant> latestCleanInstant = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
         if (latestCleanInstant.isPresent()) {
           log.warn("Latest clean commit " + latestCleanInstant.get());
           HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, latestCleanInstant.get());
           String earliestCommitToRetain = cleanMetadata.getEarliestCommitToRetain();
           log.warn("Earliest commit to retain : " + earliestCommitToRetain);
           long unCleanedInstants = metaClient.getActiveTimeline().filterCompletedInstants().filter(instant ->
-              HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestCommitToRetain)).getInstants().count();
+              HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestCommitToRetain)).countInstants();
           ValidationUtils.checkArgument(unCleanedInstants >= (maxCommitsRetained + 1), "Total uncleaned instants " + unCleanedInstants
               + " mismatched with max commits retained " + (maxCommitsRetained + 1));
         }

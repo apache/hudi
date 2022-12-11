@@ -33,6 +33,7 @@ import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkTables;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -93,15 +94,14 @@ public class TestCompactionUtil {
     List<HoodieInstant> instants = metaClient.getActiveTimeline()
         .filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
-        .getInstants()
-        .collect(Collectors.toList());
+        .getInstants();
     assertThat("all the instants should be in pending state", instants.size(), is(3));
     CompactionUtil.rollbackCompaction(table);
-    boolean allRolledBack = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants()
+    boolean allRolledBack = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstantsAsStream()
         .allMatch(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     assertTrue(allRolledBack, "all the instants should be rolled back");
     List<String> actualInstants = metaClient.getActiveTimeline()
-        .filterPendingCompactionTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .filterPendingCompactionTimeline().getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     assertThat(actualInstants, is(oriInstants));
   }
 
@@ -114,11 +114,10 @@ public class TestCompactionUtil {
     List<HoodieInstant> instants = metaClient.getActiveTimeline()
         .filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
-        .getInstants()
-        .collect(Collectors.toList());
+        .getInstants();
     assertThat("all the instants should be in pending state", instants.size(), is(3));
     CompactionUtil.rollbackEarliestCompaction(table, conf);
-    long requestedCnt = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants()
+    long requestedCnt = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstantsAsStream()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).count();
     assertThat("Only the first instant expects to be rolled back", requestedCnt, is(1L));
 
@@ -139,7 +138,7 @@ public class TestCompactionUtil {
     // write a commit with data first
     TestData.writeDataAsBatch(TestData.DATA_SET_SINGLE_INSERT, conf);
 
-    HoodieFlinkWriteClient<?> writeClient = StreamerUtil.createWriteClient(conf);
+    HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf);
     CompactionUtil.scheduleCompaction(metaClient, writeClient, true, true);
 
     Option<HoodieInstant> pendingCompactionInstant = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().lastInstant();
@@ -160,7 +159,7 @@ public class TestCompactionUtil {
    */
   private String generateCompactionPlan() {
     HoodieCompactionOperation operation = new HoodieCompactionOperation();
-    HoodieCompactionPlan plan = new HoodieCompactionPlan(Collections.singletonList(operation), Collections.emptyMap(), 1);
+    HoodieCompactionPlan plan = new HoodieCompactionPlan(Collections.singletonList(operation), Collections.emptyMap(), 1, null, null);
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     HoodieInstant compactionInstant =
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);

@@ -55,7 +55,6 @@ trait ProvidesHoodieConfig extends Logging {
 
     require(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
-    val enableHive = isUsingHiveCatalog(sparkSession)
 
     val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
 
@@ -70,11 +69,11 @@ trait ProvidesHoodieConfig extends Logging {
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
-        SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
+        SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
         OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
-        HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
-        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> enableHive.toString,
+        HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
+        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
         HiveSyncConfigHolder.HIVE_SYNC_MODE.key -> hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_SYNC_MODE, HiveSyncMode.HMS.name()),
         HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
         HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
@@ -163,16 +162,19 @@ trait ProvidesHoodieConfig extends Logging {
 
     val payloadClassName = if (operation == UPSERT_OPERATION_OPT_VAL &&
       tableType == COW_TABLE_TYPE_OPT_VAL && insertMode == InsertMode.STRICT) {
-      // Only validate duplicate key for COW, for MOR it will do the merge with the DefaultHoodieRecordPayload
+      // Validate duplicate key for COW, for MOR it will do the merge with the DefaultHoodieRecordPayload
       // on reading.
+      classOf[ValidateDuplicateKeyPayload].getCanonicalName
+    } else if (operation == INSERT_OPERATION_OPT_VAL && tableType == COW_TABLE_TYPE_OPT_VAL &&
+      insertMode == InsertMode.STRICT){
+      // Validate duplicate key for inserts to COW table when using strict insert mode.
       classOf[ValidateDuplicateKeyPayload].getCanonicalName
     } else {
       classOf[OverwriteWithLatestAvroPayload].getCanonicalName
     }
 
-    logInfo(s"Insert statement use write operation type: $operation, payloadClass: $payloadClassName")
 
-    val enableHive = isUsingHiveCatalog(sparkSession)
+    logInfo(s"Insert statement use write operation type: $operation, payloadClass: $payloadClassName")
 
     withSparkConf(sparkSession, catalogProperties) {
       Map(
@@ -183,7 +185,7 @@ trait ProvidesHoodieConfig extends Logging {
         HIVE_STYLE_PARTITIONING.key -> hiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> urlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
-        SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
+        SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         PRECOMBINE_FIELD.key -> preCombineField,
         PARTITIONPATH_FIELD.key -> partitionFieldsStr,
@@ -191,8 +193,8 @@ trait ProvidesHoodieConfig extends Logging {
         ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
         HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFieldsStr,
-        HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
-        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> enableHive.toString,
+        HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
+        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
         HiveSyncConfigHolder.HIVE_SYNC_MODE.key -> hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_SYNC_MODE, HiveSyncMode.HMS.name()),
         HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
         HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
@@ -211,7 +213,6 @@ trait ProvidesHoodieConfig extends Logging {
                                  hoodieCatalogTable: HoodieCatalogTable,
                                  partitionsToDrop: String): Map[String, String] = {
     val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
-    val enableHive = isUsingHiveCatalog(sparkSession)
     val catalogProperties = hoodieCatalogTable.catalogProperties
     val tableConfig = hoodieCatalogTable.tableConfig
 
@@ -228,8 +229,8 @@ trait ProvidesHoodieConfig extends Logging {
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
         PARTITIONPATH_FIELD.key -> partitionFields,
-        HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
-        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> enableHive.toString,
+        HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
+        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
         HiveSyncConfigHolder.HIVE_SYNC_MODE.key -> hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_SYNC_MODE, HiveSyncMode.HMS.name()),
         HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
         HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
@@ -268,11 +269,11 @@ trait ProvidesHoodieConfig extends Logging {
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
-        SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
+        SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
         OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
-        HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
-        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> enableHive.toString,
+        HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
+        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
         HiveSyncConfigHolder.HIVE_SYNC_MODE.key -> hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_SYNC_MODE, HiveSyncMode.HMS.name()),
         HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
         HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
@@ -291,12 +292,23 @@ trait ProvidesHoodieConfig extends Logging {
     hoodieConfig.getProps
   }
 
-  def buildHiveSyncConfig(props: TypedProperties, hoodieCatalogTable: HoodieCatalogTable): HiveSyncConfig = {
+  def buildHiveSyncConfig(
+     props: TypedProperties,
+     hoodieCatalogTable: HoodieCatalogTable,
+     sparkSession: SparkSession = SparkSession.active): HiveSyncConfig = {
+    // Enable the hive sync by default if spark have enable the hive metastore.
+    val enableHive = isUsingHiveCatalog(sparkSession)
     val hiveSyncConfig: HiveSyncConfig = new HiveSyncConfig(props)
+    hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_ENABLED.key, enableHive.toString)
+    hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key, enableHive.toString)
+    hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, props.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, HiveSyncMode.HMS.name()))
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_PATH, hoodieCatalogTable.tableLocation)
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, hoodieCatalogTable.baseFileFormat)
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME, hoodieCatalogTable.table.identifier.database.getOrElse("default"))
     hiveSyncConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME, hoodieCatalogTable.table.identifier.table)
+    if (props.get(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key) != null) {
+      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS, props.getString(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key))
+    }
     hiveSyncConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS, classOf[MultiPartKeysValueExtractor].getName)
     hiveSyncConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE, "true")
     if (hiveSyncConfig.useBucketSync())

@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions.{FILE_INDEX_LISTING_MODE_EAGER, FILE_INDEX_LISTING_MODE_LAZY, QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.HoodieJavaWriteClient
@@ -34,17 +34,17 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtil
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory}
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.types.{IntegerType, StringType}
 import org.apache.spark.sql.{DataFrameWriter, Row, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, ValueSource}
@@ -54,7 +54,7 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.util.Random
 
-class TestHoodieFileIndex extends HoodieClientTestBase {
+class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSupport {
 
   var spark: SparkSession = _
   val commonOpts = Map(
@@ -104,7 +104,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("keyGeneratorParameters"))
-  def testPartitionSchemaForBuildInKeyGenerator(keyGenerator: String): Unit = {
+  def testPartitionSchemaForBuiltInKeyGenerator(keyGenerator: String): Unit = {
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 100)
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
     val writer: DataFrameWriter[Row] = inputDF1.write.format("hudi")
@@ -185,8 +185,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testPartitionPruneWithPartitionEncode(partitionEncode: Boolean): Unit = {
+  @CsvSource(Array("true,true", "true,false", "false,true", "false,false"))
+  def testPartitionPruneWithPartitionEncode(partitionEncode: Boolean, listLazily: Boolean): Unit = {
     val props = new Properties()
     props.setProperty(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, String.valueOf(partitionEncode))
     initMetaClient(props)
@@ -201,7 +201,11 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
+
+    val listingMode = if (listLazily) FILE_INDEX_LISTING_MODE_LAZY else FILE_INDEX_LISTING_MODE_EAGER
+
+    val opts = queryOpts + (DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key -> listingMode)
+    val fileIndex = HoodieFileIndex(spark, metaClient, None, opts)
 
     val partitionFilter1 = EqualTo(attribute("partition"), literal("2021/03/08"))
     val partitionName = if (partitionEncode) PartitionPathEncodeUtils.escapePathName("2021/03/08")
@@ -227,85 +231,202 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testPartitionPruneWithMultiPartitionColumns(useMetaFileList: Boolean): Unit = {
+  @CsvSource(value = Array("lazy,true,true", "lazy,true,false", "lazy,false,true", "lazy,false,false",
+    "eager,true,true", "eager,true,false", "eager,false,true", "eager,false,false"))
+  def testPartitionPruneWithMultiplePartitionColumns(listingModeOverride: String,
+                                                     useMetadataTable: Boolean,
+                                                     enablePartitionPathPrefixAnalysis: Boolean): Unit = {
     val _spark = spark
     import _spark.implicits._
+
+    val writerOpts: Map[String, String] = commonOpts ++ Map(
+      DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      RECORDKEY_FIELD.key -> "id",
+      PRECOMBINE_FIELD.key -> "version",
+      PARTITIONPATH_FIELD.key -> "dt,hh",
+      KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName,
+      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
+    )
+
+    val readerOpts: Map[String, String] = queryOpts ++ Map(
+      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString,
+      DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key -> listingModeOverride,
+      DataSourceReadOptions.FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED.key -> enablePartitionPathPrefixAnalysis.toString
+    )
+
+    var fileIndex: HoodieFileIndex = null
+
+    {
+      // Case #1: Partition pruning expected to be able to prune partitions successfully (based on provided filters)
+
+      // Test the case the partition column size is equal to the partition directory level.
+      val inputDF1 = (for (i <- 0 until 10) yield (i, s"a$i", 10 + i, 10000,
+        s"2021-03-0${i % 2 + 1}", "10")).toDF("id", "name", "price", "version", "dt", "hh")
+
+      inputDF1.write.format("hudi")
+        .options(writerOpts)
+        .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "false")
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+
+      // NOTE: We're init-ing file-index in advance to additionally test refreshing capability
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      fileIndex = HoodieFileIndex(spark, metaClient, None, readerOpts)
+
+
+      val partitionFilters = And(
+        EqualTo(attribute("dt"), literal("2021-03-01")),
+        EqualTo(attribute("hh"), literal("10"))
+      )
+
+      val partitionAndFilesAfterPrune = fileIndex.listFiles(Seq(partitionFilters), Seq.empty)
+      assertEquals(1, partitionAndFilesAfterPrune.size)
+
+      val PartitionDirectory(partitionValues, filesAfterPrune) = partitionAndFilesAfterPrune.head
+      assertEquals("2021-03-01,10", partitionValues.toSeq(Seq(StringType)).mkString(","))
+      assertEquals(getFileCountInPartitionPath("2021-03-01/10"), filesAfterPrune.size)
+
+      val readDF = spark.read.format("hudi").options(readerOpts).load()
+
+      assertEquals(10, readDF.count())
+      assertEquals(5, readDF.filter("dt = '2021-03-01' and hh = '10'").count())
+    }
+
+    {
+      // Case #2: Partition pruning expected to NOT be able to prune partitions successfully (due to
+      //          non-encoded slash being used w/in partition-value)
+
+      // Test the case that partition column size not match the partition directory level and
+      // partition column size is > 1. We will not trait it as partitioned table when read.
+      val inputDF2 = (for (i <- 0 until 10) yield (i, s"a$i", 10 + i, 100 * i + 10000,
+        s"2021/03/0${i % 2 + 1}", "10")).toDF("id", "name", "price", "version", "dt", "hh")
+
+      inputDF2.write.format("hudi")
+        .options(writerOpts)
+        .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "false")
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+
+      // NOTE: That if file-index is in lazy-listing mode and we can't parse partition values, there's no way
+      //       to recover from this since Spark by default have to inject partition values parsed from the partition paths.
+      if (listingModeOverride == DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY) {
+        assertThrows(classOf[HoodieException]) { fileIndex.refresh() }
+      } else {
+        fileIndex.refresh()
+
+        val partitionFilter2 = And(
+          EqualTo(attribute("dt"), literal("2021/03/01")),
+          EqualTo(attribute("hh"), literal("10"))
+        )
+
+        val partitionAndFilesNoPruning = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
+
+        assertEquals(1, partitionAndFilesNoPruning.size)
+        // The partition prune would not work for this case, so the partition value it
+        // returns is a InternalRow.empty.
+        assertTrue(partitionAndFilesNoPruning.forall(_.values.numFields == 0))
+        // The returned file size should equal to the whole file size in all the partition paths.
+        assertEquals(getFileCountInPartitionPaths("2021/03/01/10", "2021/03/02/10"),
+          partitionAndFilesNoPruning.flatMap(_.files).length)
+
+        val readDF = spark.read.format("hudi").options(readerOpts).load()
+
+        assertEquals(10, readDF.count())
+        // There are 5 rows in the  dt = 2021/03/01 and hh = 10
+        assertEquals(5, readDF.filter("dt = '2021/03/01' and hh ='10'").count())
+      }
+    }
+
+    {
+      // Case #3: Partition pruning expected to be able to prune partitions successfully (slashes
+      //          will be URL-encoded inside partition-values)
+
+      val inputDF3 = (for (i <- 0 until 10) yield (i, s"a$i", 10 + i, 100 * i + 10000,
+        s"2021/03/0${i % 2 + 1}", "10")).toDF("id", "name", "price", "version", "dt", "hh")
+
+      inputDF3.write.format("hudi")
+        .options(writerOpts)
+        .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "true")
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+
+      fileIndex.refresh()
+
+      val partitionFilters = And(
+        EqualTo(attribute("dt"), literal("2021/03/01")),
+        EqualTo(attribute("hh"), literal("10"))
+      )
+
+      val partitionAndFilesAfterPrune = fileIndex.listFiles(Seq(partitionFilters), Seq.empty)
+      assertEquals(1, partitionAndFilesAfterPrune.size)
+
+      val PartitionDirectory(partitionValues, filesAfterPrune) = partitionAndFilesAfterPrune.head
+      assertEquals("2021/03/01,10", partitionValues.toSeq(Seq(StringType)).mkString(","))
+      assertEquals(getFileCountInPartitionPath("2021%2F03%2F01/10"), filesAfterPrune.size)
+
+      val readDF = spark.read.format("hudi").options(readerOpts).load()
+
+      assertEquals(10, readDF.count())
+      assertEquals(5, readDF.filter("dt = '2021/03/01' and hh = '10'").count())
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = Array("true", "false"))
+  def testFileListingPartitionPrefixAnalysis(enablePartitionPathPrefixAnalysis: Boolean): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+
+    val writerOpts: Map[String, String] = commonOpts ++ Map(
+      DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      RECORDKEY_FIELD.key -> "id",
+      PRECOMBINE_FIELD.key -> "version",
+      PARTITIONPATH_FIELD.key -> "dt,hh",
+      KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName
+    )
+
+    val readerOpts: Map[String, String] = queryOpts ++ Map(
+      DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key -> "eager",
+      DataSourceReadOptions.FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED.key -> enablePartitionPathPrefixAnalysis.toString
+    )
+
     // Test the case the partition column size is equal to the partition directory level.
     val inputDF1 = (for (i <- 0 until 10) yield (i, s"a$i", 10 + i, 10000,
-      s"2021-03-0${i % 2 + 1}", "10")).toDF("id", "name", "price", "version", "dt", "hh")
+      s"2021/03/0${i % 2 + 1}", s"${i % 3}")).toDF("id", "name", "price", "version", "dt", "hh")
 
     inputDF1.write.format("hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(RECORDKEY_FIELD.key, "id")
-      .option(PRECOMBINE_FIELD.key, "version")
-      .option(PARTITIONPATH_FIELD.key, "dt,hh")
-      .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+      .options(writerOpts)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "false")
-      .option(HoodieMetadataConfig.ENABLE.key, useMetaFileList)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    metaClient = HoodieTableMetaClient.reload(metaClient)
-    val fileIndex = HoodieFileIndex(spark, metaClient, None,
-      queryOpts ++ Map(HoodieMetadataConfig.ENABLE.key -> useMetaFileList.toString))
 
-    val partitionFilter1 = And(
-      EqualTo(attribute("dt"), literal("2021-03-01")),
-      EqualTo(attribute("hh"), literal("10"))
-    )
-    val partitionAndFilesAfterPrune = fileIndex.listFiles(Seq(partitionFilter1), Seq.empty)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val fileIndex = HoodieFileIndex(spark, metaClient, None, readerOpts)
+
+    val partitionFilters = EqualTo(attribute("dt"), literal("2021/03/01"))
+    val partitionAndFilesAfterPrune = fileIndex.listFiles(Seq(partitionFilters), Seq.empty)
+
+    // In this case only partitions nested under `2021-03-01` folder should be listed
     assertEquals(1, partitionAndFilesAfterPrune.size)
 
-    val PartitionDirectory(partitionValues, filesAfterPrune) = partitionAndFilesAfterPrune(0)
-    // The partition prune will work for this case.
-    assertEquals(partitionValues.toSeq(Seq(StringType)).mkString(","), "2021-03-01,10")
-    assertEquals(getFileCountInPartitionPath("2021-03-01/10"), filesAfterPrune.size)
+    val (partitionValuesSeq, perPartitionFilesSeq) = partitionAndFilesAfterPrune.map {
+      case PartitionDirectory(values, files) => (values.toSeq(Seq(StringType)), files)
+    }.unzip
 
-    val readDF1 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.ENABLE.key(), useMetaFileList)
-      .load(basePath)
-    assertEquals(10, readDF1.count())
-    assertEquals(5, readDF1.filter("dt = '2021-03-01' and hh = '10'").count())
+    val expectedListedFiles = if (enablePartitionPathPrefixAnalysis) {
+      getFileCountInPartitionPaths("2021/03/01/0", "2021/03/01/1", "2021/03/01/2")
+    } else {
+      fileIndex.allFiles.length
+    }
 
-    // Test the case that partition column size not match the partition directory level and
-    // partition column size is > 1. We will not trait it as partitioned table when read.
-    val inputDF2 = (for (i <- 0 until 10) yield (i, s"a$i", 10 + i, 100 * i + 10000,
-      s"2021/03/0${i % 2 + 1}", "10")).toDF("id", "name", "price", "version", "dt", "hh")
-    inputDF2.write.format("hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(RECORDKEY_FIELD.key, "id")
-      .option(PRECOMBINE_FIELD.key, "version")
-      .option(PARTITIONPATH_FIELD.key, "dt,hh")
-      .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
-      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "false")
-      .option(HoodieMetadataConfig.ENABLE.key(), useMetaFileList)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
+    assertEquals(expectedListedFiles, perPartitionFilesSeq.map(_.size).sum)
 
-    fileIndex.refresh()
-    val partitionFilter2 = And(
-      EqualTo(attribute("dt"), literal("2021/03/01")),
-      EqualTo(attribute("hh"), literal("10"))
-    )
-    val partitionAndFilesAfterPrune2 = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
+    val readDF = spark.read.format("hudi").options(readerOpts).load()
 
-    assertEquals(1, partitionAndFilesAfterPrune2.size)
-    val PartitionDirectory(partitionValues2, filesAfterPrune2) = partitionAndFilesAfterPrune2(0)
-    // The partition prune would not work for this case, so the partition value it
-    // returns is a InternalRow.empty.
-    assertEquals(partitionValues2, InternalRow.empty)
-    // The returned file size should equal to the whole file size in all the partition paths.
-    assertEquals(getFileCountInPartitionPaths("2021/03/01/10", "2021/03/02/10"),
-      filesAfterPrune2.length)
-    val readDF2 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.ENABLE.key, useMetaFileList)
-      .load(basePath)
-
-    assertEquals(10, readDF2.count())
-    // There are 5 rows in the  dt = 2021/03/01 and hh = 10
-    assertEquals(5, readDF2.filter("dt = '2021/03/01' and hh ='10'").count())
+    assertEquals(10, readDF.count())
+    assertEquals(3, readDF.filter("hh = '1'").count())
+    assertEquals(5, readDF.filter("dt = '2021/03/01'").count())
+    assertEquals(1, readDF.filter("dt = '2021/03/01' and hh = '1'").count())
   }
 
   @ParameterizedTest
@@ -394,6 +515,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       val props = Map[String, String](
         "path" -> basePath,
         QUERY_TYPE.key -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
+        HoodieMetadataConfig.ENABLE.key -> testCase.enableMetadata.toString,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> testCase.enableDataSkipping.toString,
         HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE.key -> testCase.columnStatsProcessingModeOverride
       ) ++ readMetadataOpts

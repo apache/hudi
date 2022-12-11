@@ -18,15 +18,13 @@
 
 package org.apache.hudi.metrics;
 
-import java.io.Closeable;
-import java.util.concurrent.TimeUnit;
-
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * Hudi Console metrics reporter. Reports the metrics by printing them to the stdout on the console.
@@ -59,11 +57,6 @@ public class ConsoleMetricsReporter extends MetricsReporter {
     } else {
       LOG.error("Cannot report metrics as the consoleReporter is null.");
     }
-  }
-
-  @Override
-  public Closeable getReporter() {
-    return consoleReporter;
   }
 
   @Override

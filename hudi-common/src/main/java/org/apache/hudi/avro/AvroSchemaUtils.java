@@ -23,13 +23,129 @@ import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
+/**
+ * Utils for Avro Schema.
+ */
 public class AvroSchemaUtils {
 
   private AvroSchemaUtils() {}
+
+  /**
+   * See {@link #isSchemaCompatible(Schema, Schema, boolean)} doc for more details
+   */
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema) {
+    return isSchemaCompatible(prevSchema, newSchema, true);
+  }
+
+  /**
+   * Establishes whether {@code prevSchema} is compatible w/ {@code newSchema}, as
+   * defined by Avro's {@link AvroSchemaCompatibility}
+   *
+   * @param prevSchema previous instance of the schema
+   * @param newSchema new instance of the schema
+   * @param checkNaming controls whether schemas fully-qualified names should be checked
+   */
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean checkNaming) {
+    // NOTE: We're establishing compatibility of the {@code prevSchema} and {@code newSchema}
+    //       as following: {@code newSchema} is considered compatible to {@code prevSchema},
+    //       iff data written using {@code prevSchema} could be read by {@code newSchema}
+    AvroSchemaCompatibility.SchemaPairCompatibility result =
+        AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema, checkNaming);
+    return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+  }
+
+  /**
+   * Generates fully-qualified name for the Avro's schema based on the Table's name
+   *
+   * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+   *       This method should not change for compatibility reasons as older versions
+   *       of Avro might be comparing fully-qualified names rather than just the record
+   *       names
+   */
+  public static String getAvroRecordQualifiedName(String tableName) {
+    String sanitizedTableName = HoodieAvroUtils.sanitizeName(tableName);
+    return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
+  }
+
+  /**
+   * Validate whether the {@code targetSchema} is a "compatible" projection of {@code sourceSchema}.
+   *
+   * Only difference of this method from {@link #isStrictProjectionOf(Schema, Schema)} is
+   * the fact that it allows some legitimate type promotions (like {@code int -> long},
+   * {@code decimal(3, 2) -> decimal(5, 2)}, etc) that allows projection to have a "wider"
+   * atomic type (whereas strict projection requires atomic type to be identical)
+   */
+  public static boolean isCompatibleProjectionOf(Schema sourceSchema, Schema targetSchema) {
+    return isProjectionOfInternal(sourceSchema, targetSchema,
+        AvroSchemaUtils::isAtomicSchemasCompatible);
+  }
+
+  private static boolean isAtomicSchemasCompatible(Schema oneAtomicType, Schema anotherAtomicType) {
+    // NOTE: Checking for compatibility of atomic types, we should ignore their
+    //       corresponding fully-qualified names (as irrelevant)
+    return isSchemaCompatible(oneAtomicType, anotherAtomicType, false);
+  }
+
+  /**
+   * Validate whether the {@code targetSchema} is a strict projection of {@code sourceSchema}.
+   *
+   * Schema B is considered a strict projection of schema A iff
+   * <ol>
+   *   <li>Schemas A and B are equal, or</li>
+   *   <li>Schemas A and B are array schemas and element-type of B is a strict projection
+   *   of the element-type of A, or</li>
+   *   <li>Schemas A and B are map schemas and value-type of B is a strict projection
+   *   of the value-type of A, or</li>
+   *   <li>Schemas A and B are union schemas (of the same size) and every element-type of B
+   *   is a strict projection of the corresponding element-type of A, or</li>
+   *   <li>Schemas A and B are record schemas and every field of the record B has corresponding
+   *   counterpart (w/ the same name) in the schema A, such that the schema of the field of the schema
+   *   B is also a strict projection of the A field's schema</li>
+   * </ol>
+   */
+  public static boolean isStrictProjectionOf(Schema sourceSchema, Schema targetSchema) {
+    return isProjectionOfInternal(sourceSchema, targetSchema, Objects::equals);
+  }
+
+  private static boolean isProjectionOfInternal(Schema sourceSchema,
+                                                Schema targetSchema,
+                                                BiFunction<Schema, Schema, Boolean> atomicTypeEqualityPredicate) {
+    if (sourceSchema.getType() == targetSchema.getType()) {
+      if (sourceSchema.getType() == Schema.Type.RECORD) {
+        for (Schema.Field targetField : targetSchema.getFields()) {
+          Schema.Field sourceField = sourceSchema.getField(targetField.name());
+          if (sourceField == null || !isProjectionOfInternal(sourceField.schema(), targetField.schema(), atomicTypeEqualityPredicate)) {
+            return false;
+          }
+        }
+        return true;
+      } else if (sourceSchema.getType() == Schema.Type.ARRAY) {
+        return isProjectionOfInternal(sourceSchema.getElementType(), targetSchema.getElementType(), atomicTypeEqualityPredicate);
+      } else if (sourceSchema.getType() == Schema.Type.MAP) {
+        return isProjectionOfInternal(sourceSchema.getValueType(), targetSchema.getValueType(), atomicTypeEqualityPredicate);
+      } else if (sourceSchema.getType() == Schema.Type.UNION) {
+        List<Schema> sourceNestedSchemas = sourceSchema.getTypes();
+        List<Schema> targetNestedSchemas = targetSchema.getTypes();
+        if (sourceNestedSchemas.size() != targetNestedSchemas.size()) {
+          return false;
+        }
+
+        for (int i = 0; i < sourceNestedSchemas.size(); ++i) {
+          if (!isProjectionOfInternal(sourceNestedSchemas.get(i), targetNestedSchemas.get(i), atomicTypeEqualityPredicate)) {
+            return false;
+          }
+        }
+        return true;
+      }
+    }
+
+    return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
+  }
 
   /**
    * Appends provided new fields at the end of the given schema
@@ -77,6 +193,19 @@ public class AvroSchemaUtils {
   }
 
   /**
+   * Returns true in case provided {@link Schema} is nullable (ie accepting null values),
+   * returns false otherwise
+   */
+  public static boolean isNullable(Schema schema) {
+    if (schema.getType() != Schema.Type.UNION) {
+      return false;
+    }
+
+    List<Schema> innerTypes = schema.getTypes();
+    return innerTypes.size() > 1 && innerTypes.stream().anyMatch(it -> it.getType() == Schema.Type.NULL);
+  }
+
+  /**
    * Resolves typical Avro's nullable schema definition: {@code Union(Schema.Type.NULL, <NonNullType>)},
    * decomposing union and returning the target non-null type
    */
@@ -105,8 +234,12 @@ public class AvroSchemaUtils {
    * wrapping around provided target non-null type
    */
   public static Schema createNullableSchema(Schema.Type avroType) {
-    checkState(avroType != Schema.Type.NULL);
-    return Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(avroType));
+    return createNullableSchema(Schema.create(avroType));
+  }
+
+  public static Schema createNullableSchema(Schema schema) {
+    checkState(schema.getType() != Schema.Type.NULL);
+    return Schema.createUnion(Schema.create(Schema.Type.NULL), schema);
   }
 
   /**

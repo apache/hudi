@@ -23,7 +23,9 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -33,6 +35,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
@@ -41,11 +44,12 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
@@ -66,6 +70,9 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
+import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY;
 
 /**
  * Test consistent hashing index
@@ -97,7 +104,7 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
       initTestDataGenerator(new String[] {""});
     }
     initFileSystem();
-    Properties props = populateMetaFields ? new Properties() : getPropertiesForKeyGen();
+    Properties props = getPropertiesForKeyGen(populateMetaFields);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, props);
     config = getConfigBuilder()
@@ -107,6 +114,7 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
             .withIndexType(HoodieIndex.IndexType.BUCKET)
             .withIndexKeyField("_row_key")
             .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)
+            .withBucketNum("8")
             .build())
         .withAutoCommit(false)
         .build();
@@ -164,31 +172,15 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
 
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-
     // Insert totalRecords records
-    writeClient.startCommitWithTime(newCommitTime);
-    List<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime).collect();
-    org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
-    boolean success = writeClient.commitStats(newCommitTime, writeStatues.stream()
-        .map(WriteStatus::getStat)
-        .collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
-    Assertions.assertTrue(success);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+    List<WriteStatus> writeStatues = writeData(writeRecords, newCommitTime, WriteOperationType.UPSERT, true);
     // The number of distinct fileId should be the same as total log file numbers
     Assertions.assertEquals(writeStatues.stream().map(WriteStatus::getFileId).distinct().count(),
         Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
-    Assertions.assertEquals(totalRecords, readRecords(dataGen.getPartitionPaths(), populateMetaFields).size());
+    Assertions.assertEquals(totalRecords, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
 
     // Upsert the same set of records, the number of records should be same
-    newCommitTime = "002";
-    writeClient.startCommitWithTime(newCommitTime);
-    writeStatues = writeClient.upsert(writeRecords, newCommitTime).collect();
-    org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
-    success = writeClient.commitStats(newCommitTime, writeStatues.stream()
-        .map(WriteStatus::getStat)
-        .collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
-    Assertions.assertTrue(success);
+    writeData(writeRecords, "002", WriteOperationType.UPSERT, true);
     // The number of log file should double after this insertion
     long numberOfLogFiles = Arrays.stream(dataGen.getPartitionPaths())
         .mapToInt(p -> {
@@ -197,27 +189,99 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
         }).sum();
     Assertions.assertEquals(writeStatues.stream().map(WriteStatus::getFileId).distinct().count() * 2, numberOfLogFiles);
     // The record number should remain same because of deduplication
-    Assertions.assertEquals(totalRecords, readRecords(dataGen.getPartitionPaths(), populateMetaFields).size());
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Assertions.assertEquals(totalRecords, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
 
     // Upsert new set of records, and validate the total number of records
-    newCommitTime = "003";
-    records = dataGen.generateInserts(newCommitTime, totalRecords);
-    writeRecords = jsc.parallelize(records, 2);
-    writeClient.startCommitWithTime(newCommitTime);
-    writeStatues = writeClient.upsert(writeRecords, newCommitTime).collect();
-    org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
-    success = writeClient.commitStats(newCommitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
-        Option.empty(), metaClient.getCommitActionType());
-    Assertions.assertTrue(success);
-    Assertions.assertEquals(totalRecords * 2, readRecords(dataGen.getPartitionPaths(), populateMetaFields).size());
+    writeData("003", totalRecords, true);
+    Assertions.assertEquals(totalRecords * 2, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
   }
 
-  private List<GenericRecord> readRecords(String[] partitions, boolean populateMetaFields) {
+  @ParameterizedTest
+  @MethodSource("configParams")
+  public void testWriteDataWithCompaction(boolean populateMetaFields, boolean partitioned) throws Exception {
+    setUp(populateMetaFields, partitioned);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 200, true);
+    config.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS, "1");
+    config.setValue(INLINE_COMPACT_TRIGGER_STRATEGY, CompactionTriggerStrategy.NUM_COMMITS.name());
+    String compactionTime = (String) writeClient.scheduleCompaction(Option.empty()).get();
+    Assertions.assertEquals(200, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 200, true);
+    Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(compactionTime);
+    writeClient.commitCompaction(compactionTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+    Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
+  }
+
+  @ParameterizedTest
+  @MethodSource("configParams")
+  public void testBulkInsertData(boolean populateMetaFields, boolean partitioned) throws Exception {
+    setUp(populateMetaFields, partitioned);
+    String newCommitTime = "001";
+    int totalRecords = 20 + random.nextInt(20);
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
+
+    // Bulk insert totalRecords records
+    List<WriteStatus> writeStatues = writeData(writeRecords, newCommitTime, WriteOperationType.BULK_INSERT, true);
+    // The number of distinct fileId should be the same as total file group numbers
+    long numFilesCreated = writeStatues.stream().map(WriteStatus::getFileId).distinct().count();
+    Assertions.assertEquals(numFilesCreated,
+        Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
+
+    // BulkInsert again.
+    writeData(writeRecords, "002", WriteOperationType.BULK_INSERT,true);
+    // The total number of file group should be the same, but each file group will have a log file.
+    Assertions.assertEquals(numFilesCreated,
+        Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
+    long numberOfLogFiles = Arrays.stream(dataGen.getPartitionPaths())
+        .mapToInt(p -> {
+          return Arrays.stream(listStatus(p, true)).mapToInt(fs ->
+              fs instanceof RealtimeFileStatus ? ((RealtimeFileStatus) fs).getDeltaLogFiles().size() : 1).sum();
+        }).sum();
+    Assertions.assertEquals(numFilesCreated, numberOfLogFiles);
+    // The record number should be doubled if we disable the merge
+    hadoopConf.set("hoodie.realtime.merge.skip", "true");
+    Assertions.assertEquals(totalRecords * 2, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
+  }
+
+  private int readRecordsNum(String[] partitions, boolean populateMetaFields) {
     return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf,
-        Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()),
-        basePath, new JobConf(hadoopConf), true, populateMetaFields);
+        Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()), basePath, new JobConf(hadoopConf), true, populateMetaFields).size();
+  }
+
+  /**
+   * Insert `num` records into table given the commitTime
+   *
+   * @param commitTime
+   * @param totalRecords
+   */
+  private List<WriteStatus> writeData(String commitTime, int totalRecords, boolean doCommit) {
+    List<HoodieRecord> records = dataGen.generateInserts(commitTime, totalRecords);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
+    return writeData(writeRecords, commitTime, WriteOperationType.UPSERT, doCommit);
+  }
+
+  private List<WriteStatus> writeData(JavaRDD<HoodieRecord> records, String commitTime, WriteOperationType op, boolean doCommit) {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    writeClient.startCommitWithTime(commitTime);
+    List<WriteStatus> writeStatues;
+    switch (op) {
+      case UPSERT:
+        writeStatues = writeClient.upsert(records, commitTime).collect();
+        break;
+      case BULK_INSERT:
+        writeStatues = writeClient.bulkInsert(records, commitTime).collect();
+        break;
+      default:
+        throw new HoodieException("Unsupported write operations: " + op);
+    }
+    org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
+    if (doCommit) {
+      boolean success = writeClient.commitStats(commitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+      Assertions.assertTrue(success);
+    }
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return writeStatues;
   }
 
   private FileStatus[] listStatus(String p, boolean realtime) {

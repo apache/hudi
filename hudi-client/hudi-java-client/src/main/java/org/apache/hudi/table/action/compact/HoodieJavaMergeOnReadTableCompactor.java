@@ -24,6 +24,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -41,8 +42,11 @@ public class HoodieJavaMergeOnReadTableCompactor<T extends HoodieRecordPayload>
 
   @Override
   public void preCompact(
-      HoodieTable table, HoodieTimeline pendingCompactionTimeline, String compactionInstantTime) {
-    HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
+      HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
+    if (WriteOperationType.LOG_COMPACT.equals(operationType)) {
+      throw new UnsupportedOperationException("Log compaction is not supported for this execution engine.");
+    }
+    HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(instantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant);
       table.getMetaClient().reloadActiveTimeline();

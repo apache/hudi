@@ -18,20 +18,23 @@
 
 package org.apache.hudi.common.util;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
-
-import java.util.Arrays;
-import java.util.List;
-import org.apache.avro.Schema;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.orc.TypeDescription;
 
+import org.apache.avro.Schema;
+import org.apache.orc.TypeDescription;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Arrays;
+import java.util.List;
+
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Tests {@link AvroOrcUtils}.
+ */
 public class TestAvroOrcUtils extends HoodieCommonTestHarness {
 
   public static List<Arguments> testCreateOrcSchemaArgs() {
