@@ -413,8 +413,8 @@ object ExpressionPayload {
                 // NOTE: We reuse Spark's [[Projection]]s infra for actual evaluation of the
                 //       expressions, allowing us to execute arbitrary expression against input
                 //       [[InternalRow]] producing another [[InternalRow]] as an outcome
-                val conditionEvaluator = GenerateSafeProjection.generate(Seq(condition))
-                val assignmentEvaluator = GenerateSafeProjection.generate(assignments)
+                val conditionEvaluator = SafeProjection.create(Seq(condition))
+                val assignmentEvaluator = SafeProjection.create(assignments)
 
                 conditionEvaluator -> assignmentEvaluator
             }
