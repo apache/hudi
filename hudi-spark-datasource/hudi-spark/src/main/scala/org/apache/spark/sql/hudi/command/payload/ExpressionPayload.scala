@@ -187,11 +187,11 @@ class ExpressionPayload(@transient record: GenericRecord,
    * @return The result of the record to insert.
    */
   private def processNotMatchedRecord(inputRecord: ConvertibleRecord, properties: Properties): HOption[IndexedRecord] = {
-    val insertConditionAndAssignmentsText =
-      properties.get(ExpressionPayload.PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS)
+    val insertConditionAndAssignmentsText: String =
+      properties.get(ExpressionPayload.PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS).toString
     // Get the evaluator for each condition and insert assignment.
     val insertConditionAndAssignments =
-      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText.toString, inputRecord.asAvro.getSchema)
+      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText, inputRecord.asAvro.getSchema)
     var resultRecordOpt: HOption[IndexedRecord] = null
     for ((conditionEvaluator, assignmentEvaluator) <- insertConditionAndAssignments
          if resultRecordOpt == null) {
