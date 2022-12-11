@@ -358,6 +358,45 @@
                 }
             ],
             "default" : null
+        },
+        {
+            "name": "recordLevelIndexMetadata",
+            "doc": "Contains information about record keys and their location in the dataset",
+            "type": [
+                "null",
+                {
+                    "type": "record",
+                    "name": "HoodieMetadataRecordLevelIndex",
+                    "fields": [
+                        {
+                            "name": "partition",
+                            "type": "string",
+                            "doc": "Partition which contains the record",
+                            "avro.java.string": "String"
+                        },
+                        {
+                            "name": "fileId",
+                            "type": "string",
+                            "doc": "FileId of file group"
+                        },
+                        {
+                            "name": "rowGroupIndex",
+                            "type": "int",
+                            "doc": "Index of the file"
+                        },
+                        {
+                            "doc": "Record index valid/deleted flag",
+                            "name": "isDeleted",
+                            "type": "boolean"
+                        },
+                        {
+                            "doc": "Record commit time",
+                            "name": "commitTime",
+                            "type": "string"
+                        }
+                     ]
+                 }
+             ]
         }
     ]
 }

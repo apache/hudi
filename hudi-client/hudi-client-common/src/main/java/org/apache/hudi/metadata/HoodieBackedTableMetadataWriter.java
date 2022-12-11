@@ -70,6 +70,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
@@ -207,6 +208,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
     if (metadataConfig.isColumnStatsIndexEnabled()) {
       enablePartition(MetadataPartitionType.COLUMN_STATS, metadataConfig, metaClient, fsView, isBootstrapCompleted);
+    }
+    if (metadataConfig.isRecordLevelIndexEnabled()) {
+      enablePartition(MetadataPartitionType.RECORD_LEVEL_INDEX, metadataConfig, metaClient, fsView, isBootstrapCompleted);
     }
   }
 
@@ -783,6 +787,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         dataWriteConfig.getMetadataBloomFilterIndexParallelism(),
         dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
         dataWriteConfig.getColumnStatsIndexParallelism(),
+        dataWriteConfig.getRecordLevelIndexParallelism(),
         dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
         dataWriteConfig.getColumnsEnabledForBloomFilterIndex());
   }
@@ -1098,6 +1103,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, recordsRDD);
     }
 
+    if (partitionTypes.contains(MetadataPartitionType.RECORD_LEVEL_INDEX) && totalDataFilesCount > 0) {
+      Option<BaseKeyGenerator> keyGeneratorOpt = getKeyGenerator(dataWriteConfig);
+      final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToRecordLevelIndex(
+          engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams(), createInstantTime, dataWriteConfig.getBasePath(), keyGeneratorOpt);
+      partitionToRecordsMap.put(MetadataPartitionType.RECORD_LEVEL_INDEX, recordsRDD);
+    }
+
     LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
 
     commit(createInstantTime, partitionToRecordsMap, false);
@@ -1184,5 +1196,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     Map<String, Long> getFileNameToSizeMap() {
       return filenameToSizeMap;
     }
+  }
+
+  public Option<BaseKeyGenerator> getKeyGenerator(HoodieWriteConfig dataWriteConfig) {
+    return Option.empty();
+  }
+
+  public void update(MetadataPartitionType metadataPartitionType, HoodieData<HoodieRecord> hoodieData){
+
   }
 }

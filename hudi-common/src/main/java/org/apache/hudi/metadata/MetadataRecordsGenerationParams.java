@@ -42,9 +42,11 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final int columnStatsIndexParallelism;
   private final List<String> targetColumnsForColumnStatsIndex;
   private final List<String> targetColumnsForBloomFilterIndex;
+  private final int recordLevelIndexParallelism;
 
   MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
-                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex) {
+                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, int recordLevelIndexParallelism,
+                                  List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
@@ -53,6 +55,7 @@ public class MetadataRecordsGenerationParams implements Serializable {
     this.columnStatsIndexParallelism = columnStatsIndexParallelism;
     this.targetColumnsForColumnStatsIndex = targetColumnsForColumnStatsIndex;
     this.targetColumnsForBloomFilterIndex = targetColumnsForBloomFilterIndex;
+    this.recordLevelIndexParallelism = recordLevelIndexParallelism;
   }
 
   public HoodieTableMetaClient getDataMetaClient() {
@@ -85,5 +88,9 @@ public class MetadataRecordsGenerationParams implements Serializable {
 
   public List<String> getSecondaryKeysForBloomFilterIndex() {
     return targetColumnsForBloomFilterIndex;
+  }
+
+  public int getRecordLevelIndexParallelism() {
+    return recordLevelIndexParallelism;
   }
 }

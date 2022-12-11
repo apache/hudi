@@ -49,7 +49,9 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.index.recordlevel.SparkRecordLevelIndex;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -123,7 +125,19 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
+    HoodieTable table = createTable(config, hadoopConf);
+    if (HoodieIndex.IndexType.RECORD_LEVEL.equals(config.getIndexType())) {
+      final HoodieData<HoodieRecord> hoodieRecordHoodieData = ((SparkRecordLevelIndex) table.getIndex()).updateLocationToMetadata(writeStatuses, table);
+      table.getMetadataWriterAndPresent(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(MetadataPartitionType.RECORD_LEVEL_INDEX, hoodieRecordHoodieData));
+    }
+    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, table);
+  }
+
+  @Override
+  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
+    table.getMetadataWriterAndPresent(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime,
+        table.isTableServiceAction(actionType)));
   }
 
   @Override

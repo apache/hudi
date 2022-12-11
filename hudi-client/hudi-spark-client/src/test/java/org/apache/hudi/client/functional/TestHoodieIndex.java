@@ -104,7 +104,9 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         {IndexType.GLOBAL_SIMPLE, false, true},
         {IndexType.GLOBAL_SIMPLE, false, false},
         {IndexType.BUCKET, false, true},
-        {IndexType.BUCKET, false, false}
+        {IndexType.BUCKET, false, false},
+        {IndexType.RECORD_LEVEL, false, true},
+        {IndexType.RECORD_LEVEL, false, false}
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -141,12 +143,14 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMetadataIndexBloomFilter(enableMetadataIndex)
             .withMetadataIndexColumnStats(enableMetadataIndex)
+            .withMetadataIndexRecordLevelIndex(indexType == IndexType.RECORD_LEVEL)
             .build())
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().fromProperties(indexBuilder.build().getProps())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
         .build();
     writeClient = getHoodieWriteClient(config);
     this.index = writeClient.getIndex();
+    initWriteConfigAndMetatableWriter(config, config.getMetadataConfig().enabled());
   }
 
   @AfterEach

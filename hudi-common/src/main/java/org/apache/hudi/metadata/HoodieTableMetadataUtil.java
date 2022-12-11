@@ -33,6 +33,8 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -45,6 +47,7 @@ import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
@@ -55,6 +58,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.AvroTypeException;
@@ -62,6 +66,7 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -79,6 +84,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -109,6 +115,7 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_FILES = "files";
   public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
+  public static final String PARTITION_NAME_RECORD_LEVEL_INDEX = "record_index";
 
   /**
    * Collects {@link HoodieColumnRangeMetadata} for the provided collection of records, pretending
@@ -968,6 +975,96 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * Convert added and deleted action metadata to record level index index records.
+   */
+  public static HoodieData<HoodieRecord> convertFilesToRecordLevelIndex(HoodieEngineContext engineContext,
+                                                                        Map<String, List<String>> partitionToDeletedFiles,
+                                                                        Map<String, Map<String, Long>> partitionToAppendedFiles,
+                                                                        MetadataRecordsGenerationParams recordsGenerationParams,
+                                                                        String instantTime,
+                                                                        String datasetBasePath,
+                                                                        Option<BaseKeyGenerator> keyGeneratorOpt) {
+    HoodieData<HoodieRecord> allRecordsRDD = engineContext.emptyHoodieData();
+
+    List<Pair<String, List<String>>> partitionToDeletedFilesList = partitionToDeletedFiles.entrySet()
+        .stream().map(e -> Pair.of(e.getKey(), e.getValue())).collect(Collectors.toList());
+    List<Pair<String, String>> filesToDelete = partitionToDeletedFilesList.stream().flatMap(e -> e.getRight().stream().map(f -> Pair.of(e.getLeft(), f))).collect(Collectors.toList());
+    int parallelism = Math.max(Math.min(filesToDelete.size(), recordsGenerationParams.getRecordLevelIndexParallelism()), 1);
+    HoodieData<Pair<String, String>> partitionToDeletedFilesRDD = engineContext.parallelize(filesToDelete, parallelism);
+
+    HoodieData<HoodieRecord> deletedFilesRecordsRDD = partitionToDeletedFilesRDD.filter(p -> FSUtils.isBaseFile(new Path(p.getRight()))).flatMap(partitionToDeletedFilePair -> {
+      return getRecordIndexFromParquetFile(new Configuration(), datasetBasePath, partitionToDeletedFilePair, true, keyGeneratorOpt);
+    });
+    allRecordsRDD = allRecordsRDD.union(deletedFilesRecordsRDD);
+
+    List<Pair<String, Map<String, Long>>> partitionToAppendedFilesList = partitionToAppendedFiles.entrySet()
+        .stream().map(entry -> Pair.of(entry.getKey(), entry.getValue())).collect(Collectors.toList());
+    List<Pair<String, String>> filesToAppended = partitionToAppendedFilesList.stream().flatMap(e -> e.getRight().keySet().stream().map(f -> Pair.of(e.getLeft(), f))).collect(Collectors.toList());
+    parallelism = Math.max(Math.min(filesToAppended.size(), recordsGenerationParams.getRecordLevelIndexParallelism()), 1);
+    HoodieData<Pair<String, String>> partitionToAppendedFilesRDD = engineContext.parallelize(filesToAppended, parallelism);
+
+    HoodieData<HoodieRecord> appendedFilesRecordsRDD = partitionToAppendedFilesRDD.filter(p -> FSUtils.isBaseFile(new Path(p.getRight()))).flatMap(partitionToDeletedFilePair -> {
+      return getRecordIndexFromParquetFile(new Configuration(), datasetBasePath, partitionToDeletedFilePair, false, keyGeneratorOpt);
+    });
+
+    allRecordsRDD = allRecordsRDD.union(appendedFilesRecordsRDD);
+
+    return allRecordsRDD;
+  }
+
+  private static Iterator<HoodieRecord> getRecordIndexFromParquetFile(
+      Configuration conf,
+      String datasetBasePath,
+      Pair<String, String> partitionToFilePair,
+      boolean isDeleted,
+      Option<BaseKeyGenerator> keyGeneratorOpt) {
+    final String partition = getPartitionIdentifier(partitionToFilePair.getLeft());
+    final String fileName = partitionToFilePair.getRight();
+    final String fileId = FSUtils.getFileId(fileName);
+    final String fileCommitTime = FSUtils.getCommitTime(fileName);
+
+    Path dataFilePath = new Path(datasetBasePath, String.format("%s%s%s", partition, Path.SEPARATOR, fileName));
+
+    BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(dataFilePath.toString());
+    Iterator<HoodieKey> recordKeyIterator;
+    if (keyGeneratorOpt.isPresent()) {
+      recordKeyIterator = baseFileUtils.getHoodieKeyIterator(conf, dataFilePath, keyGeneratorOpt);
+    } else {
+      recordKeyIterator = baseFileUtils.getHoodieKeyIterator(conf, dataFilePath);
+    }
+    // final List<Long> blockRecordSize = baseFileUtils.getBlockRecordSize(conf, dataFilePath);
+
+    return new Iterator<HoodieRecord>() {
+      long size = 0L;
+
+      @Override
+      public boolean hasNext() {
+        return recordKeyIterator.hasNext();
+      }
+
+      @Override
+      public HoodieRecord next() {
+        size++;
+        // int rowGroupIndex = findRowGroupIndex();
+         int rowGroupIndex = -1;
+        HoodieKey next = recordKeyIterator.next();
+        return HoodieMetadataPayload.createRecordLevelIndexRecord(next.getRecordKey(), next.getPartitionPath(), fileId, rowGroupIndex, isDeleted, fileCommitTime, HoodieOperation.INSERT);
+      }
+
+      // int findRowGroupIndex() {
+      //   long sum = 0;
+      //   for (int i = 0; i < blockRecordSize.size(); i++) {
+      //     sum = sum + blockRecordSize.get(i);
+      //     if (size <= sum) {
+      //       return i;
+      //     }
+      //   }
+      //   throw new HoodieMetadataException("Can not found rowGroup currenSize: " + size + ",  block total size: " + sum);
+      //  }
+    };
+  }
+
+  /**
    * Map a record key to a file group in partition of interest.
    * <p>
    * Note: For hashing, the algorithm is same as String.hashCode() but is being defined here as hashCode()
@@ -1234,6 +1331,8 @@ public class HoodieTableMetadataUtil {
         return metadataConfig.getBloomFilterIndexFileGroupCount();
       case COLUMN_STATS:
         return metadataConfig.getColumnStatsIndexFileGroupCount();
+      case RECORD_LEVEL_INDEX:
+        return metadataConfig.getRecordLevelIndexFileGroupCount();
       default:
         return 1;
     }

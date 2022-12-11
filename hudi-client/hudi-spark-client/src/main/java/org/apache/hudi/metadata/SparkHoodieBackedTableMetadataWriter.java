@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metrics.DistributedRegistry;
 
 import org.apache.avro.specific.SpecificRecordBase;
@@ -44,6 +45,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -51,6 +53,8 @@ import java.util.stream.Collectors;
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
 
   private static final Logger LOG = LogManager.getLogger(SparkHoodieBackedTableMetadataWriter.class);
+
+  public Map<MetadataPartitionType, HoodieData<HoodieRecord>> recordsQueuedForCommit = new HashMap<>();
 
   /**
    * Return a Spark based implementation of {@code HoodieTableMetadataWriter} which can be used to
@@ -129,6 +133,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean canTriggerTableService) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
+    if (recordsQueuedForCommit != null && recordsQueuedForCommit.size() > 0) {
+      partitionRecordsMap.putAll(recordsQueuedForCommit);
+    }
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
     JavaRDD<HoodieRecord> preppedRecordRDD = HoodieJavaRDD.getJavaRDD(preppedRecords);
 
@@ -169,7 +176,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
         }
       });
-
+      if (recordsQueuedForCommit != null) {
+        recordsQueuedForCommit.clear();
+      }
       // reload timeline
       metadataMetaClient.reloadActiveTimeline();
       if (canTriggerTableService) {
@@ -193,4 +202,13 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       writeClient.deletePartitions(partitionsToDrop, instantTime);
     }
   }
+
+  public void update(MetadataPartitionType metadataPartitionType, HoodieData<HoodieRecord> hoodieData) {
+    recordsQueuedForCommit.put(metadataPartitionType, hoodieData);
+  }
+
+  public Option<BaseKeyGenerator> getKeyGenerator(HoodieWriteConfig dataWriteConfig) {
+    return org.apache.hudi.index.SparkHoodieIndexFactory.getKeyGeneratorForSimpleIndex(dataWriteConfig);
+  }
+
 }

@@ -78,6 +78,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_LEVEL_INDEX;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table.
@@ -123,6 +124,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
         this.isBloomFilterIndexEnabled = metadataConfig.isBloomFilterIndexEnabled();
         this.isColumnStatsIndexEnabled = metadataConfig.isColumnStatsIndexEnabled();
+        this.isRecordLevelIndexEnabled = metadataConfig.isRecordLevelIndexEnabled();
       } catch (TableNotFoundException e) {
         LOG.warn("Metadata table was not found at path " + metadataBasePath);
         this.isMetadataTableEnabled = false;
@@ -527,6 +529,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       case PARTITION_NAME_COLUMN_STATS:
       case PARTITION_NAME_BLOOM_FILTERS:
+      case PARTITION_NAME_RECORD_LEVEL_INDEX:
       default:
         return false;
     }

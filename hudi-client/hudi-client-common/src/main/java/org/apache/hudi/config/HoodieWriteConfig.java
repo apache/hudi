@@ -531,6 +531,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When table is upgraded from pre 0.12 to 0.12, we check for \"default\" partition and fail if found one. "
           + "Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation");
 
+  public static final ConfigProperty<Boolean> WRITE_SHOULD_UPDATE_PARTITION = ConfigProperty
+      .key("hoodie.write.should.update.partition")
+      .defaultValue(true)
+      .withDocumentation("In the merge into syntax, source may not contain a partition field. "
+          + "So the partition field of the source needs to be filled with the partition of the target to avoid data partition change");
+
+  public static final ConfigProperty<String> TABLE_INDEX_TTL = ConfigProperty
+      .key("hoodie.table.index.ttl")
+      .defaultValue("-1d")
+      .withDocumentation("spark batch index ttl cycle.");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 
@@ -1697,6 +1708,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getColumnStatsIndexParallelism();
   }
 
+  public int getRecordLevelIndexParallelism() {
+    return metadataConfig.getRecordLevelIndexParallelism();
+  }
+
   public int getBloomIndexKeysPerBucket() {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET);
   }
@@ -2125,6 +2140,22 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getMetadataCleanerCommitsRetained() {
     return getInt(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED);
+  }
+
+  /**
+   * Record levle index metadata configs.
+   */
+  public int getRecordLevelIndexShardCount() {
+    return metadataConfig.getRecordLevelIndexFileGroupCount();
+  }
+
+  public boolean shouldUpdatePartition() {
+    return getBoolean(WRITE_SHOULD_UPDATE_PARTITION);
+  }
+
+  public Integer tableIndexTTL() {
+    String ttl = getString(TABLE_INDEX_TTL).toLowerCase().replaceAll("d","");
+    return Integer.parseInt(ttl);
   }
 
   /**

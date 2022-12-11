@@ -88,6 +88,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected boolean isMetadataTableEnabled;
   protected boolean isBloomFilterIndexEnabled = false;
   protected boolean isColumnStatsIndexEnabled = false;
+  protected boolean isRecordLevelIndexEnabled = false;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                               String dataBasePath, String spillableMapDirectory) {
