@@ -131,7 +131,7 @@ public class SparkRecordLevelIndex extends HoodieIndex<Object, Object> {
             // Delete existing index for a deleted record
             if (!HoodieOperation.isUpdateBefore(operation)) {
               indexRecord = HoodieMetadataPayload.createRecordLevelIndexRecord(key.getRecordKey(), partitionPath,
-                  currentLocation.getFileId(), currentLocation.getRowGroupId(), true, currentLocation.getInstantTime(), HoodieOperation.UPDATE_BEFORE);
+                  currentLocation.getFileId(), /*currentLocation.getRowGroupId()*/ -1, true, currentLocation.getInstantTime(), HoodieOperation.UPDATE_BEFORE);
             }
           } else if (currentLocation != null || HoodieOperation.isUpdateAfter(operation)) {
             // Update
@@ -154,7 +154,7 @@ public class SparkRecordLevelIndex extends HoodieIndex<Object, Object> {
               fileId = String.valueOf(BucketIdentifier.bucketIdFromFileId(fileId));
             }
 
-            Integer rowGroupId = hoodieRecordLocation.getRowGroupId();
+            Integer rowGroupId = /*hoodieRecordLocation.getRowGroupId()*/ -1;
             if (rowGroupId == null) {
               rowGroupId = -1;
             }

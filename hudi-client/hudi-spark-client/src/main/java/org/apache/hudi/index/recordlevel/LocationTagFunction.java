@@ -125,7 +125,7 @@ public class LocationTagFunction<R extends HoodieRecordPayload> implements FlatM
         String key = keyAndRecord.getKey();
 
         HoodieRecordGlobalLocation taggedLocation = new HoodieRecordGlobalLocation(oldPartition, oldCommitTime, oldFileId);
-        taggedLocation.setRowGroupId(oldRowGroupIndex);
+        // taggedLocation.setRowGroupId(oldRowGroupIndex);
 
 
         Option<String> layoutPartitionerClass = hoodieTable.getStorageLayout().layoutPartitionerClass();
@@ -145,7 +145,7 @@ public class LocationTagFunction<R extends HoodieRecordPayload> implements FlatM
           if (partitionPathFileIDList.get(oldPartition).containsKey(bucketId)) {
             Pair<String, String> fileInfo = partitionPathFileIDList.get(oldPartition).get(bucketId);
             taggedLocation = new HoodieRecordGlobalLocation(oldPartition, taggedLocation.getInstantTime(), fileInfo.getLeft());
-            taggedLocation.setRowGroupId(taggedLocation.getRowGroupId());
+            //taggedLocation.setRowGroupId(taggedLocation.getRowGroupId());
           } else {
             new IllegalStateException("bucketId " + bucketId + " not found in partition " + oldPartition);
           }

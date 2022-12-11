@@ -1046,7 +1046,7 @@ public class HoodieTableMetadataUtil {
       public HoodieRecord next() {
         size++;
         // int rowGroupIndex = findRowGroupIndex();
-         int rowGroupIndex = -1;
+        int rowGroupIndex = -1;
         HoodieKey next = recordKeyIterator.next();
         return HoodieMetadataPayload.createRecordLevelIndexRecord(next.getRecordKey(), next.getPartitionPath(), fileId, rowGroupIndex, isDeleted, fileCommitTime, HoodieOperation.INSERT);
       }
