@@ -64,7 +64,7 @@ public class TestOrcReaderIterator {
     TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
     OrcFile.WriterOptions options = OrcFile.writerOptions(conf).setSchema(orcSchema).compress(CompressionKind.ZLIB);
     Writer writer = OrcFile.createWriter(filePath, options);
-    VectorizedRowBatch batch = null;
+    VectorizedRowBatch batch = orcSchema.createRowBatch();
     BytesColumnVector nameColumns = (BytesColumnVector) batch.cols[0];
     LongColumnVector numberColumns = (LongColumnVector) batch.cols[1];
     BytesColumnVector colorColumns = (BytesColumnVector) batch.cols[2];
@@ -76,7 +76,7 @@ public class TestOrcReaderIterator {
       colorColumns.setVal(row, color);
       numberColumns.vector[row] = r;
     }
-    writer.addRowBatch(null);
+    writer.addRowBatch(batch);
     writer.close();
 
     Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
