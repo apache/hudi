@@ -24,6 +24,7 @@ import org.apache.hudi.secondary.index.SecondaryIndexType;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Properties;
 
@@ -108,6 +109,16 @@ public class HoodieBuildTaskConfig extends HoodieConfig {
 
   public static Builder builder() {
     return new Builder();
+  }
+
+  @Override
+  public String toString() {
+    return "HoodieBuildTaskConfig{"
+        + "indexSaveDir='" + indexSaveDir + '\''
+        + ", indexType=" + indexType
+        + ", indexFields=" + Arrays.toString(indexFields.toArray())
+        + ", conf=" + conf
+        + '}';
   }
 
   public static class Builder {

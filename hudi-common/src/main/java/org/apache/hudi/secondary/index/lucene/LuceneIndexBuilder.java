@@ -53,17 +53,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.stream.IntStream;
 
 public class LuceneIndexBuilder implements SecondaryIndexBuilder {
   private static final Logger LOG = LoggerFactory.getLogger(LuceneIndexBuilder.class);
 
   private final String name;
-  private final LinkedList<Schema.Field> indexFields;
   private final Configuration conf;
+  private final String[] fieldNames;
   private final Type.TypeID[] fieldTypes;
   private final String indexSaveDir;
   private final Directory directory;
@@ -72,7 +70,6 @@ public class LuceneIndexBuilder implements SecondaryIndexBuilder {
 
   public LuceneIndexBuilder(HoodieBuildTaskConfig indexConfig) {
     this.name = "lucene-index-builder-" + System.nanoTime();
-    this.indexFields = indexConfig.getIndexFields();
     this.conf = indexConfig.getConf();
     this.indexSaveDir = indexConfig.getIndexSaveDir();
     try {
@@ -89,14 +86,15 @@ public class LuceneIndexBuilder implements SecondaryIndexBuilder {
       throw new HoodieBuildException("Init lucene index builder failed", e);
     }
 
-    List<String> fieldNames = new ArrayList<>();
+    LinkedList<Schema.Field> indexFields = indexConfig.getIndexFields();
+    fieldNames = new String[indexFields.size()];
     fieldTypes = new Type.TypeID[indexFields.size()];
     IntStream.range(0, indexFields.size()).forEach(i -> {
       Schema.Field field = indexFields.get(i);
       fieldTypes[i] = AvroInternalSchemaConverter.buildTypeFromAvroSchema(field.schema()).typeId();
-      fieldNames.add(field.name());
+      fieldNames[i] = field.name();
     });
-    LOG.info("Init lucene index builder ok, name: {}, indexFields: {}", name, fieldNames);
+    LOG.info("Init lucene index builder ok, name: {}, indexConfig: {}", name, indexConfig);
   }
 
   @Override
@@ -133,62 +131,38 @@ public class LuceneIndexBuilder implements SecondaryIndexBuilder {
 
   private void buildDocument(Document reusedDoc, GenericRecord record) {
     reusedDoc.clear();
-    indexFields.forEach(avroField ->
-        reusedDoc.add(createField(avroField, record.get(avroField.name()))));
-  }
-
-  private Field createField(Schema.Field avroField, Object value) {
-    switch (avroField.schema().getType()) {
-      case BOOLEAN:
-        return new IntPoint(avroField.name(), (Boolean) value ? 1 : 0);
-      case INT:
-        return new IntPoint(avroField.name(), (Integer) value);
-      case LONG:
-        return new LongPoint(avroField.name(), (Long) value);
-      case FLOAT:
-        return new FloatPoint(avroField.name(), (Float) value);
-      case DOUBLE:
-        return new DoublePoint(avroField.name(), (Double) value);
-      case STRING:
-        byte[] bytes = ((Utf8) value).getBytes();
-        return new StringField(avroField.name(),
-            new BytesRef(bytes, 0, bytes.length), Field.Store.NO);
-      case BYTES:
-        return createFieldByAvroLogicalType(avroField);
-      case NULL:
-      default:
-        throw new HoodieSecondaryIndexException(
-            "Unsupported avro field type: " + avroField.schema().getType().getName());
+    for (int i = 0; i < fieldNames.length; i++) {
+      reusedDoc.add(
+          createField(fieldNames[i], fieldTypes[i], record.get(fieldNames[i])));
     }
   }
 
-  // Following code is forked {@code org.apache.avro.LogicalTypes}
-  private static final String DECIMAL = "decimal";
-  private static final String UUID = "uuid";
-  private static final String DATE = "date";
-  private static final String TIME_MILLIS = "time-millis";
-  private static final String TIME_MICROS = "time-micros";
-  private static final String TIMESTAMP_MILLIS = "timestamp-millis";
-  private static final String TIMESTAMP_MICROS = "timestamp-micros";
-  private static final String LOCAL_TIMESTAMP_MILLIS = "local-timestamp-millis";
-  private static final String LOCAL_TIMESTAMP_MICROS = "local-timestamp-micros";
-
-  private Field createFieldByAvroLogicalType(Schema.Field avroField) {
-    switch (avroField.schema().getLogicalType().getName()) {
+  private Field createField(String fieldName, Type.TypeID fieldType, Object value) {
+    switch (fieldType) {
+      case BOOLEAN:
+        return new IntPoint(fieldName, (Boolean) value ? 1 : 0);
+      case INT:
+        return new IntPoint(fieldName, (Integer) value);
+      case LONG:
+        return new LongPoint(fieldName, (Long) value);
+      case FLOAT:
+        return new FloatPoint(fieldName, (Float) value);
+      case DOUBLE:
+        return new DoublePoint(fieldName, (Double) value);
+      case STRING:
+        byte[] bytes = ((Utf8) value).getBytes();
+        return new StringField(fieldName,
+            new BytesRef(bytes, 0, bytes.length), Field.Store.NO);
       case DECIMAL:
       case UUID:
-        return new StringField(avroField.name(), "", Field.Store.NO);
+        return new StringField(fieldName, "", Field.Store.NO);
       case DATE:
-      case TIME_MILLIS:
-      case TIME_MICROS:
-      case TIMESTAMP_MILLIS:
-      case TIMESTAMP_MICROS:
-      case LOCAL_TIMESTAMP_MILLIS:
-      case LOCAL_TIMESTAMP_MICROS:
-        return new LongPoint(avroField.name(), 1);
+      case TIME:
+      case TIMESTAMP:
+        return new LongPoint(fieldName, 1);
       default:
         throw new HoodieSecondaryIndexException(
-            "Unsupported avro logical field type: " + avroField.schema().getLogicalType().getName());
+            "Unsupported field type, field: " + fieldType + ", type: " + fieldType);
     }
   }
 
