@@ -35,8 +35,7 @@ import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.codegen.GenerateSafeProjection
-import org.apache.spark.sql.catalyst.expressions.{Expression, Projection}
+import org.apache.spark.sql.catalyst.expressions.{Expression, Projection, SafeProjection}
 import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.BooleanType
@@ -61,7 +60,7 @@ import scala.collection.mutable.ArrayBuffer
  */
 class ExpressionPayload(@transient record: GenericRecord,
                         @transient orderingVal: Comparable[_])
-  extends DefaultHoodieRecordPayload(record, orderingVal) {
+  extends DefaultHoodieRecordPayload(record, orderingVal) with Logging {
 
   def this(recordOpt: HOption[GenericRecord]) {
     this(recordOpt.orElse(null), 0)
@@ -326,17 +325,39 @@ object ExpressionPayload {
       }
     })
 
+  /**
+   * NOTE: PLEASE READ CAREFULLY
+   *       Spark's [[AvroDeserializer]] are NOT thread-safe hence cache is scoped
+   *       down to be thread-local to support the multi-threaded executors (like
+   *       [[BoundedInMemoryQueueExecutor]], [[DisruptorExecutor]])
+   */
+  private val avroDeserializerCache = ThreadLocal.withInitial(
+    new Supplier[Cache[Schema, HoodieAvroDeserializer]] {
+      override def get(): Cache[Schema, HoodieAvroDeserializer] =
+        Caffeine.newBuilder()
+          .maximumSize(16).build[Schema, HoodieAvroDeserializer]()
+    }
+  )
+
+  /**
+   * NOTE: PLEASE READ CAREFULLY
+   *       Spark's [[AvroSerializer]] are NOT thread-safe hence cache is scoped
+   *       down to be thread-local to support the multi-threaded executors (like
+   *       [[BoundedInMemoryQueueExecutor]], [[DisruptorExecutor]])
+   */
+  private val avroSerializerCache = ThreadLocal.withInitial(
+    new Supplier[Cache[Schema, HoodieAvroSerializer]] {
+      override def get(): Cache[Schema, HoodieAvroSerializer] =
+        Caffeine.newBuilder()
+          .maximumSize(16).build[Schema, HoodieAvroSerializer]()
+    }
+  )
+
   private val schemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[String, Schema]()
 
   private val mergedSchemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[(Schema, Schema), Schema]()
-
-  private val avroDeserializerCache = Caffeine.newBuilder()
-    .maximumSize(16).build[Schema, HoodieAvroDeserializer]()
-
-  private val avroSerializerCache = Caffeine.newBuilder()
-    .maximumSize(16).build[Schema, HoodieAvroSerializer]()
 
   private def parseSchema(schemaStr: String): Schema = {
     schemaCache.get(schemaStr,
@@ -358,17 +379,19 @@ object ExpressionPayload {
   }
 
   private def getAvroDeserializerFor(schema: Schema) = {
-    avroDeserializerCache.get(schema, new Function[Schema, HoodieAvroDeserializer] {
-      override def apply(t: Schema): HoodieAvroDeserializer =
-        sparkAdapter.createAvroDeserializer(schema, convertAvroSchemaToStructType(schema))
-    })
+    avroDeserializerCache.get()
+      .get(schema, new Function[Schema, HoodieAvroDeserializer] {
+        override def apply(t: Schema): HoodieAvroDeserializer =
+          sparkAdapter.createAvroDeserializer(schema, convertAvroSchemaToStructType(schema))
+      })
   }
 
   private def getAvroSerializerFor(schema: Schema) = {
-    avroSerializerCache.get(schema, new Function[Schema, HoodieAvroSerializer] {
-      override def apply(t: Schema): HoodieAvroSerializer =
-        sparkAdapter.createAvroSerializer(convertAvroSchemaToStructType(schema), schema, isNullable(schema))
-    })
+    avroSerializerCache.get()
+      .get(schema, new Function[Schema, HoodieAvroSerializer] {
+        override def apply(t: Schema): HoodieAvroSerializer =
+          sparkAdapter.createAvroSerializer(convertAvroSchemaToStructType(schema), schema, isNullable(schema))
+      })
   }
 
   /**
