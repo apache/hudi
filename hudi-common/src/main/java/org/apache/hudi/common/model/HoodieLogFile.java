@@ -38,6 +38,7 @@ public class HoodieLogFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
   public static final String DELTA_EXTENSION = ".log";
+  public static final String LOG_FILE_PREFIX = ".";
   public static final Integer LOGFILE_BASE_VERSION = 1;
 
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
