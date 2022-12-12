@@ -18,19 +18,13 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.generic.GenericRecord;
+
 import java.io.IOException;
-import java.util.Iterator;
 
 /**
  * Helper to read records from previous version of base file and run Merge.
@@ -44,23 +38,6 @@ public abstract class BaseMergeHelper {
    * @throws IOException in case of error
    */
   public abstract void runMerge(HoodieTable<?, ?, ?, ?> table, HoodieMergeHandle<?, ?, ?, ?> upsertHandle) throws IOException;
-
-  /**
-   * Create Parquet record iterator that provides a stitched view of record read from skeleton and bootstrap file.
-   * Skeleton file is a representation of the bootstrap file inside the table, with just the bare bone fields needed
-   * for indexing, writing and other functionality.
-   *
-   */
-  protected Iterator<GenericRecord> getMergingIterator(HoodieTable<?, ?, ?, ?> table,
-                                                       HoodieMergeHandle<?, ?, ?, ?> mergeHandle,
-                                                       Path bootstrapFilePath,
-                                                       Iterator<GenericRecord> recordIterator) throws IOException {
-    Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
-    HoodieFileReader<GenericRecord> bootstrapReader =
-        HoodieFileReaderFactory.getFileReader(bootstrapFileConfig, bootstrapFilePath);
-    return new MergingIterator<>(recordIterator, bootstrapReader.getRecordIterator(),
-        (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));
-  }
 
   /**
    * Consumer that dequeues records from queue and sends to Merge Handle.

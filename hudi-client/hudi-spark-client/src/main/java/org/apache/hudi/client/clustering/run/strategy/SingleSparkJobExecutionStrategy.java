@@ -103,7 +103,6 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
     return writeMetadata;
   }
 
-
   /**
    * Submit job to execute clustering for the group.
    */
@@ -123,7 +122,6 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
     return StreamSupport.stream(writeStatusIterable.spliterator(), false)
         .flatMap(Collection::stream);
   }
-
 
   /**
    * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters.
