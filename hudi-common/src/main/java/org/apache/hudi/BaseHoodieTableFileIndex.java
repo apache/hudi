@@ -270,7 +270,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     long startTime = System.currentTimeMillis();
 
     HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
 
     resetTableMetadata(newTableMetadata);
 
