@@ -18,7 +18,10 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -66,11 +69,15 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
     HoodieMergeHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> mergeHandle = upsertHandle;
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
+    Configuration hadoopConf = new Configuration(table.getHadoopConf());
+    HoodieFileReader<GenericRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf, mergeHandle.getOldFilePath());
+    HoodieFileReader<GenericRecord> bootstrapFileReader = null;
+
     final GenericDatumWriter<GenericRecord> gWriter;
     final GenericDatumReader<GenericRecord> gReader;
     Schema readSchema;
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
-      readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
+      readSchema = baseFileReader.getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
       gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetaFields());
     } else {
@@ -80,13 +87,18 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
+        Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
+        Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
+        bootstrapFileReader = HoodieFileReaderFactory.getFileReader(bootstrapFileConfig, bootstrapFilePath);
+        readerIterator = new MergingIterator<>(
+            baseFileReader.getRecordIterator(readSchema),
+            bootstrapFileReader.getRecordIterator(),
+            (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));
       } else {
-        readerIterator = reader.getRecordIterator(readSchema);
+        readerIterator = baseFileReader.getRecordIterator(readSchema);
       }
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
@@ -104,8 +116,9 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
     } finally {
       // HUDI-2875: mergeHandle is not thread safe, we should totally terminate record inputting
       // and executor firstly and then close mergeHandle.
-      if (reader != null) {
-        reader.close();
+      baseFileReader.close();
+      if (bootstrapFileReader != null) {
+        bootstrapFileReader.close();
       }
       if (null != wrapper) {
         wrapper.shutdownNow();
