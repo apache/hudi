@@ -69,11 +69,14 @@ import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.storage.StorageLevel;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
@@ -124,6 +127,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
+    if (HoodieIndex.IndexType.RECORD_LEVEL.equals(config.getIndexType())) {
+      if (writeStatuses.getStorageLevel() == StorageLevel.NONE()) {
+        writeStatuses.persist(StorageLevel.fromString(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE)));
+      }
+    }
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     HoodieTable table = createTable(config, hadoopConf);
     if (HoodieIndex.IndexType.RECORD_LEVEL.equals(config.getIndexType())) {

@@ -40,9 +40,6 @@ public class HoodieWriteResult implements Serializable {
 
   public HoodieWriteResult(JavaRDD<WriteStatus> writeStatuses, Map<String, List<String>> partitionToReplaceFileIds) {
     this.writeStatuses = writeStatuses;
-    if (this.writeStatuses.getStorageLevel() == StorageLevel.NONE()) {
-      this.writeStatuses.persist(StorageLevel.MEMORY_AND_DISK_SER());
-    }
     this.partitionToReplaceFileIds = partitionToReplaceFileIds;
   }
 
