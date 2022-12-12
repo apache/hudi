@@ -281,6 +281,29 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     }
   }
 
+  @Test
+  public void testArchiveTableWithReplaceCommits() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 4, 2);
+    for (int i = 1; i < 7; i++) {
+      if (i < 3) {
+        testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(),
+            Arrays.asList("p1", "p2"), 2);
+      } else {
+        testTable.doWriteOperation("0000000" + i, WriteOperationType.INSERT_OVERWRITE, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      }
+      // trigger archival
+      Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
+      List<HoodieInstant> originalCommits = commitsList.getKey();
+      List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
+
+      if (i == 6) {
+        // after all rounds, only 3 should be left in active timeline. 4,5,6
+        assertEquals(originalCommits, commitsAfterArchival);
+        assertEquals(3, originalCommits.size());
+      }
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testSavepointWithArchival(boolean archiveBeyondSavepoint) throws Exception {

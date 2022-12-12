@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -57,11 +56,6 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
       HoodieEngineContext context,
       HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
-  }
-
-  @Override
-  public boolean isTableServiceAction(String actionType) {
-    return !actionType.equals(HoodieTimeline.DELTA_COMMIT_ACTION);
   }
 
   @Override
