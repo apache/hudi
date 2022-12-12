@@ -53,8 +53,7 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
     case op @ PhysicalOperation(projects, filters,
-      lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _))
-        if filters.nonEmpty && fileIndex.partitionSchema.nonEmpty && sparkAdapter.isHoodieTable(lr, spark) =>
+      lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _)) if shouldHandle(lr, fileIndex, filters) =>
 
       val deterministicFilters = filters.filter(f => f.deterministic && !SubqueryExpression.hasSubquery(f))
       val normalizedFilters = DataSourceStrategy.normalizeExprs(deterministicFilters, lr.output)
@@ -89,6 +88,12 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
       } else {
         op
       }
+  }
+
+  private def shouldHandle(lr: LogicalRelation, fileIndex: HoodieFileIndex, filters: Seq[Expression]) = {
+    sparkAdapter.isHoodieTable(lr, spark) && filters.nonEmpty && fileIndex.partitionSchema.nonEmpty &&
+      // NOTE: We should only push-down the filters if [[HoodieFileIndex]] caches are empty
+      !fileIndex.areAllFileSlicesCached()
   }
 }
 

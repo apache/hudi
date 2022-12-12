@@ -412,7 +412,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         .sum();
   }
 
-  protected boolean areAllFileSlicesCached() {
+  public boolean areAllFileSlicesCached() {
     // Loop over partition paths to check if all partitions are initialized.
     return areAllPartitionPathsCached()
         && cachedAllPartitionPaths.stream().allMatch(p -> cachedAllInputFileSlices.containsKey(p));
