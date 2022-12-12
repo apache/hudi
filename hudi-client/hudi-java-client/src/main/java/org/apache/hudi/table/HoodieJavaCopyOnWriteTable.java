@@ -38,7 +38,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -88,11 +87,6 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
                                        HoodieEngineContext context,
                                        HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
-  }
-
-  @Override
-  public boolean isTableServiceAction(String actionType) {
-    return !actionType.equals(HoodieTimeline.COMMIT_ACTION);
   }
 
   @Override
