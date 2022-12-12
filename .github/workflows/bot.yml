@@ -87,7 +87,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ false }} # TODO temp disable
+        if: ${{ !skipBundleValidation }}
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
@@ -99,14 +99,6 @@ jobs:
         if: ${{ matrix.buildOnly != 'true' }}
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark $MVN_ARGS
-      - name: 'FT: common & spark'
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ matrix.buildOnly != 'true' }}
-        run:
-          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark $MVN_ARGS
       - name: 'UT integ-test'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
