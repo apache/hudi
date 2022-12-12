@@ -150,14 +150,17 @@ object HoodieSparkSqlWriter {
       // Handle various save modes
       handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
       val partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, toProperties(parameters))
-      // Create the table if not present
-      if (!tableExists) {
+      val tableMetaClient = if (tableExists) {
+        HoodieTableMetaClient.builder
+          .setConf(sparkContext.hadoopConfiguration)
+          .setBasePath(path)
+          .build()
+      } else {
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
         val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
         val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
         val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
-
-        val tableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
+        HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(tableType)
           .setDatabaseName(databaseName)
           .setTableName(tblName)
@@ -180,8 +183,8 @@ object HoodieSparkSqlWriter {
           .setShouldDropPartitionColumns(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.DROP_PARTITION_COLUMNS))
           .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)))
           .initTable(sparkContext.hadoopConfiguration, path)
-        tableConfig = tableMetaClient.getTableConfig
-      }
+        }
+      tableConfig = tableMetaClient.getTableConfig
 
       val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
 
@@ -191,8 +194,7 @@ object HoodieSparkSqlWriter {
           classOf[Schema]))
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
-
-      val latestTableSchemaOpt = getLatestTableSchema(spark, basePath, tableIdentifier, sparkContext.hadoopConfiguration)
+      val latestTableSchemaOpt = getLatestTableSchema(spark, tableIdentifier, tableMetaClient)
       // NOTE: We need to make sure that upon conversion of the schemas b/w Catalyst's [[StructType]] and
       //       Avro's [[Schema]] we're preserving corresponding "record-name" and "record-namespace" that
       //       play crucial role in establishing compatibility b/w schemas
@@ -200,19 +202,15 @@ object HoodieSparkSqlWriter {
         .getOrElse(getAvroRecordNameAndNamespace(tblName))
 
       val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
-      val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext).orElse {
-        val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
-          DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
-        // In case we need to reconcile the schema and schema evolution is enabled,
-        // we will force-apply schema evolution to the writer's schema
-        if (shouldReconcileSchema && schemaEvolutionEnabled) {
-          val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields().filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
-          // in case sourceSchema contains HoodieRecord.HOODIE_META_COLUMNS
-          val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
-          Some(AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(latestTableSchemaOpt.getOrElse(sourceSchema), allowOperationMetaDataField)))
-        } else {
-          None
-        }
+      val internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
+          // In case we need to reconcile the schema and schema evolution is enabled,
+          // we will force-apply schema evolution to the writer's schema
+          if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
+            val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
+            Some(AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(latestTableSchemaOpt.getOrElse(sourceSchema), allowOperationMetaDataField)))
+          } else {
+            None
+          }
       }
 
       // NOTE: Target writer's schema is deduced based on
@@ -252,7 +250,7 @@ object HoodieSparkSqlWriter {
             }
 
             // Create a HoodieWriteClient & issue the delete.
-            val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
+            val internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
               mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
@@ -294,8 +292,6 @@ object HoodieSparkSqlWriter {
             client.startCommitWithTime(instantTime, commitActionType)
             val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeStatuses, client)
-
-
           case _ =>
             // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
             //
@@ -562,25 +558,24 @@ object HoodieSparkSqlWriter {
   }
 
   /**
-    * get latest internalSchema from table
-    *
-    * @param fs           instance of FileSystem.
-    * @param basePath     base path.
-    * @param sparkContext instance of spark context.
-    * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
-    */
-  def getLatestTableInternalSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext): Option[InternalSchema] = {
-    try {
-      if (FSUtils.isTableExists(basePath.toString, fs)) {
-        val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
+   * get latest internalSchema from table
+   *
+   * @param config instance of {@link HoodieConfig}
+   * @param tableMetaClient instance of HoodieTableMetaClient
+   * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
+   */
+  def getLatestTableInternalSchema(config: HoodieConfig,
+                                   tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
+    if (!config.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
+       Option.empty[InternalSchema]
+    } else {
+      try {
         val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
         val internalSchemaOpt = tableSchemaResolver.getTableInternalSchemaFromCommitMetadata
         if (internalSchemaOpt.isPresent) Some(internalSchemaOpt.get()) else None
-      } else {
-        None
+      } catch {
+        case _: Exception => None
       }
-    } catch {
-      case _: Exception => None
     }
   }
 
@@ -589,22 +584,11 @@ object HoodieSparkSqlWriter {
   }
 
   private def getLatestTableSchema(spark: SparkSession,
-                                   tableBasePath: Path,
                                    tableId: TableIdentifier,
-                                   hadoopConf: Configuration): Option[Schema] = {
-    val fs = tableBasePath.getFileSystem(hadoopConf)
+                                   tableMetaClient: HoodieTableMetaClient): Option[Schema] = {
+    val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
     val latestTableSchemaFromCommitMetadata =
-      if (FSUtils.isTableExists(tableBasePath.toString, fs)) {
-        val tableMetaClient = HoodieTableMetaClient.builder
-          .setConf(hadoopConf)
-          .setBasePath(tableBasePath.toString)
-          .build()
-        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-        toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
-      } else {
-        None
-      }
-
+      toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
     latestTableSchemaFromCommitMetadata.orElse {
       getCatalogTable(spark, tableId).map { catalogTable =>
         val (structName, namespace) = getAvroRecordNameAndNamespace(tableId.table)
