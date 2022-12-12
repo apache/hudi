@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 
 import java.util.stream.Collectors
 import org.apache.hadoop.fs.{GlobPattern, Path}
+import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
@@ -48,6 +49,7 @@ import scala.collection.mutable
  * Relation, that implements the Hoodie incremental view.
  *
  * Implemented for Copy_on_write storage.
+ * TODO: rebase w/ HoodieBaseRelation HUDI-5362
  *
  */
 class IncrementalRelation(val sqlContext: SQLContext,
@@ -91,7 +93,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
   val (usedSchema, internalSchema) = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val iSchema = if (useEndInstantSchema && !commitsToReturn.isEmpty) {
+    val iSchema : InternalSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
+      InternalSchema.getEmptyInternalSchema
+    } else if (useEndInstantSchema && !commitsToReturn.isEmpty) {
       InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getTimestamp.toLong, metaClient, hoodieTable.getConfig.getInternalSchemaCacheEnable)
     } else {
       schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(null)
