@@ -25,8 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
@@ -180,25 +178,5 @@ public class KeyGenUtils {
         throw new HoodieNotSupportedException("Required property " + prop + " is missing");
       }
     });
-  }
-
-  /**
-   * Create a key generator class via reflection, passing in any configs needed.
-   * <p>
-   * This method is for user-defined classes. To create hudi's built-in key generators, please set proper
-   * {@link org.apache.hudi.keygen.constant.KeyGeneratorType} conf, and use the relevant factory, see
-   * {@link org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory}.
-   */
-  public static KeyGenerator createKeyGeneratorByClassName(TypedProperties props) throws IOException {
-    KeyGenerator keyGenerator = null;
-    String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null);
-    if (!StringUtils.isNullOrEmpty(keyGeneratorClass)) {
-      try {
-        keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
-      } catch (Throwable e) {
-        throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
-      }
-    }
-    return keyGenerator;
   }
 }

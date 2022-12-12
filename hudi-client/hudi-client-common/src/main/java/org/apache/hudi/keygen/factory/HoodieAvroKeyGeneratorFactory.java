@@ -18,13 +18,11 @@
 package org.apache.hudi.keygen.factory;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.CustomAvroKeyGenerator;
 import org.apache.hudi.keygen.GlobalAvroDeleteKeyGenerator;
-import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -35,8 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Locale;
-import java.util.Objects;
 
 /**
  * Factory help to create {@link org.apache.hudi.keygen.KeyGenerator}.
@@ -44,33 +40,16 @@ import java.util.Objects;
  * This factory will try {@link HoodieWriteConfig#KEYGENERATOR_CLASS_NAME} firstly, this ensures the class prop
  * will not be overwritten by {@link KeyGeneratorType}
  */
-public class HoodieAvroKeyGeneratorFactory {
+public class HoodieAvroKeyGeneratorFactory extends KeyGeneratorFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroKeyGeneratorFactory.class);
 
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
-    // keyGenerator class name has higher priority
-    KeyGenerator keyGenerator = KeyGenUtils.createKeyGeneratorByClassName(props);
-    return Objects.isNull(keyGenerator) ? createAvroKeyGeneratorByType(props) : keyGenerator;
+    return KeyGeneratorFactory.createKeyGenerator(props, LOG, HoodieAvroKeyGeneratorFactory::convertTypeToKeyGenerator);
   }
 
-  public static KeyGenerator createAvroKeyGeneratorByType(TypedProperties props) throws IOException {
-    // Use KeyGeneratorType.SIMPLE as default keyGeneratorType
-    String keyGeneratorType =
-        props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), null);
-
-    if (StringUtils.isNullOrEmpty(keyGeneratorType)) {
-      LOG.info("The value of {} is empty, using SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE.key());
-      keyGeneratorType = KeyGeneratorType.SIMPLE.name();
-    }
-
-    KeyGeneratorType keyGeneratorTypeEnum;
-    try {
-      keyGeneratorTypeEnum = KeyGeneratorType.valueOf(keyGeneratorType.toUpperCase(Locale.ROOT));
-    } catch (IllegalArgumentException e) {
-      throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorType);
-    }
-
+  private static KeyGenerator convertTypeToKeyGenerator(KeyGeneratorType keyGeneratorTypeEnum, TypedProperties props)
+      throws IOException {
     switch (keyGeneratorTypeEnum) {
       case SIMPLE:
         return new SimpleAvroKeyGenerator(props);
@@ -85,8 +64,7 @@ public class HoodieAvroKeyGeneratorFactory {
       case GLOBAL_DELETE:
         return new GlobalAvroDeleteKeyGenerator(props);
       default:
-        throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorType);
+        throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorTypeEnum);
     }
   }
-
 }

@@ -126,17 +126,16 @@ public class BulkInsertDataInternalWriterHelper {
   private Option<BuiltinKeyGenerator> getKeyGenerator(Properties properties) {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.putAll(properties);
-    if (Option.ofNullable(properties.get(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()))
-        .map(v -> v.equals(NonpartitionedKeyGenerator.class.getName())).orElse(false)) {
-      return Option.empty(); // Do not instantiate NonPartitionKeyGen
-    } else {
-      try {
-        return Option.of((BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
-      } catch (ClassCastException cce) {
-        throw new HoodieIOException("Only those key generators implementing BuiltInKeyGenerator interface is supported with virtual keys");
-      } catch (IOException e) {
-        throw new HoodieIOException("Key generator instantiation failed ", e);
-      }
+    try {
+      Option<BuiltinKeyGenerator> keyGeneratorOption =
+          Option.of((BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
+      return keyGeneratorOption.get() instanceof NonpartitionedKeyGenerator
+          ? Option.empty()
+          : keyGeneratorOption;
+    } catch (ClassCastException cce) {
+      throw new HoodieIOException("Only those key generators implementing BuiltInKeyGenerator interface is supported with virtual keys");
+    } catch (IOException e) {
+      throw new HoodieIOException("Key generator instantiation failed ", e);
     }
   }
 
