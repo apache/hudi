@@ -20,11 +20,13 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.GLOBAL_SORT;
 
 /**
  * A built-in partitioner that does global sorting for the input records across partitions
@@ -36,16 +38,19 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class GlobalSortPartitioner<T extends HoodieRecordPayload>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
-  private final boolean populateMetaFields;
+  private final boolean shouldPopulateMetaFields;
 
-  public GlobalSortPartitioner(boolean populateMetaFields) {
-    this.populateMetaFields = populateMetaFields;
+  public GlobalSortPartitioner(HoodieWriteConfig config) {
+    this.shouldPopulateMetaFields = config.populateMetaFields();
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    checkState(populateMetaFields, "Meta fields are disabled!");
+    if (!shouldPopulateMetaFields) {
+      throw new HoodieException(GLOBAL_SORT.name() + " mode requires meta-fields to be enabled");
+    }
+
     // Now, sort the records and line them up nicely for loading.
     return records.sortBy(record -> {
       // Let's use "partitionPath + key" as the sort key. Spark, will ensure

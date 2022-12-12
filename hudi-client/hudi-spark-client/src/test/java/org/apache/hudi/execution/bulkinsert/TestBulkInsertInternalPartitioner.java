@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -138,36 +139,36 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
                                                  boolean populateMetaFields) {
     int numPartitions = 2;
     if (!populateMetaFields) {
-      assertThrows(IllegalStateException.class, () -> partitioner.repartitionRecords(records, numPartitions));
-    } else {
-      JavaRDD<HoodieRecord<? extends HoodieRecordPayload>> actualRecords =
-          (JavaRDD<HoodieRecord<? extends HoodieRecordPayload>>) partitioner.repartitionRecords(records, numPartitions);
-      assertEquals(
-          enforceNumOutputPartitions ? numPartitions : records.getNumPartitions(),
-          actualRecords.getNumPartitions());
-      List<HoodieRecord<? extends HoodieRecordPayload>> collectedActualRecords = actualRecords.collect();
-      if (isGloballySorted) {
-        // Verify global order
-        verifyRecordAscendingOrder(collectedActualRecords, comparator);
-      } else if (isLocallySorted) {
-        // Verify local order
-        actualRecords.mapPartitions(partition -> {
-          List<HoodieRecord<? extends HoodieRecordPayload>> partitionRecords = new ArrayList<>();
-          partition.forEachRemaining(partitionRecords::add);
-          verifyRecordAscendingOrder(partitionRecords, comparator);
-          return Collections.emptyList().iterator();
-        }).collect();
-      }
-
-      // Verify number of records per partition path
-      Map<String, Long> actualPartitionNumRecords = new HashMap<>();
-      for (HoodieRecord record : collectedActualRecords) {
-        String partitionPath = record.getPartitionPath();
-        actualPartitionNumRecords.put(partitionPath,
-            actualPartitionNumRecords.getOrDefault(partitionPath, 0L) + 1);
-      }
-      assertEquals(expectedPartitionNumRecords, actualPartitionNumRecords);
+      assertThrows(HoodieException.class, () -> partitioner.repartitionRecords(records, numPartitions));
+      return;
     }
+    JavaRDD<HoodieRecord<? extends HoodieRecordPayload>> actualRecords =
+        (JavaRDD<HoodieRecord<? extends HoodieRecordPayload>>) partitioner.repartitionRecords(records, numPartitions);
+    assertEquals(
+        enforceNumOutputPartitions ? numPartitions : records.getNumPartitions(),
+        actualRecords.getNumPartitions());
+    List<HoodieRecord<? extends HoodieRecordPayload>> collectedActualRecords = actualRecords.collect();
+    if (isGloballySorted) {
+      // Verify global order
+      verifyRecordAscendingOrder(collectedActualRecords, comparator);
+    } else if (isLocallySorted) {
+      // Verify local order
+      actualRecords.mapPartitions(partition -> {
+        List<HoodieRecord<? extends HoodieRecordPayload>> partitionRecords = new ArrayList<>();
+        partition.forEachRemaining(partitionRecords::add);
+        verifyRecordAscendingOrder(partitionRecords, comparator);
+        return Collections.emptyList().iterator();
+      }).collect();
+    }
+
+    // Verify number of records per partition path
+    Map<String, Long> actualPartitionNumRecords = new HashMap<>();
+    for (HoodieRecord record : collectedActualRecords) {
+      String partitionPath = record.getPartitionPath();
+      actualPartitionNumRecords.put(partitionPath,
+          actualPartitionNumRecords.getOrDefault(partitionPath, 0L) + 1);
+    }
+    assertEquals(expectedPartitionNumRecords, actualPartitionNumRecords);
   }
 
   @ParameterizedTest(name = "[{index}] {0} isTablePartitioned={1} enforceNumOutputPartitions={2}")
@@ -180,9 +181,17 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
                                                 boolean populateMetaFields) {
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
+
+    HoodieWriteConfig config = HoodieWriteConfig
+        .newBuilder()
+        .withPath("/")
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withBulkInsertSortMode(sortMode.name())
+        .withPopulateMetaFields(populateMetaFields)
+        .build();
+
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerFactory.get(
-            sortMode, isTablePartitioned, enforceNumOutputPartitions, populateMetaFields),
+        BulkInsertInternalPartitionerFactory.get(config, isTablePartitioned, enforceNumOutputPartitions),
         records1,
         enforceNumOutputPartitions,
         isGloballySorted,
@@ -190,8 +199,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         generateExpectedPartitionNumRecords(records1),
         populateMetaFields);
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerFactory.get(
-            sortMode, isTablePartitioned, enforceNumOutputPartitions, populateMetaFields),
+        BulkInsertInternalPartitionerFactory.get(config, isTablePartitioned, enforceNumOutputPartitions),
         records2,
         enforceNumOutputPartitions,
         isGloballySorted,

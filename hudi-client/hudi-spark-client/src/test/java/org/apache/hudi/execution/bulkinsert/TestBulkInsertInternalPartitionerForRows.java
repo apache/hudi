@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -102,9 +104,17 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
                                                 boolean populateMetaFields) {
     Dataset<Row> records1 = generateTestRecords();
     Dataset<Row> records2 = generateTestRecords();
+
+    HoodieWriteConfig config = HoodieWriteConfig
+        .newBuilder()
+        .withPath("/")
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withBulkInsertSortMode(sortMode.name())
+        .withPopulateMetaFields(populateMetaFields)
+        .build();
+
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerWithRowsFactory.get(
-            sortMode, isTablePartitioned, enforceNumOutputPartitions, populateMetaFields),
+        BulkInsertInternalPartitionerWithRowsFactory.get(config, isTablePartitioned, enforceNumOutputPartitions),
         records1,
         enforceNumOutputPartitions,
         isGloballySorted,
@@ -113,8 +123,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
         Option.empty(),
         populateMetaFields);
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerWithRowsFactory.get(
-            sortMode, isTablePartitioned, enforceNumOutputPartitions, populateMetaFields),
+        BulkInsertInternalPartitionerWithRowsFactory.get(config, isTablePartitioned, enforceNumOutputPartitions),
         records2,
         enforceNumOutputPartitions,
         isGloballySorted,
@@ -159,38 +168,38 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
                                                  boolean populateMetaFields) {
     int numPartitions = 2;
     if (!populateMetaFields) {
-      assertThrows(IllegalStateException.class, () -> partitioner.repartitionRecords(rows, numPartitions));
-    } else {
-      Dataset<Row> actualRecords = (Dataset<Row>) partitioner.repartitionRecords(rows, numPartitions);
-      assertEquals(
-          enforceNumOutputPartitions ? numPartitions : rows.rdd().getNumPartitions(),
-          actualRecords.rdd().getNumPartitions());
-
-      List<Row> collectedActualRecords = actualRecords.collectAsList();
-      if (isGloballySorted) {
-        // Verify global order
-        verifyRowsAscendingOrder(collectedActualRecords, comparator);
-      } else if (isLocallySorted) {
-        // Verify local order
-        actualRecords.mapPartitions((MapPartitionsFunction<Row, Object>) input -> {
-          List<Row> partitionRows = new ArrayList<>();
-          while (input.hasNext()) {
-            partitionRows.add(input.next());
-          }
-          verifyRowsAscendingOrder(partitionRows, comparator);
-          return Collections.emptyList().iterator();
-        }, SparkDatasetTestUtils.ENCODER);
-      }
-
-      // Verify number of records per partition path
-      Map<String, Long> actualPartitionNumRecords = new HashMap<>();
-      for (Row record : collectedActualRecords) {
-        String partitionPath = record.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
-        actualPartitionNumRecords.put(partitionPath,
-            actualPartitionNumRecords.getOrDefault(partitionPath, 0L) + 1);
-      }
-      assertEquals(expectedPartitionNumRecords, actualPartitionNumRecords);
+      assertThrows(HoodieException.class, () -> partitioner.repartitionRecords(rows, numPartitions));
+      return;
     }
+    Dataset<Row> actualRecords = (Dataset<Row>) partitioner.repartitionRecords(rows, numPartitions);
+    assertEquals(
+        enforceNumOutputPartitions ? numPartitions : rows.rdd().getNumPartitions(),
+        actualRecords.rdd().getNumPartitions());
+
+    List<Row> collectedActualRecords = actualRecords.collectAsList();
+    if (isGloballySorted) {
+      // Verify global order
+      verifyRowsAscendingOrder(collectedActualRecords, comparator);
+    } else if (isLocallySorted) {
+      // Verify local order
+      actualRecords.mapPartitions((MapPartitionsFunction<Row, Object>) input -> {
+        List<Row> partitionRows = new ArrayList<>();
+        while (input.hasNext()) {
+          partitionRows.add(input.next());
+        }
+        verifyRowsAscendingOrder(partitionRows, comparator);
+        return Collections.emptyList().iterator();
+      }, SparkDatasetTestUtils.ENCODER);
+    }
+
+    // Verify number of records per partition path
+    Map<String, Long> actualPartitionNumRecords = new HashMap<>();
+    for (Row record : collectedActualRecords) {
+      String partitionPath = record.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+      actualPartitionNumRecords.put(partitionPath,
+          actualPartitionNumRecords.getOrDefault(partitionPath, 0L) + 1);
+    }
+    assertEquals(expectedPartitionNumRecords, actualPartitionNumRecords);
   }
 
   public static Map<String, Long> generateExpectedPartitionNumRecords(Dataset<Row> rows) {

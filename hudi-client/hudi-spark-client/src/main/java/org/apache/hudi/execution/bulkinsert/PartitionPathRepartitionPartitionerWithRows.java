@@ -20,13 +20,15 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_PATH_REPARTITION;
 
 /**
  * A built-in partitioner that does the following for input rows for bulk insert operation
@@ -42,16 +44,19 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class PartitionPathRepartitionPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   private final boolean isTablePartitioned;
-  private final boolean populateMetaFields;
+  private final boolean shouldPopulateMetaFields;
 
-  public PartitionPathRepartitionPartitionerWithRows(boolean isTablePartitioned, boolean populateMetaFields) {
+  public PartitionPathRepartitionPartitionerWithRows(boolean isTablePartitioned, HoodieWriteConfig config) {
     this.isTablePartitioned = isTablePartitioned;
-    this.populateMetaFields = populateMetaFields;
+    this.shouldPopulateMetaFields = config.populateMetaFields();
   }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    checkState(populateMetaFields, "Meta fields are disabled!");
+    if (!shouldPopulateMetaFields) {
+      throw new HoodieException(PARTITION_PATH_REPARTITION.name() + " mode requires meta-fields to be enabled");
+    }
+
     if (isTablePartitioned) {
       return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
     }

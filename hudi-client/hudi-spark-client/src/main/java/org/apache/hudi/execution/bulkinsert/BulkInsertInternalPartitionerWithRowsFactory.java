@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
@@ -29,27 +30,26 @@ import org.apache.spark.sql.Row;
  */
 public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode,
-                                                        boolean isTablePartitioned,
-                                                        boolean populateMetaFields) {
-    return get(sortMode, isTablePartitioned, false, populateMetaFields);
+  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieWriteConfig config,
+                                                        boolean isTablePartitioned) {
+    return get(config, isTablePartitioned, false);
   }
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode,
+  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieWriteConfig config,
                                                         boolean isTablePartitioned,
-                                                        boolean enforceNumOutputPartitions,
-                                                        boolean populateMetaFields) {
+                                                        boolean enforceNumOutputPartitions) {
+    BulkInsertSortMode sortMode = config.getBulkInsertSortMode();
     switch (sortMode) {
       case NONE:
         return new NonSortPartitionerWithRows(enforceNumOutputPartitions);
       case GLOBAL_SORT:
-        return new GlobalSortPartitionerWithRows(populateMetaFields);
+        return new GlobalSortPartitionerWithRows(config);
       case PARTITION_SORT:
-        return new PartitionSortPartitionerWithRows(populateMetaFields);
+        return new PartitionSortPartitionerWithRows(config);
       case PARTITION_PATH_REPARTITION:
-        return new PartitionPathRepartitionPartitionerWithRows(isTablePartitioned, populateMetaFields);
+        return new PartitionPathRepartitionPartitionerWithRows(isTablePartitioned, config);
       case PARTITION_PATH_REPARTITION_AND_SORT:
-        return new PartitionPathRepartitionAndSortPartitionerWithRows(isTablePartitioned, populateMetaFields);
+        return new PartitionPathRepartitionAndSortPartitionerWithRows(isTablePartitioned, config);
       default:
         throw new UnsupportedOperationException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }
