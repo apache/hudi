@@ -22,18 +22,20 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieBaseRelation, Spark2HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql._
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
@@ -126,6 +128,23 @@ class Spark2Adapter extends SparkAdapter {
     }
     closePartition()
     partitions.toSeq
+  }
+
+  override def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
+    super.isHoodieTable(table, spark) ||
+      // NOTE: Following checks extending the logic of the base class specifically for Spark 2.x
+      (unfoldSubqueryAliases(table) match {
+        // This is to handle the cases when table is loaded by providing
+        // the path to the Spark DS and not from the catalog
+        //
+        // NOTE: This logic can't be relocated to the hudi-spark-client
+        case LogicalRelation(_: HoodieBaseRelation, _, _, _) => true
+
+        case relation: UnresolvedRelation =>
+          isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
+
+        case _ => false
+      })
   }
 
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
