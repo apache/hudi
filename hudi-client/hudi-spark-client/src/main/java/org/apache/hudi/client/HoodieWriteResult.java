@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.storage.StorageLevel;
 
 import java.io.Serializable;
 import java.util.Collections;
