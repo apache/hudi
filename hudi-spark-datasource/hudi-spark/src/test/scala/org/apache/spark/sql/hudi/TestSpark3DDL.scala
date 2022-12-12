@@ -669,4 +669,55 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test non-batch read for schema change table") {
+    withTempDir { tmp =>
+      Seq("MERGE_ON_READ").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          val tableName = generateTableName
+          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(
+            s"""create table $tableName
+               |(id int, comb int, col0 date, col1 timestamp, col5 string, col6 string, par date)
+               |using hudi
+               |location '$tablePath'
+               |options(type='mor', primaryKey='id', preCombineField='comb')"""
+              .stripMargin)
+
+          spark.sql(
+            s"""insert into $tableName
+               |values
+               |(1,10,'2021-12-27','2021-12-27 21:23:00','2021-12-27','2021-12-27 12:32:00','2022-01-01'),
+               |(2,10,'2021-12-27','2021-12-27 21:23:00','2021-12-27','2021-12-27 12:32:00','2022-01-01'),
+               |(3,10,'2021-12-27','2021-12-27 21:23:00','2021-12-27','2021-12-27 12:32:00','2022-01-01'),
+               |(4,10,'2021-12-27','2021-12-27 21:23:00','2021-12-27','2021-12-27 12:32:00','2022-01-01'),
+               |(5,10,'2021-12-27','2021-12-27 21:23:00','2021-12-27','2021-12-27 12:32:00','2022-01-01'),
+               |(6,10,'2021-12-27','2021-12-27 21:23:00','2021-12-27','2021-12-27 12:32:00','2022-01-01'),
+               |(7,10,'2021-12-27','2021-12-27 21:23:00','2021-12-27','2021-12-27 12:32:00','2022-01-01'),
+               |(8,10,'2021-12-27','2021-12-27 21:23:00','2021-12-27','2021-12-27 12:32:00','2022-01-01'),
+               |(9,20,'2021-12-28','2021-12-28 21:23:00','2021-12-27','2021-12-28 12:32:00','2022-01-01')"""
+              .stripMargin)
+          spark.sql(s"alter table $tableName alter column col0 type string")
+          spark.sql(s"alter table $tableName alter column col5 type date")
+          // disable batch read
+          spark.sessionState.conf.setConfString("spark.sql.codegen.maxFields", "2")
+          spark.sessionState.conf.setConfString("spark.sql.parquet.columnarReaderBatchSize", "2")
+          spark.sql(s"select * from $tableName").show(false)
+          checkAnswer(spark.sql(s"select count(distinct(id)), count(distinct(col5)) from $tableName").collect())(
+            Seq(9, 1)
+          )
+          // enable batch read
+          spark.sessionState.conf.setConfString("spark.sql.codegen.maxFields", "100")
+          spark.sessionState.conf.setConfString("spark.sql.parquet.columnarReaderBatchSize", "4096")
+          checkAnswer(spark.sql(s"select count(distinct(id)), count(distinct(col5)) from $tableName").collect())(
+            Seq(9, 1)
+          )
+          spark.sql(s"select * from $tableName order by id").show(false)
+        }
+      }
+    }
+  }
 }

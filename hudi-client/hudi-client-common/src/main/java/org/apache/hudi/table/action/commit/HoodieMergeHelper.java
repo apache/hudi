@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -29,8 +28,8 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -150,6 +149,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
       InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema, querySchemaOpt.get());
+      // get base file schema. Due to schema evolution, base file schema maybe not equal to querySchema/tableSchema
       long commitInstantTime = Long.parseLong(baseFile.getCommitTime());
       InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, metaClient);
       if (fileSchema.isEmptySchema() && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {
@@ -161,6 +161,8 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
         }
       }
       final InternalSchema writeInternalSchema = fileSchema;
+      // verify whether the file schema is consistent with the querySchema/tableSchema
+      // if not, we need rewrite base file records.
       List<String> colNamesFromQuerySchema = querySchema.getAllColsFullName();
       List<String> colNamesFromWriteSchema = writeInternalSchema.getAllColsFullName();
       List<String> sameCols = colNamesFromWriteSchema.stream()
@@ -168,7 +170,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
             int writerSchemaFieldId = writeInternalSchema.findIdByName(f);
             int querySchemaFieldId = querySchema.findIdByName(f);
 
-            return colNamesFromQuerySchema.contains(f)
+            return colNamesFromQuerySchema.contains(f) // check column name.
                 && writerSchemaFieldId == querySchemaFieldId
                 && writerSchemaFieldId != -1
                 && Objects.equals(writeInternalSchema.findType(writerSchemaFieldId), querySchema.findType(querySchemaFieldId));
@@ -177,9 +179,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
       InternalSchema mergedSchema = new InternalSchemaMerger(writeInternalSchema, querySchema,
           true, false, false).mergeSchema();
       Schema newWriterSchema = AvroInternalSchemaConverter.convert(mergedSchema, writerSchema.getFullName());
-      Schema writeSchemaFromFile = AvroInternalSchemaConverter.convert(writeInternalSchema, newWriterSchema.getFullName());
-      boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size()
-          || SchemaCompatibility.checkReaderWriterCompatibility(newWriterSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+      boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size();
       if (needToReWriteRecord) {
         Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
         return Option.of(record -> rewriteRecordWithNewSchema(record, newWriterSchema, renameCols));

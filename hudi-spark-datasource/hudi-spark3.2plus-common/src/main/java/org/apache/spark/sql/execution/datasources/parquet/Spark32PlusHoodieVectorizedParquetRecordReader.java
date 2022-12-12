@@ -55,6 +55,9 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
   // The memory mode of the columnarBatch.
   private final MemoryMode memoryMode;
 
+  // Need to rewrite vector
+  private final boolean needReWriteVectors;
+
   /**
    * Batch of rows that we assemble and the current index we've returned. Every time this
    * batch is used up (batchIdx == numBatched), we populated the batch.
@@ -75,6 +78,7 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
     memoryMode = useOffHeap ? MemoryMode.OFF_HEAP : MemoryMode.ON_HEAP;
     this.typeChangeInfos = typeChangeInfos;
     this.capacity = capacity;
+    needReWriteVectors = (typeChangeInfos != null && !typeChangeInfos.isEmpty());
   }
 
   @Override
@@ -114,31 +118,40 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
   @Override
   public ColumnarBatch resultBatch() {
     ColumnarBatch currentColumnBatch = super.resultBatch();
-    boolean changed = false;
+    if (!needReWriteVectors) {
+      return currentColumnBatch;
+    }
+
+    setUpColumnarBatch();
+
+    if (columnarBatch != null) {
+      return columnarBatch;
+    } else {
+      return currentColumnBatch;
+    }
+  }
+
+  private void setUpColumnarBatch() {
+    ColumnarBatch currentColumnBatch = super.resultBatch();
+
     for (Map.Entry<Integer, Pair<DataType, DataType>> entry : typeChangeInfos.entrySet()) {
       boolean rewrite = SparkInternalSchemaConverter
           .convertColumnVectorType((WritableColumnVector) currentColumnBatch.column(entry.getKey()),
               idToColumnVectors.get(entry.getKey()), currentColumnBatch.numRows());
       if (rewrite) {
-        changed = true;
         columnVectors[entry.getKey()] = idToColumnVectors.get(entry.getKey());
       }
     }
-    if (changed) {
-      if (columnarBatch == null) {
-        // fill other vector
-        for (int i = 0; i < columnVectors.length; i++) {
-          if (columnVectors[i] == null) {
-            columnVectors[i] = (WritableColumnVector) currentColumnBatch.column(i);
-          }
+    if (columnarBatch == null) {
+      // fill other vector
+      for (int i = 0; i < columnVectors.length; i++) {
+        if (columnVectors[i] == null) {
+          columnVectors[i] = (WritableColumnVector) currentColumnBatch.column(i);
         }
-        columnarBatch = new ColumnarBatch(columnVectors);
       }
-      columnarBatch.setNumRows(currentColumnBatch.numRows());
-      return columnarBatch;
-    } else {
-      return currentColumnBatch;
+      columnarBatch = new ColumnarBatch(columnVectors);
     }
+    columnarBatch.setNumRows(currentColumnBatch.numRows());
   }
 
   @Override
@@ -147,6 +160,7 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
     if (idToColumnVectors != null) {
       idToColumnVectors.entrySet().stream().forEach(e -> e.getValue().reset());
     }
+    // Trigger vector rewrite
     numBatched = resultBatch().numRows();
     batchIdx = 0;
     return result;
@@ -160,20 +174,22 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
 
   @Override
   public Object getCurrentValue() {
-    if (typeChangeInfos == null || typeChangeInfos.isEmpty()) {
+    if (!needReWriteVectors || columnarBatch == null) {
       return super.getCurrentValue();
     }
-
-    if (returnColumnarBatch) {
-      return columnarBatch == null ? super.getCurrentValue() : columnarBatch;
-    }
-
-    return columnarBatch == null ? super.getCurrentValue() : columnarBatch.getRow(batchIdx - 1);
+    return returnColumnarBatch ? columnarBatch : columnarBatch.getRow(batchIdx - 1);
   }
 
   @Override
   public boolean nextKeyValue() throws IOException {
-    resultBatch();
+    // Trigger to create first columnarBatch
+    if (columnarBatch == null) {
+      resultBatch();
+    }
+
+    if (!needReWriteVectors || columnarBatch == null) {
+      return super.nextKeyValue();
+    }
 
     if (returnColumnarBatch)  {
       return nextBatch();

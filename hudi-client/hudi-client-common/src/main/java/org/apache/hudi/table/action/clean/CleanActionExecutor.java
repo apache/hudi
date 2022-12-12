@@ -243,7 +243,14 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       // try to clean old history schema.
       try {
         FileBasedInternalSchemaStorageManager fss = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
-        fss.cleanOldFiles(pendingCleanInstants.stream().map(is -> is.getTimestamp()).collect(Collectors.toList()));
+        int versionsRetained = table.getConfig().getCleanerFileVersionsRetained();
+        List<String> validCommits = table
+            .getActiveTimeline()
+            .filterCompletedAndCompactionInstants()
+            .getInstantsAsStream()
+            .sorted(HoodieInstant.COMPARATOR.reversed())
+            .skip(versionsRetained > 0 ? versionsRetained : 1).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        fss.cleanOldFiles(validCommits);
       } catch (Exception e) {
         // we should not affect original clean logic. Swallow exception and log warn.
         LOG.warn("failed to clean old history schema");

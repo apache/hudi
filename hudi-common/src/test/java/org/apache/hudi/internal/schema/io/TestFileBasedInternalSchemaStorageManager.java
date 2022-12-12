@@ -34,6 +34,8 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,6 +95,14 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
     File f = new File(metaClient.getSchemaFolderName() + File.separator + "0002.schemacommit");
     assertTrue(!f.exists());
     assertEquals(lastSchema, fm.getSchemaByKey("3").get());
+    // clean old schema files
+    List<String> validCommits = metaClient
+        .reloadActiveTimeline()
+        .getCommitsTimeline()
+        .filterCompletedAndCompactionInstants()
+        .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+    fm.cleanOldFiles(validCommits);
+    assertTrue(fm.getHistorySchemaStr().isEmpty());
   }
 
   private void simulateCommit(String commitTime) {

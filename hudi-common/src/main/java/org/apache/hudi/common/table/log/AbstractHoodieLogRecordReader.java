@@ -52,6 +52,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -67,6 +70,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -127,6 +131,8 @@ public abstract class AbstractHoodieLogRecordReader {
   private AtomicLong totalLogFiles = new AtomicLong(0);
   // Internal schema, used to support full schema evolution.
   private InternalSchema internalSchema;
+  // Historical Schemas, only used when schema evolution enabled.
+  private TreeMap<Long, InternalSchema> historicalSchemas;
   // Hoodie table path.
   private final String path;
   // Total log blocks read - for metrics
@@ -810,13 +816,23 @@ public abstract class AbstractHoodieLogRecordReader {
     }
 
     long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
-    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime,
-        hoodieTableMetaClient, false);
+    if (historicalSchemas == null) {
+      FileBasedInternalSchemaStorageManager schemaStorageManager = new FileBasedInternalSchemaStorageManager(hoodieTableMetaClient);
+      historicalSchemas = SerDeHelper.parseSchemas(schemaStorageManager.getHistorySchemaStr());
+    }
+    InternalSchema fileSchema;
+    long maxVersionId = historicalSchemas.keySet().stream().max(Long::compareTo).orElse(0L);
+    if (maxVersionId >= currentInstantTime) {
+      fileSchema = InternalSchemaUtils.searchSchema(currentInstantTime, historicalSchemas);
+    } else {
+      fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(currentInstantTime, hoodieTableMetaClient);
+      historicalSchemas.put(currentInstantTime, fileSchema);
+    }
     InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false).mergeSchema();
     Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, readerSchema.getFullName());
 
-    return Option.of((record) -> rewriteRecordWithNewSchema(record, mergedAvroSchema, Collections.emptyMap()));
+    return Option.of((record) -> rewriteRecordWithNewSchema(record, mergedAvroSchema, InternalSchemaUtils.collectRenameCols(fileSchema, internalSchema)));
   }
 
   /**

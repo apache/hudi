@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -85,9 +86,12 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
 
       // try to load internalSchema to support schema Evolution
       HoodieWriteConfig configCopy = config;
-      Pair<Option<String>, Option<String>> schemaPair = InternalSchemaCache
-          .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
-      if (schemaPair.getLeft().isPresent() && schemaPair.getRight().isPresent()) {
+      boolean schemaEvolutionEnable = new TableSchemaResolver(table.getMetaClient()).getTableInternalSchemaFromCommitMetadata().isPresent();
+      Pair<Option<String>, Option<String>> schemaPair = Pair.of(Option.empty(), Option.empty());
+      if (schemaEvolutionEnable) {
+        schemaPair = InternalSchemaCache.getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
+      }
+      if (schemaEvolutionEnable && schemaPair.getLeft().isPresent() && schemaPair.getRight().isPresent()) {
         // should not influence the original config, just copy it
         configCopy = HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build();
         configCopy.setInternalSchemaString(schemaPair.getLeft().get());
@@ -105,7 +109,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
         metadata.addWriteStat(stat.getPartitionPath(), stat);
       }
       metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
-      if (schemaPair.getLeft().isPresent()) {
+      if (schemaEvolutionEnable) {
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
         metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
       }

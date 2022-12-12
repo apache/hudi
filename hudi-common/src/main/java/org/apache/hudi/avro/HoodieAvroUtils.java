@@ -809,12 +809,13 @@ public class HoodieAvroUtils {
           Schema.Field field = fields.get(i);
           String fieldName = field.name();
           fieldNames.push(fieldName);
-          if (oldSchema.getField(field.name()) != null && !renameCols.containsKey(field.name())) {
+          // check rename
+          String fieldNameFromOldSchema = renameCols.isEmpty() ? "" : renameCols.getOrDefault(createFullName(fieldNames), "");
+
+          if (oldSchema.getField(field.name()) != null && fieldNameFromOldSchema.isEmpty()) {
             Schema.Field oldField = oldSchema.getField(field.name());
             newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
           } else {
-            String fieldFullName = createFullName(fieldNames);
-            String fieldNameFromOldSchema = renameCols.getOrDefault(fieldFullName, "");
             // deal with rename
             if (oldSchema.getField(fieldNameFromOldSchema) != null) {
               // find rename
