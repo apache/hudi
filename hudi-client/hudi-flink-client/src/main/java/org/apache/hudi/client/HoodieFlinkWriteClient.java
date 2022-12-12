@@ -286,7 +286,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       // the schema expects to be immutable for SQL jobs but may be not for non-SQL
       // jobs.
       this.metadataWriter.initTableMetadata();
-      this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
+      this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));
     } finally {
       this.txnManager.getLockManager().unlock();
     }

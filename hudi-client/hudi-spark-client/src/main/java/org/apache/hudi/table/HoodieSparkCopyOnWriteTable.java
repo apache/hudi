@@ -104,11 +104,6 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public boolean isTableServiceAction(String actionType) {
-    return !actionType.equals(HoodieTimeline.COMMIT_ACTION);
-  }
-
-  @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsert(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records) {
     return new SparkUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, records).execute();
   }

@@ -58,7 +58,7 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    */
   protected final void writeTableMetadata(HoodieCommitMetadata metadata, String actionType) {
     table.getMetadataWriter(instantTime).ifPresent(w -> w.update(
-        metadata, instantTime, table.isTableServiceAction(actionType)));
+        metadata, instantTime, table.isTableServiceAction(actionType, instantTime)));
   }
 
   /**
