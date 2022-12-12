@@ -57,15 +57,15 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSparkEngineContext.class);
   private final JavaSparkContext javaSparkContext;
-  private SQLContext sqlContext;
+  private final SQLContext sqlContext;
 
   public HoodieSparkEngineContext(JavaSparkContext jsc) {
-    super(new SerializableConfiguration(jsc.hadoopConfiguration()), new SparkTaskContextSupplier());
-    this.javaSparkContext = jsc;
-    this.sqlContext = SQLContext.getOrCreate(jsc.sc());
+    this(jsc, SQLContext.getOrCreate(jsc.sc()));
   }
 
-  public void setSqlContext(SQLContext sqlContext) {
+  public HoodieSparkEngineContext(JavaSparkContext jsc, SQLContext sqlContext) {
+    super(new SerializableConfiguration(jsc.hadoopConfiguration()), new SparkTaskContextSupplier());
+    this.javaSparkContext = jsc;
     this.sqlContext = sqlContext;
   }
 

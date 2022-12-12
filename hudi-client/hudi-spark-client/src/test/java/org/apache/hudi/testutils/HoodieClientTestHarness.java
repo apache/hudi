@@ -200,7 +200,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     jsc.setLogLevel("ERROR");
 
     hadoopConf = jsc.hadoopConfiguration();
-    context = new HoodieSparkEngineContext(jsc);
 
     sparkSession = SparkSession.builder()
         .withExtensions(JFunction.toScala(sparkSessionExtensions -> {
@@ -209,7 +208,9 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
         }))
         .config(jsc.getConf())
         .getOrCreate();
+
     sqlContext = new SQLContext(sparkSession);
+    context = new HoodieSparkEngineContext(jsc, sqlContext);
   }
 
   /**
