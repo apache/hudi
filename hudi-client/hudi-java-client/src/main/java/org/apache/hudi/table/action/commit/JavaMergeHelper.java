@@ -18,7 +18,9 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -39,6 +41,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -81,10 +84,15 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
     HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
+    HoodieFileReader<GenericRecord> bootstrapFileReader = null;
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
+        Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
+        Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
+        bootstrapFileReader = HoodieFileReaderFactory.getFileReader(bootstrapFileConfig, bootstrapFilePath);
+        readerIterator = new MergingIterator<>(reader.getRecordIterator(), bootstrapFileReader.getRecordIterator(),
+            (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));
       } else {
         readerIterator = reader.getRecordIterator(readSchema);
       }
@@ -106,6 +114,9 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
       // and executor firstly and then close mergeHandle.
       if (reader != null) {
         reader.close();
+      }
+      if (bootstrapFileReader != null) {
+        bootstrapFileReader.close();
       }
       if (null != wrapper) {
         wrapper.shutdownNow();

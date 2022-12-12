@@ -177,9 +177,11 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
     clusteringOps.forEach(clusteringOp -> {
       long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new JavaTaskContextSupplier(), config);
       LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
+      Option<HoodieFileReader> baseFileReader = Option.empty();
+      HoodieMergedLogRecordScanner scanner = null;
       try {
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-        HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+        scanner = HoodieMergedLogRecordScanner.newBuilder()
             .withFileSystem(table.getMetaClient().getFs())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(clusteringOp.getDeltaFilePaths())
@@ -195,7 +197,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
             .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
             .build();
 
-        Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
+        baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
             : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
@@ -208,6 +210,13 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
       } catch (IOException e) {
         throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
             + " and " + clusteringOp.getDeltaFilePaths(), e);
+      } finally {
+        if (scanner != null) {
+          scanner.close();
+        }
+        if (baseFileReader.isPresent()) {
+          baseFileReader.get().close();
+        }
       }
     });
     return records;
@@ -219,9 +228,8 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
   private List<HoodieRecord<T>> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
     List<HoodieRecord<T>> records = new ArrayList<>();
     clusteringOps.forEach(clusteringOp -> {
-      try {
+      try (HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()))) {
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
-        HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
         Iterator<IndexedRecord> recordIterator = baseFileReader.getRecordIterator(readerSchema);
         recordIterator.forEachRemaining(record -> records.add(transform(record)));
       } catch (IOException e) {
