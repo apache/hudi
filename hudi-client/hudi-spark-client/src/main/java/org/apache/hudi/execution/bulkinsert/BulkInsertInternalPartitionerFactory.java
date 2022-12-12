@@ -30,37 +30,36 @@ import org.apache.hudi.table.HoodieTable;
  */
 public abstract class BulkInsertInternalPartitionerFactory {
 
-  public static BulkInsertPartitioner get(HoodieTable table, HoodieWriteConfig config) {
+  public static BulkInsertPartitioner get(HoodieTable table,
+                                          HoodieWriteConfig config) {
     return get(table, config, false);
   }
 
-  public static BulkInsertPartitioner get(
-      HoodieTable table, HoodieWriteConfig config, boolean enforceNumOutputPartitions) {
+  public static BulkInsertPartitioner get(HoodieTable table,
+                                          HoodieWriteConfig config,
+                                          boolean enforceNumOutputPartitions) {
     if (config.getIndexType().equals(HoodieIndex.IndexType.BUCKET)
         && config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)) {
       return new RDDConsistentBucketPartitioner(table);
     }
-    return get(config.getBulkInsertSortMode(), table.isPartitioned(), enforceNumOutputPartitions);
-  }
-
-  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode, boolean isTablePartitioned) {
-    return get(sortMode, isTablePartitioned, false);
+    return get(config.getBulkInsertSortMode(), table.isPartitioned(), enforceNumOutputPartitions, config.populateMetaFields());
   }
 
   public static BulkInsertPartitioner get(BulkInsertSortMode sortMode,
                                           boolean isTablePartitioned,
-                                          boolean enforceNumOutputPartitions) {
+                                          boolean enforceNumOutputPartitions,
+                                          boolean populateMetaFields) {
     switch (sortMode) {
       case NONE:
         return new NonSortPartitioner(enforceNumOutputPartitions);
       case GLOBAL_SORT:
-        return new GlobalSortPartitioner();
+        return new GlobalSortPartitioner(populateMetaFields);
       case PARTITION_SORT:
-        return new RDDPartitionSortPartitioner();
+        return new RDDPartitionSortPartitioner(populateMetaFields);
       case PARTITION_PATH_REPARTITION:
-        return new PartitionPathRepartitionPartitioner(isTablePartitioned);
+        return new PartitionPathRepartitionPartitioner(isTablePartitioned, populateMetaFields);
       case PARTITION_PATH_REPARTITION_AND_SORT:
-        return new PartitionPathRepartitionAndSortPartitioner(isTablePartitioned);
+        return new PartitionPathRepartitionAndSortPartitioner(isTablePartitioned, populateMetaFields);
       default:
         throw new HoodieException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }

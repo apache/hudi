@@ -30,6 +30,8 @@ import java.util.List;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * A built-in partitioner that does local sorting for each RDD partition
  * after coalesce for bulk insert operation, corresponding to the
@@ -40,9 +42,16 @@ import scala.Tuple2;
 public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
+  private final boolean populateMetaFields;
+
+  public RDDPartitionSortPartitioner(boolean populateMetaFields) {
+    this.populateMetaFields = populateMetaFields;
+  }
+
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
+    checkState(populateMetaFields, "Meta fields are disabled!");
     return records.coalesce(outputSparkPartitions)
         .mapToPair(record ->
             new Tuple2<>(

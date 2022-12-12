@@ -30,23 +30,26 @@ import org.apache.spark.sql.Row;
 public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
   public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode,
-                                                        boolean isTablePartitioned) {
-    return get(sortMode, isTablePartitioned, false);
+                                                        boolean isTablePartitioned,
+                                                        boolean populateMetaFields) {
+    return get(sortMode, isTablePartitioned, false, populateMetaFields);
   }
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(
-      BulkInsertSortMode sortMode, boolean isTablePartitioned, boolean enforceNumOutputPartitions) {
+  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode,
+                                                        boolean isTablePartitioned,
+                                                        boolean enforceNumOutputPartitions,
+                                                        boolean populateMetaFields) {
     switch (sortMode) {
       case NONE:
         return new NonSortPartitionerWithRows(enforceNumOutputPartitions);
       case GLOBAL_SORT:
-        return new GlobalSortPartitionerWithRows();
+        return new GlobalSortPartitionerWithRows(populateMetaFields);
       case PARTITION_SORT:
-        return new PartitionSortPartitionerWithRows();
+        return new PartitionSortPartitionerWithRows(populateMetaFields);
       case PARTITION_PATH_REPARTITION:
-        return new PartitionPathRepartitionPartitionerWithRows(isTablePartitioned);
+        return new PartitionPathRepartitionPartitionerWithRows(isTablePartitioned, populateMetaFields);
       case PARTITION_PATH_REPARTITION_AND_SORT:
-        return new PartitionPathRepartitionAndSortPartitionerWithRows(isTablePartitioned);
+        return new PartitionPathRepartitionAndSortPartitionerWithRows(isTablePartitioned, populateMetaFields);
       default:
         throw new UnsupportedOperationException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }

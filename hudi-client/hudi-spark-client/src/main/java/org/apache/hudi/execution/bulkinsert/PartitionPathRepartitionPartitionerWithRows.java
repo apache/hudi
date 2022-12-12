@@ -26,6 +26,8 @@ import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * A built-in partitioner that does the following for input rows for bulk insert operation
  * <p>
@@ -40,13 +42,16 @@ import org.apache.spark.sql.Row;
 public class PartitionPathRepartitionPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   private final boolean isTablePartitioned;
+  private final boolean populateMetaFields;
 
-  public PartitionPathRepartitionPartitionerWithRows(boolean isTablePartitioned) {
+  public PartitionPathRepartitionPartitionerWithRows(boolean isTablePartitioned, boolean populateMetaFields) {
     this.isTablePartitioned = isTablePartitioned;
+    this.populateMetaFields = populateMetaFields;
   }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    checkState(populateMetaFields, "Meta fields are disabled!");
     if (isTablePartitioned) {
       return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
     }

@@ -25,13 +25,22 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.functions;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * A built-in partitioner that does global sorting for the input Rows across partitions after repartition for bulk insert operation, corresponding to the {@code BulkInsertSortMode.GLOBAL_SORT} mode.
  */
 public class GlobalSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
+  private final boolean populateMetaFields;
+
+  public GlobalSortPartitionerWithRows(boolean populateMetaFields) {
+    this.populateMetaFields = populateMetaFields;
+  }
+
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    checkState(populateMetaFields, "Meta fields are disabled!");
     // Now, sort the records and line them up nicely for loading.
     // Let's use "partitionPath + key" as the sort key.
     return rows.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))

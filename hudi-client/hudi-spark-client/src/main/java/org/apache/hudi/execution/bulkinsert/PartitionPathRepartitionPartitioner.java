@@ -27,6 +27,8 @@ import org.apache.spark.api.java.JavaRDD;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * A built-in partitioner that does the following for input records for bulk insert operation
  * <p>
@@ -44,14 +46,17 @@ public class PartitionPathRepartitionPartitioner<T extends HoodieRecordPayload>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean isTablePartitioned;
+  private final boolean populateMetaFields;
 
-  public PartitionPathRepartitionPartitioner(boolean isTablePartitioned) {
+  public PartitionPathRepartitionPartitioner(boolean isTablePartitioned, boolean populateMetaFields) {
     this.isTablePartitioned = isTablePartitioned;
+    this.populateMetaFields = populateMetaFields;
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
+    checkState(populateMetaFields, "Meta fields are disabled!");
     if (isTablePartitioned) {
       PartitionPathRDDPartitioner partitioner = new PartitionPathRDDPartitioner(
           (partitionPath) -> (String) partitionPath, outputSparkPartitions);

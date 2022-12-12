@@ -24,6 +24,8 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * A built-in partitioner that does global sorting for the input records across partitions
  * after repartition for bulk insert operation, corresponding to the
@@ -34,9 +36,16 @@ import org.apache.spark.api.java.JavaRDD;
 public class GlobalSortPartitioner<T extends HoodieRecordPayload>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
+  private final boolean populateMetaFields;
+
+  public GlobalSortPartitioner(boolean populateMetaFields) {
+    this.populateMetaFields = populateMetaFields;
+  }
+
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
+    checkState(populateMetaFields, "Meta fields are disabled!");
     // Now, sort the records and line them up nicely for loading.
     return records.sortBy(record -> {
       // Let's use "partitionPath + key" as the sort key. Spark, will ensure

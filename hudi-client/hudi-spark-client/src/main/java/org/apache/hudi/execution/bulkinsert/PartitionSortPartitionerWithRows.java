@@ -24,13 +24,22 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * A built-in partitioner that does local sorting for each spark partitions after coalesce for bulk insert operation, corresponding to the {@code BulkInsertSortMode.PARTITION_SORT} mode.
  */
 public class PartitionSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
+  private final boolean populateMetaFields;
+
+  public PartitionSortPartitionerWithRows(boolean populateMetaFields) {
+    this.populateMetaFields = populateMetaFields;
+  }
+
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    checkState(populateMetaFields, "Meta fields are disabled!");
     return rows.coalesce(outputSparkPartitions).sortWithinPartitions(HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
