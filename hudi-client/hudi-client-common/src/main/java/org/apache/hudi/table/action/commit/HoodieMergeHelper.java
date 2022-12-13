@@ -18,10 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.client.utils.MergingIterator;
-
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -50,7 +46,6 @@ import org.apache.hudi.util.QueueBasedExecutorFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -88,8 +83,9 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
     Configuration hadoopConf = new Configuration(table.getHadoopConf());
+    HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
     HoodieFileReader baseFileReader = HoodieFileReaderFactory
-        .getReaderFactory(table.getConfig().getRecordMerger().getRecordType())
+        .getReaderFactory(recordType)
         .getFileReader(hadoopConf, mergeHandle.getOldFilePath());
     HoodieFileReader bootstrapFileReader = null;
 
@@ -125,11 +121,12 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
         Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
-        bootstrapFileReader = HoodieFileReaderFactory.getFileReader(bootstrapFileConfig, bootstrapFilePath);
-        recordIterator = new MergingIterator<>(
-            baseFileRecordIterator,
-            bootstrapFileReader.getRecordIterator(),
-            (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));      } else if (schemaEvolutionTransformerOpt.isPresent()) {
+        bootstrapFileReader =
+            HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, bootstrapFilePath);
+        recordIterator = new MergingIterator(baseFileRecordIterator, bootstrapFileReader.getRecordIterator(),
+            (left, right) -> left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
+        recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
+      } else if (schemaEvolutionTransformerOpt.isPresent()) {
         recordIterator = new MappingIterator<>(baseFileRecordIterator,
             schemaEvolutionTransformerOpt.get().getLeft().apply(isPureProjection ? writerSchema : readerSchema));
         recordSchema = schemaEvolutionTransformerOpt.get().getRight();
