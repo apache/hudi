@@ -20,13 +20,27 @@ package org.apache.spark.sql
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.codegen.{GenerateMutableProjection, GenerateUnsafeProjection}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Like, Literal, MutableProjection, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, AttributeSet, Expression, Like, Literal, MutableProjection, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{DataType, StructType}
-import scala.annotation.tailrec
 
 trait HoodieCatalystExpressionUtils {
+
+  /**
+   * Returns a filter that its reference is a subset of `outputSet` and it contains the maximum
+   * constraints from `condition`. This is used for predicate push-down
+   * When there is no such filter, `None` is returned.
+   */
+  def extractPredicatesWithinOutputSet(condition: Expression,
+                                       outputSet: AttributeSet): Option[Expression]
+
+  /**
+   * The attribute name may differ from the one in the schema if the query analyzer
+   * is case insensitive. We should change attribute names to match the ones in the schema,
+   * so we do not need to worry about case sensitivity anymore
+   */
+  def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression]
 
   /**
    * Matches an expression iff

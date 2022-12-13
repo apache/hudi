@@ -26,8 +26,8 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.FilterEstimation
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LeafNode, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.execution.datasources.{DataSourceStrategy, HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.hudi.analysis.HoodiePruneFileSourcePartitions.{HoodieRelationMatcher, getPartitionFiltersAndDataFilters, rebuildPhysicalOperation}
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.hudi.analysis.HoodiePruneFileSourcePartitions.{HoodieRelationMatcher, exprUtils, getPartitionFiltersAndDataFilters, rebuildPhysicalOperation}
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
 
@@ -44,7 +44,7 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
       lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _)) if shouldHandle(lr, fileIndex, filters) =>
 
       val deterministicFilters = filters.filter(f => f.deterministic && !SubqueryExpression.hasSubquery(f))
-      val normalizedFilters = DataSourceStrategy.normalizeExprs(deterministicFilters, lr.output)
+      val normalizedFilters = exprUtils.normalizeExprs(deterministicFilters, lr.output)
 
       val (partitionKeyFilters, _) =
         getPartitionFiltersAndDataFilters(fileIndex.partitionSchema, normalizedFilters)
@@ -87,6 +87,8 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
 
 private object HoodiePruneFileSourcePartitions extends PredicateHelper {
 
+  private val exprUtils = sparkAdapter.getCatalystExpressionUtils
+
   private object HoodieRelationMatcher {
     def unapply(relation: BaseRelation): Option[HoodieFileIndex] = relation match {
       case HadoopFsRelation(fileIndex: HoodieFileIndex, _, _, _, _, _) => Some(fileIndex)
@@ -120,7 +122,7 @@ private object HoodiePruneFileSourcePartitions extends PredicateHelper {
       f.references.subsetOf(partitionSet)
     )
     val extraPartitionFilter =
-      dataFilters.flatMap(extractPredicatesWithinOutputSet(_, partitionSet))
+      dataFilters.flatMap(exprUtils.extractPredicatesWithinOutputSet(_, partitionSet))
     (ExpressionSet(partitionFilters ++ extraPartitionFilter).toSeq, dataFilters)
   }
 
