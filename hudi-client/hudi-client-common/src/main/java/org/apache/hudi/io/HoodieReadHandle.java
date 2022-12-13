@@ -66,4 +66,9 @@ public abstract class HoodieReadHandle<T extends HoodieRecordPayload, I, K, O> e
     return HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(),
         new Path(getLatestDataFile().getPath()));
   }
+
+  protected HoodieFileReader createNewFileReader(HoodieBaseFile hoodieBaseFile) throws IOException {
+    return HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(),
+            new Path(hoodieBaseFile.getPath()));
+  }
 }
