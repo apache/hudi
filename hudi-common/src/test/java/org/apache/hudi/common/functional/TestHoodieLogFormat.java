@@ -81,7 +81,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -1598,7 +1597,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     scanner.close();
   }
 
-  @ParameterizedTest
+  /*@ParameterizedTest
   @MethodSource("testArgumentsWithoutScanV2Arg")
   public void testAvroLogRecordReaderWithMixedInsertsCorruptsRollbackAndMergedLogBlock(ExternalSpillableMap.DiskMapType diskMapType,
                                                                                        boolean isCompressionEnabled,
@@ -1787,7 +1786,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Collections.sort(readKeys);
     assertEquals(expectedRecords, readKeys, "Record keys read should be exactly same.");
     scanner.close();
-  }
+  }*/
 
   /*
    * During a spark stage failure, when the stage is retried, tasks that are part of the previous attempt
