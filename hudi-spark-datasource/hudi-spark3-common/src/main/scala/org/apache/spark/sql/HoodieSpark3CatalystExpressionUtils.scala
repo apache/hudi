@@ -20,7 +20,7 @@ package org.apache.spark.sql
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, Predicate, PredicateHelper}
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
 
-private trait HoodieSpark3CatalystExpressionUtils extends HoodieCatalystExpressionUtils
+trait HoodieSpark3CatalystExpressionUtils extends HoodieCatalystExpressionUtils
   with PredicateHelper {
 
   override def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression] =
