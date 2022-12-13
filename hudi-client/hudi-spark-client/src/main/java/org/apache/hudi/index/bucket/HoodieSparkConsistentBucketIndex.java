@@ -105,7 +105,8 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
     }
 
     HoodieClusteringPlan plan = instantPlanPair.get().getRight();
-    HoodieJavaRDD.getJavaRDD(context.parallelize(plan.getInputGroups().stream().map(HoodieClusteringGroup::getExtraMetadata).collect(Collectors.toList())))
+    List<Map<String, String>> planList = plan.getInputGroups().stream().map(HoodieClusteringGroup::getExtraMetadata).collect(Collectors.toList());
+    HoodieJavaRDD.getJavaRDD(context.parallelize(planList, Math.min(planList.size(), config.getMetadataInsertParallelism())))
         .mapToPair(m -> new Tuple2<>(m.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_PARTITION_KEY), m)
     ).groupByKey().foreach((input) -> {
       // Process each partition

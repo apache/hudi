@@ -171,7 +171,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
             metadataMetaClient, metadataFileSystemView, partitionName);
 
-    return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) : engineContext.parallelize(partitionFileSlices))
+    return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) : engineContext.parallelize(partitionFileSlices, Math.min(partitionFileSlices.size(),
+        metadataConfig.getFileListingParallelism())))
         .flatMap((SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice -> {
           // NOTE: Since this will be executed by executors, we can't access previously cached
           //       readers, and therefore have to always open new ones

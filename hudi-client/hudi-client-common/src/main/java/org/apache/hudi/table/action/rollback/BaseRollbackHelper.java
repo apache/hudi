@@ -176,7 +176,7 @@ public class BaseRollbackHelper implements Serializable {
                     .build()))
             .stream();
       }
-    }, numPartitions);
+    },  Math.min(1, Math.max(numPartitions, config.getRollbackParallelism())));
   }
 
   /**

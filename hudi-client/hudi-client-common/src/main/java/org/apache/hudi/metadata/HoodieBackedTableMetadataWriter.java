@@ -1109,12 +1109,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   private HoodieData<HoodieRecord> getFilesPartitionRecords(String createInstantTime, List<DirectoryInfo> partitionInfoList, HoodieRecord allPartitionRecord) {
+    //only 1 record so parallelism of  1
     HoodieData<HoodieRecord> filesPartitionRecords = engineContext.parallelize(Arrays.asList(allPartitionRecord), 1);
     if (partitionInfoList.isEmpty()) {
       return filesPartitionRecords;
     }
 
-    HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
+    HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList,Math.min(dataWriteConfig.getFileListingParallelism(), partitionInfoList.size())).map(partitionInfo -> {
       Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
       // filter for files that are part of the completed commits
       Map<String, Long> validFileNameToSizeMap = fileNameToSizeMap.entrySet().stream().filter(fileSizePair -> {

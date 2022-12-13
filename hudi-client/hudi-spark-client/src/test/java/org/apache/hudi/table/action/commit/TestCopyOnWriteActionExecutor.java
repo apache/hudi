@@ -334,7 +334,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     // Insert new records
     BaseSparkCommitActionExecutor actionExecutor = new SparkInsertCommitActionExecutor(context, config, table,
-        firstCommitTime, context.parallelize(records));
+        firstCommitTime, context.parallelize(records, 4));
     List<WriteStatus> writeStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator());
     }).flatMap(Transformations::flattenAsIterator).collect();

@@ -56,7 +56,8 @@ public class JavaInsertOverwriteTableCommitActionExecutor<T extends HoodieRecord
 
     if (partitionPaths != null && partitionPaths.size() > 0) {
       partitionToExistingFileIds = context.mapToPair(partitionPaths,
-          partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)), 1);
+          partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)),
+          Math.min(partitionPaths.size(), config.getFileListingParallelism()));
     }
     return partitionToExistingFileIds;
   }

@@ -141,7 +141,7 @@ public class HoodieSimpleIndex
     List<String> affectedPartitionPathList =
         hoodieKeys.map(HoodieKey::getPartitionPath).distinct().collectAsList();
     List<Pair<String, HoodieBaseFile>> latestBaseFiles =
-        getLatestBaseFilesForAllPartitions(affectedPartitionPathList, context, hoodieTable);
+        getLatestBaseFilesForAllPartitions(affectedPartitionPathList, context, hoodieTable, config.getSimpleIndexParallelism());
     return fetchRecordLocations(context, hoodieTable, parallelism, latestBaseFiles);
   }
 

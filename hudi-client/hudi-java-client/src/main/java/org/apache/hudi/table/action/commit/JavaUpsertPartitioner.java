@@ -232,7 +232,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
       partitionSmallFilesMap = context.mapToPair(partitionPaths,
-          partitionPath -> new ImmutablePair<>(partitionPath, getSmallFiles(partitionPath)), 0);
+          partitionPath -> new ImmutablePair<>(partitionPath, getSmallFiles(partitionPath)), Math.min(partitionPaths.size(), config.getFileListingParallelism()));
     }
     return partitionSmallFilesMap;
   }

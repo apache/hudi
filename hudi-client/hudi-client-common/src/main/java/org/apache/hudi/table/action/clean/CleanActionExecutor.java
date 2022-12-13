@@ -126,9 +126,9 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
    * @throws IllegalArgumentException if unknown cleaning policy is provided
    */
   List<HoodieCleanStat> clean(HoodieEngineContext context, HoodieCleanerPlan cleanerPlan) {
-    int cleanerParallelism = Math.min(
+    int cleanerParallelism = Math.max(Math.min(
         (int) (cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).count()),
-        config.getCleanerParallelism());
+        config.getCleanerParallelism()), 1);
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
     context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of partitions: " + config.getTableName());

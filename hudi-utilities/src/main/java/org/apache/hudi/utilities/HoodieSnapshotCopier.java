@@ -72,13 +72,17 @@ public class HoodieSnapshotCopier implements Serializable {
     @Parameter(names = {"--date-partitioned", "-dp"}, description = "Can we assume date partitioning?")
     boolean shouldAssumeDatePartitioning = false;
 
+    @Parameter(names = {"--parallelism", "-pl"}, description = "The parallelism for file copying")
+    int parallelism = 0;
+
     @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
     public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
   }
 
   public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir,
                        final boolean shouldAssumeDatePartitioning,
-                       final boolean useFileListingFromMetadata) throws IOException {
+                       final boolean useFileListingFromMetadata,
+                       final int parallelism) throws IOException {
     FileSystem fs = FSUtils.getFs(baseDir, jsc.hadoopConfiguration());
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
     final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir).build();
@@ -124,7 +128,7 @@ public class HoodieSnapshotCopier implements Serializable {
         }
 
         return filePaths.stream();
-      }, partitions.size());
+      }, Math.min(partitions.size(), parallelism));
 
       context.foreach(filesToCopy, tuple -> {
         String partition = tuple._1();
@@ -137,7 +141,7 @@ public class HoodieSnapshotCopier implements Serializable {
         }
         FileUtil.copy(ifs, sourceFilePath, ifs, new Path(toPartitionPath, sourceFilePath.getName()), false,
             ifs.getConf());
-      }, filesToCopy.size());
+      }, Math.min(filesToCopy.size(), parallelism));
       
       // Also copy the .commit files
       LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
@@ -189,8 +193,9 @@ public class HoodieSnapshotCopier implements Serializable {
     LOG.info("Initializing spark job.");
 
     // Copy
+    int parallelism = cfg.parallelism == 0 ? jsc.defaultParallelism() : cfg.parallelism;
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc, cfg.basePath, cfg.outputPath, cfg.shouldAssumeDatePartitioning, cfg.useFileListingFromMetadata);
+    copier.snapshot(jsc, cfg.basePath, cfg.outputPath, cfg.shouldAssumeDatePartitioning, cfg.useFileListingFromMetadata, parallelism);
 
     // Stop the job
     jsc.stop();

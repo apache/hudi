@@ -68,7 +68,7 @@ public class JavaInsertOverwriteCommitActionExecutor<T extends HoodieRecordPaylo
     return context.mapToPair(
         writeResult.getWriteStatuses().stream().map(status -> status.getStat().getPartitionPath()).distinct().collect(Collectors.toList()),
         partitionPath ->
-            Pair.of(partitionPath, getAllExistingFileIds(partitionPath)), 1
+            Pair.of(partitionPath, getAllExistingFileIds(partitionPath)), config.getFileListingParallelism()
     );
   }
 

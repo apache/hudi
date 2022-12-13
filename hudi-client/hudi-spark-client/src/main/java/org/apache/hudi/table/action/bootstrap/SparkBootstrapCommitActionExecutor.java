@@ -311,7 +311,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
    */
   private Map<BootstrapMode, List<Pair<String, List<HoodieFileStatus>>>> listAndProcessSourcePartitions() throws IOException {
     List<Pair<String, List<HoodieFileStatus>>> folders = BootstrapUtils.getAllLeafFoldersWithFiles(
-            table.getMetaClient(), bootstrapSourceFileSystem, config.getBootstrapSourceBasePath(), context);
+            table.getMetaClient(), bootstrapSourceFileSystem, config.getBootstrapSourceBasePath(), context, config.getBootstrapParallelism());
 
     LOG.info("Fetching Bootstrap Schema !!");
     HoodieBootstrapSchemaProvider sourceSchemaProvider = new HoodieSparkBootstrapSchemaProvider(config);

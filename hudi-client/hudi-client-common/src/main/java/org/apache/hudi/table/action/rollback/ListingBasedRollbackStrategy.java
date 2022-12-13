@@ -180,7 +180,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               String.format("Unsupported table type: %s, during listing rollback of %s", tableType, instantToRollback));
         }
         return hoodieRollbackRequests.stream();
-      }, numPartitions);
+      }, Math.max(1, Math.min(numPartitions, config.getRollbackParallelism())));
     } catch (Exception e) {
       LOG.error("Generating rollback requests failed for " + instantToRollback.getTimestamp(), e);
       throw new HoodieRollbackException("Generating rollback requests failed for " + instantToRollback.getTimestamp(), e);

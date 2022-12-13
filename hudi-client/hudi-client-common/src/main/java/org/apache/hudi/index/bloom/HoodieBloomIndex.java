@@ -162,7 +162,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   List<Pair<String, BloomIndexFileInfo>> loadColumnRangesFromFiles(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
     // Obtain the latest data files from all the partitions.
-    List<Pair<String, Pair<String, HoodieBaseFile>>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
+    List<Pair<String, Pair<String, HoodieBaseFile>>> partitionPathFileIDList =
+        getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable, config.getBloomIndexParallelism()).stream()
         .map(pair -> Pair.of(pair.getKey(), Pair.of(pair.getValue().getFileId(), pair.getValue())))
         .collect(toList());
 
@@ -176,7 +177,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         LOG.warn("Unable to find range metadata in file :" + pf);
         return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey()));
       }
-    }, Math.max(partitionPathFileIDList.size(), 1));
+    }, Math.max(Math.min(partitionPathFileIDList.size(), config.getBloomIndexParallelism()), 1));
   }
 
   /**
@@ -190,7 +191,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   private List<Pair<String, BloomIndexFileInfo>> getFileInfoForLatestBaseFiles(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
     List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context,
-        hoodieTable).stream()
+        hoodieTable, config.getBloomIndexParallelism()).stream()
         .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
         .collect(toList());
     return partitionPathFileIDList.stream()
@@ -237,7 +238,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
       } catch (MetadataNotFoundException me) {
         throw new HoodieMetadataException("Unable to find column range metadata for partition:" + partitionName, me);
       }
-    }, Math.max(partitions.size(), 1));
+    }, Math.max(Math.min(partitions.size(), config.getBloomIndexParallelism()), 1));
   }
 
   @Override

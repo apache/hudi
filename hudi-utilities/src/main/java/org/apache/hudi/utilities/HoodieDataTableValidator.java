@@ -337,7 +337,7 @@ public class HoodieDataTableValidator implements Serializable {
           } else {
             return Stream.empty();
           }
-        }, hoodieInstants.size()).stream().collect(Collectors.toList());
+        }, Math.max(1, Math.min(hoodieInstants.size(), cfg.parallelism))).stream().collect(Collectors.toList());
 
         if (!danglingFiles.isEmpty()) {
           LOG.error("Data table validation failed due to extra files found for completed commits " + danglingFiles.size());

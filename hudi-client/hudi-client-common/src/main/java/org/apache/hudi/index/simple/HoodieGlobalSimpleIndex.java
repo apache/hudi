@@ -103,7 +103,7 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
     // Obtain the latest data files from all the partitions.
-    return getLatestBaseFilesForAllPartitions(allPartitionPaths, context, hoodieTable);
+    return getLatestBaseFilesForAllPartitions(allPartitionPaths, context, hoodieTable, config.getGlobalSimpleIndexParallelism());
   }
 
   /**

@@ -64,7 +64,7 @@ public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
       HoodieTimer timer = HoodieTimer.start();
       context.setJobStatus(this.getClass().getSimpleName(), "Gather all file ids from all deleting partitions.");
       Map<String, List<String>> partitionToReplaceFileIds =
-          HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitions).distinct()
+          HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitions, Math.min(partitions.size(), config.getFileListingParallelism())).distinct()
               .mapToPair(partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
       HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
       result.setPartitionToReplaceFileIds(partitionToReplaceFileIds);

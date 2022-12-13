@@ -171,7 +171,7 @@ public class TestBootstrap extends HoodieClientTestBase {
       df.write().format("parquet").mode(SaveMode.Overwrite).save(srcPath);
     }
     String filePath = FileStatusUtils.toPath(BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(),
-            srcPath, context).stream().findAny().map(p -> p.getValue().stream().findAny())
+            srcPath, context, 3).stream().findAny().map(p -> p.getValue().stream().findAny())
             .orElse(null).get().getPath()).toString();
     HoodieParquetReader<?> parquetReader = new HoodieParquetReader<>(metaClient.getHadoopConf(), new Path(filePath));
     return parquetReader.getSchema();
@@ -266,7 +266,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     client.rollbackFailedBootstrap();
     metaClient.reloadActiveTimeline();
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
-    assertEquals(0L, BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), basePath, context)
+    assertEquals(0L, BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), basePath, context, 3)
             .stream().flatMap(f -> f.getValue().stream()).count());
 
     BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
@@ -292,7 +292,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     String updateSPath = tmpFolder.toAbsolutePath().toString() + "/data2";
     generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSPath);
     JavaRDD<HoodieRecord> updateBatch =
-        generateInputBatch(jsc, BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), updateSPath, context),
+        generateInputBatch(jsc, BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), updateSPath, context, 3),
                 schema);
     String newInstantTs = client.startCommit();
     client.upsert(updateBatch, newInstantTs);
@@ -355,7 +355,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     original.registerTempTable("original");
     if (checkNumRawFiles) {
       List<HoodieFileStatus> files = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(),
-          bootstrapBasePath, context).stream().flatMap(x -> x.getValue().stream()).collect(Collectors.toList());
+          bootstrapBasePath, context, 3).stream().flatMap(x -> x.getValue().stream()).collect(Collectors.toList());
       assertEquals(files.size() * numVersions,
           sqlContext.sql("select distinct _hoodie_file_name from bootstrapped").count());
     }

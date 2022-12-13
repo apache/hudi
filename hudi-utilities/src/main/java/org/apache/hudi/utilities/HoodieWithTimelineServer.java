@@ -61,6 +61,8 @@ public class HoodieWithTimelineServer implements Serializable {
     public Integer serverPort = 26754;
     @Parameter(names = {"--delay-secs", "-d"}, description = "Delay(sec) before client connects")
     public Integer delaySecs = 30;
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Spark parallelism")
+    public Integer parallelism = 4;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
   }
@@ -91,7 +93,7 @@ public class HoodieWithTimelineServer implements Serializable {
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     context.setJobStatus(this.getClass().getSimpleName(), "Sending requests to driver host");
-    List<String> gotMessages = context.map(messages, msg -> sendRequest(driverHost, cfg.serverPort), messages.size());
+    List<String> gotMessages = context.map(messages, msg -> sendRequest(driverHost, cfg.serverPort),  Math.min(cfg.parallelism, messages.size()));
     System.out.println("Got Messages :" + gotMessages);
     ValidationUtils.checkArgument(gotMessages.equals(messages), "Got expected reply from Server");
   }

@@ -119,7 +119,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
-        }), partitionPaths.size()).stream()
+        }), Math.max(1, Math.min(partitionPaths.size(), writeConfig.getUpsertShuffleParallelism()))).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of " + operations.size() + " compaction operations are retrieved");

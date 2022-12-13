@@ -443,7 +443,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         new HoodieMetadataValidationContext(engineContext, cfg, metaClient, false);
 
     Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
-    List<Boolean> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
+    List<Boolean> result = engineContext.parallelize(allPartitions, Math.min(cfg.parallelism, allPartitions.size())).map(partitionPath -> {
       try {
         validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
         LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));

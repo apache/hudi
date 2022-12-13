@@ -51,7 +51,7 @@ public class BootstrapUtils {
    * @throws IOException
    */
   public static List<Pair<String, List<HoodieFileStatus>>> getAllLeafFoldersWithFiles(HoodieTableMetaClient metaClient,
-      FileSystem fs, String basePathStr, HoodieEngineContext context) throws IOException {
+      FileSystem fs, String basePathStr, HoodieEngineContext context, int parallelism) throws IOException {
     final Path basePath = new Path(basePathStr);
     final String baseFileExtension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
     final Map<Integer, List<String>> levelToPartitions = new HashMap<>();
@@ -92,7 +92,7 @@ public class BootstrapUtils {
           }
         }
         return res.stream();
-      }, subDirectories.size()));
+      }, Math.min(subDirectories.size(), parallelism)));
     }
 
     result.forEach(val -> {

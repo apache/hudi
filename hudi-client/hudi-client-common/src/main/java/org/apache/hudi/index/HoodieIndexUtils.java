@@ -104,7 +104,8 @@ public class HoodieIndexUtils {
    */
   public static List<Pair<String, HoodieBaseFile>> getLatestBaseFilesForAllPartitions(final List<String> partitions,
                                                                                       final HoodieEngineContext context,
-                                                                                      final HoodieTable hoodieTable) {
+                                                                                      final HoodieTable hoodieTable,
+                                                                                      final int parallelism) {
     context.setJobStatus(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions: " + hoodieTable.getConfig().getTableName());
     return context.flatMap(partitions, partitionPath -> {
       List<Pair<String, HoodieBaseFile>> filteredFiles =
@@ -113,7 +114,7 @@ public class HoodieIndexUtils {
               .collect(toList());
 
       return filteredFiles.stream();
-    }, Math.max(partitions.size(), 1));
+    }, Math.max(Math.min(parallelism, partitions.size()), 1));
   }
 
   /**

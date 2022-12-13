@@ -93,7 +93,7 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
         List<String> latestFiles = view.getLatestBaseFilesBeforeOrOn(partitionPath, instantTime)
             .map(HoodieBaseFile::getFileName).collect(Collectors.toList());
         return new ImmutablePair<>(partitionPath, latestFiles);
-      }, null);
+      }, config.getFileListingParallelism());
       HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint
       table.getActiveTimeline().createNewInstant(

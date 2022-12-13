@@ -127,7 +127,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
 
     context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
-    return context.parallelize(operations).map(operation -> compact(
+    return context.parallelize(operations, Math.min(operations.size(), config.getUpsertShuffleParallelism())).map(operation -> compact(
         compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, taskContextSupplier, executionHelper))
         .flatMap(List::iterator);
   }

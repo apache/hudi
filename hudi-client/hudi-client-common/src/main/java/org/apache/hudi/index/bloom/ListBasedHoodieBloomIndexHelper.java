@@ -71,7 +71,8 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
 
     keyLookupResults = keyLookupResults.stream().filter(
         lr -> lr.getMatchingRecordKeys().size() > 0).collect(toList());
-    return context.parallelize(keyLookupResults).flatMap(lookupResult ->
+    return context.parallelize(keyLookupResults, Math.max(1, Math.min(config.getBloomIndexParallelism(), keyLookupResults.size())))
+        .flatMap(lookupResult ->
         lookupResult.getMatchingRecordKeys().stream()
             .map(recordKey -> new ImmutablePair<>(lookupResult, recordKey)).iterator()
     ).mapToPair(pair -> {

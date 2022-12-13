@@ -102,7 +102,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
     Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> expectedList =
         writeToParquetAndGetExpectedRecordLocations(partitionRecordsMap, testTable);
 
-    List<Tuple2<String, HoodieBaseFile>> partitionPathFileIdPairs = loadAllFilesForPartitions(new ArrayList<>(partitionRecordsMap.keySet()), context, hoodieTable);
+    List<Tuple2<String, HoodieBaseFile>> partitionPathFileIdPairs = loadAllFilesForPartitions(new ArrayList<>(partitionRecordsMap.keySet()), context, hoodieTable, 4);
 
     BaseKeyGenerator keyGenerator = (BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getPropertiesForKeyGen()));
 
@@ -157,9 +157,9 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
   }
 
   private static List<Tuple2<String, HoodieBaseFile>> loadAllFilesForPartitions(List<String> partitions, HoodieEngineContext context,
-      HoodieTable hoodieTable) {
+      HoodieTable hoodieTable, int parallelism) {
     // Obtain the latest data files from all the partitions.
-    List<Pair<String, HoodieBaseFile>> partitionPathFileIDList = HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable);
+    List<Pair<String, HoodieBaseFile>> partitionPathFileIDList = HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable, parallelism);
     return partitionPathFileIDList.stream()
         .map(pf -> new Tuple2<>(pf.getKey(), pf.getValue())).collect(toList());
   }
