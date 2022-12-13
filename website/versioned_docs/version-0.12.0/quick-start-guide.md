@@ -272,9 +272,7 @@ Spark SQL needs an explicit create table command.
 3. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
 4. `preCombineField` is required for MOR tables.
 5. When set `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`.
-6. A new Hudi table created by Spark SQL will by default
-   set `hoodie.table.keygenerator.class=org.apache.hudi.keygen.ComplexKeyGenerator` and
-   `hoodie.datasource.write.hive_style_partitioning=true`.
+6. A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`.
 :::
 
 **Create a Non-Partitioned Table**
