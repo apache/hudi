@@ -89,8 +89,7 @@ public class RowDataProjection implements Serializable {
     return values;
   }
 
-  protected @Nullable
-  Object getVal(int pos, @Nullable Object val) {
+  protected @Nullable Object getVal(int pos, @Nullable Object val) {
     return val;
   }
 }
