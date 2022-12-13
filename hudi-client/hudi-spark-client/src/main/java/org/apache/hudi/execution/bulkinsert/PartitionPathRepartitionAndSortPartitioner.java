@@ -21,11 +21,15 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
 
 import scala.Tuple2;
+
+import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_PATH_REPARTITION_AND_SORT;
 
 /**
  * A built-in partitioner that does the following for input records for bulk insert operation
@@ -45,14 +49,20 @@ public class PartitionPathRepartitionAndSortPartitioner<T extends HoodieRecordPa
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean isTablePartitioned;
+  private final boolean shouldPopulateMetaFields;
 
-  public PartitionPathRepartitionAndSortPartitioner(boolean isTablePartitioned) {
+  public PartitionPathRepartitionAndSortPartitioner(boolean isTablePartitioned, HoodieWriteConfig config) {
     this.isTablePartitioned = isTablePartitioned;
+    this.shouldPopulateMetaFields = config.populateMetaFields();
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
+    if (!shouldPopulateMetaFields) {
+      throw new HoodieException(PARTITION_PATH_REPARTITION_AND_SORT.name() + " mode requires meta-fields to be enabled");
+    }
+
     if (isTablePartitioned) {
       PartitionPathRDDPartitioner partitioner = new PartitionPathRDDPartitioner(
           (partitionPath) -> (String) partitionPath, outputSparkPartitions);

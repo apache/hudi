@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
@@ -44,7 +45,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests {@link BulkInsertPartitioner}s with Rows.
@@ -53,6 +56,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
 
   private static final Comparator<Row> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD) + "+" + o.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)));
+
   @BeforeEach
   public void setUp() throws Exception {
     initSparkContexts("TestBulkInsertInternalPartitionerForRows");
@@ -71,16 +75,21 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
     //   boolean isTablePartitioned,
     //   boolean enforceNumOutputPartitions,
     //   boolean isGloballySorted,
-    //   boolean isLocallySorted
+    //   boolean isLocallySorted,
+    //   boolean populateMetaFields
     Object[][] data = new Object[][] {
-        {BulkInsertSortMode.GLOBAL_SORT, true, true, true, true},
-        {BulkInsertSortMode.PARTITION_SORT, true, true, false, true},
-        {BulkInsertSortMode.PARTITION_PATH_REPARTITION, true, true, false, false},
-        {BulkInsertSortMode.PARTITION_PATH_REPARTITION, false, true, false, false},
-        {BulkInsertSortMode.PARTITION_PATH_REPARTITION_AND_SORT, true, true, false, false},
-        {BulkInsertSortMode.PARTITION_PATH_REPARTITION_AND_SORT, false, true, false, false},
-        {BulkInsertSortMode.NONE, true, true, false, false},
-        {BulkInsertSortMode.NONE, true, false, false, false}
+        {BulkInsertSortMode.GLOBAL_SORT, true, true, true, true, true},
+        {BulkInsertSortMode.PARTITION_SORT, true, true, false, true, true},
+        {BulkInsertSortMode.PARTITION_PATH_REPARTITION, true, true, false, false, true},
+        {BulkInsertSortMode.PARTITION_PATH_REPARTITION, false, true, false, false, true},
+        {BulkInsertSortMode.PARTITION_PATH_REPARTITION_AND_SORT, true, true, false, false, true},
+        {BulkInsertSortMode.PARTITION_PATH_REPARTITION_AND_SORT, false, true, false, false, true},
+        {BulkInsertSortMode.NONE, true, true, false, false, true},
+        {BulkInsertSortMode.NONE, true, false, false, false, true},
+        {BulkInsertSortMode.GLOBAL_SORT, true, true, true, true, false},
+        {BulkInsertSortMode.PARTITION_SORT, true, true, false, true, false},
+        {BulkInsertSortMode.PARTITION_PATH_REPARTITION, true, true, false, false, false},
+        {BulkInsertSortMode.PARTITION_PATH_REPARTITION_AND_SORT, true, true, false, false, false, false},
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -91,28 +100,37 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
                                                 boolean isTablePartitioned,
                                                 boolean enforceNumOutputPartitions,
                                                 boolean isGloballySorted,
-                                                boolean isLocallySorted)
-      throws Exception {
+                                                boolean isLocallySorted,
+                                                boolean populateMetaFields) {
     Dataset<Row> records1 = generateTestRecords();
     Dataset<Row> records2 = generateTestRecords();
+
+    HoodieWriteConfig config = HoodieWriteConfig
+        .newBuilder()
+        .withPath("/")
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withBulkInsertSortMode(sortMode.name())
+        .withPopulateMetaFields(populateMetaFields)
+        .build();
+
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerWithRowsFactory.get(
-            sortMode, isTablePartitioned, enforceNumOutputPartitions),
+        BulkInsertInternalPartitionerWithRowsFactory.get(config, isTablePartitioned, enforceNumOutputPartitions),
         records1,
         enforceNumOutputPartitions,
         isGloballySorted,
         isLocallySorted,
         generateExpectedPartitionNumRecords(records1),
-        Option.empty());
+        Option.empty(),
+        populateMetaFields);
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerWithRowsFactory.get(
-            sortMode, isTablePartitioned, enforceNumOutputPartitions),
+        BulkInsertInternalPartitionerWithRowsFactory.get(config, isTablePartitioned, enforceNumOutputPartitions),
         records2,
         enforceNumOutputPartitions,
         isGloballySorted,
         isLocallySorted,
         generateExpectedPartitionNumRecords(records2),
-        Option.empty());
+        Option.empty(),
+        populateMetaFields);
   }
 
   @Test
@@ -124,9 +142,9 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
     Comparator<Row> comparator = getCustomColumnComparator(sortColumns);
 
     testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
-        records1, true, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator));
+        records1, true, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator), true);
     testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
-        records2, true, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator));
+        records2, true, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator), true);
 
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
@@ -135,9 +153,9 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
         .build();
     testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
-        records1, true, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator));
+        records1, true, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator), true);
     testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
-        records2, true, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator));
+        records2, true, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator), true);
   }
 
   private void testBulkInsertInternalPartitioner(BulkInsertPartitioner partitioner,
@@ -146,8 +164,13 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
                                                  boolean isGloballySorted,
                                                  boolean isLocallySorted,
                                                  Map<String, Long> expectedPartitionNumRecords,
-                                                 Option<Comparator<Row>> comparator) {
+                                                 Option<Comparator<Row>> comparator,
+                                                 boolean populateMetaFields) {
     int numPartitions = 2;
+    if (!populateMetaFields) {
+      assertThrows(HoodieException.class, () -> partitioner.repartitionRecords(rows, numPartitions));
+      return;
+    }
     Dataset<Row> actualRecords = (Dataset<Row>) partitioner.repartitionRecords(rows, numPartitions);
     assertEquals(
         enforceNumOutputPartitions ? numPartitions : rows.rdd().getNumPartitions(),
@@ -198,7 +221,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
 
   private void verifyRowsAscendingOrder(List<Row> records, Option<Comparator<Row>> comparator) {
     List<Row> expectedRecords = new ArrayList<>(records);
-    Collections.sort(expectedRecords,comparator.orElse(KEY_COMPARATOR));
+    Collections.sort(expectedRecords, comparator.orElse(KEY_COMPARATOR));
     assertEquals(expectedRecords, records);
   }
 
