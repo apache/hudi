@@ -39,18 +39,6 @@ import org.apache.spark.sql.types.StructType
  */
 case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[LogicalPlan] {
 
-  private def rebuildPhysicalOperation(projects: Seq[NamedExpression],
-                                       filters: Seq[Expression],
-                                       relation: LeafNode): Project = {
-    val withFilter = if (filters.nonEmpty) {
-      val filterExpression = filters.reduceLeft(And)
-      Filter(filterExpression, relation)
-    } else {
-      relation
-    }
-    Project(projects, withFilter)
-  }
-
   override def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
     case op @ PhysicalOperation(projects, filters,
       lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _)) if shouldHandle(lr, fileIndex, filters) =>
@@ -105,6 +93,18 @@ private object HoodiePruneFileSourcePartitions extends PredicateHelper {
       case r: HoodieBaseRelation => Some(r.fileIndex)
       case _ => None
     }
+  }
+
+  private def rebuildPhysicalOperation(projects: Seq[NamedExpression],
+                                       filters: Seq[Expression],
+                                       relation: LeafNode): Project = {
+    val withFilter = if (filters.nonEmpty) {
+      val filterExpression = filters.reduceLeft(And)
+      Filter(filterExpression, relation)
+    } else {
+      relation
+    }
+    Project(projects, withFilter)
   }
 
   def getPartitionFiltersAndDataFilters(partitionSchema: StructType,
