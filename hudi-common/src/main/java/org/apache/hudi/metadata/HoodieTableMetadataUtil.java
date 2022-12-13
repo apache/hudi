@@ -987,13 +987,15 @@ public class HoodieTableMetadataUtil {
    * just before the compaction instant time. The list of file slices returned is
    * sorted in the correct order of file group name.
    *
-   * @param metaClient - Instance of {@link HoodieTableMetaClient}.
-   * @param partition  - The name of the partition whose file groups are to be loaded.
+   * @param metaClient Instance of {@link HoodieTableMetaClient}.
+   * @param fsView     Metadata table filesystem view.
+   * @param partition  The name of the partition whose file groups are to be loaded.
    * @return List of latest file slices for all file groups in a given partition.
    */
-  public static List<FileSlice> getPartitionLatestMergedFileSlices(HoodieTableMetaClient metaClient, String partition) {
+  public static List<FileSlice> getPartitionLatestMergedFileSlices(
+      HoodieTableMetaClient metaClient, HoodieTableFileSystemView fsView, String partition) {
     LOG.info("Loading latest merged file slices for metadata table partition " + partition);
-    return getPartitionFileSlices(metaClient, Option.empty(), partition, true);
+    return getPartitionFileSlices(metaClient, Option.of(fsView), partition, true);
   }
 
   /**
