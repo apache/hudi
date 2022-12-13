@@ -85,7 +85,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
     Seq("eager", "lazy").foreach { listingModeOverride =>
       // We need to refresh the table to make sure Spark is re-processing the query every time
       // instead of serving already cached value
-      spark.sessionState.catalog.invalidateCachedTable(TableIdentifier(tableName))
+      spark.sessionState.catalog.invalidateAllCachedTables()
 
       spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode.override=$listingModeOverride")
 
