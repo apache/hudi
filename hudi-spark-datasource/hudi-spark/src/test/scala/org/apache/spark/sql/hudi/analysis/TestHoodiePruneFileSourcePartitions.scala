@@ -21,8 +21,14 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.ScalaAssertionSupport
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, IsNotNull, Literal}
+import org.apache.spark.sql.catalyst.plans.logical.Filter
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
+import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
+import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.{Assertions, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -49,7 +55,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
 
   @ParameterizedTest
   @CsvSource(value = Array("cow", "mor"))
-  def testPartitionPredicatesPushDown(tableType: String): Unit = {
+  def testPartitionFiltersPushDown(tableType: String): Unit = {
     spark.sql(
       s"""
          |CREATE TABLE $tableName (
@@ -77,51 +83,65 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
          """.stripMargin)
 
     Seq("eager", "lazy").foreach { listingModeOverride =>
+      // We need to refresh the table to make sure Spark is re-processing the query every time
+      // instead of serving already cached value
+      spark.sessionState.catalog.invalidateCachedTable(TableIdentifier(tableName))
 
       spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode.override=$listingModeOverride")
 
-      val explainCostPlanString = spark.sql(s"EXPLAIN COST SELECT * FROM $tableName WHERE partition = '2021-01-05'")
-        .collectAsList()
-        .get(0)
-        .getString(0)
+      val df = spark.sql(s"SELECT * FROM $tableName WHERE partition = '2021-01-05'")
+      val optimizedPlan = df.queryExecution.optimizedPlan
 
-      listingModeOverride match {
-        // Case #1: Eager listing (fallback mode).
-        //          Whole table will be _listed_ before partition-pruning would be applied. This is default
-        //          Spark behavior that naturally occurs, since predicate push-down for tables w/o appropriate catalog
-        //          support (for partition-pruning) will only occur during execution phase, while file-listing
-        //          actually happens during analysis stage
-        case "eager" =>
-          val expectedOptimizedLogicalPlan =
-            """== Optimized Logical Plan ==
-              |Filter (isnotnull(partition#74) AND (partition#74 = 2021-01-05)), Statistics(sizeInBytes=1275.3 KiB)
-              |+- Relation default.hoodie_test[_hoodie_commit_time#65,_hoodie_commit_seqno#66,_hoodie_record_key#67,_hoodie_partition_path#68,_hoodie_file_name#69,id#70,name#71,price#72,ts#73L,partition#74] parquet, Statistics(sizeInBytes=1275.3 KiB)
-              |""".stripMargin.trim
+      optimizedPlan match {
+        case f @ Filter(And(IsNotNull(_), EqualTo(attr: AttributeReference, Literal(value, StringType))), lr: LogicalRelation)
+          if attr.name == "partition" && value.toString.equals("2021-01-05") =>
 
-          Assertions.assertTrue(explainCostPlanString.contains(expectedOptimizedLogicalPlan))
+          listingModeOverride match {
+            // Case #1: Eager listing (fallback mode).
+            //          Whole table will be _listed_ before partition-pruning would be applied. This is default
+            //          Spark behavior that naturally occurs, since predicate push-down for tables w/o appropriate catalog
+            //          support (for partition-pruning) will only occur during execution phase, while file-listing
+            //          actually happens during analysis stage
+            case "eager" =>
+              assertEquals(1275, f.stats.sizeInBytes.longValue() / 1024)
+              assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
 
-        // Case #2: Lazy listing (default mode).
-        //          In case of lazy listing mode, Hudi will only list partitions matching partition-predicates that are
-        //          eagerly pushed down (w/ help of [[HoodiePruneFileSourcePartitions]]) avoiding the necessity to
-        //          list the whole table
-        case "lazy" =>
-          val expectedOptimizedLogicalPlan =
-            """== Optimized Logical Plan ==
-              |Filter (isnotnull(partition#64) AND (partition#64 = 2021-01-05)), Statistics(sizeInBytes=425.1 KiB)
-              |+- Relation default.hoodie_test[_hoodie_commit_time#55,_hoodie_commit_seqno#56,_hoodie_record_key#57,_hoodie_partition_path#58,_hoodie_file_name#59,id#60,name#61,price#62,ts#63L,partition#64] parquet, Statistics(sizeInBytes=425.1 KiB)
-              |""".stripMargin.trim
+            // Case #2: Lazy listing (default mode).
+            //          In case of lazy listing mode, Hudi will only list partitions matching partition-predicates that are
+            //          eagerly pushed down (w/ help of [[HoodiePruneFileSourcePartitions]]) avoiding the necessity to
+            //          list the whole table
+            case "lazy" =>
+              assertEquals(425, f.stats.sizeInBytes.longValue() / 1024)
+              assertEquals(425, lr.stats.sizeInBytes.longValue() / 1024)
 
-          Assertions.assertTrue(explainCostPlanString.contains(expectedOptimizedLogicalPlan))
+            case _ => throw new UnsupportedOperationException()
+          }
 
-        case _ => throw new UnsupportedOperationException()
+          val executionPlan = df.queryExecution.executedPlan
+          val expectedPhysicalPlanPartitionFiltersClause = tableType match {
+            case "cow" => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
+            case "mor" => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
+          }
+
+          Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))
+
+        case _ =>
+          val failureHint =
+            s"""Expected to see plan like below:
+               |```
+               |== Optimized Logical Plan ==
+               |Filter (isnotnull(partition#74) AND (partition#74 = 2021-01-05)), Statistics(sizeInBytes=...)
+               |+- Relation default.hoodie_test[_hoodie_commit_time#65,_hoodie_commit_seqno#66,_hoodie_record_key#67,_hoodie_partition_path#68,_hoodie_file_name#69,id#70,name#71,price#72,ts#73L,partition#74] parquet, Statistics(sizeInBytes=...)
+               |```
+               |
+               |Instead got
+               |```
+               |$optimizedPlan
+               |```
+               |""".stripMargin.trim
+
+          fail(failureHint)
       }
-
-      val expectedPhysicalPlanPartitionFiltersClause = listingModeOverride match {
-        case "eager" => "PartitionFilters: [isnotnull(partition#74), (partition#74 = 2021-01-05)]"
-        case "lazy" => "PartitionFilters: [isnotnull(partition#64), (partition#64 = 2021-01-05)]"
-      }
-
-      Assertions.assertTrue(explainCostPlanString.contains(expectedPhysicalPlanPartitionFiltersClause))
     }
   }
 
