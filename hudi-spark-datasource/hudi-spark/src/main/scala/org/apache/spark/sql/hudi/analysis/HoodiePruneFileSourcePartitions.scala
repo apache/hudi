@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.FilterEstimat
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LeafNode, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{DataSourceStrategy, HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.hudi.analysis.HoodiePruneFileSourcePartitions.{HoodieRelationMatcher, getPartitionFiltersAndDataFilters}
+import org.apache.spark.sql.hudi.analysis.HoodiePruneFileSourcePartitions.{HoodieRelationMatcher, getPartitionFiltersAndDataFilters, rebuildPhysicalOperation}
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
 
@@ -93,7 +93,7 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
   private def shouldHandle(lr: LogicalRelation, fileIndex: HoodieFileIndex, filters: Seq[Expression]) = {
     sparkAdapter.isHoodieTable(lr, spark) && filters.nonEmpty && fileIndex.partitionSchema.nonEmpty &&
       // NOTE: We should only push-down the filters if [[HoodieFileIndex]] caches are empty
-      !fileIndex.areAllFileSlicesCached()
+      !fileIndex.prunedFor(filters)
   }
 }
 

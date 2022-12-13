@@ -41,6 +41,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.text.SimpleDateFormat
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
@@ -84,6 +85,12 @@ case class HoodieFileIndex(spark: SparkSession,
   )
     with FileIndex {
 
+  @transient private lazy val prunedPartitionPredicatesCache = mutable.HashSet[Seq[Expression]]()
+
+  /**
+   * NOTE: [[ColumnStatsIndexSupport]] is a transient state, since it's only relevant while logical plan
+   *       is handled by the Spark's driver
+   */
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
@@ -163,6 +170,8 @@ case class HoodieFileIndex(spark: SparkSession,
     logInfo(s"Total base files: $totalFileSize; " +
       s"candidate files after data skipping: $candidateFileSize; " +
       s"skipping percentage $skippingRatio")
+
+    prunedPartitionPredicatesCache += partitionFilters
 
     if (shouldReadAsPartitionedTable()) {
       listedPartitions
@@ -253,6 +262,9 @@ case class HoodieFileIndex(spark: SparkSession,
     allFiles.map(_.getPath.toString).toArray
 
   override def sizeInBytes: Long = getTotalCachedFilesSize
+
+  def prunedFor(filters: Seq[Expression]): Boolean =
+    prunedPartitionPredicatesCache.contains(filters)
 
   private def isDataSkippingEnabled: Boolean = getConfigValue(options, spark.sessionState.conf,
     DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false").toBoolean
