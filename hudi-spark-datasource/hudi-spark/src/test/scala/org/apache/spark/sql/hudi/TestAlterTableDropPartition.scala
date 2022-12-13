@@ -19,10 +19,13 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.util.PartitionPathEncodeUtils
+import org.apache.hudi.common.model.HoodieCommitMetadata
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.spark.sql.SaveMode
+import org.junit.jupiter.api.Assertions
 
 class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
@@ -333,6 +336,63 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         } else {
           checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
         }
+      }
+    }
+  }
+
+  test("check instance schema") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by (dt)
+       """.stripMargin)
+        // insert data to table
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, '01'), " +
+          s"(2, 'a2', 10, 1000, '02'), (3, 'a3', 10, 1000, '03')")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "01"),
+          Seq(2, "a2", 10.0, 1000, "02"),
+          Seq(3, "a3", 10.0, 1000, "03")
+        )
+
+        // drop partition
+        spark.sql(s"alter table $tableName drop partition (dt = '01')")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(2, "a2", 10.0, 1000, "02"),
+          Seq(3, "a3", 10.0, 1000, "03")
+        )
+
+        // check schema
+        val hadoopConf = spark.sessionState.newHadoopConf()
+        val metaClient = HoodieTableMetaClient.builder().setBasePath(s"${tmp.getCanonicalPath}/$tableName")
+          .setConf(hadoopConf).build()
+        val lastInstant = metaClient.getActiveTimeline.lastInstant()
+        val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(
+          lastInstant.get()).get(), classOf[HoodieCommitMetadata])
+        val schemaStr = commitMetadata.getExtraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY)
+        Assertions.assertFalse(StringUtils.isNullOrEmpty(schemaStr))
+
+        // delete
+        spark.sql(s"delete from $tableName where dt = '02'")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(3, "a3", 10, 1000, "03")
+        )
       }
     }
   }
