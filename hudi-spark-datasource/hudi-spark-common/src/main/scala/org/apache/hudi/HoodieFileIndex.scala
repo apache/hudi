@@ -39,6 +39,7 @@ import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
+import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
@@ -66,6 +67,7 @@ import scala.util.{Failure, Success, Try}
  *
  * TODO rename to HoodieSparkSqlFileIndex
  */
+@NotThreadSafe
 case class HoodieFileIndex(spark: SparkSession,
                            metaClient: HoodieTableMetaClient,
                            schemaSpec: Option[StructType],
