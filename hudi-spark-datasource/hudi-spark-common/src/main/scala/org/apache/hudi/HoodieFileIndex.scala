@@ -256,6 +256,7 @@ case class HoodieFileIndex(spark: SparkSession,
   override def refresh(): Unit = {
     super.refresh()
     columnStatsIndex.invalidateCaches()
+    prunedPartitionPredicatesCache.clear()
   }
 
   override def inputFiles: Array[String] =
