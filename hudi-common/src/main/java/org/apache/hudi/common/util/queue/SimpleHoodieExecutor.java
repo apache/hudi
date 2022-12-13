@@ -46,21 +46,17 @@ public class SimpleHoodieExecutor<I, O, E> implements HoodieExecutor<E> {
   // records iterator
   protected final Iterator<I> it;
   private final Function<I, O> transformFunction;
-  private final Runnable preExecuteRunnable;
-  private final AtomicBoolean isWriteDone = new AtomicBoolean(false);
-  private final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
   public SimpleHoodieExecutor(final Iterator<I> inputItr, HoodieConsumer<O, E> consumer,
-                              Function<I, O> transformFunction, Runnable preExecuteRunnable) {
-    this(inputItr, Option.of(consumer), transformFunction, preExecuteRunnable);
+                              Function<I, O> transformFunction) {
+    this(inputItr, Option.of(consumer), transformFunction);
   }
 
   public SimpleHoodieExecutor(final Iterator<I> inputItr, Option<HoodieConsumer<O, E>> consumer,
-                              Function<I, O> transformFunction, Runnable preExecuteRunnable) {
+                              Function<I, O> transformFunction) {
     this.it = inputItr;
     this.consumer = consumer;
     this.transformFunction = transformFunction;
-    this.preExecuteRunnable = preExecuteRunnable;
   }
 
   /**
@@ -72,12 +68,7 @@ public class SimpleHoodieExecutor<I, O, E> implements HoodieExecutor<E> {
 
     try {
       LOG.info("Starting consumer, consuming records from the records iterator directly");
-      preExecuteRunnable.run();
       while (it.hasNext()) {
-        if (isShutdown.get()) {
-          LOG.warn("Call shutdown while getting new entries, stop consuming.");
-          break;
-        }
         O payload = transformFunction.apply(it.next());
         consumer.get().consume(payload);
       }
@@ -86,22 +77,17 @@ public class SimpleHoodieExecutor<I, O, E> implements HoodieExecutor<E> {
     } catch (Exception e) {
       LOG.error("Error consuming records in SimpleHoodieExecutor", e);
       throw new HoodieException(e);
-    } finally {
-      isWriteDone.set(true);
     }
   }
 
   @Override
   public void shutdownNow() {
-    isShutdown.set(true);
+    // no-op
   }
 
   @Override
   public boolean awaitTermination() {
-    return isWriteDone.get();
-  }
-
-  public boolean isRunning() {
-    return it.hasNext();
+    // no-op
+    return true;
   }
 }

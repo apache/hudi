@@ -55,7 +55,7 @@ public class ExecutorFactory {
         return new DisruptorExecutor<>(hoodieConfig.getDisruptorWriteBufferSize(), inputItr, consumer,
             transformFunction, hoodieConfig.getWriteExecutorWaitStrategy(), preExecuteRunnable);
       case SIMPLE:
-        return new SimpleHoodieExecutor<>(inputItr, consumer, transformFunction, preExecuteRunnable);
+        return new SimpleHoodieExecutor<>(inputItr, consumer, transformFunction);
       default:
         throw new HoodieException("Unsupported Executor Type " + executorType);
     }

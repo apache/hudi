@@ -66,6 +66,8 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
   }
 
   /**
+   * This benchmark has been run w/ unconstrained parallelism which is beneficial to Disruptor more than it's for Simple
+   *
    * OpenJDK 64-Bit Server VM 1.8.0_342-b07 on Linux 5.10.62-55.141.amzn2.x86_64
    * Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz
    * COW Ingestion:                            Best Time(ms)   Avg Time(ms)   Stdev(ms)    Rate(M/s)   Per Row(ns)   Relative

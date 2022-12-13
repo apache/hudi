@@ -47,7 +47,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import scala.Tuple2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -99,14 +98,11 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
-
+      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
 
       int result = exec.execute();
-      // It should buffer and write 100 records
+      // It should buffer and write 128 records
       assertEquals(128, result);
-      // There should be no remaining records in the buffer
-      assertFalse(exec.isRunning());
 
       // collect all records and assert that consumed records are identical to produced ones
       // assert there's no tampering, and that the ordering is preserved
@@ -175,12 +171,9 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
+      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
       int result = exec.execute();
-      // It should buffer and write 100 records
       assertEquals(100, result);
-      // There should be no remaining records in the buffer
-      assertFalse(exec.isRunning());
 
       assertEquals(beforeRecord, afterRecord);
       assertEquals(beforeIndexedRecord, afterIndexedRecord);
@@ -223,7 +216,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
         };
 
     SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec =
-        new SimpleHoodieExecutor(iterator, consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
+        new SimpleHoodieExecutor(iterator, consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,
         "exception is expected");
