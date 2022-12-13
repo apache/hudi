@@ -58,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * The utility class to support testing compaction.
+ * The utility class to support testing compaction .
  */
 public class CompactionTestUtils {
 
