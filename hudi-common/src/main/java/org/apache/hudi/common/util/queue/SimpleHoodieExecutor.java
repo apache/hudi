@@ -26,7 +26,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.util.Iterator;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 /**
