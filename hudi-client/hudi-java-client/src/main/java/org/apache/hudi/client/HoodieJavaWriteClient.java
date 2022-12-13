@@ -46,6 +46,7 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
@@ -82,9 +83,11 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
                         List<WriteStatus> writeStatuses,
                         Option<Map<String, String>> extraMetadata,
                         String commitActionType,
-                        Map<String, List<String>> partitionToReplacedFileIds) {
+                        Map<String, List<String>> partitionToReplacedFileIds,
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
+    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
+        extraPreCommitFunc);
   }
 
   @Override
