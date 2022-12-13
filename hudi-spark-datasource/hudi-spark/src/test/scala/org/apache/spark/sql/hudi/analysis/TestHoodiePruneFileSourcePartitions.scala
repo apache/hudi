@@ -85,17 +85,41 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
         .get(0)
         .getString(0)
 
-      val expectedOptimizedLogicalPlan =
-        """== Optimized Logical Plan ==
-          |Filter (isnotnull(partition#64) AND (partition#64 = 2021-01-05)), Statistics(sizeInBytes=425.1 KiB)
-          |+- Relation default.hoodie_test[_hoodie_commit_time#55,_hoodie_commit_seqno#56,_hoodie_record_key#57,_hoodie_partition_path#58,_hoodie_file_name#59,id#60,name#61,price#62,ts#63L,partition#64] parquet, Statistics(sizeInBytes=425.1 KiB)
-          |""".stripMargin.trim
+      listingModeOverride match {
+        // Case #1: Eager listing (fallback mode).
+        //          Whole table will be _listed_ before partition-pruning would be applied. This is default
+        //          Spark behavior that naturally occurs, since predicate push-down for tables w/o appropriate catalog
+        //          support (for partition-pruning) will only occur during execution phase, while file-listing
+        //          actually happens during analysis stage
+        case "eager" =>
+          val expectedOptimizedLogicalPlan =
+            """== Optimized Logical Plan ==
+              |Filter (isnotnull(partition#74) AND (partition#74 = 2021-01-05)), Statistics(sizeInBytes=1275.3 KiB)
+              |+- Relation default.hoodie_test[_hoodie_commit_time#65,_hoodie_commit_seqno#66,_hoodie_record_key#67,_hoodie_partition_path#68,_hoodie_file_name#69,id#70,name#71,price#72,ts#73L,partition#74] parquet, Statistics(sizeInBytes=1275.3 KiB)
+              |""".stripMargin.trim
 
-      Assertions.assertTrue(explainCostPlanString.contains(expectedOptimizedLogicalPlan))
+          Assertions.assertTrue(explainCostPlanString.contains(expectedOptimizedLogicalPlan))
 
-      val expectedPhysicalPlanPartitionFiltersClause =
-        """PartitionFilters: [isnotnull(partition#64), (partition#64 = 2021-01-05)],
-          |""".stripMargin.trim
+        // Case #2: Lazy listing (default mode).
+        //          In case of lazy listing mode, Hudi will only list partitions matching partition-predicates that are
+        //          eagerly pushed down (w/ help of [[HoodiePruneFileSourcePartitions]]) avoiding the necessity to
+        //          list the whole table
+        case "lazy" =>
+          val expectedOptimizedLogicalPlan =
+            """== Optimized Logical Plan ==
+              |Filter (isnotnull(partition#64) AND (partition#64 = 2021-01-05)), Statistics(sizeInBytes=425.1 KiB)
+              |+- Relation default.hoodie_test[_hoodie_commit_time#55,_hoodie_commit_seqno#56,_hoodie_record_key#57,_hoodie_partition_path#58,_hoodie_file_name#59,id#60,name#61,price#62,ts#63L,partition#64] parquet, Statistics(sizeInBytes=425.1 KiB)
+              |""".stripMargin.trim
+
+          Assertions.assertTrue(explainCostPlanString.contains(expectedOptimizedLogicalPlan))
+
+        case _ => throw new UnsupportedOperationException()
+      }
+
+      val expectedPhysicalPlanPartitionFiltersClause = listingModeOverride match {
+        case "eager" => "PartitionFilters: [isnotnull(partition#74), (partition#74 = 2021-01-05)]"
+        case "lazy" => "PartitionFilters: [isnotnull(partition#64), (partition#64 = 2021-01-05)]"
+      }
 
       Assertions.assertTrue(explainCostPlanString.contains(expectedPhysicalPlanPartitionFiltersClause))
     }
