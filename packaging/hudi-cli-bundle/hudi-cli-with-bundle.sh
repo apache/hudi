@@ -20,17 +20,25 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 echo "DIR is ${DIR}"
 CLI_BUNDLE_JAR=`ls $DIR/target/hudi-cli-bundle*.jar | grep -v source | grep -v javadoc`
 SPARK_BUNDLE_JAR=`ls $DIR/../hudi-spark-bundle/target/hudi-spark*-bundle*.jar | grep -v source | grep -v javadoc`
+HUDI_CONF_DIR="${DIR}"/conf
+# hudi aux lib contains jakarta.el jars, which need to be put directly on class path
+HUDI_AUX_LIB="${DIR}"/auxlib
 
 . "${DIR}"/conf/hudi-env.sh
 
+if [ -z "$CLI_BUNDLE_JAR" ] || [ -z "$SPARK_BUNDLE_JAR" ]; then
+  echo "Make sure to generate both the hudi-cli-bundle.jar and hudi-spark-bundle.jar before running this script."
+  exit
+fi
+
 if [ -z "$SPARK_HOME" ]; then
-  echo "setting spark home"
-  export SPARK_HOME="/usr/local/spark/"
+  echo "SPARK_HOME not set, setting to /usr/local/spark"
+  export SPARK_HOME="/usr/local/spark"
 fi
 
 if [ -z "$CLIENT_JAR" ]; then
   echo "Client jar location not set, please set it in conf/hudi-env.sh"
 fi
 
-echo "Running : java -cp /usr/local/spark/*:/usr/local/spark/jars/*:${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${CLI_BUNDLE_JAR}:${SPARK_BUNDLE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@"
-java -cp /usr/local/spark/*:/usr/local/spark/jars/*:${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${CLI_BUNDLE_JAR}:${SPARK_BUNDLE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@
+echo "Running : java -cp ${HUDI_AUX_LIB}/*:${SPARK_HOME}/*:${SPARK_HOME}/jars/*:${HUDI_CONF_DIR}:${HUDI_AUX_LIB}/*:${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${CLI_BUNDLE_JAR}:${SPARK_BUNDLE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@"
+java -cp ${HUDI_AUX_LIB}/*:${SPARK_HOME}/*:${SPARK_HOME}/jars/*:${HUDI_CONF_DIR}:${HADOOP_CONF_DIR}:${SPARK_CONF_DIR}:${CLI_BUNDLE_JAR}:${SPARK_BUNDLE_JAR}:${CLIENT_JAR} -DSPARK_CONF_DIR=${SPARK_CONF_DIR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.cli.Main $@
