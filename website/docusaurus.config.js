@@ -338,7 +338,7 @@ module.exports = {
           items: [
             {
               label: 'Get Involved',
-              to: '/contribute/get-involved'
+              to: '/community/get-involved'
             },
             {
               label: 'Slack',
