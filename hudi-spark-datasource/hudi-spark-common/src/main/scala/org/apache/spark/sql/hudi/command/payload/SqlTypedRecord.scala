@@ -34,6 +34,7 @@ import java.util.function.Function
  */
 class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
 
+  private lazy val structType = getSqlType(getSchema)
   private lazy val sqlRow = getAvroDeserializer(getSchema).deserialize(record).get.asInstanceOf[InternalRow]
 
   override def put(i: Int, v: Any): Unit = {
@@ -41,7 +42,7 @@ class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
   }
 
   override def get(i: Int): AnyRef = {
-    sqlRow.get(i, getSqlType(getSchema)(i).dataType)
+    sqlRow.get(i, structType(i).dataType)
   }
 
   override def getSchema: Schema = record.getSchema
