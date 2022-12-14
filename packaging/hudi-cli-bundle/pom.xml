@@ -102,7 +102,6 @@
                   <include>jakarta.validation:jakarta.validation-api</include>
                   <include>net.java.dev.jna:jna</include>
 
-                  <include>org.apache.commons:commons-configuration2</include>
                   <include>org.apache.httpcomponents:httpclient</include>
                   <include>org.apache.httpcomponents:httpcore</include>
                   <include>org.apache.httpcomponents:fluent-hc</include>
