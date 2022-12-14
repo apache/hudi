@@ -189,6 +189,11 @@ public class HoodieConfig implements Serializable {
     return rawValue.map(v -> Double.parseDouble(v.toString())).orElse(null);
   }
 
+  public <T> Double getDoubleOrDefault(ConfigProperty<T> configProperty) {
+    Option<Object> rawValue = getRawValue(configProperty);
+    return rawValue.map(v -> Double.parseDouble(v.toString())).orElse((Double) configProperty.defaultValue());
+  }
+
   public <T> String getStringOrDefault(ConfigProperty<T> configProperty) {
     return getStringOrDefault(configProperty, configProperty.defaultValue().toString());
   }

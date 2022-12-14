@@ -87,6 +87,8 @@ object HoodieProcedures {
       ,(CopyToTempView.NAME, CopyToTempView.builder)
       ,(ShowCommitExtraMetadataProcedure.NAME, ShowCommitExtraMetadataProcedure.builder)
       ,(ShowTablePropertiesProcedure.NAME, ShowTablePropertiesProcedure.builder)
+      ,(RunBuildProcedure.NAME, RunBuildProcedure.builder)
+      ,(ShowBuildProcedure.NAME, ShowBuildProcedure.builder)
       ,(HelpProcedure.NAME, HelpProcedure.builder)
     )
   }

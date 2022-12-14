@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
  * Supported runtime table services.
  */
 public enum TableServiceType {
-  ARCHIVE, COMPACT, CLUSTER, CLEAN, LOG_COMPACT;
+  ARCHIVE, COMPACT, CLUSTER, CLEAN, LOG_COMPACT, BUILD;
 
   public String getAction() {
     switch (this) {
@@ -39,6 +39,8 @@ public enum TableServiceType {
         return HoodieTimeline.REPLACE_COMMIT_ACTION;
       case LOG_COMPACT:
         return HoodieTimeline.LOG_COMPACTION_ACTION;
+      case BUILD:
+        return HoodieTimeline.BUILD_ACTION;
       default:
         throw new IllegalArgumentException("Unknown table service " + this);
     }

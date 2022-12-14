@@ -52,7 +52,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         checkAnswer(s"create index idx_price on $tableName using lucene (price options(order='desc')) options(block_size=512)")()
 
         // Create an index with multiple columns
-        checkException(s"create index idx_id_ts on $tableName using lucene (id, ts)")("Lucene index only support single column")
+        checkAnswer(s"create index idx_id_ts on $tableName using lucene (id, ts)")()
 
         // Create an index with the occupied name
         checkException(s"create index idx_price on $tableName using lucene (price)")(
@@ -66,6 +66,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
         spark.sql(s"show indexes from $tableName").show()
         checkAnswer(s"show indexes from $tableName")(
+          Seq("idx_id_ts", "id,ts", "lucene", "", ""),
           Seq("idx_name", "name", "lucene", "", "{\"block_size\":\"1024\"}"),
           Seq("idx_price", "price", "lucene", "{\"price\":{\"order\":\"desc\"}}", "{\"block_size\":\"512\"}")
         )
@@ -75,11 +76,14 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
         spark.sql(s"show indexes from $tableName").show()
         checkAnswer(s"show indexes from $tableName")(
+          Seq("idx_id_ts", "id,ts", "lucene", "", ""),
           Seq("idx_price", "price", "lucene", "{\"price\":{\"order\":\"desc\"}}", "{\"block_size\":\"512\"}")
         )
 
         checkAnswer(s"drop index idx_price on $tableName")()
-        checkAnswer(s"show indexes from $tableName")()
+        checkAnswer(s"show indexes from $tableName")(
+          Seq("idx_id_ts", "id,ts", "lucene", "", "")
+        )
 
         checkException(s"drop index idx_price on $tableName")("Secondary index not exists: idx_price")
 
