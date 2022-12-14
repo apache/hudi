@@ -26,6 +26,7 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
+import org.apache.hudi.common.model.BaseAvroPayload.isDeleteRecord
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
@@ -86,11 +87,14 @@ class ExpressionPayload(@transient record: GenericRecord,
     processMatchedRecord(ConvertibleRecord(joinedRecord), Some(targetRecord), properties)
   }
 
+  override def canProduceSentinel: Boolean = true
+
   /**
    * Process the matched record. Firstly test if the record matched any of the update-conditions,
    * if matched, return the update assignments result. Secondly, test if the record matched
    * delete-condition, if matched then return a delete record. Finally if no condition matched,
-   * return a {@link HoodieWriteHandle.IGNORE_RECORD} which will be ignored by HoodieWriteHandle.
+   * return a [[HoodieRecord.SENTINEL]] which will be ignored by HoodieWriteHandle.
+   *
    * @param inputRecord  The input record to process.
    * @param targetRecord The origin exist record.
    * @param properties   The properties.
@@ -153,7 +157,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     if (resultRecordOpt == null) {
       // If there is no condition matched, just filter this record.
       // here we return a IGNORE_RECORD, HoodieMergeHandle will not handle it.
-      HOption.of(HoodieWriteHandle.IGNORE_RECORD)
+      HOption.of(HoodieRecord.SENTINEL)
     } else {
       resultRecordOpt
     }
@@ -180,7 +184,7 @@ class ExpressionPayload(@transient record: GenericRecord,
   /**
    * Process the not-matched record. Test if the record matched any of insert-conditions,
    * if matched then return the result of insert-assignment. Or else return a
-   * {@link HoodieWriteHandle.IGNORE_RECORD} which will be ignored by HoodieWriteHandle.
+   * [[HoodieRecord.SENTINEL]] which will be ignored by HoodieWriteHandle.
    *
    * @param inputRecord The input record to process.
    * @param properties  The properties.
@@ -215,8 +219,18 @@ class ExpressionPayload(@transient record: GenericRecord,
     } else {
       // If there is no condition matched, just filter this record.
       // Here we return a IGNORE_RECORD, HoodieCreateHandle will not handle it.
-      HOption.of(HoodieWriteHandle.IGNORE_RECORD)
+      HOption.of(HoodieRecord.SENTINEL)
     }
+  }
+
+  override def isDeleted(schema: Schema, props: Properties): Boolean = {
+    val deleteConditionText = props.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
+    val isUpdateRecord = props.getProperty(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, "false").toBoolean
+    val isDeleteOnCondition= if (isUpdateRecord && deleteConditionText != null) {
+      !getInsertValue(schema, props).isPresent
+    } else false
+
+    isDeletedRecord || isDeleteOnCondition
   }
 
   override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {

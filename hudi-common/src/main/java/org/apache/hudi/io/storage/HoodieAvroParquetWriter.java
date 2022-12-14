@@ -35,9 +35,9 @@ import java.io.IOException;
  * ATTENTION: HoodieParquetWriter is not thread safe and developer should take care of the order of write and close
  */
 @NotThreadSafe
-public class HoodieAvroParquetWriter<R extends IndexedRecord>
+public class HoodieAvroParquetWriter
     extends HoodieBaseParquetWriter<IndexedRecord>
-    implements HoodieFileWriter<R> {
+    implements HoodieAvroFileWriter {
 
   private final String fileName;
   private final String instantTime;
@@ -60,7 +60,7 @@ public class HoodieAvroParquetWriter<R extends IndexedRecord>
   }
 
   @Override
-  public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
+  public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);

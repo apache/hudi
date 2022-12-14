@@ -35,11 +35,11 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
-
 import java.io.File
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.break
 
@@ -124,7 +124,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
       }) {
         val blk = reader.next.asInstanceOf[HoodieAvroDataBlock]
         try {
-          val recordItr = blk.getRecordIterator
+          val recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)
           try while ( {
             recordItr.hasNext
           }) {

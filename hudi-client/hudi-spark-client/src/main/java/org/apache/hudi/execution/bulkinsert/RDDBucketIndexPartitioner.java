@@ -19,7 +19,6 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -28,6 +27,6 @@ import org.apache.spark.api.java.JavaRDD;
  * Abstract of bucket index bulk_insert partitioner
  * TODO implement partitioner for SIMPLE BUCKET INDEX
  */
-public abstract class RDDBucketIndexPartitioner<T extends HoodieRecordPayload>
+public abstract class RDDBucketIndexPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 }

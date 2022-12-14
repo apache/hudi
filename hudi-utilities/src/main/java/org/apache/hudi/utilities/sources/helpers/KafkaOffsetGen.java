@@ -415,7 +415,6 @@ public class KafkaOffsetGen {
     return Option.of(sb.deleteCharAt(sb.length() - 1).toString());
   }
 
-
   /**
    * Check if topic exists.
    * @param consumer kafka consumer

@@ -21,6 +21,7 @@ import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, TBL_NAME}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
@@ -44,7 +45,6 @@ import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
 import org.apache.spark.sql.types.{BooleanType, StructType}
 
 import java.util.Base64
-
 
 /**
  * The Command for hoodie MergeIntoTable.
@@ -188,7 +188,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     // Create the write parameters
     val parameters = buildMergeIntoConfig(hoodieCatalogTable)
-    executeUpsert(sourceDF, parameters)
+    // TODO Remove it when we implement ExpressionPayload for SparkRecord
+    val parametersWithAvroRecordMerger = parameters ++ Map(HoodieWriteConfig.MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName)
+    executeUpsert(sourceDF, parametersWithAvroRecordMerger)
 
     sparkSession.catalog.refreshTable(targetTableIdentify.unquotedString)
     Seq.empty[Row]

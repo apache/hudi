@@ -22,7 +22,6 @@ import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -35,7 +34,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
-public class JavaLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
+public class JavaLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
   public JavaLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                 boolean areRecordsSorted,
                                 HoodieWriteConfig config,
@@ -65,7 +64,7 @@ public class JavaLazyInsertIterable<T extends HoodieRecordPayload> extends Hoodi
     try {
       final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
       bufferedIteratorExecutor =
-          QueueBasedExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(), getTransformFunction(schema));
+          QueueBasedExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(), getCloningTransformer(schema));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       checkState(result != null && !result.isEmpty());
       return result;

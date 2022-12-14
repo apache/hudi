@@ -28,6 +28,7 @@ import org.objenesis.strategy.StdInstantiatorStrategy;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
 
 /**
  * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.
@@ -117,6 +118,10 @@ public class SerializationUtils {
       // for hadoop
       kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
 
+      // Register Hudi's classes
+      Arrays.stream(new HoodieCommonKryoProvider().registerClasses())
+          .forEach(kryo::register);
+
       // Register serializers
       kryo.register(Utf8.class, new AvroUtf8Serializer());
 
@@ -129,7 +134,7 @@ public class SerializationUtils {
    * NOTE: This {@link Serializer} could deserialize instance of {@link Utf8} serialized
    *       by implicitly generated Kryo serializer (based on {@link com.esotericsoftware.kryo.serializers.FieldSerializer}
    */
-  private static class AvroUtf8Serializer extends Serializer<Utf8> {
+  public static class AvroUtf8Serializer extends Serializer<Utf8> {
 
     @SuppressWarnings("unchecked")
     @Override

@@ -36,7 +36,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -53,8 +52,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *  1. Records should be added in order of keys
  *  2. There are no column stats
  */
-public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
-    implements HoodieFileWriter<R> {
+public class HoodieAvroHFileWriter
+    implements HoodieAvroFileWriter {
   private static AtomicLong recordIndex = new AtomicLong(1);
 
   private final Path file;
@@ -73,8 +72,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   // This is private in CacheConfig so have been copied here.
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
-  public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
-                           TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
+  public HoodieAvroHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
+                               TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
@@ -106,11 +105,11 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
         .withFileContext(context)
         .create();
 
-    writer.appendFileInfo(HoodieHFileReader.SCHEMA_KEY.getBytes(), schema.toString().getBytes());
+    writer.appendFileInfo(HoodieAvroHFileReader.SCHEMA_KEY.getBytes(), schema.toString().getBytes());
   }
 
   @Override
-  public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
+  public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), recordIndex.getAndIncrement(), file.getName());
@@ -167,11 +166,11 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
       if (maxRecordKey == null) {
         maxRecordKey = "";
       }
-      writer.appendFileInfo(HoodieHFileReader.KEY_MIN_RECORD.getBytes(), minRecordKey.getBytes());
-      writer.appendFileInfo(HoodieHFileReader.KEY_MAX_RECORD.getBytes(), maxRecordKey.getBytes());
-      writer.appendFileInfo(HoodieHFileReader.KEY_BLOOM_FILTER_TYPE_CODE.getBytes(),
+      writer.appendFileInfo(HoodieAvroHFileReader.KEY_MIN_RECORD.getBytes(), minRecordKey.getBytes());
+      writer.appendFileInfo(HoodieAvroHFileReader.KEY_MAX_RECORD.getBytes(), maxRecordKey.getBytes());
+      writer.appendFileInfo(HoodieAvroHFileReader.KEY_BLOOM_FILTER_TYPE_CODE.getBytes(),
           bloomFilter.getBloomFilterTypeCode().toString().getBytes());
-      writer.appendMetaBlock(HoodieHFileReader.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
+      writer.appendMetaBlock(HoodieAvroHFileReader.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
         @Override
         public void write(DataOutput out) throws IOException {
           out.write(bloomFilter.serializeToString().getBytes());

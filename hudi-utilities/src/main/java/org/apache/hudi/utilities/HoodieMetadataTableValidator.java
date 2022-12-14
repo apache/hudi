@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -63,7 +64,6 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import jline.internal.Log;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -1047,7 +1047,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
       Path path = new Path(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath), filename);
       BloomFilter bloomFilter;
-      try (HoodieFileReader<IndexedRecord> fileReader = HoodieFileReaderFactory.getFileReader(metaClient.getHadoopConf(), path)) {
+      try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(), path)) {
         bloomFilter = fileReader.readBloomFilter();
         if (bloomFilter == null) {
           Log.error("Failed to read bloom filter for " + path);

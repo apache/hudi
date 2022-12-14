@@ -20,7 +20,6 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -39,7 +38,7 @@ public class FlinkWriteHandleFactory {
   /**
    * Returns the write handle factory with given write config.
    */
-  public static <T extends HoodieRecordPayload, I, K, O> Factory<T, I, K, O> getFactory(
+  public static <T, I, K, O> Factory<T, I, K, O> getFactory(
       HoodieTableConfig tableConfig,
       HoodieWriteConfig writeConfig) {
     if (writeConfig.allowDuplicateInserts()) {
@@ -58,7 +57,7 @@ public class FlinkWriteHandleFactory {
   //  Inner Class
   // -------------------------------------------------------------------------
 
-  public interface Factory<T extends HoodieRecordPayload, I, K, O> {
+  public interface Factory<T, I, K, O> {
     /**
      * Get or create a new write handle in order to reuse the file handles.
      *
@@ -87,7 +86,7 @@ public class FlinkWriteHandleFactory {
    * Base clazz for commit write handle factory,
    * it encapsulates the handle switching logic: INSERT OR UPSERT.
    */
-  private abstract static class BaseCommitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O> implements Factory<T, I, K, O> {
+  private abstract static class BaseCommitWriteHandleFactory<T, I, K, O> implements Factory<T, I, K, O> {
     @Override
     public HoodieWriteHandle<?, ?, ?, ?> create(
         Map<String, HoodieWriteHandle<?, ?, ?, ?>> bucketToHandles,
@@ -140,12 +139,12 @@ public class FlinkWriteHandleFactory {
   /**
    * Write handle factory for commit.
    */
-  private static class CommitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
+  private static class CommitWriteHandleFactory<T, I, K, O>
       extends BaseCommitWriteHandleFactory<T, I, K, O> {
     private static final CommitWriteHandleFactory<?, ?, ?, ?> INSTANCE = new CommitWriteHandleFactory<>();
 
     @SuppressWarnings("unchecked")
-    public static <T extends HoodieRecordPayload, I, K, O> CommitWriteHandleFactory<T, I, K, O> getInstance() {
+    public static <T, I, K, O> CommitWriteHandleFactory<T, I, K, O> getInstance() {
       return (CommitWriteHandleFactory<T, I, K, O>) INSTANCE;
     }
 
@@ -178,12 +177,12 @@ public class FlinkWriteHandleFactory {
   /**
    * Write handle factory for inline clustering.
    */
-  private static class ClusterWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
+  private static class ClusterWriteHandleFactory<T, I, K, O>
       extends BaseCommitWriteHandleFactory<T, I, K, O> {
     private static final ClusterWriteHandleFactory<?, ?, ?, ?> INSTANCE = new ClusterWriteHandleFactory<>();
 
     @SuppressWarnings("unchecked")
-    public static <T extends HoodieRecordPayload, I, K, O> ClusterWriteHandleFactory<T, I, K, O> getInstance() {
+    public static <T, I, K, O> ClusterWriteHandleFactory<T, I, K, O> getInstance() {
       return (ClusterWriteHandleFactory<T, I, K, O>) INSTANCE;
     }
 
@@ -216,12 +215,12 @@ public class FlinkWriteHandleFactory {
   /**
    * Write handle factory for commit, the write handle supports logging change logs.
    */
-  private static class CdcWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
+  private static class CdcWriteHandleFactory<T, I, K, O>
       extends BaseCommitWriteHandleFactory<T, I, K, O> {
     private static final CdcWriteHandleFactory<?, ?, ?, ?> INSTANCE = new CdcWriteHandleFactory<>();
 
     @SuppressWarnings("unchecked")
-    public static <T extends HoodieRecordPayload, I, K, O> CdcWriteHandleFactory<T, I, K, O> getInstance() {
+    public static <T, I, K, O> CdcWriteHandleFactory<T, I, K, O> getInstance() {
       return (CdcWriteHandleFactory<T, I, K, O>) INSTANCE;
     }
 
@@ -254,11 +253,11 @@ public class FlinkWriteHandleFactory {
   /**
    * Write handle factory for delta commit.
    */
-  private static class DeltaCommitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O> implements Factory<T, I, K, O> {
+  private static class DeltaCommitWriteHandleFactory<T, I, K, O> implements Factory<T, I, K, O> {
     private static final DeltaCommitWriteHandleFactory<?, ?, ?, ?> INSTANCE = new DeltaCommitWriteHandleFactory<>();
 
     @SuppressWarnings("unchecked")
-    public static <T extends HoodieRecordPayload, I, K, O> DeltaCommitWriteHandleFactory<T, I, K, O> getInstance() {
+    public static <T, I, K, O> DeltaCommitWriteHandleFactory<T, I, K, O> getInstance() {
       return (DeltaCommitWriteHandleFactory<T, I, K, O>) INSTANCE;
     }
 

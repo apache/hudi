@@ -18,14 +18,24 @@
 
 package org.apache.hudi.common.model;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 
+import java.io.IOException;
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -33,15 +43,52 @@ import java.util.stream.IntStream;
 /**
  * A Single Record managed by Hoodie.
  */
-public abstract class HoodieRecord<T> implements Serializable {
+public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterface, KryoSerializable, Serializable {
 
-  public static final String COMMIT_TIME_METADATA_FIELD = "_hoodie_commit_time";
-  public static final String COMMIT_SEQNO_METADATA_FIELD = "_hoodie_commit_seqno";
-  public static final String RECORD_KEY_METADATA_FIELD = "_hoodie_record_key";
-  public static final String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
-  public static final String FILENAME_METADATA_FIELD = "_hoodie_file_name";
-  public static final String OPERATION_METADATA_FIELD = "_hoodie_operation";
-  public static final String HOODIE_IS_DELETED = "_hoodie_is_deleted";
+  public static final String COMMIT_TIME_METADATA_FIELD = HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName();
+  public static final String COMMIT_SEQNO_METADATA_FIELD = HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD.getFieldName();
+  public static final String RECORD_KEY_METADATA_FIELD = HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName();
+  public static final String PARTITION_PATH_METADATA_FIELD = HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName();
+  public static final String FILENAME_METADATA_FIELD = HoodieMetadataField.FILENAME_METADATA_FIELD.getFieldName();
+  public static final String OPERATION_METADATA_FIELD = HoodieMetadataField.OPERATION_METADATA_FIELD.getFieldName();
+  public static final String HOODIE_IS_DELETED_FIELD = "_hoodie_is_deleted";
+
+  public enum HoodieMetadataField {
+    COMMIT_TIME_METADATA_FIELD("_hoodie_commit_time"),
+    COMMIT_SEQNO_METADATA_FIELD("_hoodie_commit_seqno"),
+    RECORD_KEY_METADATA_FIELD("_hoodie_record_key"),
+    PARTITION_PATH_METADATA_FIELD("_hoodie_partition_path"),
+    FILENAME_METADATA_FIELD("_hoodie_file_name"),
+    OPERATION_METADATA_FIELD("_hoodie_operation");
+
+    private final String fieldName;
+
+    HoodieMetadataField(String fieldName) {
+      this.fieldName = fieldName;
+    }
+
+    public String getFieldName() {
+      return fieldName;
+    }
+  }
+
+  /**
+   * A special record returned by {@link HoodieRecordPayload}, which means we should just skip this record.
+   * This record is only used for {@link HoodieRecordPayload} currently, so it should not
+   * shuffle though network, we can compare the record locally by the equal method.
+   * The HoodieRecordPayload#combineAndGetUpdateValue and HoodieRecordPayload#getInsertValue
+   * have 3 kind of return:
+   * 1、Option.empty
+   * This means we should delete this record.
+   * 2、IGNORE_RECORD
+   * This means we should not process this record,just skip.
+   * 3、Other non-empty record
+   * This means we should process this record.
+   *
+   * We can see the usage of IGNORE_RECORD in
+   * org.apache.spark.sql.hudi.command.payload.ExpressionPayload
+   */
+  public static final EmptyRecord SENTINEL = new EmptyRecord();
 
   public static final List<String> HOODIE_META_COLUMNS =
       CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
@@ -67,7 +114,7 @@ public abstract class HoodieRecord<T> implements Serializable {
   /**
    * Identifies the record across the table.
    */
-  private HoodieKey key;
+  protected HoodieKey key;
 
   /**
    * Actual payload of the record.
@@ -77,12 +124,12 @@ public abstract class HoodieRecord<T> implements Serializable {
   /**
    * Current location of record on storage. Filled in by looking up index
    */
-  private HoodieRecordLocation currentLocation;
+  protected HoodieRecordLocation currentLocation;
 
   /**
    * New location of record on storage, after written.
    */
-  private HoodieRecordLocation newLocation;
+  protected HoodieRecordLocation newLocation;
 
   /**
    * Indicates whether the object is sealed.
@@ -92,33 +139,54 @@ public abstract class HoodieRecord<T> implements Serializable {
   /**
    * The cdc operation.
    */
-  private HoodieOperation operation;
+  protected HoodieOperation operation;
+
+  /**
+   * The metaData of the record.
+   */
+  protected Option<Map<String, String>> metaData;
 
   public HoodieRecord(HoodieKey key, T data) {
-    this(key, data, null);
+    this(key, data, null, Option.empty());
   }
 
-  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation) {
+  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation, Option<Map<String, String>> metaData) {
     this.key = key;
     this.data = data;
     this.currentLocation = null;
     this.newLocation = null;
     this.sealed = false;
     this.operation = operation;
+    this.metaData = metaData;
+  }
+
+  public HoodieRecord(
+      HoodieKey key,
+      T data,
+      HoodieOperation operation,
+      HoodieRecordLocation currentLocation,
+      HoodieRecordLocation newLocation) {
+    this.key = key;
+    this.data = data;
+    this.currentLocation = currentLocation;
+    this.newLocation = newLocation;
+    this.operation = operation;
   }
 
   public HoodieRecord(HoodieRecord<T> record) {
-    this(record.key, record.data);
+    this(record.key, record.data, record.operation, record.metaData);
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
-    this.operation = record.operation;
   }
 
-  public HoodieRecord() {
-  }
+  public HoodieRecord() {}
 
   public abstract HoodieRecord<T> newInstance();
+
+  public abstract HoodieRecord<T> newInstance(HoodieKey key, HoodieOperation op);
+
+  public abstract HoodieRecord<T> newInstance(HoodieKey key);
 
   public HoodieKey getKey() {
     return key;
@@ -127,6 +195,8 @@ public abstract class HoodieRecord<T> implements Serializable {
   public HoodieOperation getOperation() {
     return operation;
   }
+
+  public abstract Comparable<?> getOrderingValue(Schema recordSchema, Properties props);
 
   public T getData() {
     if (data == null) {
@@ -203,10 +273,6 @@ public abstract class HoodieRecord<T> implements Serializable {
     return sb.toString();
   }
 
-  public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
-    return instantTime + "_" + partitionId + "_" + recordIndex;
-  }
-
   public String getPartitionPath() {
     assert key != null;
     return key.getPartitionPath();
@@ -216,6 +282,12 @@ public abstract class HoodieRecord<T> implements Serializable {
     assert key != null;
     return key.getRecordKey();
   }
+
+  public abstract HoodieRecordType getRecordType();
+
+  public abstract String getRecordKey(Schema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt);
+
+  public abstract String getRecordKey(Schema recordSchema, String keyFieldName);
 
   public void seal() {
     this.sealed = true;
@@ -229,5 +301,138 @@ public abstract class HoodieRecord<T> implements Serializable {
     if (sealed) {
       throw new UnsupportedOperationException("Not allowed to modify after sealed");
     }
+  }
+
+  protected abstract void writeRecordPayload(T payload, Kryo kryo, Output output);
+
+  protected abstract T readRecordPayload(Kryo kryo, Input input);
+
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
+  @Override
+  public final void write(Kryo kryo, Output output) {
+    kryo.writeObjectOrNull(output, key, HoodieKey.class);
+    kryo.writeObjectOrNull(output, operation, HoodieOperation.class);
+    // NOTE: We have to write actual class along with the object here,
+    //       since [[HoodieRecordLocation]] has inheritors
+    kryo.writeClassAndObject(output, currentLocation);
+    kryo.writeClassAndObject(output, newLocation);
+    // NOTE: Writing out actual record payload is relegated to the actual
+    //       implementation
+    writeRecordPayload(data, kryo, output);
+  }
+
+  /**
+   * NOTE: This method is declared final to make sure there's no polymorphism and therefore
+   *       JIT compiler could perform more aggressive optimizations
+   */
+  @Override
+  public final void read(Kryo kryo, Input input) {
+    this.key = kryo.readObjectOrNull(input, HoodieKey.class);
+    this.operation = kryo.readObjectOrNull(input, HoodieOperation.class);
+    this.currentLocation = (HoodieRecordLocation) kryo.readClassAndObject(input);
+    this.newLocation = (HoodieRecordLocation) kryo.readClassAndObject(input);
+    // NOTE: Reading out actual record payload is relegated to the actual
+    //       implementation
+    this.data = readRecordPayload(kryo, input);
+
+    // NOTE: We're always seal object after deserialization
+    this.sealed = true;
+  }
+
+  /**
+   * Get column in record to support RDDCustomColumnsSortPartitioner
+   * @return
+   */
+  public abstract Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
+
+  /**
+   * Support bootstrap.
+   */
+  public abstract HoodieRecord joinWith(HoodieRecord other, Schema targetSchema);
+
+  /**
+   * Rewrite record into new schema(add meta columns)
+   */
+  public abstract HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException;
+
+  /**
+   * Support schema evolution.
+   */
+  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException;
+
+  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema) throws IOException {
+    return rewriteRecordWithNewSchema(recordSchema, props, newSchema, Collections.emptyMap());
+  }
+
+  /**
+   * This method could change in the future.
+   * @temporary
+   */
+  public abstract HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException;
+
+  public abstract boolean isDelete(Schema recordSchema, Properties props) throws IOException;
+
+  /**
+   * Is EmptyRecord. Generated by ExpressionPayload.
+   */
+  public abstract boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException;
+
+  /**
+   * This is used to copy data.
+   */
+  public abstract HoodieRecord<T> copy();
+
+  public abstract Option<Map<String, String>> getMetadata();
+
+  public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
+    return instantTime + "_" + partitionId + "_" + recordIndex;
+  }
+
+  /**
+   * A special record returned by {@link HoodieRecordPayload}, which means we should just skip this record.
+   * This record is only used for {@link HoodieRecordPayload} currently, so it should not
+   * shuffle though network, we can compare the record locally by the equal method.
+   * The HoodieRecordPayload#combineAndGetUpdateValue and HoodieRecordPayload#getInsertValue
+   * have 3 kind of return:
+   * 1、Option.empty
+   * This means we should delete this record.
+   * 2、IGNORE_RECORD
+   * This means we should not process this record,just skip.
+   * 3、Other non-empty record
+   * This means we should process this record.
+   *
+   * We can see the usage of IGNORE_RECORD in
+   * org.apache.spark.sql.hudi.command.payload.ExpressionPayload
+   */
+  private static class EmptyRecord implements GenericRecord {
+    private EmptyRecord() {}
+
+    @Override
+    public void put(int i, Object v) {}
+
+    @Override
+    public Object get(int i) {
+      return null;
+    }
+
+    @Override
+    public Schema getSchema() {
+      return null;
+    }
+
+    @Override
+    public void put(String key, Object v) {}
+
+    @Override
+    public Object get(String key) {
+      return null;
+    }
+  }
+
+  public enum HoodieRecordType {
+    AVRO, SPARK
   }
 }

@@ -19,9 +19,13 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.MappingIterator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 
 import org.apache.avro.Schema;
@@ -39,24 +43,35 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
+
 /**
  * {@link HoodieFileReader} implementation for parquet format.
  *
  * @param <R> Record implementation that permits field access by integer index.
  */
-public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileReader<R> {
+public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
   private final Path path;
   private final Configuration conf;
   private final BaseFileUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
-  public HoodieParquetReader(Configuration configuration, Path path) {
+  public HoodieAvroParquetReader(Configuration configuration, Path path) {
     // We have to clone the Hadoop Config as it might be subsequently modified
     // by the Reader (for proper config propagation to Parquet components)
     this.conf = tryOverrideDefaultConfigs(new Configuration(configuration));
     this.path = path;
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
+  }
+
+  @Override
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema readerSchema) throws IOException {
+    // TODO(HUDI-4588) remove after HUDI-4588 is resolved
+    // NOTE: This is a workaround to avoid leveraging projection w/in [[AvroParquetReader]],
+    //       until schema handling issues (nullability canonicalization, etc) are resolved
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(readerSchema);
+    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
   @Override
@@ -75,17 +90,13 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   }
 
   @Override
-  public ClosableIterator<R> getRecordIterator(Schema schema) throws IOException {
-    // NOTE: We have to set both Avro read-schema and projection schema to make
-    //       sure that in case the file-schema is not equal to read-schema we'd still
-    //       be able to read that file (in case projection is a proper one)
-    AvroReadSupport.setAvroReadSchema(conf, schema);
-    AvroReadSupport.setRequestedProjection(conf, schema);
+  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema schema) throws IOException {
+    return getIndexedRecordIteratorInternal(schema, Option.empty());
+  }
 
-    ParquetReader<R> reader = AvroParquetReader.<R>builder(path).withConf(conf).build();
-    ParquetReaderIterator<R> parquetReaderIterator = new ParquetReaderIterator<>(reader);
-    readerIterators.add(parquetReaderIterator);
-    return parquetReaderIterator;
+  @Override
+  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    return getIndexedRecordIteratorInternal(readerSchema, Option.of(requestedSchema));
   }
 
   @Override
@@ -141,5 +152,22 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
     }
 
     return conf;
+  }
+
+  private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(Schema schema, Option<Schema> requestedSchema) throws IOException {
+    // NOTE: We have to set both Avro read-schema and projection schema to make
+    //       sure that in case the file-schema is not equal to read-schema we'd still
+    //       be able to read that file (in case projection is a proper one)
+    if (!requestedSchema.isPresent()) {
+      AvroReadSupport.setAvroReadSchema(conf, schema);
+      AvroReadSupport.setRequestedProjection(conf, schema);
+    } else {
+      AvroReadSupport.setAvroReadSchema(conf, requestedSchema.get());
+      AvroReadSupport.setRequestedProjection(conf, requestedSchema.get());
+    }
+    ParquetReader<IndexedRecord> reader = AvroParquetReader.<IndexedRecord>builder(path).withConf(conf).build();
+    ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
+    readerIterators.add(parquetReaderIterator);
+    return parquetReaderIterator;
   }
 }

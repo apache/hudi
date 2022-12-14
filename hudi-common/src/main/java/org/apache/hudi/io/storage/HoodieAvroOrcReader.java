@@ -37,6 +37,7 @@ import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -44,12 +45,13 @@ import java.util.Set;
  *
  * @param <R> Record implementation that permits field access by integer index.
  */
-public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReader {
-  private Path path;
-  private Configuration conf;
+public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
+
+  private final Path path;
+  private final Configuration conf;
   private final BaseFileUtils orcUtils;
 
-  public HoodieOrcReader(Configuration configuration, Path path) {
+  public HoodieAvroOrcReader(Configuration configuration, Path path) {
     this.conf = configuration;
     this.path = path;
     this.orcUtils = BaseFileUtils.getInstance(HoodieFileFormat.ORC);
@@ -71,12 +73,16 @@ public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReade
   }
 
   @Override
-  public ClosableIterator<R> getRecordIterator(Schema schema) throws IOException {
+  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    if (!Objects.equals(readerSchema, requestedSchema)) {
+      throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
+    }
+
     try {
       Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf));
-      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema);
+      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readerSchema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
-      return new OrcReaderIterator<>(recordReader, schema, orcSchema);
+      return new OrcReaderIterator<>(recordReader, readerSchema, orcSchema);
     } catch (IOException io) {
       throw new HoodieIOException("Unable to create an ORC reader.", io);
     }
@@ -88,8 +94,7 @@ public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReade
   }
 
   @Override
-  public void close() {
-  }
+  public void close() {}
 
   @Override
   public long getTotalRecords() {

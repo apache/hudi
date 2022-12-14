@@ -24,7 +24,7 @@ import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecord, HoodieRecordPayload}
+import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord, HoodieRecordMerger, HoodieRecordPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCInferCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
@@ -151,7 +151,7 @@ class HoodieCDCRDD(
     private lazy val tableState = {
       val metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(props)
-        .build();
+        .build()
       HoodieTableState(
         pathToString(basePath),
         split.changes.last.getInstant,
@@ -159,7 +159,10 @@ class HoodieCDCRDD(
         preCombineFieldOpt,
         usesVirtualKeys = false,
         metaClient.getTableConfig.getPayloadClass,
-        metadataConfig
+        metadataConfig,
+        // TODO support CDC with spark record
+        mergerImpls = List(classOf[HoodieAvroRecordMerger].getName),
+        mergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID
       )
     }
 
@@ -217,7 +220,7 @@ class HoodieCDCRDD(
      * Only one case where it will be used is that extract the change data from log files for mor table.
      * At the time, 'logRecordIter' will work with [[beforeImageRecords]] that keep all the records of the previous file slice.
      */
-    private var logRecordIter: Iterator[(String, HoodieRecord[_ <: HoodieRecordPayload[_ <: HoodieRecordPayload[_ <: AnyRef]]])] = Iterator.empty
+    private var logRecordIter: Iterator[(String, HoodieRecord[_])] = Iterator.empty
 
     /**
      * Only one case where it will be used is that extract the change data from cdc log files.
@@ -435,7 +438,7 @@ class HoodieCDCRDD(
             val absLogPath = new Path(basePath, currentChangeFile.getCdcFiles.get(0))
             val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(fs.getFileStatus(absLogPath))))
             val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
-            logRecordIter = logFileIterator.logRecordsIterator()
+            logRecordIter = logFileIterator.logRecordsPairIterator
           case AS_IS =>
             assert(currentChangeFile.getCdcFiles != null && !currentChangeFile.getCdcFiles.isEmpty)
             // load beforeFileSlice to beforeImageRecords
@@ -604,9 +607,9 @@ class HoodieCDCRDD(
     }
 
     private def getInsertValue(
-        record: HoodieRecord[_ <: HoodieRecordPayload[_ <: HoodieRecordPayload[_ <: AnyRef]]])
+        record: HoodieRecord[_])
     : Option[IndexedRecord] = {
-      toScalaOption(record.getData.getInsertValue(avroSchema, payloadProps))
+      toScalaOption(record.toIndexedRecord(avroSchema, payloadProps)).map(_.getData)
     }
 
     private def projectAvroUnsafe(record: IndexedRecord): GenericRecord = {
@@ -614,8 +617,8 @@ class HoodieCDCRDD(
         avroSchema, reusableRecordBuilder)
     }
 
-    private def merge(curAvroRecord: GenericRecord, newRecord: HoodieRecord[_ <: HoodieRecordPayload[_]]): IndexedRecord = {
-      newRecord.getData.combineAndGetUpdateValue(curAvroRecord, avroSchema, payloadProps).get()
+    private def merge(curAvroRecord: GenericRecord, newRecord: HoodieRecord[_]): IndexedRecord = {
+      newRecord.getData.asInstanceOf[HoodieRecordPayload[_]].combineAndGetUpdateValue(curAvroRecord, avroSchema, payloadProps).get()
     }
 
     private def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection =
