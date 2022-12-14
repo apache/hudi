@@ -132,8 +132,11 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         //         qualified names of the structs, which could not be reconstructed when converting from
         //         Parquet to Avro (b/c Parquet doesn't bear these)
         Schema bootstrapSchema = mergeHandle.getWriterSchema();
-        recordIterator = new MergingIterator(baseFileRecordIterator, bootstrapFileReader.getRecordIterator(),
-            (left, right) -> left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
+        recordIterator = new MergingIterator<>(
+            baseFileRecordIterator,
+            bootstrapFileReader.getRecordIterator(bootstrapSchema),
+            (inputRecordPair) ->
+                left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
       } else if (schemaEvolutionTransformerOpt.isPresent()) {
         recordIterator = new MappingIterator<>(baseFileRecordIterator,
