@@ -30,8 +30,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
  * This class does not have anything to do with Hudi but is there to keep mvn javadocs/source plugin happy.
  */
 public class Main {
-
-    public static void main(String[] args) {
-        ReflectionUtils.getTopLevelClassesInClasspath(Main.class).forEach(System.out::println);
-    }
+  public static void main(String[] args) {
+    ReflectionUtils.getTopLevelClassesInClasspath(Main.class).forEach(System.out::println);
+  }
 }
