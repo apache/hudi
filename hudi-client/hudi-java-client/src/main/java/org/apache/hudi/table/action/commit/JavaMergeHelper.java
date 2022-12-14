@@ -93,9 +93,16 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
         Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
         Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
         bootstrapFileReader = HoodieFileReaderFactory.getFileReader(bootstrapFileConfig, bootstrapFilePath);
+        // NOTE: It's important for us to rely on writer's schema here
+        //         - When records will be read by Parquet reader, if schema will be decoded from the
+        //         file itself by taking its Parquet one and converting it to Avro. This will be problematic
+        //         w/ schema validations of the records since Avro's schemas also validate corresponding
+        //         qualified names of the structs, which could not be reconstructed when converting from
+        //         Parquet to Avro (b/c Parquet doesn't bear these)
+        Schema bootstrapSchema = externalSchemaTransformation ? bootstrapFileReader.getSchema() : mergeHandle.getWriterSchema();
         readerIterator = new MergingIterator<>(
             baseFileReader.getRecordIterator(readSchema),
-            bootstrapFileReader.getRecordIterator(),
+            bootstrapFileReader.getRecordIterator(bootstrapSchema),
             (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));
       } else {
         readerIterator = baseFileReader.getRecordIterator(readSchema);
