@@ -131,7 +131,14 @@ $ docker ps
 
 </TabItem>
 <TabItem value="m1">
-Please note that Presto and Trino do not currently work for the docker demo on Mac AArch64
+
+:::note Please note the following for Mac AArch64 users
+<ul>
+  <li> The demo must be built and run using the master branch. We currently plan to include support starting with the
+    0.13.0 release. </li>
+  <li> Presto and Trino are not currently supported in the demo. </li>
+</ul>
+:::
 
 ```java
 cd docker
@@ -548,7 +555,14 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 
 ### Step 4 (c): Run Presto Queries
 
-Here are the Presto queries for similar Hive and Spark queries. Currently, Presto does not support snapshot or incremental queries on Hudi tables.
+Here are the Presto queries for similar Hive and Spark queries. 
+
+:::note 
+<ul>
+  <li> Currently, Presto does not support snapshot or incremental queries on Hudi tables. </li>
+  <li> This section of the demo is not supported for Mac AArch64 users at this time. </li>
+</ul>
+:::
 
 ```java
 docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
@@ -639,7 +653,14 @@ presto:default> exit
 
 ### Step 4 (d): Run Trino Queries
 
-Here are the similar queries with Trino. Currently, Trino does not support snapshot or incremental queries on Hudi tables.
+Here are the similar queries with Trino.
+:::note
+<ul>
+  <li> Currently, Trino does not support snapshot or incremental queries on Hudi tables. </li>
+  <li> This section of the demo is not supported for Mac AArch64 users at this time. </li>
+</ul>
+:::
+
 ```java
 docker exec -it adhoc-2 trino --server trino-coordinator-1:8091
 trino> show catalogs;
@@ -922,6 +943,10 @@ exit
 
 Running the same queries on Presto for ReadOptimized queries. 
 
+:::note
+This section of the demo is not supported for Mac AArch64 users at this time.
+:::
+
 ```java
 docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
 presto> use hive.default;
@@ -983,6 +1008,10 @@ presto:default> exit
 ### Step 6 (d): Run Trino Queries
 
 Running the same queries on Trino for Read-Optimized queries.
+
+:::note
+This section of the demo is not supported for Mac AArch64 users at this time.
+:::
 
 ```java
 docker exec -it adhoc-2 trino --server trino-coordinator-1:8091
@@ -1346,6 +1375,9 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 ```
 
 ### Step 11:  Presto Read Optimized queries on MOR table after compaction
+:::note
+This section of the demo is not supported for Mac AArch64 users at this time.
+:::
 
 ```java
 docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
