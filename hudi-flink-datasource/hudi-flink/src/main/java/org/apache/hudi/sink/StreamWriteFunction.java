@@ -432,7 +432,11 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .writeStatus(writeStatus)
         .lastBatch(false)
         .endInput(false)
+        .maxEventTime(this.currentTimeStamp)
         .build();
+
+    LOG.info("Write MetadataEvent in subtask [{}] for instant [{}] maxEventTime [{}]",
+        taskID, currentInstant, this.currentTimeStamp);
 
     this.eventGateway.sendEventToCoordinator(event);
     writeStatuses.addAll(writeStatus);
@@ -475,7 +479,11 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .writeStatus(writeStatus)
         .lastBatch(true)
         .endInput(endInput)
+        .maxEventTime(this.currentTimeStamp)
         .build();
+
+    LOG.info("Write MetadataEvent in subtask [{}] for instant [{}] maxEventTime [{}]",
+        taskID, currentInstant, this.currentTimeStamp);
 
     this.eventGateway.sendEventToCoordinator(event);
     this.buckets.clear();

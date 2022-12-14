@@ -173,7 +173,7 @@ public class TimelineUtils {
           HoodieInstant::getTimestamp, instant -> getMetadataValue(metaClient, extraMetadataKey, instant)));
   }
 
-  private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
+  public static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
       LOG.info("reading checkpoint info for:"  + instant + " key: " + extraMetadataKey);
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(

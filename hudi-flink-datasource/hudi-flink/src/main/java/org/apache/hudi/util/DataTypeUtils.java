@@ -19,6 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -30,16 +31,38 @@ import org.apache.flink.table.types.logical.TimestampType;
 import javax.annotation.Nullable;
 
 import java.math.BigDecimal;
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static java.time.temporal.ChronoField.DAY_OF_MONTH;
+import static java.time.temporal.ChronoField.HOUR_OF_DAY;
+import static java.time.temporal.ChronoField.MINUTE_OF_HOUR;
+import static java.time.temporal.ChronoField.MONTH_OF_YEAR;
+import static java.time.temporal.ChronoField.NANO_OF_SECOND;
+import static java.time.temporal.ChronoField.SECOND_OF_MINUTE;
+import static java.time.temporal.ChronoField.YEAR;
 
 /**
  * Utilities for {@link org.apache.flink.table.types.DataType}.
  */
 public class DataTypeUtils {
+
+  private static final DateTimeFormatter DEFAULT_TIMESTAMP_FORMATTER =
+       new DateTimeFormatterBuilder()
+      .appendPattern("yyyy-[MM][M]-[dd][d]")
+      .optionalStart()
+      .appendPattern(" [HH][H]:[mm][m]:[ss][s]")
+      .appendFraction(NANO_OF_SECOND, 0, 9, true)
+      .optionalEnd()
+      .toFormatter();
   /**
    * Returns whether the given type is TIMESTAMP type.
    */
@@ -165,6 +188,85 @@ public class DataTypeUtils {
       fields.add(DataTypes.FIELD(fieldNames.get(i), fieldTypes.get(i)));
     }
     return DataTypes.ROW(fields.stream().toArray(DataTypes.Field[]::new)).notNull();
+  }
+
+  public static Long getAsLong(Object value, LogicalType logicalType) {
+    if (isTimeType(logicalType)) {
+      return toMills(toLocalDateTime(value.toString()));
+    }
+    return Long.parseLong(value.toString());
+  }
+
+  public static boolean isTimeType(LogicalType logicalType) {
+    return logicalType.getTypeRoot() == LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE
+      || logicalType.getTypeRoot() == LogicalTypeRoot.DATE
+      || logicalType.getTypeRoot() == LogicalTypeRoot.TIME_WITHOUT_TIME_ZONE;
+  }
+
+  public static LocalDateTime toLocalDateTime(String timestampString) {
+    try {
+      return parseTimestampData(timestampString);
+    } catch (DateTimeParseException e) {
+      return LocalDateTime.parse(timestampString);
+    }
+  }
+
+  public static LocalDateTime parseTimestampData(String dateStr) throws DateTimeException {
+    // Precision is hardcoded to match signature of TO_TIMESTAMP
+    //  https://issues.apache.org/jira/browse/FLINK-14925
+    return parseTimestampData(dateStr, 3);
+  }
+
+  public static LocalDateTime parseTimestampData(String dateStr, int precision)
+       throws DateTimeException {
+    return fromTemporalAccessor(DEFAULT_TIMESTAMP_FORMATTER.parse(dateStr), precision);
+  }
+
+  public static long toMills(LocalDateTime dateTime) {
+    return TimestampData.fromLocalDateTime(dateTime).getMillisecond();
+  }
+
+  private static LocalDateTime fromTemporalAccessor(TemporalAccessor accessor, int precision) {
+    // complement year with 1970
+    int year = accessor.isSupported(YEAR) ? accessor.get(YEAR) : 1970;
+    // complement month with 1
+    int month = accessor.isSupported(MONTH_OF_YEAR) ? accessor.get(MONTH_OF_YEAR) : 1;
+    // complement day with 1
+    int day = accessor.isSupported(DAY_OF_MONTH) ? accessor.get(DAY_OF_MONTH) : 1;
+    // complement hour with 0
+    int hour = accessor.isSupported(HOUR_OF_DAY) ? accessor.get(HOUR_OF_DAY) : 0;
+    // complement minute with 0
+    int minute = accessor.isSupported(MINUTE_OF_HOUR) ? accessor.get(MINUTE_OF_HOUR) : 0;
+    // complement second with 0
+    int second = accessor.isSupported(SECOND_OF_MINUTE) ? accessor.get(SECOND_OF_MINUTE) : 0;
+    // complement nano_of_second with 0
+    int nanoOfSecond = accessor.isSupported(NANO_OF_SECOND) ? accessor.get(NANO_OF_SECOND) : 0;
+
+    if (precision == 0) {
+      nanoOfSecond = 0;
+    } else if (precision != 9) {
+      nanoOfSecond = (int) floor(nanoOfSecond, powerX(10, 9 - precision));
+    }
+
+    return LocalDateTime.of(year, month, day, hour, minute, second, nanoOfSecond);
+  }
+
+  private static long floor(long a, long b) {
+    long r = a % b;
+    if (r < 0) {
+      return a - r - b;
+    } else {
+      return a - r;
+    }
+  }
+
+  private static long powerX(long a, long b) {
+    long x = 1;
+    while (b > 0) {
+      x *= a;
+      --b;
+    }
+    return x;
   }
 
 }

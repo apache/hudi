@@ -57,6 +57,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -148,6 +149,8 @@ public class StreamWriteOperatorCoordinator
    */
   private transient TableState tableState;
 
+  private final boolean commitEventTimeEnable;
+
   /**
    * The checkpoint metadata.
    */
@@ -166,6 +169,7 @@ public class StreamWriteOperatorCoordinator
     this.context = context;
     this.parallelism = context.currentParallelism();
     this.hiveConf = new SerializableConfiguration(HadoopConfigurations.getHiveConf(conf));
+    this.commitEventTimeEnable = Objects.nonNull(conf.get(FlinkOptions.EVENT_TIME_FIELD));
   }
 
   @Override
@@ -489,13 +493,7 @@ public class StreamWriteOperatorCoordinator
       return false;
     }
 
-    List<WriteStatus> writeResults = Arrays.stream(eventBuffer)
-        .filter(Objects::nonNull)
-        .map(WriteMetadataEvent::getWriteStatuses)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
-
-    if (writeResults.size() == 0) {
+    if (getWriteStatuses().size() == 0) {
       // No data has written, reset the buffer and returns early
       reset();
       // Send commit ack event to the write function to unblock the flushing
@@ -504,15 +502,33 @@ public class StreamWriteOperatorCoordinator
       sendCommitAckEvents(checkpointId);
       return false;
     }
-    doCommit(instant, writeResults);
+    doCommit(instant);
     return true;
+  }
+
+  public List<WriteStatus> getWriteStatuses() {
+    return Arrays.stream(eventBuffer)
+      .filter(Objects::nonNull)
+      .map(WriteMetadataEvent::getWriteStatuses)
+      .flatMap(Collection::stream)
+      .collect(Collectors.toList());
+  }
+
+  public Long minEventTime(WriteMetadataEvent[] eventBuffer) {
+    Map<Integer, Long> taskIdToMaxEventTimeMap = Arrays.stream(eventBuffer).filter(Objects::nonNull)
+        .collect(Collectors.toMap(WriteMetadataEvent::getTaskID, WriteMetadataEvent::getMaxEventTime));
+    LOG.info("receive event time [{}] for instant {} ", taskIdToMaxEventTimeMap, this.instant);
+    return taskIdToMaxEventTimeMap.values().stream()
+      .filter(maxEventTime -> maxEventTime > 0)
+      .min(Comparator.naturalOrder()).orElse(-1L);
   }
 
   /**
    * Performs the actual commit action.
    */
   @SuppressWarnings("unchecked")
-  private void doCommit(String instant, List<WriteStatus> writeResults) {
+  private void doCommit(String instant) {
+    List<WriteStatus> writeResults = getWriteStatuses();
     // commit or rollback
     long totalErrorRecords = writeResults.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
     long totalRecords = writeResults.stream().map(WriteStatus::getTotalRecords).reduce(Long::sum).orElse(0L);
@@ -520,6 +536,11 @@ public class StreamWriteOperatorCoordinator
 
     if (!hasErrors || this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
+      if (commitEventTimeEnable) {
+        Long minEventTime = minEventTime(eventBuffer);
+        checkpointCommitMetadata.put(FlinkOptions.EVENT_TIME_FIELD.key(), minEventTime.toString());
+        LOG.info("[doCommit] minEventTime: {} at instant {} ", minEventTime, instant);
+      }
       if (hasErrors) {
         LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total="
             + totalErrorRecords + "/" + totalRecords);
