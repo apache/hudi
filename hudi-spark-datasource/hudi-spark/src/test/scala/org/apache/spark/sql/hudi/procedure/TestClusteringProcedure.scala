@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField, StructType}
@@ -599,6 +600,71 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       assert((1.0 * c2OrderFilterCount / orderAllFiles) < (1.0 * c2ZOrderFilterCount / ZOrderAllFiles))
       assert((1.0 * c3OrderFilterCount / orderAllFiles) > (1.0 * c3ZOrderFilterCount / ZOrderAllFiles))
+    }
+  }
+
+  test("Test Call run_clustering with partition selected config") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | options (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+           | partitioned by(ts)
+           | location '$basePath'
+     """.stripMargin)
+
+      // Test clustering with PARTITION_SELECTED config set, choose only a part of all partitions to schedule
+      {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1010)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1010)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1011)")
+        spark.sql(s"set ${HoodieClusteringConfig.PARTITION_SELECTED.key()}=ts=1010")
+        // Do
+        val result = spark.sql(s"call run_clustering(table => '$tableName', show_involved_partition => true)")
+          .collect()
+          .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+        assertResult(1)(result.length)
+        assertResult("ts=1010")(result(0)(3))
+
+        checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+          Seq(1, "a1", 10.0, 1010),
+          Seq(2, "a2", 10.0, 1010),
+          Seq(3, "a3", 10.0, 1011)
+        )
+      }
+
+      // Test clustering with PARTITION_SELECTED config set, choose all partitions to schedule
+      {
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1010)")
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1011)")
+        spark.sql(s"insert into $tableName values(6, 'a6', 10, 1012)")
+        spark.sql(s"set ${HoodieClusteringConfig.PARTITION_SELECTED.key()}=ts=1010,ts=1011,ts=1012")
+        val result = spark.sql(s"call run_clustering(table => '$tableName', show_involved_partition => true)")
+          .collect()
+          .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+        assertResult(1)(result.length)
+        assertResult("ts=1010,ts=1011,ts=1012")(result(0)(3))
+
+        checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+          Seq(1, "a1", 10.0, 1010),
+          Seq(2, "a2", 10.0, 1010),
+          Seq(3, "a3", 10.0, 1011),
+          Seq(4, "a4", 10.0, 1010),
+          Seq(5, "a5", 10.0, 1011),
+          Seq(6, "a6", 10.0, 1012)
+        )
+      }
     }
   }
 
