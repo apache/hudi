@@ -212,5 +212,16 @@ public class BulkInsertWriterHelper {
     writeStatus.setTotalErrorRecords(internalWriteStatus.getTotalErrorRecords());
     return writeStatus;
   }
+
+  /**
+   * Get partition path from the record.
+   * @param record
+   * @return
+   */
+  public String getPartitionPath(RowData record) {
+    return keyGen != null
+            ? keyGen.getPartitionPath(record)
+            : record.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD).toString();
+  }
 }
 

@@ -133,7 +133,12 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   @Override
   public void processElement(I value, ProcessFunction<I, Object>.Context ctx, Collector<Object> out) throws Exception {
-    bufferRecord((HoodieRecord<?>) value);
+    HoodieRecord<?> record = (HoodieRecord<?>) value;
+    bufferRecord(record);
+    String partitionPath = record.getPartitionPath();
+    if (partitionPath != null && out != null) {
+      out.collect(partitionPath);
+    }
   }
 
   @Override

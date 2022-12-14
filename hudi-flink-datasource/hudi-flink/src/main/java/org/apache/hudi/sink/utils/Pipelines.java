@@ -46,6 +46,9 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
+import org.apache.hudi.sink.successfile.SuccessFileSinkOperator;
+import org.apache.hudi.sink.successfile.SuccessFileSinkOperatorFactory;
+import org.apache.hudi.sink.successfile.SuccessFileWriteFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
 
@@ -432,6 +435,22 @@ public class Pipelines {
     return dataStream.addSink(Pipelines.DummySink.INSTANCE)
         .setParallelism(1)
         .name("dummy");
+  }
+
+  /**
+   * Create a dataStream to write success file to finished partitions.
+   * @param conf
+   * @param dataStream
+   * @return
+   */
+  public static DataStream<Object> successFileWrite(Configuration conf, DataStream<Object> dataStream) {
+    SuccessFileWriteFunction<Object> function = new SuccessFileWriteFunction<>(conf);
+    SuccessFileSinkOperator<Object> operator = new SuccessFileSinkOperator<>(function);
+    SuccessFileSinkOperatorFactory<Object> operatorFactory = new SuccessFileSinkOperatorFactory<>(operator, conf);
+    return dataStream
+            .transform(opName("hoodie_success_file_write", conf), TypeInformation.of(Object.class), operatorFactory)
+            .uid("uid_success_file_write" + conf.getString(FlinkOptions.TABLE_NAME))
+            .setParallelism(1);
   }
 
   public static String opName(String operatorN, Configuration conf) {

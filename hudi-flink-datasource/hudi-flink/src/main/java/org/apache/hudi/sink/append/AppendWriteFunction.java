@@ -83,7 +83,13 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     if (this.writerHelper == null) {
       initWriterHelper();
     }
-    this.writerHelper.write((RowData) value);
+    RowData rowValue = (RowData) value;
+    // Get partition path from the record, and emit it to next operator.
+    String partitionPath = this.writerHelper.getPartitionPath(rowValue);
+    if (partitionPath != null && out != null) {
+      out.collect(partitionPath);
+    }
+    this.writerHelper.write(rowValue);
   }
 
   /**
@@ -141,4 +147,5 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
   }
+
 }

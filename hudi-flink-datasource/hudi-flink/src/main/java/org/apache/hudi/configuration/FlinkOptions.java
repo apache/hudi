@@ -40,6 +40,7 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -851,6 +852,34 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .noDefaultValue()
       .withDescription("The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine");
+
+  public static final ConfigOption<String> PARTITION_TIME_EXTRACTOR_TIMESTAMP_PATTERN = ConfigOptions
+          .key("partition.time-extractor.timestamp-pattern")
+          .stringType()
+          .noDefaultValue()
+          .withDescription(
+                  "The 'default' construction way allows users to use partition"
+                          + " fields to get a legal timestamp pattern."
+                          + " Default support 'yyyy-mm-dd hh:mm:ss' from first field."
+                          + " If timestamp in partition is single field 'dt', can configure: '$dt'."
+                          + " If timestamp in partition is year, month, day, hour,"
+                          + " can configure: '$year-$month-$day $hour:00:00'."
+                          + " If timestamp in partition is dt and hour, can configure: '$dt $hour:00:00'.");
+
+  public static final ConfigOption<Duration> PARTITION_WRITE_SUCCESS_FILE_DELAY = ConfigOptions
+          .key("partition.write-success-file.delay")
+          .durationType()
+          .defaultValue(Duration.ofMillis(0))
+          .withDescription("The success file should be write to partition path until the delay time."
+                  + " if it is a day partition, should be '1 d',"
+                  + " if it is a hour partition, should be '1 h'");
+
+
+  public static final ConfigOption<Boolean> PARTITION_WRITE_SUCCESS_FILE_ENABLE = ConfigOptions
+          .key("partition.write-success-file.enable")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("whether enable write success file to finished partition. true for enable, false for disable");
 
   // -------------------------------------------------------------------------
   //  Utilities
