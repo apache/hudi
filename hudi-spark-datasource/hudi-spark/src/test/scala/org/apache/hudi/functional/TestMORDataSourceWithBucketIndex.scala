@@ -38,20 +38,14 @@ import scala.collection.JavaConversions._
 class TestMORDataSourceWithBucketIndex extends HoodieClientTestBase {
 
   var spark: SparkSession = null
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    "hoodie.bulkinsert.shuffle.parallelism" -> "2",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieIndexConfig.INDEX_TYPE.key -> IndexType.BUCKET.name,
+  val bucketIndexOpts = Map(HoodieIndexConfig.INDEX_TYPE.key -> IndexType.BUCKET.name,
     HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "8",
     KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> "_row_key",
     HoodieLayoutConfig.LAYOUT_TYPE.key -> HoodieStorageLayout.LayoutType.BUCKET.name,
     HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME.key -> classOf[SparkBucketIndexPartitioner[_]].getName
   )
+
+  val commonOpts = getCommonOptions ++ bucketIndexOpts
 
   @BeforeEach override def setUp(): Unit = {
     initPath()

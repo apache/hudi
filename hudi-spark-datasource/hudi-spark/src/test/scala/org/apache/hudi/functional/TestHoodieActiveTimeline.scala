@@ -42,14 +42,7 @@ class TestHoodieActiveTimeline extends HoodieClientTestBase {
 
   private val log = LogManager.getLogger(classOf[TestHoodieActiveTimeline])
 
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-  )
+  val commonOpts = getCommonOptions
 
   @BeforeEach
   override def setUp() {

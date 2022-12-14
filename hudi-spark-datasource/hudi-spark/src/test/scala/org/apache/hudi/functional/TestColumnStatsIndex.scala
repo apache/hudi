@@ -88,6 +88,9 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     val commonOpts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "2",
+      HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key -> "2",
+      HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "2",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",

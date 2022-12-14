@@ -47,7 +47,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
-import scala.collection.JavaConversions.mapAsJavaMap
+import scala.collection.JavaConversions.{mapAsJavaMap, mapAsScalaMap}
 import scala.collection.JavaConverters._
 
 /**
@@ -57,14 +57,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
   var spark: SparkSession = null
   private val log = LogManager.getLogger(classOf[TestMORDataSource])
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-  )
+  val commonOpts = getCommonOptions
 
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
@@ -508,6 +501,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val commonOptsNoPreCombine = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "2",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
@@ -1021,8 +1015,10 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
       HoodieWriteConfig.TBL_NAME.key -> tableName,
-      "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1")
+      "hoodie.insert.shuffle.parallelism" -> "2",
+      "hoodie.upsert.shuffle.parallelism" -> "2",
+      HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "2",
+      HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "2")
 
     // First batch with all inserts
     // Deltacommit1 (DC1, completed), writing file group 1 (fg1)

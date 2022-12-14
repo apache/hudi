@@ -32,6 +32,7 @@ class TestGenericRecordAndRowConsistency extends HoodieClientTestBase {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_type_consistency_tbl",
     "hoodie.insert.shuffle.parallelism" -> "1",
     "hoodie.upsert.shuffle.parallelism" -> "1",
+    HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "2",
     DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "str,eventTime",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "typeId",
