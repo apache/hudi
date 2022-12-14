@@ -52,6 +52,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABAS
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_OMIT_METADATA_FIELDS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SKIP_RT_SUFFIX_FOR_READ_SNAPSHOT_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
@@ -121,7 +122,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           this.roTableName = Option.empty();
           break;
         case MERGE_ON_READ:
-          this.snapshotTableName = tableName + SUFFIX_SNAPSHOT_TABLE;
+          if (config.getBoolean(HIVE_SKIP_RT_SUFFIX_FOR_READ_SNAPSHOT_TABLE)
+                  && config.getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)) {
+            throw new HoodieHiveSyncException("Can not skip _ro and _rt suffix both at the same time!");
+          }
+          this.snapshotTableName = config.getBoolean(HIVE_SKIP_RT_SUFFIX_FOR_READ_SNAPSHOT_TABLE)
+                  ? tableName
+                  : tableName + SUFFIX_SNAPSHOT_TABLE;
           this.roTableName = config.getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)
               ? Option.of(tableName)
               : Option.of(tableName + SUFFIX_READ_OPTIMIZED_TABLE);
