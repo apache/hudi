@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -31,9 +32,22 @@ import java.io.IOException;
  */
 public class HoodieRangeInfoHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
+  private HoodieBaseFile latestBaseFile = null;
+
   public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-      Pair<String, String> partitionPathFilePair) {
+                               Pair<String, String> partitionPathFilePair) {
     super(config, hoodieTable, partitionPathFilePair);
+  }
+
+  public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
+                               String partitionPath, HoodieBaseFile latestBaseFile) {
+    super(config, hoodieTable, Pair.of(partitionPath, latestBaseFile.getFileId()));
+    this.latestBaseFile = latestBaseFile;
+  }
+
+  @Override
+  protected HoodieBaseFile getLatestDataFile() {
+    return Option.ofNullable(latestBaseFile).orElse(super.getLatestDataFile());
   }
 
   public String[] getMinMaxKeys() throws IOException {
@@ -41,11 +55,4 @@ public class HoodieRangeInfoHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
       return reader.readMinMaxRecordKeys();
     }
   }
-
-  public String[] getMinMaxKeys(HoodieBaseFile baseFile) throws IOException {
-    try (HoodieFileReader reader = createNewFileReader(baseFile)) {
-      return reader.readMinMaxRecordKeys();
-    }
-  }
-
 }
