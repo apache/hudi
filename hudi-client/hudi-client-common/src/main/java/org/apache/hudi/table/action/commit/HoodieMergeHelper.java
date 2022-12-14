@@ -60,6 +60,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.isStrictProjectionOf;
+import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
+import static org.apache.hudi.avro.HoodieAvroUtils.stitchRecords;
 
 public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
@@ -123,6 +125,13 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
         bootstrapFileReader =
             HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, bootstrapFilePath);
+        // NOTE: It's important for us to rely on writer's schema here
+        //         - When records will be read by Parquet reader, if schema will be decoded from the
+        //         file itself by taking its Parquet one and converting it to Avro. This will be problematic
+        //         w/ schema validations of the records since Avro's schemas also validate corresponding
+        //         qualified names of the structs, which could not be reconstructed when converting from
+        //         Parquet to Avro (b/c Parquet doesn't bear these)
+        Schema bootstrapSchema = mergeHandle.getWriterSchema();
         recordIterator = new MergingIterator(baseFileRecordIterator, bootstrapFileReader.getRecordIterator(),
             (left, right) -> left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
