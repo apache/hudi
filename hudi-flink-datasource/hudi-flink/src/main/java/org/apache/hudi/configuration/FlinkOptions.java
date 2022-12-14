@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -851,6 +852,12 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .noDefaultValue()
       .withDescription("The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine");
+
+  public static final ConfigOption<String> HIVE_SYNC_TABLE_STRATEGY = ConfigOptions
+          .key("hive_sync.table.strategy")
+          .stringType()
+          .defaultValue(HoodieSyncTableStrategy.ALL.name())
+          .withDescription("Hive table synchronization strategy. Available option: RO, RT, ALL.");
 
   // -------------------------------------------------------------------------
   //  Utilities
