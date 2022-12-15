@@ -24,8 +24,10 @@ import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.model.CleanFileInfo;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -48,7 +50,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 /**
  * Utils for clean action.
  */
-public class CleanerUtils {
+public class CleanerUtils<T extends HoodieAvroPayload, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(CleanerUtils.class);
 
@@ -159,6 +161,48 @@ public class CleanerUtils {
         break;
       default:
         throw new IllegalArgumentException("Unsupported action type " + actionType);
+    }
+  }
+
+  /**
+   * Get latest clean planner clean time.
+   * @param metaClient
+   * @return Latest clean planner clean time.
+   * @throws IOException
+   */
+  public static Option<String> getLatestInstantCleanTime(HoodieTableMetaClient metaClient)
+      throws IOException {
+    HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
+    Option<HoodieInstant> lastCleanInstantOption = activeTimeline.getCleanerTimeline().lastInstant();
+    Option<HoodieCleanMetadata> cleanMetadata = lastCleanInstantOption.isPresent() && ! activeTimeline.isEmpty(lastCleanInstantOption.get())
+        ? Option.ofNullable(TimelineMetadataUtils.deserializeHoodieCleanMetadata(activeTimeline.getInstantDetails(lastCleanInstantOption.get()).get()))
+        : Option.empty();
+    return cleanMetadata.isPresent() ? Option.ofNullable(cleanMetadata.get().getStartCleanTime()) : Option.empty();
+  }
+
+  /**
+   * Get earliest unClean completed instant
+   * @param metaClient
+   * @return
+   * @throws IOException
+   */
+  public static Option<HoodieInstant> getEarliestUnCleanCompletedInstant(HoodieTableMetaClient metaClient) throws IOException {
+    Option<String> earliestInstantCleanTime = getLatestInstantCleanTime(metaClient);
+    if (earliestInstantCleanTime.isPresent()) {
+      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+      return activeTimeline.getCommitsTimeline().filterCompletedInstants().filter(instant ->
+        instant.getMarkerFileAccessTimestamp().isPresent()
+          && HoodieTimeline.compareTimestamps(instant.getMarkerFileAccessTimestamp().get(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestInstantCleanTime.get())).firstInstant();
+    } else {
+      // if no clean instant, return first completed clustering instant
+      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+      Option<HoodieInstant> firstCompletedClusteringInstant = activeTimeline.getCommitsTimeline().filterCompletedInstants()
+            .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).firstInstant();
+      if (firstCompletedClusteringInstant.isPresent()) {
+        return firstCompletedClusteringInstant;
+      } else {
+        return Option.empty();
+      }
     }
   }
 }
