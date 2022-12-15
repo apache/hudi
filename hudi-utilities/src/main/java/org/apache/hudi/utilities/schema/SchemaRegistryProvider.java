@@ -79,6 +79,10 @@ public class SchemaRegistryProvider extends SchemaProvider {
     }
     ObjectMapper mapper = new ObjectMapper();
     JsonNode node = mapper.readTree(getStream(connection));
+    if (node.get("schemaType").asText().equalsIgnoreCase("JSON")) {
+      // convert json schema to avro
+      return JsonSchemaToAvroSchemaConverter.convertJsonSchemaToAvroSchema(node.get("schema").asText());
+    }
     return node.get("schema").asText();
   }
 
