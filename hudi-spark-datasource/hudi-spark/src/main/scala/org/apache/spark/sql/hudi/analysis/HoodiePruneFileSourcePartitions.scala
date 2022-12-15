@@ -40,22 +40,24 @@ import org.apache.spark.sql.types.StructType
 case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
-    case op @ PhysicalOperation(projects, filters,
-      lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _)) if shouldHandle(lr, fileIndex, filters) =>
+    case op @ PhysicalOperation(projects, filters, lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _))
+      if sparkAdapter.isHoodieTable(lr, spark) && filters.nonEmpty && fileIndex.partitionSchema.nonEmpty =>
 
       val deterministicFilters = filters.filter(f => f.deterministic && !SubqueryExpression.hasSubquery(f))
       val normalizedFilters = exprUtils.normalizeExprs(deterministicFilters, lr.output)
 
-      val (partitionKeyFilters, _) =
+      val (partitionPruningFilters, _) =
         getPartitionFiltersAndDataFilters(fileIndex.partitionSchema, normalizedFilters)
 
-      if (partitionKeyFilters.nonEmpty) {
+      // NOTE: We should only push-down the predicates [[HoodieFileIndex]], which we didn't
+      //       prune on before
+      if (partitionPruningFilters.nonEmpty && !fileIndex.prunedFor(partitionPruningFilters)) {
         // [[HudiFileIndex]] is a caching one, therefore we don't need to reconstruct new relation,
         // instead we simply just refresh the index and update the stats
-        fileIndex.listFiles(partitionKeyFilters, Seq())
+        fileIndex.listFiles(partitionPruningFilters, Seq())
 
         // Change table stats based on the sizeInBytes of pruned files
-        val filteredStats = FilterEstimation(Filter(partitionKeyFilters.reduce(And), lr)).estimate
+        val filteredStats = FilterEstimation(Filter(partitionPruningFilters.reduce(And), lr)).estimate
         val colStats = filteredStats.map {
           _.attributeStats.map { case (attr, colStat) =>
             (attr.name, colStat.toCatalogColumnStat(attr.name, attr.dataType))
@@ -78,11 +80,6 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
       }
   }
 
-  private def shouldHandle(lr: LogicalRelation, fileIndex: HoodieFileIndex, filters: Seq[Expression]) = {
-    sparkAdapter.isHoodieTable(lr, spark) && filters.nonEmpty && fileIndex.partitionSchema.nonEmpty &&
-      // NOTE: We should only push-down the filters if [[HoodieFileIndex]] caches are empty
-      !fileIndex.prunedFor(filters)
-  }
 }
 
 private object HoodiePruneFileSourcePartitions extends PredicateHelper {
