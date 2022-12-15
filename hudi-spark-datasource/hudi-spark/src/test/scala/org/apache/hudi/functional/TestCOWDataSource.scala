@@ -20,8 +20,9 @@ package org.apache.hudi.functional
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -30,7 +31,7 @@ import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
-import org.apache.hudi.exception.{HoodieException, HoodieUpsertException, SchemaCompatibilityException}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
@@ -38,8 +39,8 @@ import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, QuickstartUtils, ScalaAssertionSupport}
-import org.apache.spark.sql.{HoodieInternalRowUtils, _}
-import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
+import org.apache.spark.sql._
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
 import org.joda.time.DateTime
@@ -51,8 +52,6 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.sql.{Date, Timestamp}
 import java.util.function.Consumer
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -170,9 +169,10 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
    * For COW table, test the snapshot query mode and incremental query mode.
    */
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testPrunePartitionForTimestampBasedKeyGenerator(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(Array("true,AVRO", "true,SPARK", "false,AVRO", "false,SPARK"))
+  def testPrunePartitionForTimestampBasedKeyGenerator(enableFileIndex: Boolean,
+                                                      recordType: HoodieRecordType): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, enableFileIndex = enableFileIndex)
 
     val options = commonOpts ++ Map(
       "hoodie.compact.inline" -> "false",
@@ -207,12 +207,16 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
     val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
 
     // snapshot query
-    val snapshotQueryRes = spark.read.format("hudi").options(readOpts).load(basePath)
+    val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
+    val snapshotQueryRes = spark.read.format("hudi").options(readOpts).load(pathForReader)
     // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    //assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
-    //assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
-    assertEquals(snapshotQueryRes.where("partition = '2022/01/01'").count, 20)
-    assertEquals(snapshotQueryRes.where("partition = '2022/01/02'").count, 30)
+    if (enableFileIndex) {
+      assertEquals(snapshotQueryRes.where("partition = '2022/01/01'").count, 20)
+      assertEquals(snapshotQueryRes.where("partition = '2022/01/02'").count, 30)
+    } else {
+      assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
+      assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
+    }
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
@@ -266,9 +270,10 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testCopyOnWriteDeletes(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(Array("true,AVRO", "true,SPARK", "false,AVRO", "false,SPARK"))
+  def testCopyOnWriteDeletes(enableFileIndex: Boolean,
+                             recordType: HoodieRecordType): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, enableFileIndex = enableFileIndex)
 
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
@@ -280,13 +285,14 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
+    val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
     val snapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+      .load(pathForReader)
     assertEquals(100, snapshotDF1.count())
 
     val records2 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).toList
-    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2 , 2))
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
     inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
@@ -296,7 +302,7 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
 
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+      .load(pathForReader)
     assertEquals(snapshotDF2.count(), 80)
   }
 
@@ -804,11 +810,16 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
 
   @ParameterizedTest
   @CsvSource(Array(
-    "true,false,AVRO", "true,true,AVRO", "false,true,AVRO", "false,false,AVRO",
-    "true,false,SPARK", "true,true,SPARK", "false,true,SPARK", "false,false,SPARK"
+    "true,true,false,AVRO", "true,true,true,AVRO", "true,false,true,AVRO", "true,false,false,AVRO",
+    "true,true,false,SPARK", "true,true,true,SPARK", "true,false,true,SPARK", "true,false,false,SPARK",
+    "false,true,false,AVRO", "false,true,true,AVRO", "false,false,true,AVRO", "false,false,false,AVRO",
+    "false,true,false,SPARK", "false,true,true,SPARK", "false,false,true,SPARK", "false,false,false,SPARK"
   ))
-  def testQueryCOWWithBasePathAndFileIndex(partitionEncode: Boolean, isMetadataEnabled: Boolean, recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  def testQueryCOWWithBasePathAndFileIndex(enableFileIndex: Boolean,
+                                           partitionEncode: Boolean,
+                                           isMetadataEnabled: Boolean,
+                                           recordType: HoodieRecordType): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, enableFileIndex = enableFileIndex)
 
     val N = 20
     // Test query with partition prune if URL_ENCODE_PARTITIONING has enable
@@ -824,11 +835,12 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
     val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
 
     val countIn20160315 = records1.asScala.count(record => record.getPartitionPath == "2016/03/15")
+    val pathForReader = getPathForReader(basePath, !enableFileIndex, if (partitionEncode) 1 else 3)
     // query the partition by filter
     val count1 = spark.read.format("hudi")
       .options(readOpts)
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .load(basePath)
+      .load(pathForReader)
       .filter("partition = '2016/03/15'")
       .count()
     assertEquals(countIn20160315, count1)
@@ -880,9 +892,14 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
   }
 
   @ParameterizedTest
-  @CsvSource(Array("true, AVRO", "false, AVRO", "true, SPARK", "false, SPARK"))
-  def testCopyOnWriteWithDroppedPartitionColumns(enableDropPartitionColumns: Boolean, recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(Array(
+    "true, true, AVRO", "true, false, AVRO", "true, true, SPARK", "true, false, SPARK",
+    "false, true, AVRO", "false, false, AVRO", "false, true, SPARK", "false, false, SPARK"
+  ))
+  def testCopyOnWriteWithDroppedPartitionColumns(enableFileIndex: Boolean,
+                                                 enableDropPartitionColumns: Boolean,
+                                                 recordType: HoodieRecordType) {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, enableFileIndex = enableFileIndex)
 
     val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -892,15 +909,18 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
       .option(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key, enableDropPartitionColumns)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val snapshotDF1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+
+    val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
+    val snapshotDF1 = spark.read.format("hudi").options(readOpts).load(pathForReader)
     assertEquals(snapshotDF1.count(), 100)
     assertEquals(3, snapshotDF1.select("partition").distinct().count())
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testHoodieIsDeletedCOW(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(Array("true,AVRO", "true,SPARK", "false,AVRO", "false,SPARK"))
+  def testHoodieIsDeletedCOW(enableFileIndex: Boolean,
+                             recordType: HoodieRecordType): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, enableFileIndex = enableFileIndex)
 
     val numRecords = 100
     val numRecordsToDelete = 2
@@ -911,9 +931,10 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
+    val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
     val snapshotDF0 = spark.read.format("org.apache.hudi")
       .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+      .load(pathForReader)
     assertEquals(numRecords, snapshotDF0.count())
 
     val df1 = snapshotDF0.limit(numRecordsToDelete)
@@ -928,14 +949,15 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
       .save(basePath)
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+      .load(pathForReader)
     assertEquals(numRecords - numRecordsToDelete, snapshotDF2.count())
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testWriteSmallPrecisionDecimalTable(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(Array("true,AVRO", "true,SPARK", "false,AVRO", "false,SPARK"))
+  def testWriteSmallPrecisionDecimalTable(enableFileIndex: Boolean,
+                                          recordType: HoodieRecordType): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, enableFileIndex = enableFileIndex)
 
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -953,7 +975,9 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
-    val readResult = spark.read.format("hudi").options(readOpts).load(basePath)
+
+    val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
+    val readResult = spark.read.format("hudi").options(readOpts).load(pathForReader)
     assert(readResult.count() == 5)
     // compare the test result
     assertEquals(inputDF2.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","),
@@ -961,9 +985,14 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
   }
 
   @ParameterizedTest
-  @CsvSource(Array("true, AVRO", "false, AVRO", "true, SPARK", "false, SPARK"))
-  def testPartitionColumnsProperHandling(useGlobbing: Boolean, recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(Array(
+    "true, true, AVRO", "true, false, AVRO", "true, true, SPARK", "true, false, SPARK",
+    "false, true, AVRO", "false, false, AVRO", "false, true, SPARK", "false, false, SPARK"
+  ))
+  def testPartitionColumnsProperHandling(enableFileIndex: Boolean,
+                                         useGlobbing: Boolean,
+                                         recordType: HoodieRecordType): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, enableFileIndex = enableFileIndex)
 
     val _spark = spark
     import _spark.implicits._
@@ -990,20 +1019,16 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
     // NOTE: We're testing here that both paths are appropriately handling
     //       partition values, regardless of whether we're reading the table
     //       t/h a globbed path or not
-    val path = if (useGlobbing) {
-      s"$basePath/*/*/*/*"
-    } else {
-      basePath
-    }
+    val pathForReader = getPathForReader(basePath, useGlobbing || !enableFileIndex, 3)
 
     // Case #1: Partition columns are read from the data file
-    val firstDF = spark.read.format("hudi").options(readOpts).load(path)
+    val firstDF = spark.read.format("hudi").options(readOpts).load(pathForReader)
 
     assert(firstDF.count() == 2)
 
     // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
     // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    val expectedValues = if (useGlobbing) {
+    val expectedValues = if (useGlobbing || !enableFileIndex) {
       Seq("2018-09-23", "2018-09-24")
     } else {
       Seq("2018/09/23", "2018/09/24")
@@ -1019,11 +1044,11 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
     //
     // NOTE: This case is only relevant when globbing is NOT used, since when globbing is used Spark
     //       won't be able to infer partitioning properly
-    if (!useGlobbing) {
+    if (!useGlobbing && enableFileIndex) {
       val secondDF = spark.read.format("hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key, "true")
-        .load(path)
+        .load(pathForReader)
 
       assert(secondDF.count() == 2)
 
@@ -1040,10 +1065,12 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testSaveAsTableInDifferentModes(recordType: HoodieRecordType): Unit = {
+  @CsvSource(Array("true,AVRO", "true,SPARK", "false,AVRO", "false,SPARK"))
+  def testSaveAsTableInDifferentModes(enableFileIndex: Boolean,
+                                      recordType: HoodieRecordType): Unit = {
     val options = scala.collection.mutable.Map.empty ++ commonOpts ++ Map("path" -> basePath)
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, options.toMap)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, options.toMap, enableFileIndex)
+    val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
 
     // first use the Overwrite mode
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
@@ -1059,7 +1086,11 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
       .setBasePath(basePath)
       .setConf(spark.sessionState.newHadoopConf)
       .build()
-    assertEquals(spark.read.format("hudi").options(readOpts).load(basePath).count(), 5)
+    assertEquals(spark.read.format("hudi")
+      .options(readOpts)
+      .load(pathForReader)
+      .count(),
+      5)
 
     // use the Append mode
     val records2 = recordsToStrings(dataGen.generateInserts("002", 6)).toList
@@ -1069,7 +1100,11 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
       .options(writeOpts)
       .mode(SaveMode.Append)
       .saveAsTable("hoodie_test")
-    assertEquals(spark.read.format("hudi").options(readOpts).load(basePath).count(), 11)
+    assertEquals(spark.read.format("hudi")
+      .options(readOpts)
+      .load(pathForReader)
+      .count(),
+      11)
 
     // use the Ignore mode
     val records3 = recordsToStrings(dataGen.generateInserts("003", 7)).toList
@@ -1103,7 +1138,11 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
       .options(writeOpts)
       .mode(SaveMode.Overwrite)
       .saveAsTable("hoodie_test")
-    assertEquals(spark.read.format("hudi").options(readOpts).load(basePath).count(), 9)
+    assertEquals(spark.read.format("hudi")
+      .options(readOpts)
+      .load(pathForReader)
+      .count(),
+      9)
   }
 
   @ParameterizedTest
@@ -1131,10 +1170,26 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
     assertEquals(false, Metrics.isInitialized, "Metrics should be shutdown")
   }
 
-  def getWriterReaderOpts(recordType: HoodieRecordType, opt: Map[String, String] = commonOpts): (Map[String, String], Map[String, String]) = {
+  def getWriterReaderOpts(recordType: HoodieRecordType,
+                          opt: Map[String, String] = commonOpts,
+                          enableFileIndex: Boolean = DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.defaultValue()):
+  (Map[String, String], Map[String, String]) = {
+    val fileIndexOpt: Map[String, String] =
+      Map(DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key -> enableFileIndex.toString)
+
     recordType match {
-      case HoodieRecordType.SPARK => (opt ++ sparkOpts, sparkOpts)
-      case _ => (opt, Map.empty[String, String])
+      case HoodieRecordType.SPARK => (opt ++ sparkOpts, sparkOpts ++ fileIndexOpt)
+      case _ => (opt, fileIndexOpt)
+    }
+  }
+
+  def getPathForReader(basePath: String, useGlobbing: Boolean, partitionPathLevel: Int): String = {
+    if (useGlobbing) {
+      // When explicitly using globbing or not using HoodieFileIndex, we fall back to the old way
+      // of reading Hudi table with globbed path
+      basePath + "/*" * (partitionPathLevel + 1)
+    } else {
+      basePath
     }
   }
 }

@@ -67,6 +67,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
   )
 
   var queryOpts = Map(
+    DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key -> "true",
     DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
   )
 
