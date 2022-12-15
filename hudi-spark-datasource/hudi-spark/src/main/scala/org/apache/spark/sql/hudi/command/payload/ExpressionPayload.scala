@@ -38,7 +38,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, Projection, SafeProjection}
 import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
-import org.apache.spark.sql.types.BooleanType
+import org.apache.spark.sql.types.{BooleanType, StructType}
 
 import java.util.function.{Function, Supplier}
 import java.util.{Base64, Objects, Properties}
@@ -80,7 +80,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     val recordSchema = getRecordSchema(properties)
 
     val sourceRecord = bytesToAvro(recordBytes, recordSchema)
-    val joinedRecord = joinRecord(sourceRecord, targetRecord)
+    val joinedRecord = joinRecord(sourceRecord, targetRecord, properties)
 
     processMatchedRecord(ConvertibleRecord(joinedRecord), Some(targetRecord), properties)
   }
@@ -272,7 +272,7 @@ class ExpressionPayload(@transient record: GenericRecord,
    */
   private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord, props: Properties): GenericRecord = {
     val leftSchema = sourceRecord.getSchema
-    val joinSchema = getMergedSchema(leftSchema, targetRecord.getSchema, props)
+    val joinSchema = getMergedSchema(leftSchema, targetRecord.getSchema)
 
     // TODO rebase onto JoinRecord
     val values = new Array[AnyRef](joinSchema.getFields.size())
