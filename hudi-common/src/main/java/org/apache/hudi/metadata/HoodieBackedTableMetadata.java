@@ -152,7 +152,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   public List<String> getPartitionPathsWithPrefixes(List<String> prefixes) throws IOException {
     return getAllPartitionPaths().stream()
-        .filter(p -> prefixes.stream().anyMatch(p::startsWith))
+        .filter(p -> prefixes.stream().anyMatch(queryPaths ->
+            p.startsWith(queryPaths + "/") || queryPaths.equals(p) || (StringUtils.isNullOrEmpty(queryPaths) && p.startsWith(queryPaths))))
         .collect(Collectors.toList());
   }
 
