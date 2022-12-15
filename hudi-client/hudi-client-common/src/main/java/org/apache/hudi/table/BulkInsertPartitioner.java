@@ -20,10 +20,16 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.io.WriteHandleFactory;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Partitions the input records for bulk insert operation.
@@ -47,7 +53,7 @@ public interface BulkInsertPartitioner<I> extends Serializable {
   I repartitionRecords(I records, int outputPartitions);
 
   /**
-   * @return {@code true} if the records within a partition are sorted; {@code false} otherwise.
+   * @return {@code true} if the records are sorted by partition-path; {@code false} otherwise.
    */
   boolean arePartitionRecordsSorted();
 
@@ -70,6 +76,33 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    */
   default Option<WriteHandleFactory> getWriteHandleFactory(int partitionId) {
     return Option.empty();
+  }
+
+  /*
+   * If possible, we want to sort the data by partition path. Doing so will reduce the number of files written.
+   **/
+  static String[] prependPartitionPathColumn(String[] columnNames, HoodieWriteConfig config) {
+    String partitionPath = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    if (partitionPath.isEmpty() || config.getMetadataConfig().populateMetaFields()) {
+      //If we have meta fields we can just leverage those instead
+      return columnNames;
+    }
+    ArrayList<String> sortCols = new ArrayList<>();
+    Set<String> used = new HashSet<>();
+    Arrays.stream(partitionPath.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .forEach(col -> {
+          sortCols.add(col);
+          used.add(col);
+        });
+    for (String col : columnNames) {
+      if (!used.contains(col)) {
+        sortCols.add(col);
+        used.add(col);
+      }
+    }
+    return sortCols.toArray(new String[0]);
   }
 
 }

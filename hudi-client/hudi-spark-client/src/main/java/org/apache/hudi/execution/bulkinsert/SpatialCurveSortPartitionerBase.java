@@ -78,6 +78,8 @@ public abstract class SpatialCurveSortPartitionerBase<T> implements BulkInsertPa
 
   @Override
   public boolean arePartitionRecordsSorted() {
-    return true;
+    //The data is sorted using a function that maps multiple columns into a single dimension.
+    //Therefore, it is not sorted by partition.
+    return false;
   }
 }

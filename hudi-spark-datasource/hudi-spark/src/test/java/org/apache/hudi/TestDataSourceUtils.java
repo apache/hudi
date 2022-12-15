@@ -214,7 +214,7 @@ public class TestDataSourceUtils {
             .newBuilder()
             .withPath("/")
             .withUserDefinedBulkInsertPartitionerClass(RDDCustomColumnsSortPartitioner.class.getName())
-            .withUserDefinedBulkInsertPartitionerSortColumns("column1, column2")
+            .withUserDefinedBulkInsertPartitionerSortColumns("column1,column2")
             .withSchema(avroSchemaString)
             .build();
 

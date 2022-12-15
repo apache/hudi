@@ -24,8 +24,10 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.spark.sql.SaveMode
+import org.scalatest.Inspectors.forAll
 
 import java.io.File
 
@@ -1046,4 +1048,62 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       )
     }
   }
+
+  /**
+   * This test is to make sure that bulk insert doesn't create a bunch of tiny files if
+   * hoodie.bulkinsert.user.defined.partitioner.sort.columns doesn't start with the partition columns
+   *
+   */
+  forAll(BulkInsertSortMode.values().toList) { (sortMode: BulkInsertSortMode) =>
+    val sortModeName = sortMode.name()
+    test(s"Test Bulk Insert with BulkInsertSortMode: '$sortModeName'") {
+      withTempDir { basePath =>
+        testBulkInsertPartitioner(basePath, sortModeName)
+      }
+    }
+  }
+
+  def testBulkInsertPartitioner(basePath: File, sortModeName: String): Unit = {
+    val tableName = generateTableName
+    //Default parallelism is 200 which means in global sort, each record will end up in a different spark partition so
+    //9 files would be created. Setting parallelism to 3 so that each spark partition will contain a hudi partition.
+    val parallelism = if (sortModeName.equals(BulkInsertSortMode.GLOBAL_SORT.name())) {
+      "hoodie.bulkinsert.shuffle.parallelism = 3,"
+    } else {
+      ""
+    }
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  dt string
+         |) using hudi
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  type = 'cow',
+         |  $parallelism
+         |  hoodie.bulkinsert.sort.mode = '$sortModeName'
+         | )
+         | partitioned by (dt)
+         | location '${basePath.getCanonicalPath}/$tableName'
+        """.stripMargin)
+    spark.sql("set hoodie.sql.bulk.insert.enable = true")
+    spark.sql("set hoodie.sql.insert.mode = non-strict")
+    spark.sql(
+      s"""insert into $tableName  values
+         |(5, 'a', 35, '2021-05-21'),
+         |(1, 'a', 31, '2021-01-21'),
+         |(3, 'a', 33, '2021-03-21'),
+         |(4, 'b', 16, '2021-05-21'),
+         |(2, 'b', 18, '2021-01-21'),
+         |(6, 'b', 17, '2021-03-21'),
+         |(8, 'a', 21, '2021-05-21'),
+         |(9, 'a', 22, '2021-01-21'),
+         |(7, 'a', 23, '2021-03-21')
+         |""".stripMargin)
+    assertResult(3)(spark.sql(s"select distinct _hoodie_file_name from $tableName").count())
+  }
+
 }
