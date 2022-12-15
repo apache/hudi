@@ -897,28 +897,40 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (!tableServicesEnabled(config)) {
       return null;
     }
-    final Timer.Context timerContext = metrics.getCleanCtx();
-    CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
-        HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites(skipLocking));
-
-    HoodieTable table = createTable(config, hadoopConf);
-    if (config.allowMultipleCleans() || !table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
-      LOG.info("Cleaner started");
-      // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
-      if (scheduleInline) {
-        scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
-        table.getMetaClient().reloadActiveTimeline();
+    HoodieCleanMetadata metadata;
+    HoodieInstant ownerInstant = null;
+    try {
+      if (!skipLocking) {
+        ownerInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstantTime);
+        this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
       }
-    }
+      final Timer.Context timerContext = metrics.getCleanCtx();
+      CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
+              HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites(true));
 
-    // Proceeds to execute any requested or inflight clean instances in the timeline
-    HoodieCleanMetadata metadata = table.clean(context, cleanInstantTime, skipLocking);
-    if (timerContext != null && metadata != null) {
-      long durationMs = metrics.getDurationInMs(timerContext.stop());
-      metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
-      LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files"
-          + " Earliest Retained Instant :" + metadata.getEarliestCommitToRetain()
-          + " cleanerElapsedMs" + durationMs);
+      HoodieTable table = createTable(config, hadoopConf);
+      if (config.allowMultipleCleans() || !table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
+        LOG.info("Cleaner started");
+        // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
+        if (scheduleInline) {
+          scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
+          table.getMetaClient().reloadActiveTimeline();
+        }
+      }
+
+      // Proceeds to execute any requested or inflight clean instances in the timeline
+      metadata = table.clean(context, cleanInstantTime, true);
+      if (timerContext != null && metadata != null) {
+        long durationMs = metrics.getDurationInMs(timerContext.stop());
+        metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
+        LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files"
+                + " Earliest Retained Instant :" + metadata.getEarliestCommitToRetain()
+                + " cleanerElapsedMs" + durationMs);
+      }
+    } finally {
+      if (!skipLocking) {
+        this.txnManager.endTransaction(Option.of(ownerInstant));
+      }
     }
     return metadata;
   }
