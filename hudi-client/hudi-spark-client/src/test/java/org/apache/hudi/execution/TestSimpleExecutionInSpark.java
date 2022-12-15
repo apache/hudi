@@ -18,7 +18,7 @@
 
 package org.apache.hudi.execution;
 
-import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformFunction;
+import static org.apache.hudi.execution.HoodieLazyInsertIterable.getCloningTransformer;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -31,8 +31,6 @@ import org.apache.hudi.common.util.queue.SimpleHoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-import org.apache.spark.TaskContext;
-import org.apache.spark.TaskContext$;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,11 +65,6 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     cleanupResources();
   }
 
-  private Runnable getPreExecuteRunnable() {
-    final TaskContext taskContext = TaskContext.get();
-    return () -> TaskContext$.MODULE$.setTaskContext(taskContext);
-  }
-
   @Test
   public void testExecutor() {
 
@@ -86,7 +79,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
 
           @Override
           public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) throws Exception {
-            consumedRecords.add(record.record);
+            consumedRecords.add(record.getResult());
             count++;
           }
 
@@ -98,7 +91,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
+      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
 
       int result = exec.execute();
       // It should buffer and write 128 records
@@ -107,9 +100,6 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
       // collect all records and assert that consumed records are identical to produced ones
       // assert there's no tampering, and that the ordering is preserved
       assertEquals(hoodieRecords, consumedRecords);
-      for (int i = 0; i < hoodieRecords.size(); i++) {
-        assertEquals(hoodieRecords.get(i), consumedRecords.get(i));
-      }
 
     } finally {
       if (exec != null) {
@@ -143,8 +133,6 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
       }
     });
 
-    HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getDisruptorWriteBufferSize()).thenReturn(Option.of(16));
     HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
           private int count = 0;
@@ -152,9 +140,9 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
           @Override
           public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) throws Exception {
             count++;
-            afterRecord.add((HoodieAvroRecord) record.record);
+            afterRecord.add((HoodieAvroRecord) record.getResult());
             try {
-              IndexedRecord indexedRecord = (IndexedRecord)((HoodieAvroRecord) record.record)
+              IndexedRecord indexedRecord = (IndexedRecord)((HoodieAvroRecord) record.getResult())
                   .getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get();
               afterIndexedRecord.add(indexedRecord);
             } catch (IOException e) {
@@ -171,7 +159,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
+      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
       int result = exec.execute();
       assertEquals(100, result);
 
@@ -205,7 +193,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
           @Override
           public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) throws Exception {
             // Read recs and ensure we have covered all producer recs.
-            final HoodieRecord rec = payload.record;
+            final HoodieRecord rec = payload.getResult();
             count++;
           }
 
@@ -216,7 +204,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
         };
 
     SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec =
-        new SimpleHoodieExecutor(iterator, consumer, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
+        new SimpleHoodieExecutor(iterator, consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,
         "exception is expected");
