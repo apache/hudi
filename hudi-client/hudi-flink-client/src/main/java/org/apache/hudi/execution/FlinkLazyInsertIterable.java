@@ -28,7 +28,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.QueueBasedExecutorFactory;
+import org.apache.hudi.util.ExecutorFactory;
 
 import java.util.Iterator;
 import java.util.List;
@@ -56,10 +56,11 @@ public class FlinkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
   @Override
   protected List<WriteStatus> computeNext() {
     // Executor service used for launching writer thread.
-    HoodieExecutor<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> bufferedIteratorExecutor = null;
+    HoodieExecutor<List<WriteStatus>> bufferedIteratorExecutor = null;
     try {
       final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
-      bufferedIteratorExecutor = QueueBasedExecutorFactory.create(hoodieConfig, inputItr, getExplicitInsertHandler(), getCloningTransformer(schema, hoodieConfig));
+      bufferedIteratorExecutor = ExecutorFactory.create(hoodieConfig, inputItr, getExplicitInsertHandler(),
+          getCloningTransformer(schema, hoodieConfig));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       checkState(result != null && !result.isEmpty());
       return result;
