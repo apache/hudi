@@ -34,6 +34,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 
 import java.util.Properties;
 
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
@@ -119,6 +120,7 @@ public class HiveSyncContext {
     props.setPropertyIfNonNull(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX)));
     props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_ASSUME_DATE_PARTITION)));
     props.setPropertyIfNonNull(HIVE_SYNC_TABLE_STRATEGY.key(), String.valueOf(conf.getString(FlinkOptions.HIVE_SYNC_TABLE_STRATEGY)));
+    props.setPropertyIfNonNull(HIVE_CREATE_MANAGED_TABLE.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_CREATE_MANAGED_TABLE)));
     return props;
   }
 }

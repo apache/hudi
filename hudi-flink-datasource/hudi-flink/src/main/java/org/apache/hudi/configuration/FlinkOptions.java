@@ -875,6 +875,12 @@ public class FlinkOptions extends HoodieConfig {
           .defaultValue(HoodieSyncTableStrategy.ALL.name())
           .withDescription("Hive table synchronization strategy. Available option: RO, RT, ALL.");
 
+  public static final ConfigOption<Boolean> HIVE_SYNC_CREATE_MANAGED_TABLE = ConfigOptions
+          .key("hive_sync.create_managed_table")
+          .booleanType()
+          .defaultValue(true)
+          .withDescription("Whether to sync the table as managed table.");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
