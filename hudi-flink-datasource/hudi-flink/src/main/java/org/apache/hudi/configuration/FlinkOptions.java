@@ -878,7 +878,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> HIVE_SYNC_CREATE_MANAGED_TABLE = ConfigOptions
           .key("hive_sync.create_managed_table")
           .booleanType()
-          .defaultValue(true)
+          .defaultValue(false)
           .withDescription("Whether to sync the table as managed table.");
 
   // -------------------------------------------------------------------------
