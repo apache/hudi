@@ -67,7 +67,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     // Committed instant
     COMPLETED,
     // Invalid instant
-    INVALID
+    NIL
   }
 
   private State state = State.COMPLETED;

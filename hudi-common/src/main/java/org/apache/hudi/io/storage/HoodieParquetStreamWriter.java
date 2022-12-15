@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -36,18 +37,16 @@ import java.io.IOException;
  * Hudi log block writer for parquet format.
  * <p>
  * TODO(HUDI-3035) unify w/ HoodieParquetWriter.
- *
- * @param <R> Record implementation that permits field access by integer index.
  */
-public class HoodieParquetStreamWriter<R extends IndexedRecord> implements AutoCloseable {
+public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoCloseable {
 
-  private final ParquetWriter<R> writer;
+  private final ParquetWriter<IndexedRecord> writer;
   private final HoodieAvroWriteSupport writeSupport;
 
   public HoodieParquetStreamWriter(FSDataOutputStream outputStream,
                                    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
-    this.writer = new Builder<R>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
+    this.writer = new Builder<IndexedRecord>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
         .withWriteMode(ParquetFileWriter.Mode.CREATE)
         .withCompressionCodec(parquetConfig.getCompressionCodecName())
         .withRowGroupSize(parquetConfig.getBlockSize())
@@ -59,9 +58,21 @@ public class HoodieParquetStreamWriter<R extends IndexedRecord> implements AutoC
         .build();
   }
 
-  public void writeAvro(String key, R object) throws IOException {
-    writer.write(object);
+  @Override
+  public boolean canWrite() {
+    return true;
+  }
+
+  @Override
+  public void writeAvro(String key, IndexedRecord record) throws IOException {
+    writer.write(record);
     writeSupport.add(key);
+  }
+
+  @Override
+  public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
+    // TODO support populating the metadata
+    this.writeAvro(key.getRecordKey(), avroRecord);
   }
 
   @Override

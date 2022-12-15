@@ -232,7 +232,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
       // database name should be null
       JsonNode database = record.get("database");
       // insert and update records should be tagged as no delete
-      boolean isDelete = record.get(HoodieRecord.HOODIE_IS_DELETED).booleanValue();
+      boolean isDelete = record.get(HoodieRecord.HOODIE_IS_DELETED_FIELD).booleanValue();
 
       assertFalse(isDelete);
       assertNull(database);
@@ -252,7 +252,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
         .process(inputDelete).map(mapper::readTree).foreach(record -> {
 
           // delete records should be tagged as delete
-          boolean isDelete = record.get(HoodieRecord.HOODIE_IS_DELETED).booleanValue();
+          boolean isDelete = record.get(HoodieRecord.HOODIE_IS_DELETED_FIELD).booleanValue();
           // update_time should equals ts
           String updateTime = record.get("update_time").textValue();
 

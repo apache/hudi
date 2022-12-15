@@ -18,20 +18,19 @@
 
 package org.apache.hudi.client.utils;
 
-import java.util.Iterator;
-import java.util.function.Function;
-import org.apache.avro.generic.GenericRecord;
-
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 
-public class MergingIterator<T extends GenericRecord> implements Iterator<T> {
+import java.util.Iterator;
+import java.util.function.BiFunction;
 
-  private final Iterator<T> leftIterator;
-  private final Iterator<T> rightIterator;
-  private final Function<Pair<T,T>, T> mergeFunction;
+public class MergingIterator implements Iterator<HoodieRecord> {
 
-  public MergingIterator(Iterator<T> leftIterator, Iterator<T> rightIterator, Function<Pair<T,T>, T> mergeFunction) {
+  private final Iterator<HoodieRecord> leftIterator;
+  private final Iterator<HoodieRecord> rightIterator;
+  private final BiFunction<HoodieRecord, HoodieRecord, HoodieRecord> mergeFunction;
+
+  public MergingIterator(Iterator<HoodieRecord> leftIterator, Iterator<HoodieRecord> rightIterator, BiFunction<HoodieRecord, HoodieRecord, HoodieRecord> mergeFunction) {
     this.leftIterator = leftIterator;
     this.rightIterator = rightIterator;
     this.mergeFunction = mergeFunction;
@@ -46,7 +45,7 @@ public class MergingIterator<T extends GenericRecord> implements Iterator<T> {
   }
 
   @Override
-  public T next() {
-    return mergeFunction.apply(Pair.of(leftIterator.next(), rightIterator.next()));
+  public HoodieRecord next() {
+    return mergeFunction.apply(leftIterator.next(), rightIterator.next());
   }
 }

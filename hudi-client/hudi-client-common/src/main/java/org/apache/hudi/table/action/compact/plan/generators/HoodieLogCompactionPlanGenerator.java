@@ -92,6 +92,7 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
         .withLatestInstantTime(maxInstantTime)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
         .withUseScanV2(true)
+        .withRecordMerger(writeConfig.getRecordMerger())
         .build();
     scanner.scanInternal(Option.empty(), true);
     int totalBlocks = scanner.getCurrentInstantLogBlocks().size();

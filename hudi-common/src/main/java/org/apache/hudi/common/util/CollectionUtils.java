@@ -118,7 +118,6 @@ public class CollectionUtils {
     return combined;
   }
 
-
   /**
    * Combines provided {@link List}s into one, returning new instance of {@link ArrayList}
    */
@@ -153,6 +152,15 @@ public class CollectionUtils {
     combined.putAll(one);
     another.forEach((k, v) -> combined.merge(k, v, merge));
     return combined;
+  }
+
+  /**
+   * Zip two lists into a Map. Will throw Exception if the size is different between these two lists.
+   */
+  public static <K, V> Map<K, V> zipToMap(List<K> keys, List<V> values) {
+    checkArgument(keys.size() == values.size(),
+        "keys' size must be equal with the values' size");
+    return IntStream.range(0, keys.size()).boxed().collect(Collectors.toMap(keys::get, values::get));
   }
 
   /**
@@ -239,6 +247,15 @@ public class CollectionUtils {
       map.put(pair.getLeft(), pair.getRight());
     }
     return Collections.unmodifiableMap(map);
+  }
+
+  @SafeVarargs
+  public static <K,V> HashMap<K, V> createHashMap(final Pair<K, V>... elements) {
+    HashMap<K,V> map = new HashMap<>();
+    for (Pair<K,V> pair: elements) {
+      map.put(pair.getLeft(), pair.getRight());
+    }
+    return map;
   }
 
   @SafeVarargs

@@ -23,7 +23,10 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieSyncTableStrategy;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -112,6 +115,20 @@ public class FlinkOptions extends HoodieConfig {
       .withFallbackKeys("write.payload.class")
       .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
           + "This will render any value set for the option in-effective");
+
+  public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions
+      .key("record.merger.impls")
+      .stringType()
+      .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .withDescription("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
+          + "These merger impls will filter by record.merger.strategy. "
+          + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
+
+  public static final ConfigOption<String> RECORD_MERGER_STRATEGY = ConfigOptions
+      .key("record.merger.strategy")
+      .stringType()
+      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .withDescription("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in record.merger.impls which has the same merger strategy id");
 
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
       .key("partition.default_name")
@@ -851,6 +868,12 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .noDefaultValue()
       .withDescription("The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine");
+
+  public static final ConfigOption<String> HIVE_SYNC_TABLE_STRATEGY = ConfigOptions
+          .key("hive_sync.table.strategy")
+          .stringType()
+          .defaultValue(HoodieSyncTableStrategy.ALL.name())
+          .withDescription("Hive table synchronization strategy. Available option: RO, RT, ALL.");
 
   // -------------------------------------------------------------------------
   //  Utilities

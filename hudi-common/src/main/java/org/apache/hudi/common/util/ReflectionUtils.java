@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.log4j.LogManager;
@@ -66,18 +65,6 @@ public class ReflectionUtils {
       return (T) getClass(className).newInstance();
     } catch (InstantiationException | IllegalAccessException e) {
       throw new HoodieException("Could not load class " + className, e);
-    }
-  }
-
-  /**
-   * Instantiate a given class with a generic record payload.
-   */
-  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, Object[] payloadArgs,
-      Class<?>... constructorArgTypes) {
-    try {
-      return (T) getClass(recordPayloadClass).getConstructor(constructorArgTypes).newInstance(payloadArgs);
-    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-      throw new HoodieException("Unable to instantiate payload class ", e);
     }
   }
 

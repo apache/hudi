@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -417,8 +418,8 @@ public class HoodieTableMetadataUtil {
       }
 
       final Path writeFilePath = new Path(recordsGenerationParams.getDataMetaClient().getBasePath(), pathWithPartition);
-      try (HoodieFileReader<IndexedRecord> fileReader =
-               HoodieFileReaderFactory.getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), writeFilePath)) {
+      try (HoodieFileReader fileReader =
+               HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), writeFilePath)) {
         try {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
@@ -877,8 +878,8 @@ public class HoodieTableMetadataUtil {
         }
         final String pathWithPartition = partitionName + "/" + appendedFile;
         final Path appendedFilePath = new Path(recordsGenerationParams.getDataMetaClient().getBasePath(), pathWithPartition);
-        try (HoodieFileReader<IndexedRecord> fileReader =
-                 HoodieFileReaderFactory.getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), appendedFilePath)) {
+        try (HoodieFileReader fileReader =
+                 HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), appendedFilePath)) {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
             LOG.error("Failed to read bloom filter for " + appendedFilePath);
@@ -991,13 +992,15 @@ public class HoodieTableMetadataUtil {
    * just before the compaction instant time. The list of file slices returned is
    * sorted in the correct order of file group name.
    *
-   * @param metaClient - Instance of {@link HoodieTableMetaClient}.
-   * @param partition  - The name of the partition whose file groups are to be loaded.
+   * @param metaClient Instance of {@link HoodieTableMetaClient}.
+   * @param fsView     Metadata table filesystem view.
+   * @param partition  The name of the partition whose file groups are to be loaded.
    * @return List of latest file slices for all file groups in a given partition.
    */
-  public static List<FileSlice> getPartitionLatestMergedFileSlices(HoodieTableMetaClient metaClient, String partition) {
+  public static List<FileSlice> getPartitionLatestMergedFileSlices(
+      HoodieTableMetaClient metaClient, HoodieTableFileSystemView fsView, String partition) {
     LOG.info("Loading latest merged file slices for metadata table partition " + partition);
-    return getPartitionFileSlices(metaClient, Option.empty(), partition, true);
+    return getPartitionFileSlices(metaClient, Option.of(fsView), partition, true);
   }
 
   /**

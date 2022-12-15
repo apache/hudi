@@ -32,11 +32,11 @@ import java.io.IOException;
 public class ParquetReaderIterator<T> implements ClosableIterator<T> {
 
   // Parquet reader for an existing parquet file
-  private final ParquetReader<T> parquetReader;
+  private final ParquetReader<? extends T> parquetReader;
   // Holds the next entry returned by the parquet reader
   private T next;
 
-  public ParquetReaderIterator(ParquetReader<T> parquetReader) {
+  public ParquetReaderIterator(ParquetReader<? extends T> parquetReader) {
     this.parquetReader = parquetReader;
   }
 
@@ -64,7 +64,7 @@ public class ParquetReaderIterator<T> implements ClosableIterator<T> {
         }
       }
       T retVal = this.next;
-      this.next = parquetReader.read();
+      this.next = null;
       return retVal;
     } catch (Exception e) {
       FileIOUtils.closeQuietly(parquetReader);

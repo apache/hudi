@@ -320,8 +320,8 @@ public class SparkMain {
   }
 
   protected static int deleteMarker(JavaSparkContext jsc, String instantTime, String basePath) {
-    try {
-      SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
+    try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
+
       HoodieWriteConfig config = client.getConfig();
       HoodieEngineContext context = client.getEngineContext();
       HoodieSparkTable table = HoodieSparkTable.create(config, context);
@@ -573,8 +573,7 @@ public class SparkMain {
 
   private static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
                                      String comments, String basePath) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
-    try {
+    try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       client.savepoint(commitTime, user, comments);
       LOG.info(String.format("The commit \"%s\" has been savepointed.", commitTime));
       return 0;
@@ -585,8 +584,7 @@ public class SparkMain {
   }
 
   private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath, boolean lazyCleanPolicy) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, lazyCleanPolicy);
-    try {
+    try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, lazyCleanPolicy)) {
       client.restoreToSavepoint(savepointTime);
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
       return 0;
@@ -597,8 +595,7 @@ public class SparkMain {
   }
 
   private static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
-    try {
+    try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       client.deleteSavepoint(savepointTime);
       LOG.info(String.format("Savepoint \"%s\" deleted.", savepointTime));
       return 0;
