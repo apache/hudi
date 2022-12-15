@@ -60,8 +60,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.isStrictProjectionOf;
-import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.stitchRecords;
 
 public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
@@ -135,7 +133,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         recordIterator = new MergingIterator<>(
             baseFileRecordIterator,
             bootstrapFileReader.getRecordIterator(bootstrapSchema),
-            (inputRecordPair) ->
+            (left, right) ->
                 left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
       } else if (schemaEvolutionTransformerOpt.isPresent()) {
