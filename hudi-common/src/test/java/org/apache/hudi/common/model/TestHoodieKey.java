@@ -31,10 +31,10 @@ public class TestHoodieKey {
 
   @Test
   public void testPartitionPathValid() {
-    HoodieKey hoodieKey = new HoodieKey(UUID.randomUUID().toString(), "0000/00/00");
+    HoodieKey hoodieKey = new HoodieKey(UUID.randomUUID().toString(), "/0000/00/00");
     assertThrows(IllegalArgumentException.class, () -> {
       hoodieKey.getPartitionPath();
-      }, "should fail since partition path cannot begin with a /");
+    }, "should fail since partition path cannot begin with a /");
   }
 
 }
