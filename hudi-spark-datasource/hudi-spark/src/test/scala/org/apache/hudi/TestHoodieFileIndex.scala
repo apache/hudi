@@ -67,6 +67,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
   )
 
   var queryOpts = Map(
+    DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key -> "true",
     DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
   )
 
@@ -219,7 +220,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     )
     val prunedPartitions = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
       .map(_.values.toSeq(Seq(StringType))
-      .mkString(","))
+        .mkString(","))
       .toList
       .sorted
 

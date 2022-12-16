@@ -43,7 +43,7 @@ import org.apache.spark.sql.types.BooleanType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import java.util.function.Consumer
 import scala.collection.JavaConversions.mapAsJavaMap
@@ -911,8 +911,9 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
    *
    * For MOR table, test all the three query modes.
    */
-  @Test
-  def testPrunePartitionForTimestampBasedKeyGenerator(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPrunePartitionForTimestampBasedKeyGenerator(enableFileIndex: Boolean): Unit = {
     val options = commonOpts ++ Map(
       "hoodie.compact.inline" -> "false",
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
@@ -921,6 +922,9 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP -> "yyyy/MM/dd",
       Config.TIMESTAMP_TIMEZONE_FORMAT_PROP -> "GMT+8:00",
       Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP -> "yyyy-MM-dd"
+    )
+    val readOpts = Map(
+      DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key -> enableFileIndex.toString
     )
 
     val dataGen1 = new HoodieTestDataGenerator(Array("2022-01-01"))
@@ -953,9 +957,10 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .save(basePath)
     val commit3Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
 
+    val pathForROQuery = getPathForROQuery(basePath, !enableFileIndex, 3)
     // snapshot query
-    val snapshotQueryRes = spark.read.format("hudi").load(basePath)
-      assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit1Time'").count, 50)
+    val snapshotQueryRes = spark.read.format("hudi").options(readOpts).load(basePath)
+    assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit1Time'").count, 50)
     assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit2Time'").count, 40)
     assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit3Time'").count, 20)
 
@@ -964,16 +969,21 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
     // read_optimized query
     val readOptimizedQueryRes = spark.read.format("hudi")
+      .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .load(basePath)
+      .load(pathForROQuery)
     // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    //assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
-    //assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
-    assertEquals(readOptimizedQueryRes.where("partition = '2022/01/01'").count, 50)
-    assertEquals(readOptimizedQueryRes.where("partition = '2022/01/02'").count, 60)
+    if (enableFileIndex) {
+      assertEquals(readOptimizedQueryRes.where("partition = '2022/01/01'").count, 50)
+      assertEquals(readOptimizedQueryRes.where("partition = '2022/01/02'").count, 60)
+    } else {
+      assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
+      assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
+    }
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
+      .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit2Time)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commit3Time)
@@ -1002,8 +1012,9 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
    *
    * The read-optimized query should read `fg1_dc1.parquet` only in this case.
    */
-  @Test
-  def testReadOptimizedQueryAfterInflightCompactionAndCompletedDeltaCommit(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testReadOptimizedQueryAfterInflightCompactionAndCompletedDeltaCommit(enableFileIndex: Boolean): Unit = {
     val (tableName, tablePath) = ("hoodie_mor_ro_read_test_table", s"${basePath}_mor_test_table")
     val precombineField = "col3"
     val recordKeyField = "key"
@@ -1019,6 +1030,10 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       HoodieWriteConfig.TBL_NAME.key -> tableName,
       "hoodie.insert.shuffle.parallelism" -> "1",
       "hoodie.upsert.shuffle.parallelism" -> "1")
+    val readOpts = Map(
+      DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key -> enableFileIndex.toString
+    )
+    val pathForROQuery = getPathForROQuery(tablePath, !enableFileIndex, 0)
 
     // First batch with all inserts
     // Deltacommit1 (DC1, completed), writing file group 1 (fg1)
@@ -1080,15 +1095,26 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
     // Read-optimized query on MOR
     val roDf = spark.read.format("org.apache.hudi")
+      .options(readOpts)
       .option(
         DataSourceReadOptions.QUERY_TYPE.key,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .load(tablePath)
+      .load(pathForROQuery)
 
     // The base file in the first file slice, i.e., fg1_dc1.parquet, should be read only
     assertEquals(10, roDf.count())
     assertEquals(
       1000L,
       roDf.where(col(recordKeyField) === 0).select(dataField).collect()(0).getLong(0))
+  }
+
+  def getPathForROQuery(basePath: String, useGlobbing: Boolean, partitionPathLevel: Int): String = {
+    if (useGlobbing) {
+      // When explicitly using globbing or not using HoodieFileIndex, we fall back to the old way
+      // of reading Hudi table with globbed path
+      basePath + "/*" * (partitionPathLevel + 1)
+    } else {
+      basePath
+    }
   }
 }

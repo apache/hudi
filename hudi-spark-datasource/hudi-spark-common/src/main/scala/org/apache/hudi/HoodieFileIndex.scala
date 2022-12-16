@@ -254,10 +254,11 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def sizeInBytes: Long = cachedFileSize
 
-  private def isDataSkippingEnabled: Boolean = HoodieFileIndex.getBooleanConfigValue(options, spark.sessionState.conf, DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
-  "false")
+  private def isDataSkippingEnabled: Boolean = HoodieSparkConfUtils.getBooleanConfigValue(
+    options, spark.sessionState.conf, DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), false)
 
   private def isMetadataTableEnabled: Boolean = metadataConfig.enabled()
+
   private def isColumnStatsIndexEnabled: Boolean = metadataConfig.isColumnStatsIndexEnabled
 
   private def validateConfig(): Unit = {
@@ -270,10 +271,6 @@ case class HoodieFileIndex(spark: SparkSession,
 }
 
 object HoodieFileIndex extends Logging {
-
-  def getBooleanConfigValue(options: Map[String, String], sqlConf: SQLConf, configKey: String, defaultValue: String) : Boolean = {
-    options.getOrElse(configKey, sqlConf.getConfString(configKey, defaultValue)).toBoolean
-  }
 
   object DataSkippingFailureMode extends Enumeration {
     val configName = "hoodie.fileIndex.dataSkippingFailureMode"
@@ -308,7 +305,8 @@ object HoodieFileIndex extends Logging {
     // To support metadata listing via Spark SQL we allow users to pass the config via SQL Conf in spark session. Users
     // would be able to run SET hoodie.metadata.enable=true in the spark sql session to enable metadata listing.
     val isMetadataFilesPartitionAvailable = isFilesPartitionAvailable(metaClient) &&
-      getBooleanConfigValue(options, sqlConf, HoodieMetadataConfig.ENABLE.key(), HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString)
+      HoodieSparkConfUtils.getBooleanConfigValue(
+        options, sqlConf, HoodieMetadataConfig.ENABLE.key(), HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS)
     properties.putAll(options.filter(p => p._2 != null).asJava)
     properties.setProperty(HoodieMetadataConfig.ENABLE.key(), String.valueOf(isMetadataFilesPartitionAvailable))
     properties
