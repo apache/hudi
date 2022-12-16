@@ -18,6 +18,30 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieTableQueryType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -31,40 +55,28 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieTableQueryType;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.buildMetadataConfig;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getFileStatus;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.refreshFileStatus;
 
 /**
  * Base implementation of the Hive's {@link FileInputFormat} allowing for reading of Hudi's
@@ -223,7 +235,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
 
     Map<HoodieTableMetaClient, List<Path>> groupedPaths =
         HoodieInputFormatUtils.groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
-
+    Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
     for (Map.Entry<HoodieTableMetaClient, List<Path>> entry : groupedPaths.entrySet()) {
       HoodieTableMetaClient tableMetaClient = entry.getKey();
       List<Path> partitionPaths = entry.getValue();
@@ -235,9 +247,9 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
 
       boolean shouldIncludePendingCommits =
           HoodieHiveUtils.shouldIncludePendingCommits(job, tableMetaClient.getTableConfig().getTableName());
-
-      HiveHoodieTableFileIndex fileIndex =
-          new HiveHoodieTableFileIndex(
+      if (conf.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS) && HoodieTableMetadataUtil.isFilesPartitionAvailable(tableMetaClient)) {
+        HiveHoodieTableFileIndex fileIndex =
+            new HiveHoodieTableFileIndex(
               engineContext,
               tableMetaClient,
               props,
@@ -246,18 +258,38 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
               queryCommitInstant,
               shouldIncludePendingCommits);
 
-      Map<String, List<FileSlice>> partitionedFileSlices = fileIndex.listFileSlices();
+        Map<String, List<FileSlice>> partitionedFileSlices = fileIndex.listFileSlices();
 
-      Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getHoodieVirtualKeyInfo(tableMetaClient);
+        Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getHoodieVirtualKeyInfo(tableMetaClient);
 
-      targetFiles.addAll(
-          partitionedFileSlices.values()
-              .stream()
-              .flatMap(Collection::stream)
-              .filter(fileSlice -> checkIfValidFileSlice(fileSlice))
-              .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex, virtualKeyInfoOpt))
-              .collect(Collectors.toList())
-      );
+        targetFiles.addAll(partitionedFileSlices.values()
+            .stream()
+            .flatMap(Collection::stream)
+            .filter(fileSlice -> checkIfValidFileSlice(fileSlice))
+            .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex, virtualKeyInfoOpt))
+            .collect(Collectors.toList())
+        );
+      } else {
+        LOG.info(">>> Inside non-metadata path");
+        HoodieTimeline timeline = tableMetaClient.getActiveTimeline();
+
+        HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(tableMetaClient, hoodietableMetaClient ->
+            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, hoodietableMetaClient, buildMetadataConfig(job), timeline));
+
+        List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
+
+        for (Path p : entry.getValue()) {
+          String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(tableMetaClient.getBasePath()), p);
+          List<HoodieBaseFile> matched = fsView.getLatestBaseFiles(relativePartitionPath).collect(Collectors.toList());
+          filteredBaseFiles.addAll(matched);
+        }
+
+        LOG.info("Total filtered paths " + filteredBaseFiles.size());
+        for (HoodieBaseFile filteredFile : filteredBaseFiles) {
+          filteredFile = refreshFileStatus(job, filteredFile);
+          targetFiles.add(getFileStatus(filteredFile));
+        }
+      }
     }
 
     return targetFiles;
@@ -285,7 +317,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
   @Nonnull
   protected static FileStatus getFileStatusUnchecked(HoodieBaseFile baseFile) {
     try {
-      return HoodieInputFormatUtils.getFileStatus(baseFile);
+      return getFileStatus(baseFile);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to get file-status", ioe);
     }

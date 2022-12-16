@@ -198,6 +198,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    */
   protected List<PartitionPath> getAllQueryPartitionPaths() {
     if (cachedAllPartitionPaths == null) {
+      LOG.info("Query paths: " + queryPaths);
       List<String> queryRelativePartitionPaths = queryPaths.stream()
           .map(path -> FSUtils.getRelativePartitionPath(basePath, path))
           .collect(Collectors.toList());
