@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
@@ -137,7 +138,7 @@ public class ITTestHoodieFlinkCompactor {
     // infer changelog mode
     CompactionUtil.inferChangelogMode(conf, metaClient);
 
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
 
     String compactionInstantTime = scheduleCompactionPlan(metaClient, writeClient);
 
@@ -241,7 +242,7 @@ public class ITTestHoodieFlinkCompactor {
 
     List<String> compactionInstantTimeList = new ArrayList<>(2);
 
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
 
     compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));
 
@@ -255,7 +256,7 @@ public class ITTestHoodieFlinkCompactor {
     // re-create the write client/fs view server
     // or there is low probability that connection refused occurs then
     // the reader metadata view is not complete
-    writeClient = StreamerUtil.createWriteClient(conf);
+    writeClient = FlinkWriteClients.createWriteClient(conf);
 
     metaClient.reloadActiveTimeline();
     compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));

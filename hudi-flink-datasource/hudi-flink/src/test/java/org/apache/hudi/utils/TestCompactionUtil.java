@@ -33,6 +33,7 @@ import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkTables;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -139,7 +140,7 @@ public class TestCompactionUtil {
     // write a commit with data first
     TestData.writeDataAsBatch(TestData.DATA_SET_SINGLE_INSERT, conf);
 
-    HoodieFlinkWriteClient<?> writeClient = StreamerUtil.createWriteClient(conf);
+    HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf);
     CompactionUtil.scheduleCompaction(metaClient, writeClient, true, true);
 
     Option<HoodieInstant> pendingCompactionInstant = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().lastInstant();
