@@ -213,6 +213,10 @@ public abstract class AbstractStreamWriteFunction<I>
   private void sendBootstrapEvent() {
     int attemptId = getRuntimeContext().getAttemptNumber();
     if (attemptId > 0) {
+      if (Objects.isNull(lastPendingInstant())) {
+        this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
+        return;
+      }
       // either a partial or global failover, reuses the current inflight instant
       if (this.currentInstant != null) {
         LOG.info("Recover task[{}] for instant [{}] with attemptId [{}]", taskID, this.currentInstant, attemptId);
