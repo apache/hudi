@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.CachingPath;
@@ -55,6 +56,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -181,6 +183,20 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * @return
    */
   public List<HoodiePartitionIncrementalSnapshot> listFilesBetween(HoodieInstant from, HoodieInstant to, List<?> filters) {
+    ValidationUtils.checkArgument(to != null, "to instant cannot be null");
+    HoodieTimeline timeline;
+    if (from == null) {
+      timeline = getActiveTimeline().findInstantsBefore(to.getTimestamp()).filterCompletedInstants();
+    } else {
+      timeline = getActiveTimeline().findInstantsInRange(from.getTimestamp(), to.getTimestamp()).filterCompletedInstants();
+    }
+    Set<String> commitTimestamps = timeline.getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+    cachedAllInputFileSlices.entrySet()
+        .stream()
+        .map(entry -> {
+          PartitionPath partitionPath = entry.getKey();
+          List<FileSlice> fileSlices = entry.getValue();
+        })
     return null;
   }
 
