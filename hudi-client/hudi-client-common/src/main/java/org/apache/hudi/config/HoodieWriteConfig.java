@@ -158,7 +158,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` "
           + "extract a key out of incoming records.");
 
-  public static final ConfigProperty<String> EXECUTOR_TYPE = ConfigProperty
+  public static final ConfigProperty<String> WRITE_EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
       .defaultValue(BOUNDED_IN_MEMORY.name())
       .withValidValues(BOUNDED_IN_MEMORY.name(), DISRUPTOR.name())
@@ -271,13 +271,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(String.valueOf(4 * 1024 * 1024))
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
 
-  public static final ConfigProperty<String> WRITE_DISRUPTOR_BUFFER_SIZE = ConfigProperty
+  public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_BUFFER_SIZE = ConfigProperty
       .key("hoodie.write.executor.disruptor.buffer.size")
       .defaultValue(String.valueOf(1024))
       .sinceVersion("0.13.0")
       .withDocumentation("The size of the Disruptor Executor ring buffer, must be power of 2");
 
-  public static final ConfigProperty<String> WRITE_WAIT_STRATEGY = ConfigProperty
+  public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY = ConfigProperty
       .key("hoodie.write.executor.disruptor.wait.strategy")
       .defaultValue("BLOCKING_WAIT")
       .sinceVersion("0.13.0")
@@ -1107,7 +1107,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public ExecutorType getExecutorType() {
-    return ExecutorType.valueOf(getStringOrDefault(EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
+    return ExecutorType.valueOf(getStringOrDefault(WRITE_EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
   }
 
   public boolean isCDCEnabled() {
@@ -1175,12 +1175,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_LIMIT_BYTES_VALUE));
   }
 
-  public Option<String> getWriteExecutorWaitStrategy() {
-    return Option.of(getString(WRITE_WAIT_STRATEGY));
+  public Option<String> getWriteExecutorDisruptorWaitStrategy() {
+    return Option.of(getString(WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY));
   }
 
-  public Option<Integer> getDisruptorWriteBufferSize() {
-    return Option.of(Integer.parseInt(getStringOrDefault(WRITE_DISRUPTOR_BUFFER_SIZE)));
+  public Option<Integer> getWriteExecutorDisruptorWriteBufferSize() {
+    return Option.of(Integer.parseInt(getStringOrDefault(WRITE_EXECUTOR_DISRUPTOR_BUFFER_SIZE)));
   }
 
   public boolean shouldCombineBeforeInsert() {
@@ -2481,7 +2481,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withExecutorType(String executorClass) {
-      writeConfig.setValue(EXECUTOR_TYPE, executorClass);
+      writeConfig.setValue(WRITE_EXECUTOR_TYPE, executorClass);
       return this;
     }
 
@@ -2537,12 +2537,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withWriteWaitStrategy(String waitStrategy) {
-      writeConfig.setValue(WRITE_WAIT_STRATEGY, String.valueOf(waitStrategy));
+      writeConfig.setValue(WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY, String.valueOf(waitStrategy));
       return this;
     }
 
     public Builder withWriteBufferSize(int size) {
-      writeConfig.setValue(WRITE_DISRUPTOR_BUFFER_SIZE, String.valueOf(size));
+      writeConfig.setValue(WRITE_EXECUTOR_DISRUPTOR_BUFFER_SIZE, String.valueOf(size));
       return this;
     }
 

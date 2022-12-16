@@ -72,7 +72,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     final List<HoodieRecord> consumedRecords = new ArrayList<>();
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getDisruptorWriteBufferSize()).thenReturn(Option.of(8));
+    when(hoodieWriteConfig.getWriteExecutorDisruptorWriteBufferSize()).thenReturn(Option.of(8));
     HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
           private int count = 0;

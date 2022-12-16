@@ -52,8 +52,8 @@ public class ExecutorFactory {
         return new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, consumer,
             transformFunction, preExecuteRunnable);
       case DISRUPTOR:
-        return new DisruptorExecutor<>(hoodieConfig.getDisruptorWriteBufferSize(), inputItr, consumer,
-            transformFunction, hoodieConfig.getWriteExecutorWaitStrategy(), preExecuteRunnable);
+        return new DisruptorExecutor<>(hoodieConfig.getWriteExecutorDisruptorWriteBufferSize(), inputItr, consumer,
+            transformFunction, hoodieConfig.getWriteExecutorDisruptorWaitStrategy(), preExecuteRunnable);
       case SIMPLE:
         return new SimpleHoodieExecutor<>(inputItr, consumer, transformFunction);
       default:
