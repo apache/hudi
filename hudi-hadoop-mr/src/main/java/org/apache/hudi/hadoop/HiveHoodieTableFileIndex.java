@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.common.config.TypedProperties;
@@ -27,6 +26,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.util.FileStatusCacheHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +57,9 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
         specifiedQueryInstant,
         shouldIncludePendingCommits,
         true,
-        new NoopCache(),
+        FileStatusCacheHolder.get()
+            // TODO extract to config
+            .getOrCreate(250 * 1024 * 1024, -1),
         false);
   }
 
@@ -77,22 +79,5 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
     //       since Hive does partition pruning in a different way (based on the input-path being
     //       fetched by the query engine)
     return new Object[0];
-  }
-
-  static class NoopCache implements FileStatusCache {
-    @Override
-    public Option<FileStatus[]> get(Path path) {
-      return Option.empty();
-    }
-
-    @Override
-    public void put(Path path, FileStatus[] leafFiles) {
-      // no-op
-    }
-
-    @Override
-    public void invalidate() {
-      // no-op
-    }
   }
 }

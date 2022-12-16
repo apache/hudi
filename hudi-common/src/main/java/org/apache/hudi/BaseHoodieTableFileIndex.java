@@ -43,6 +43,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.util.FileStatusCache;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -490,14 +491,5 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
-  /**
-   * APIs for caching {@link FileStatus}.
-   */
-  protected interface FileStatusCache {
-    Option<FileStatus[]> get(Path path);
 
-    void put(Path path, FileStatus[] leafFiles);
-
-    void invalidate();
-  }
 }
