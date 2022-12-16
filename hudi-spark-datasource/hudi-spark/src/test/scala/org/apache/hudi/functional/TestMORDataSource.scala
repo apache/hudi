@@ -97,14 +97,9 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     )
 
   @ParameterizedTest
-  @CsvSource(Array(
-    "true, AVRO, AVRO, avro", "true, AVRO, SPARK, parquet", "true, SPARK, AVRO, parquet", "true, SPARK, SPARK, parquet",
-    "false, AVRO, AVRO, avro", "false, AVRO, SPARK, parquet", "false, SPARK, AVRO, parquet", "false, SPARK, SPARK, parquet"
-  ))
-  def testCount(enableFileIndex: Boolean,
-                readType: HoodieRecordType,
-                writeType: HoodieRecordType, logType: String) {
-    var (_, readOpts) = getWriterReaderOpts(readType, enableFileIndex = enableFileIndex)
+  @CsvSource(Array("AVRO, AVRO, avro", "AVRO, SPARK, parquet", "SPARK, AVRO, parquet", "SPARK, SPARK, parquet"))
+  def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String) {
+    var (_, readOpts) = getWriterReaderOpts(readType)
     var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
     writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
@@ -123,11 +118,10 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .save(basePath)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
-    val pathForROQuery = getPathForROQuery(basePath, !enableFileIndex, 3)
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath)
+      .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
 
     // Second Operation:
@@ -142,7 +136,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath)
+      .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiSnapshotDF2.count()) // still 100, since we only updated
     val commit1Time = hudiSnapshotDF1.select("_hoodie_commit_time").head().get(0).toString
     val commit2Time = hudiSnapshotDF2.select("_hoodie_commit_time").head().get(0).toString
@@ -200,7 +194,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
-      .load(basePath)
+      .load(basePath + "/*/*/*/*")
     assertEquals(200, hudiSnapshotSkipMergeDF2.count())
     assertEquals(100, hudiSnapshotSkipMergeDF2.select("_hoodie_record_key").distinct().count())
     assertEquals(200, hudiSnapshotSkipMergeDF2.join(hudiSnapshotDF2, Seq("_hoodie_record_key"), "left").count())
@@ -209,7 +203,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val hudiRODF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .load(pathForROQuery)
+      .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiRODF2.count())
 
     // Third Operation:
@@ -224,7 +218,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val hudiSnapshotDF3 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath)
+      .load(basePath + "/*/*/*/*")
     // still 100, because we only updated the existing records
     assertEquals(100, hudiSnapshotDF3.count())
 
@@ -267,7 +261,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val hudiSnapshotDF4 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath)
+      .load(basePath + "/*/*/*/*")
     // 200, because we insert 100 records to a new partition
     assertEquals(200, hudiSnapshotDF4.count())
     assertEquals(100,
@@ -295,7 +289,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val hudiSnapshotDF5 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath)
+      .load(basePath + "/*/*/*/*")
     assertEquals(200, hudiSnapshotDF5.count())
 
     // Sixth Operation:

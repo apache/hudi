@@ -135,8 +135,8 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
    *       rule; you can find more details in HUDI-3896)
    */
   def toHadoopFsRelation: HadoopFsRelation = {
-    val enableFileIndex = optParams.get(ENABLE_HOODIE_FILE_INDEX.key)
-      .map(_.toBoolean).getOrElse(ENABLE_HOODIE_FILE_INDEX.defaultValue)
+    val enableFileIndex = HoodieSparkConfUtils.getBooleanConfigValue(
+      optParams, sparkSession.sessionState.conf, ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue)
     if (enableFileIndex && globPaths.isEmpty) {
       // NOTE: There are currently 2 ways partition values could be fetched:
       //          - Source columns (producing the values used for physical partitioning) will be read

@@ -48,8 +48,8 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, ValueSource}
-import java.util.Properties
 
+import java.util.Properties
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.util.Random
@@ -224,7 +224,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
     )
     val prunedPartitions = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
       .map(_.values.toSeq(Seq(StringType))
-      .mkString(","))
+        .mkString(","))
       .toList
       .sorted
 
