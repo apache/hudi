@@ -60,6 +60,7 @@ import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
@@ -159,7 +160,12 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
 
-    collector = new StreamRecordCollector<>(output);
+    this.collector = new StreamRecordCollector<>(output);
+  }
+
+  @Override
+  public void processWatermark(Watermark mark) {
+    // no need to propagate the watermark
   }
 
   @Override
