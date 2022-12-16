@@ -28,7 +28,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 /**
- * Test for
+ * Test cases to validate Hudi's support for writing and reading when evolving schema implicitly via Avro's Schema Resolution
  */
 class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
 
