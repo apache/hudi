@@ -96,11 +96,6 @@ public class HoodieFlinkWriteClient<T> extends
    */
   private final Map<String, HoodieWriteHandle<?, ?, ?, ?>> bucketToHandles;
 
-  /**
-   * Cached metadata writer for coordinator to reuse for each commit.
-   */
-  private HoodieBackedTableMetadataWriter metadataWriter;
-
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, FlinkUpgradeDowngradeHelper.getInstance());
     this.bucketToHandles = new HashMap<>();
@@ -283,21 +278,10 @@ public class HoodieFlinkWriteClient<T> extends
 
   @Override
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
-    if (this.metadataWriter == null) {
-      initMetadataWriter();
-    }
-    // refresh the timeline
-
-    // Note: the data meta client is not refreshed currently, some code path
-    // relies on the meta client for resolving the latest data schema,
-    // the schema expects to be immutable for SQL jobs but may be not for non-SQL
-    // jobs.
-    this.metadataWriter.initTableMetadata();
-    this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));
-    try {
-      this.metadataWriter.close();
+    try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
+      metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));
     } catch (Exception e) {
-      throw new HoodieException("Failed to close metadata writer ", e);
+      throw new HoodieException("Failed to update metadata", e);
     }
   }
 
@@ -305,8 +289,8 @@ public class HoodieFlinkWriteClient<T> extends
    * Initialize the table metadata writer, for e.g, bootstrap the metadata table
    * from the filesystem if it does not exist.
    */
-  public void initMetadataWriter() {
-    this.metadataWriter = (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
+  private HoodieBackedTableMetadataWriter initMetadataWriter() {
+    return (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
         FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT);
   }
 
@@ -317,7 +301,11 @@ public class HoodieFlinkWriteClient<T> extends
     HoodieFlinkTable<?> table = getHoodieTable();
     if (config.isMetadataTableEnabled()) {
       // initialize the metadata table path
-      initMetadataWriter();
+      try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
+        // do nothing
+      } catch (Exception e) {
+        throw new HoodieException("Failed to initialize metadata table", e);
+      }
       // clean the obsolete index stats
       table.deleteMetadataIndexIfNecessary();
     } else {
