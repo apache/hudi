@@ -104,6 +104,12 @@
             </goals>
           </execution>
         </executions>
+        <configuration>
+          <args>
+            <arg>-nobootcp</arg>
+            <arg>-target:jvm-1.8</arg>
+          </args>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -116,6 +122,10 @@
             </goals>
           </execution>
         </executions>
+        <configuration>
+          <source>1.8</source>
+          <target>1.8</target>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
