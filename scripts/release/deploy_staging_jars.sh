@@ -36,16 +36,37 @@ if [ "$#" -gt "1" ]; then
   exit 1
 fi
 
+BUNDLE_MODULES=$(find -s packaging -name 'hudi-*-bundle' -type d)
+BUNDLE_MODULES_EXCLUDED="-${BUNDLE_MODULES//$'\n'/,-}"
+
 declare -a ALL_VERSION_OPTS=(
-"-Dscala-2.11 -Dspark2 -Dflink1.13" # for legacy bundle name
-"-Dscala-2.12 -Dspark2 -Dflink1.13" # for legacy bundle name
-"-Dscala-2.12 -Dspark3 -Dflink1.14" # for legacy bundle name
-"-Dscala-2.11 -Dspark2.4 -Dflink1.13"
-"-Dscala-2.11 -Dspark2.4 -Dflink1.14"
-"-Dscala-2.12 -Dspark2.4 -Dflink1.13"
-"-Dscala-2.12 -Dspark3.3 -Dflink1.15"
-"-Dscala-2.12 -Dspark3.2 -Dflink1.14"
-"-Dscala-2.12 -Dspark3.1 -Dflink1.14" # run this last to make sure utilities bundle has spark 3.1
+# upload all module jars and bundle jars
+"-Dscala-2.11 -Dspark2.4 -pl $BUNDLE_MODULES_EXCLUDED"
+"-Dscala-2.12 -Dspark2.4 -pl $BUNDLE_MODULES_EXCLUDED"
+"-Dscala-2.12 -Dspark3.3 -pl $BUNDLE_MODULES_EXCLUDED"
+"-Dscala-2.12 -Dspark3.2 -pl $BUNDLE_MODULES_EXCLUDED"
+"-Dscala-2.12 -Dspark3.1"  # this profile goes last in this section to ensure bundles use avro 1.8
+
+# spark bundles
+"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-spark-bundle"
+"-Dscala-2.12 -Dspark2.4 -pl packaging/hudi-spark-bundle"
+"-Dscala-2.12 -Dspark3.3 -pl packaging/hudi-spark-bundle"
+"-Dscala-2.12 -Dspark3.2 -pl packaging/hudi-spark-bundle"
+"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-spark-bundle"
+
+# spark bundles (legacy) (not overwriting previous uploads as these jar names are unique)
+"-Dscala-2.11 -Dspark2 -pl packaging/hudi-spark-bundle" # for legacy bundle name hudi-spark-bundle_2.11
+"-Dscala-2.12 -Dspark2 -pl packaging/hudi-spark-bundle" # for legacy bundle name hudi-spark-bundle_2.12
+"-Dscala-2.12 -Dspark3 -pl packaging/hudi-spark-bundle" # for legacy bundle name hudi-spark3-bundle_2.12
+
+# utilities bundles (legacy) (overwriting previous uploads)
+"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-utilities-bundle" # utilities-bundle_2.11 is for spark 2.4 only
+"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-utilities-bundle" # utilities-bundle_2.12 is for spark 3.1 only
+
+# flink bundles (overwriting previous uploads)
+"-Dscala-2.12 -Dflink1.13 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle"
+"-Dscala-2.12 -Dflink1.14 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle"
+"-Dscala-2.12 -Dflink1.15 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle"
 )
 printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 
