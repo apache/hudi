@@ -76,7 +76,7 @@ public class LockManager implements Serializable, AutoCloseable {
             break;
           }
           metrics.updateLockNotAcquiredMetric();
-          LOG.warn("Current lock owner information ： " + lockProvider.getCurrentOwnerLockInfo());
+          LOG.warn("Current lock owner information : " + lockProvider.getCurrentOwnerLockInfo());
           LOG.info("Retrying to acquire lock...");
           Thread.sleep(maxWaitTimeInMs);
         } catch (HoodieLockException | InterruptedException e) {
