@@ -97,8 +97,7 @@ import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.queue.ExecutorType.BOUNDED_IN_MEMORY;
-import static org.apache.hudi.common.util.queue.ExecutorType.DISRUPTOR;
+import static org.apache.hudi.common.util.queue.ExecutorType.SIMPLE;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
@@ -160,8 +159,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
-      .defaultValue(BOUNDED_IN_MEMORY.name())
-      .withValidValues(BOUNDED_IN_MEMORY.name(), DISRUPTOR.name())
+      .defaultValue(SIMPLE.name())
+      .withValidValues(Arrays.stream(ExecutorType.values()).map(Enum::name).toArray(String[]::new))
       .sinceVersion("0.13.0")
       .withDocumentation("Set executor which orchestrates concurrent producers and consumers communicating through a message queue."
           + "BOUNDED_IN_MEMORY(default): Use LinkedBlockingQueue as a bounded in-memory queue, this queue will use extra lock to balance producers and consumer"
@@ -1987,7 +1986,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getDatadogApiKey() {
     if (props.containsKey(HoodieMetricsDatadogConfig.API_KEY.key())) {
       return getString(HoodieMetricsDatadogConfig.API_KEY);
-      
+
     } else {
       Supplier<String> apiKeySupplier = ReflectionUtils.loadClass(
           getString(HoodieMetricsDatadogConfig.API_KEY_SUPPLIER));
