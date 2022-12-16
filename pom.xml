@@ -41,7 +41,6 @@
     <module>hudi-aws</module>
     <module>hudi-gcp</module>
     <module>hudi-hadoop-mr</module>
-    <module>hudi-platform-service</module>
     <module>hudi-spark-datasource</module>
     <module>hudi-timeline-service</module>
     <module>hudi-utilities</module>

@@ -37,6 +37,7 @@
         <h2.version>1.4.200</h2.version>
         <!-- Thrift related properties -->
         <thrift.home>/usr/local</thrift.home>
+        <thrift.install.env>docker</thrift.install.env>
         <maven-thrift-plugin.version>0.1.11</maven-thrift-plugin.version>
     </properties>
 
@@ -146,7 +147,7 @@
 
     <profiles>
         <profile>
-            <id>thrift</id>
+            <id>thrift-gen-source</id>
             <build>
                 <plugins>
                     <plugin>
@@ -169,8 +170,28 @@
                             </execution>
                         </executions>
                     </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>1.6.0</version>
+                        <configuration>
+                            <skip>true</skip>
+                        </configuration>
+                    </plugin>
                 </plugins>
             </build>
+        </profile>
+        <profile>
+            <id>m1-mac</id>
+            <properties>
+                <thrift.install.env>m1_mac</thrift.install.env>
+            </properties>
+            <activation>
+                <os>
+                    <family>mac</family>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
         </profile>
     </profiles>
 
@@ -179,6 +200,27 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.6.0</version>
+                <executions>
+                    <execution>
+                        <id>thrift-install-and-generate-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <executable>src/main/thrift/bin/thrift_binary.sh</executable>
+                    <arguments>
+                        <argument>${thrift.install.env}</argument>
+                    </arguments>
+                    <skip>false</skip>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>

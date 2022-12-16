@@ -130,6 +130,5 @@ jobs:
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
       - name: Platform Service Build and Test
         run:
-          sh hudi-platform-service/hudi-metaserver/bin/compile_thrift_by_docker.sh &&
           mvn install -pl :hudi-metaserver -DskipTests=true -Phudi-platform-service &&
           mvn test -Phudi-platform-service -pl :hudi-metaserver
