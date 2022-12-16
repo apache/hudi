@@ -490,6 +490,4 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       return path.hashCode() * 1103 + Arrays.hashCode(values);
     }
   }
-
-
 }

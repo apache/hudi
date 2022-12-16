@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.util.FileStatusCacheHolder;
+import org.apache.hudi.util.GlobalFileStatusCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,9 +57,7 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
         specifiedQueryInstant,
         shouldIncludePendingCommits,
         true,
-        FileStatusCacheHolder.get()
-            // TODO extract to config
-            .getOrCreate(250 * 1024 * 1024, -1),
+        GlobalFileStatusCache.create(),
         false);
   }
 
