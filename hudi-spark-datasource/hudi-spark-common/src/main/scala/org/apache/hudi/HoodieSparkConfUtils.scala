@@ -34,10 +34,10 @@ object HoodieSparkConfUtils {
    * @param defaultValue Default value to return if not configured.
    * @return The config value.
    */
-  def getBooleanConfigValue(options: Map[String, String],
-                            sqlConf: SQLConf,
-                            configKey: String,
-                            defaultValue: Boolean): Boolean = {
-    options.getOrElse(configKey, sqlConf.getConfString(configKey, defaultValue.toString)).toBoolean
+  def getConfigValue(options: Map[String, String],
+                     sqlConf: SQLConf,
+                     configKey: String,
+                     defaultValue: String): String = {
+    options.getOrElse(configKey, sqlConf.getConfString(configKey, defaultValue))
   }
 }
