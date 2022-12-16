@@ -918,7 +918,6 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
       .option(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key, enableDropPartitionColumns)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-
     val snapshotDF1 = spark.read.format("hudi").options(readOpts).load(basePath)
     assertEquals(snapshotDF1.count(), 100)
     assertEquals(3, snapshotDF1.select("partition").distinct().count())
@@ -940,7 +939,7 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
 
     val snapshotDF0 = spark.read.format("org.apache.hudi")
       .options(readOpts)
-      .load(basePath)
+      .load(basePath + "/*/*/*/*")
     assertEquals(numRecords, snapshotDF0.count())
 
     val df1 = snapshotDF0.limit(numRecordsToDelete)
@@ -952,7 +951,7 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
     df2.write.format("org.apache.hudi")
       .options(writeOpts)
       .mode(SaveMode.Append)
-      .save(basePath + "/*/*/*/*")
+      .save(basePath)
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath + "/*/*/*/*")
@@ -980,7 +979,6 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
-
     val readResult = spark.read.format("hudi").options(readOpts).load(basePath)
     assert(readResult.count() == 5)
     // compare the test result
