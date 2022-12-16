@@ -45,7 +45,7 @@ import org.apache.spark.sql.execution.datasources.parquet.Spark32PlusHoodieParqu
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, AtomicType, DataType, MapType, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.net.URI
@@ -146,7 +146,7 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
       // Internal schema has to be pruned at this point
       val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
 
-      val shouldUseInternalSchema = !isNullOrEmpty(internalSchemaStr) && querySchemaOption.isPresent
+      var shouldUseInternalSchema = !isNullOrEmpty(internalSchemaStr) && querySchemaOption.isPresent
 
       val tablePath = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
       val fileSchema = if (shouldUseInternalSchema) {
@@ -228,7 +228,24 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
 
         SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
       } else {
-        new java.util.HashMap()
+        val implicitTypeChangeInfo: java.util.Map[Integer, Pair[DataType, DataType]] = new java.util.HashMap()
+        val convert = new ParquetToSparkSchemaConverter(hadoopAttemptConf)
+        val fileStruct = convert.convert(footerFileMetaData.getSchema)
+        val fileStructMap = fileStruct.fields.map(f => (f.name, f.dataType)).toMap
+        val sparkRequestSchema = requiredSchema.map(f => {
+          val requiredType = f.dataType
+          if (fileStructMap.contains(f.name) && !isDataTypeEqual(requiredType, fileStructMap(f.name))) {
+            implicitTypeChangeInfo.put(new Integer(requiredSchema.fieldIndex(f.name)), Pair.of(requiredType, fileStructMap(f.name)))
+            StructField(f.name, fileStructMap(f.name), f.nullable)
+          } else {
+            f
+          }
+        })
+        if (!implicitTypeChangeInfo.isEmpty) {
+          shouldUseInternalSchema = true
+          hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, StructType(sparkRequestSchema).json)
+        }
+        implicitTypeChangeInfo
       }
 
       val hadoopAttemptContext =
@@ -395,6 +412,33 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     }
   }
 
+  private def isDataTypeEqual(requiredType: DataType, fileType: DataType): Boolean = (requiredType, fileType) match {
+    case (requiredType, fileType) if DataType.equalsIgnoreNullability(requiredType, fileType) => true
+
+    case (ArrayType(rt, _), ArrayType(ft, _)) =>
+      // Do not care about nullability as schema evolution require fields to be nullable
+      isDataTypeEqual(rt, ft)
+
+    case (MapType(requiredKey, requiredValue, _), MapType(fileKey, fileValue, _)) =>
+      // Likewise, do not care about nullability as schema evolution require fields to be nullable
+      isDataTypeEqual(requiredKey, fileKey) && isDataTypeEqual(requiredValue, fileValue)
+
+    case (StructType(requiredFields), StructType(fileFields)) =>
+      // Find fields that are in requiredFields and fileFields as they might not be the same during add column + change column operations
+      val commonFieldNames = requiredFields.map(_.name) intersect fileFields.map(_.name)
+
+      // Need to match by name instead of StructField as name will stay the same whilst type may change
+      val fileFilteredFields = fileFields.filter(f => commonFieldNames.contains(f.name)).sortWith(_.name < _.name)
+      val requiredFilteredFields = requiredFields.filter(f => commonFieldNames.contains(f.name)).sortWith(_.name < _.name)
+
+      // Sorting ensures that the same field names are being compared for type differences
+      requiredFilteredFields.zip(fileFilteredFields).forall {
+        case (requiredField, fileFilteredField) =>
+          isDataTypeEqual(requiredField.dataType, fileFilteredField.dataType)
+      }
+
+    case _ => false
+  }
 }
 
 object Spark32PlusHoodieParquetFileFormat {
