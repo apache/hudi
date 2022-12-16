@@ -88,8 +88,8 @@ class SharedInMemoryCache {
 
   private void onRemoval(Pair<Object, Path> key, FileStatus[] value, RemovalCause cause) {
     if (cause == RemovalCause.SIZE && warnedAboutEviction.compareAndSet(false, true)) {
-      LOG.warn(String.format("Evicting cached table's partition file-list from memory due to memory pressure " +
-              "(%d bytes threshold). This may impact query planning performance", maxSizeInBytes));
+      LOG.warn(String.format("Evicting cached table's partition file-list from memory due to memory pressure "
+          + "(%d bytes threshold). This may impact query planning performance", maxSizeInBytes));
     }
   }
 
