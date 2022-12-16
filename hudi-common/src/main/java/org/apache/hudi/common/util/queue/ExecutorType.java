@@ -18,12 +18,6 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 /**
  * Types of {@link org.apache.hudi.common.util.queue.HoodieExecutor}.
  */
