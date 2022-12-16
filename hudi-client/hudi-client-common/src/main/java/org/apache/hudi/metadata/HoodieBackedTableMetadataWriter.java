@@ -751,6 +751,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       LOG.warn("Deleting pending indexing instant from the timeline for partition: " + partitionPath);
       deletePendingIndexingInstant(dataMetaClient, partitionPath);
     }
+    closeInternal();
   }
 
   /**
@@ -884,6 +885,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(
         engineContext, commitMetadata, instantTime, getRecordsGenerationParams()), !isTableServiceAction);
+    closeInternal();
   }
 
   /**
@@ -896,6 +898,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
         cleanMetadata, getRecordsGenerationParams(), instantTime), false);
+    closeInternal();
   }
 
   /**
@@ -909,6 +912,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
         metadataMetaClient.getActiveTimeline(), restoreMetadata, getRecordsGenerationParams(), instantTime,
         metadata.getSyncedInstantTime()), false);
+    closeInternal();
   }
 
   /**
@@ -937,6 +941,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
               rollbackMetadata, getRecordsGenerationParams(), instantTime,
               metadata.getSyncedInstantTime(), wasSynced);
       commit(instantTime, records, false);
+      closeInternal();
     }
   }
 
@@ -1122,6 +1127,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     });
 
     return filesPartitionRecords.union(fileListRecords);
+  }
+
+  protected void closeInternal() {
+    try {
+      close();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to close HoodieMetadata writer ", e);
+    }
   }
 
   /**

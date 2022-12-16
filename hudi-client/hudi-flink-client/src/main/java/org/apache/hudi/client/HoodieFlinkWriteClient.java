@@ -43,6 +43,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.FlinkHoodieIndexFactory;
 import org.apache.hudi.index.HoodieIndex;
@@ -100,11 +101,6 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    * so that we can append the mini-batch data buffer incrementally.
    */
   private final Map<String, HoodieWriteHandle<?, ?, ?, ?>> bucketToHandles;
-
-  /**
-   * Cached metadata writer for coordinator to reuse for each commit.
-   */
-  private HoodieBackedTableMetadataWriter metadataWriter;
 
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, FlinkUpgradeDowngradeHelper.getInstance());
@@ -272,25 +268,19 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
-    if (this.metadataWriter == null) {
-      initMetadataWriter();
+    try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
+      metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));
+    } catch (Exception e) {
+      throw new HoodieException("Failed to update metadata", e);
     }
-    // refresh the timeline
-
-    // Note: the data meta client is not refreshed currently, some code path
-    // relies on the meta client for resolving the latest data schema,
-    // the schema expects to be immutable for SQL jobs but may be not for non-SQL
-    // jobs.
-    this.metadataWriter.initTableMetadata();
-    this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));
   }
 
   /**
    * Initialize the table metadata writer, for e.g, bootstrap the metadata table
    * from the filesystem if it does not exist.
    */
-  public void initMetadataWriter() {
-    this.metadataWriter = (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
+  public HoodieBackedTableMetadataWriter initMetadataWriter() {
+    return (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
         FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT);
   }
 
@@ -301,7 +291,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     HoodieFlinkTable<?> table = getHoodieTable();
     if (config.isMetadataTableEnabled()) {
       // initialize the metadata table path
-      initMetadataWriter();
+      try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
+        // do nothing
+      } catch (Exception e) {
+        throw new HoodieException("Failed to initialize metadata table", e);
+      }
       // clean the obsolete index stats
       table.deleteMetadataIndexIfNecessary();
     } else {
