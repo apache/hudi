@@ -73,12 +73,6 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     spark = sqlContext.sparkSession
   }
 
-  @AfterEach
-  override def tearDown() = {
-    cleanupFileSystem()
-    cleanupSparkContexts()
-  }
-
   @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParams"))
   def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
