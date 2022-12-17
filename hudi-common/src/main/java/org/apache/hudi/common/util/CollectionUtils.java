@@ -166,7 +166,7 @@ public class CollectionUtils {
   /**
    * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
    */
-  public static <E> Set<E> diff(Collection<E> one, Collection<E> another) {
+  public static <E> Set<E> diffSet(Set<E> one, Set<E> another) {
     Set<E> diff = new HashSet<>(one);
     diff.removeAll(another);
     return diff;

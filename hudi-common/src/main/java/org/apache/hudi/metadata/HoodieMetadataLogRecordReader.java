@@ -21,10 +21,8 @@ package org.apache.hudi.metadata;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
@@ -82,7 +80,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
       logRecordScanner.scanByKeyPrefixes(keyPrefixes);
-      Map<String, HoodieRecord<? extends HoodieRecordPayload>> allRecords = logRecordScanner.getRecords();
+      Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
 
       Predicate<String> p = createPrefixMatchingPredicate(keyPrefixes);
       return allRecords.entrySet()
@@ -103,7 +101,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
       logRecordScanner.scanByFullKeys(keys);
-      Map<String, HoodieRecord<? extends HoodieRecordPayload>> allRecords = logRecordScanner.getRecords();
+      Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
       return keys.stream()
           .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
           .filter(Objects::nonNull)

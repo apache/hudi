@@ -209,7 +209,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   @Override
-  protected <T> void processNextRecord(HoodieRecord<T> newRecord) {
+  protected <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
     String key = newRecord.getRecordKey();
     HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {

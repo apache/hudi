@@ -799,7 +799,7 @@ public abstract class AbstractHoodieLogRecordReader {
     if (keySpecOpt.isPresent()) {
       KeySpec keySpec = keySpecOpt.get();
       blockRecordsIterator = (ClosableIterator) dataBlock
-          .getRecordIterator(keySpec.keys, keySpec.fullKey, recordType);
+          .getRecordIterator(keySpec.getKeys(), keySpec.isFullKey(), recordType);
     } else {
       blockRecordsIterator = (ClosableIterator) dataBlock.getRecordIterator(recordType);
     }
