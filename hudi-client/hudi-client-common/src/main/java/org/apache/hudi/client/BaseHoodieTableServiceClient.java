@@ -667,6 +667,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   /**
    * Rollback all failed writes.
+   * @return true if rollback was triggered. false otherwise.
    */
   protected Boolean rollbackFailedWrites() {
     return rollbackFailedWrites(false);
@@ -675,6 +676,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   /**
    * Rollback all failed writes.
    * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
+   * @return true if rollback was triggered. false otherwise.
    */
   protected Boolean rollbackFailedWrites(boolean skipLocking) {
     HoodieTable table = createTable(config, hadoopConf);
@@ -682,7 +684,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
     rollbackFailedWrites(pendingRollbacks, skipLocking);
-    return true;
+    return !pendingRollbacks.isEmpty();
   }
 
   protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback, boolean skipLocking) {
