@@ -63,7 +63,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 
 /**
  * Common (engine-agnostic) File Index implementation enabling individual query engines to
- * list Hudi Table contents based on the
+ * list Hudi Table contents based on the following:
  *
  * <ul>
  *   <li>Table type (MOR, COW)</li>
