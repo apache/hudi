@@ -41,25 +41,17 @@ public class JavaCustomColumnsSortPartitioner<T>
   private final String[] sortColumnNames;
   private final Schema schema;
   private final boolean consistentLogicalTimestampEnabled;
-  private final boolean areMetafieldsPopulated;
 
   public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
     this.sortColumnNames = BulkInsertPartitioner.prependPartitionPathColumn(columnNames, config);
     this.schema = schema;
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
-    this.areMetafieldsPopulated = config.getMetadataConfig().populateMetaFields();
   }
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(
       List<HoodieRecord<T>> records, int outputPartitions) {
     return records.stream().sorted((o1, o2) -> {
-      if (areMetafieldsPopulated) {
-        int comp = o1.getPartitionPath().compareTo(o2.getPartitionPath());
-        if (comp != 0) {
-          return comp;
-        }
-      }
       Object values1 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)o1, sortColumnNames, schema, consistentLogicalTimestampEnabled);
       Object values2 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)o2, sortColumnNames, schema, consistentLogicalTimestampEnabled);
       return values1.toString().compareTo(values2.toString());

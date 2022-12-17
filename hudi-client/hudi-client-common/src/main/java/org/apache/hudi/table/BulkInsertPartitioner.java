@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
@@ -82,9 +83,15 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    * If possible, we want to sort the data by partition path. Doing so will reduce the number of files written.
    **/
   static String[] prependPartitionPathColumn(String[] columnNames, HoodieWriteConfig config) {
-    String partitionPath = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
-    if (partitionPath.isEmpty() || config.getMetadataConfig().populateMetaFields()) {
+    if (config.getMetadataConfig().populateMetaFields()) {
       //If we have meta fields we can just leverage those instead
+      String[] prependedColumnNames = new String[columnNames.length + 1];
+      prependedColumnNames[0] = HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName();
+      System.arraycopy(columnNames, 0, prependedColumnNames, 1, columnNames.length);
+      return prependedColumnNames;
+    }
+    String partitionPath = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    if (partitionPath == null || partitionPath.isEmpty()) {
       return columnNames;
     }
     ArrayList<String> sortCols = new ArrayList<>();
