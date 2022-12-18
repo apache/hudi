@@ -38,6 +38,7 @@ fi
 
 BUNDLE_MODULES=$(find -s packaging -name 'hudi-*-bundle' -type d)
 BUNDLE_MODULES_EXCLUDED="-${BUNDLE_MODULES//$'\n'/,-}"
+BUNDLE_MODULES_EXCLUDED="-packaging/hudi-aws-bundle,-packaging/hudi-datahub-sync-bundle,-packaging/hudi-flink-bundle,-packaging/hudi-gcp-bundle,-packaging/hudi-integ-test-bundle,-packaging/hudi-kafka-connect-bundle"
 
 declare -a ALL_VERSION_OPTS=(
 # upload all module jars and bundle jars
@@ -48,25 +49,25 @@ declare -a ALL_VERSION_OPTS=(
 "-Dscala-2.12 -Dspark3.1"  # this profile goes last in this section to ensure bundles use avro 1.8
 
 # spark bundles
-"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-spark-bundle"
-"-Dscala-2.12 -Dspark2.4 -pl packaging/hudi-spark-bundle"
-"-Dscala-2.12 -Dspark3.3 -pl packaging/hudi-spark-bundle"
-"-Dscala-2.12 -Dspark3.2 -pl packaging/hudi-spark-bundle"
-"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-spark-bundle"
+"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-spark-bundle -am"
+"-Dscala-2.12 -Dspark2.4 -pl packaging/hudi-spark-bundle -am"
+"-Dscala-2.12 -Dspark3.3 -pl packaging/hudi-spark-bundle -am"
+"-Dscala-2.12 -Dspark3.2 -pl packaging/hudi-spark-bundle -am"
+"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-spark-bundle -am"
 
 # spark bundles (legacy) (not overwriting previous uploads as these jar names are unique)
-"-Dscala-2.11 -Dspark2 -pl packaging/hudi-spark-bundle" # for legacy bundle name hudi-spark-bundle_2.11
-"-Dscala-2.12 -Dspark2 -pl packaging/hudi-spark-bundle" # for legacy bundle name hudi-spark-bundle_2.12
-"-Dscala-2.12 -Dspark3 -pl packaging/hudi-spark-bundle" # for legacy bundle name hudi-spark3-bundle_2.12
+"-Dscala-2.11 -Dspark2 -pl packaging/hudi-spark-bundle -am" # for legacy bundle name hudi-spark-bundle_2.11
+"-Dscala-2.12 -Dspark2 -pl packaging/hudi-spark-bundle -am" # for legacy bundle name hudi-spark-bundle_2.12
+"-Dscala-2.12 -Dspark3 -pl packaging/hudi-spark-bundle -am" # for legacy bundle name hudi-spark3-bundle_2.12
 
 # utilities bundles (legacy) (overwriting previous uploads)
-"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-utilities-bundle" # utilities-bundle_2.11 is for spark 2.4 only
-"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-utilities-bundle" # utilities-bundle_2.12 is for spark 3.1 only
+"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-utilities-bundle -am" # utilities-bundle_2.11 is for spark 2.4 only
+"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-utilities-bundle -am" # utilities-bundle_2.12 is for spark 3.1 only
 
 # flink bundles (overwriting previous uploads)
-"-Dscala-2.12 -Dflink1.13 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle"
-"-Dscala-2.12 -Dflink1.14 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle"
-"-Dscala-2.12 -Dflink1.15 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle"
+"-Dscala-2.12 -Dflink1.13 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle -am"
+"-Dscala-2.12 -Dflink1.14 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle -am"
+"-Dscala-2.12 -Dflink1.15 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle -am"
 )
 printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 
@@ -98,7 +99,15 @@ fi
 
 for v in "${ALL_VERSION_OPTS[@]}"
 do
-  echo "Deploying to repository.apache.org with version option ${v}"
+  # clean everything before any round of depoyment
+  #$MVN clean
+  #echo "Building with options ${v}"
+  #echo "install Command: $MVN install "$COMMON_OPTIONS" "${v}""
+  #$MVN install "${v}" "$COMMON_OPTIONS"
+  #echo "Deploying to repository.apache.org with version options $COMMON_OPTIONS ${v%-am}"
+  #echo "Command execute: $MVN clean install deploy "${v%-am}" "$COMMON_OPTIONS""
+  # remove `-am` option to only deploy intended modules
+  #$MVN clean deploy "$COMMON_OPTIONS" "${v%-am}"
   COMMON_OPTIONS="${v} -DdeployArtifacts=true -DskipTests -DretryFailedDeploymentCount=10"
   $MVN clean deploy $COMMON_OPTIONS
 done
