@@ -137,6 +137,7 @@ test_utilities_bundle () {
 # Function to test the flink bundle.
 #
 # env vars (defined in container):
+#   HADOOP_HOME: path to the hadoop directory
 #   FLINK_HOME: path to the flink directory
 ##
 test_flink_bundle() {
