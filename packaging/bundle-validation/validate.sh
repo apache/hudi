@@ -29,6 +29,7 @@ WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
 ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
+ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
 ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
@@ -133,6 +134,23 @@ test_utilities_bundle () {
 
 
 ##
+# Function to test the flink bundle.
+#
+# env vars (defined in container):
+#   FLINK_HOME: path to the flink directory
+##
+test_flink_bundle() {
+    local HADOOP_CLASSPATH=$($HADOOP_HOME/bin/hadoop classpath)
+    $FLINK_HOME/bin/start-cluster.sh
+    $FLINK_HOME/bin/sql-client.sh -j $JARS_DIR/flink.jar -f $WORKDIR/flink/insert.sql
+    $WORKDIR/flink/compact.sh $JARS_DIR/flink.jar
+    local EXIT_CODE=$?
+    $FLINK_HOME/bin/stop-cluster.sh
+    exit $EXIT_CODE
+}
+
+
+##
 # Function to test the kafka-connect bundle.
 # It runs zookeeper, kafka broker, schema registry, and connector worker.
 # After producing and consuming data, it checks successful commit under `.hoodie/`
@@ -186,6 +204,13 @@ if [ "$?" -ne 0 ]; then
     exit 1
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
+
+echo "::warning::validate.sh validating flink bundle"
+test_flink_bundle
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done validating flink bundle"
 
 echo "::warning::validate.sh validating kafka connect bundle"
 test_kafka_connect_bundle $JARS_DIR/kafka-connect.jar
