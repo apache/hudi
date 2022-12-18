@@ -5,6 +5,17 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2022/11/22/Build-your-Apache-Hudi-data-lake-on-AWS-using-Amazon-EMR–Part-1",
+            "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/part-1-build-your-apache-hudi-data-lake-on-aws-using-amazon-emr//\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2022/11/22/Build-your-Apache-Hudi-data-lake-on-AWS-using-Amazon-EMR–Part-1",
+            "title": "Build your Apache Hudi data lake on AWS using Amazon EMR – Part 1",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2022-11-22T00:00:00.000Z",
+            "author": {
+                "name": "Suthan Phillips"
+            }
+        },
+        {
             "id": "/2022/11/10/How-Hudl-built-a-cost-optimized-AWS-Glue-pipeline-with-Apache-Hudi-datasets",
             "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/how-hudl-built-a-cost-optimized-aws-glue-pipeline-with-apache-hudi-datasets/\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/blog/2022/11/10/How-Hudl-built-a-cost-optimized-AWS-Glue-pipeline-with-Apache-Hudi-datasets",
