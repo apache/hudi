@@ -20,9 +20,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -191,36 +188,5 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       });
       return Option.of(builder.build());
     }
-  }
-
-  /**
-   * Returns whether the given record is newer than the record of this payload.
-   *
-   * @param orderingVal
-   * @param record The record
-   * @param prop   The payload properties
-   *
-   * @return true if the given record is newer
-   */
-  private static boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
-    String orderingField = prop.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
-    if (!StringUtils.isNullOrEmpty(orderingField)) {
-      boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(prop.getProperty(
-          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-
-      Comparable oldOrderingVal =
-          (Comparable) HoodieAvroUtils.getNestedFieldVal(
-              (GenericRecord) record,
-              orderingField,
-              true,
-              consistentLogicalTimestampEnabled);
-
-      // pick the payload with greater ordering value as insert record
-      return oldOrderingVal != null
-          && ReflectionUtils.isSameClass(oldOrderingVal, orderingVal)
-          && oldOrderingVal.compareTo(orderingVal) > 0;
-    }
-    return false;
   }
 }
