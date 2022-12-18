@@ -217,8 +217,9 @@ public abstract class AbstractStreamWriteFunction<I>
       if (this.currentInstant != null) {
         LOG.info("Recover task[{}] for instant [{}] with attemptId [{}]", taskID, this.currentInstant, attemptId);
         this.currentInstant = null;
+        return;
       }
-      return;
+      // the JM may have also been rebooted, sends the bootstrap event either
     }
     this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
