@@ -104,7 +104,7 @@ public final class HoodieKey implements Serializable, KryoSerializable {
   }
 
   private static void validatePartitionPath(String partitionPath) {
-    if (partitionPath != null && partitionPath.startsWith("/")) {
+    if (partitionPath != null && partitionPath.charAt(0) == '/') {
       throw new IllegalArgumentException("Partition path cannot start with a /");
     }
   }
