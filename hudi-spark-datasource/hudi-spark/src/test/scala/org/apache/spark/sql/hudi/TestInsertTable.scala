@@ -1082,6 +1082,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          |) using hudi
          | tblproperties (
          |  primaryKey = 'id',
+         |  preCombineField = 'name',
          |  type = 'cow',
          |  $parallelism
          |  hoodie.bulkinsert.sort.mode = '$sortModeName'
