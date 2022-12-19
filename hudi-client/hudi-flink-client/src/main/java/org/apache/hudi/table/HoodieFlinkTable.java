@@ -59,15 +59,15 @@ public abstract class HoodieFlinkTable<T>
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
-    if (config.getSchemaEvolutionEnable()) {
-      setLatestInternalSchema(config, metaClient);
-    }
     return HoodieFlinkTable.create(config, context, metaClient);
   }
 
   public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config,
                                                HoodieFlinkEngineContext context,
                                                HoodieTableMetaClient metaClient) {
+    if (config.getSchemaEvolutionEnable()) {
+      setLatestInternalSchema(config, metaClient);
+    }
     final HoodieFlinkTable<T> hoodieFlinkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
