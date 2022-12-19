@@ -169,10 +169,10 @@ public class MergeOnReadInputFormat
     this.closed = false;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
-      if (split.getInstantRange() != null) {
+      if (split.getInstantRange().isPresent()) {
         // base file only with commit time filtering
         this.iterator = new BaseFileOnlyFilteringIterator(
-            split.getInstantRange(),
+            split.getInstantRange().get(),
             this.tableState.getRequiredRowType(),
             getReader(split.getBasePath().get(), getRequiredPosWithCommitTime(this.requiredPos)));
       } else {
@@ -506,11 +506,11 @@ public class MergeOnReadInputFormat
     private RowData currentRecord;
 
     BaseFileOnlyFilteringIterator(
-        Option<InstantRange> instantRange,
+        InstantRange instantRange,
         RowType requiredRowType,
         ParquetColumnarRowSplitReader reader) {
       this.reader = reader;
-      this.instantRange = instantRange.orElse(null);
+      this.instantRange = instantRange;
       int[] positions = IntStream.range(1, 1 + requiredRowType.getFieldCount()).toArray();
       projection = RowDataProjection.instance(requiredRowType, positions);
     }
@@ -519,12 +519,8 @@ public class MergeOnReadInputFormat
     public boolean reachedEnd() throws IOException {
       while (!this.reader.reachedEnd()) {
         currentRecord = this.reader.nextRecord();
-        if (instantRange != null) {
-          boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
-          if (isInRange) {
-            return false;
-          }
-        } else {
+        boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
+        if (isInRange) {
           return false;
         }
       }

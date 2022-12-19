@@ -26,14 +26,17 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
+import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
@@ -49,8 +52,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -58,6 +63,7 @@ import java.util.stream.Collectors;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Test cases for MergeOnReadInputFormat and ParquetInputFormat.
@@ -330,6 +336,50 @@ public class TestInputFormat {
         + "+I[id1, Danny, 23, 1970-01-01T00:00:00.001, par1], "
         + "+I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1]]";
     assertThat(actual, is(expected));
+  }
+
+  @Test
+  void testReadBaseFilesWithStartCommit() throws Exception {
+    beforeEach(HoodieTableType.COPY_ON_WRITE);
+
+    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
+
+    // write base files
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
+        .rowType(TestConfigurations.ROW_TYPE)
+        .conf(conf)
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .requiredPartitions(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4")))
+        .build();
+
+    // default read the latest commit
+    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, hadoopConf, null);
+    assertFalse(splits1.isEmpty());
+    List<RowData> result1 = readData(inputFormat, splits1.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+
+    String actual1 = TestData.rowDataToString(result1);
+    String expected1 = TestData.rowDataToString(TestData.DATA_SET_INSERT);
+    assertThat(actual1, is(expected1));
+
+    // write another commit and read again
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+
+    // read from the latest commit
+    String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 1, false);
+    conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
+
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, hadoopConf, null);
+    assertFalse(splits2.isEmpty());
+    List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    String actual2 = TestData.rowDataToString(result2);
+    String expected2 = TestData.rowDataToString(TestData.DATA_SET_UPDATE_INSERT);
+    assertThat(actual2, is(expected2));
   }
 
   @Test
@@ -632,10 +682,14 @@ public class TestInputFormat {
         conf);
   }
 
-  @SuppressWarnings("unchecked, rawtypes")
+  @SuppressWarnings("rawtypes")
   private static List<RowData> readData(InputFormat inputFormat) throws IOException {
     InputSplit[] inputSplits = inputFormat.createInputSplits(1);
+    return readData(inputFormat, inputSplits);
+  }
 
+  @SuppressWarnings("unchecked, rawtypes")
+  private static List<RowData> readData(InputFormat inputFormat, InputSplit[] inputSplits) throws IOException {
     List<RowData> result = new ArrayList<>();
 
     for (InputSplit inputSplit : inputSplits) {
