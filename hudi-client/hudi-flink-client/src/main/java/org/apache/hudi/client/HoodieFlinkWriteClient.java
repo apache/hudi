@@ -146,7 +146,7 @@ public class HoodieFlinkWriteClient<T> extends
   @Override
   public List<WriteStatus> upsert(List<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
+        initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime), true);
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
@@ -162,7 +162,7 @@ public class HoodieFlinkWriteClient<T> extends
   public List<WriteStatus> upsertPreppedRecords(List<HoodieRecord<T>> preppedRecords, String instantTime) {
     // only used for metadata table, the upsert happens in single thread
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
+        initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime), true);
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
     Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
@@ -178,7 +178,7 @@ public class HoodieFlinkWriteClient<T> extends
   @Override
   public List<WriteStatus> insert(List<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.INSERT, Option.ofNullable(instantTime));
+        initTable(WriteOperationType.INSERT, Option.ofNullable(instantTime), true);
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
     // create the write handle if not exists
@@ -201,7 +201,7 @@ public class HoodieFlinkWriteClient<T> extends
   public List<WriteStatus> insertOverwrite(
       List<HoodieRecord<T>> records, final String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.INSERT_OVERWRITE, Option.ofNullable(instantTime));
+        initTable(WriteOperationType.INSERT_OVERWRITE, Option.ofNullable(instantTime), true);
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
     // create the write handle if not exists
@@ -220,7 +220,7 @@ public class HoodieFlinkWriteClient<T> extends
    */
   public List<WriteStatus> insertOverwriteTable(
       List<HoodieRecord<T>> records, final String instantTime) {
-    HoodieTable table = initTable(WriteOperationType.INSERT_OVERWRITE_TABLE, Option.ofNullable(instantTime));
+    HoodieTable table = initTable(WriteOperationType.INSERT_OVERWRITE_TABLE, Option.ofNullable(instantTime), true);
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
     // create the write handle if not exists
@@ -253,7 +253,7 @@ public class HoodieFlinkWriteClient<T> extends
   @Override
   public List<WriteStatus> delete(List<HoodieKey> keys, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.DELETE, Option.ofNullable(instantTime));
+        initTable(WriteOperationType.DELETE, Option.ofNullable(instantTime), true);
     preWrite(instantTime, WriteOperationType.DELETE, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.delete(context, instantTime, keys);
     return postWrite(result, instantTime, table);
@@ -261,7 +261,7 @@ public class HoodieFlinkWriteClient<T> extends
 
   public List<WriteStatus> deletePartitions(List<String> partitions, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime));
+        initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime), true);
     preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.deletePartitions(context, instantTime, partitions);
     return postWrite(result, instantTime, table);

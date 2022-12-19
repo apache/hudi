@@ -1555,7 +1555,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *   <li>Initializing metrics contexts</li>
    * </ul>
    */
-  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
+  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime, boolean initialMetadataTableIfNecessary, boolean skipLocking) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // Setup write schemas for deletes
     if (operationType == WriteOperationType.DELETE) {
@@ -1567,12 +1567,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (instantTime.isPresent()) {
       ownerInstant = Option.of(new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
     }
-    this.txnManager.beginTransaction(ownerInstant, Option.empty());
+    if (!skipLocking) {
+      this.txnManager.beginTransaction(ownerInstant, Option.empty());
+    }
     try {
       tryUpgrade(metaClient, instantTime);
       table = doInitTable(metaClient, instantTime, initialMetadataTableIfNecessary);
     } finally {
-      this.txnManager.endTransaction(ownerInstant);
+      if (!skipLocking) {
+        this.txnManager.endTransaction(ownerInstant);
+      }
     }
 
     // Validate table properties
@@ -1602,7 +1606,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
-    return initTable(operationType, instantTime, config.isMetadataTableEnabled());
+    return initTable(operationType, instantTime, config.isMetadataTableEnabled(), false);
+  }
+
+  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime, boolean skipLocking) {
+    return initTable(operationType, instantTime, config.isMetadataTableEnabled(), skipLocking);
   }
 
   /**
