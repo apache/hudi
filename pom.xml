@@ -891,7 +891,17 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.apache.xbean</groupId>
+            <artifactId>xbean-asm6-shaded</artifactId>
+          </exclusion>
         </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.xbean</groupId>
+        <artifactId>xbean-asm6-shaded</artifactId>
+        <version>4.10</version>
+        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.spark</groupId>
