@@ -246,8 +246,6 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
 
 object LogFileIterator {
 
-  val CONFIG_INSTANTIATION_LOCK = new Object()
-
   def scanLog(logFiles: List[HoodieLogFile],
               partitionPath: Path,
               logSchema: Schema,

@@ -283,7 +283,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   def canPruneRelationSchema: Boolean =
     (fileFormat.isInstanceOf[ParquetFileFormat] || fileFormat.isInstanceOf[OrcFileFormat]) &&
       // NOTE: Some relations might be disabling sophisticated schema pruning techniques (for ex, nested schema pruning)
-      // TODO(HUDI-XXX) internal schema doesn't support nested schema pruning currently
+      // TODO(HUDI-5421) internal schema doesn't support nested schema pruning currently
       !hasSchemaOnRead
 
   override def sizeInBytes: Long = fileIndex.sizeInBytes

@@ -20,16 +20,15 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
-
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
-import org.apache.hudi.LogFileIterator.CONFIG_INSTANTIATION_LOCK
+import org.apache.hudi.HoodieMergeOnReadRDD.whitelistedPayloadClasses
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
+
 import java.io.Closeable
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
@@ -43,7 +42,7 @@ case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSp
  *   the base file and the corresponding delta-log file to merge them correctly</li>
  *
  *   <li>Required-schema reader: is used when it's fine to only read row's projected columns.
- *   This could occur, when row could be merged with corresponding delta-log record leveraging while only having
+ *   This could occur, when row could be merged with corresponding delta-log record while leveraging only
  *   projected columns</li>
  *
  *   <li>Required-schema reader (skip-merging): is used when when no merging will be performed (skip-merged).
@@ -78,11 +77,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
-  private val confBroadcast = sc.broadcast(new SerializableWritable(config))
-
-  private val whitelistedPayloadClasses: Set[String] = Seq(
-    classOf[OverwriteWithLatestAvroPayload]
-  ).map(_.getName).toSet
+  private val hadoopConfBroadcast = sc.broadcast(new SerializableWritable(config))
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
@@ -92,15 +87,15 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         projectedReader(dataFileOnlySplit.dataFile.get)
 
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
-        new LogFileIterator(logFileOnlySplit, tableSchema, requiredSchema, tableState, getConfig)
+        new LogFileIterator(logFileOnlySplit, tableSchema, requiredSchema, tableState, getHadoopConf)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
         val reader = fileReaders.requiredSchemaReaderSkipMerging
-        new SkipMergeIterator(split, reader, tableSchema, requiredSchema, tableState, getConfig)
+        new SkipMergeIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
         val reader = pickBaseFileReader
-        new RecordMergingFileIterator(split, reader, tableSchema, requiredSchema, tableState, getConfig)
+        new RecordMergingFileIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
 
       case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
         s"file path: ${mergeOnReadPartition.split.dataFile.get.filePath}" +
@@ -124,10 +119,9 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       of the stored data possible, while still properly executing corresponding relation's semantic
     //       and meet the query's requirements.
     //
-    //       Here we assume that iff queried table
-    //          a) It does use one of the standard (and whitelisted) Record Payload classes
-    //       then we can avoid reading and parsing the records w/ _full_ schema, and instead only
-    //       rely on projected one, nevertheless being able to perform merging correctly
+    //       Here we assume that iff queried table does use one of the standard (and whitelisted)
+    //       Record Payload classes then we can avoid reading and parsing the records w/ _full_ schema,
+    //       and instead only rely on projected one, nevertheless being able to perform merging correctly
     if (whitelistedPayloadClasses.contains(tableState.recordPayloadClassName)) {
       fileReaders.requiredSchemaReader
     } else {
@@ -138,10 +132,16 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   override protected def getPartitions: Array[Partition] =
     fileSplits.zipWithIndex.map(file => HoodieMergeOnReadPartition(file._2, file._1)).toArray
 
-  private def getConfig: Configuration = {
-    val conf = confBroadcast.value.value
-    CONFIG_INSTANTIATION_LOCK.synchronized {
-      new Configuration(conf)
-    }
+  private def getHadoopConf: Configuration = {
+    val conf = hadoopConfBroadcast.value.value
+    new Configuration(conf)
   }
+}
+
+object HoodieMergeOnReadRDD {
+
+  private val whitelistedPayloadClasses: Set[String] = Seq(
+    classOf[OverwriteWithLatestAvroPayload]
+  ).map(_.getName).toSet
+
 }

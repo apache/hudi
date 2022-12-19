@@ -160,10 +160,10 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       )
     } else {
       val prunedRequiredSchema = {
-        val superfluousColumnNames = mandatoryColumns.filterNot(requestedColumns.contains)
+        val unusedMandatoryColumnNames = mandatoryColumns.filterNot(requestedColumns.contains)
         val prunedStructSchema =
           StructType(requiredDataSchema.structTypeSchema.fields
-            .filterNot(f => superfluousColumnNames.contains(f.name)))
+            .filterNot(f => unusedMandatoryColumnNames.contains(f.name)))
 
         HoodieTableSchema(prunedStructSchema, convertToAvroSchema(prunedStructSchema).toString)
       }
