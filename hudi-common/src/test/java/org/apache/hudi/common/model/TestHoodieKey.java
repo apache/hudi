@@ -22,19 +22,27 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests for {@link HoodieKey}.
  */
 public class TestHoodieKey {
-
   @Test
   public void testPartitionPathValid() {
-    HoodieKey hoodieKey = new HoodieKey(UUID.randomUUID().toString(), "/0000/00/00");
+
     assertThrows(IllegalArgumentException.class, () -> {
-      hoodieKey.getPartitionPath();
+      new HoodieKey(UUID.randomUUID().toString(), "/0000/00/00");
     }, "should fail since partition path cannot begin with a /");
+
+    assertThrows(IllegalArgumentException.class, () -> {
+      new HoodieKey().setPartitionPath("/0000/00/00");
+    }, "should fail since partition path cannot begin with a /");
+
+    assertDoesNotThrow(() -> {
+      new HoodieKey(UUID.randomUUID().toString(), "0000/00/00");
+    }, "should not fail for a valid partition path");
   }
 
 }

@@ -41,6 +41,7 @@ public final class HoodieKey implements Serializable, KryoSerializable {
   public HoodieKey() {}
 
   public HoodieKey(String recordKey, String partitionPath) {
+    validatePartitionPath(partitionPath);
     this.recordKey = recordKey;
     this.partitionPath = partitionPath;
   }
@@ -54,13 +55,11 @@ public final class HoodieKey implements Serializable, KryoSerializable {
   }
 
   public void setPartitionPath(String partitionPath) {
+    validatePartitionPath(partitionPath);
     this.partitionPath = partitionPath;
   }
 
   public String getPartitionPath() {
-    if (partitionPath.trim().startsWith("/")) {
-      throw new IllegalArgumentException("Partition path cannot start with a /");
-    }
     return partitionPath;
   }
 
@@ -98,7 +97,16 @@ public final class HoodieKey implements Serializable, KryoSerializable {
 
   @Override
   public void read(Kryo kryo, Input input) {
+    validatePartitionPath(partitionPath);
     this.recordKey = input.readString();
-    this.partitionPath = input.readString();
+    String partitionPath = input.readString();
+    validatePartitionPath(partitionPath);
+    this.partitionPath = partitionPath;
+  }
+
+  private static void validatePartitionPath(String partitionPath) {
+    if (partitionPath != null && partitionPath.startsWith("/")) {
+      throw new IllegalArgumentException("Partition path cannot start with a /");
+    }
   }
 }
