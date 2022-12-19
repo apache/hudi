@@ -149,7 +149,6 @@ public class TestRecordCountAvroPayload {
 
     RecordCountAvroPayload payload1 = new RecordCountAvroPayload(record1, 1L);
     RecordCountAvroPayload payload2 = new RecordCountAvroPayload(delRecord1, 2L);
-
     assertEquals(payload1.preCombine(payload2, schema, properties), payload1);
     assertEquals(payload2.preCombine(payload1, schema, properties), payload2);
 
