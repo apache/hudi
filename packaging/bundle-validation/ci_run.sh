@@ -27,7 +27,8 @@
 # This is to run by GitHub Actions CI tasks from the project root directory
 # and it contains the CI environment-specific variables.
 
-HUDI_VERSION=$1
+HUDI_VERSION=0.12.2-rc1
+REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-1106/org/apache/hudi
 
 # choose versions based on build profiles
 if [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
@@ -40,6 +41,12 @@ if [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1136hive239spark248
+  hudi_flink_bundle_name=hudi-flink1.13-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark2.4-bundle_2.11
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.11
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.11
 elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -50,6 +57,12 @@ elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1136hive313spark313
+  hudi_flink_bundle_name=hudi-flink1.13-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark3.1-bundle_2.12
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
 elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -60,6 +73,12 @@ elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1146hive313spark323
+  hudi_flink_bundle_name=hudi-flink1.14-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark3.2-bundle_2.12
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
 elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -70,17 +89,23 @@ elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1153hive313spark331
+  hudi_flink_bundle_name=hudi-flink1.15-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark3.3-bundle_2.12
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
 fi
 
 # Copy bundle jars to temp dir for mounting
 TMP_JARS_DIR=/tmp/jars/$(date +%s)
 mkdir -p $TMP_JARS_DIR
-cp ${GITHUB_WORKSPACE}/packaging/hudi-flink-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-cp ${GITHUB_WORKSPACE}/packaging/hudi-hadoop-mr-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-cp ${GITHUB_WORKSPACE}/packaging/hudi-kafka-connect-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-cp ${GITHUB_WORKSPACE}/packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_flink_bundle_name/$HUDI_VERSION/$hudi_flink_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_hadoop_mr_bundle_name/$HUDI_VERSION/$hudi_hadoop_mr_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_kafka_connect_bundle_name/$HUDI_VERSION/$hudi_kafka_connect_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_spark_bundle_name/$HUDI_VERSION/$hudi_spark_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_utilities_bundle_name/$HUDI_VERSION/$hudi_utilities_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_utilities_slim_bundle_name/$HUDI_VERSION/$hudi_utilities_slim_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
 echo 'Validating jars below:'
 ls -l $TMP_JARS_DIR
 
