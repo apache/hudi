@@ -18,9 +18,11 @@
 
 package org.apache.hudi.common.model;
 
-import java.util.Properties;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
@@ -29,9 +31,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Objects;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import java.util.Properties;
 
 /**
  * Default payload used for delta streamer.
