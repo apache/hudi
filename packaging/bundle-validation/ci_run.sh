@@ -30,6 +30,8 @@
 HUDI_VERSION=0.12.2-rc1
 REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-1106/org/apache/hudi
 
+echo "Validating $HUDI_VERSION bundles"
+
 # choose versions based on build profiles
 if [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
   HADOOP_VERSION=2.7.7
@@ -106,7 +108,7 @@ wget -q $REPO_BASE_URL/$hudi_kafka_connect_bundle_name/$HUDI_VERSION/$hudi_kafka
 wget -q $REPO_BASE_URL/$hudi_spark_bundle_name/$HUDI_VERSION/$hudi_spark_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
 wget -q $REPO_BASE_URL/$hudi_utilities_bundle_name/$HUDI_VERSION/$hudi_utilities_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
 wget -q $REPO_BASE_URL/$hudi_utilities_slim_bundle_name/$HUDI_VERSION/$hudi_utilities_slim_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
-echo 'Validating jars below:'
+echo "Downloaded these jars from $REPO_BASE_URL for validation:"
 ls -l $TMP_JARS_DIR
 
 # Copy test dataset
