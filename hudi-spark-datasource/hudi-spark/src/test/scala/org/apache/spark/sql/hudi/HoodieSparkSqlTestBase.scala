@@ -82,14 +82,22 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
+    val conf = spark.sessionState.conf.getAllConfs
     super.test(testName, testTags: _*)(
       try {
         testFun
       } finally {
         val catalog = spark.sessionState.catalog
-        catalog.listDatabases().foreach{db =>
-          catalog.listTables(db).foreach {table =>
+        catalog.listDatabases().foreach { db =>
+          catalog.listTables(db).foreach { table =>
             catalog.dropTable(table, true, true)
+          }
+        }
+        for ((k, v) <- spark.sessionState.conf.getAllConfs) {
+          if (!conf.contains(k)) {
+            spark.sessionState.conf.unsetConf(k)
+          } else if (!conf(k).equals(v)) {
+            spark.sessionState.conf.setConfString(k, conf(k))
           }
         }
       }
