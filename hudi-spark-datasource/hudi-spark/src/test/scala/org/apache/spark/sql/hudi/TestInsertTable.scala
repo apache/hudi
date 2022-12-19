@@ -1065,6 +1065,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   def testBulkInsertPartitioner(basePath: File, sortModeName: String): Unit = {
     val tableName = generateTableName
+    spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.write.insert.drop.duplicates")
+    spark.sessionState.conf.unsetConf("hoodie.merge.allow.duplicate.on.inserts")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled")
     //Default parallelism is 200 which means in global sort, each record will end up in a different spark partition so
     //9 files would be created. Setting parallelism to 3 so that each spark partition will contain a hudi partition.
     val parallelism = if (sortModeName.equals(BulkInsertSortMode.GLOBAL_SORT.name())) {
