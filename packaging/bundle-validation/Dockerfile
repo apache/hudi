@@ -22,7 +22,7 @@ FROM apachehudi/hudi-ci-bundle-validation-base:$IMAGE_TAG
 ADD . .
 ENV HUDI_CONF_DIR=$WORKDIR/conf
 RUN cp conf/hive-site.xml $HIVE_HOME/conf/
-RUN if [[ $HIVE_VERSION == 2.* ]]; \
+RUN if [[ $HIVE_VERSION == "2."* ]]; \
     then cp conf/hive-site.hive2.xml $HIVE_HOME/conf/hive-site.xml; fi
 RUN cp $HIVE_HOME/conf/hive-site.xml $SPARK_HOME/conf/
 RUN cp $DERBY_HOME/lib/derbyclient.jar $SPARK_HOME/jars/
