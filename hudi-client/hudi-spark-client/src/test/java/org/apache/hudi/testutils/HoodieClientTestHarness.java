@@ -211,6 +211,10 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
 
     sqlContext = new SQLContext(sparkSession);
     context = new HoodieSparkEngineContext(jsc, sqlContext);
+
+    // NOTE: It's important to set Spark's `Tests.IS_TESTING` so that our tests are recognized
+    //       as such by Spark
+    System.setProperty("spark.testing", "true");
   }
 
   /**
