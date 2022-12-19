@@ -97,7 +97,6 @@ public final class HoodieKey implements Serializable, KryoSerializable {
 
   @Override
   public void read(Kryo kryo, Input input) {
-    validatePartitionPath(partitionPath);
     this.recordKey = input.readString();
     String partitionPath = input.readString();
     validatePartitionPath(partitionPath);
