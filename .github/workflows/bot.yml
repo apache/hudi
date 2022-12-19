@@ -18,12 +18,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.15'
-            sparkProfile: 'spark3.3'
-          - flinkProfile: 'flink1.14'
-            sparkProfile: 'spark3.2'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark2.4'
           - flinkProfile: 'flink1.13'
             sparkProfile: 'spark3.1'
+          - flinkProfile: 'flink1.14'
+            sparkProfile: 'spark3.2'
+          - flinkProfile: 'flink1.15'
+            sparkProfile: 'spark3.3'
+          - flinkProfile: 'flink1.15'
+            sparkProfile: 'spark3'
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -36,7 +42,6 @@ jobs:
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: 'scala-2.12'
         run: |
           ./packaging/bundle-validation/ci_run.sh
 

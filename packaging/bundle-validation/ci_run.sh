@@ -33,7 +33,23 @@ REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-1
 echo "Validating $HUDI_VERSION bundles"
 
 # choose versions based on build profiles
-if [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
+if [[ ${SPARK_PROFILE} == 'spark' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=2.3.9
+  DERBY_VERSION=10.10.2.0
+  FLINK_VERSION=1.13.6
+  SPARK_VERSION=2.4.8
+  SPARK_HADOOP_VERSION=2.7
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1136hive239spark248
+  hudi_flink_bundle_name=hudi-flink1.13-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark-bundle_2.11
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.11
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.11
+elif [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=2.3.9
   DERBY_VERSION=10.10.2.0
@@ -95,6 +111,22 @@ elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
   hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
   hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
   hudi_spark_bundle_name=hudi-spark3.3-bundle_2.12
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
+elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.15.3
+  SPARK_VERSION=3.3.1
+  SPARK_HADOOP_VERSION=2
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1153hive313spark331
+  hudi_flink_bundle_name=hudi-flink1.15-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark3-bundle_2.12
   hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
   hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
 fi
