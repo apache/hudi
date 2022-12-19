@@ -94,10 +94,13 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
           }
         }
         for ((k, v) <- spark.sessionState.conf.getAllConfs) {
-          if (!conf.contains(k)) {
-            spark.sessionState.conf.unsetConf(k)
-          } else if (!conf(k).equals(v)) {
-            spark.sessionState.conf.setConfString(k, conf(k))
+          //some configs like spark.driver.port or spark.app.startTime may change
+          if (!k.startsWith("spark.")) {
+            if (!conf.contains(k)) {
+              spark.sessionState.conf.unsetConf(k)
+            } else if (!conf(k).equals(v)) {
+              spark.sessionState.conf.setConfString(k, conf(k))
+            }
           }
         }
       }
