@@ -19,7 +19,6 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -47,11 +46,11 @@ public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
-    return HoodieJavaTable.create(config, (HoodieJavaEngineContext) context, metaClient);
+    return HoodieJavaTable.create(config, context, metaClient);
   }
 
   public static <T extends HoodieRecordPayload> HoodieJavaTable<T> create(HoodieWriteConfig config,
-                                                                          HoodieJavaEngineContext context,
+                                                                          HoodieEngineContext context,
                                                                           HoodieTableMetaClient metaClient) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:

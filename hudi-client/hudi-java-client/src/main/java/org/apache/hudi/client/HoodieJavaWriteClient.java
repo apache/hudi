@@ -94,7 +94,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
-    return HoodieJavaTable.create(config, (HoodieJavaEngineContext) context, metaClient);
+    return HoodieJavaTable.create(config, context, metaClient);
   }
 
   @Override

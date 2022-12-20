@@ -133,7 +133,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
-    return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient);
+    return HoodieSparkTable.create(config, context, metaClient);
   }
 
   @Override

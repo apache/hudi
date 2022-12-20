@@ -19,7 +19,6 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -60,11 +59,11 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
             .setProperties(config.getProps()).build();
-    return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient);
+    return HoodieSparkTable.create(config, context, metaClient);
   }
 
   public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config,
-                                                                           HoodieSparkEngineContext context,
+                                                                           HoodieEngineContext context,
                                                                            HoodieTableMetaClient metaClient) {
     HoodieSparkTable<T> hoodieSparkTable;
     switch (metaClient.getTableType()) {
