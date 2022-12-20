@@ -93,6 +93,11 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
+  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
+    return HoodieJavaTable.create(config, context, metaClient);
+  }
+
+  @Override
   public List<WriteStatus> upsert(List<HoodieRecord<T>> records,
                                   String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
@@ -228,13 +233,4 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
     throw new HoodieNotSupportedException("Cluster is not supported in HoodieJavaClient");
   }
-
-  @Override
-  protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
-    // new JavaUpgradeDowngrade(metaClient, config, context).run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
-
-    // Create a Hoodie table which encapsulated the commits and files visible
-    return HoodieJavaTable.create(config, (HoodieJavaEngineContext) context, metaClient);
-  }
-
 }
