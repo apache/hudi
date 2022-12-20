@@ -331,6 +331,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   protected abstract HoodieTable<T, I, K, O> createTable(HoodieWriteConfig config, Configuration hadoopConf);
 
+  protected abstract HoodieTable<T, I, K, O> createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient);
+
   void emitCommitMetrics(String instantTime, HoodieCommitMetadata metadata, String actionType) {
     if (writeTimer != null) {
       long durationInMs = metrics.getDurationInMs(writeTimer.stop());
@@ -1530,17 +1532,38 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Instantiates engine-specific instance of {@link HoodieTable} as well as performs necessary
-   * bootstrapping operations (for ex, validating whether Metadata Table has to be bootstrapped)
+   * Performs necessary bootstrapping operations (for ex, validating whether Metadata Table has to be bootstrapped).
    *
-   * NOTE: THIS OPERATION IS EXECUTED UNDER LOCK, THEREFORE SHOULD AVOID ANY OPERATIONS
-   *       NOT REQUIRING EXTERNAL SYNCHRONIZATION
+   * <p>NOTE: THIS OPERATION IS EXECUTED UNDER LOCK, THEREFORE SHOULD AVOID ANY OPERATIONS
+   *          NOT REQUIRING EXTERNAL SYNCHRONIZATION
    *
    * @param metaClient instance of {@link HoodieTableMetaClient}
    * @param instantTime current inflight instant time
-   * @return instantiated {@link HoodieTable}
    */
-  protected abstract HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary);
+  protected void doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
+    Option<HoodieInstant> ownerInstant = Option.empty();
+    if (instantTime.isPresent()) {
+      ownerInstant = Option.of(new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
+    }
+    this.txnManager.beginTransaction(ownerInstant, Option.empty());
+    try {
+      tryUpgrade(metaClient, instantTime);
+      if (initialMetadataTableIfNecessary) {
+        initMetadataTable(instantTime);
+      }
+    } finally {
+      this.txnManager.endTransaction(ownerInstant);
+    }
+  }
+
+  /**
+   * Bootstrap the metadata table.
+   *
+   * @param instantTime current inflight instant time
+   */
+  protected void initMetadataTable(Option<String> instantTime) {
+    // by default do nothing.
+  }
 
   /**
    * Instantiates and initializes instance of {@link HoodieTable}, performing crucial bootstrapping
@@ -1562,18 +1585,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       setWriteSchemaForDeletes(metaClient);
     }
 
-    HoodieTable table;
-    Option<HoodieInstant> ownerInstant = Option.empty();
-    if (instantTime.isPresent()) {
-      ownerInstant = Option.of(new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
-    }
-    this.txnManager.beginTransaction(ownerInstant, Option.empty());
-    try {
-      tryUpgrade(metaClient, instantTime);
-      table = doInitTable(metaClient, instantTime, initialMetadataTableIfNecessary);
-    } finally {
-      this.txnManager.endTransaction(ownerInstant);
-    }
+    doInitTable(metaClient, instantTime, initialMetadataTableIfNecessary);
+    HoodieTable table = createTable(config, hadoopConf, metaClient);
 
     // Validate table properties
     metaClient.validateTableProperties(config.getProps());
