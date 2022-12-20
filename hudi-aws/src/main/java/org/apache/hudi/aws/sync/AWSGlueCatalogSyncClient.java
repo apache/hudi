@@ -19,10 +19,13 @@
 package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.sync.common.HoodieSyncClient;
+import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
 import com.amazonaws.services.glue.AWSGlue;
@@ -57,13 +60,7 @@ import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
@@ -145,7 +142,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
             LOG.warn("Partitions already exist in glue: " + result.getErrors());
           } else {
             throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
-              + " with error(s): " + result.getErrors());
+                + " with error(s): " + result.getErrors());
           }
         }
         Thread.sleep(BATCH_REQUEST_SLEEP_MILLIS);
@@ -238,6 +235,66 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
+  private void setComments(List<Column> columns, Map<String, Option<String>> commentsMap) {
+    columns.forEach(column -> {
+      String comment = commentsMap.getOrDefault(column.getName(), Option.empty()).orElse(null);
+      column.setComment(comment);
+    });
+  }
+
+  private String getTableDoc() {
+    try {
+      return new TableSchemaResolver(metaClient).getTableAvroSchema(true).getDoc();
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get schema's doc from storage : ", e);
+    }
+  }
+
+  @Override
+  public List<FieldSchema> getStorageFieldSchemas() {
+    try {
+      return new TableSchemaResolver(metaClient).getTableAvroSchema(true)
+          .getFields()
+          .stream()
+          .map(f -> new FieldSchema(f.name(), f.schema().getType().getName(), f.doc()))
+          .collect(Collectors.toList());
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get field schemas from storage : ", e);
+    }
+  }
+
+  @Override
+  public void updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
+    Table table = getTable(awsGlue, databaseName, tableName);
+
+    Map<String, Option<String>> commentsMap = fromStorage.stream().collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getComment));
+
+    StorageDescriptor storageDescriptor = table.getStorageDescriptor();
+    setComments(storageDescriptor.getColumns(), commentsMap);
+
+    List<Column> partitionKeys = table.getPartitionKeys();
+    setComments(partitionKeys, commentsMap);
+
+    String tableDescription = getTableDoc();
+
+    final Date now = new Date();
+    TableInput updatedTableInput = new TableInput()
+        .withName(tableName)
+        .withDescription(tableDescription)
+        .withTableType(table.getTableType())
+        .withParameters(table.getParameters())
+        .withPartitionKeys(partitionKeys)
+        .withStorageDescriptor(storageDescriptor)
+        .withLastAccessTime(now)
+        .withLastAnalyzedTime(now);
+
+    UpdateTableRequest request = new UpdateTableRequest()
+        .withDatabaseName(databaseName)
+        .withTableInput(updatedTableInput);
+
+    awsGlue.updateTable(request);
+  }
+
   @Override
   public void updateTableSchema(String tableName, MessageType newSchema) {
     // ToDo Cascade is set in Hive meta sync, but need to investigate how to configure it for Glue meta
@@ -271,12 +328,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void createTable(String tableName,
-      MessageType storageSchema,
-      String inputFormatClass,
-      String outputFormatClass,
-      String serdeClass,
-      Map<String, String> serdeProperties,
-      Map<String, String> tableProperties) {
+                          MessageType storageSchema,
+                          String inputFormatClass,
+                          String outputFormatClass,
+                          String serdeClass,
+                          Map<String, String> serdeProperties,
+                          Map<String, String> tableProperties) {
     if (tableExists(tableName)) {
       return;
     }
