@@ -188,10 +188,10 @@ public class MergeOnReadInputFormat
 
   protected ClosableIterator<RowData> initIterator(MergeOnReadInputSplit split) throws IOException {
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
-      if (split.getInstantRange() != null) {
+      if (split.getInstantRange().isPresent()) {
         // base file only with commit time filtering
         return new BaseFileOnlyFilteringIterator(
-            split.getInstantRange(),
+            split.getInstantRange().get(),
             this.tableState.getRequiredRowType(),
             getBaseFileIterator(split.getBasePath().get(), getRequiredPosWithCommitTime(this.requiredPos)));
       } else {
@@ -549,11 +549,11 @@ public class MergeOnReadInputFormat
     private RowData currentRecord;
 
     BaseFileOnlyFilteringIterator(
-        Option<InstantRange> instantRange,
+        InstantRange instantRange,
         RowType requiredRowType,
         ClosableIterator<RowData> nested) {
       this.nested = nested;
-      this.instantRange = instantRange.orElse(null);
+      this.instantRange = instantRange;
       int[] positions = IntStream.range(1, 1 + requiredRowType.getFieldCount()).toArray();
       projection = RowDataProjection.instance(requiredRowType, positions);
     }
@@ -562,12 +562,8 @@ public class MergeOnReadInputFormat
     public boolean hasNext() {
       while (this.nested.hasNext()) {
         currentRecord = this.nested.next();
-        if (instantRange != null) {
-          boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
-          if (isInRange) {
-            return true;
-          }
-        } else {
+        boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
+        if (isInRange) {
           return true;
         }
       }

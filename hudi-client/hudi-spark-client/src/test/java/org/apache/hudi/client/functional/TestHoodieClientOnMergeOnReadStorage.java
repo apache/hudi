@@ -230,7 +230,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     client.logCompact(timeStamp.get());
     // Verify all the records.
     assertDataInMORTable(config, lastCommitBeforeLogCompaction, timeStamp.get(),
-        hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+        hadoopConf, Arrays.asList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
   }
 
   /**

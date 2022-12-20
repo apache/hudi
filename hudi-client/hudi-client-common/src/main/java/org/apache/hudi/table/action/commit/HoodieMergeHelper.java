@@ -42,7 +42,7 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.QueueBasedExecutorFactory;
+import org.apache.hudi.util.ExecutorFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
@@ -108,7 +108,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         || !isPureProjection
         || baseFile.getBootstrapBaseFile().isPresent();
 
-    HoodieExecutor<HoodieRecord, HoodieRecord, Void> wrapper = null;
+    HoodieExecutor<Void> wrapper = null;
 
     try {
       Iterator<HoodieRecord> recordIterator;
@@ -135,7 +135,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         recordSchema = isPureProjection ? writerSchema : readerSchema;
       }
 
-      wrapper = QueueBasedExecutorFactory.create(writeConfig, recordIterator, new UpdateHandler(mergeHandle), record -> {
+      wrapper = ExecutorFactory.create(writeConfig, recordIterator, new UpdateHandler(mergeHandle), record -> {
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
         //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
         //       it since these records will be put into queue of QueueBasedExecutorFactory.
