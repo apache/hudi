@@ -19,12 +19,14 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -47,6 +49,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -610,5 +613,103 @@ public class TestCleanPlanExecutor extends TestCleaner {
     assertTrue(testTable.baseFileExists(p1, secondCommitTs, file1P1C0));
     assertFalse(testTable.baseFileExists(p0, firstCommitTs, file1P0C0));
     assertFalse(testTable.baseFileExists(p1, firstCommitTs, file1P1C0));
+  }
+
+  /**
+   * Test Hudi COW Table Cleaner - Keep the latest file versions policy with replace commit.
+   * Commit1 (T - 8h):
+   *        p0 => file1P0C0-commit1
+   *        p1 => file1P1C0-commit1
+   * Commit2 (T - 7h):
+   *        p0 => file1P0C0-commit1, file1P0C0-commit2
+   *        p1 => file1P1C0-commit1, file1P1C0-commit2
+   *  ReplaceCommit1 (T-6h): only affect p0
+   *        p0 => file1P0C0-commit1, file1P0C0-commit2 replaced by file2P0C1-replaceCommit1
+   *        p1 => file1P1C0-commit1, file1P1C0-commit2
+   *
+   *  ReplaceCommit2 (T-2h): only affect p0
+   *        p0 => file1P0C0-commit1, file1P0C0-commit2
+   *              file2P0C1-replaceCommit1 replace file1P0C0-commit1, file1P0C0-commit2
+   *              file2P0C1Sec-replaceCommit2 replace file2P0C1-replaceCommit1
+   *        p1 => file1P1C0-commit1, file1P1C0-commit2
+   *
+   *  call clean :
+   *  case1 ReplacedFilesRetainHours = -1 => clean replaced files asap
+   *        p0 => file2P0C1Sec-replaceCommit2
+   *        p1 => file1P1C0-commit2
+   *
+   *  case2 ReplacedFilesRetainHours = -3 => keep replace commit2 and related replaced files
+   *        p0 => file2P0C1-replaceCommit1
+   *              file2P0C1Sec-replaceCommit2
+   *        p1 => file1P1C0-commit2
+   */
+  @ParameterizedTest
+  @ValueSource(ints = {-1, 3})
+  public void testKeepLatestFileVersionsWithReplaceCommitRetain(int hours) throws Exception {
+    HoodieWriteConfig config =
+        HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withCleanConfig(HoodieCleanConfig.newBuilder()
+                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1)
+                .withReplacedFilesRetainHours(hours).build())
+            .build();
+
+    HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+
+    final String p0 = "2020/01/01";
+    final String p1 = "2020/01/02";
+
+    // make 1 commit, with 1 file per partition
+    final String file1P0C0 = UUID.randomUUID().toString();
+    final String file1P1C0 = UUID.randomUUID().toString();
+
+    Map<String, List<Pair<String, Integer>>> c1PartitionToFilesNameLengthMap = new HashMap<>();
+    c1PartitionToFilesNameLengthMap.put(p0, Collections.singletonList(Pair.of(file1P0C0, 100)));
+    c1PartitionToFilesNameLengthMap.put(p1, Collections.singletonList(Pair.of(file1P1C0, 200)));
+
+    Instant instant = Instant.now();
+    ZonedDateTime commitDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
+    int minutesForFirstCommit = 8 * 60;
+    String firstCommitTs = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusMinutes(minutesForFirstCommit).toInstant()));
+
+    testTable.doWriteOperation(firstCommitTs, WriteOperationType.INSERT, Arrays.asList(p0, p1),
+        c1PartitionToFilesNameLengthMap, false, false);
+
+    int minutesForSecondCommit = 7 * 60;
+    String secondCommitTs = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusMinutes(minutesForSecondCommit).toInstant()));
+
+    testTable.doWriteOperation(secondCommitTs, WriteOperationType.UPSERT, Arrays.asList(p0, p1),
+        c1PartitionToFilesNameLengthMap, false, false);
+
+    int minutesForFirstReplace = 6 * 60;
+    String firstReplaceCommitTs = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusMinutes(minutesForFirstReplace).toInstant()));
+
+    Map<String, String> partitionAndFileId002 = testTable.forReplaceCommit(firstReplaceCommitTs).getFileIdsWithBaseFilesInPartitions(p0);
+    String file2P0C1 = partitionAndFileId002.get(p0);
+    Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
+        generateReplaceCommitMetadata(firstReplaceCommitTs, p0, file1P0C0, file2P0C1);
+    testTable.addReplaceCommit(firstReplaceCommitTs, Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
+
+    int minutesForSecondReplace = 2 * 60;
+    String secondReplaceCommitTs = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusMinutes(minutesForSecondReplace).toInstant()));
+
+    Map<String, String> partitionAndFileId002Sec = testTable.forReplaceCommit(secondReplaceCommitTs).getFileIdsWithBaseFilesInPartitions(p0);
+    String file2P0C1Sec = partitionAndFileId002Sec.get(p0);
+    Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadataSec =
+        generateReplaceCommitMetadata(secondReplaceCommitTs, p0, file2P0C1, file2P0C1Sec);
+    testTable.addReplaceCommit(secondReplaceCommitTs, Option.of(replaceMetadataSec.getKey()), Option.empty(), replaceMetadataSec.getValue());
+
+    List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);
+    assertEquals(2, hoodieCleanStats.size(), "Should clean one file each from both the partitions");
+
+    if (hours > 0) {
+      assertTrue(testTable.baseFileExists(p1, secondCommitTs, file1P1C0));
+      assertTrue(testTable.baseFileExists(p0, firstReplaceCommitTs, file2P0C1));
+      assertTrue(testTable.baseFileExists(p0, secondReplaceCommitTs, file2P0C1Sec));
+    } else {
+      assertTrue(testTable.baseFileExists(p1, secondCommitTs, file1P1C0));
+      assertTrue(testTable.baseFileExists(p0, secondReplaceCommitTs, file2P0C1Sec));
+    }
   }
 }

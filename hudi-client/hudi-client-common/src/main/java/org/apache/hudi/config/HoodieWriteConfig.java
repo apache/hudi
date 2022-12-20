@@ -1259,6 +1259,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED);
   }
 
+  public int getCleanerReplacedFilesRetainHours() {
+    return getInt(HoodieCleanConfig.CLEANER_REPLACED_FILES_HOURS_RETAINED);
+  }
+
   public int getCleanerCommitsRetained() {
     return getInt(HoodieCleanConfig.CLEANER_COMMITS_RETAINED);
   }

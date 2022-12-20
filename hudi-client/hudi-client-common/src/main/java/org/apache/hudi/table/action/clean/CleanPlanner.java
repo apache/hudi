@@ -238,9 +238,18 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         .flatMap(this::getSavepointedDataFiles)
         .collect(Collectors.toList());
 
-    // In this scenario, we will assume that once replaced a file group automatically becomes eligible for cleaning completely
-    // In other words, the file versions only apply to the active file groups.
-    deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, Option.empty()));
+    int replacedFilesRetainHours = config.getCleanerReplacedFilesRetainHours();
+    if (replacedFilesRetainHours < 0) {
+      // In this scenario, we will assume that once replaced a file group automatically becomes eligible for cleaning completely
+      // In other words, the file versions only apply to the active file groups.
+      deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, Option.empty()));
+    } else {
+      // In this scenario, we will get the earliest commit based on replacedFilesRetainHours,
+      // and all replaced files later than this commit WILL NOT be deleted.
+      Option<HoodieInstant> replacedFilesRetain = getEarliestCommitToRetain(replacedFilesRetainHours);
+      deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, replacedFilesRetain));
+    }
+
     boolean toDeletePartition = false;
     List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     for (HoodieFileGroup fileGroup : fileGroups) {
@@ -489,13 +498,18 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         && commitTimeline.countInstants() > commitsRetained) {
       earliestCommitToRetain = commitTimeline.nthInstant(commitTimeline.countInstants() - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list
     } else if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
-      Instant instant = Instant.now();
-      ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
-      String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
-      earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstantsAsStream().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
-              HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
+      earliestCommitToRetain = getEarliestCommitToRetain(hoursRetained);
     }
     return earliestCommitToRetain;
+  }
+
+  private Option<HoodieInstant> getEarliestCommitToRetain(int hoursRetained) {
+    Instant instant = Instant.now();
+    ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
+    String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
+
+    return Option.fromJavaOptional(commitTimeline.getInstantsAsStream().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
+        HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
   }
 
   /**
