@@ -9,7 +9,7 @@
  *
  *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
+   * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
@@ -29,8 +29,11 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -89,7 +92,9 @@ public class MercifulJsonConverter {
    */
   public GenericRecord convert(String json, Schema schema) {
     try {
-      Map<String, Object> jsonObjectMap = mapper.readValue(json, Map.class);
+      // Remove the 5 bytes at the beginning, these are used to encode the schema id.
+      String actualJson = json.substring(5);
+      Map<String, Object> jsonObjectMap = mapper.readValue(actualJson, Map.class);
       return convertJsonToAvro(jsonObjectMap, schema);
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
@@ -188,7 +193,9 @@ public class MercifulJsonConverter {
         if (value instanceof Number) {
           return Pair.of(true, ((Number) value).doubleValue());
         } else if (value instanceof String) {
-          return Pair.of(true, Double.valueOf((String) value));
+          // needs to be converted into a double with scale 2
+          byte[] byteArr = Base64.getDecoder().decode(value.toString());
+          return Pair.of(true, Double.valueOf(String.valueOf(new BigDecimal(new BigInteger(byteArr), 2))));
         }
         return Pair.of(false, null);
       }
