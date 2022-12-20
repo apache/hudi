@@ -106,18 +106,16 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   }
 
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[HoodieBaseFileSplit] = {
-    val partitions = listLatestBaseFiles(globPaths, partitionFilters, dataFilters)
-    val fileSplits = partitions.values.toSeq
-      .flatMap { files =>
-        files.flatMap { file =>
-          // TODO fix, currently assuming parquet as underlying format
-          HoodieDataSourceHelper.splitFiles(
-            sparkSession = sparkSession,
-            file = file,
-            partitionValues = getPartitionColumnsAsInternalRow(file)
-          )
-        }
-      }
+    val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
+    val fileSplits = fileSlices.flatMap { fileSlice =>
+      // TODO fix, currently assuming parquet as underlying format
+      val fs = fileSlice.getBaseFile.get.getFileStatus
+      HoodieDataSourceHelper.splitFiles(
+        sparkSession = sparkSession,
+        file = fs,
+        partitionValues = getPartitionColumnsAsInternalRow(fs)
+      )
+    }
       // NOTE: It's important to order the splits in the reverse order of their
       //       size so that we can subsequently bucket them in an efficient manner
       .sortBy(_.length)(implicitly[Ordering[Long]].reverse)
