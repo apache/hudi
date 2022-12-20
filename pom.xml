@@ -495,7 +495,7 @@
         <plugin>
           <groupId>org.scalatest</groupId>
           <artifactId>scalatest-maven-plugin</artifactId>
-          <version>1.0</version>
+          <version>2.2.0</version>
           <configuration>
             <skipTests>${skipUTs}</skipTests>
             <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
