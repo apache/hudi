@@ -144,8 +144,7 @@ public class JsonSchemaToAvroSchemaConverter {
    * @return avroschema event schema in AVRO format
    */
   public static String convertJsonSchemaToAvroSchema(String jsonSchema) throws IOException {
-    JsonParser jsonParser = new JsonParser();
-    JsonElement jsonTree = jsonParser.parse(jsonSchema);
+    JsonElement jsonTree = JsonParser.parseString(jsonSchema);
     JsonObject avroSchema = new JsonObject();
 
     if (jsonTree.isJsonObject()) {
