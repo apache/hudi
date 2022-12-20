@@ -185,12 +185,12 @@ public class ITTestHoodieSanity extends ITTestBase {
 
     // Ensure row count is 80 (without duplicates) (100 - 20 deleted)
     stdOutErr = executeHiveCommand("select count(1) from " + snapshotTableName);
-    assertEquals(80, Integer.parseInt(stdOutErr.getLeft().substring(stdOutErr.getLeft().lastIndexOf("\n")).trim()),
+    assertEquals(80, Integer.parseInt(lastLine(stdOutErr.getLeft()).trim()),
         "Expecting 80 rows to be present in the snapshot table");
 
     if (roTableName.isPresent()) {
       stdOutErr = executeHiveCommand("select count(1) from " + roTableName.get());
-      assertEquals(80, Integer.parseInt(stdOutErr.getLeft().substring(stdOutErr.getLeft().lastIndexOf("\n")).trim()),
+      assertEquals(80, Integer.parseInt(lastLine(stdOutErr.getLeft()).trim()),
           "Expecting 80 rows to be present in the snapshot table");
     }
 
@@ -204,8 +204,14 @@ public class ITTestHoodieSanity extends ITTestBase {
     } else {
       stdOutErr = executeHiveCommand("select count(1) from " + snapshotTableName);
     }
-    assertEquals(280, Integer.parseInt(stdOutErr.getLeft().trim()),
+
+    assertEquals(280, Integer.parseInt(lastLine(stdOutErr.getLeft()).trim()),
         "Expecting 280 rows to be present in the new table");
+  }
+
+  private static String lastLine(String output) {
+    String[] lines = output.split("\n");
+    return lines[lines.length - 1];
   }
 
   public void testRunHoodieJavaApp(String hiveTableName, String tableType, PartitionType partitionType)

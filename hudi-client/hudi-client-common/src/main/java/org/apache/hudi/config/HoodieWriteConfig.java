@@ -157,9 +157,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(BOUNDED_IN_MEMORY.name())
       .withValidValues(BOUNDED_IN_MEMORY.name(), DISRUPTOR.name())
       .withDocumentation("Set executor which orchestrates concurrent producers and consumers communicating through a message queue."
-          + "default value is BOUNDED_IN_MEMORY which use a bounded in-memory queue using LinkedBlockingQueue."
-          + "Also users could use DISRUPTOR, which use disruptor as a lock free message queue "
-          + "to gain better writing performance if lock was the bottleneck. Although DISRUPTOR_EXECUTOR is still an experimental feature.");
+          + "BOUNDED_IN_MEMORY(default): Use LinkedBlockingQueue as a bounded in-memory queue, this queue will use extra lock to balance producers and consumer"
+          + "DISRUPTOR: Use disruptor which a lock free message queue as inner message, this queue may gain better writing performance if lock was the bottleneck. "
+          + "SIMPLE: Executor with no inner message queue and no inner lock. Consuming and writing records from iterator directly. Compared with BIM and DISRUPTOR, "
+          + "this queue has no need for additional memory and cpu resources due to lock or multithreading, but also lost some benefits such as speed limit. "
+          + "Although DISRUPTOR_EXECUTOR and SIMPLE are still in experimental.");
 
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.type")
