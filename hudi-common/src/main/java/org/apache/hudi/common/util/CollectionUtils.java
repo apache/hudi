@@ -118,7 +118,6 @@ public class CollectionUtils {
     return combined;
   }
 
-
   /**
    * Combines provided {@link List}s into one, returning new instance of {@link ArrayList}
    */
@@ -248,6 +247,15 @@ public class CollectionUtils {
       map.put(pair.getLeft(), pair.getRight());
     }
     return Collections.unmodifiableMap(map);
+  }
+
+  @SafeVarargs
+  public static <K,V> HashMap<K, V> createHashMap(final Pair<K, V>... elements) {
+    HashMap<K,V> map = new HashMap<>();
+    for (Pair<K,V> pair: elements) {
+      map.put(pair.getLeft(), pair.getRight());
+    }
+    return map;
   }
 
   @SafeVarargs

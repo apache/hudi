@@ -663,7 +663,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     List<HoodieInstant> allInstants = new ArrayList<>();
     long instantTime = 1;
     for (State state : State.values()) {
-      if (state == State.INVALID) {
+      if (state == State.NIL) {
         continue;
       }
       for (String action : HoodieTimeline.VALID_ACTIONS_IN_TIMELINE) {

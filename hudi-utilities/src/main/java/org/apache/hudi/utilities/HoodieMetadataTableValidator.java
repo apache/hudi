@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -63,7 +64,6 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import jline.internal.Log;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -152,7 +152,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   // Properties with source, hoodie client, key generator etc.
   private TypedProperties props;
 
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
 
   protected transient Option<AsyncMetadataTableValidateService> asyncMetadataTableValidateService;
 
@@ -940,10 +940,10 @@ public class HoodieMetadataTableValidator implements Serializable {
    * verified in the {@link HoodieMetadataTableValidator}.
    */
   private static class HoodieMetadataValidationContext implements Serializable {
-    private HoodieTableMetaClient metaClient;
-    private HoodieTableFileSystemView fileSystemView;
-    private HoodieTableMetadata tableMetadata;
-    private boolean enableMetadataTable;
+    private final HoodieTableMetaClient metaClient;
+    private final HoodieTableFileSystemView fileSystemView;
+    private final HoodieTableMetadata tableMetadata;
+    private final boolean enableMetadataTable;
     private List<String> allColumnNameList;
 
     public HoodieMetadataValidationContext(
@@ -1038,30 +1038,29 @@ public class HoodieMetadataTableValidator implements Serializable {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
       try {
         return schemaResolver.getTableAvroSchema().getFields().stream()
-            .map(entry -> entry.name()).collect(Collectors.toList());
+            .map(Schema.Field::name).collect(Collectors.toList());
       } catch (Exception e) {
         throw new HoodieException("Failed to get all column names for " + metaClient.getBasePath());
       }
     }
 
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
-      Path path = new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPath), filename);
-      HoodieFileReader<IndexedRecord> fileReader;
-      try {
-        fileReader = HoodieFileReaderFactory.getFileReader(metaClient.getHadoopConf(), path);
+      Path path = new Path(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath), filename);
+      BloomFilter bloomFilter;
+      try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(), path)) {
+        bloomFilter = fileReader.readBloomFilter();
+        if (bloomFilter == null) {
+          Log.error("Failed to read bloom filter for " + path);
+          return Option.empty();
+        }
       } catch (IOException e) {
         Log.error("Failed to get file reader for " + path + " " + e.getMessage());
-        return Option.empty();
-      }
-      final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
-      if (fileBloomFilter == null) {
-        Log.error("Failed to read bloom filter for " + path);
         return Option.empty();
       }
       return Option.of(BloomFilterData.builder()
           .setPartitionPath(partitionPath)
           .setFilename(filename)
-          .setBloomFilter(ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes()))
+          .setBloomFilter(ByteBuffer.wrap(bloomFilter.serializeToString().getBytes()))
           .build());
     }
   }

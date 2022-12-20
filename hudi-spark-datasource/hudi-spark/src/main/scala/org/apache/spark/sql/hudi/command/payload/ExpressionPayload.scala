@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import com.github.benmanes.caffeine.cache.Caffeine
+import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
@@ -26,6 +26,7 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
+import org.apache.hudi.common.model.BaseAvroPayload.isDeleteRecord
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
@@ -35,13 +36,12 @@ import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.codegen.GenerateSafeProjection
-import org.apache.spark.sql.catalyst.expressions.{Expression, Projection}
+import org.apache.spark.sql.catalyst.expressions.{Expression, Projection, SafeProjection}
 import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.BooleanType
 
-import java.util.function.Function
+import java.util.function.{Function, Supplier}
 import java.util.{Base64, Properties}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -61,25 +61,11 @@ import scala.collection.mutable.ArrayBuffer
  */
 class ExpressionPayload(@transient record: GenericRecord,
                         @transient orderingVal: Comparable[_])
-  extends DefaultHoodieRecordPayload(record, orderingVal) {
+  extends DefaultHoodieRecordPayload(record, orderingVal) with Logging {
 
   def this(recordOpt: HOption[GenericRecord]) {
     this(recordOpt.orElse(null), 0)
   }
-
-  /**
-   * Target schema used for writing records into the table
-   */
-  private var writeSchema: Schema = _
-
-  /**
-   * Original record's schema
-   *
-   * NOTE: To avoid excessive overhead of serializing original record's Avro schema along
-   *       w/ _every_ record, we instead make it to be provided along with every request
-   *       requiring this record to be deserialized
-   */
-  private var recordSchema: Schema = _
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
                                         schema: Schema): HOption[IndexedRecord] = {
@@ -93,7 +79,7 @@ class ExpressionPayload(@transient record: GenericRecord,
   override def combineAndGetUpdateValue(targetRecord: IndexedRecord,
                                         schema: Schema,
                                         properties: Properties): HOption[IndexedRecord] = {
-    init(properties)
+    val recordSchema = getRecordSchema(properties)
 
     val sourceRecord = bytesToAvro(recordBytes, recordSchema)
     val joinedRecord = joinRecord(sourceRecord, targetRecord)
@@ -101,11 +87,14 @@ class ExpressionPayload(@transient record: GenericRecord,
     processMatchedRecord(ConvertibleRecord(joinedRecord), Some(targetRecord), properties)
   }
 
+  override def canProduceSentinel: Boolean = true
+
   /**
    * Process the matched record. Firstly test if the record matched any of the update-conditions,
    * if matched, return the update assignments result. Secondly, test if the record matched
    * delete-condition, if matched then return a delete record. Finally if no condition matched,
-   * return a {@link HoodieWriteHandle.IGNORE_RECORD} which will be ignored by HoodieWriteHandle.
+   * return a [[HoodieRecord.SENTINEL]] which will be ignored by HoodieWriteHandle.
+   *
    * @param inputRecord  The input record to process.
    * @param targetRecord The origin exist record.
    * @param properties   The properties.
@@ -136,8 +125,9 @@ class ExpressionPayload(@transient record: GenericRecord,
       // If the update condition matched  then execute assignment expression
       // to compute final record to update. We will return the first matched record.
       if (conditionEvalResult) {
+        val writerSchema = getWriterSchema(properties)
         val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
-        lazy val resultingAvroRecord = getAvroSerializerFor(writeSchema)
+        lazy val resultingAvroRecord = getAvroSerializerFor(writerSchema)
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
 
@@ -167,7 +157,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     if (resultRecordOpt == null) {
       // If there is no condition matched, just filter this record.
       // here we return a IGNORE_RECORD, HoodieMergeHandle will not handle it.
-      HOption.of(HoodieWriteHandle.IGNORE_RECORD)
+      HOption.of(HoodieRecord.SENTINEL)
     } else {
       resultRecordOpt
     }
@@ -194,18 +184,18 @@ class ExpressionPayload(@transient record: GenericRecord,
   /**
    * Process the not-matched record. Test if the record matched any of insert-conditions,
    * if matched then return the result of insert-assignment. Or else return a
-   * {@link HoodieWriteHandle.IGNORE_RECORD} which will be ignored by HoodieWriteHandle.
+   * [[HoodieRecord.SENTINEL]] which will be ignored by HoodieWriteHandle.
    *
    * @param inputRecord The input record to process.
    * @param properties  The properties.
    * @return The result of the record to insert.
    */
   private def processNotMatchedRecord(inputRecord: ConvertibleRecord, properties: Properties): HOption[IndexedRecord] = {
-    val insertConditionAndAssignmentsText =
-      properties.get(ExpressionPayload.PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS)
+    val insertConditionAndAssignmentsText: String =
+      properties.get(ExpressionPayload.PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS).toString
     // Get the evaluator for each condition and insert assignment.
     val insertConditionAndAssignments =
-      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText.toString, inputRecord.asAvro.getSchema)
+      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText, inputRecord.asAvro.getSchema)
     var resultRecordOpt: HOption[IndexedRecord] = null
     for ((conditionEvaluator, assignmentEvaluator) <- insertConditionAndAssignments
          if resultRecordOpt == null) {
@@ -215,8 +205,9 @@ class ExpressionPayload(@transient record: GenericRecord,
       // If matched the insert condition then execute the assignment expressions to compute the
       // result record. We will return the first matched record.
       if (conditionEvalResult) {
+        val writerSchema = getWriterSchema(properties)
         val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
-        val resultingAvroRecord = getAvroSerializerFor(writeSchema)
+        val resultingAvroRecord = getAvroSerializerFor(writerSchema)
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
 
@@ -228,14 +219,24 @@ class ExpressionPayload(@transient record: GenericRecord,
     } else {
       // If there is no condition matched, just filter this record.
       // Here we return a IGNORE_RECORD, HoodieCreateHandle will not handle it.
-      HOption.of(HoodieWriteHandle.IGNORE_RECORD)
+      HOption.of(HoodieRecord.SENTINEL)
     }
   }
 
-  override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
-    init(properties)
+  override def isDeleted(schema: Schema, props: Properties): Boolean = {
+    val deleteConditionText = props.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
+    val isUpdateRecord = props.getProperty(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, "false").toBoolean
+    val isDeleteOnCondition= if (isUpdateRecord && deleteConditionText != null) {
+      !getInsertValue(schema, props).isPresent
+    } else false
 
+    isDeletedRecord || isDeleteOnCondition
+  }
+
+  override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
+    val recordSchema = getRecordSchema(properties)
     val incomingRecord = ConvertibleRecord(bytesToAvro(recordBytes, recordSchema))
+
     if (isDeleteRecord(incomingRecord.asAvro)) {
       HOption.empty[IndexedRecord]()
     } else if (isMORTable(properties)) {
@@ -266,20 +267,6 @@ class ExpressionPayload(@transient record: GenericRecord,
       writeRecord.put(i, values(i))
     }
     writeRecord
-  }
-
-  private def init(props: Properties): Unit = {
-    if (writeSchema == null) {
-      ValidationUtils.checkArgument(props.containsKey(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key),
-        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key} property")
-      writeSchema = parseSchema(props.getProperty(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key))
-    }
-
-    if (recordSchema == null) {
-      ValidationUtils.checkArgument(props.containsKey(PAYLOAD_RECORD_AVRO_SCHEMA),
-        s"Missing ${PAYLOAD_RECORD_AVRO_SCHEMA} property")
-      recordSchema = parseSchema(props.getProperty(PAYLOAD_RECORD_AVRO_SCHEMA))
-    }
   }
 
   /**
@@ -328,6 +315,11 @@ object ExpressionPayload {
   val PAYLOAD_RECORD_AVRO_SCHEMA = "hoodie.payload.record.schema"
 
   /**
+   * NOTE: PLEASE READ CAREFULLY
+   *       Spark's [[SafeProjection]] are NOT thread-safe hence cache is scoped
+   *       down to be thread-local to support the multi-threaded executors (like
+   *       [[BoundedInMemoryQueueExecutor]], [[DisruptorExecutor]])
+   *
    * To avoid compiling projections for Merge Into expressions for every record these
    * are cached under a key of
    * <ol>
@@ -338,21 +330,48 @@ object ExpressionPayload {
    * NOTE: Schema is required b/c these cache is static and might be shared by multiple
    *       executed statements w/in a single Spark session
    */
-  private val projectionsCache = Caffeine.newBuilder()
-    .maximumSize(1024)
-    .build[(String, Schema), Map[Projection, Projection]]()
+  private val projectionsCache = ThreadLocal.withInitial(
+    new Supplier[Cache[(String, Schema), Seq[(Projection, Projection)]]] {
+      override def get(): Cache[(String, Schema), Seq[(Projection, Projection)]] = {
+        Caffeine.newBuilder()
+          .maximumSize(1024)
+          .build[(String, Schema), Seq[(Projection, Projection)]]()
+      }
+    })
+
+  /**
+   * NOTE: PLEASE READ CAREFULLY
+   *       Spark's [[AvroDeserializer]] are NOT thread-safe hence cache is scoped
+   *       down to be thread-local to support the multi-threaded executors (like
+   *       [[BoundedInMemoryQueueExecutor]], [[DisruptorExecutor]])
+   */
+  private val avroDeserializerCache = ThreadLocal.withInitial(
+    new Supplier[Cache[Schema, HoodieAvroDeserializer]] {
+      override def get(): Cache[Schema, HoodieAvroDeserializer] =
+        Caffeine.newBuilder()
+          .maximumSize(16).build[Schema, HoodieAvroDeserializer]()
+    }
+  )
+
+  /**
+   * NOTE: PLEASE READ CAREFULLY
+   *       Spark's [[AvroSerializer]] are NOT thread-safe hence cache is scoped
+   *       down to be thread-local to support the multi-threaded executors (like
+   *       [[BoundedInMemoryQueueExecutor]], [[DisruptorExecutor]])
+   */
+  private val avroSerializerCache = ThreadLocal.withInitial(
+    new Supplier[Cache[Schema, HoodieAvroSerializer]] {
+      override def get(): Cache[Schema, HoodieAvroSerializer] =
+        Caffeine.newBuilder()
+          .maximumSize(16).build[Schema, HoodieAvroSerializer]()
+    }
+  )
 
   private val schemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[String, Schema]()
 
   private val mergedSchemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[(Schema, Schema), Schema]()
-
-  private val avroDeserializerCache = Caffeine.newBuilder()
-    .maximumSize(16).build[Schema, HoodieAvroDeserializer]()
-
-  private val avroSerializerCache = Caffeine.newBuilder()
-    .maximumSize(16).build[Schema, HoodieAvroSerializer]()
 
   private def parseSchema(schemaStr: String): Schema = {
     schemaCache.get(schemaStr,
@@ -361,18 +380,32 @@ object ExpressionPayload {
     })
   }
 
+  private def getRecordSchema(props: Properties) = {
+    ValidationUtils.checkArgument(props.containsKey(PAYLOAD_RECORD_AVRO_SCHEMA),
+      s"Missing ${PAYLOAD_RECORD_AVRO_SCHEMA} property")
+    parseSchema(props.getProperty(PAYLOAD_RECORD_AVRO_SCHEMA))
+  }
+
+  private def getWriterSchema(props: Properties): Schema = {
+    ValidationUtils.checkArgument(props.containsKey(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key),
+      s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key} property")
+    parseSchema(props.getProperty(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key))
+  }
+
   private def getAvroDeserializerFor(schema: Schema) = {
-    avroDeserializerCache.get(schema, new Function[Schema, HoodieAvroDeserializer] {
-      override def apply(t: Schema): HoodieAvroDeserializer =
-        sparkAdapter.createAvroDeserializer(schema, convertAvroSchemaToStructType(schema))
-    })
+    avroDeserializerCache.get()
+      .get(schema, new Function[Schema, HoodieAvroDeserializer] {
+        override def apply(t: Schema): HoodieAvroDeserializer =
+          sparkAdapter.createAvroDeserializer(schema, convertAvroSchemaToStructType(schema))
+      })
   }
 
   private def getAvroSerializerFor(schema: Schema) = {
-    avroSerializerCache.get(schema, new Function[Schema, HoodieAvroSerializer] {
-      override def apply(t: Schema): HoodieAvroSerializer =
-        sparkAdapter.createAvroSerializer(convertAvroSchemaToStructType(schema), schema, isNullable(schema))
-    })
+    avroSerializerCache.get()
+      .get(schema, new Function[Schema, HoodieAvroSerializer] {
+        override def apply(t: Schema): HoodieAvroSerializer =
+          sparkAdapter.createAvroSerializer(convertAvroSchemaToStructType(schema), schema, isNullable(schema))
+      })
   }
 
   /**
@@ -380,26 +413,27 @@ object ExpressionPayload {
    * the compile time for each method call.
    */
   private def getEvaluator(serializedConditionAssignments: String,
-                   inputSchema: Schema): Map[Projection, Projection] = {
-    projectionsCache.get((serializedConditionAssignments, inputSchema),
-      new Function[(String, Schema), Map[Projection, Projection]] {
-        override def apply(key: (String, Schema)): Map[Projection, Projection] = {
-          val (encodedConditionalAssignments, _) = key
-          val serializedBytes = Base64.getDecoder.decode(encodedConditionalAssignments)
-          val conditionAssignments = SerDeUtils.toObject(serializedBytes)
-            .asInstanceOf[Map[Expression, Seq[Expression]]]
-          conditionAssignments.map {
-            case (condition, assignments) =>
-              // NOTE: We reuse Spark's [[Projection]]s infra for actual evaluation of the
-              //       expressions, allowing us to execute arbitrary expression against input
-              //       [[InternalRow]] producing another [[InternalRow]] as an outcome
-              val conditionEvaluator = GenerateSafeProjection.generate(Seq(condition))
-              val assignmentEvaluator = GenerateSafeProjection.generate(assignments)
+                           inputSchema: Schema): Seq[(Projection, Projection)] = {
+    projectionsCache.get()
+      .get((serializedConditionAssignments, inputSchema),
+        new Function[(String, Schema), Seq[(Projection, Projection)]] {
+          override def apply(key: (String, Schema)): Seq[(Projection, Projection)] = {
+            val (encodedConditionalAssignments, _) = key
+            val serializedBytes = Base64.getDecoder.decode(encodedConditionalAssignments)
+            val conditionAssignments = SerDeUtils.toObject(serializedBytes)
+              .asInstanceOf[Map[Expression, Seq[Expression]]]
+            conditionAssignments.toSeq.map {
+              case (condition, assignments) =>
+                // NOTE: We reuse Spark's [[Projection]]s infra for actual evaluation of the
+                //       expressions, allowing us to execute arbitrary expression against input
+                //       [[InternalRow]] producing another [[InternalRow]] as an outcome
+                val conditionEvaluator = SafeProjection.create(Seq(condition))
+                val assignmentEvaluator = SafeProjection.create(assignments)
 
-              conditionEvaluator -> assignmentEvaluator
+                conditionEvaluator -> assignmentEvaluator
+            }
           }
-        }
-      })
+        })
   }
 
   private def getMergedSchema(source: Schema, target: Schema): Schema = {

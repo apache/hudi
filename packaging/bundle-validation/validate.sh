@@ -29,6 +29,7 @@ WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
 ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
+ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
 ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
@@ -47,7 +48,9 @@ test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh setting up hive metastore for spark & hadoop-mr bundles validation"
 
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
+    local DERBY_PID=$!
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
+    local HIVE_PID=$!
     echo "::warning::validate.sh Writing sample data via Spark DataSource and run Hive Sync..."
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/write.scala
 
@@ -73,6 +76,7 @@ test_spark_hadoop_mr_bundles () {
         exit 1
     fi
     echo "::warning::validate.sh spark & hadoop-mr bundles validation was successful."
+    kill $DERBY_PID $HIVE_PID
 }
 
 
@@ -133,6 +137,25 @@ test_utilities_bundle () {
 
 
 ##
+# Function to test the flink bundle.
+#
+# env vars (defined in container):
+#   HADOOP_HOME: path to the hadoop directory
+#   FLINK_HOME: path to the flink directory
+##
+test_flink_bundle() {
+    export HADOOP_CLASSPATH=$($HADOOP_HOME/bin/hadoop classpath)
+    $FLINK_HOME/bin/start-cluster.sh
+    $FLINK_HOME/bin/sql-client.sh -j $JARS_DIR/flink.jar -f $WORKDIR/flink/insert.sql
+    $WORKDIR/flink/compact.sh $JARS_DIR/flink.jar
+    local EXIT_CODE=$?
+    $FLINK_HOME/bin/stop-cluster.sh
+    unset HADOOP_CLASSPATH
+    exit $EXIT_CODE
+}
+
+
+##
 # Function to test the kafka-connect bundle.
 # It runs zookeeper, kafka broker, schema registry, and connector worker.
 # After producing and consuming data, it checks successful commit under `.hoodie/`
@@ -147,13 +170,18 @@ test_kafka_connect_bundle() {
     KAFKA_CONNECT_JAR=$1
     cp $KAFKA_CONNECT_JAR $KAFKA_CONNECT_PLUGIN_PATH_LIB_PATH
     $CONFLUENT_HOME/bin/zookeeper-server-start $CONFLUENT_HOME/etc/kafka/zookeeper.properties &
+    local ZOOKEEPER_PID=$!
     $CONFLUENT_HOME/bin/kafka-server-start $CONFLUENT_HOME/etc/kafka/server.properties &
+    local KAFKA_SERVER_PID=$!
     sleep 10
     $CONFLUENT_HOME/bin/schema-registry-start $CONFLUENT_HOME/etc/schema-registry/schema-registry.properties &
+    local SCHEMA_REG_PID=$!
     sleep 10
     $CONFLUENT_HOME/bin/kafka-topics --create --topic hudi-control-topic --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092
     $WORKDIR/kafka/produce.sh
     $WORKDIR/kafka/consume.sh
+    local EXIT_CODE=$?
+    kill $ZOOKEEPER_PID $KAFKA_SERVER_PID $SCHEMA_REG_PID
 }
 
 
@@ -186,6 +214,13 @@ if [ "$?" -ne 0 ]; then
     exit 1
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
+
+echo "::warning::validate.sh validating flink bundle"
+test_flink_bundle
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done validating flink bundle"
 
 echo "::warning::validate.sh validating kafka connect bundle"
 test_kafka_connect_bundle $JARS_DIR/kafka-connect.jar

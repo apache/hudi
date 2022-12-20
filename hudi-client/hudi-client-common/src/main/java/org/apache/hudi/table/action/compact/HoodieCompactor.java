@@ -27,7 +27,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -65,7 +64,7 @@ import static java.util.stream.Collectors.toList;
 /**
  * A HoodieCompactor runs compaction on a hoodie table.
  */
-public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
 
@@ -201,6 +200,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
         .withUseScanV2(executionHelper.useScanV2(config))
+        .withRecordMerger(config.getRecordMerger())
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =

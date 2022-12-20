@@ -30,12 +30,15 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, P
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark31HoodieParquetFileFormat}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.vectorized.ColumnarUtils
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark31CatalogUtils, HoodieSpark31CatalystExpressionUtils, HoodieSpark31CatalystPlanUtils, HoodieSpark3CatalogUtils, SparkSession}
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.1.x
  */
 class Spark3_1Adapter extends BaseSpark3Adapter {
+
+  override def isColumnarBatchRow(r: InternalRow): Boolean = ColumnarUtils.isColumnarBatchRow(r)
 
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark31CatalogUtils
 

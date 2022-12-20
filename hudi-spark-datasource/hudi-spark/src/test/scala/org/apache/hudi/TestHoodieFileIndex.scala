@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.HoodieJavaWriteClient
 import org.apache.hudi.client.common.HoodieJavaEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -33,7 +33,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
-import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
@@ -67,6 +67,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
   )
 
   var queryOpts = Map(
+    DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key -> "true",
     DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
   )
 
@@ -223,7 +224,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
     )
     val prunedPartitions = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
       .map(_.values.toSeq(Seq(StringType))
-      .mkString(","))
+        .mkString(","))
       .toList
       .sorted
 

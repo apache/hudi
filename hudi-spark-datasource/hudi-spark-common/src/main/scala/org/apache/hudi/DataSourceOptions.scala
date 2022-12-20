@@ -341,6 +341,17 @@ object DataSourceWriteOptions {
   val PAYLOAD_CLASS_NAME = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME
 
   /**
+   * HoodieMerger will replace the payload to process the merge of data
+   * and provide the same capabilities as the payload
+   */
+  val MERGER_IMPLS = HoodieWriteConfig.MERGER_IMPLS
+
+  /**
+   * Id of merger strategy
+   */
+  val MERGER_STRATEGY = HoodieWriteConfig.MERGER_STRATEGY
+
+  /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
    * will be obtained by invoking .toString() on the field value. Nested fields can be specified using
    * the dot notation eg: `a.b.c`
@@ -433,6 +444,16 @@ object DataSourceWriteOptions {
     .withDocumentation("Config to indicate whether to ignore any non exception error (e.g. writestatus error)"
       + " within a streaming microbatch. Turning this on, could hide the write status errors while the spark checkpoint moves ahead." +
       "So, would recommend users to use this with caution.")
+
+  val STREAMING_CHECKPOINT_IDENTIFIER: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.write.streaming.checkpoint.identifier")
+    .noDefaultValue()
+    .sinceVersion("0.13.0")
+    .withDocumentation("A stream identifier used for HUDI to fetch the right checkpoint(`batch id` to be more specific) "
+      + "corresponding this writer. Please note that keep the identifier an unique value for different writer "
+      + "if under multi-writer scenario. If the value is not set, will only keep the checkpoint info in the memory. "
+      + "This could introduce the potential issue that the job is restart(`batch id` is lost) while spark checkpoint write fails, "
+      + "causing spark will retry and rewrite the data.")
 
   val META_SYNC_CLIENT_TOOL_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.meta.sync.client.tool.class")

@@ -19,8 +19,8 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.io.HoodieWriteHandle;
 
@@ -32,7 +32,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 /**
  * Consumes stream of hoodie records from in-memory queue and writes to one explicit create handle.
  */
-public class ExplicitWriteHandler<T extends HoodieRecordPayload>
+public class ExplicitWriteHandler<T>
     implements HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
   private final List<WriteStatus> statuses = new ArrayList<>();
@@ -44,9 +44,9 @@ public class ExplicitWriteHandler<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
-    final HoodieRecord insertPayload = payload.record;
-    handle.write(insertPayload, payload.insertValue, payload.exception);
+  public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> genResult) {
+    final HoodieRecord insertPayload = genResult.getResult();
+    handle.write(insertPayload, genResult.schema, new TypedProperties(genResult.props));
   }
 
   @Override
