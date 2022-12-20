@@ -104,7 +104,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    *
    * @return true if the given record is newer
    */
-  protected static boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
+  protected boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
     String orderingField = prop.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     if (!StringUtils.isNullOrEmpty(orderingField)) {
       boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(prop.getProperty(

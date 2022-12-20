@@ -35,8 +35,9 @@ import java.util.Properties;
 /**
  * Payload clazz that is used for pv/uv.
  * In order to use 'RecordCountAvroPayload', we need to add field [hoodie_record_count bigint]
- * to the schema when creating the hudi table to record the result of pv/uv, field 'hoodie_record_count'
- * does not need to be filled, and flink will automatically set it to "null", "null" represents 1.
+ * to the schema when creating the hudi table to record the result of pv/uv, the field 'hoodie_record_count'
+ * does not need to be filled in, flink will automatically set 'hoodie_record_count' to 'null',
+ * and will update 'null' to '1' in #getInsertValue and #mergeOldRecord.
  *
  * <p>Simplified pv/uv calculation Logic:
  * <pre>
@@ -143,7 +144,7 @@ public class RecordCountAvroPayload extends OverwriteWithLatestAvroPayload {
       return Option.empty();
     } else {
       try {
-        // Flink automatically fills CountField with null, but "null" represents count 1.
+        // Flink automatically set 'hoodie_record_count' to 'null', here updated to 1, so that the query result is 1.
         if (((GenericRecord) indexedRecord).get(DEFAULT_RECORD_COUNT_FIELD_VAL) == null) {
           ((GenericRecord) indexedRecord).put(DEFAULT_RECORD_COUNT_FIELD_VAL, 1L);
         }
@@ -184,7 +185,7 @@ public class RecordCountAvroPayload extends OverwriteWithLatestAvroPayload {
     }
 
     try {
-      // Accumulate, "null" represents 1
+      // When adding, 'null' represents '1'
       long currentRecordCount = mergedRecord.get(DEFAULT_RECORD_COUNT_FIELD_VAL) == null ? 1L : (long) mergedRecord.get(DEFAULT_RECORD_COUNT_FIELD_VAL);
       long insertRecordCount = baseRecord.get(DEFAULT_RECORD_COUNT_FIELD_VAL) == null ? 1L : (long) baseRecord.get(DEFAULT_RECORD_COUNT_FIELD_VAL);
       baseRecord.put(DEFAULT_RECORD_COUNT_FIELD_VAL, currentRecordCount + insertRecordCount);
