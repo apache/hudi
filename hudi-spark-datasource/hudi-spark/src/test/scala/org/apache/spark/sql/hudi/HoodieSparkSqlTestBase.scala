@@ -83,6 +83,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
     val conf = spark.sessionState.conf.getAllConfs
+    println(s"Before $testName")
+    for ((k, v) <- conf) {
+      println(s"k: $k, v: $v")
+    }
     super.test(testName, testTags: _*)(
       try {
         testFun
@@ -93,15 +97,21 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
             catalog.dropTable(table, true, true)
           }
         }
+        println(s"After $testName")
         for ((k, v) <- spark.sessionState.conf.getAllConfs) {
-          println(s"k: $k, v: $v")
           //some configs like spark.driver.port or spark.app.startTime may change
           if (k.startsWith("hoodie")) {
             if (!conf.contains(k)) {
+              println(s"unsetting k: $k, v: $v")
               spark.sessionState.conf.unsetConf(k)
             } else if (!conf(k).equals(v)) {
+              println(s"overwriting k: $k, v: $v with ${conf(k)}")
               spark.sessionState.conf.setConfString(k, conf(k))
+            } else {
+              println(s"keeping k: $k, v: $v")
             }
+          } else {
+            println(s"Doesn't start with hoodie k: $k, v: $v")
           }
         }
       }
