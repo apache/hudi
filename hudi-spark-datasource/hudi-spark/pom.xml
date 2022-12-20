@@ -56,10 +56,6 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
-          <configuration>
-            <source>1.8</source>
-            <target>1.8</target>
-          </configuration>
         </plugin>
       </plugins>
     </pluginManagement>
@@ -278,6 +274,10 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- Adding xbean-asm6-shaded as direct dependency and excluding it
+    from spark-core. The dependency in spark-core leads to Azure CI failure
+    with Ubuntu upgrade. Please see issue
+    https://issues.apache.org/jira/browse/HUDI-4827-->
     <dependency>
       <groupId>org.apache.xbean</groupId>
       <artifactId>xbean-asm6-shaded</artifactId>
