@@ -17,24 +17,19 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.avro.model.HoodieMetadataColumnStats
-import org.apache.spark.sql.avro.SchemaConverters.SchemaType
-import org.junit.Test
-import org.junit.jupiter.api.Assertions.assertEquals
-
 class TestSchemaConverters {
 
-  @Test
-  def testAvroUnionConversion(): Unit = {
-    val originalAvroSchema = HoodieMetadataColumnStats.SCHEMA$
-
-    val SchemaType(convertedStructType, _) = SchemaConverters.toSqlType(originalAvroSchema)
-    val convertedAvroSchema = SchemaConverters.toAvroType(convertedStructType)
-
-    // NOTE: Here we're validating that converting Avro -> Catalyst and Catalyst -> Avro are inverse
-    //       transformations, but since it's not an easy endeavor to match Avro scehams, we match
-    //       derived Catalyst schemas instead
-    assertEquals(convertedStructType, SchemaConverters.toSqlType(convertedAvroSchema).dataType)
-  }
+//  @Test
+//  def testAvroUnionConversion(): Unit = {
+//    val originalAvroSchema = HoodieMetadataColumnStats.SCHEMA$
+//
+//    val SchemaType(convertedStructType, _) = SchemaConverters.toSqlType(originalAvroSchema)
+//    val convertedAvroSchema = SchemaConverters.toAvroType(convertedStructType)
+//
+//    // NOTE: Here we're validating that converting Avro -> Catalyst and Catalyst -> Avro are inverse
+//    //       transformations, but since it's not an easy endeavor to match Avro scehams, we match
+//    //       derived Catalyst schemas instead
+//    assertEquals(convertedStructType, SchemaConverters.toSqlType(convertedAvroSchema).dataType)
+//  }
 
 }
