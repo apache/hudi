@@ -34,32 +34,28 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, GenericRecordBuilder, IndexedRecord}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-
 import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateLazyProjection
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
-import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
+import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.io.Closeable
 import java.util.Properties
 import java.util.stream.Collectors
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -197,7 +193,7 @@ class HoodieCDCRDD(
       sparkAdapter.createAvroDeserializer(cdcAvroSchema, cdcSparkSchema)
     }
 
-    private lazy val projection: UnsafeProjection = generateUnsafeProjection(cdcSchema, requiredCdcSchema)
+    private lazy val projection: Projection = generateLazyProjection(cdcSchema, requiredCdcSchema)
 
     // Iterator on cdc file
     private val cdcFileIter = split.changes.iterator
@@ -620,9 +616,6 @@ class HoodieCDCRDD(
     private def merge(curAvroRecord: GenericRecord, newRecord: HoodieRecord[_]): IndexedRecord = {
       newRecord.getData.asInstanceOf[HoodieRecordPayload[_]].combineAndGetUpdateValue(curAvroRecord, avroSchema, payloadProps).get()
     }
-
-    private def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection =
-      HoodieCatalystExpressionUtils.generateUnsafeProjection(from, to)
 
     override def close(): Unit = {}
   }

@@ -180,7 +180,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    *
    * Please check scala-doc for [[updatePrunedDataSchema]] more details
    */
-  protected var optimizerPrunedDataSchema: Option[StructType] = None
+ private var optimizerPrunedDataSchema: Option[StructType] = None
 
   /**
    * Controls whether partition values (ie values of partition columns) should be
@@ -279,7 +279,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   def canPruneRelationSchema: Boolean =
     (fileFormat.isInstanceOf[ParquetFileFormat] || fileFormat.isInstanceOf[OrcFileFormat]) &&
-      // NOTE: Some relations might be disabling sophisticated schema pruning techniques (for ex, nested schema pruning)
       // TODO(HUDI-5421) internal schema doesn't support nested schema pruning currently
       !hasSchemaOnRead
 

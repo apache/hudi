@@ -42,10 +42,10 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.util.CachingIterator
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateLazyProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
+import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
@@ -83,7 +83,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
   protected val logFileReaderStructType: StructType = tableSchema.structTypeSchema
 
   private val requiredSchemaSafeAvroProjection: SafeAvroProjection = SafeAvroProjection.create(logFileReaderAvroSchema, avroSchema)
-  private val requiredSchemaUnsafeRowProjection: UnsafeProjection = generateUnsafeProjection(logFileReaderStructType, structTypeSchema)
+  private val requiredSchemaRowProjection: Projection = generateLazyProjection(logFileReaderStructType, structTypeSchema)
 
   private val logRecords = {
     val internalSchema = tableSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
@@ -122,7 +122,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
           nextRecord = deserialize(projectedAvroRecord)
           true
         case Some(r: HoodieSparkRecord) =>
-          nextRecord = requiredSchemaUnsafeRowProjection(r.getData)
+          nextRecord = requiredSchemaRowProjection(r.getData)
           true
         case None => this.hasNextInternal
       }
@@ -143,14 +143,14 @@ private class SkipMergeIterator(split: HoodieMergeOnReadFileSplit,
                                 config: Configuration)
   extends LogFileIterator(split, dataSchema, requiredSchema, tableState, config) {
 
-  private val requiredSchemaUnsafeProjection = generateUnsafeProjection(baseFileReader.schema, structTypeSchema)
+  private val requiredSchemaProjection = generateLazyProjection(baseFileReader.schema, structTypeSchema)
 
   private val baseFileIterator = baseFileReader(split.dataFile.get)
 
   override def doHasNext: Boolean = {
     if (baseFileIterator.hasNext) {
       // No merge is required, simply load current row and project into required schema
-      nextRecord = requiredSchemaUnsafeProjection(baseFileIterator.next())
+      nextRecord = requiredSchemaProjection(baseFileIterator.next())
       true
     } else {
       super[LogFileIterator].doHasNext
@@ -184,7 +184,7 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
 
   private val recordKeyOrdinal = baseFileReader.schema.fieldIndex(tableState.recordKeyField)
 
-  private val requiredSchemaUnsafeProjection = generateUnsafeProjection(baseFileReader.schema, structTypeSchema)
+  private val requiredSchemaProjection = generateLazyProjection(baseFileReader.schema, structTypeSchema)
 
   private val baseFileIterator = baseFileReader(split.dataFile.get)
 
@@ -202,7 +202,7 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
       val updatedRecordOpt = removeLogRecord(curKey)
       if (updatedRecordOpt.isEmpty) {
         // No merge is required, simply load current row and project into required schema
-        nextRecord = requiredSchemaUnsafeProjection(curRow)
+        nextRecord = requiredSchemaProjection(curRow)
         true
       } else {
        val mergedRecordOpt = merge(curRow, updatedRecordOpt.get)

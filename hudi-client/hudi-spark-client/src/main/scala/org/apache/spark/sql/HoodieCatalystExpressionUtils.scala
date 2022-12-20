@@ -18,8 +18,9 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+import org.apache.spark.sql.catalyst.SQLConfHelper
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, AttributeSet, Expression, Like, Literal, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, AttributeSet, Expression, Like, Literal, Projection, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -72,7 +73,7 @@ trait HoodieCatalystExpressionUtils {
   def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)]
 }
 
-object HoodieCatalystExpressionUtils {
+object HoodieCatalystExpressionUtils extends SQLConfHelper {
 
   /**
    * Convenience extractor allowing to untuple [[Cast]] across Spark versions
@@ -92,11 +93,23 @@ object HoodieCatalystExpressionUtils {
    * B is a subset of A
    */
   def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
+    val resolver = conf.resolver
     val attrs = from.toAttributes
-    val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
-    val targetExprs = to.fields.map(f => attrsMap(f.name))
+    val targetExprs = to.fields.map { f =>
+      attrs.find(attr => resolver(attr.name, f.name))
+        .getOrElse(throw new AnalysisException(s"Wasn't able to match target field `${f.name}` to any of the source attributes ($attrs)"))
+    }
 
     UnsafeProjection.create(targetExprs, attrs)
+  }
+
+  // TODO scala-docs
+  def generateLazyProjection(from: StructType, to: StructType): Projection = {
+    if (from == to) {
+      identity
+    } else {
+      generateUnsafeProjection(from, to)
+    }
   }
 
   /**
