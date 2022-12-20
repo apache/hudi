@@ -80,8 +80,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   private val hadoopConfBroadcast = sc.broadcast(new SerializableWritable(config))
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
-    val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
-    val iter = mergeOnReadPartition.split match {
+    val partition = split.asInstanceOf[HoodieMergeOnReadPartition]
+    val iter = partition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
         val projectedReader = projectReader(fileReaders.requiredSchemaReaderSkipMerging, requiredSchema.structTypeSchema)
         projectedReader(dataFileOnlySplit.dataFile.get)
@@ -89,19 +89,24 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
         new LogFileIterator(logFileOnlySplit, tableSchema, requiredSchema, tableState, getHadoopConf)
 
-      case split if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
-        val reader = fileReaders.requiredSchemaReaderSkipMerging
-        new SkipMergeIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
+      case split =>
+        mergeType match {
+          case DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL =>
+            val reader = fileReaders.requiredSchemaReaderSkipMerging
+            new SkipMergeIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
 
-      case split if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
-        val reader = pickBaseFileReader
-        new RecordMergingFileIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
+          case DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL =>
+            val reader = pickBaseFileReader
+            new RecordMergingFileIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
+
+          case _ => throw new UnsupportedOperationException(s"Not supported merge type ($mergeType)")
+        }
 
       case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
-        s"file path: ${mergeOnReadPartition.split.dataFile.get.filePath}" +
-        s"log paths: ${mergeOnReadPartition.split.logFiles.toString}" +
+        s"file path: ${partition.split.dataFile.get.filePath}" +
+        s"log paths: ${partition.split.logFiles.toString}" +
         s"hoodie table path: ${tableState.tablePath}" +
-        s"spark partition Index: ${mergeOnReadPartition.index}" +
+        s"spark partition Index: ${partition.index}" +
         s"merge type: ${mergeType}")
     }
 
