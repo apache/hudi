@@ -94,8 +94,9 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
           }
         }
         for ((k, v) <- spark.sessionState.conf.getAllConfs) {
+          println(s"k: $k, v: $v")
           //some configs like spark.driver.port or spark.app.startTime may change
-          if (!k.startsWith("spark.")) {
+          if (k.startsWith("hoodie")) {
             if (!conf.contains(k)) {
               spark.sessionState.conf.unsetConf(k)
             } else if (!conf(k).equals(v)) {
