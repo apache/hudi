@@ -617,6 +617,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
 
   /**
    * Test Hudi COW Table Cleaner - Keep the latest file versions policy with replace commit.
+   *
    * Commit1 (T - 8h):
    *        p0 => file1P0C0-commit1
    *        p1 => file1P1C0-commit1
