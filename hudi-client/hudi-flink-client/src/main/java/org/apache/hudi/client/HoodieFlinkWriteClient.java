@@ -127,6 +127,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
+  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
+    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context, metaClient);
+  }
+
+  @Override
   public List<HoodieRecord<T>> filterExists(List<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieFlinkTable<T> table = getHoodieTable();
@@ -291,10 +296,14 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     HoodieFlinkTable<?> table = getHoodieTable();
     if (config.isMetadataTableEnabled()) {
       // initialize the metadata table path
-      try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
-        // do nothing
+      // guard the metadata writer with concurrent lock
+      try {
+        this.txnManager.getLockManager().lock();
+        initMetadataWriter().close();
       } catch (Exception e) {
         throw new HoodieException("Failed to initialize metadata table", e);
+      } finally {
+        this.txnManager.getLockManager().unlock();
       }
       // clean the obsolete index stats
       table.deleteMetadataIndexIfNecessary();
@@ -478,16 +487,13 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
-    // Create a Hoodie table which encapsulated the commits and files visible
-    return getHoodieTable();
-  }
-
-  @Override
-  protected void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
+  protected void doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
     // do nothing.
+
     // flink executes the upgrade/downgrade once when initializing the first instant on start up,
     // no need to execute the upgrade/downgrade on each write in streaming.
+
+    // flink performs metadata table bootstrap on the coordinator when it starts up.
   }
 
   public void completeTableService(
