@@ -53,7 +53,7 @@ import java.util.Properties;
  *  with the larger ordering value and returns a merged record.
  *
  *  Illustration with simple data.
- *  let's say the order field is 'ts' and schema is :
+ *  let's say the order field is 'ts' and schema is:
  *  {
  *    [
  *      {"name":"id","type":"string"},
