@@ -39,7 +39,7 @@ import java.util.Properties;
  * does not need to be filled in, flink will automatically set 'hoodie_record_count' to 'null',
  * and will update 'null' to '1' in #getInsertValue and #mergeOldRecord.
  *
- * <p>Simplified pv/uv calculation Logic:
+ * <p>Simplified pv/uv calculation Logic :
  * <pre>
  *  1. #preCombine
  *  For records with the same record key in one batch
