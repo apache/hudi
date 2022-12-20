@@ -634,7 +634,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
    *              file2P0C1Sec-replaceCommit2 replace file2P0C1-replaceCommit1
    *        p1 => file1P1C0-commit1, file1P1C0-commit2
    *
-   *  call clean :
+   *  schedule and execute clean :
    *  case1 ReplacedFilesRetainHours = -1 => clean replaced files asap
    *        p0 => file2P0C1Sec-replaceCommit2
    *        p1 => file1P1C0-commit2
