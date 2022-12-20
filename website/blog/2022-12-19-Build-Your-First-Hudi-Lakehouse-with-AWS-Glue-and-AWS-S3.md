@@ -11,7 +11,7 @@ tags:
 - aws
 ---
 
-![/assets/images/blog/DataCouncil.jpg]
+![/assets/images/blog/DataCouncil.jpg](/assets/images/blog/DataCouncil.jpg)
 
 
 # Build Your First Hudi Lakehouse with AWS S3 and AWS Glue
@@ -25,7 +25,7 @@ In this tutorial, you’ll learn how to:
 -   Add data to the Hudi Table 
 -   Query data via Athena
 
-![/assets/images/blog/build-your-first-hudi-lakehouse-12-19-diagram.jpg]
+![/assets/images/blog/build-your-first-hudi-lakehouse-12-19-diagram.jpg](/assets/images/blog/build-your-first-hudi-lakehouse-12-19-diagram.jpg)
 
 
 **Step 1**: Users in this architecture purchase things from online retailers and generate an order transaction that is kept in DynamoDB.
@@ -45,4 +45,5 @@ Follow the the [step-by-step instructions](https://drive.google.com/file/d/1W-E_
 Apply the [code source](https://github.com/soumilshah1995/dynamodb-hudi-stream-project).
 
 ## Questions
+
 If you run into blockers doing this tutorial, please reach out on the Apache Hudi community and tag **soumilshah1995** to help debug. 
