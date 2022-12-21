@@ -31,7 +31,6 @@
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'db created time',
             update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time'
         ) COMMENT 'databases';
-
     </update>
 
     <update id="createTables">

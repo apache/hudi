@@ -45,6 +45,7 @@
     <module>hudi-timeline-service</module>
     <module>hudi-utilities</module>
     <module>hudi-sync</module>
+    <module>hudi-platform-service</module>
     <module>packaging/hudi-hadoop-mr-bundle</module>
     <module>packaging/hudi-datahub-sync-bundle</module>
     <module>packaging/hudi-hive-sync-bundle</module>
@@ -56,6 +57,7 @@
     <module>packaging/hudi-utilities-slim-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
     <module>packaging/hudi-trino-bundle</module>
+    <module>packaging/hudi-metaserver-server-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink-datasource</module>
     <module>hudi-kafka-connect</module>
@@ -2322,13 +2324,6 @@
           <name>skipShadeSources</name>
         </property>
       </activation>
-    </profile>
-
-    <profile>
-      <id>hudi-platform-service</id>
-      <modules>
-        <module>hudi-platform-service/hudi-metaserver</module>
-      </modules>
     </profile>
   </profiles>
 

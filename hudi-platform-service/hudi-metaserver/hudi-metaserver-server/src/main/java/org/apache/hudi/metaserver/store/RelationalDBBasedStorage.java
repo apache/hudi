@@ -45,9 +45,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class RelationalDBBasedStorage implements MetaserverStorage, Serializable {
 
   private final WrapperDao tableDao = new WrapperDao.TableDao();
-  private final WrapperDao partitionDao = new WrapperDao.PartitionDao();
   private final WrapperDao timelineDao = new WrapperDao.TimelineDao();
-  private final WrapperDao fileDao = new WrapperDao.FileDao();
 
   @Override
   public void initStorage() throws MetaserverStorageException {

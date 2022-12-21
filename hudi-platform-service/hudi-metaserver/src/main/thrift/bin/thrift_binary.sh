@@ -24,7 +24,7 @@
 # in tandem.
 #
 
-SUBDIR=src/main/thrift/bin
+SUBDIR=../src/main/thrift/bin
 OS_VERSION=$1
 M1_MAC='m1_mac'
 DOCKER='docker'

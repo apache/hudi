@@ -17,9 +17,8 @@
 # limitations under the License.
 
 printf "====== INSTALL THRIFT START ======"
-mkdir -p $PWD/hudi-platform-service/hudi-metaserver/target/generated-sources
-THRIFT_FILE_PATH=$PWD/hudi-platform-service/hudi-metaserver/src/main/thrift
-THRIFT_OUT_PATH=$PWD/hudi-platform-service/hudi-metaserver/target/generated-sources
+THRIFT_FILE_PATH=../src/main/thrift
+THRIFT_OUT_PATH=target/generated-sources
 THRIFT_VERSION=0.12.0
 THRIFT_IMAGE=thrift:$THRIFT_VERSION
 docker pull $THRIFT_IMAGE

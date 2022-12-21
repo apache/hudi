@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metaserver.HoodieMetaserver;
 import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.hudi.metaserver.thrift.ThriftHoodieMetaserver;
 import org.apache.hudi.metaserver.util.EntityConversions;
@@ -35,6 +34,8 @@ import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 
 import java.io.Serializable;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -61,7 +62,12 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, AutoCl
     this.retryDelaySeconds = config.getConnectionRetryDelay();
     String uri = config.getMetaserverUris();
     if (isLocalEmbeddedMetaserver(uri)) {
-      this.client = HoodieMetaserver.getEmbeddedMetaserver();
+      try {
+        Method method = Class.forName("org.apache.hudi.metaserver.HoodieMetaserver").getMethod("getEmbeddedMetaserver", new Class[]{});
+        this.client = (ThriftHoodieMetaserver.Iface) method.invoke(null, new Object[]{});
+      } catch (ClassNotFoundException | NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
+        throw new HoodieException("Please check the server uri has ever been set. Empty uri is used for local unit test", e);
+      }
       this.isConnected = true;
       this.isLocal = true;
     } else {
@@ -86,7 +92,7 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, AutoCl
       }
     }
     if (!isConnected) {
-      throw new HoodieException("Fail to connect to the meta server.", exception);
+      throw new HoodieException("Fail to connect to the metaserver.", exception);
     }
   }
 
