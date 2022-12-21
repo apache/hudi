@@ -104,18 +104,24 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
       val df1 = Seq((1, 100, "aaa")).toDF("id", "userid", "name")
       val df2 = Seq((2, 200L, "bbb")).toDF("id", "userid", "name")
 
+      def prepDataFrame(df: DataFrame, colInitType: String): DataFrame = {
+        // convert int to string first before conversion to binary
+        // after which, initialise df with initType
+        if (colInitType == "binary") {
+          val castDf = df.withColumn(colToCast, df.col(colToCast).cast("string"))
+          castDf.withColumn(colToCast, castDf.col(colToCast).cast(colInitType))
+        } else {
+          df.withColumn(colToCast, df.col(colToCast).cast(colInitType))
+        }
+      }
+
       def doTest(colInitType: String, start: Int, end: Int): Unit = {
         for (a <- Range(start, end)) {
           try {
-            Console.println(s"Performing test: $a with $colInitType")
+            Console.println(s"Performing test: $a with initialColType of: $colInitType")
 
             // convert int to string first before conversion to binary
-            val initDF = if (colInitType == "binary") {
-              val castDf1 = df1.withColumn(colToCast, df1.col(colToCast).cast("string"))
-              castDf1.withColumn(colToCast, castDf1.col(colToCast).cast(colInitType))
-            } else {
-              df1.withColumn(colToCast, df1.col(colToCast).cast(colInitType))
-            }
+            val initDF = prepDataFrame(df1, colInitType)
             initDF.printSchema()
             initDF.show(false)
 
@@ -123,7 +129,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
             initialiseTable(initDF, tempRecordPath, isCow)
 
             // perform avro supported casting
-            var upsertDf = df2
+            var upsertDf = prepDataFrame(df2, colInitType)
             upsertDf = castColToX(a, colToCast, upsertDf)
             upsertDf.printSchema()
             upsertDf.show(false)
