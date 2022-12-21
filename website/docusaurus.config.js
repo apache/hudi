@@ -134,6 +134,10 @@ module.exports = {
               to: 'talks',
             },
             {
+              label: 'Video Guides',
+              to: 'videos',
+            },
+            {
               label: 'FAQ',
               href: '/docs/faq',
             },
@@ -293,6 +297,10 @@ module.exports = {
             {
               label: 'Talks',
               to: 'talks',
+            },
+            {
+              label: 'Video Guides',
+              to: 'videos',
             },
             {
               label: 'FAQ',
