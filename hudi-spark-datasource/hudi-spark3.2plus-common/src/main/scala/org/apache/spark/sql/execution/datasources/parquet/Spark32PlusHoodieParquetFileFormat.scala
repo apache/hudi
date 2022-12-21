@@ -34,6 +34,7 @@ import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
+import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.hadoop.{ParquetInputFormat, ParquetRecordReader}
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.SparkSession
@@ -228,22 +229,10 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
 
         SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
       } else {
-        val implicitTypeChangeInfo: java.util.Map[Integer, Pair[DataType, DataType]] = new java.util.HashMap()
-        val convert = new ParquetToSparkSchemaConverter(hadoopAttemptConf)
-        val fileStruct = convert.convert(footerFileMetaData.getSchema)
-        val fileStructMap = fileStruct.fields.map(f => (f.name, f.dataType)).toMap
-        val sparkRequestSchema = requiredSchema.map(f => {
-          val requiredType = f.dataType
-          if (fileStructMap.contains(f.name) && !isDataTypeEqual(requiredType, fileStructMap(f.name))) {
-            implicitTypeChangeInfo.put(new Integer(requiredSchema.fieldIndex(f.name)), Pair.of(requiredType, fileStructMap(f.name)))
-            StructField(f.name, fileStructMap(f.name), f.nullable)
-          } else {
-            f
-          }
-        })
+        val (implicitTypeChangeInfo, sparkRequestSchema) = buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
         if (!implicitTypeChangeInfo.isEmpty) {
           shouldUseInternalSchema = true
-          hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, StructType(sparkRequestSchema).json)
+          hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
         }
         implicitTypeChangeInfo
       }
@@ -410,6 +399,25 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
         }
       }
     }
+  }
+
+  private def buildImplicitSchemaChangeInfo(hadoopConf: Configuration,
+                                            parquetFileMetaData: FileMetaData,
+                                            requiredSchema: StructType): (java.util.Map[Integer, Pair[DataType, DataType]], StructType) = {
+    val implicitTypeChangeInfo: java.util.Map[Integer, Pair[DataType, DataType]] = new java.util.HashMap()
+    val convert = new ParquetToSparkSchemaConverter(hadoopConf)
+    val fileStruct = convert.convert(parquetFileMetaData.getSchema)
+    val fileStructMap = fileStruct.fields.map(f => (f.name, f.dataType)).toMap
+    val sparkRequestStructFields = requiredSchema.map(f => {
+      val requiredType = f.dataType
+      if (fileStructMap.contains(f.name) && !isDataTypeEqual(requiredType, fileStructMap(f.name))) {
+        implicitTypeChangeInfo.put(new Integer(requiredSchema.fieldIndex(f.name)), Pair.of(requiredType, fileStructMap(f.name)))
+        StructField(f.name, fileStructMap(f.name), f.nullable)
+      } else {
+        f
+      }
+    })
+    (implicitTypeChangeInfo, StructType(sparkRequestStructFields))
   }
 
   private def isDataTypeEqual(requiredType: DataType, fileType: DataType): Boolean = (requiredType, fileType) match {
