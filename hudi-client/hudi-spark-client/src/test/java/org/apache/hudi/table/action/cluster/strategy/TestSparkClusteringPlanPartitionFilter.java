@@ -47,8 +47,8 @@ public class TestSparkClusteringPlanPartitionFilter {
   @BeforeEach
   public void setUp() {
     this.hoodieWriteConfigBuilder = HoodieWriteConfig
-        .newBuilder()
-        .withPath("Fake_Table_Path");
+            .newBuilder()
+            .withPath("Fake_Table_Path");
   }
 
   @Test
