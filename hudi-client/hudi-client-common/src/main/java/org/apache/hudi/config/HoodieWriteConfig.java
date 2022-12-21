@@ -54,6 +54,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.queue.DisruptorWaitStrategyType;
 import org.apache.hudi.common.util.queue.ExecutorType;
 import org.apache.hudi.config.metrics.HoodieMetricsCloudWatchConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -278,7 +279,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY = ConfigProperty
       .key("hoodie.write.executor.disruptor.wait.strategy")
-      .defaultValue("BLOCKING_WAIT")
+      .defaultValue(DisruptorWaitStrategyType.BLOCKING_WAIT.name())
       .sinceVersion("0.13.0")
       .withDocumentation("Strategy employed for making Disruptor Executor wait on a cursor. Other options are "
           + "SLEEPING_WAIT, it attempts to be conservative with CPU usage by using a simple busy wait loop"
@@ -1174,12 +1175,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_LIMIT_BYTES_VALUE));
   }
 
-  public Option<String> getWriteExecutorDisruptorWaitStrategy() {
-    return Option.of(getString(WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY));
+  public String getWriteExecutorDisruptorWaitStrategy() {
+    return getStringOrDefault(WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY);
   }
 
-  public Option<Integer> getWriteExecutorDisruptorWriteBufferSize() {
-    return Option.of(Integer.parseInt(getStringOrDefault(WRITE_EXECUTOR_DISRUPTOR_BUFFER_SIZE)));
+  public Integer getWriteExecutorDisruptorWriteBufferSize() {
+    return Integer.parseInt(getStringOrDefault(WRITE_EXECUTOR_DISRUPTOR_BUFFER_SIZE));
   }
 
   public boolean shouldCombineBeforeInsert() {
