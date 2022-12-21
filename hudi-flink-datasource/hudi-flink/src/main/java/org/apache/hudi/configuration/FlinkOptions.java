@@ -401,6 +401,22 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(4) // default 4 buckets per partition
       .withDescription("Hudi bucket number per partition. Only affected if using Hudi bucket index.");
 
+  public static final ConfigOption<Boolean> WRITE_TASK_BUKET_CUSTOM_ENABLE = ConfigOptions
+      .key("hoodie.write.task.bucket.custom.enable")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to set different buckets for different partitions. Only affected if using Hudi bucket index.");
+
+  public static final ConfigOption<String> WRITE_TASK_BUKET_CUSTOM_DETAIL = ConfigOptions
+      .key("hoodie.write.task.bucket.custom.detail")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Details of different buckets in different partitions. Use json format, "
+          + "json key is the value of the last level partition and value is the number of buckets in this partition "
+          + "if the partition is not specified, the number of buckets is 1."
+          + "eg: pt=2021/code=a, pt=2021/code=b, pt=2021/code=c; 2021/a, 2021/b, 2021/c; code=a, code=b code=c ... "
+          + "'hoodie.write.task.bucket.custom.detail' = '{\"a\":10,\"b\":5,\"c\":3}'");
+
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
       .stringType()

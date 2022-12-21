@@ -23,8 +23,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.sink.StreamWriteFunction;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -63,6 +65,10 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    */
   private Map<String, Map<Integer, String>> bucketIndex;
 
+  private boolean writeTaskBucketCustomEnable;
+
+  private Map<String, Integer> bucketSizeDetail = new HashMap<>();
+
   /**
    * Incremental bucket index of the current checkpoint interval,
    * it is needed because the bucket type('I' or 'U') should be decided based on the committed files view,
@@ -88,6 +94,13 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
+    this.writeTaskBucketCustomEnable = config.getBoolean(FlinkOptions.WRITE_TASK_BUKET_CUSTOM_ENABLE);
+    if (writeTaskBucketCustomEnable) {
+      final String bucketSizeDetail = config.getString(FlinkOptions.WRITE_TASK_BUKET_CUSTOM_DETAIL);
+      ObjectMapper objectMapper = new ObjectMapper();
+      Map<String, Object> partitionBucketSize = objectMapper.readValue(bucketSizeDetail, Map.class);
+      partitionBucketSize.forEach((k, v) -> this.bucketSizeDetail.put(k, Integer.parseInt(v.toString())));
+    }
   }
 
   @Override
@@ -110,7 +123,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
     bootstrapIndexIfNeed(partition);
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
-    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, this.bucketNum);
+    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, getBucketNumByPartition(partition));
     final String bucketId = partition + "/" + bucketNum;
 
     if (incBucketIndex.contains(bucketId)) {
@@ -127,6 +140,18 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     record.setCurrentLocation(location);
     record.seal();
     bufferRecord(record);
+  }
+
+  protected Integer getBucketNumByPartition(String partition) {
+    if (writeTaskBucketCustomEnable) {
+      final String[] partitions = partition.split(KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR);
+      String lastPartition = partitions[partitions.length - 1];
+      final String[] partitionKeyVal = lastPartition.split("=");
+      String lastPartitionVal = partitionKeyVal[partitionKeyVal.length - 1];
+      return this.bucketSizeDetail.getOrDefault(lastPartitionVal, 1);
+    } else {
+      return this.bucketNum;
+    }
   }
 
   /**
