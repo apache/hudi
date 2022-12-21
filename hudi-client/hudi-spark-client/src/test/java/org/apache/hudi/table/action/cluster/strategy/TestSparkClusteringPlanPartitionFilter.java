@@ -47,15 +47,15 @@ public class TestSparkClusteringPlanPartitionFilter {
   @BeforeEach
   public void setUp() {
     this.hoodieWriteConfigBuilder = HoodieWriteConfig
-        .newBuilder()
-        .withPath("Fake_Table_Path");
+            .newBuilder()
+            .withPath("Fake_Table_Path");
   }
 
   @Test
   public void testFilterPartitionNoFilter() {
     HoodieWriteConfig config = hoodieWriteConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
-        .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.NONE)
-        .build())
+                    .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.NONE)
+                    .build())
         .build();
 
     PartitionAwareClusteringPlanStrategy sg = new SparkSizeBasedClusteringPlanStrategy(table, context, config);
@@ -70,10 +70,10 @@ public class TestSparkClusteringPlanPartitionFilter {
   @Test
   public void testFilterPartitionRecentDays() {
     HoodieWriteConfig config = hoodieWriteConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
-        .withClusteringSkipPartitionsFromLatest(1)
-        .withClusteringTargetPartitions(1)
-        .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.RECENT_DAYS)
-        .build())
+                    .withClusteringSkipPartitionsFromLatest(1)
+                    .withClusteringTargetPartitions(1)
+                    .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.RECENT_DAYS)
+                    .build())
         .build();
 
     PartitionAwareClusteringPlanStrategy sg = new SparkSizeBasedClusteringPlanStrategy(table, context, config);
@@ -89,10 +89,10 @@ public class TestSparkClusteringPlanPartitionFilter {
   @Test
   public void testFilterPartitionSelectedPartitions() {
     HoodieWriteConfig config = hoodieWriteConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
-        .withClusteringPartitionFilterBeginPartition("20211222")
-        .withClusteringPartitionFilterEndPartition("20211223")
-        .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS)
-        .build())
+                    .withClusteringPartitionFilterBeginPartition("20211222")
+                    .withClusteringPartitionFilterEndPartition("20211223")
+                    .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS)
+                    .build())
         .build();
 
     PartitionAwareClusteringPlanStrategy sg = new SparkSizeBasedClusteringPlanStrategy(table, context, config);
@@ -117,8 +117,21 @@ public class TestSparkClusteringPlanPartitionFilter {
     for (int i = 0; i < 24; i++) {
       fakeTimeBasedPartitionsPath.add("20220301" + (i >= 10 ? String.valueOf(i) : "0" + i));
     }
-    List list = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
-    assertEquals(1, list.size());
-    assertSame(fakeTimeBasedPartitionsPath.get(DateTime.now().getHourOfDay()), list.get(0));
+    List filterPartitions = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    assertEquals(1, filterPartitions.size());
+    assertSame(fakeTimeBasedPartitionsPath.get(DateTime.now().getHourOfDay()), filterPartitions.get(0));
+
+    fakeTimeBasedPartitionsPath = new ArrayList<>();
+    for (int i = 0; i < 24; i++) {
+      fakeTimeBasedPartitionsPath.add("20220301" + (i >= 10 ? String.valueOf(i) : "0" + i));
+      fakeTimeBasedPartitionsPath.add("20220302" + (i >= 10 ? String.valueOf(i) : "0" + i));
+    }
+    filterPartitions = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    assertEquals(2, filterPartitions.size());
+
+    int hourOfDay = DateTime.now().getHourOfDay();
+    String suffix = hourOfDay >= 10 ? hourOfDay + "" : "0" + hourOfDay;
+    assertSame("20220301" + suffix, filterPartitions.get(0));
+    assertSame("20220302" + suffix, filterPartitions.get(1));
   }
 }

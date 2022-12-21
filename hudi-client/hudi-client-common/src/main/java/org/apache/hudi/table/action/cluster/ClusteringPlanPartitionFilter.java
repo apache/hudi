@@ -34,7 +34,7 @@ import java.util.stream.Stream;
  *  NONE: skip filter
  *  RECENT DAYS: output recent partition given skip num and days lookback config
  *  SELECTED_PARTITIONS: output partition falls in the [start, end] condition
- *  DAY_ROLLING: Clustering all partitions once a day to avoid clustering data of all partitions each time。
+ *  DAY_ROLLING: Clustering all partitions once a day to avoid clustering data of all partitions each time.
  *  sort partitions asc, choose which partition index % 24 = now_hour.
  *  tips: If hoodie.clustering.inline=true, try to reach the limit of hoodie.clustering.inline.max.commits every hour.
  *        If hoodie.clustering.async.enabled=true, try to reach the limit of hoodie.clustering.async.max.commits every hour.
