@@ -27,6 +27,8 @@ import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.function.Function;
 
@@ -37,6 +39,8 @@ import java.util.function.Function;
  * @param <O> Transformed output type.
  */
 public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
+
+  private static final Logger LOG = LogManager.getLogger(DisruptorMessageQueue.class);
 
   private final Disruptor<HoodieDisruptorEvent> queue;
   private final Function<I, O> transformFunction;
@@ -103,9 +107,13 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     }
   }
 
-  protected void setHandlers(HoodieConsumer consumer) {
+  protected void setHandlers(HoodieConsumer<O, ?> consumer) {
     queue.handleEventsWith((event, sequence, endOfBatch) -> {
-      consumer.consume(event.get());
+      try {
+        consumer.consume(event.get());
+      } catch (Exception e) {
+        LOG.error("Failed consuming records", e);
+      }
     });
   }
 
