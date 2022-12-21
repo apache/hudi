@@ -19,10 +19,11 @@ package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.spark.sql.catalyst.SQLConfHelper
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, AttributeSet, CreateStruct, Expression, GetStructField, Like, Literal, Projection, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{DataType, StructType}
 
@@ -74,7 +75,7 @@ trait HoodieCatalystExpressionUtils {
   def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)]
 }
 
-object HoodieCatalystExpressionUtils extends SQLConfHelper {
+object HoodieCatalystExpressionUtils {
 
   /**
    * Convenience extractor allowing to untuple [[Cast]] across Spark versions
@@ -94,7 +95,7 @@ object HoodieCatalystExpressionUtils extends SQLConfHelper {
    * B is a subset of A
    */
   def generateUnsafeProjection(sourceStructType: StructType, targetStructType: StructType): UnsafeProjection = {
-    val resolver = conf.resolver
+    val resolver = SQLConf.get.resolver
     val attrs = sourceStructType.toAttributes
     val targetExprs = targetStructType.fields.map { targetField =>
       val attrRef = attrs.find(attr => resolver(attr.name, targetField.name))
@@ -130,7 +131,14 @@ object HoodieCatalystExpressionUtils extends SQLConfHelper {
 
   // TODO scala-docs
   def generateLazyProjection(from: StructType, to: StructType): Projection =
-    if (from == to) identity else generateUnsafeProjection(from, to)
+    if (from != to) {
+      generateUnsafeProjection(from, to)
+    } else {
+      // NOTE: Have to use explicit [[Projection]] instantiation to stay compatible w/ Scala 2.11
+      new Projection {
+        override def apply(r: InternalRow): InternalRow = r
+      }
+    }
 
   /**
    * Split the given predicates into two sequence predicates:
