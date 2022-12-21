@@ -40,18 +40,19 @@ import org.apache.spark.sql.types.StructType
  * <li>For MOR tables: Read-optimized</li>
  * </ul>
  *
- * NOTE: The reason this Relation is used in liue of Spark's default [[HadoopFsRelation]] is primarily due to the
+ * NOTE: The reason this Relation is used in-liue of Spark's default [[HadoopFsRelation]] is primarily due to the
  * fact that it injects real partition's path as the value of the partition field, which Hudi ultimately persists
  * as part of the record payload. In some cases, however, partition path might not necessarily be equal to the
  * verbatim value of the partition path field (when custom [[KeyGenerator]] is used) therefore leading to incorrect
  * partition field values being written
  */
-class BaseFileOnlyRelation(sqlContext: SQLContext,
-                           metaClient: HoodieTableMetaClient,
-                           optParams: Map[String, String],
-                           userSchema: Option[StructType],
-                           globPaths: Seq[Path])
-  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) with SparkAdapterSupport {
+case class BaseFileOnlyRelation(private val sqlContext: SQLContext,
+                                private val metaClient: HoodieTableMetaClient,
+                                private val optParams: Map[String, String],
+                                private val userSchema: Option[StructType],
+                                private val globPaths: Seq[Path],
+                                private val prunedDataSchema: Option[StructType] = None)
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) with SparkAdapterSupport {
 
   case class HoodieBaseFileSplit(filePartition: FilePartition) extends HoodieFileSplit
 
@@ -66,6 +67,9 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
     internalSchemaOpt.isEmpty
 
   override lazy val mandatoryFields: Seq[String] = Seq.empty
+
+  override def updatePrunedDataSchema(prunedSchema: StructType): RelationType =
+    this.copy(prunedDataSchema = prunedDataSchema)
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)

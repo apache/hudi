@@ -244,10 +244,10 @@ object DefaultSource {
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          new MergeOnReadSnapshotRelation(sqlContext, parameters, userSchema, globPaths, metaClient)
+          new MergeOnReadSnapshotRelation(sqlContext, parameters, globPaths, metaClient, userSchema)
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new MergeOnReadIncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+          new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
         case (_, _, true) =>
           new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)

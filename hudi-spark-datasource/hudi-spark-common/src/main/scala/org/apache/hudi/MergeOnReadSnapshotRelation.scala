@@ -42,12 +42,13 @@ import scala.collection.JavaConverters._
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
                                       logFiles: List[HoodieLogFile]) extends HoodieFileSplit
 
-class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
-                                  optParams: Map[String, String],
-                                  userSchema: Option[StructType],
-                                  globPaths: Seq[Path],
-                                  metaClient: HoodieTableMetaClient)
-  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
+case class MergeOnReadSnapshotRelation(private val sqlContext: SQLContext,
+                                       private val optParams: Map[String, String],
+                                       private val globPaths: Seq[Path],
+                                       private val metaClient: HoodieTableMetaClient,
+                                       private val userSchema: Option[StructType],
+                                       private val prunedDataSchema: Option[StructType] = None)
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
 
   override type FileSplit = HoodieMergeOnReadFileSplit
 
@@ -74,6 +75,9 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
+
+  override def updatePrunedDataSchema(prunedSchema: StructType): RelationType =
+    this.copy(prunedDataSchema = prunedDataSchema)
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)

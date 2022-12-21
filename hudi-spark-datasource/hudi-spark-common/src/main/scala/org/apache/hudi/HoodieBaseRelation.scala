@@ -79,12 +79,13 @@ case class HoodieTableState(tablePath: String,
                             recordMergerStrategy: String)
 
 /**
- * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
+ * Hoodie BaseRelation which extends [[PrunedFilteredScan]]
  */
-abstract class HoodieBaseRelation(val sqlContext: SQLContext,
-                                  val metaClient: HoodieTableMetaClient,
-                                  val optParams: Map[String, String],
-                                  schemaSpec: Option[StructType])
+abstract case class HoodieBaseRelation(sqlContext: SQLContext,
+                                       metaClient: HoodieTableMetaClient,
+                                       optParams: Map[String, String],
+                                       private val schemaSpec: Option[StructType],
+                                       private val prunedDataSchema: Option[StructType])
   extends BaseRelation
     with FileRelation
     with PrunedFilteredScan
@@ -92,6 +93,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     with SparkAdapterSupport {
 
   type FileSplit <: HoodieFileSplit
+  type RelationType = this.type
 
   imbueConfigs(sqlContext)
 
@@ -173,14 +175,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
-  protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
-
-  /**
-   * Data schema optimized (externally) by Spark's Optimizer.
-   *
-   * Please check scala-doc for [[updatePrunedDataSchema]] more details
-   */
- private var optimizerPrunedDataSchema: Option[StructType] = None
+  protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   /**
    * Controls whether partition values (ie values of partition columns) should be
@@ -217,7 +212,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * NOTE: This fields are accessed by [[NestedSchemaPruning]] component which is only enabled for
    *       Spark >= 3.1
    */
-  lazy val (fileFormat: FileFormat, fileFormatClassName: String) =
+  protected lazy val (fileFormat: FileFormat, fileFormatClassName: String) =
     metaClient.getTableConfig.getBaseFileFormat match {
       case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
       case HoodieFileFormat.PARQUET =>
@@ -288,7 +283,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     // NOTE: Optimizer could prune the schema (applying for ex, [[NestedSchemaPruning]] rule) setting new updated
     //       schema in-place (via [[setPrunedDataSchema]] method), therefore we have to make sure that we pick
     //       pruned data schema (if present) over the standard table's one
-    optimizerPrunedDataSchema.getOrElse(tableStructSchema)
+    prunedDataSchema.getOrElse(tableStructSchema)
   }
 
   /**
@@ -326,7 +321,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       schema conversion, which is lossy in nature (for ex, it doesn't preserve original Avro type-names) and
     //       could have an effect on subsequent de-/serializing records in some exotic scenarios (when Avro unions
     //       w/ more than 2 types are involved)
-    val sourceSchema = optimizerPrunedDataSchema.map(convertToAvroSchema).getOrElse(tableAvroSchema)
+    val sourceSchema = prunedDataSchema.map(convertToAvroSchema).getOrElse(tableAvroSchema)
     val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
       projectSchema(Either.cond(internalSchemaOpt.isDefined, internalSchemaOpt.get, sourceSchema), targetColumns)
 
@@ -506,10 +501,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    *       Therefore more advanced optimizations (like [[NestedSchemaPruning]]) have to be carried out
    *       by Spark's Optimizer holistically evaluating Spark's [[LogicalPlan]]
    */
-  def updatePrunedDataSchema(prunedSchema: StructType): this.type = {
-    optimizerPrunedDataSchema = Some(prunedSchema)
-    this
-  }
+  def updatePrunedDataSchema(prunedSchema: StructType): RelationType
 
   /**
    * Returns file-reader routine accepting [[PartitionedFile]] and returning an [[Iterator]]
