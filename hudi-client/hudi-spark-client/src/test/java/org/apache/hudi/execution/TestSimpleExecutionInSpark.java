@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
-import org.apache.hudi.common.util.queue.SimpleHoodieExecutor;
+import org.apache.hudi.common.util.queue.SimpleExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
@@ -88,10 +88,10 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
             return count;
           }
         };
-    SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
+    SimpleExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
+      exec = new SimpleExecutor(hoodieRecords.iterator(), consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
 
       int result = exec.execute();
       // It should buffer and write 128 records
@@ -156,10 +156,10 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
           }
         };
 
-    SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
+    SimpleExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new SimpleHoodieExecutor(hoodieRecords.iterator(), consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
+      exec = new SimpleExecutor(hoodieRecords.iterator(), consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
       int result = exec.execute();
       assertEquals(100, result);
 
@@ -203,8 +203,8 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
           }
         };
 
-    SimpleHoodieExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec =
-        new SimpleHoodieExecutor(iterator, consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
+    SimpleExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec =
+        new SimpleExecutor(iterator, consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,
         "exception is expected");

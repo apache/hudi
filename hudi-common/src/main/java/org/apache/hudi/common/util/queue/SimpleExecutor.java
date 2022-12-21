@@ -18,9 +18,6 @@
 
 package org.apache.hudi.common.util.queue;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
-
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -29,31 +26,31 @@ import java.util.Iterator;
 import java.util.function.Function;
 
 /**
- * Single Writer and Single Reader mode. Also this SimpleHoodieExecutor has no inner message queue and no inner lock.
- * Consuming and writing records from iterator directly.
+ * Simple implementation of the {@link HoodieExecutor} interface assuming single-writer/single-reader
+ * mode allowing it to consume from the input {@link Iterator} directly avoiding the need for
+ * any internal materialization (ie queueing).
  *
- * Compared with queue based Executor
- * Advantages: there is no need for additional memory and cpu resources due to lock or multithreading.
- * Disadvantages: lost some benefits such as speed limit. And maybe lower throughput.
+ * <p>
+ * Such executor is aimed primarily at allowing
+ * the production-consumption chain to run w/ as little overhead as possible, at the expense of
+ * limited parallelism and therefore throughput, which is not an issue for execution environments
+ * such as Spark, where it's used primarily in a parallelism constraint environment (on executors)
  */
-public class SimpleHoodieExecutor<I, O, E> implements HoodieExecutor<E> {
+public class SimpleExecutor<I, O, E> implements HoodieExecutor<E> {
 
-  private static final Logger LOG = LogManager.getLogger(SimpleHoodieExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(SimpleExecutor.class);
 
+  // Record iterator (producer)
+  private final Iterator<I> itr;
   // Consumer
-  protected final Option<HoodieConsumer<O, E>> consumer;
-  // records iterator
-  protected final Iterator<I> it;
+  private final HoodieConsumer<O, E> consumer;
+
   private final Function<I, O> transformFunction;
 
-  public SimpleHoodieExecutor(final Iterator<I> inputItr, HoodieConsumer<O, E> consumer,
-                              Function<I, O> transformFunction) {
-    this(inputItr, Option.of(consumer), transformFunction);
-  }
-
-  public SimpleHoodieExecutor(final Iterator<I> inputItr, Option<HoodieConsumer<O, E>> consumer,
-                              Function<I, O> transformFunction) {
-    this.it = inputItr;
+  public SimpleExecutor(Iterator<I> inputItr,
+                        HoodieConsumer<O, E> consumer,
+                        Function<I, O> transformFunction) {
+    this.itr = inputItr;
     this.consumer = consumer;
     this.transformFunction = transformFunction;
   }
@@ -63,18 +60,16 @@ public class SimpleHoodieExecutor<I, O, E> implements HoodieExecutor<E> {
    */
   @Override
   public E execute() {
-    checkState(this.consumer.isPresent());
-
     try {
       LOG.info("Starting consumer, consuming records from the records iterator directly");
-      while (it.hasNext()) {
-        O payload = transformFunction.apply(it.next());
-        consumer.get().consume(payload);
+      while (itr.hasNext()) {
+        O payload = transformFunction.apply(itr.next());
+        consumer.consume(payload);
       }
 
-      return consumer.get().finish();
+      return consumer.finish();
     } catch (Exception e) {
-      LOG.error("Error consuming records in SimpleHoodieExecutor", e);
+      LOG.error("Failed consuming records", e);
       throw new HoodieException(e);
     }
   }
