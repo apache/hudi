@@ -274,6 +274,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   def canPruneRelationSchema: Boolean =
     (fileFormat.isInstanceOf[ParquetFileFormat] || fileFormat.isInstanceOf[OrcFileFormat]) &&
+      // NOTE: In case this relation has already been pruned there's no point in pruning it again
+      prunedDataSchema.isEmpty &&
       // TODO(HUDI-5421) internal schema doesn't support nested schema pruning currently
       !hasSchemaOnRead
 
