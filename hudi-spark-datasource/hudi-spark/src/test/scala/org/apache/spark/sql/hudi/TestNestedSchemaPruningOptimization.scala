@@ -115,6 +115,9 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
               //assertEquals(tableName, tableIdentifier.get.table)
               //assertEquals(expectedSchema, requiredSchema, hint)
           }
+
+          // Execute the query to make sure it's working as expected (smoke test)
+          selectDF.count
         }
       }
     }

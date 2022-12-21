@@ -18,9 +18,10 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.sql.catalyst.SQLConfHelper
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, AttributeSet, Expression, Like, Literal, Projection, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, AttributeSet, CreateStruct, Expression, GetStructField, Like, Literal, Projection, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -92,25 +93,44 @@ object HoodieCatalystExpressionUtils extends SQLConfHelper {
    * NOTE: Projection of the row from [[StructType]] A to [[StructType]] B is only possible, if
    * B is a subset of A
    */
-  def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
+  def generateUnsafeProjection(sourceStructType: StructType, targetStructType: StructType): UnsafeProjection = {
     val resolver = conf.resolver
-    val attrs = from.toAttributes
-    val targetExprs = to.fields.map { f =>
-      attrs.find(attr => resolver(attr.name, f.name))
-        .getOrElse(throw new AnalysisException(s"Wasn't able to match target field `${f.name}` to any of the source attributes ($attrs)"))
+    val attrs = sourceStructType.toAttributes
+    val targetExprs = targetStructType.fields.map { targetField =>
+      val attrRef = attrs.find(attr => resolver(attr.name, targetField.name))
+        .getOrElse(throw new AnalysisException(s"Wasn't able to match target field `${targetField.name}` to any of the source attributes ($attrs)"))
+
+      genProjectingExpression(attrRef, targetField.dataType)
     }
 
     UnsafeProjection.create(targetExprs, attrs)
   }
 
-  // TODO scala-docs
-  def generateLazyProjection(from: StructType, to: StructType): Projection = {
-    if (from == to) {
-      identity
-    } else {
-      generateUnsafeProjection(from, to)
+  private def genProjectingExpression(sourceExpr: Expression,
+                                      targetDataType: DataType): Expression = {
+    checkState(sourceExpr.resolved)
+
+    // TODO support array, map
+    (sourceExpr.dataType, targetDataType) match {
+      case (sdt, tdt) if sdt == tdt =>
+        sourceExpr
+
+      case (sourceType: StructType, targetType: StructType) =>
+        val fieldValueExprs = targetType.fields.map { tf =>
+          val ord = sourceType.fieldIndex(tf.name)
+          val fieldValExpr = genProjectingExpression(GetStructField(sourceExpr, ord, Some(tf.name)), tf.dataType)
+          Alias(fieldValExpr, tf.name)()
+        }
+
+        CreateStruct(fieldValueExprs)
+
+      case _ => throw new UnsupportedOperationException(s"(${sourceExpr.dataType}, $targetDataType)")
     }
   }
+
+  // TODO scala-docs
+  def generateLazyProjection(from: StructType, to: StructType): Projection =
+    if (from == to) identity else generateUnsafeProjection(from, to)
 
   /**
    * Split the given predicates into two sequence predicates:

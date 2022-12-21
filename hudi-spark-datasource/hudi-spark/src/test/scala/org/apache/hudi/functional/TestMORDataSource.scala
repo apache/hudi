@@ -42,6 +42,7 @@ import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.BooleanType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -427,6 +428,10 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testPrunedFiltered(recordType: HoodieRecordType) {
+
+    spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
+    spark.sessionState.conf.setConf(SQLConf.CODEGEN_FACTORY_MODE, "NO_CODEGEN")
+
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     // First Operation:
