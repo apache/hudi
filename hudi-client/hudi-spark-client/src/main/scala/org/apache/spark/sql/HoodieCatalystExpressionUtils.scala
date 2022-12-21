@@ -18,16 +18,12 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, AttributeSet, Expression, Like, Literal, NamedExpression, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.expressions.codegen.{GenerateMutableProjection, GenerateUnsafeProjection}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Like, Literal, MutableProjection, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeEq, AttributeReference, Expression, Like, Literal, MutableProjection, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{DataType, StructType}
-import scala.annotation.tailrec
 
 trait HoodieCatalystExpressionUtils {
 
@@ -76,11 +72,10 @@ object HoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   /**
-   * Leverages [[AttributeSet]] to invoke [[AttributeEquals]] predicate on 2 provided
-   * [[NamedExpression]]s
+   * Leverages [[AttributeEquals]] predicate on 2 provided [[Attribute]]s
    */
-  def attributeEquals(one: NamedExpression, other: NamedExpression): Boolean =
-    AttributeSet(Seq(one)).contains(other)
+  def attributeEquals(one: Attribute, other: Attribute): Boolean =
+    new AttributeEq(one).equals(new AttributeEq(other))
 
   /**
    * Generates instance of [[UnsafeProjection]] projecting row of one [[StructType]] into another [[StructType]]
