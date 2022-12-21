@@ -29,11 +29,13 @@ import org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
+import org.apache.hudi.util.JFunction.scalaFunction1Noop
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BindReferences, BoundReference, Cast, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
@@ -311,10 +313,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     writeParams ++= Seq(
       // Append (encoded) updating actions
       PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
-        serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments))),
+        // NOTE: For updating clause we allow partial assignments, where only some of the fields of the target
+        //       table's records are updated (w/ the missing ones keeping their existing values)
+        serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments)),
+          allowPartialAssignments = true),
       // Append (encoded) inserting actions
       PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
-        serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)), validateInsertingAssignmentExpression)
+        serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)),
+          validator = validateInsertingAssignmentExpression)
     )
 
     // Append (encoded) deleting actions
@@ -362,7 +368,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * </ol>
    */
   private def serializeConditionalAssignments(conditionalAssignments: Seq[(Option[Expression], Seq[Assignment])],
-                                              validator: Function[Expression, Unit] = _ => {}): String = {
+                                              allowPartialAssignments: Boolean = false,
+                                              validator: Expression => Unit = scalaFunction1Noop): String = {
     val boundConditionalAssignments =
       conditionalAssignments.map {
         case (condition, assignments) =>
@@ -371,7 +378,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           //       All other actions are expected to provide assignments correspondent to every field
           //       of the [[targetTable]] being assigned
           val reorderedAssignments = if (assignments.nonEmpty) {
-            reorderAssignments(assignments)
+            alignAssignments(assignments, allowPartialAssignments)
           } else {
             Seq.empty
           }
@@ -396,7 +403,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * Re-orders assignment expressions to adhere to the ordering of that of [[targetTable]]
    */
-  private def reorderAssignments(assignments: Seq[Assignment]): Seq[Assignment] = {
+  private def alignAssignments(assignments: Seq[Assignment], allowPartialAssignments: Boolean): Seq[Assignment] = {
     val attr2Assignments = assignments.map {
       case assign @ Assignment(attr: Attribute, _) => attr -> assign
       case a =>
@@ -410,8 +417,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         attr2Assignments.find(tuple => attributeEquals(tuple._1, attr)) match {
           case Some((_, assignment)) => assignment
           case None =>
-            throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
-              s"(provided: `${assignments.map(_.sql).mkString(",")}`")
+            // In case partial assignments are allowed and there's no corresponding conditional assignment,
+            // create a self-assignment for the target table's attribute
+            if (allowPartialAssignments) {
+              Assignment(attr, attr)
+            } else {
+              throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
+                s"(provided: `${assignments.map(_.sql).mkString(",")}`")
+            }
         }
       }
   }
@@ -446,17 +459,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       of its output attributes
     val joinedExpectedOutputAttributes = joinedExpectedOutput
 
-    // TODO replace w/ BindReference.bindReference
-    expr transform {
-      case attr: AttributeReference =>
-        val index = joinedExpectedOutputAttributes.indexWhere(attributeEquals(_, attr))
-        if (index == -1) {
-            throw new AnalysisException(s"Can't find `${attr.qualifiedName}` attribute in either source or the target " +
-              s"tables of the MERGE INTO statement (${joinedExpectedOutputAttributes.map(_.qualifiedName)})");
-          }
-          BoundReference(index, attr.dataType, attr.nullable)
-      case other => other
-    }
+    bindReference(expr, joinedExpectedOutputAttributes, allowFailures = false)
   }
 
   /**
@@ -580,10 +583,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       throw new AnalysisException(s"Only one updating action is supported in MERGE INTO statement (provided ${updateActions.length})")
     }
 
-    updateActions.foreach(update =>
-      assert(update.assignments.length == targetTableSchema.length,
-        s"The number of update assignments[${update.assignments.length}] must equal to the " +
-          s"targetTable field size[${targetTableSchema.length}]"))
+    //updateActions.foreach(update =>
+    //  assert(update.assignments.length == targetTableSchema.length,
+    //    s"The number of update assignments[${update.assignments.length}] must equal to the " +
+    //      s"targetTable field size[${targetTableSchema.length}]"))
 
     // For MOR table, the target table field cannot be the right-value in the update action.
     if (targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
