@@ -92,8 +92,8 @@ public class MercifulJsonConverter {
    */
   public GenericRecord convert(String json, Schema schema) {
     try {
-      // Remove the 5 bytes at the beginning, these are used to encode the schema id.
-      String actualJson = json.substring(5);
+      // Ignore first 5 bytes for json schema kafka messages
+      String actualJson = json.charAt(0) == '{' ? json : json.substring(5);
       Map<String, Object> jsonObjectMap = mapper.readValue(actualJson, Map.class);
       return convertJsonToAvro(jsonObjectMap, schema);
     } catch (IOException e) {
@@ -194,8 +194,9 @@ public class MercifulJsonConverter {
           return Pair.of(true, ((Number) value).doubleValue());
         } else if (value instanceof String) {
           // needs to be converted into a double with scale 2
-          byte[] byteArr = Base64.getDecoder().decode(value.toString());
-          return Pair.of(true, Double.valueOf(String.valueOf(new BigDecimal(new BigInteger(byteArr), 2))));
+          byte[] byteArr = Base64.getDecoder().decode((String) value);
+          BigDecimal bigDecimal = new BigDecimal(new BigInteger(byteArr), 2);
+          return Pair.of(true, bigDecimal.doubleValue());
         }
         return Pair.of(false, null);
       }
