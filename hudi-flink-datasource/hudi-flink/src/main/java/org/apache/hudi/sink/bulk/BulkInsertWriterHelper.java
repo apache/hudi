@@ -107,7 +107,6 @@ public class BulkInsertWriterHelper {
           : keyGen.getPartitionPath(record);
 
       if ((lastKnownPartitionPath == null) || !lastKnownPartitionPath.equals(partitionPath) || !handle.canWrite()) {
-        LOG.info("Creating new file for partition path " + partitionPath);
         handle = getRowCreateHandle(partitionPath);
         lastKnownPartitionPath = partitionPath;
       }
@@ -130,12 +129,15 @@ public class BulkInsertWriterHelper {
       if (isInputSorted) {
         close();
       }
+
+      LOG.info("Creating new file for partition path " + partitionPath);
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
           instantTime, taskPartitionId, taskId, taskEpochId, rowType, preserveHoodieMetadata);
       handles.put(partitionPath, rowCreateHandle);
     } else if (!handles.get(partitionPath).canWrite()) {
       // even if there is a handle to the partition path, it could have reached its max size threshold. So, we close the handle here and
       // create a new one.
+      LOG.info("Rolling max-size file for partition path " + partitionPath);
       writeStatusList.add(handles.remove(partitionPath).close());
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
           instantTime, taskPartitionId, taskId, taskEpochId, rowType, preserveHoodieMetadata);
@@ -146,6 +148,7 @@ public class BulkInsertWriterHelper {
 
   public void close() throws IOException {
     for (HoodieRowDataCreateHandle rowCreateHandle : handles.values()) {
+      LOG.info("Closing bulk insert file " + rowCreateHandle.getFileName());
       writeStatusList.add(rowCreateHandle.close());
     }
     handles.clear();
