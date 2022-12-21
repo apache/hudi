@@ -672,7 +672,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 'a1' as name, 1 as id, 10 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when not matched and s0.id % 2 = 1 then insert *
@@ -749,7 +749,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 'a2' as name, 1 as id, 1000 as ts
+           |  select 1 as id, 'a2' as name, 1000 as ts
            | ) as s0
            | on t0.id = s0.id
            | when matched then update set t0.name = s0.name, t0.ts = s0.ts
