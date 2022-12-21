@@ -87,7 +87,7 @@ public class SparkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
       }
 
       bufferedIteratorExecutor = ExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(),
-          getCloningTransformer(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
+          getTransformer(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
 
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       checkState(result != null && !result.isEmpty());

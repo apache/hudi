@@ -2546,6 +2546,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withWriteExecutorDisruptorWriteBufferSize(long size) {
+      writeConfig.setValue(WRITE_EXECUTOR_DISRUPTOR_BUFFER_SIZE, String.valueOf(size));
+      return this;
+    }
+
     public Builder combineInput(boolean onInsert, boolean onUpsert) {
       writeConfig.setValue(COMBINE_BEFORE_INSERT, String.valueOf(onInsert));
       writeConfig.setValue(COMBINE_BEFORE_UPSERT, String.valueOf(onUpsert));
