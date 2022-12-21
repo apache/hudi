@@ -57,7 +57,7 @@ public class InternalSchemaUtils {
     List<Integer> prunedIds = names.stream().map(name -> {
       int id = schema.findIdByName(name);
       if (id == -1) {
-        throw new IllegalArgumentException(String.format("cannot prune col: %s which not exisit in hudi table", name));
+        throw new IllegalArgumentException(String.format("cannot prune col: %s which does not exist in hudi table", name));
       }
       return id;
     }).collect(Collectors.toList());
@@ -177,7 +177,7 @@ public class InternalSchemaUtils {
   public static String reBuildFilterName(String name, InternalSchema fileSchema, InternalSchema querySchema) {
     int nameId = querySchema.findIdByName(name);
     if (nameId == -1) {
-      throw new IllegalArgumentException(String.format("cannot found filter col name：%s from querySchema: %s", name, querySchema));
+      throw new IllegalArgumentException(String.format("cannot find filter col name：%s from querySchema: %s", name, querySchema));
     }
     if (fileSchema.findField(nameId) == null) {
       // added operation found
