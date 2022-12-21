@@ -51,7 +51,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   override type Relation = MergeOnReadIncrementalRelation
 
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
-    this.copy(prunedDataSchema = prunedDataSchema)
+    this.copy(prunedDataSchema = Some(prunedSchema))
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)

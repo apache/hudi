@@ -71,7 +71,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   override lazy val mandatoryFields: Seq[String] = Seq.empty
 
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
-    this.copy(prunedDataSchema = prunedDataSchema)
+    this.copy(prunedDataSchema = Some(prunedSchema))
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)

@@ -53,7 +53,7 @@ case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
   override type Relation = MergeOnReadSnapshotRelation
 
   override def updatePrunedDataSchema(prunedSchema: StructType): MergeOnReadSnapshotRelation =
-    this.copy(prunedDataSchema = prunedDataSchema)
+    this.copy(prunedDataSchema = Some(prunedSchema))
 
 }
 
