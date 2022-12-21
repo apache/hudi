@@ -253,7 +253,7 @@ object LogFileIterator {
               tableState: HoodieTableState,
               maxCompactionMemoryInBytes: Long,
               hadoopConf: Configuration,
-              internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): mutable.Map[String, HoodieRecord[_ <: HoodieRecordPayload[_ <: HoodieRecordPayload[_ <: AnyRef]]]] = {
+              internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): mutable.Map[String, HoodieRecord[_]] = {
     val tablePath = tableState.tablePath
     val fs = FSUtils.getFs(tablePath, hadoopConf)
 
