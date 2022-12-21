@@ -19,7 +19,7 @@
 package org.apache.hudi.cdc
 
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
 import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -177,7 +177,7 @@ class HoodieCDCRDD(
     private lazy val serializer = sparkAdapter.createAvroSerializer(originTableSchema.structTypeSchema,
       avroSchema, nullable = false)
 
-    private lazy val reusableRecordBuilder: GenericRecordBuilder = new GenericRecordBuilder(avroSchema)
+    private lazy val avroProjection = AvroProjection.createLazy(avroSchema)
 
     private lazy val cdcAvroSchema: Schema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
       cdcSupplementalLoggingMode,
@@ -377,7 +377,7 @@ class HoodieCDCRDD(
         val existingRecordOpt = beforeImageRecords.get(key)
         if (existingRecordOpt.isEmpty) {
           // a new record is inserted.
-          val insertedRecord = projectAvroUnsafe(indexedRecord.get)
+          val insertedRecord = avroProjection(indexedRecord.get.asInstanceOf[GenericRecord])
           recordToLoad.update(0, CDCRelation.CDC_OPERATION_INSERT)
           recordToLoad.update(2, null)
           recordToLoad.update(3, recordToJsonAsUTF8String(insertedRecord))
@@ -388,7 +388,7 @@ class HoodieCDCRDD(
           // a existed record is updated.
           val existingRecord = existingRecordOpt.get
           val merged = merge(existingRecord, logRecord)
-          val mergeRecord = projectAvroUnsafe(merged)
+          val mergeRecord = avroProjection(merged.asInstanceOf[GenericRecord])
           if (existingRecord != mergeRecord) {
             recordToLoad.update(0, CDCRelation.CDC_OPERATION_UPDATE)
             recordToLoad.update(2, recordToJsonAsUTF8String(existingRecord))
@@ -606,11 +606,6 @@ class HoodieCDCRDD(
         record: HoodieRecord[_])
     : Option[IndexedRecord] = {
       toScalaOption(record.toIndexedRecord(avroSchema, payloadProps)).map(_.getData)
-    }
-
-    private def projectAvroUnsafe(record: IndexedRecord): GenericRecord = {
-      LogFileIterator.projectAvroUnsafe(record.asInstanceOf[GenericRecord],
-        avroSchema, reusableRecordBuilder)
     }
 
     private def merge(curAvroRecord: GenericRecord, newRecord: HoodieRecord[_]): IndexedRecord = {

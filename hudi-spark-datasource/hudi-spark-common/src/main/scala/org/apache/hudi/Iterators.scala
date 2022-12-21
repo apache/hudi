@@ -19,7 +19,7 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
+import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
@@ -82,7 +82,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
   protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
   protected val logFileReaderStructType: StructType = tableSchema.structTypeSchema
 
-  private val requiredSchemaSafeAvroProjection: SafeAvroProjection = SafeAvroProjection.create(logFileReaderAvroSchema, avroSchema)
+  private val requiredSchemaAvroProjection: AvroProjection = AvroProjection.createLazy(avroSchema)
   private val requiredSchemaRowProjection: Projection = generateLazyProjection(logFileReaderStructType, structTypeSchema)
 
   private val logRecords = {
@@ -118,7 +118,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
     logRecordsIterator.hasNext && {
       logRecordsIterator.next() match {
         case Some(r: HoodieAvroIndexedRecord) =>
-          val projectedAvroRecord = requiredSchemaSafeAvroProjection(r.getData.asInstanceOf[GenericRecord])
+          val projectedAvroRecord = requiredSchemaAvroProjection(r.getData.asInstanceOf[GenericRecord])
           nextRecord = deserialize(projectedAvroRecord)
           true
         case Some(r: HoodieSparkRecord) =>
@@ -180,15 +180,15 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
 
   private val serializer = sparkAdapter.createAvroSerializer(baseFileReader.schema, baseFileReaderAvroSchema, nullable = false)
 
-  private val reusableRecordBuilder: GenericRecordBuilder = new GenericRecordBuilder(avroSchema)
-
   private val recordKeyOrdinal = baseFileReader.schema.fieldIndex(tableState.recordKeyField)
 
   private val requiredSchemaProjection = generateLazyProjection(baseFileReader.schema, structTypeSchema)
+  private val requiredSchemaAvroProjection = AvroProjection.createLazy(avroSchema)
 
   private val baseFileIterator = baseFileReader(split.dataFile.get)
 
-  private val recordMerger = HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.recordMergerImpls.asJava, tableState.recordMergerStrategy)
+  private val recordMerger = HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK,
+    tableState.recordMergerImpls.asJava, tableState.recordMergerStrategy)
 
   override def doHasNext: Boolean = hasNextInternal
 
@@ -230,16 +230,19 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
         val curRecord = new HoodieSparkRecord(curRow, baseFileReader.schema)
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
         toScalaOption(result)
-          .map(r => {
+          .map { r =>
             val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
             val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
             projection.apply(r.getLeft.getData.asInstanceOf[InternalRow])
-          })
+          }
       case _ =>
         val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
         toScalaOption(result)
-          .map(r => deserialize(projectAvroUnsafe(r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord], avroSchema, reusableRecordBuilder)))
+          .map { r =>
+            val avroRecord = r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
+            deserialize(requiredSchemaAvroProjection(avroRecord))
+          }
     }
   }
 }
@@ -331,12 +334,6 @@ object LogFileIterator {
     try { f } finally {
       c.close()
     }
-  }
-
-  def projectAvroUnsafe(record: GenericRecord, projectedSchema: Schema, reusableRecordBuilder: GenericRecordBuilder): GenericRecord = {
-    val fields = projectedSchema.getFields.asScala
-    fields.foreach(field => reusableRecordBuilder.set(field, record.get(field.name())))
-    reusableRecordBuilder.build()
   }
 
   def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
