@@ -161,7 +161,8 @@ public abstract class AbstractHoodieLogRecordReader {
                                           Option<String> partitionNameOverride,
                                           InternalSchema internalSchema,
                                           Option<String> keyFieldOverride,
-                                          boolean useScanV2, HoodieRecordMerger recordMerger) {
+                                          boolean useScanV2,
+                                          HoodieRecordMerger recordMerger) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
