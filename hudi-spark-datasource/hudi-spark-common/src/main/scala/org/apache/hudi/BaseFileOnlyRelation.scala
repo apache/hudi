@@ -36,8 +36,8 @@ import org.apache.spark.sql.types.StructType
  * [[BaseRelation]] implementation only reading Base files of Hudi tables, essentially supporting following querying
  * modes:
  * <ul>
- * <li>For COW tables: Snapshot</li>
- * <li>For MOR tables: Read-optimized</li>
+ *  <li>For COW tables: Snapshot</li>
+ *  <li>For MOR tables: Read-optimized</li>
  * </ul>
  *
  * NOTE: The reason this Relation is used in-liue of Spark's default [[HadoopFsRelation]] is primarily due to the
@@ -46,17 +46,19 @@ import org.apache.spark.sql.types.StructType
  * verbatim value of the partition path field (when custom [[KeyGenerator]] is used) therefore leading to incorrect
  * partition field values being written
  */
-case class BaseFileOnlyRelation(private val sqlContext: SQLContext,
-                                private val metaClient: HoodieTableMetaClient,
-                                private val optParams: Map[String, String],
+case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
+                                override val metaClient: HoodieTableMetaClient,
+                                override val optParams: Map[String, String],
                                 private val userSchema: Option[StructType],
                                 private val globPaths: Seq[Path],
                                 private val prunedDataSchema: Option[StructType] = None)
-  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) with SparkAdapterSupport {
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema)
+    with SparkAdapterSupport {
 
   case class HoodieBaseFileSplit(filePartition: FilePartition) extends HoodieFileSplit
 
   override type FileSplit = HoodieBaseFileSplit
+  override type Relation = BaseFileOnlyRelation
 
   // TODO(HUDI-3204) this is to override behavior (exclusively) for COW tables to always extract
   //                 partition values from partition path
@@ -68,7 +70,7 @@ case class BaseFileOnlyRelation(private val sqlContext: SQLContext,
 
   override lazy val mandatoryFields: Seq[String] = Seq.empty
 
-  override def updatePrunedDataSchema(prunedSchema: StructType): RelationType =
+  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = prunedDataSchema)
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {

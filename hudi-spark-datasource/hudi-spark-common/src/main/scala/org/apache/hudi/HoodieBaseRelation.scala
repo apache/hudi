@@ -81,11 +81,11 @@ case class HoodieTableState(tablePath: String,
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]]
  */
-abstract case class HoodieBaseRelation(sqlContext: SQLContext,
-                                       metaClient: HoodieTableMetaClient,
-                                       optParams: Map[String, String],
-                                       private val schemaSpec: Option[StructType],
-                                       private val prunedDataSchema: Option[StructType])
+abstract class HoodieBaseRelation(val sqlContext: SQLContext,
+                                  val metaClient: HoodieTableMetaClient,
+                                  val optParams: Map[String, String],
+                                  private val schemaSpec: Option[StructType],
+                                  private val prunedDataSchema: Option[StructType])
   extends BaseRelation
     with FileRelation
     with PrunedFilteredScan
@@ -93,7 +93,7 @@ abstract case class HoodieBaseRelation(sqlContext: SQLContext,
     with SparkAdapterSupport {
 
   type FileSplit <: HoodieFileSplit
-  type RelationType = this.type
+  type Relation <: HoodieBaseRelation
 
   imbueConfigs(sqlContext)
 
@@ -485,14 +485,6 @@ abstract case class HoodieBaseRelation(sqlContext: SQLContext,
     }
   }
 
-  protected def getColName(f: StructField): String = {
-    if (sparkSession.sessionState.conf.caseSensitiveAnalysis) {
-      f.name
-    } else {
-      f.name.toLowerCase(Locale.ROOT)
-    }
-  }
-
   /**
    * Hook for Spark's Optimizer to update expected relation schema after pruning
    *
@@ -501,7 +493,7 @@ abstract case class HoodieBaseRelation(sqlContext: SQLContext,
    *       Therefore more advanced optimizations (like [[NestedSchemaPruning]]) have to be carried out
    *       by Spark's Optimizer holistically evaluating Spark's [[LogicalPlan]]
    */
-  def updatePrunedDataSchema(prunedSchema: StructType): RelationType
+  def updatePrunedDataSchema(prunedSchema: StructType): Relation
 
   /**
    * Returns file-reader routine accepting [[PartitionedFile]] and returning an [[Iterator]]

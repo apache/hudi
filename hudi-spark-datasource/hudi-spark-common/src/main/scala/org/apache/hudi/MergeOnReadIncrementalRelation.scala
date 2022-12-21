@@ -40,17 +40,17 @@ import scala.collection.immutable
 /**
  * @Experimental
  */
-case class MergeOnReadIncrementalRelation(private val sqlContext: SQLContext,
-                                          private val optParams: Map[String, String],
-                                          private val metaClient: HoodieTableMetaClient,
+case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
+                                          override val optParams: Map[String, String],
+                                          override val metaClient: HoodieTableMetaClient,
                                           private val userSchema: Option[StructType],
                                           private val prunedDataSchema: Option[StructType] = None)
-  extends MergeOnReadSnapshotRelation(sqlContext, optParams, Seq(), metaClient, userSchema, prunedDataSchema)
+  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
     with HoodieIncrementalRelationTrait {
 
-  override type FileSplit = HoodieMergeOnReadFileSplit
+  override type Relation = MergeOnReadIncrementalRelation
 
-  override def updatePrunedDataSchema(prunedSchema: StructType): RelationType =
+  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = prunedDataSchema)
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {

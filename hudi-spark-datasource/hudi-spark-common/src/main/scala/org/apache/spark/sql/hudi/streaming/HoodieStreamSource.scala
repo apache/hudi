@@ -149,7 +149,7 @@ class HoodieStreamSource(
               .map(serDe.serializeRow)
           case HoodieTableType.MERGE_ON_READ =>
             val requiredColumns = schema.fields.map(_.name)
-            new MergeOnReadIncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
+            new MergeOnReadIncrementalRelation(sqlContext, incParams, metaClient, Some(schema))
               .buildScan(requiredColumns, Array.empty[Filter])
               .asInstanceOf[RDD[InternalRow]]
           case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
