@@ -405,7 +405,7 @@ object HoodieSparkSqlWriter {
         val shouldCanonicalizeSchema = opts.getOrDefault(DataSourceWriteOptions.CANONICALIZE_SCHEMA.key,
           DataSourceWriteOptions.CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-          AvroSchemaEvolutionUtils.reconcileNullability(sourceSchema, latestTableSchema)
+          canonicalizeSchema(sourceSchema, latestTableSchema)
         } else {
           sourceSchema
         }
@@ -510,31 +510,6 @@ object HoodieSparkSqlWriter {
     HoodieAvroUtils.removeFields(schema, partitionColumns.toSet.asJava)
   }
 
-  def generateSparkSchemaWithoutPartitionColumns(partitionParam: String, schema: StructType): StructType = {
-    val partitionColumns = getPartitionColumns(partitionParam)
-    HoodieInternalRowUtils.removeFields(schema, partitionColumns)
-  }
-
-  def getAvroProcessedRecord(partitionParam: String, record: GenericRecord,
-                             dropPartitionColumns: Boolean): GenericRecord = {
-    var processedRecord = record
-    if (dropPartitionColumns) {
-      val writeSchema = generateSchemaWithoutPartitionColumns(partitionParam, record.getSchema)
-      processedRecord = HoodieAvroUtils.rewriteRecord(record, writeSchema)
-    }
-    processedRecord
-  }
-
-  def getProcessedRecord(partitionParam: String, record: GenericRecord,
-                         dropPartitionColumns: Boolean): GenericRecord = {
-    var processedRecord = record
-    if (dropPartitionColumns) {
-      val writeSchema = generateSchemaWithoutPartitionColumns(partitionParam, record.getSchema)
-      processedRecord = HoodieAvroUtils.rewriteRecord(record, writeSchema)
-    }
-    processedRecord
-  }
-
   def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema], writeSchemaOpt: Option[Schema] = None): Map[String, String] = {
     val schemaEvolutionEnable = if (internalSchemaOpt.isDefined) "true" else "false"
 
@@ -580,6 +555,28 @@ object HoodieSparkSqlWriter {
   }
 
   /**
+   * Canonicalizes [[sourceSchema]] by reconciling it w/ [[latestTableSchema]] in following
+   *
+   * <ol>
+   *  <li>Nullability: making sure that nullability of the fields in the source schema is matching
+   *  that of the latest table's ones</li>
+   *  <li>Casing: making sure that the casing of the field names in the source schema is matching
+   *  that one of the latest table's ones. This is necessary b/c unlike Spark/Catalyst resolution logic
+   *  Avro is case-sensitive</li>
+   * </ol>
+   */
+  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema): Schema = {
+    val nullabilityReconciledSchema = reconcileNullability(sourceSchema, latestTableSchema)
+    if (SQLConf.get.getConf(SQLConf.CASE_SENSITIVE)) {
+      nullabilityReconciledSchema
+    } else {
+      // Otherwise we have to canonicalize field names across incoming and existing table schemas
+      reconcileFieldNamesCasing(nullabilityReconciledSchema, latestTableSchema)
+    }
+  }
+
+
+  /**
    * get latest internalSchema from table
    *
    * @param config instance of {@link HoodieConfig}
@@ -616,15 +613,6 @@ object HoodieSparkSqlWriter {
         val (structName, namespace) = getAvroRecordNameAndNamespace(tableId.table)
         convertStructTypeToAvroSchema(catalogTable.schema, structName, namespace)
       }
-    }
-  }
-
-  private def reconcileFieldNameCasing(spark: SparkSession, sourceSchema: Schema, latestTableSchema: Schema) = {
-    if (spark.sessionState.conf.getConf(SQLConf.CASE_SENSITIVE)) {
-      sourceSchema
-    } else {
-      // Otherwise we have to canonicalize field names across incoming and existing table schemas
-      reconcileFieldNamesCasing(sourceSchema, latestTableSchema)
     }
   }
 
@@ -1091,6 +1079,7 @@ object HoodieSparkSqlWriter {
             hoodieRecord
           }
         }).toJavaRDD()
+
       case HoodieRecord.HoodieRecordType.SPARK =>
         // ut will use AvroKeyGenerator, so we need to cast it in spark record
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
