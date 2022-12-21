@@ -2,11 +2,23 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2022-11-22T00:00:00.000Z</updated>
+    <updated>2022-12-19T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Build Your First Hudi Lakehouse with AWS S3 and AWS Glue]]></title>
+        <id>/2022/12/19/Build-Your-First-Hudi-Lakehouse-with-AWS-Glue-and-AWS-S3</id>
+        <link href="https://hudi.apache.org/blog/2022/12/19/Build-Your-First-Hudi-Lakehouse-with-AWS-Glue-and-AWS-S3"/>
+        <updated>2022-12-19T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[/assets/images/blog/DataCouncil.jpg]]></summary>
+        <content type="html"><![CDATA[<p><img src="/assets/images/blog/DataCouncil.jpg" alt="/assets/images/blog/DataCouncil.jpg"/></p><h1>Build Your First Hudi Lakehouse with AWS S3 and AWS Glue</h1><p>Soumil Shah is a Hudi community champion building <a href="https://www.youtube.com/@SoumilShah/playlists">YouTube content</a> so developers can easily get started incorporating a lakehouse into their data infrastructure. In this <a href="https://www.youtube.com/watch?v=5zF4jc_3rFs&amp;list=PLL2hlSFBmWwwbMpcyMjYuRn8cN99gFSY6">video</a>, Soumil shows you how to get started with AWS Glue, AWS S3, Hudi and Athena.</p><p>In this tutorial, you’ll learn how to:</p><ul><li>Create and configure AWS Glue</li><li>Create a Hudi Table</li><li>Create a Spark Data Frame</li><li>Add data to the Hudi Table </li><li>Query data via Athena</li></ul><p><img src="/assets/images/blog/build-your-first-hudi-lakehouse-12-19-diagram.jpg" alt="/assets/images/blog/build-your-first-hudi-lakehouse-12-19-diagram.jpg"/></p><p><strong>Step 1</strong>: Users in this architecture purchase things from online retailers and generate an order transaction that is kept in DynamoDB.</p><p><strong>Step 2</strong>: The raw data layer stores the order transaction data that is fed into the data lake. To accomplish this, enable Kinesis Data Streams for DynamoDB, and we will stream real-time transactions from DynamoDB into kinesis data streams, process the streaming data with lambda, and insert the data into the next kinesis stream, where a glue streaming job will process and insert the data into Apache Hudi Transaction data lake.</p><p><strong>Step 3</strong>: Users can build dashboards and derive insights using QuickSight.</p><h2>Getting Started</h2><p>To get started on building this data app, follow the YouTube video on
+<a href="https://www.youtube.com/watch?v=5zF4jc_3rFs&amp;list=PLL2hlSFBmWwwbMpcyMjYuRn8cN99gFSY6&amp;">Build Datalakes on S3 and Glue with Apache HUDI</a>.</p><p>Follow the the <a href="https://drive.google.com/file/d/1W-E_SupsoI8VZWGtq5d7doxdWdNDPEoj/view">step-by-step instructions</a>. </p><p>Apply the <a href="https://github.com/soumilshah1995/dynamodb-hudi-stream-project">code source</a>.</p><h2>Questions</h2><p>If you run into blockers doing this tutorial, please reach out on the Apache Hudi community and tag <strong>soumilshah1995</strong> to help debug.</p>]]></content>
+        <author>
+            <name>Nadine Farah</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Build your Apache Hudi data lake on AWS using Amazon EMR – Part 1]]></title>
         <id>/2022/11/22/Build-your-Apache-Hudi-data-lake-on-AWS-using-Amazon-EMR–Part-1</id>
