@@ -18,14 +18,12 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
-
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.BusySpinWaitStrategy;
 import com.lmax.disruptor.SleepingWaitStrategy;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.YieldingWaitStrategy;
+import org.apache.hudi.exception.HoodieException;
 
 import static org.apache.hudi.common.util.queue.DisruptorWaitStrategyType.BLOCKING_WAIT;
 

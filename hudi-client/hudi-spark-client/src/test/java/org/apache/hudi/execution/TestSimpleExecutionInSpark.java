@@ -18,8 +18,6 @@
 
 package org.apache.hudi.execution;
 
-import static org.apache.hudi.execution.HoodieLazyInsertIterable.getCloningTransformer;
-
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -28,27 +26,24 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.common.util.queue.SimpleExecutor;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import scala.Tuple2;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
 
@@ -71,8 +66,6 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 128);
     final List<HoodieRecord> consumedRecords = new ArrayList<>();
 
-    HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteExecutorDisruptorWriteBufferSize()).thenReturn(Option.of(8));
     HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
           private int count = 0;
@@ -91,7 +84,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     SimpleExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new SimpleExecutor(hoodieRecords.iterator(), consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
+      exec = new SimpleExecutor(hoodieRecords.iterator(), consumer, Function.identity());
 
       int result = exec.execute();
       // It should buffer and write 128 records
@@ -159,7 +152,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     SimpleExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new SimpleExecutor(hoodieRecords.iterator(), consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
+      exec = new SimpleExecutor(hoodieRecords.iterator(), consumer, Function.identity());
       int result = exec.execute();
       assertEquals(100, result);
 
@@ -204,7 +197,7 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
         };
 
     SimpleExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec =
-        new SimpleExecutor(iterator, consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA));
+        new SimpleExecutor(iterator, consumer, Function.identity());
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,
         "exception is expected");
