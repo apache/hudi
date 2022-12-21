@@ -70,7 +70,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
   private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
       .withExecutorType(ExecutorType.BOUNDED_IN_MEMORY.name())
       .withWriteBufferLimitBytes(1024)
-      .build();
+      .build(false);
 
   @BeforeEach
   public void setUp() throws Exception {

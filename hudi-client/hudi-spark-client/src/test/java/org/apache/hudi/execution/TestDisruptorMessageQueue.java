@@ -69,7 +69,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
   private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
       .withExecutorType(ExecutorType.DISRUPTOR.name())
       .withWriteExecutorDisruptorWriteBufferSize(16)
-      .build();
+      .build(false);
 
   @BeforeEach
   public void setUp() throws Exception {
