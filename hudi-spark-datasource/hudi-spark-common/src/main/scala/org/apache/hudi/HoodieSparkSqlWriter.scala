@@ -25,8 +25,7 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAv
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
-import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaCompatible}
+import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaCompatible, resolveNullableSchema}
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
@@ -47,7 +46,7 @@ import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.{reconcileFieldNamesCasing, reconcileNullability}
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileNullability
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{SparkKeyGeneratorInterface, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -60,9 +59,6 @@ import org.apache.log4j.LogManager
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.internal.StaticSQLConf
@@ -560,19 +556,12 @@ object HoodieSparkSqlWriter {
    * <ol>
    *  <li>Nullability: making sure that nullability of the fields in the source schema is matching
    *  that of the latest table's ones</li>
-   *  <li>Casing: making sure that the casing of the field names in the source schema is matching
-   *  that one of the latest table's ones. This is necessary b/c unlike Spark/Catalyst resolution logic
-   *  Avro is case-sensitive</li>
    * </ol>
+   *
+   * TODO support casing reconciliation
    */
   private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema): Schema = {
-    val nullabilityReconciledSchema = reconcileNullability(sourceSchema, latestTableSchema)
-    if (SQLConf.get.getConf(SQLConf.CASE_SENSITIVE)) {
-      nullabilityReconciledSchema
-    } else {
-      // Otherwise we have to canonicalize field names across incoming and existing table schemas
-      reconcileFieldNamesCasing(nullabilityReconciledSchema, latestTableSchema)
-    }
+    reconcileNullability(sourceSchema, latestTableSchema)
   }
 
 
