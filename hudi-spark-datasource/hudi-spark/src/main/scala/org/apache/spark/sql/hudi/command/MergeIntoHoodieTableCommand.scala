@@ -39,7 +39,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeRef
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
-import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{encodeAsBase64String, toStructType}
+import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{CoercedAttributeReference, encodeAsBase64String, stripCasting, toStructType}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS, _}
 import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
@@ -127,7 +127,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private lazy val primaryKeyAttributeToConditionExpression: Seq[(Attribute, Expression)] = {
     val conditions = splitConjunctivePredicates(mergeInto.mergeCondition)
     if (!conditions.forall(p => p.isInstanceOf[EqualTo])) {
-      throw new IllegalArgumentException(s"Currently only equality predicates are supported in MERGE INTO statement " +
+      throw new AnalysisException(s"Currently only equality predicates are supported in MERGE INTO statement " +
         s"(provided ${mergeInto.mergeCondition.sql}")
     }
 
@@ -136,16 +136,46 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val targetAttrs = mergeInto.targetTable.outputSet
 
-    val targetAttr2ConditionExpressions = conditions.map {
-      case EqualTo(attr: Attribute, rightExpr) if targetAttrs.contains(attr) =>
-        attr -> rightExpr
-      case EqualTo(leftExpr, attr: Attribute) if targetAttrs.contains(attr) =>
-        attr -> leftExpr
+    val exprUtils = sparkAdapter.getCatalystExpressionUtils
+    // Here we're unraveling superfluous casting of expressions on both sides of the matched-on condition,
+    // in case both of them are casted to the same type (which might be result of either explicit casting
+    // from the user, or auto-casting performed by Spark for type coercion), which has potential
+    // of rendering the whole operation as invalid. This is the case b/c we're leveraging Hudi's internal
+    // flow of matching records and therefore will be matching source and target table's primary-key values
+    // as they are w/o the ability of transforming them w/ custom expressions (unlike in vanilla Spark flow).
+    //
+    // Check out HUDI-4861 for more details
+    val cleanedConditions = conditions.map(_.asInstanceOf[EqualTo]).map(stripCasting)
 
-      case e =>
-        throw new AnalysisException(s"Unsupported predicate w/in MERGE INTO statement: ${e.sql}. " +
-          "Currently, only equality predicates one side of which is the receiving (target) table attribute are supported " +
-          "(e.g. `t.id = s.id`)")
+    // Expressions of the following forms are supported:
+    //    `target.id = <expr>` (or `<expr> = target.id`)
+    //    `cast(target.id, ...) = <expr>` (or `<expr> = cast(target.id, ...)`)
+    //
+    // In the latter case, there are further restrictions: since cast will be dropped on the
+    // target table side (since we're gonna be matching against primary-key column as is) expression
+    // on the opposite side of the comparison should be cast-able to the primary-key column's data-type
+    // t/h "up-cast" (ie w/o any loss in precision)
+    val targetAttr2ConditionExpressions = cleanedConditions.map {
+      case EqualTo(CoercedAttributeReference(attr), expr) if targetAttrs.exists(f => attributeEquals(f, attr)) =>
+        if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
+          attr -> castIfNeeded(expr, attr.dataType)
+        } else {
+          throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
+            + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
+        }
+
+      case EqualTo(expr, CoercedAttributeReference(attr)) if targetAttrs.exists(f => attributeEquals(f, attr)) =>
+        if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
+          attr -> castIfNeeded(expr, attr.dataType)
+        } else {
+          throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
+            + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
+        }
+
+      case expr =>
+        throw new AnalysisException(s"Invalid MERGE INTO matching condition: `${expr.sql}`: "
+          + "expected condition should be 'target.id = <source-column-expr>', e.g. "
+          + "`t.id = s.id` or `t.id = cast(s.id, ...)`")
     }
 
     targetAttr2ConditionExpressions.collect {
@@ -391,7 +421,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
               validator(boundExpr)
               // Alias resulting expression w/ target table's expected column name, as well as
               // do casting if necessary
-              Alias(castIfNeeded(boundExpr, attr.dataType, sparkSession.sqlContext.conf), attr.name)()
+              Alias(castIfNeeded(boundExpr, attr.dataType), attr.name)()
             }
 
           boundCondition -> boundAssignmentExprs
@@ -555,7 +585,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   def validate(mit: MergeIntoTable): Unit = {
     // TODO validate MIT adheres to Hudi's constraints
-    //       - Merge-on condition can only ref primary-key columns
     //       - Source table has to contain column mapping into pre-combine one (if defined for the target table)
     checkUpdatingActions(updatingActions)
     checkInsertingActions(insertingActions)
@@ -601,10 +630,27 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
 object MergeIntoHoodieTableCommand {
 
+  object CoercedAttributeReference {
+    def unapply(expr: Expression): Option[AttributeReference] = {
+      expr match {
+        case attr: AttributeReference => Some(attr)
+        case MatchCast(attr: AttributeReference, _, _, _) => Some(attr)
+
+        case _ => None
+      }
+    }
+  }
+
+  def stripCasting(expr: EqualTo): EqualTo = expr match {
+    case EqualTo(MatchCast(leftExpr, leftTargetType, _, _), MatchCast(rightExpr, rightTargetType, _, _))
+      if leftTargetType.sameType(rightTargetType) => EqualTo(leftExpr, rightExpr)
+    case _ => expr
+  }
+
   def toStructType(attrs: Seq[Attribute]): StructType =
     StructType(attrs.map(a => StructField(a.qualifiedName.replace('.', '_'), a.dataType, a.nullable, a.metadata)))
 
   def encodeAsBase64String(any: Any): String =
     Base64.getEncoder.encodeToString(SerDeUtils.toBytes(any))
-
 }
+
