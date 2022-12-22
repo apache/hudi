@@ -19,17 +19,11 @@
 package org.apache.hudi.internal.schema.utils;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
 import java.util.TreeMap;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
