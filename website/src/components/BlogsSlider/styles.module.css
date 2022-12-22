@@ -1,0 +1,152 @@
+.cardBlogWrapper {
+    padding: 80px 20px;
+    background: var(--ifm-color-primary-light-grey);
+}
+.blogsWrapper {
+    padding: 10px;
+    display: flex;
+    height: 100%;
+}
+.titleWrapper {
+    text-align: center;
+    margin-bottom: 45px;
+}
+
+.cardTitleWrapper {
+    display: flex;
+}
+
+.cardBlogs {
+    background: var(--ifm-color-white);
+    border-radius: 12px;
+    padding: 25px;
+    display: flex;
+    height: 100%;
+    cursor: pointer;
+    transition: 0.3s;
+    color: var(--ifm-color-black);
+}
+
+.link:hover {
+    color: var(--ifm-color-black);
+    text-decoration: none;
+}
+.cardBlogs:hover {
+    box-shadow: 0px 3px 12px rgba(0, 0, 0, 0.1);
+}
+
+.blogImg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.blogImgWrapper {
+    background: var(--ifm-color-primary-light-grey);
+    height: 250px;
+    display: flex;
+    border-radius: 8px;
+    align-items: center;
+    overflow: hidden;
+}
+
+.blogContent {
+    padding: 12px 0 10px 0;
+    color: var(--ifm-color-secondary-text);
+    font-weight: 400;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.authorName {
+    color: var(--ifm-color-secondary-text);
+}
+
+.date {
+    display: list-item;
+    margin-left: 25px;
+}
+
+.blogTitle {
+    font-weight: 500;
+    font-size: 20px;
+    line-height: 24px;
+    margin: 0;
+}
+.dots {
+    margin: 0 7px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--ifm-color-secondary-text);
+}
+.sliderActionsWrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 45px;
+}
+.dotsWrapper {
+    display: flex;
+    align-items: center;
+    margin: 0 30px;
+}
+.sliderDots {
+    width: 8px;
+    height: 8px;
+    background: var(--ifm-color-grey-shade-3);
+    margin: 2.5px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+.activeSliderDots {
+    background: var(--ifm-color-primary-text);
+    width: 24px;
+    border-radius: 4px;
+}
+.arrowIcon {
+    cursor: pointer;
+}
+.blogViewAllBtnWrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 30px;
+}
+.blogBtn {
+    min-width: 180px;
+    text-align: center;
+}
+
+
+.embla {
+    overflow: hidden;
+    width: 100%;
+}
+.embla__container {
+    display: flex;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    margin-left: -10px;
+}
+.embla__slide {
+    position: relative;
+    min-width: 33.33%;
+    padding-left: 10px;
+}
+
+@media (max-width:1025px)  {
+    .embla__slide {
+        position: relative;
+        min-width: 50%;
+    }
+}
+
+@media (max-width:641px)  {
+    .embla__slide {
+        position: relative;
+        min-width: 100%;
+    }
+}

@@ -18,6 +18,20 @@ module.exports = {
   favicon: '/assets/images/favicon.ico',
   organizationName: 'apache',
   projectName: 'hudi',
+  customFields: {
+    copyrightText:
+        "Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.",
+    tagline: "Hudi brings transactions, record-level updates/deletes and change streams to data lakes!",
+    taglineConfig: {
+      prefix: "Hudi brings ",
+      suffix: " to data lakes!",
+      content: [
+        "transactions",
+        "record-level updates/deletes",
+        "change streams",
+      ],
+    },
+  },
   i18n: {
     defaultLocale: 'en',
     locales: ['en', 'cn'],
@@ -405,7 +419,8 @@ module.exports = {
         src: '/assets/images/logo-big.png',
         href: 'https://hudi.apache.org/',
       },
-      copyright: 'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. <br />Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.',
+      copyright:
+          'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. <br />Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.',
     },
     prism: {
       theme: darkCodeTheme,
