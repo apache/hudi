@@ -297,26 +297,48 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    */
   def sourceDataset: DataFrame = {
     val resolver = sparkSession.sessionState.analyzer.resolver
-    var sourceDF = Dataset.ofRows(sparkSession, mergeInto.sourceTable)
-    val sourceTableOutput = mergeInto.sourceTable.output
 
-    (primaryKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression).foreach {
-      // NOTE: Primary key attribute (required) as well as Pre-combine one (optional) defined
-      //       in the [[targetTable]] schema has to be present in the incoming [[sourceTable]] dataset.
-      //       In cases when [[sourceTable]] doesn't bear such attributes (which, for ex, could happen
-      //       in case of it having different schema), we will be adding additional columns (while setting
-      //       them according to aforementioned heuristic) to meet Hudi's requirements
-      case (targetAttr, sourceExpression)
-        if !sourceTableOutput.exists(attr => resolver(attr.name, targetAttr.name)) =>
-          sourceDF = sourceDF.withColumn(targetAttr.name, new Column(sourceExpression))
+    val sourceTablePlan = mergeInto.sourceTable
+    val sourceTableOutput = sourceTablePlan.output
 
-      case _ => // no-op
+    val requiredAttributesMap = primaryKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
+
+    val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
+      case (keyAttr, _) => sourceTableOutput.exists(attr => resolver(keyAttr.name, attr.name))
     }
+
+    // NOTE: Primary key attribute (required) as well as Pre-combine one (optional) defined
+    //       in the [[targetTable]] schema has to be present in the incoming [[sourceTable]] dataset.
+    //       In cases when [[sourceTable]] doesn't bear such attributes (which, for ex, could happen
+    //       in case of it having different schema), we will be adding additional columns (while setting
+    //       them according to aforementioned heuristic) to meet Hudi's requirements
+    val additionalColumns: Seq[NamedExpression] =
+      missingAttributesMap.flatMap {
+        case (keyAttr, sourceExpression) if !sourceTableOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
+          Seq(Alias(sourceExpression, keyAttr.name)())
+
+        case _ => Seq()
+      }
+
+    // In case when we're not adding new columns we need to make sure that the casing of the key attributes'
+    // matches to that one of the target table. This is necessary b/c unlike Spark, Avro is case-sensitive
+    // and therefore would fail downstream if case of corresponding columns don't match
+    val existingAttributes = existingAttributesMap.map(_._1)
+    val adjustedSourceTableOutput = sourceTableOutput.map { attr =>
+      existingAttributes.find(keyAttr => resolver(keyAttr.name, attr.name)) match {
+        // To align the casing we just rename the attribute to match that one of the
+        // target table
+        case Some(keyAttr) => attr.withName(keyAttr.name)
+        case _ => attr
+      }
+    }
+
+    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, sourceTablePlan)
 
     // NOTE: We have to manually strip meta-fields since Spark < 3.2 doesn't support
     //       [[StructField]] metadata (of [[METADATA_COL_ATTR_KEY]]) enabling Spark to differentiate
     //       meta columns from the data columns omitting them by default (unless explicitly ref'd)
-    removeMetaFields(sourceDF)
+    removeMetaFields(Dataset.ofRows(sparkSession, amendedPlan))
   }
 
   /**
