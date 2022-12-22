@@ -192,7 +192,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         //
         //       Which (in the current design) could result in a primary key of the record being modified,
         //       which is not allowed.
-        if (!resolvesToSourceAttributeReferenceExpr(expr)) {
+        if (!resolvesToSourceAttribute(expr)) {
           throw new AnalysisException("Only simple conditions of the form `t.id = s.id` are allowed on the " +
             s"primary-key column. Found `${attr.sql} = ${expr.sql}`")
         }
@@ -223,7 +223,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           case None =>
             updatingActions.flatMap(_.assignments).collectFirst {
               case Assignment(attr: AttributeReference, expr)
-                if resolver(attr.name, preCombineField) && resolvesToSourceAttributeReferenceExpr(expr) => expr
+                if resolver(attr.name, preCombineField) && resolvesToSourceAttribute(expr) => expr
             } getOrElse {
               throw new AnalysisException(s"Failed to resolve pre-combine field `${preCombineField}` w/in the source-table output")
             }
@@ -301,7 +301,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val sourceTableOutput = mergeInto.sourceTable.output
 
     (primaryKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression).foreach {
-      // NOTE: Primary-key attribute (required) as well as Pre-combine one (optional) defined
+      // NOTE: Primary key attribute (required) as well as Pre-combine one (optional) defined
       //       in the [[targetTable]] schema has to be present in the incoming [[sourceTable]] dataset.
       //       In cases when [[sourceTable]] doesn't bear such attributes (which, for ex, could happen
       //       in case of it having different schema), we will be adding additional columns (while setting
@@ -503,7 +503,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     sourceDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output
   }
 
-  private def resolvesToSourceAttributeReferenceExpr(expr: Expression): Boolean = {
+  private def resolvesToSourceAttribute(expr: Expression): Boolean = {
     val sourceTableOutputSet = mergeInto.sourceTable.outputSet
     expr match {
       case attr: AttributeReference => sourceTableOutputSet.contains(attr)
@@ -584,8 +584,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   def validate(mit: MergeIntoTable): Unit = {
-    // TODO validate MIT adheres to Hudi's constraints
-    //       - Source table has to contain column mapping into pre-combine one (if defined for the target table)
     checkUpdatingActions(updatingActions)
     checkInsertingActions(insertingActions)
     checkDeletingActions(deletingActions)
