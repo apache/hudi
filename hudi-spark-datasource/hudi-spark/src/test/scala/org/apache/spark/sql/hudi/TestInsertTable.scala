@@ -1065,6 +1065,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   def testBulkInsertPartitioner(basePath: File, sortModeName: String): Unit = {
     val tableName = generateTableName
+    //Remove these with [HUDI-5419]
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.insert.drop.duplicates")
     spark.sessionState.conf.unsetConf("hoodie.merge.allow.duplicate.on.inserts")

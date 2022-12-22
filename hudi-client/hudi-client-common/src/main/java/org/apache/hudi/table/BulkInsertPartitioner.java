@@ -83,26 +83,25 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    * If possible, we want to sort the data by partition path. Doing so will reduce the number of files written.
    **/
   static String[] prependPartitionPathColumn(String[] columnNames, HoodieWriteConfig config) {
-    if (config.getMetadataConfig().populateMetaFields()) {
-      //If we have meta fields we can just leverage those instead
-      String[] prependedColumnNames = new String[columnNames.length + 1];
-      prependedColumnNames[0] = HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName();
-      System.arraycopy(columnNames, 0, prependedColumnNames, 1, columnNames.length);
-      return prependedColumnNames;
-    }
-    String partitionPath = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
-    if (partitionPath == null || partitionPath.isEmpty()) {
-      return columnNames;
-    }
     ArrayList<String> sortCols = new ArrayList<>();
     Set<String> used = new HashSet<>();
-    Arrays.stream(partitionPath.split(","))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .forEach(col -> {
-          sortCols.add(col);
-          used.add(col);
-        });
+    if (config.getMetadataConfig().populateMetaFields()) {
+      //If we have meta fields we can just leverage those instead
+      sortCols.add(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName());
+      used.add(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName());
+    } else {
+      String partitionPath = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+      if (partitionPath == null || partitionPath.isEmpty()) {
+        return columnNames;
+      }
+      Arrays.stream(partitionPath.split(","))
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .forEach(col -> {
+            sortCols.add(col);
+            used.add(col);
+          });
+    }
     for (String col : columnNames) {
       if (!used.contains(col)) {
         sortCols.add(col);
