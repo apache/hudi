@@ -21,7 +21,10 @@ package org.apache.spark.sql.parser
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 
-// TODO elaborate
+/**
+ * This trait helps us to bridge compatibility gap of [[ParserInterface]] b/w different
+ * Spark versions
+ */
 trait HoodieExtendedParserInterface extends ParserInterface {
 
   def parseQuery(sqlText: String): LogicalPlan = {
