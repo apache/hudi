@@ -25,18 +25,19 @@ import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
+import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.hadoop.{ParquetFileReader, ParquetInputFormat, ParquetRecordReader}
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.AvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{AtomicType, StructType}
+import org.apache.spark.sql.types.{ArrayType, AtomicType, DataType, MapType, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.net.URI
@@ -159,8 +160,17 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         }
 
       val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
+
+      // Clone new conf
+      val hadoopAttemptConf = new Configuration(broadcastedHadoopConf.value.value)
+      val (implicitTypeChangeInfos, sparkRequestSchema) = buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
+
+      if (!implicitTypeChangeInfos.isEmpty) {
+        hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
+      }
+
       val hadoopAttemptContext =
-        new TaskAttemptContextImpl(broadcastedHadoopConf.value.value, attemptId)
+        new TaskAttemptContextImpl(hadoopAttemptConf, attemptId)
 
       // Try to push down filters when filter push-down is enabled.
       // Notice: This push-down is RowGroups level, not individual records.
@@ -169,17 +179,29 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       }
       val taskContext = Option(TaskContext.get())
       if (enableVectorizedReader) {
-        val vectorizedReader = new VectorizedParquetRecordReader(
-          convertTz.orNull, enableOffHeapColumnVector && taskContext.isDefined, capacity)
+        val vectorizedReader = if (!implicitTypeChangeInfos.isEmpty) {
+          new Spark24HoodieVectorizedParquetRecordReader(
+            convertTz.orNull,
+            enableOffHeapColumnVector && taskContext.isDefined,
+            capacity,
+            implicitTypeChangeInfos
+          )
+        } else {
+          new VectorizedParquetRecordReader(
+            convertTz.orNull,
+            enableOffHeapColumnVector && taskContext.isDefined,
+            capacity)
+        }
+
         val iter = new RecordReaderIterator(vectorizedReader)
         // SPARK-23457 Register a task completion lister before `initialization`.
         taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
         vectorizedReader.initialize(split, hadoopAttemptContext)
-        logDebug(s"Appending $partitionSchema ${file.partitionValues}")
 
         // NOTE: We're making appending of the partitioned values to the rows read from the
         //       data file configurable
         if (shouldAppendPartitionValues) {
+          logDebug(s"Appending $partitionSchema ${file.partitionValues}")
           vectorizedReader.initBatch(partitionSchema, file.partitionValues)
         } else {
           vectorizedReader.initBatch(StructType(Nil), InternalRow.empty)
@@ -194,11 +216,12 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       } else {
         logDebug(s"Falling back to parquet-mr")
         // ParquetRecordReader returns UnsafeRow
+        val readSupport = new ParquetReadSupport(convertTz)
         val reader = if (pushed.isDefined && enableRecordFilter) {
           val parquetFilter = FilterCompat.get(pushed.get, null)
-          new ParquetRecordReader[UnsafeRow](new ParquetReadSupport(convertTz), parquetFilter)
+          new ParquetRecordReader[UnsafeRow](readSupport, parquetFilter)
         } else {
-          new ParquetRecordReader[UnsafeRow](new ParquetReadSupport(convertTz))
+          new ParquetRecordReader[UnsafeRow](readSupport)
         }
         val iter = new RecordReaderIterator(reader)
         // SPARK-23457 Register a task completion lister before `initialization`.
@@ -206,8 +229,21 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         reader.initialize(split, hadoopAttemptContext)
 
         val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
-        val joinedRow = new JoinedRow()
-        val appendPartitionColumns = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+        val unsafeProjection = if (implicitTypeChangeInfos.isEmpty) {
+          GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+        } else {
+          val newFullSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
+            if (implicitTypeChangeInfos.containsKey(i)) {
+              StructField(f.name, implicitTypeChangeInfos.get(i).getRight, f.nullable, f.metadata)
+            } else f
+          }).toAttributes ++ partitionSchema.toAttributes
+          val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
+            if (implicitTypeChangeInfos.containsKey(i)) {
+              Cast(attr, implicitTypeChangeInfos.get(i).getLeft)
+            } else attr
+          }
+          GenerateUnsafeProjection.generate(castSchema, newFullSchema)
+        }
 
         // This is a horrible erasure hack...  if we type the iterator above, then it actually check
         // the type in next() and we get a class cast exception.  If we make that function return
@@ -217,13 +253,60 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         //       data file configurable
         if (!shouldAppendPartitionValues || partitionSchema.length == 0) {
           // There is no partition columns
-          iter.asInstanceOf[Iterator[InternalRow]]
+          iter.asInstanceOf[Iterator[InternalRow]].map(unsafeProjection)
         } else {
+          val joinedRow = new JoinedRow()
           iter.asInstanceOf[Iterator[InternalRow]]
-            .map(d => appendPartitionColumns(joinedRow(d, file.partitionValues)))
+            .map(d => unsafeProjection(joinedRow(d, file.partitionValues)))
         }
-
       }
     }
+  }
+
+  private def buildImplicitSchemaChangeInfo(hadoopConf: Configuration,
+                                            parquetFileMetaData: FileMetaData,
+                                            requiredSchema: StructType): (java.util.Map[Integer, org.apache.hudi.common.util.collection.Pair[DataType, DataType]], StructType) = {
+    val implicitTypeChangeInfo: java.util.Map[Integer, org.apache.hudi.common.util.collection.Pair[DataType, DataType]] = new java.util.HashMap()
+    val convert = new ParquetToSparkSchemaConverter(hadoopConf)
+    val fileStruct = convert.convert(parquetFileMetaData.getSchema)
+    val fileStructMap = fileStruct.fields.map(f => (f.name, f.dataType)).toMap
+    val sparkRequestStructFields = requiredSchema.map(f => {
+      val requiredType = f.dataType
+      if (fileStructMap.contains(f.name) && !isDataTypeEqual(requiredType, fileStructMap(f.name))) {
+        implicitTypeChangeInfo.put(new Integer(requiredSchema.fieldIndex(f.name)), org.apache.hudi.common.util.collection.Pair.of(requiredType, fileStructMap(f.name)))
+        StructField(f.name, fileStructMap(f.name), f.nullable)
+      } else {
+        f
+      }
+    })
+    (implicitTypeChangeInfo, StructType(sparkRequestStructFields))
+  }
+
+  private def isDataTypeEqual(requiredType: DataType, fileType: DataType): Boolean = (requiredType, fileType) match {
+    case (requiredType, fileType) if requiredType == fileType => true
+
+    case (ArrayType(rt, _), ArrayType(ft, _)) =>
+      // Do not care about nullability as schema evolution require fields to be nullable
+      isDataTypeEqual(rt, ft)
+
+    case (MapType(requiredKey, requiredValue, _), MapType(fileKey, fileValue, _)) =>
+      // Likewise, do not care about nullability as schema evolution require fields to be nullable
+      isDataTypeEqual(requiredKey, fileKey) && isDataTypeEqual(requiredValue, fileValue)
+
+    case (StructType(requiredFields), StructType(fileFields)) =>
+      // Find fields that are in requiredFields and fileFields as they might not be the same during add column + change column operations
+      val commonFieldNames = requiredFields.map(_.name) intersect fileFields.map(_.name)
+
+      // Need to match by name instead of StructField as name will stay the same whilst type may change
+      val fileFilteredFields = fileFields.filter(f => commonFieldNames.contains(f.name)).sortWith(_.name < _.name)
+      val requiredFilteredFields = requiredFields.filter(f => commonFieldNames.contains(f.name)).sortWith(_.name < _.name)
+
+      // Sorting ensures that the same field names are being compared for type differences
+      requiredFilteredFields.zip(fileFilteredFields).forall {
+        case (requiredField, fileFilteredField) =>
+          isDataTypeEqual(requiredField.dataType, fileFilteredField.dataType)
+      }
+
+    case _ => false
   }
 }
