@@ -22,12 +22,10 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.exception.HoodieCatalogException
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, UpdateTable}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.StructField
 
 import scala.collection.JavaConverters._
 
@@ -63,9 +61,9 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
 
     val projects = updateExpressions.zip(removeMetaFields(ut.table.schema).fields).map {
       case (attr: AttributeReference, field) =>
-        Column(cast(attr, field, sqlConf))
+        Column(castIfNeeded(attr, field.dataType))
       case (exp, field) =>
-        Column(Alias(cast(exp, field, sqlConf), field.name)())
+        Column(Alias(castIfNeeded(exp, field.dataType), field.name)())
     }
 
     var df = Dataset.ofRows(sparkSession, ut.table)
@@ -84,7 +82,4 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     Seq.empty[Row]
   }
 
-  def cast(exp:Expression, field: StructField, sqlConf: SQLConf): Expression = {
-    castIfNeeded(exp, field.dataType, sqlConf)
-  }
 }

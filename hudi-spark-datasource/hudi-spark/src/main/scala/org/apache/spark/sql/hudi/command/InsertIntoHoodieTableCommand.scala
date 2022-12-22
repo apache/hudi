@@ -190,7 +190,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
       .filter(pf => staticPartitionValues.contains(pf.name))
       .map(pf => {
         val staticPartitionValue = staticPartitionValues(pf.name)
-        val castExpr = castIfNeeded(Literal.create(staticPartitionValue), pf.dataType, conf)
+        val castExpr = castIfNeeded(Literal.create(staticPartitionValue), pf.dataType)
 
         Alias(castExpr, pf.name)()
       })

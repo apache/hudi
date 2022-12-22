@@ -307,10 +307,10 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     resolver(field.name, other.name) && field.dataType == other.dataType
   }
 
-  def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
+  def castIfNeeded(child: Expression, dataType: DataType): Expression = {
     child match {
       case Literal(nul, NullType) => Literal(nul, dataType)
-      case expr if child.dataType != dataType => Cast(expr, dataType, Option(conf.sessionLocalTimeZone))
+      case expr if child.dataType != dataType => Cast(expr, dataType, Option(SQLConf.get.sessionLocalTimeZone))
       case _ => child
     }
   }
