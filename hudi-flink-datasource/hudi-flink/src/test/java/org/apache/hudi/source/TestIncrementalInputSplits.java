@@ -83,6 +83,14 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     List<HoodieInstant> instantRange3 = iis.filterInstantsWithRange(timeline, null);
     assertEquals(3, instantRange3.size());
     assertIterableEquals(Arrays.asList(commit1, commit2, commit3), instantRange3);
+
+    // add an inflight instant which should be excluded
+    HoodieInstant commit4 = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "4");
+    timeline.createNewInstant(commit4);
+    timeline = timeline.reload();
+    assertEquals(4, timeline.getInstants().size());
+    List<HoodieInstant> instantRange4 = iis.filterInstantsWithRange(timeline, null);
+    assertEquals(3, instantRange4.size());
   }
 
 }
