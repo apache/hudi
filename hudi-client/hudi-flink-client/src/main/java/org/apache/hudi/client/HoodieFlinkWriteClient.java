@@ -96,11 +96,6 @@ public class HoodieFlinkWriteClient<T> extends
    */
   private final Map<String, HoodieWriteHandle<?, ?, ?, ?>> bucketToHandles;
 
-  /**
-   * Cached metadata writer for coordinator to reuse for each commit.
-   */
-  private HoodieBackedTableMetadataWriter metadataWriter;
-
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, FlinkUpgradeDowngradeHelper.getInstance());
     this.bucketToHandles = new HashMap<>();
@@ -131,6 +126,11 @@ public class HoodieFlinkWriteClient<T> extends
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf) {
     return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
+  }
+
+  @Override
+  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
+    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context, metaClient);
   }
 
   @Override
@@ -283,21 +283,10 @@ public class HoodieFlinkWriteClient<T> extends
 
   @Override
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
-    if (this.metadataWriter == null) {
-      initMetadataWriter();
-    }
-    // refresh the timeline
-
-    // Note: the data meta client is not refreshed currently, some code path
-    // relies on the meta client for resolving the latest data schema,
-    // the schema expects to be immutable for SQL jobs but may be not for non-SQL
-    // jobs.
-    this.metadataWriter.initTableMetadata();
-    this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));
-    try {
-      this.metadataWriter.close();
+    try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
+      metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));
     } catch (Exception e) {
-      throw new HoodieException("Failed to close metadata writer ", e);
+      throw new HoodieException("Failed to update metadata", e);
     }
   }
 
@@ -305,8 +294,8 @@ public class HoodieFlinkWriteClient<T> extends
    * Initialize the table metadata writer, for e.g, bootstrap the metadata table
    * from the filesystem if it does not exist.
    */
-  public void initMetadataWriter() {
-    this.metadataWriter = (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
+  private HoodieBackedTableMetadataWriter initMetadataWriter() {
+    return (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
         FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT);
   }
 
@@ -317,7 +306,15 @@ public class HoodieFlinkWriteClient<T> extends
     HoodieFlinkTable<?> table = getHoodieTable();
     if (config.isMetadataTableEnabled()) {
       // initialize the metadata table path
-      initMetadataWriter();
+      // guard the metadata writer with concurrent lock
+      try {
+        this.txnManager.getLockManager().lock();
+        initMetadataWriter().close();
+      } catch (Exception e) {
+        throw new HoodieException("Failed to initialize metadata table", e);
+      } finally {
+        this.txnManager.getLockManager().unlock();
+      }
       // clean the obsolete index stats
       table.deleteMetadataIndexIfNecessary();
     } else {
@@ -500,16 +497,13 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   @Override
-  protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
-    // Create a Hoodie table which encapsulated the commits and files visible
-    return getHoodieTable();
-  }
-
-  @Override
-  protected void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
+  protected void doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
     // do nothing.
+
     // flink executes the upgrade/downgrade once when initializing the first instant on start up,
     // no need to execute the upgrade/downgrade on each write in streaming.
+
+    // flink performs metadata table bootstrap on the coordinator when it starts up.
   }
 
   public void completeTableService(
