@@ -158,7 +158,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val targetAttr2ConditionExpressions = cleanedConditions.map {
       case EqualTo(CoercedAttributeReference(attr), expr) if targetAttrs.exists(f => attributeEquals(f, attr)) =>
         if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
-          attr -> castIfNeeded(expr, attr.dataType)
+          // NOTE: It's critical we reference output attribute here and not the one from condition
+          val targetAttr = targetAttrs.find(f => attributeEquals(f, attr)).get
+          targetAttr -> castIfNeeded(expr, attr.dataType)
         } else {
           throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
             + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
@@ -166,7 +168,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
       case EqualTo(expr, CoercedAttributeReference(attr)) if targetAttrs.exists(f => attributeEquals(f, attr)) =>
         if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
-          attr -> castIfNeeded(expr, attr.dataType)
+          // NOTE: It's critical we reference output attribute here and not the one from condition
+          val targetAttr = targetAttrs.find(f => attributeEquals(f, attr)).get
+          targetAttr -> castIfNeeded(expr, attr.dataType)
         } else {
           throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
             + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
