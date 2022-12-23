@@ -48,12 +48,11 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, None)
   }
 
-  override def unapplyInsertIntoStatement(plan: LogicalPlan):
-  Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
+  override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
       case InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists) =>
         Some((table, partition, query, overwrite, ifPartitionNotExists))
-      case _=> None
+      case _ => None
     }
   }
 
