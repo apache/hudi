@@ -131,8 +131,7 @@ public class KeyGenUtils {
       } else {
         if (encodePartitionPath) {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
-        }
-        else {
+        } else {
           // Hive doesn't respect the space at the end, so remove it to avoid duplicate keys error
           fieldVal = fieldVal.trim();
         }
@@ -160,8 +159,7 @@ public class KeyGenUtils {
     }
     if (encodePartitionPath) {
       partitionPath = PartitionPathEncodeUtils.escapePathName(partitionPath);
-    }
-    else{
+    } else {
       partitionPath = partitionPath.trim();
     }
     if (hiveStylePartitioning) {
