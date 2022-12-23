@@ -23,7 +23,7 @@ import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.MultiInstanceRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.plans.logical.HoodieLogicalRelation.{resolveHudiTable, resolvesToMetaField}
+import org.apache.spark.sql.catalyst.plans.logical.HoodieLogicalRelationAdapter.{resolveHudiTable, resolvesToMetaField}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 
 import scala.collection.JavaConverters._
@@ -34,7 +34,7 @@ import scala.collection.JavaConverters._
  * NOTE: This class is a wrapper allowing to streamline handling of Hudi's metadata fields in Spark <= 3.1
  *       (proper meta-fields support is introduced only in Spark 3.2)
  */
-case class HoodieLogicalRelation(override val child: LogicalRelation) extends UnaryNode
+case class HoodieLogicalRelationAdapter(override val child: LogicalRelation) extends UnaryNode
   with MultiInstanceRelation
   with HoodieUnaryLikeSham[LogicalPlan] {
 
@@ -55,7 +55,7 @@ case class HoodieLogicalRelation(override val child: LogicalRelation) extends Un
   override protected def withNewChildInternal(newChild: LogicalPlan): LogicalPlan = this.copy(child = newChild.asInstanceOf[LogicalRelation])
 }
 
-object HoodieLogicalRelation extends SparkAdapterSupport {
+object HoodieLogicalRelationAdapter extends SparkAdapterSupport {
 
   private lazy val metaFieldNames = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet
 

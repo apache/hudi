@@ -117,14 +117,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
       session => HoodiePostAnalysisRule(session)
     )
 
-    if (HoodieSparkUtils.gteqSpark3_1) {
-      val spark3FoldLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3FoldLogicalRelations"
-      val spark3FoldLogicalRelations: RuleBuilder =
-        _ => ReflectionUtils.loadClass(spark3FoldLogicalRelationsClass).asInstanceOf[Rule[LogicalPlan]]
-
-      rules += spark3FoldLogicalRelations
-    }
-
     if (HoodieSparkUtils.gteqSpark3_2) {
       val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusPostAnalysisRule"
       val spark3PostHocResolution: RuleBuilder =
@@ -134,6 +126,64 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     rules
+  }
+
+  /**
+   * This rule wraps [[LogicalRelation]] into [[HoodieLogicalRelationAdapter]] such that all of the
+   * default Spark resolution could be applied resolving standard Spark SQL commands like `MERGE INTO`,
+   * `INSERT INTO` even though Hudi tables might be carrying meta-fields that have to be ignored during
+   * resolution phase.
+   *
+   * Spark >= 3.2 bears fully-fledged support for meta-fields and such antics are not required for it:
+   * we just need to annotate corresponding attributes as "metadata" for Spark to be able to ignore it.
+   *
+   * In Spark < 3.2 however, this is worked around like following
+   *
+   * <ol>
+   *   <li>[[AdaptLogicalRelations]] wraps around any [[LogicalRelation]] resolving to a target Hudi table
+   *   w/ [[HoodieLogicalRelationAdapter]]</li>
+   *   <li>Spark resolution rules are executed appropriately resolving [[LogicalPlan]] tree</li>
+   *   <li>[[StripLogicalRelations]] strips away [[HoodieLogicalRelationAdapter]]</li>
+   * </ol>
+   */
+  case class AdaptLogicalRelations() extends Rule[LogicalPlan] {
+
+    override def apply(plan: LogicalPlan): LogicalPlan =
+      AnalysisHelper.allowInvokingTransformsInAnalyzer {
+        // NOTE: First we need to check whether this rule had already been applied to
+        //       this plan and all [[LogicalRelation]]s of Hudi tables had already been wrapped
+        //       (requires no more than just one pass)
+        plan.collectFirst {
+          case hlr @ HoodieLogicalRelationAdapter(_) => hlr
+        } match {
+          case Some(_) => plan // no-op
+          case None =>
+            // NOTE: It's critical to transform the tree in post-order here to make sure this traversal isn't
+            //       looping infinitely
+            plan.transformUp {
+              case lr@LogicalRelation(_, _, Some(table), _) if sparkAdapter.isHoodieTable(table) =>
+                // NOTE: Have to make a copy here, since by default Spark is caching resolved [[LogicalRelation]]s
+                HoodieLogicalRelationAdapter(lr.copy())
+            }
+        }
+      }
+  }
+
+  /**
+   * Please check out scala-doc for [[AdaptLogicalRelations]]
+   */
+  case class StripLogicalRelations() extends Rule[LogicalPlan] {
+    override def apply(plan: LogicalPlan): LogicalPlan = {
+      AnalysisHelper.allowInvokingTransformsInAnalyzer {
+        plan.transformDown {
+          // NOTE: Here we expose full output of the original [[LogicalRelation]] again (including meta-fields)
+          //       to make sure if meta-fields were accessed by some operators upstream (t/h metadata-output
+          //       resolution) these are still accessible.
+          //       At this stage, we've already cleared the analysis (resolution) phase, therefore it's safe to do so
+          case HoodieLogicalRelationAdapter(lr: LogicalRelation) => lr
+        }
+      }
+    }
   }
 
   private[sql] object MatchInsertIntoStatement {

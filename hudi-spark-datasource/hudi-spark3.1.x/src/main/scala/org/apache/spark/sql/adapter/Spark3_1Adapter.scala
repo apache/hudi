@@ -57,7 +57,7 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
 
   override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
     EliminateSubqueryAliases(plan) match {
-      case HoodieLogicalRelation(LogicalRelation(_, _, Some(table), _)) => Some(table)
+      case HoodieLogicalRelationAdapter(LogicalRelation(_, _, Some(table), _)) => Some(table)
       case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
       case _ => None
     }
