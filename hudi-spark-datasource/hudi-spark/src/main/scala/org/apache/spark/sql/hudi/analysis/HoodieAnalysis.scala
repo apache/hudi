@@ -68,7 +68,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     if (HoodieSparkUtils.isSpark2) {
       val spark2ResolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
       val spark2ResolveReferences: RuleBuilder =
-        _ => ReflectionUtils.loadClass(spark2ResolveReferencesClass).asInstanceOf[Rule[LogicalPlan]]
+        session => ReflectionUtils.loadClass(spark2ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
       // NOTE: It's crucial
       rules += spark2ResolveReferences

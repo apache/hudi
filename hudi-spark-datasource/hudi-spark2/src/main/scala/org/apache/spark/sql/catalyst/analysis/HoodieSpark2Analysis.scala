@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.catalyst.analysis
 
-import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolver
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Alias, CurrentDate, CurrentTimestamp, Expression, ExtractValue, GetStructField, LambdaFunction}
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Assignment, DeleteAction, InsertAction, LogicalPlan, MergeIntoTable, Project, UpdateAction, Window}
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -32,7 +32,9 @@ import org.apache.spark.sql.catalyst.util.toPrettySQL
  */
 object HoodieSpark2Analysis {
 
-  case class ResolveReferences() extends Rule[LogicalPlan] {
+  case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan] {
+
+    private val resolver = spark.sessionState.conf.resolver
 
     override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
       case m @ MergeIntoTable(targetTable, sourceTable, _, _, _)
