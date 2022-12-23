@@ -112,6 +112,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadataWriter.class);
 
+  public static final String METADATA_COMPACTION_TIME_SUFFIX = "001";
+
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
   private static final String RECORD_KEY_FIELD_NAME = HoodieMetadataPayload.KEY_FIELD_NAME;
@@ -1019,21 +1021,28 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // finish off any pending compactions if any from previous attempt.
     writeClient.runAnyPendingCompactions();
 
-    String latestDeltaCommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
-        .get().getTimestamp();
-    List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
-        .findInstantsBefore(instantTime).getInstants();
+    String latestDeltaCommitTimeInMetadataTable = metadataMetaClient.reloadActiveTimeline()
+        .getDeltaCommitTimeline()
+        .filterCompletedInstants()
+        .lastInstant().orElseThrow(() -> new HoodieMetadataException("No completed deltacommit in metadata table"))
+        .getTimestamp();
+    List<HoodieInstant> pendingInstantsInDataTable = dataMetaClient.reloadActiveTimeline()
+        .filterInflightsAndRequested()
+        .getInstantsAsStream()
+        .filter(instant -> !instant.getTimestamp().equals(instantTime))
+        .collect(Collectors.toList());
 
-    if (!pendingInstants.isEmpty()) {
-      LOG.info(String.format("Cannot compact metadata table as there are %d inflight instants before latest deltacommit %s: %s",
-          pendingInstants.size(), latestDeltaCommitTime, Arrays.toString(pendingInstants.toArray())));
+    if (!pendingInstantsInDataTable.isEmpty()) {
+      LOG.info(String.format(
+          "Cannot compact metadata table as there are %d inflight instants in data table. Latest deltacommit in metadata table: %s. Inflight instants in data table: %s",
+          pendingInstantsInDataTable.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstantsInDataTable.toArray())));
       return;
     }
 
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    final String compactionInstantTime = latestDeltaCommitTime + "001";
+    final String compactionInstantTime = latestDeltaCommitTimeInMetadataTable + METADATA_COMPACTION_TIME_SUFFIX;
     if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       writeClient.compact(compactionInstantTime);
     }
