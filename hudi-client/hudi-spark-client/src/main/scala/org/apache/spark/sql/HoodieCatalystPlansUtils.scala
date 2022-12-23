@@ -67,6 +67,5 @@ trait HoodieCatalystPlansUtils {
   /**
    * Get the member of the Repair Table LogicalPlan.
    */
-  def getRepairTableChildren(plan: LogicalPlan):
-  Option[(TableIdentifier, Boolean, Boolean, String)]
+  def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)]
 }
