@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions.{PAYLOAD_CLASS_NAME, _}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.config.HoodieWriteConfig
@@ -246,11 +246,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val sourceDF: DataFrame = sourceDataset
     // Create the write parameters
-    val parameters = buildMergeIntoConfig(hoodieCatalogTable)
-    // TODO Remove it when we implement ExpressionPayload for SparkRecord
-    val parametersWithAvroRecordMerger = parameters ++ Map(HoodieWriteConfig.MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName)
+    val props = buildMergeIntoConfig(hoodieCatalogTable)
     // Do the upsert
-    executeUpsert(sourceDF, parametersWithAvroRecordMerger)
+    executeUpsert(sourceDF, props)
     // Refresh the table in the catalog
     sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
 
@@ -568,18 +566,32 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // default value ("ts")
     // TODO(HUDI-3456) clean up
     val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
-
+    // TODO deduplicate w/ withSparkConf
     val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
     val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
 
-    withSparkConf(sparkSession, catalogProperties) {
+    val overrides: Map[String, String] = Map(
+      // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
+      //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
+      //       compatibility b/w table's schema and incoming one is not necessary in this case since we can
+      //       be cherry-picking only selected columns from the incoming dataset to be inserted/updated in the
+      //       target table, ie partially updating)
+      AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
+      RECONCILE_SCHEMA.key -> "false",
+      "hoodie.datasource.write.schema.canonicalize" -> "false",
+      // NOTE: We have to override payload property and record-merger implementation to make sure that
+      //       [[ExpressionPayload]] is used and not the payload or record-merger configured for the table
+      PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
+      MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName
+    )
+
+    val combinedProps = withSparkConf(sparkSession, catalogProperties) {
       Map(
         "path" -> path,
         RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
         PRECOMBINE_FIELD.key -> preCombineField,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
-        PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
@@ -595,18 +607,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "200"), // set the default parallelism to 200 for sql
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "200"),
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key, "200"),
-        SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
-        // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
-        //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
-        //       compatibility b/w table's schema and incoming one is not necessary in this case since we can
-        //       be cherry-picking only selected columns from the incoming dataset to be inserted/updated in the
-        //       target table, ie partially updating)
-        AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
-        RECONCILE_SCHEMA.key -> "false",
-        "hoodie.datasource.write.schema.canonicalize" -> "false"
+        SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
       )
         .filter { case (_, v) => v != null }
     }
+
+    combinedProps ++ overrides
   }
 
   def validate(mit: MergeIntoTable): Unit = {
