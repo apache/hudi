@@ -292,8 +292,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       // Delete with condition expression.
       val errorMessage = if (HoodieSparkUtils.gteqSpark3_2) {
         "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.id = (s0.s_id + 1)`"
-      } else {
+      } else if (HoodieSparkUtils.gteqSpark3_1) {
         "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`s_id` + 1)`"
+      } else {
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`s_id` + 1)`;"
       }
 
       checkException(
@@ -477,8 +479,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         // Insert data
         spark.sql(s"""insert into $tableName1 values(1, 'a1', 10, 1000, '2021-03-21')""")
 
+        //
         // Update data with a value expression on preCombine field
         // 1) set source column name to be same as target column
+        //
         spark.sql(
           s"""
              | merge into $tableName1 as t0
@@ -494,7 +498,15 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 22, "2021-03-21", 1001)
         )
 
+        //
         // 2) set source column name to be different with target column
+        //
+        val errorMessage = if (HoodieSparkUtils.gteqSpark3_1) {
+          "Failed to resolve pre-combine field `v` w/in the source-table output"
+        } else {
+          "Failed to resolve pre-combine field `v` w/in the source-table output;"
+        }
+
         checkException(
           s"""
              | merge into $tableName1 as t0
@@ -504,7 +516,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
              | on t0.id = s0.s_id
              | when matched then update set id=s0.s_id, name=s0.s_name, price=s0.s_price*2, v=s0.s_v+2, dt=s0.dt
          """.stripMargin
-        )("Failed to resolve pre-combine field `v` w/in the source-table output")
+        )(errorMessage)
 
         spark.sql(
           s"""
@@ -550,12 +562,16 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       spark.sql(s"""insert into $tableName1 values(2, 'a2', 20, 2000, '2021-03-21')""")
       spark.sql(s"""insert into $tableName1 values(1, 'a1', 10, 1000, '2021-03-21')""")
 
+      //
       // Delete data with a condition expression on primaryKey field
       // 1) set source column name to be same as target column
-      val errorMessage = if (HoodieSparkUtils.gteqSpark3_2) {
+      //
+      val complexConditionsErrorMessage = if (HoodieSparkUtils.gteqSpark3_2) {
         "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.id = (s0.id + 1)`"
-      } else {
+      } else if (HoodieSparkUtils.gteqSpark3_1) {
         "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`id` + 1)`"
+      } else {
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`id` + 1)`;"
       }
 
       checkException(
@@ -565,7 +581,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            | ) s0
            | on t0.id = s0.id + 1
            | when matched then delete
-       """.stripMargin)(errorMessage)
+       """.stripMargin)(complexConditionsErrorMessage)
 
       spark.sql(
         s"""
@@ -582,7 +598,15 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 30, 3000, "2021-03-21")
       )
 
+      //
       // 2.a) set source column name to be different with target column (should fail unable to match pre-combine field)
+      //
+      val failedToResolveErrorMessage = if (HoodieSparkUtils.gteqSpark3_1) {
+        "Failed to resolve pre-combine field `v` w/in the source-table output"
+      } else {
+        "Failed to resolve pre-combine field `v` w/in the source-table output;"
+      }
+
       checkException(
         s"""merge into $tableName1 t0
            | using (
@@ -590,9 +614,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            | ) s0
            | on t0.id = s0.s_id
            | when matched then delete
-           |""".stripMargin)(s"Failed to resolve pre-combine field `v` w/in the source-table output")
+           |""".stripMargin)(failedToResolveErrorMessage)
 
+      //
       // 2.b) set source column name to be different with target column
+      //
       spark.sql(
         s"""
            | merge into $tableName1 t0
