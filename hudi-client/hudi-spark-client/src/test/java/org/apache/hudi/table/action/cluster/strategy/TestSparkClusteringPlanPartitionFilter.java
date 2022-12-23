@@ -119,7 +119,7 @@ public class TestSparkClusteringPlanPartitionFilter {
     }
     List filterPartitions = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
     assertEquals(1, filterPartitions.size());
-    assertSame(fakeTimeBasedPartitionsPath.get(DateTime.now().getHourOfDay()), filterPartitions.get(0));
+    assertEquals(fakeTimeBasedPartitionsPath.get(DateTime.now().getHourOfDay()), filterPartitions.get(0));
 
     fakeTimeBasedPartitionsPath = new ArrayList<>();
     for (int i = 0; i < 24; i++) {
@@ -131,7 +131,7 @@ public class TestSparkClusteringPlanPartitionFilter {
 
     int hourOfDay = DateTime.now().getHourOfDay();
     String suffix = hourOfDay >= 10 ? hourOfDay + "" : "0" + hourOfDay;
-    assertSame("20220301" + suffix, filterPartitions.get(0));
-    assertSame("20220302" + suffix, filterPartitions.get(1));
+    assertEquals("20220301" + suffix, filterPartitions.get(0));
+    assertEquals("20220302" + suffix, filterPartitions.get(1));
   }
 }
