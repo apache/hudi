@@ -1502,6 +1502,9 @@ ALTER TABLE tableIdentifier CHANGE COLUMN colName colName colType
 
 -- Alter table properties
 ALTER TABLE tableIdentifier SET TBLPROPERTIES (key = 'value')
+
+-- Alter table properties
+ALTER TABLE tableIdentifier UNSET TBLPROPERTIES (key = 'value')
 ```
 **Examples**
 ```sql
@@ -1509,13 +1512,64 @@ ALTER TABLE tableIdentifier SET TBLPROPERTIES (key = 'value')
 ALTER TABLE hudi_cow_nonpcf_tbl RENAME TO hudi_cow_nonpcf_tbl2;
 
 --add column:
-ALTER TABLE hudi_cow_nonpcf_tbl2 add columns(remark string);
+ALTER TABLE hudi_cow_nonpcf_tbl2 ADD COLUMNS(remark string);
 
 --change column:
-ALTER TABLE hudi_cow_nonpcf_tbl2 change column uuid uuid bigint;
+ALTER TABLE hudi_cow_nonpcf_tbl2 CHANGE COLUMN uuid uuid bigint;
 
 --set properties;
-alter table hudi_cow_nonpcf_tbl2 set tblproperties (hoodie.keep.max.commits = '10');
+ALTER TABLE hudi_cow_nonpcf_tbl2 SET TBLPROPERTIES (hoodie.keep.max.commits = '10');
+
+--unset properties;
+ALTER TABLE hudi_cow_nonpcf_tbl2 UNSET TBLPROPERTIES (hoodie.keep.max.commits = '10');
+```
+
+### Drop Table
+
+**Syntax**
+```sql
+-- Drop table - delete no record; table removed from metastore
+DROP TABLE [IF EXISTS] tableIdentifier;
+
+-- Drop table purge - delete all records via file system; table removed from metastore
+DROP TABLE [IF EXISTS] tableIdentifier PURGE;
+```
+**Examples**
+```sql
+-- Drop table
+DROP TABLE hudi_cow_tbl1;
+
+-- Drop table with databse specified
+DROP TABLE default.hudi_cow_tbl1;
+
+-- Drop table if exists
+DROP TABLE IF EXISTS hudi_cow_tbl1;
+
+-- Drop table purge
+DROP TABLE hudi_cow_tbl1 PURGE;
+
+-- Drop table purge if exists
+DROP TABLE IF EXISTS hudi_cow_tbl1 PURGE;
+```
+
+### Truncate Table
+
+**Syntax**
+```sql
+-- TRUNCATE TABLE - delete all records via file system; table retained in metastore
+TRUNCATE TABLE tableIdentifier;
+
+-- TRUNCATE TABLE - delete all records via file system from partitions specified; table retained in metastore
+TRUNCATE TABLE tableIdentifier PARTITION( partition_col_name = partition_col_val [ , ... ] );
+
+```
+**Examples**
+```sql
+-- Truncate table:
+TRUNCATE TABLE hudi_cow_tbl1;
+
+-- Truncate table partition:
+TRUNCATE TABLE hudi_cow_tbl1 partition(dt='2021-12-09', hh='10');
 ```
 
 ### Partition SQL Command
