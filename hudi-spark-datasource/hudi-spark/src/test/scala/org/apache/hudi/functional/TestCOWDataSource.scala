@@ -958,8 +958,6 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
     assertEquals(numRecords - numRecordsToDelete, snapshotDF2.count())
   }
 
-  // TODO revert
-  @Disabled
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testWriteSmallPrecisionDecimalTable(recordType: HoodieRecordType): Unit = {

@@ -19,8 +19,6 @@ package org.apache.spark.sql.hudi
 
 class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
-  // TODO re-enable
-  /*
   test("Test Partial Update") {
     withTempDir { tmp =>
       // TODO after we support partial update for MOR, we can add test case for 'mor'.
@@ -136,5 +134,4 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         "Currently we cannot support partial update for MOR, please complete all the target fields " +
         "just like '...update set id = s0.id, name = s0.name ....'")
   }
-   */
 }
