@@ -1074,6 +1074,19 @@ Spark SQL can be used within ForeachBatch sink to do INSERT, UPDATE, DELETE and 
 Target table must exist before write.
 :::
 
+### Table maintenance
+Hudi can run async or inline table services while running Strucrured Streaming query and takes care of cleaning, compaction and clustering. There's no operational overhead for the user.  
+For CoW tables, table services work in inline mode by default.  
+For MoR tables, some async services are enabled by default.
+
+:::note
+Since Hudi 0.11 Metadata Table is enabled by default. When using async table services with Metadata Table enabled you must use Optimistic Concurrency Control to avoid the risk of data loss (even in single writer scenario). See [Metadata Table deployment considerations](/docs/metadata#deployment-considerations) for detailed instructions.
+
+If you're using Foreach or ForeachBatch streaming sink you must use inline table services, async table services are not supported.
+:::
+
+Hive Sync works with Structured Streaming, it will create table if not exists and synchronize table to metastore aftear each streaming write.
+
 ## Point in time query
 
 Lets look at how to query data as of a specific time. The specific time can be represented by pointing endTime to a 
