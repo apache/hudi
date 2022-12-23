@@ -94,6 +94,8 @@ import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
@@ -110,6 +112,7 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_FILES = "files";
   public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
+  public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
 
   /**
    * Returns whether the files partition of metadata table is ready for read.
@@ -222,10 +225,11 @@ public class HoodieTableMetadataUtil {
    * no other
    * process should be running.
    *
+   * @param dataMetaClient instance of {@link HoodieTableMetaClient}.
    * @param basePath base path of the dataset
    * @param context  instance of {@link HoodieEngineContext}.
    */
-  public static void deleteMetadataTable(String basePath, HoodieEngineContext context) {
+  public static void deleteMetadataTable(HoodieTableMetaClient dataMetaClient, String basePath, HoodieEngineContext context) {
     final String metadataTablePathStr = HoodieTableMetadata.getMetadataTableBasePath(basePath);
     FileSystem fs = FSUtils.getFs(metadataTablePathStr, context.getHadoopConf().get());
     try {
@@ -236,6 +240,7 @@ public class HoodieTableMetadataUtil {
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to remove metadata table from path " + metadataTablePathStr, e);
     }
+    clearMetadataTablePartitionsConfig(dataMetaClient, Option.empty(), true);
   }
 
   /**
@@ -253,6 +258,24 @@ public class HoodieTableMetadataUtil {
     } catch (Exception e) {
       throw new HoodieMetadataException(String.format("Failed to remove metadata partition %s from path %s", partitionType, metadataTablePath), e);
     }
+  }
+
+  /**
+   * Clears hoodie.table.metadata.partitions in hoodie.properties
+   */
+  public static HoodieTableMetaClient clearMetadataTablePartitionsConfig(HoodieTableMetaClient metaClient, Option<MetadataPartitionType> partitionType, boolean clearAll) {
+    Set<String> partitions = metaClient.getTableConfig().getMetadataPartitions();
+    if (clearAll && partitions.size() > 0) {
+      LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
+      metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
+      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+    } else if (partitions.remove(partitionType.get().getPartitionPath())) {
+      metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", partitions));
+      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+    }
+    // if table config is updated, lets reload the metaClient.
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return metaClient;
   }
 
   /**

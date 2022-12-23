@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
-import java.util.Hashtable;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -39,13 +39,15 @@ public class TwoToThreeUpgradeHandler implements UpgradeHandler {
 
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     if (config.isMetadataTableEnabled()) {
       // Metadata Table in version 2 is asynchronous and in version 3 is synchronous. Synchronous table will not
       // sync any instants not already synced. So its simpler to re-bootstrap the table. Also, the schema for the
       // table has been updated and is not backward compatible.
-      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+      HoodieTableMetadataUtil.deleteMetadataTable(upgradeDowngradeHelper.getTable(config, context).getMetaClient(), config.getBasePath(), context);
     }
-    Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
+    // Clear all the metadata table partitions
+    tablePropsToAdd.put(HoodieTableConfig.TABLE_METADATA_PARTITIONS, "");
     tablePropsToAdd.put(HoodieTableConfig.URL_ENCODE_PARTITIONING, config.getStringOrDefault(HoodieTableConfig.URL_ENCODE_PARTITIONING));
     tablePropsToAdd.put(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, config.getStringOrDefault(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
     String keyGenClassName = Option.ofNullable(config.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME))

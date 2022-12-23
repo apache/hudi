@@ -149,8 +149,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
     this.metrics = Option.empty();
     this.enabledPartitionTypes = new ArrayList<>();
+    this.dataMetaClient =
+        HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
 
-    if (writeConfig.isMetadataTableEnabled()) {
+    if (dataMetaClient.getTableConfig().isMetadataTableEnabled() || writeConfig.isMetadataTableEnabled()) {
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig);
       enabled = true;
@@ -711,6 +713,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     LOG.info(String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
         fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
     for (int i = 0; i < fileGroupCount; ++i) {
+      // TODO. fix fileId
       final String fileGroupFileId = String.format("%s%04d", metadataPartition.getFileIdPrefix(), i);
       try {
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
@@ -719,7 +722,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
             .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
-            .withFs(dataMetaClient.getFs())
+            .withFs(metadataMetaClient.getFs())
             .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();

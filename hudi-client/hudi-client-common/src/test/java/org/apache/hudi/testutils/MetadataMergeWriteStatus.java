@@ -21,7 +21,6 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKeyWithLocation;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 
 import java.util.HashMap;

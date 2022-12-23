@@ -21,10 +21,12 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -37,7 +39,11 @@ public class FourToThreeDowngradeHandler implements DowngradeHandler {
     if (config.isMetadataTableEnabled()) {
       // Metadata Table in version 4 has a schema that is not forward compatible.
       // Hence, it is safe to delete the metadata table, which will be re-initialized in subsequent commit.
-      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+      HoodieTableMetadataUtil.deleteMetadataTable(upgradeDowngradeHelper.getTable(config, context).getMetaClient(), config.getBasePath(), context);
+      Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+      // Clear all the metadata table partitions
+      tablePropsToAdd.put(HoodieTableConfig.TABLE_METADATA_PARTITIONS, "");
+      return tablePropsToAdd;
     }
     return Collections.emptyMap();
   }

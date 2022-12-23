@@ -45,7 +45,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -71,6 +70,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -100,8 +100,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
-import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
@@ -119,7 +117,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(HoodieTable.class);
 
   protected final HoodieWriteConfig config;
-  protected final HoodieTableMetaClient metaClient;
+  protected HoodieTableMetaClient metaClient;
   protected final HoodieIndex<?, ?> index;
   private SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
@@ -912,8 +910,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     if (shouldExecuteMetadataTableDeletion()) {
       try {
         LOG.info("Deleting metadata table because it is disabled in writer.");
-        deleteMetadataTable(config.getBasePath(), context);
-        clearMetadataTablePartitionsConfig(Option.empty(), true);
+        deleteMetadataTable(metaClient, config.getBasePath(), context);
       } catch (HoodieMetadataException e) {
         throw new HoodieException("Failed to delete metadata table.", e);
       }
@@ -931,7 +928,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType)) {
             deleteMetadataPartition(metaClient.getBasePath(), context, partitionType);
           }
-          clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
+          metaClient = HoodieTableMetadataUtil.clearMetadataTablePartitionsConfig(metaClient, Option.of(partitionType), false);
         } catch (HoodieMetadataException e) {
           throw new HoodieException("Failed to delete metadata partition: " + partitionType.name(), e);
         }
@@ -976,21 +973,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return !HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())
         && !config.isMetadataTableEnabled()
         && !metaClient.getTableConfig().getMetadataPartitions().isEmpty();
-  }
-
-  /**
-   * Clears hoodie.table.metadata.partitions in hoodie.properties
-   */
-  private void clearMetadataTablePartitionsConfig(Option<MetadataPartitionType> partitionType, boolean clearAll) {
-    Set<String> partitions = metaClient.getTableConfig().getMetadataPartitions();
-    if (clearAll && partitions.size() > 0) {
-      LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
-      metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
-      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
-    } else if (partitions.remove(partitionType.get().getPartitionPath())) {
-      metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", partitions));
-      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
-    }
   }
 
   public HoodieTableMetadata getMetadataTable() {
