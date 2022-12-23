@@ -257,7 +257,7 @@ public class InternalSchema implements Serializable {
           .stream()
           .map(fieldName -> fieldName.toLowerCase(Locale.ROOT))
           .collect(Collectors.toSet())
-          .contains(colName);
+          .contains(colName.toLowerCase(Locale.ROOT));
     }
   }
 
