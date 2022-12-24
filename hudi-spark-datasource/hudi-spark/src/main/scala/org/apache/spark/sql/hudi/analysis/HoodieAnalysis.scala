@@ -112,12 +112,19 @@ object HoodieAnalysis extends SparkAdapterSupport {
       rules += resolveAlterTableCommands
     }
 
+    // NOTE: Some of the conversions (for [[CreateTable]], [[InsertIntoStatement]] have to happen
+    //       early to preempt execution of [[DataSourceAnalysis]] rule from Spark
+    //       Please check rule's scala-doc for more details
+    rules += (_ => ResolveImplementationsEarly())
+
     rules
   }
 
   def customPostHocResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
-      session => ResolveImplementations(session),
+      // NOTE: By default all commands are converted into corresponding Hudi implementations during
+      //       "post-hoc resolution" phase
+      session => ResolveImplementations(),
       session => HoodiePostAnalysisRule(session)
     )
 
@@ -194,8 +201,44 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
 /**
  * Rule converting *fully-resolved* Spark SQL plans into Hudi's custom implementations
+ *
+ * NOTE: This is separated out from [[ResolveImplementations]] such that we can apply it
+ *       during earlier stage (resolution), while the [[ResolveImplementations]] is applied at post-hoc
+ *       resolution phase. This is necessary to make sure that [[ResolveImplementationsEarly]] preempts
+ *       execution of the [[DataSourceAnalysis]] stage from Spark which would otherwise convert same commands
+ *       into native Spark implementations (which are not compatible w/ Hudi)
  */
-case class ResolveImplementations(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
+
+  override def apply(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      // Convert to InsertIntoHoodieTableCommand
+      case iis @ MatchInsertIntoStatement(relation@ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
+        relation match {
+          // NOTE: In Spark >= 3.2, Hudi relations will be resolved as [[DataSourceV2Relation]]s by default;
+          //       However, currently, fallback will be applied downgrading them to V1 relations, hence
+          //       we need to check whether we could proceed here, or has to wait until fallback rule kicks in
+          case lr: LogicalRelation => new InsertIntoHoodieTableCommand(lr, query, partition, overwrite)
+          case _ => iis
+        }
+
+      // Convert to CreateHoodieTableAsSelectCommand
+      case ct @ CreateTable(table, mode, Some(query))
+        if sparkAdapter.isHoodieTable(table) && ct.query.forall(_.resolved) =>
+        CreateHoodieTableAsSelectCommand(table, mode, query)
+
+      case _ => plan
+    }
+  }
+}
+
+/**
+ * Rule converting *fully-resolved* Spark SQL plans into Hudi's custom implementations
+ *
+ * NOTE: This is executed in "post-hoc resolution" phase to make sure all of the commands have
+ *       been resolved prior to that
+ */
+case class ResolveImplementations() extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
@@ -210,21 +253,6 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
       // Convert to DeleteHoodieTableCommand
       case dft @ DeleteFromTable(plan @ ResolvesToHudiTable(_), _) if dft.resolved =>
         DeleteHoodieTableCommand(dft)
-
-      // Convert to InsertIntoHoodieTableCommand
-      case iis @ MatchInsertIntoStatement(relation @ ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
-        relation match {
-          // NOTE: In Spark >= 3.2, Hudi relations will be resolved as [[DataSourceV2Relation]]s by default;
-          //       However, currently, fallback will be applied downgrading them to V1 relations, hence
-          //       we need to check whether we could proceed here, or has to wait until fallback rule kicks in
-          case lr: LogicalRelation => new InsertIntoHoodieTableCommand(lr, query, partition, overwrite)
-          case _ => iis
-        }
-
-      // Convert to CreateHoodieTableAsSelectCommand
-      case ct @ CreateTable(table, mode, Some(query))
-        if sparkAdapter.isHoodieTable(table) && ct.query.forall(_.resolved) =>
-          CreateHoodieTableAsSelectCommand(table, mode, query)
 
       // Convert to CompactionHoodieTableCommand
       case ct @ CompactionTable(plan @ ResolvesToHudiTable(table), operation, options) if ct.resolved =>
