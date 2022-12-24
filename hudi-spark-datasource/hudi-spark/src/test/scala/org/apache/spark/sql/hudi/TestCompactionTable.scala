@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 class TestCompactionTable extends HoodieSparkSqlTestBase {
 
   test("Test compaction table") {
-    withTempDir {tmp =>
+    withRecordType()(withTempDir {tmp =>
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -67,11 +67,11 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
         Seq(4, "a4", 10.0, 1000)
       )
       assertResult(0)(spark.sql(s"show compaction on $tableName").collect().length)
-    }
+    })
   }
 
   test("Test compaction path") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -124,6 +124,6 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
       checkException(s"run compaction on '${tmp.getCanonicalPath}' at 12345")(
         s"Compaction instant: 12345 is not found in ${tmp.getCanonicalPath}, Available pending compaction instants are:  "
       )
-    }
+    })
   }
 }

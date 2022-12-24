@@ -42,6 +42,9 @@ import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
+/**
+ * Utils for Java Collection.
+ */
 public class CollectionUtils {
 
   private static final Properties EMPTY_PROPERTIES = new Properties();
@@ -115,7 +118,6 @@ public class CollectionUtils {
     return combined;
   }
 
-
   /**
    * Combines provided {@link List}s into one, returning new instance of {@link ArrayList}
    */
@@ -153,9 +155,18 @@ public class CollectionUtils {
   }
 
   /**
+   * Zip two lists into a Map. Will throw Exception if the size is different between these two lists.
+   */
+  public static <K, V> Map<K, V> zipToMap(List<K> keys, List<V> values) {
+    checkArgument(keys.size() == values.size(),
+        "keys' size must be equal with the values' size");
+    return IntStream.range(0, keys.size()).boxed().collect(Collectors.toMap(keys::get, values::get));
+  }
+
+  /**
    * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
    */
-  public static <E> Set<E> diff(Set<E> one, Set<E> another) {
+  public static <E> Set<E> diff(Collection<E> one, Collection<E> another) {
     Set<E> diff = new HashSet<>(one);
     diff.removeAll(another);
     return diff;
@@ -164,7 +175,7 @@ public class CollectionUtils {
   /**
    * Returns difference b/w {@code one} {@link List} of elements and {@code another}
    *
-   * NOTE: This is less optimal counterpart to {@link #diff(Set, Set)}, accepting {@link List}
+   * NOTE: This is less optimal counterpart to {@link #diff(Collection, Collection)}, accepting {@link List}
    *       as a holding collection to support duplicate elements use-cases
    */
   public static <E> List<E> diff(List<E> one, List<E> another) {
@@ -236,6 +247,15 @@ public class CollectionUtils {
       map.put(pair.getLeft(), pair.getRight());
     }
     return Collections.unmodifiableMap(map);
+  }
+
+  @SafeVarargs
+  public static <K,V> HashMap<K, V> createHashMap(final Pair<K, V>... elements) {
+    HashMap<K,V> map = new HashMap<>();
+    for (Pair<K,V> pair: elements) {
+      map.put(pair.getLeft(), pair.getRight());
+    }
+    return map;
   }
 
   @SafeVarargs

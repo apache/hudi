@@ -25,7 +25,6 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -50,7 +49,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRollbackMetadata> {
+public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRollbackMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseRollbackActionExecutor.class);
 
@@ -104,7 +103,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
         ? table.getActiveTimeline().transitionRollbackRequestedToInflight(rollbackInstant)
         : rollbackInstant;
 
-    HoodieTimer rollbackTimer = new HoodieTimer().startTimer();
+    HoodieTimer rollbackTimer = HoodieTimer.start();
     List<HoodieRollbackStat> stats = doRollbackAndGetStats(rollbackPlan);
     HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.convertRollbackMetadata(
         instantTime,
@@ -140,7 +139,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
 
   private void validateSavepointRollbacks() {
     // Check if any of the commits is a savepoint - do not allow rollback on those commits
-    List<String> savepoints = table.getCompletedSavepointTimeline().getInstants()
+    List<String> savepoints = table.getCompletedSavepointTimeline().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     savepoints.forEach(s -> {
@@ -176,7 +175,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
         }
       }
 
-      List<String> inflights = inflightAndRequestedCommitTimeline.getInstants().filter(instant -> {
+      List<String> inflights = inflightAndRequestedCommitTimeline.getInstantsAsStream().filter(instant -> {
         if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
           return true;
         }

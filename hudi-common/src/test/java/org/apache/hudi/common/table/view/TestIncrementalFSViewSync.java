@@ -50,15 +50,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -88,27 +88,31 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestIncrementalFSViewSync.class);
   private static final int NUM_FILE_IDS_PER_PARTITION = 10;
-
-  private static String TEST_WRITE_TOKEN = "1-0-1";
-
-  private final List<String> partitions = Arrays.asList("2018/01/01", "2018/01/02", "2019/03/01");
-  private final List<String> fileIdsPerPartition =
+  private static final String TEST_WRITE_TOKEN = "1-0-1";
+  private static final List<String> PARTITIONS = Arrays.asList("2018/01/01", "2018/01/02", "2019/03/01");
+  private static final List<String> FILE_IDS_PER_PARTITION =
       IntStream.range(0, NUM_FILE_IDS_PER_PARTITION).mapToObj(x -> UUID.randomUUID().toString()).collect(Collectors.toList());
 
   @BeforeEach
   public void init() throws IOException {
     initMetaClient();
-    for (String p : partitions) {
+    for (String p : PARTITIONS) {
       Files.createDirectories(Paths.get(basePath, p));
     }
     refreshFsView();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanMetaClient();
   }
 
   @Test
   public void testEmptyPartitionsAndTimeline() throws IOException {
     SyncableFileSystemView view = getFileSystemView(metaClient);
     assertFalse(view.getLastInstant().isPresent());
-    partitions.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
+    PARTITIONS.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
+    view.close();
   }
 
   @Test
@@ -164,6 +168,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     // Finish Compaction
     instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("19"), false, "19", 2,
         Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "24"))));
+    view.close();
   }
 
   @Test
@@ -227,6 +232,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     // Finish Compaction
     instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("25"), false, "25", 2,
         Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "25"))));
+
+    view.close();
   }
 
   @Test
@@ -247,7 +254,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     assertEquals("11", view.getLastInstant().get().getTimestamp());
     assertEquals(State.COMPLETED, view.getLastInstant().get().getState());
     assertEquals(HoodieTimeline.COMMIT_ACTION, view.getLastInstant().get().getAction());
-    partitions.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
+    PARTITIONS.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
 
     metaClient.reloadActiveTimeline();
     SyncableFileSystemView newView = getFileSystemView(metaClient);
@@ -267,6 +274,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     // Clean instants.
     testCleans(view, Arrays.asList("21", "22"), instantsToFiles, Arrays.asList("18", "19"), 0, 0);
+
+    newView.close();
+    view.close();
   }
 
   @Test
@@ -287,7 +297,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     assertEquals("11", view.getLastInstant().get().getTimestamp());
     assertEquals(State.COMPLETED, view.getLastInstant().get().getState());
     assertEquals(HoodieTimeline.COMMIT_ACTION, view.getLastInstant().get().getAction());
-    partitions.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
+    PARTITIONS.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
 
     metaClient.reloadActiveTimeline();
     SyncableFileSystemView newView = getFileSystemView(metaClient);
@@ -303,7 +313,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     // restore instants in reverse order till we rollback all replace instants
     testRestore(view, Arrays.asList("15", "16"), instantsToFiles,
          Arrays.asList(getHoodieReplaceInstant("14"), getHoodieReplaceInstant("13")),
-         "17", true, 1, fileIdsPerPartition.size());
+         "17", true, 1, FILE_IDS_PER_PARTITION.size());
 
     // clear files from inmemory view for replaced instants
     instantsToFiles.remove("14");
@@ -314,6 +324,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     // Clean instants.
     testCleans(view, Arrays.asList("21", "22"), instantsToFiles, Arrays.asList("18", "19"), NUM_FILE_IDS_PER_PARTITION, 1);
+
+    newView.close();
+    view.close();
   }
 
   private void testMultipleReplaceSteps(Map<String, List<String>> instantsToFiles, SyncableFileSystemView view, List<String> instants,
@@ -327,8 +340,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         metaClient.reloadActiveTimeline();
         SyncableFileSystemView newView = getFileSystemView(metaClient);
         // 1 fileId is replaced for every partition, so subtract partitions.size()
-        expectedSlicesPerPartition = expectedSlicesPerPartition + fileIdsPerPartition.size()  -  1;
-        areViewsConsistent(view, newView, expectedSlicesPerPartition * partitions.size());
+        expectedSlicesPerPartition = expectedSlicesPerPartition + FILE_IDS_PER_PARTITION.size()  -  1;
+        areViewsConsistent(view, newView, expectedSlicesPerPartition * PARTITIONS.size());
+        newView.close();
       } catch (IOException e) {
         throw new HoodieIOException("unable to test replace", e);
       }
@@ -357,7 +371,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       int lastPartition = file.lastIndexOf("/");
       return Pair.of(file.substring(0, lastPartition), file.substring(lastPartition + 1));
     }).collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
-    return partitions.stream()
+    return PARTITIONS.stream()
         .map(p -> Pair.of(p, FSUtils.getFileId(partitionToFileIdsList.get(p).get(0))))
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
   }
@@ -388,7 +402,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     instantsToFiles = testMultipleWriteSteps(view1, Collections.singletonList("11"), true, "11");
 
     SyncableFileSystemView view2 =
-        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).build());
+        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePathV2().toString()).build());
 
     // Run 2 more ingestion on MOR table. View1 is not yet synced but View2 is
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("12", "13"), true, "11"));
@@ -398,9 +412,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     view2.sync();
     SyncableFileSystemView view3 =
-        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).build());
+        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePathV2().toString()).build());
     view3.sync();
-    areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size());
+    areViewsConsistent(view1, view2, PARTITIONS.size() * FILE_IDS_PER_PARTITION.size());
 
     /*
      * Case where a compaction is scheduled and then unscheduled
@@ -408,9 +422,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     scheduleCompaction(view2, "15");
     unscheduleCompaction(view2, "15", "14", "11");
     view1.sync();
-    areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size());
+    areViewsConsistent(view1, view2, PARTITIONS.size() * FILE_IDS_PER_PARTITION.size());
     SyncableFileSystemView view4 =
-        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).build());
+        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePathV2().toString()).build());
     view4.sync();
 
     /*
@@ -422,9 +436,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     testMultipleWriteSteps(view2, Collections.singletonList("16"), false, "16", 2,
         Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "18")));
     view1.sync();
-    areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size() * 2);
+    areViewsConsistent(view1, view2, PARTITIONS.size() * FILE_IDS_PER_PARTITION.size() * 2);
     SyncableFileSystemView view5 =
-        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).build());
+        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePathV2().toString()).build());
     view5.sync();
 
     /*
@@ -445,9 +459,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     // Run one more round of ingestion
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("23", "24"), true, "20", 2));
     view1.sync();
-    areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size() * 2);
+    areViewsConsistent(view1, view2, PARTITIONS.size() * FILE_IDS_PER_PARTITION.size() * 2);
     SyncableFileSystemView view6 =
-        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).build());
+        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePathV2().toString()).build());
     view6.sync();
 
     /*
@@ -464,8 +478,15 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     Arrays.asList(view1, view2, view3, view4, view5, view6).forEach(v -> {
       v.sync();
-      areViewsConsistent(v, view1, partitions.size() * fileIdsPerPartition.size() * 3);
+      areViewsConsistent(v, view1, PARTITIONS.size() * FILE_IDS_PER_PARTITION.size() * 3);
     });
+
+    view1.close();
+    view2.close();
+    view3.close();
+    view4.close();
+    view5.close();
+    view6.close();
   }
 
   /*
@@ -498,7 +519,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       List<String> cleanedInstants, int numFilesAddedPerInstant, int numFilesReplacedPerInstant) {
     final int netFilesAddedPerInstant = numFilesAddedPerInstant - numFilesReplacedPerInstant;
     assertEquals(newCleanerInstants.size(), cleanedInstants.size());
-    long exp = partitions.stream().mapToLong(p1 -> view.getAllFileSlices(p1).count()).findAny().getAsLong();
+    long exp = PARTITIONS.stream().mapToLong(p1 -> view.getAllFileSlices(p1).count()).findAny().getAsLong();
     LOG.info("Initial File Slices :" + exp);
     for (int idx = 0; idx < newCleanerInstants.size(); idx++) {
       String instant = cleanedInstants.get(idx);
@@ -508,25 +529,26 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
         performClean(instant, filesToDelete, newCleanerInstants.get(idx));
 
-        exp -= fileIdsPerPartition.size() - numFilesReplacedPerInstant;
+        exp -= FILE_IDS_PER_PARTITION.size() - numFilesReplacedPerInstant;
         final long expTotalFileSlicesPerPartition = exp;
         view.sync();
         assertTrue(view.getLastInstant().isPresent());
         assertEquals(newCleanerInstants.get(idx), view.getLastInstant().get().getTimestamp());
         assertEquals(State.COMPLETED, view.getLastInstant().get().getState());
         assertEquals(HoodieTimeline.CLEAN_ACTION, view.getLastInstant().get().getAction());
-        partitions.forEach(p -> {
+        PARTITIONS.forEach(p -> {
           LOG.info("PARTITION : " + p);
           LOG.info("\tFileSlices :" + view.getAllFileSlices(p).collect(Collectors.toList()));
         });
 
         final int instantIdx = newCleanerInstants.size() - idx;
-        partitions.forEach(p -> assertEquals(fileIdsPerPartition.size() + instantIdx * netFilesAddedPerInstant, view.getLatestFileSlices(p).count()));
-        partitions.forEach(p -> assertEquals(expTotalFileSlicesPerPartition, view.getAllFileSlices(p).count()));
+        PARTITIONS.forEach(p -> assertEquals(FILE_IDS_PER_PARTITION.size() + instantIdx * netFilesAddedPerInstant, view.getLatestFileSlices(p).count()));
+        PARTITIONS.forEach(p -> assertEquals(expTotalFileSlicesPerPartition, view.getAllFileSlices(p).count()));
 
         metaClient.reloadActiveTimeline();
         SyncableFileSystemView newView = getFileSystemView(metaClient);
-        areViewsConsistent(view, newView, expTotalFileSlicesPerPartition * partitions.size());
+        areViewsConsistent(view, newView, expTotalFileSlicesPerPartition * PARTITIONS.size());
+        newView.close();
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -552,16 +574,16 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       Map<String, List<String>> instantsToFiles, List<HoodieInstant> rolledBackInstants, String emptyRestoreInstant,
       boolean isRestore, int totalReplacedFileSlicesPerPartition, int totalFilesAddedPerPartitionPerInstant) {
     assertEquals(newRestoreInstants.size(), rolledBackInstants.size());
-    long initialFileSlices = partitions.stream().mapToLong(p -> view.getAllFileSlices(p).count()).findAny().getAsLong();
+    long initialFileSlices = PARTITIONS.stream().mapToLong(p -> view.getAllFileSlices(p).count()).findAny().getAsLong();
     final int numFileSlicesAddedPerInstant = (totalFilesAddedPerPartitionPerInstant - totalReplacedFileSlicesPerPartition);
-    final long expectedLatestFileSlices = fileIdsPerPartition.size() + (rolledBackInstants.size()) * numFileSlicesAddedPerInstant;
+    final long expectedLatestFileSlices = FILE_IDS_PER_PARTITION.size() + (rolledBackInstants.size()) * numFileSlicesAddedPerInstant;
     IntStream.range(0, newRestoreInstants.size()).forEach(idx -> {
       HoodieInstant instant = rolledBackInstants.get(idx);
       try {
         boolean isDeltaCommit = HoodieTimeline.DELTA_COMMIT_ACTION.equalsIgnoreCase(instant.getAction());
-        performRestore(instant, instantsToFiles.get(instant.getTimestamp()), newRestoreInstants.get(idx), isRestore);
+        performRestore(instant, instantsToFiles.getOrDefault(instant.getTimestamp(), Collections.emptyList()), newRestoreInstants.get(idx), isRestore);
         final long expTotalFileSlicesPerPartition =
-            isDeltaCommit ? initialFileSlices : initialFileSlices - ((idx + 1) * (fileIdsPerPartition.size() - totalReplacedFileSlicesPerPartition));
+            isDeltaCommit ? initialFileSlices : initialFileSlices - ((idx + 1) * (FILE_IDS_PER_PARTITION.size() - totalReplacedFileSlicesPerPartition));
         view.sync();
         assertTrue(view.getLastInstant().isPresent());
         LOG.info("Last Instant is :" + view.getLastInstant().get());
@@ -573,15 +595,16 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
         if (HoodieTimeline.compareTimestamps(newRestoreInstants.get(idx), HoodieTimeline.GREATER_THAN_OR_EQUALS, emptyRestoreInstant
         )) {
-          partitions.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
+          PARTITIONS.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
         } else {
-          partitions.forEach(p -> assertEquals(expectedLatestFileSlices - (idx + 1) * numFileSlicesAddedPerInstant, view.getLatestFileSlices(p).count()));
+          PARTITIONS.forEach(p -> assertEquals(expectedLatestFileSlices - (idx + 1) * numFileSlicesAddedPerInstant, view.getLatestFileSlices(p).count()));
         }
-        partitions.forEach(p -> assertEquals(expTotalFileSlicesPerPartition, view.getAllFileSlices(p).count()));
+        PARTITIONS.forEach(p -> assertEquals(expTotalFileSlicesPerPartition, view.getAllFileSlices(p).count()));
 
         metaClient.reloadActiveTimeline();
         SyncableFileSystemView newView = getFileSystemView(metaClient);
-        areViewsConsistent(view, newView, expTotalFileSlicesPerPartition * partitions.size());
+        areViewsConsistent(view, newView, expTotalFileSlicesPerPartition * PARTITIONS.size());
+        newView.close();
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -653,20 +676,15 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    *
    * @param files List of files to be deleted
    */
-  private Map<String, List<String>> deleteFiles(List<String> files) {
-
-    if (null == files) {
-      return new HashMap<>();
-    }
-
+  private Map<String, List<String>> deleteFiles(List<String> files) throws IOException {
     Map<String, List<String>> partititonToFiles = new HashMap<>();
-    partitions.forEach(p -> partititonToFiles.put(p, new ArrayList<>()));
+    PARTITIONS.forEach(p -> partititonToFiles.put(p, new ArrayList<>()));
 
     for (String f : files) {
-      String fullPath = String.format("%s/%s", metaClient.getBasePath(), f);
-      new File(fullPath).delete();
-      String partition = partitions.stream().filter(f::startsWith).findAny().get();
-      partititonToFiles.get(partition).add(fullPath);
+      java.nio.file.Path fullPath = Paths.get(metaClient.getBasePathV2().toString(), f);
+      Files.delete(fullPath);
+      String partition = PARTITIONS.stream().filter(f::startsWith).findAny().get();
+      partititonToFiles.get(partition).add(fullPath.toUri().toString());
     }
     return partititonToFiles;
   }
@@ -678,17 +696,17 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    * @param instantTime Compaction Instant Time
    */
   private void scheduleCompaction(SyncableFileSystemView view, String  instantTime) throws IOException {
-    List<Pair<String, FileSlice>> slices = partitions.stream()
+    List<Pair<String, FileSlice>> slices = PARTITIONS.stream()
         .flatMap(p -> view.getLatestFileSlices(p).map(s -> Pair.of(p, s))).collect(Collectors.toList());
 
-    long initialExpTotalFileSlices = partitions.stream().mapToLong(p -> view.getAllFileSlices(p).count()).sum();
+    long initialExpTotalFileSlices = PARTITIONS.stream().mapToLong(p -> view.getAllFileSlices(p).count()).sum();
     HoodieInstant compactionRequestedInstant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime);
     HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty());
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionRequestedInstant,
         TimelineMetadataUtils.serializeCompactionPlan(plan));
 
     view.sync();
-    partitions.forEach(p -> {
+    PARTITIONS.forEach(p -> {
       view.getLatestFileSlices(p).forEach(fs -> {
         assertEquals(instantTime, fs.getBaseInstantTime());
         assertEquals(p, fs.getPartitionPath());
@@ -702,7 +720,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     metaClient.reloadActiveTimeline();
     SyncableFileSystemView newView = getFileSystemView(metaClient);
-    areViewsConsistent(view, newView, initialExpTotalFileSlices + partitions.size() * fileIdsPerPartition.size());
+    areViewsConsistent(view, newView, initialExpTotalFileSlices + PARTITIONS.size() * FILE_IDS_PER_PARTITION.size());
+    newView.close();
   }
 
   /**
@@ -712,17 +731,17 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    * @param instantTime Log Compaction Instant Time
    */
   private void scheduleLogCompaction(SyncableFileSystemView view, String instantTime, String baseInstantTime) throws IOException {
-    List<Pair<String, FileSlice>> slices = partitions.stream()
+    List<Pair<String, FileSlice>> slices = PARTITIONS.stream()
         .flatMap(p -> view.getLatestFileSlices(p).map(s -> Pair.of(p, s))).collect(Collectors.toList());
 
-    long initialExpTotalFileSlices = partitions.stream().mapToLong(p -> view.getAllFileSlices(p).count()).sum();
+    long initialExpTotalFileSlices = PARTITIONS.stream().mapToLong(p -> view.getAllFileSlices(p).count()).sum();
     HoodieInstant logCompactionRequestedInstant = new HoodieInstant(State.REQUESTED, LOG_COMPACTION_ACTION, instantTime);
     HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty());
     metaClient.getActiveTimeline().saveToLogCompactionRequested(logCompactionRequestedInstant,
         TimelineMetadataUtils.serializeCompactionPlan(plan));
 
     view.sync();
-    partitions.forEach(p -> {
+    PARTITIONS.forEach(p -> {
       view.getLatestFileSlices(p).forEach(fs -> {
         assertEquals(baseInstantTime, fs.getBaseInstantTime());
         assertEquals(p, fs.getPartitionPath());
@@ -732,6 +751,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
     SyncableFileSystemView newView = getFileSystemView(metaClient);
     areViewsConsistent(view, newView, initialExpTotalFileSlices);
+    newView.close();
   }
 
   /**
@@ -750,7 +770,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     view.sync();
     assertEquals(newLastInstant, view.getLastInstant().get().getTimestamp());
-    partitions.forEach(p -> view.getLatestFileSlices(p).forEach(fs -> assertEquals(newBaseInstant, fs.getBaseInstantTime())));
+    PARTITIONS.forEach(p -> view.getLatestFileSlices(p).forEach(fs -> assertEquals(newBaseInstant, fs.getBaseInstantTime())));
   }
 
   /**
@@ -769,7 +789,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     view.sync();
     assertEquals(newLastInstant, view.getLastInstant().get().getTimestamp());
-    partitions.forEach(p -> view.getLatestFileSlices(p).forEach(fs -> assertEquals(newBaseInstant, fs.getBaseInstantTime())));
+    PARTITIONS.forEach(p -> view.getLatestFileSlices(p).forEach(fs -> assertEquals(newBaseInstant, fs.getBaseInstantTime())));
   }
 
   /**
@@ -847,21 +867,22 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       assertEquals(State.COMPLETED, view.getLastInstant().get().getState());
       assertEquals(lastInstant.getAction(), view.getLastInstant().get().getAction(),
           "Expected Last=" + lastInstant + ", Found Instants="
-              + view.getTimeline().getInstants().collect(Collectors.toList()));
-      partitions.forEach(p -> assertEquals(fileIdsPerPartition.size(), view.getLatestFileSlices(p).count()));
-      final long expTotalFileSlicesPerPartition = fileIdsPerPartition.size() * multiple;
-      partitions.forEach(p -> assertEquals(expTotalFileSlicesPerPartition, view.getAllFileSlices(p).count()));
+              + view.getTimeline().getInstants());
+      PARTITIONS.forEach(p -> assertEquals(FILE_IDS_PER_PARTITION.size(), view.getLatestFileSlices(p).count()));
+      final long expTotalFileSlicesPerPartition = FILE_IDS_PER_PARTITION.size() * multiple;
+      PARTITIONS.forEach(p -> assertEquals(expTotalFileSlicesPerPartition, view.getAllFileSlices(p).count()));
       if (deltaCommit) {
-        partitions.forEach(p ->
+        PARTITIONS.forEach(p ->
             view.getLatestFileSlices(p).forEach(f -> assertEquals(baseInstantForDeltaCommit, f.getBaseInstantTime()))
         );
       } else {
-        partitions.forEach(p -> view.getLatestBaseFiles(p).forEach(f -> assertEquals(instant, f.getCommitTime())));
+        PARTITIONS.forEach(p -> view.getLatestBaseFiles(p).forEach(f -> assertEquals(instant, f.getCommitTime())));
       }
 
       metaClient.reloadActiveTimeline();
       SyncableFileSystemView newView = getFileSystemView(metaClient);
-      areViewsConsistent(view, newView, fileIdsPerPartition.size() * partitions.size() * multiple);
+      areViewsConsistent(view, newView, FILE_IDS_PER_PARTITION.size() * PARTITIONS.size() * multiple);
+      newView.close();
       instantToFiles.put(instant, filePaths);
       if (!deltaCommit) {
         multiple++;
@@ -882,9 +903,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     assertEquals(view1.getLastInstant(), view2.getLastInstant());
 
     // View Checks
-    Map<HoodieFileGroupId, HoodieFileGroup> fileGroupsMap1 = partitions.stream().flatMap(view1::getAllFileGroups)
+    Map<HoodieFileGroupId, HoodieFileGroup> fileGroupsMap1 = PARTITIONS.stream().flatMap(view1::getAllFileGroups)
         .collect(Collectors.toMap(HoodieFileGroup::getFileGroupId, fg -> fg));
-    Map<HoodieFileGroupId, HoodieFileGroup> fileGroupsMap2 = partitions.stream().flatMap(view2::getAllFileGroups)
+    Map<HoodieFileGroupId, HoodieFileGroup> fileGroupsMap2 = PARTITIONS.stream().flatMap(view2::getAllFileGroups)
         .collect(Collectors.toMap(HoodieFileGroup::getFileGroupId, fg -> fg));
     assertEquals(fileGroupsMap1.keySet(), fileGroupsMap2.keySet());
     long gotSlicesCount = fileGroupsMap1.keySet().stream()
@@ -933,20 +954,19 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   private List<Pair<String, HoodieWriteStat>> generateDataForInstant(String baseInstant, String instant, boolean deltaCommit) {
-    return generateDataForInstant(baseInstant, instant, deltaCommit, fileIdsPerPartition);
+    return generateDataForInstant(baseInstant, instant, deltaCommit, FILE_IDS_PER_PARTITION);
   }
 
   private List<Pair<String, HoodieWriteStat>> generateDataForInstant(String baseInstant, String instant, boolean deltaCommit, List<String> fileIds) {
-    return partitions.stream().flatMap(p -> fileIds.stream().map(f -> {
+    return PARTITIONS.stream().flatMap(p -> fileIds.stream().map(f -> {
       try {
-        File file = new File(basePath + "/" + p + "/"
-            + (deltaCommit
+        java.nio.file.Path filePath = Paths.get(basePath, p, deltaCommit
             ? FSUtils.makeLogFileName(f, ".log", baseInstant, Integer.parseInt(instant), TEST_WRITE_TOKEN)
-            : FSUtils.makeBaseFileName(instant, TEST_WRITE_TOKEN, f)));
-        file.createNewFile();
+            : FSUtils.makeBaseFileName(instant, TEST_WRITE_TOKEN, f));
+        Files.createFile(filePath);
         HoodieWriteStat w = new HoodieWriteStat();
         w.setFileId(f);
-        w.setPath(String.format("%s/%s", p, file.getName()));
+        w.setPath(String.format("%s/%s", p, filePath.getFileName()));
         return Pair.of(p, w);
       } catch (IOException e) {
         throw new HoodieException(e);

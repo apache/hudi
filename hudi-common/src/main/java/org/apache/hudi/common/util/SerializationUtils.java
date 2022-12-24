@@ -19,13 +19,16 @@
 package org.apache.hudi.common.util;
 
 import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.util.Utf8;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
 
 /**
  * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.
@@ -35,9 +38,6 @@ public class SerializationUtils {
   // Caching kryo serializer to avoid creating kryo instance for every serde operation
   private static final ThreadLocal<KryoSerializerInstance> SERIALIZER_REF =
       ThreadLocal.withInitial(KryoSerializerInstance::new);
-
-  // Serialize
-  // -----------------------------------------------------------------------
 
   /**
    * <p>
@@ -51,9 +51,6 @@ public class SerializationUtils {
   public static byte[] serialize(final Object obj) throws IOException {
     return SERIALIZER_REF.get().serialize(obj);
   }
-
-  // Deserialize
-  // -----------------------------------------------------------------------
 
   /**
    * <p>
@@ -112,17 +109,46 @@ public class SerializationUtils {
   private static class KryoInstantiator implements Serializable {
 
     public Kryo newKryo() {
-
       Kryo kryo = new Kryo();
-      // ensure that kryo doesn't fail if classes are not registered with kryo.
+
+      // This instance of Kryo should not require prior registration of classes
       kryo.setRegistrationRequired(false);
-      // This would be used for object initialization if nothing else works out.
       kryo.setInstantiatorStrategy(new Kryo.DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
       // Handle cases where we may have an odd classloader setup like with libjars
       // for hadoop
       kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
+
+      // Register Hudi's classes
+      Arrays.stream(new HoodieCommonKryoProvider().registerClasses())
+          .forEach(kryo::register);
+
+      // Register serializers
+      kryo.register(Utf8.class, new AvroUtf8Serializer());
+
       return kryo;
     }
 
+  }
+
+  /**
+   * NOTE: This {@link Serializer} could deserialize instance of {@link Utf8} serialized
+   *       by implicitly generated Kryo serializer (based on {@link com.esotericsoftware.kryo.serializers.FieldSerializer}
+   */
+  public static class AvroUtf8Serializer extends Serializer<Utf8> {
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void write(Kryo kryo, Output output, Utf8 utf8String) {
+      Serializer<byte[]> bytesSerializer = kryo.getDefaultSerializer(byte[].class);
+      bytesSerializer.write(kryo, output, utf8String.getBytes());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Utf8 read(Kryo kryo, Input input, Class<Utf8> type) {
+      Serializer<byte[]> bytesSerializer = kryo.getDefaultSerializer(byte[].class);
+      byte[] bytes = bytesSerializer.read(kryo, input, byte[].class);
+      return new Utf8(bytes);
+    }
   }
 }

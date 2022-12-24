@@ -212,7 +212,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
           return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, internalSchema);
         } else {
           return new HoodieAvroDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc,
-              Option.ofNullable(readerSchema), header, footer, keyField, internalSchema);
+              getTargetReaderSchemaForBlock(), header, footer, keyField);
         }
 
       case HFILE_DATA_BLOCK:
@@ -227,7 +227,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
             String.format("Parquet block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
 
         return new HoodieParquetDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc,
-             Option.ofNullable(readerSchema), header, footer, keyField);
+            getTargetReaderSchemaForBlock(), header, footer, keyField);
 
       case DELETE_BLOCK:
         return new HoodieDeleteBlock(content, inputStream, readBlockLazily, Option.of(logBlockContentLoc), header, footer);
@@ -240,6 +240,18 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
       default:
         throw new HoodieNotSupportedException("Unsupported Block " + blockType);
+    }
+  }
+
+  private Option<Schema> getTargetReaderSchemaForBlock() {
+    // we should use write schema to read log file,
+    // since when we have done some DDL operation, the readerSchema maybe different from writeSchema, avro reader will throw exception.
+    // eg: origin writeSchema is: "a String, b double" then we add a new column now the readerSchema will be: "a string, c int, b double". it's wrong to use readerSchema to read old log file.
+    // after we read those record by writeSchema,  we rewrite those record with readerSchema in AbstractHoodieLogRecordReader
+    if (internalSchema.isEmptySchema()) {
+      return Option.ofNullable(this.readerSchema);
+    } else {
+      return Option.empty();
     }
   }
 
@@ -272,7 +284,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private boolean isBlockCorrupted(int blocksize) throws IOException {
     long currentPos = inputStream.getPos();
     long blockSizeFromFooter;
-    
+
     try {
       // check if the blocksize mentioned in the footer is the same as the header;
       // by seeking and checking the length of a long.  We do not seek `currentPos + blocksize`

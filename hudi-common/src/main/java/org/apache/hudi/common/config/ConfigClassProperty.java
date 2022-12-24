@@ -23,17 +23,18 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.TYPE)
-
 /**
  * Annotation for superclasses of {@link HoodieConfig} that includes the
- * human-readable name of the config class, the config group ({@link ConfigGroupName})
+ * human-readable name of the config class, the config group ({@link ConfigGroups})
  * it belongs to (e.g., spark/ flink/ write)
  * and the description of the config class.
  */
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
 public @interface ConfigClassProperty {
   String name();
+
   ConfigGroups.Names groupName();
+
   String description();
 }

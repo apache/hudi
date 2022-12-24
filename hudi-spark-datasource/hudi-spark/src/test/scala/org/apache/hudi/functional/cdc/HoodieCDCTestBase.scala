@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieKey, HoodieLogFile, HoodieRecord}
-import org.apache.hudi.common.table.cdc.HoodieCDCOperation
+import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
@@ -29,17 +29,13 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-
 import org.apache.hadoop.fs.Path
-
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.spark.sql.{DataFrame, SparkSession}
-
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull, assertTrue}
-
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -101,7 +97,8 @@ abstract class HoodieCDCTestBase extends HoodieClientTestBase {
     val hoodieWriteStats = commitMetadata.getWriteStats.asScala
     hoodieWriteStats.exists { hoodieWriteStat =>
       val cdcPaths = hoodieWriteStat.getCdcStats
-      cdcPaths != null && cdcPaths.nonEmpty
+      cdcPaths != null && cdcPaths.nonEmpty &&
+        cdcPaths.keySet().asScala.forall(_.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
     }
   }
 
@@ -127,11 +124,11 @@ abstract class HoodieCDCTestBase extends HoodieClientTestBase {
     blocks.toList
   }
 
-  protected def readCDCLogFile(relativeLogFile: String, cdcSchema: Schema): List[IndexedRecord] = {
-    val records = scala.collection.mutable.ListBuffer.empty[IndexedRecord]
+  protected def readCDCLogFile(relativeLogFile: String, cdcSchema: Schema): List[HoodieRecord[_]] = {
+    val records = scala.collection.mutable.ListBuffer.empty[HoodieRecord[_]]
     val blocks = getCDCBlocks(relativeLogFile, cdcSchema)
     blocks.foreach { block =>
-      records.addAll(block.getRecordIterator.asScala.toList)
+      records.addAll(block.getRecordIterator[IndexedRecord](HoodieRecordType.AVRO).asScala.toList)
     }
     records.toList
   }
@@ -139,18 +136,18 @@ abstract class HoodieCDCTestBase extends HoodieClientTestBase {
   protected def checkCDCDataForInsertOrUpdate(cdcSupplementalLoggingMode: String,
                                              cdcSchema: Schema,
                                              dataSchema: Schema,
-                                             cdcRecords: Seq[IndexedRecord],
+                                             cdcRecords: Seq[HoodieRecord[_]],
                                              newHoodieRecords: java.util.List[HoodieRecord[_]],
                                              op: HoodieCDCOperation): Unit = {
-    val cdcRecord = cdcRecords.head.asInstanceOf[GenericRecord]
+    val cdcRecord = cdcRecords.head.getData.asInstanceOf[GenericRecord]
     // check schema
     assertEquals(cdcRecord.getSchema, cdcSchema)
     if (cdcSupplementalLoggingMode == "cdc_op_key") {
       // check record key
-      assert(cdcRecords.map(_.get(1).toString).sorted == newHoodieRecords.map(_.getKey.getRecordKey).sorted)
+      assert(cdcRecords.map(_.getData.asInstanceOf[GenericRecord].get(1).toString).sorted == newHoodieRecords.map(_.getKey.getRecordKey).sorted)
     } else if (cdcSupplementalLoggingMode == "cdc_data_before") {
       // check record key
-      assert(cdcRecords.map(_.get(1).toString).sorted == newHoodieRecords.map(_.getKey.getRecordKey).sorted)
+      assert(cdcRecords.map(_.getData.asInstanceOf[GenericRecord].get(1).toString).sorted == newHoodieRecords.map(_.getKey.getRecordKey).sorted)
       // check before
       if (op == HoodieCDCOperation.INSERT) {
         assertNull(cdcRecord.get("before"))

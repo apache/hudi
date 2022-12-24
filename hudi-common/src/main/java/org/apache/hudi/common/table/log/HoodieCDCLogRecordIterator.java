@@ -18,20 +18,25 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-
 import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 
+/**
+ * Record iterator for Hudi logs in CDC format.
+ */
 public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecord> {
 
   private final FileSystem fs;
@@ -90,7 +95,8 @@ public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecor
   private boolean loadItr() {
     HoodieDataBlock dataBlock = (HoodieDataBlock) reader.next();
     closeItr();
-    itr = dataBlock.getRecordIterator();
+    // TODO support cdc with spark record.
+    itr = new MappingIterator(dataBlock.getRecordIterator(HoodieRecordType.AVRO), record -> ((HoodieAvroIndexedRecord) record).getData());
     return itr.hasNext();
   }
 

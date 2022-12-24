@@ -146,7 +146,7 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
       // Internal schema has to be pruned at this point
       val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
 
-      val shouldUseInternalSchema = !isNullOrEmpty(internalSchemaStr) && querySchemaOption.isPresent
+      var shouldUseInternalSchema = !isNullOrEmpty(internalSchemaStr) && querySchemaOption.isPresent
 
       val tablePath = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
       val fileSchema = if (shouldUseInternalSchema) {
@@ -228,7 +228,12 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
 
         SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
       } else {
-        new java.util.HashMap()
+        val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
+        if (!implicitTypeChangeInfo.isEmpty) {
+          shouldUseInternalSchema = true
+          hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
+        }
+        implicitTypeChangeInfo
       }
 
       val hadoopAttemptContext =
@@ -394,7 +399,6 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
       }
     }
   }
-
 }
 
 object Spark32PlusHoodieParquetFileFormat {

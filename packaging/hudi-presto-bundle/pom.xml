@@ -71,6 +71,7 @@
 
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>org.codehaus.jackson:*</include>
                   <include>org.apache.commons:commons-lang3</include>
                   <include>org.apache.hbase:hbase-common</include>
@@ -300,7 +301,7 @@
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
-      <version>3.17.3</version>
+      <version>${proto.version}</version>
       <scope>${presto.bundle.bootstrap.scope}</scope>
     </dependency>
 

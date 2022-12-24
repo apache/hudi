@@ -36,7 +36,7 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, L
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql.{HoodieCatalogUtils, HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SQLContext, SparkSession}
+import org.apache.spark.sql.{HoodieCatalogUtils, HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SQLContext, SparkSession, SparkSessionExtensions}
 import org.apache.spark.storage.StorageLevel
 
 import java.util.Locale
@@ -45,6 +45,16 @@ import java.util.Locale
  * Interface adapting discrepancies and incompatibilities between different Spark versions
  */
 trait SparkAdapter extends Serializable {
+
+  /**
+   * Checks whether provided instance of [[InternalRow]] is actually an instance of [[ColumnarBatchRow]]
+   */
+  def isColumnarBatchRow(r: InternalRow): Boolean
+
+  /**
+   * Inject table-valued functions to SparkSessionExtensions
+   */
+  def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}
 
   /**
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's

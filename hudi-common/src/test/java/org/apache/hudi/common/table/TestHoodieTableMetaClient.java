@@ -25,6 +25,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +46,11 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   @BeforeEach
   public void init() throws IOException {
     initMetaClient();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanMetaClient();
   }
 
   @Test
@@ -70,7 +76,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     commitTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
-    assertEquals(completedInstant, commitTimeline.getInstants().findFirst().get(),
+    assertEquals(completedInstant, commitTimeline.getInstantsAsStream().findFirst().get(),
         "Commit should be 1 and completed");
     assertArrayEquals("test-detail".getBytes(), commitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");
@@ -95,7 +101,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     activeTimeline = activeTimeline.reload();
     activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
-    assertEquals(completedInstant, activeCommitTimeline.getInstants().findFirst().get(),
+    assertEquals(completedInstant, activeCommitTimeline.getInstantsAsStream().findFirst().get(),
         "Commit should be 1");
     assertArrayEquals("test-detail".getBytes(), activeCommitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");

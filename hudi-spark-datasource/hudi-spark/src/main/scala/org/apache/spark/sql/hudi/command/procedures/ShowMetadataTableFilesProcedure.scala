@@ -65,7 +65,7 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
       partitionPath = new Path(basePath, partition)
     }
 
-    val timer = new HoodieTimer().startTimer
+    val timer = HoodieTimer.start
     val statuses = metaReader.getAllFilesInPartition(partitionPath)
     logDebug("Took " + timer.endTimer + " ms")
 

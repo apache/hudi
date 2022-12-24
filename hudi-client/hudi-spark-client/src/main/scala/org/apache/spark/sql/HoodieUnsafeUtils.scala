@@ -31,6 +31,15 @@ import org.apache.spark.util.MutablePair
 object HoodieUnsafeUtils {
 
   /**
+   * Creates [[DataFrame]] from provided [[plan]]
+   *
+   * @param spark spark's session
+   * @param plan given plan to wrap into [[DataFrame]]
+   */
+  def createDataFrameFrom(spark: SparkSession, plan: LogicalPlan): DataFrame =
+    Dataset.ofRows(spark, plan)
+
+  /**
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[Row]]s with provided [[schema]]
    *
    * NOTE: [[DataFrame]] is based on [[LocalRelation]], entailing that most computations with it
@@ -39,7 +48,6 @@ object HoodieUnsafeUtils {
    * @param spark spark's session
    * @param rows collection of rows to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
-   * @return
    */
   def createDataFrameFromRows(spark: SparkSession, rows: Seq[Row], schema: StructType): DataFrame =
     Dataset.ofRows(spark, LocalRelation.fromExternalRows(schema.toAttributes, rows))
@@ -53,7 +61,6 @@ object HoodieUnsafeUtils {
    * @param spark spark's session
    * @param rows collection of rows to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
-   * @return
    */
   def createDataFrameFromInternalRows(spark: SparkSession, rows: Seq[InternalRow], schema: StructType): DataFrame =
     Dataset.ofRows(spark, LocalRelation(schema.toAttributes, rows))
@@ -65,7 +72,6 @@ object HoodieUnsafeUtils {
    * @param spark spark's session
    * @param rdd RDD w/ [[Row]]s to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
-   * @return
    */
   def createDataFrameFromRDD(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame =
     spark.internalCreateDataFrame(rdd, schema)

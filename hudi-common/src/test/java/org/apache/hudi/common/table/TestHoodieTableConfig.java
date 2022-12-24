@@ -26,6 +26,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -41,6 +42,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link HoodieTableConfig}.
+ */
 public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
   private FileSystem fs;
@@ -60,10 +64,15 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     backupCfgPath = new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
   }
 
+  @AfterEach
+  public void tearDown() throws Exception {
+    fs.close();
+  }
+
   @Test
   public void testCreate() throws IOException {
     assertTrue(fs.exists(new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
-    HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null);
+    HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     assertEquals(6, config.getProps().size());
   }
 
@@ -76,7 +85,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     assertTrue(fs.exists(cfgPath));
     assertFalse(fs.exists(backupCfgPath));
-    HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null);
+    HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     assertEquals(7, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertEquals("new_field", config.getPreCombineField());
@@ -89,7 +98,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     assertTrue(fs.exists(cfgPath));
     assertFalse(fs.exists(backupCfgPath));
-    HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null);
+    HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     assertEquals(5, config.getProps().size());
     assertNull(config.getProps().getProperty("hoodie.invalid.config"));
     assertFalse(config.getProps().contains(HoodieTableConfig.ARCHIVELOG_FOLDER.key()));
@@ -99,13 +108,13 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   public void testReadsWhenPropsFileDoesNotExist() throws IOException {
     fs.delete(cfgPath, false);
     assertThrows(HoodieIOException.class, () -> {
-      new HoodieTableConfig(fs, metaPath.toString(), null);
+      new HoodieTableConfig(fs, metaPath.toString(), null, null);
     });
   }
 
   @Test
   public void testReadsWithUpdateFailures() throws IOException {
-    HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null);
+    HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     fs.delete(cfgPath, false);
     try (FSDataOutputStream out = fs.create(backupCfgPath)) {
       config.getProps().store(out, "");
@@ -113,14 +122,14 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     assertFalse(fs.exists(cfgPath));
     assertTrue(fs.exists(backupCfgPath));
-    config = new HoodieTableConfig(fs, metaPath.toString(), null);
+    config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     assertEquals(6, config.getProps().size());
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testUpdateRecovery(boolean shouldPropsFileExist) throws IOException {
-    HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null);
+    HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     if (!shouldPropsFileExist) {
       fs.delete(cfgPath, false);
     }
@@ -131,7 +140,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig.recoverIfNeeded(fs, cfgPath, backupCfgPath);
     assertTrue(fs.exists(cfgPath));
     assertFalse(fs.exists(backupCfgPath));
-    config = new HoodieTableConfig(fs, metaPath.toString(), null);
+    config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     assertEquals(6, config.getProps().size());
   }
 }

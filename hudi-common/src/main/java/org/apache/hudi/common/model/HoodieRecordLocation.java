@@ -18,13 +18,18 @@
 
 package org.apache.hudi.common.model;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * Location of a HoodieRecord within the partition it belongs to. Ultimately, this points to an actual file on disk
  */
-public class HoodieRecordLocation implements Serializable {
+public class HoodieRecordLocation implements Serializable, KryoSerializable {
 
   protected String instantTime;
   protected String fileId;
@@ -77,5 +82,17 @@ public class HoodieRecordLocation implements Serializable {
 
   public void setFileId(String fileId) {
     this.fileId = fileId;
+  }
+
+  @Override
+  public void write(Kryo kryo, Output output) {
+    output.writeString(instantTime);
+    output.writeString(fileId);
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    this.instantTime = input.readString();
+    this.fileId = input.readString();
   }
 }

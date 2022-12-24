@@ -23,8 +23,12 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -49,8 +53,9 @@ import org.apache.hudi.common.testutils.HadoopMapRedUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
+import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.CorruptedLogFileException;
@@ -64,6 +69,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -72,6 +78,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -112,6 +120,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   private static final HoodieLogBlockType DEFAULT_DATA_BLOCK_TYPE = HoodieLogBlockType.AVRO_DATA_BLOCK;
   private static final int BUFFER_SIZE = 4096;
 
+  private static HdfsTestService hdfsTestService;
   private static FileSystem fs;
   private Path partitionPath;
   private String spillableBasePath;
@@ -119,22 +128,22 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
-    MiniClusterUtil.setUp();
-    fs = MiniClusterUtil.fileSystem;
+    hdfsTestService = new HdfsTestService();
+    fs = hdfsTestService.start(true).getFileSystem();
   }
 
   @AfterAll
   public static void tearDownClass() {
-    MiniClusterUtil.shutdown();
-    fs = null;
+    hdfsTestService.stop();
   }
 
   @BeforeEach
-  public void setUp() throws IOException, InterruptedException {
-    this.basePath = tempDir.toUri().getPath();
-    this.partitionPath = new Path(basePath, "partition_path");
-    this.spillableBasePath = new Path(basePath, ".spillable_path").toUri().getPath();
-    HoodieTestUtils.init(MiniClusterUtil.configuration, basePath, HoodieTableType.MERGE_ON_READ);
+  public void setUp(TestInfo testInfo) throws IOException, InterruptedException {
+    Path workDir = fs.getWorkingDirectory();
+    basePath = new Path(workDir.toString(), testInfo.getDisplayName() + System.currentTimeMillis()).toString();
+    partitionPath = new Path(basePath, "partition_path");
+    spillableBasePath = new Path(workDir.toString(), ".spillable_path").toString();
+    HoodieTestUtils.init(fs.getConf(), basePath, HoodieTableType.MERGE_ON_READ);
   }
 
   @Test
@@ -316,43 +325,17 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }, "getCurrentSize should fail after the logAppender is closed");
   }
 
-  /*
-   * This is actually a test on concurrent append and not recovery lease. Commenting this out.
-   * https://issues.apache.org/jira/browse/HUDI-117
-   */
-
-  /**
-   * @Test public void testLeaseRecovery() throws IOException, URISyntaxException, InterruptedException { Writer writer
-   * = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-   * .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-   * .overBaseCommit("100").withFs(fs).build(); List<IndexedRecord> records =
-   * SchemaTestUtil.generateTestRecords(0, 100); Map<HoodieLogBlock.HeaderMetadataType, String> header =
-   * Maps.newHashMap(); header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
-   * header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString()); HoodieAvroDataBlock
-   * dataBlock = new HoodieAvroDataBlock(records, header); writer = writer.appendBlock(dataBlock); long size1 =
-   * writer.getCurrentSize(); // do not close this writer - this simulates a data note appending to a log dying
-   * without closing the file // writer.close();
-   * <p>
-   * writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-   * .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
-   * .withFs(fs).build(); records = SchemaTestUtil.generateTestRecords(0, 100);
-   * header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString()); dataBlock = new
-   * HoodieAvroDataBlock(records, header); writer = writer.appendBlock(dataBlock); long size2 =
-   * writer.getCurrentSize(); assertTrue("We just wrote a new block - size2 should be > size1", size2 > size1);
-   * assertEquals("Write should be auto-flushed. The size reported by FileStatus and the writer should match",
-   * size2, fs.getFileStatus(writer.getLogFile().getPath()).getLen()); writer.close(); }
-   */
-
   @Test
-  public void testAppendNotSupported() throws IOException, URISyntaxException, InterruptedException {
+  public void testAppendNotSupported(@TempDir java.nio.file.Path tempDir) throws IOException, URISyntaxException, InterruptedException {
     // Use some fs like LocalFileSystem, that does not support appends
-    Path localPartitionPath = new Path("file://" + partitionPath);
-    FileSystem localFs = FSUtils.getFs(localPartitionPath.toString(), HoodieTestUtils.getDefaultHadoopConf());
-    Path testPath = new Path(localPartitionPath, "append_test");
+    Path localTempDir = new Path(tempDir.toUri());
+    FileSystem localFs = FSUtils.getFs(localTempDir.toString(), HoodieTestUtils.getDefaultHadoopConf());
+    assertTrue(localFs instanceof LocalFileSystem);
+    Path testPath = new Path(localTempDir, "append_test");
     localFs.mkdirs(testPath);
 
     // Some data & append two times.
-    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 5);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
@@ -679,6 +662,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(useScanv2)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
 
     List<IndexedRecord> scannedRecords = new ArrayList<>();
@@ -914,6 +898,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(useScanv2)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
@@ -999,6 +984,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(useScanv2)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(200, scanner.getTotalLogRecords(), "We read 200 records from 2 write batches");
     Set<String> readKeys = new HashSet<>(200);
@@ -1089,6 +1075,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(useScanv2)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(200, scanner.getTotalLogRecords(), "We would read 200 records");
     Set<String> readKeys = new HashSet<>(200);
@@ -1170,6 +1157,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(useScanv2)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
 
     assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
@@ -1178,7 +1166,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     scanner.forEach(s -> {
       try {
-        if (!s.getData().getInsertValue(schema).isPresent()) {
+        if (!((HoodieRecordPayload)s.getData()).getInsertValue(schema).isPresent()) {
           emptyPayloads.add(true);
         }
       } catch (IOException io) {
@@ -1217,13 +1205,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals(100, readKeys.size(), "Stream collect should return all 200 records after rollback of delete");
     final List<Boolean> newEmptyPayloads = new ArrayList<>();
     scanner.forEach(s -> {
       try {
-        if (!s.getData().getInsertValue(schema).isPresent()) {
+        if (!((HoodieRecordPayload) s.getData()).getInsertValue(schema).isPresent()) {
           newEmptyPayloads.add(true);
         }
       } catch (IOException io) {
@@ -1332,6 +1321,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
 
     assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
@@ -1340,7 +1330,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     scanner.forEach(s -> readKeys.add(s.getRecordKey()));
     scanner.forEach(s -> {
       try {
-        if (!s.getData().getInsertValue(schema).isPresent()) {
+        if (!((HoodieRecordPayload)s.getData()).getInsertValue(schema).isPresent()) {
           emptyPayloadKeys.add(s.getRecordKey());
         }
       } catch (IOException io) {
@@ -1439,6 +1429,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(useScanv2)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would have scanned 0 records because of rollback");
 
@@ -1511,6 +1502,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(useScanv2)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
@@ -1566,6 +1558,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(useScanv2)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(100, scanner.getTotalLogRecords(), "We still would read 100 records");
     final List<String> readKeys = new ArrayList<>(100);
@@ -1640,6 +1633,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(useScanv2)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
     writer.close();
@@ -1750,6 +1744,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(useScanv2)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
@@ -1930,6 +1925,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withUseScanV2(true)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(600, scanner.getTotalLogRecords(), "We would read 600 records from scanner");
     final List<String> readKeys = new ArrayList<>();
@@ -2018,6 +2014,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           .withDiskMapType(diskMapType)
           .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
           .withUseScanV2(useScanv2)
+          .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
           .build();
 
       assertEquals(Math.max(numRecordsInLog1, numRecordsInLog2), scanner.getNumMergedRecordsInLog(),
@@ -2278,7 +2275,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> recordsCopy = new ArrayList<>(records);
     assertEquals(100, records.size());
     assertEquals(100, recordsCopy.size());
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema);
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), schema);
     byte[] content = dataBlock.getBytes(schema);
     assertTrue(content.length > 0);
 
@@ -2347,7 +2344,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           new HashMap<HoodieLogBlockType, Integer>() {{
             put(HoodieLogBlockType.AVRO_DATA_BLOCK, 0); // not supported
             put(HoodieLogBlockType.HFILE_DATA_BLOCK, 0); // not supported
-            put(HoodieLogBlockType.PARQUET_DATA_BLOCK, 2605);
+            put(HoodieLogBlockType.PARQUET_DATA_BLOCK, HoodieAvroUtils.gteqAvro1_9() ? 1802 : 1809);
           }};
 
       List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
@@ -2365,10 +2362,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   private HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<IndexedRecord> records,
                                        Map<HeaderMetadataType, String> header) {
-    return getDataBlock(dataBlockType, records, header, new Path("dummy_path"));
+    return getDataBlock(dataBlockType, records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, new Path("dummy_path"));
   }
 
-  private HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<IndexedRecord> records,
+  private HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<HoodieRecord> records,
                                        Map<HeaderMetadataType, String> header, Path pathForReader) {
     switch (dataBlockType) {
       case CDC_DATA_BLOCK:
@@ -2378,7 +2375,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(records, header, Compression.Algorithm.GZ, pathForReader);
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP);
+        return new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true);
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }
@@ -2424,10 +2421,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
    * Utility to convert the given iterator to a List.
    */
   private static List<IndexedRecord> getRecords(HoodieDataBlock dataBlock) {
-    ClosableIterator<IndexedRecord> itr = dataBlock.getRecordIterator();
+    ClosableIterator<HoodieRecord<IndexedRecord>> itr = dataBlock.getRecordIterator(HoodieRecordType.AVRO);
 
     List<IndexedRecord> elements = new ArrayList<>();
-    itr.forEachRemaining(elements::add);
+    itr.forEachRemaining(r -> elements.add(r.getData()));
     return elements;
   }
 }
