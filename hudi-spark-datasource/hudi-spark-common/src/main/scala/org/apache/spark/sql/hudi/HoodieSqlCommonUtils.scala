@@ -162,7 +162,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     }
   }
 
-  def removeMetaFields(attrs: Seq[Attribute]): Seq[Attribute] = {
+  def removeMetaFields[T <: Attribute](attrs: Seq[T]): Seq[T] = {
     attrs.filterNot(attr => isMetaField(attr.name))
   }
 

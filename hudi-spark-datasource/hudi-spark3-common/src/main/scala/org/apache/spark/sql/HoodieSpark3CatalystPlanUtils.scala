@@ -62,6 +62,9 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
         None
     }
   }
+
+  def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan): LogicalPlan =
+    iis.asInstanceOf[InsertIntoStatement].copy(table = targetTable)
 }
 
 object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
