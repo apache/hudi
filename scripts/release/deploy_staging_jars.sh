@@ -102,8 +102,8 @@ do
   # clean everything before any round of depoyment
   $MVN clean
   echo "Building with options ${v}"
-  $MVN install "$COMMON_OPTIONS" "${v}"
+  $MVN install ${v} $COMMON_OPTIONS
   echo "Deploying to repository.apache.org with version options ${v%-am}"
   # remove `-am` option to only deploy intended modules
-  $MVN deploy "$COMMON_OPTIONS" "${v%-am}"
+  $MVN deploy ${v%-am} $COMMON_OPTIONS
 done
