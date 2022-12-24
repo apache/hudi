@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.fs.Path
@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNu
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
-abstract class HoodieCDCTestBase extends HoodieClientTestBase {
+abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = _
 

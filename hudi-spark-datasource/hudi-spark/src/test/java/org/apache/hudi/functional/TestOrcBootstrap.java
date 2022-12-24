@@ -55,7 +55,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.action.bootstrap.BootstrapUtils;
-import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -107,7 +107,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests Bootstrap Client functionality.
  */
 @Tag("functional")
-public class TestOrcBootstrap extends HoodieClientTestBase {
+public class TestOrcBootstrap extends HoodieSparkClientTestBase {
 
 
   public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,"

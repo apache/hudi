@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.TestColumnStatsIndex.ColumnStatsTestCase
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 
 import org.apache.spark.sql._
@@ -47,7 +47,7 @@ import scala.collection.JavaConverters._
 import scala.util.Random
 
 @Tag("functional")
-class TestColumnStatsIndex extends HoodieClientTestBase {
+class TestColumnStatsIndex extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
 
   val sourceTableSchema =

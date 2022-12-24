@@ -57,7 +57,7 @@ import org.apache.hudi.io.storage.HoodieAvroParquetReader;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.action.bootstrap.BootstrapUtils;
-import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 
 import org.apache.avro.Schema;
@@ -114,7 +114,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests Bootstrap Client functionality.
  */
 @Tag("functional")
-public class TestBootstrap extends HoodieClientTestBase {
+public class TestBootstrap extends HoodieSparkClientTestBase {
 
   public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,string,double,double,double,double,"
       + "struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
