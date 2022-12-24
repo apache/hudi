@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, HoodieLogicalRelationAdapter, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
@@ -69,14 +69,6 @@ class Spark2Adapter extends SparkAdapter {
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark2CatalystPlanUtils
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark2CatalystExpressionUtils
-
-  override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
-    EliminateSubqueryAliases(plan) match {
-      case HoodieLogicalRelationAdapter(LogicalRelation(_, _, Some(table), _)) => Some(table)
-      case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
-      case _ => None
-    }
-  }
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark2_4AvroSerializer(rootCatalystType, rootAvroType, nullable)

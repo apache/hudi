@@ -18,7 +18,6 @@
 
 package org.apache.spark.sql.catalyst.plans.logical
 
-import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.trees.TreeNode
 
 /**
@@ -29,7 +28,5 @@ import org.apache.spark.sql.catalyst.trees.TreeNode
 trait HoodieUnaryLikeSham[T <: TreeNode[T]] { self: TreeNode[T] =>
 
   protected def withNewChildInternal(newChild: T): T
-
-  def metadataOutput: Seq[Attribute]
 
 }

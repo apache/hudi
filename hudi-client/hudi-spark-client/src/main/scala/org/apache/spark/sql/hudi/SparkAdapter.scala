@@ -116,7 +116,16 @@ trait SparkAdapter extends Serializable {
   def getFilePartitions(sparkSession: SparkSession, partitionedFiles: Seq[PartitionedFile],
       maxSplitBytes: Long): Seq[FilePartition]
 
-  def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable]
+  /**
+   * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
+   * corresponding [[CatalogTable]]
+   */
+  def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
+    EliminateSubqueryAliases(plan) match {
+      case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
+      case _ => None
+    }
+  }
 
   def isHoodieTable(map: java.util.Map[String, String]): Boolean = {
     map.getOrDefault("provider", "").equals("hudi")

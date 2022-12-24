@@ -57,11 +57,12 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark33CatalystExpressionUtils
 
   override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
-    EliminateSubqueryAliases(plan) match {
-      case HoodieLogicalRelationAdapter(LogicalRelation(_, _, Some(table), _)) => Some(table)
-      case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
-      case DataSourceV2Relation(v2Table: V2TableWithV1Fallback, _, _, _, _) if isHoodieTable(v2Table.v1Table) => Some(v2Table.v1Table)
-      case _ => None
+    super.resolveHoodieTable(plan).orElse {
+      EliminateSubqueryAliases(plan) match {
+        case DataSourceV2Relation(v2Table: V2TableWithV1Fallback, _, _, _, _) if isHoodieTable(v2Table.v1Table) =>
+          Some(v2Table.v1Table)
+        case _ => None
+      }
     }
   }
 

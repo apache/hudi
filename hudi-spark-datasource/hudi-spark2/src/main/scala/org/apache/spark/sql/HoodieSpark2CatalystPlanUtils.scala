@@ -56,6 +56,9 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     }
   }
 
+  def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan): LogicalPlan =
+    iis.asInstanceOf[InsertIntoTable].copy(table = targetTable)
+
   override def isRepairTable(plan: LogicalPlan): Boolean = {
     plan.isInstanceOf[AlterTableRecoverPartitionsCommand]
   }

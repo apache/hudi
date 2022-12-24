@@ -55,14 +55,6 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark31CatalystExpressionUtils
 
-  override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
-    EliminateSubqueryAliases(plan) match {
-      case HoodieLogicalRelationAdapter(LogicalRelation(_, _, Some(table), _)) => Some(table)
-      case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
-      case _ => None
-    }
-  }
-
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark3_1AvroSerializer(rootCatalystType, rootAvroType, nullable)
 
