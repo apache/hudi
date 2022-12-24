@@ -64,7 +64,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val rules: ListBuffer[RuleBuilder] = ListBuffer()
 
     // TODO limit adapters to only Spark < 3.2
-    val adaptLogicalRelations: RuleBuilder = _ => AdaptLogicalRelations()
+    val adaptLogicalRelations: RuleBuilder = _ => AdaptIngestionTargetLogicalRelations()
 
     if (HoodieSparkUtils.isSpark2) {
       val spark2ResolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
@@ -158,7 +158,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
    * of the [[LogicalRelation]] resolving into Hudi table. Note that, it's a safe operation since we
    * actually need to ignore this values (at that level) anyway
    */
-  case class AdaptLogicalRelations() extends Rule[LogicalPlan] {
+  case class AdaptIngestionTargetLogicalRelations() extends Rule[LogicalPlan] {
 
     override def apply(plan: LogicalPlan): LogicalPlan =
       AnalysisHelper.allowInvokingTransformsInAnalyzer {
