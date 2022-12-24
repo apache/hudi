@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.removeMetaFields
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchInsertIntoStatement, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
@@ -170,20 +170,20 @@ object HoodieAnalysis extends SparkAdapterSupport {
         plan.transformUp {
           // NOTE: In case of [[MergeIntoTable]] Hudi tables could be on both sides -- receiving and providing
           //       the data, as such we have to make sure that we handle both of these cases
-          case mit @ MergeIntoTable(targetTable, sourceTable, _, _, _) =>
+          case mit @ MergeIntoTable(targetTable, query, _, _, _) =>
             val updatedTargetTable = targetTable match {
               case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
               case _ => None
             }
-            val updatedSourceTable = sourceTable match {
-              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(sourceTable))
+            val updatedQuery = query match {
+              case ResolvesToHudiTable(_) => Some(projectOutMetaFieldsAttributes(query))
               case _ => None
             }
 
-            if (updatedTargetTable.isDefined || updatedSourceTable.isDefined) {
+            if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
               mit.copy(
                 targetTable = updatedTargetTable.getOrElse(targetTable),
-                sourceTable = updatedSourceTable.getOrElse(sourceTable)
+                sourceTable = updatedQuery.getOrElse(query)
               )
             } else {
               mit
@@ -194,9 +194,17 @@ object HoodieAnalysis extends SparkAdapterSupport {
             sparkAdapter.getCatalystPlanUtils.rebaseInsertIntoStatement(iis, adapted)
 
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
-            ut.copy(table = stripMetaFieldsAttributes(relation))
+            ut.copy(table = projectOutMetaFieldsAttributes(relation))
         }
       }
+  }
+
+  private def projectOutMetaFieldsAttributes(plan: LogicalPlan): LogicalPlan = {
+    if (plan.output.exists(attr => isMetaField(attr.name))) {
+      Project(removeMetaFields(plan.output), plan)
+    } else {
+      plan
+    }
   }
 
   private def stripMetaFieldsAttributes(relation: LogicalPlan): LogicalPlan = {
