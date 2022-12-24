@@ -49,7 +49,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
       //       assigned attributes to the ones of the target table. Ones not being assigned
       //       will simply be carried over (from the old record)
       assignedAttributes.find(p => attributeEquals(p._1, targetAttr))
-        .map { case (_, expr) => Alias(expr, targetAttr.name)() }
+        .map { case (_, expr) => Alias(castIfNeeded(expr, targetAttr.dataType), targetAttr.name)() }
         .getOrElse(targetAttr)
     }
 
