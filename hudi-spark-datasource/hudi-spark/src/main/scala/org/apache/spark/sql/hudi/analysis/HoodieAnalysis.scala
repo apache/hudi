@@ -116,7 +116,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // Default rules
       session => ResolveImplementations(session),
-      _ => StripLogicalRelations()
+      _ => StripLogicalRelationAdapters()
     )
 
     if (HoodieSparkUtils.gteqSpark3_2) {
@@ -145,7 +145,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
    *   <li>[[AdaptLogicalRelations]] wraps around any [[LogicalRelation]] resolving to a target Hudi table
    *   w/ [[HoodieLogicalRelationAdapter]]</li>
    *   <li>Spark resolution rules are executed appropriately resolving [[LogicalPlan]] tree</li>
-   *   <li>[[StripLogicalRelations]] strips away [[HoodieLogicalRelationAdapter]]</li>
+   *   <li>[[StripLogicalRelationAdapters]] strips away [[HoodieLogicalRelationAdapter]]</li>
    * </ol>
    */
   case class AdaptLogicalRelations() extends Rule[LogicalPlan] {
@@ -163,7 +163,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
             // NOTE: It's critical to transform the tree in post-order here to make sure this traversal isn't
             //       looping infinitely
             plan.transformUp {
-              case lr@LogicalRelation(_, _, Some(table), _) if sparkAdapter.isHoodieTable(table) =>
+              case lr @ LogicalRelation(_, _, Some(table), _) if sparkAdapter.isHoodieTable(table) =>
                 // NOTE: Have to make a copy here, since by default Spark is caching resolved [[LogicalRelation]]s
                 HoodieLogicalRelationAdapter(lr.copy())
             }
@@ -174,7 +174,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
   /**
    * Please check out scala-doc for [[AdaptLogicalRelations]]
    */
-  case class StripLogicalRelations() extends Rule[LogicalPlan] {
+  case class StripLogicalRelationAdapters() extends Rule[LogicalPlan] {
     override def apply(plan: LogicalPlan): LogicalPlan = {
       AnalysisHelper.allowInvokingTransformsInAnalyzer {
         plan.transformDown {
