@@ -38,7 +38,7 @@ object HoodieSpark2Analysis {
 
     override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
       case m @ MergeIntoTable(targetTable, sourceTable, _, _, _)
-        if !m.resolved && targetTable.resolved && sourceTable.resolved =>
+        if (!m.resolved || containsUnresolvedStarAssignments(m)) && targetTable.resolved && sourceTable.resolved =>
 
         EliminateSubqueryAliases(targetTable) match {
           case _ =>
@@ -163,10 +163,9 @@ object HoodieSpark2Analysis {
      * Literal functions do not require the user to specify braces when calling them
      * When an attributes is not resolvable, we try to resolve it as a literal function.
      */
-    private def resolveLiteralFunction(
-                                        nameParts: Seq[String],
-                                        attribute: UnresolvedAttribute,
-                                        plan: LogicalPlan): Option[Expression] = {
+    private def resolveLiteralFunction(nameParts: Seq[String],
+                                       attribute: UnresolvedAttribute,
+                                       plan: LogicalPlan): Option[Expression] = {
       if (nameParts.length != 1) return None
       val isNamedExpression = plan match {
         case Aggregate(_, aggregateExpressions, _) => aggregateExpressions.contains(attribute)
@@ -182,8 +181,28 @@ object HoodieSpark2Analysis {
       val func = literalFunctions.find(e => caseInsensitiveResolution(e.prettyName, name))
       func.map(wrapper)
     }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////
+    // Following section is amended to the original (Spark's) implementation
+    // >>> BEGINS
+    ////////////////////////////////////////////////////////////////////////////////////////////
+
+    private def containsUnresolvedStarAssignments(mit: MergeIntoTable): Boolean = {
+      val containsUnresolvedInsertStar = mit.notMatchedActions.exists {
+        case InsertAction(_, assignments) => assignments.isEmpty
+        case _ => false
+      }
+      val containsUnresolvedUpdateStar = mit.matchedActions.exists {
+        case UpdateAction(_, assignments) => assignments.isEmpty
+        case _ => false
+      }
+
+      containsUnresolvedInsertStar || containsUnresolvedUpdateStar
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////
+    // <<< ENDS
+    ////////////////////////////////////////////////////////////////////////////////////////////
   }
-
-
 
 }

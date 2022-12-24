@@ -61,8 +61,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
   def customResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
-      // Default rules
-      session => ResolveImplementations(session),
       _ => AdaptLogicalRelations()
     )
 
@@ -71,7 +69,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       val spark2ResolveReferences: RuleBuilder =
         session => ReflectionUtils.loadClass(spark2ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-        rules += spark2ResolveReferences
+      rules += spark2ResolveReferences
     }
 
     if (HoodieSparkUtils.gteqSpark3_2) {
@@ -83,7 +81,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       val spark32PlusResolveReferences: RuleBuilder =
         session => ReflectionUtils.loadClass(spark32PlusResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      // NOTE: PLEASE READ CAREFULLY
+      // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
       //
       // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
       // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
@@ -109,12 +107,21 @@ object HoodieAnalysis extends SparkAdapterSupport {
       rules += resolveAlterTableCommands
     }
 
+    // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+    //
+    // It's critical for this rule to trail _all_ of the other Hudi's custom resolution rules, as it's
+    // the one that will be converting Spark's logical plans w/ Hudi's implementations. We need to make sure
+    // that all of the resolution occurred by that point (even though implementation resolution is predicated
+    // on that all of the components have to be resolved by the time we substitute it w/ an implementation command,
+    // unfortunately due to the need to support Merge Into semantic in Spark 2.x we have to rely on this peculiar
+    // ordering to make it work)
+    rules += (session => ResolveImplementations(session))
+
     rules
   }
 
   def customPostHocResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
-      // Default rules
       session => HoodiePostAnalysisRule(session),
       _ => StripLogicalRelationAdapters()
     )
