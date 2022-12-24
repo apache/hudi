@@ -30,7 +30,7 @@ import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql._
-import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFields
+import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 
 /**
  * Command for insert into Hudi table.
@@ -134,7 +134,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
 
     // Make sure we strip out meta-fields from the incoming dataset (these will have to be discarded anyway)
-    val cleanedQuery = stripMetaFields(query)
+    val cleanedQuery = stripMetaFieldAttributes(query)
     // To validate and align properly output of the query, we simply filter out partition columns with already
     // provided static values from the table's schema
     //

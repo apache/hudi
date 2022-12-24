@@ -18,13 +18,11 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.exception.HoodieCatalogException
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, Filter}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFields
+import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 
 case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport
@@ -41,7 +39,7 @@ case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunn
 
     val condition = sparkAdapter.extractDeleteCondition(dft)
 
-    val targetLogicalPlan = stripMetaFields(dft.table)
+    val targetLogicalPlan = stripMetaFieldAttributes(dft.table)
     val filteredPlan = if (condition != null) {
       Filter(condition, targetLogicalPlan)
     } else {

@@ -31,7 +31,7 @@ trait HoodieLeafRunnableCommand extends RunnableCommand with HoodieLeafLike[Logi
 
 object HoodieLeafRunnableCommand {
 
-  private[hudi] def stripMetaFields(query: LogicalPlan): LogicalPlan = {
+  private[hudi] def stripMetaFieldAttributes(query: LogicalPlan): LogicalPlan = {
     val filteredOutput = query.output.filterNot(attr => isMetaField(attr.name))
     if (filteredOutput == query.output) {
       query
