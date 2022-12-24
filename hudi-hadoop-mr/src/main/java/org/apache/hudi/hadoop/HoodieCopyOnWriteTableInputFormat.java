@@ -18,7 +18,21 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieTableQueryType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -31,29 +45,11 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieTableQueryType;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
@@ -190,7 +186,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
     return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
   }
 
-  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
+  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, HoodieTableMetaClient metaClient) {
     Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
 
     if (baseFileOpt.isPresent()) {
@@ -215,7 +211,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
   @Nonnull
   private List<FileStatus> listStatusForSnapshotMode(JobConf job,
                                                      Map<String, HoodieTableMetaClient> tableMetaClientMap,
-                                                     List<Path> snapshotPaths) throws IOException {
+                                                     List<Path> snapshotPaths) {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
     List<FileStatus> targetFiles = new ArrayList<>();
 
@@ -248,14 +244,12 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
 
       Map<String, List<FileSlice>> partitionedFileSlices = fileIndex.listFileSlices();
 
-      Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getHoodieVirtualKeyInfo(tableMetaClient);
-
       targetFiles.addAll(
           partitionedFileSlices.values()
               .stream()
               .flatMap(Collection::stream)
               .filter(fileSlice -> checkIfValidFileSlice(fileSlice))
-              .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex, virtualKeyInfoOpt))
+              .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex, tableMetaClient))
               .collect(Collectors.toList())
       );
     }
@@ -288,26 +282,6 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
       return HoodieInputFormatUtils.getFileStatus(baseFile);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to get file-status", ioe);
-    }
-  }
-
-  protected static Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo(HoodieTableMetaClient metaClient) {
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (tableConfig.populateMetaFields()) {
-      return Option.empty();
-    }
-    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    try {
-      Schema schema = tableSchemaResolver.getTableAvroSchema();
-      boolean isNonPartitionedKeyGen = StringUtils.isNullOrEmpty(tableConfig.getPartitionFieldProp());
-      return Option.of(
-          new HoodieVirtualKeyInfo(
-              tableConfig.getRecordKeyFieldProp(),
-              isNonPartitionedKeyGen ? Option.empty() : Option.of(tableConfig.getPartitionFieldProp()),
-              schema.getField(tableConfig.getRecordKeyFieldProp()).pos(),
-              isNonPartitionedKeyGen ? Option.empty() : Option.of(schema.getField(tableConfig.getPartitionFieldProp()).pos())));
-    } catch (Exception exception) {
-      throw new HoodieException("Fetching table schema failed with exception ", exception);
     }
   }
 }
