@@ -70,7 +70,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT)
-    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.METASTORE_URIS)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_USER)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_PASS)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_URL)

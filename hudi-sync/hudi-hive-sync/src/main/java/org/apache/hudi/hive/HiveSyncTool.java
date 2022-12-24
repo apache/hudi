@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -50,6 +49,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
@@ -101,7 +102,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     String metastoreUris = props.getProperty(METASTORE_URIS.key());
     // Give precedence to HiveConf.ConfVars.METASTOREURIS if it is set.
     // Else if user has provided HiveSyncConfigHolder.METASTORE_URIS, then set that in hadoop conf.
-    if (StringUtils.isNullOrEmpty(hadoopConf.get(HiveConf.ConfVars.METASTOREURIS.varname)) && StringUtils.nonEmpty(metastoreUris)) {
+    if (isNullOrEmpty(hadoopConf.get(HiveConf.ConfVars.METASTOREURIS.varname)) && nonEmpty(metastoreUris)) {
+      LOG.info(String.format("Setting %s = %s", HiveConf.ConfVars.METASTOREURIS.varname, metastoreUris));
       hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, metastoreUris);
     }
     HiveSyncConfig config = new HiveSyncConfig(props, hadoopConf);
