@@ -172,6 +172,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
           //       the data, as such we have to make sure that we handle both of these cases
           case mit @ MergeIntoTable(targetTable, query, _, _, _) =>
             val updatedTargetTable = targetTable match {
+              // NOTE: In the receiving side of the MIT, we can't project meta-field attributes out,
+              //       and instead have to explicitly remove them
               case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
               case _ => None
             }
@@ -193,6 +195,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
           //       the data, as such we have to make sure that we handle both of these cases
           case iis @ MatchInsertIntoStatement(targetTable, _, query, _, _) =>
             val updatedTargetTable = targetTable match {
+              // NOTE: In the receiving side of the MIT, we can't project meta-field attributes out,
+              //       and instead have to explicitly remove them
               case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
               case _ => None
             }
