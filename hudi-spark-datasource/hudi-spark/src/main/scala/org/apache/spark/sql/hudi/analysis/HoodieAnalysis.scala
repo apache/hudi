@@ -63,8 +63,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
   def customResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer()
 
+    // NOTE: This rule adjusts [[LogicalRelation]]s resolving into Hudi tables such that
+    //       meta-fields are not affecting the resolution of the target columns to be updated by Spark.
+    //       For more details please check out the scala-doc of the rule
     // TODO limit adapters to only Spark < 3.2
-    val adaptLogicalRelations: RuleBuilder = _ => AdaptIngestionTargetLogicalRelations()
+    val adaptIngestionTargetLogicalRelations: RuleBuilder = _ => AdaptIngestionTargetLogicalRelations()
 
     if (HoodieSparkUtils.isSpark2) {
       val spark2ResolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
@@ -72,9 +75,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
         session => ReflectionUtils.loadClass(spark2ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
       // TODO elaborate on the ordering
-      rules += (adaptLogicalRelations, spark2ResolveReferences)
+      rules += (adaptIngestionTargetLogicalRelations, spark2ResolveReferences)
     } else {
-      rules += adaptLogicalRelations
+      rules += adaptIngestionTargetLogicalRelations
     }
 
     if (HoodieSparkUtils.gteqSpark3_2) {
@@ -165,14 +168,32 @@ object HoodieAnalysis extends SparkAdapterSupport {
         // NOTE: It's critical to transform the tree in post-order here to make sure this traversal isn't
         //       looping infinitely
         plan.transformUp {
-          case mit @ MergeIntoTable(relation@ResolvesToHudiTable(_), _, _, _, _) =>
-            mit.copy(targetTable = stripMetaFieldsAttributes(relation))
+          // NOTE: In case of [[MergeIntoTable]] Hudi tables could be on both sides -- receiving and providing
+          //       the data, as such we have to make sure that we handle both of these cases
+          case mit @ MergeIntoTable(targetTable, sourceTable, _, _, _) =>
+            val updatedTargetTable = targetTable match {
+              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
+              case _ => None
+            }
+            val updatedSourceTable = sourceTable match {
+              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(sourceTable))
+              case _ => None
+            }
 
-          case iis @ MatchInsertIntoStatement(relation@ResolvesToHudiTable(_), _, _, _, _) =>
+            if (updatedTargetTable.isDefined || updatedSourceTable.isDefined) {
+              mit.copy(
+                targetTable = updatedTargetTable.getOrElse(targetTable),
+                sourceTable = updatedSourceTable.getOrElse(sourceTable)
+              )
+            } else {
+              mit
+            }
+
+          case iis @ MatchInsertIntoStatement(relation @ ResolvesToHudiTable(_), _, _, _, _) =>
             val adapted = stripMetaFieldsAttributes(relation)
             sparkAdapter.getCatalystPlanUtils.rebaseInsertIntoStatement(iis, adapted)
 
-          case ut @ UpdateTable(relation@ResolvesToHudiTable(_), _, _) =>
+          case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
             ut.copy(table = stripMetaFieldsAttributes(relation))
         }
       }
