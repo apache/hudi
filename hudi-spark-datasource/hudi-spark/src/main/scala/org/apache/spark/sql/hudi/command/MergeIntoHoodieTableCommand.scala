@@ -19,13 +19,11 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
-import org.apache.hudi.DataSourceWriteOptions.{PAYLOAD_CLASS_NAME, _}
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, TBL_NAME}
-import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -35,13 +33,13 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeE
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BindReferences, BoundReference, Cast, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{CoercedAttributeReference, encodeAsBase64String, stripCasting, toStructType}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
-import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS, _}
+import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
@@ -337,10 +335,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, sourceTablePlan)
 
-    // NOTE: We have to manually strip meta-fields since Spark < 3.2 doesn't support
-    //       [[StructField]] metadata (of [[METADATA_COL_ATTR_KEY]]) enabling Spark to differentiate
-    //       meta columns from the data columns omitting them by default (unless explicitly ref'd)
-    removeMetaFields(Dataset.ofRows(sparkSession, amendedPlan))
+    Dataset.ofRows(sparkSession, amendedPlan)
   }
 
   /**
@@ -383,19 +378,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         PAYLOAD_DELETE_CONDITION -> serializeConditionalAssignments(Seq(condition -> Seq.empty))
     }.toSeq
 
-    // Remove the meta fields from the sourceDF as we do not need these when writing.
-    val trimmedSourceDF = removeMetaFields(sourceDF)
-
     // Append
     //  - Original [[sourceTable]] (Avro) schema
     //  - Schema of the expected "joined" output of the [[sourceTable]] and [[targetTable]]
     writeParams ++= Seq(
       PAYLOAD_RECORD_AVRO_SCHEMA ->
-        convertStructTypeToAvroSchema(trimmedSourceDF.schema, "record", "").toString,
+        convertStructTypeToAvroSchema(sourceDF.schema, "record", "").toString,
       PAYLOAD_EXPECTED_COMBINED_SCHEMA -> encodeAsBase64String(toStructType(joinedExpectedOutput))
     )
 
-    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, trimmedSourceDF)
+    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDF)
     if (!success) {
       throw new HoodieException("Merge into Hoodie table command failed")
     }

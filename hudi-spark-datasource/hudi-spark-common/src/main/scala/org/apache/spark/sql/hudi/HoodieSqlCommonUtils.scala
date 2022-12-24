@@ -151,17 +151,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     metaFields.contains(name)
   }
 
-  def removeMetaFields(df: DataFrame): DataFrame = {
-    val withoutMetaColumns = df.logicalPlan.output
-      .filterNot(attr => isMetaField(attr.name))
-      .map(new Column(_))
-    if (withoutMetaColumns.length != df.logicalPlan.output.size) {
-      df.select(withoutMetaColumns: _*)
-    } else {
-      df
-    }
-  }
-
   def removeMetaFields[T <: Attribute](attrs: Seq[T]): Seq[T] = {
     attrs.filterNot(attr => isMetaField(attr.name))
   }
