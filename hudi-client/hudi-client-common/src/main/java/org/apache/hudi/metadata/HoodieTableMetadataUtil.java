@@ -122,6 +122,7 @@ import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataCommonUtils.getPartitionIdentifier;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 
 /**
  * A utility to convert timeline information to metadata table records.
@@ -135,6 +136,22 @@ public class HoodieTableMetadataUtil {
   // for block size (4MB), compression (GZ) and disabling the hudi metadata fields.
   private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
 
+  /**
+   * Returns true if any enabled metadata partition in the given hoodie table requires WriteStatus to track the
+   * written records.
+   * @param config
+   *
+   * @return true if WriteStatus should track the written records else false.
+   */
+  public static boolean needsWriteStatusTracking(HoodieMetadataConfig config, HoodieTableMetaClient metaClient) {
+    // Does any enabled partition need to track the written records
+    if (metaClient.getTableConfig().getMetadataPartitions().stream().anyMatch(p -> MetadataPartitionType.needWriteStatusTracking(p))) {
+      return true;
+    }
+
+    // Does any enabled partition being enabled need to track the written records
+    return config.isRecordIndexEnabled();
+  }
 
   /**
    * Create a {@code HoodieWriteConfig} to use for the Metadata Table.
@@ -432,7 +449,8 @@ public class HoodieTableMetadataUtil {
    */
   public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadataToRecords(
       HoodieEngineContext context, HoodieCommitMetadata commitMetadata, String instantTime,
-      MetadataRecordsGenerationParams recordsGenerationParams, HoodieData<WriteStatus> writeStatuses, HoodieWriteConfig dataTableWriteConfig) {
+      MetadataRecordsGenerationParams recordsGenerationParams, HoodieData<WriteStatus> writeStatuses, HoodieWriteConfig dataTableWriteConfig,
+      HoodieWriteConfig metadataWriteConfig) {
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
         convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1);
@@ -449,7 +467,24 @@ public class HoodieTableMetadataUtil {
     }
 
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.RECORD_INDEX)) {
-      final HoodieData<HoodieRecord> metadataRecordIndexRDD = convertMetadataToRecordIndexRecords(commitMetadata, writeStatuses, context, recordsGenerationParams, dataTableWriteConfig);
+      try {
+        // we need to initialize record level index if not initialized before.
+        if (recordsGenerationParams.getMetadataMetaClient().getFs().listStatus(new Path(recordsGenerationParams.getMetadataMetaClient().getBasePathV2().toString()
+            + "/" + MetadataPartitionType.RECORD_INDEX.getPartitionPath())).length == 0) {
+          // record level index not yet initialized. So, we need to initialize before going ahead w/ the commit.
+          // find total record count to assist w/ initializing
+          long totalRecordCount = commitMetadata.getPartitionToWriteStats().values().stream().mapToLong(writeStatList ->
+              writeStatList.stream().mapToLong(writeStat -> writeStat.getNumWrites()).sum()).sum();
+          final int fileGroupCount = estimateFileGroupCount(dataTableWriteConfig.getMetadataConfig(), MetadataPartitionType.RECORD_INDEX.getPartitionPath(), totalRecordCount,
+              RECORD_INDEX_AVERAGE_RECORD_SIZE, dataTableWriteConfig.getRecordIndexMinFileGroupCount(),
+              dataTableWriteConfig.getRecordIndexMaxFileGroupCount(), dataTableWriteConfig.getRecordIndexGrowthFactor());
+          MetadataPartitionType.RECORD_INDEX.setFileGroupCount(fileGroupCount);
+          initializeFileGroups(recordsGenerationParams.getMetadataMetaClient(), metadataWriteConfig, MetadataPartitionType.RECORD_INDEX, SOLO_COMMIT_TIMESTAMP, fileGroupCount);
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to initialize Record Level Index ", e);
+      }
+      final HoodieData<HoodieRecord> metadataRecordIndexRDD = convertMetadataToRecordIndexRecords(writeStatuses, dataTableWriteConfig);
       partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX, metadataRecordIndexRDD);
     }
     return partitionToRecordsMap;
@@ -1157,7 +1192,7 @@ public class HoodieTableMetadataUtil {
     // for first time initialization, we need to deduce the file group count dynamically and initialize them.
     final long recordCount = records.count();
     // Initialize the file groups
-    final int fileGroupCount = estimateFileGroupCount(dataWriteConfig, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), recordCount,
+    final int fileGroupCount = estimateFileGroupCount(dataWriteConfig.getMetadataConfig(), MetadataPartitionType.RECORD_INDEX.getPartitionPath(), recordCount,
         RECORD_INDEX_AVERAGE_RECORD_SIZE, dataWriteConfig.getRecordIndexMinFileGroupCount(),
         dataWriteConfig.getRecordIndexMaxFileGroupCount(), dataWriteConfig.getRecordIndexGrowthFactor());
     MetadataPartitionType.RECORD_INDEX.setFileGroupCount(fileGroupCount);
@@ -1183,9 +1218,9 @@ public class HoodieTableMetadataUtil {
    * @param growthFactor By what factor are the records (recordCount) expected to grow.
    * @return The estimated number of file groups.
    */
-  private static int estimateFileGroupCount(HoodieWriteConfig dataWriteConfig, String partitionName, long recordCount, int averageRecordSize, int minFileGroupCount,
+  private static int estimateFileGroupCount(HoodieMetadataConfig metadataConfig, String partitionName, long recordCount, int averageRecordSize, int minFileGroupCount,
                                             int maxFileGroupCount, float growthFactor) {
-    long maxRequestedFileGroupSizeBytes = dataWriteConfig.getMetadataConfig().getMaxFileGroupSizeBytes();
+    long maxRequestedFileGroupSizeBytes = metadataConfig.getMaxFileGroupSizeBytes();
     int fileGroupCount = 1;
     // If a fixed number of file groups are desired
     if ((minFileGroupCount == maxFileGroupCount) && (minFileGroupCount != 0)) {
@@ -1333,13 +1368,11 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  public static HoodieData<HoodieRecord> convertMetadataToRecordIndexRecords(HoodieCommitMetadata commitMetadata,
-                                                                             HoodieData<WriteStatus> writeStatuses,
-                                                                             HoodieEngineContext engineContext,
-                                                                             MetadataRecordsGenerationParams recordsGenerationParams,
-                                                                             HoodieWriteConfig dataTableWriteConfig) {
+  public static HoodieData<HoodieRecord> convertMetadataToRecordIndexRecords(HoodieData<WriteStatus> writeStatuses, HoodieWriteConfig dataTableWriteConfig) {
     HoodieTimer timer = new HoodieTimer().startTimer();
     Registry registry = Registry.getRegistry(dataTableWriteConfig.getTableName() + ".SparkMetadataTableRecordIndex");
+
+    List<WriteStatus> writeStatuses1 = writeStatuses.collectAsList();
 
     HoodieData<HoodieRecord> records = writeStatuses.flatMap(writeStatus -> {
       long numUpdates = 0;
@@ -1382,6 +1415,8 @@ public class HoodieTableMetadataUtil {
 
     //    registry.add(HoodieIndex.UPDATE_LOC_DURATION, timer.endTimer());
     //    registry.add(HoodieIndex.UPDATE_LOC_NUM_PARTITIONS, writeStatuses.getNumPartitions());
+
+    List<HoodieRecord> recordList = records.collectAsList();
 
     return records;
     //return tagRecordsWithLocation(records, MetadataPartitionType.RECORD_INDEX.getPartitionPath());

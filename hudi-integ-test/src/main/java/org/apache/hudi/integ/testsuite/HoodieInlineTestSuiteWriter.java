@@ -211,7 +211,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
       }
       HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(writeClient.getConfig(), writeClient.getEngineContext());
       HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(table, instantTime.get(), HoodieJavaRDD.of(records), writeClient.getConfig().getSchema());
-      writeClient.commitCompaction(instantTime.get(), metadata, Option.of(extraMetadata));
+      writeClient.commitCompaction(instantTime.get(), metadata, Option.of(extraMetadata), HoodieJavaRDD.of(records));
     }
   }
 }

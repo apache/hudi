@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.log4j.LogManager;
@@ -91,8 +92,13 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
     this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     this.timer = HoodieTimer.start();
+    // We need to track written records within WriteStatus in two cases:
+    // 1. When the HoodieIndex being used is not implicit with storage
+    // 2. If any of the metadata table partitions (record index, etc) which require written record tracking are enabled
+    final boolean trackSuccessRecords = !hoodieTable.getIndex().isImplicitWithStorage()
+        || HoodieTableMetadataUtil.needsWriteStatusTracking(config.getMetadataConfig(), hoodieTable.getMetaClient());
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+        trackSuccessRecords, config.getWriteStatusFailureFraction());
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();

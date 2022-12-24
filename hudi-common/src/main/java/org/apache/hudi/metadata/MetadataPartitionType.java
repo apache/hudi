@@ -68,6 +68,13 @@ public enum MetadataPartitionType {
         RECORD_INDEX.getPartitionPath()
     );
   }
+  
+  /**
+   * Returns true if WriteStatus to track written records.
+   */
+  public static boolean needWriteStatusTracking(String metadataPartitionPath) {
+    return metadataPartitionPath.equals(RECORD_INDEX.getPartitionPath());
+  }
 
   @Override
   public String toString() {

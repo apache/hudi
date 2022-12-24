@@ -729,7 +729,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction, HoodieData<WriteStatus> writeStatuses) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(
-        engineContext, commitMetadata, instantTime, getRecordsGenerationParams(), writeStatuses, dataWriteConfig), !isTableServiceAction);
+        engineContext, commitMetadata, instantTime, getRecordsGenerationParams(), writeStatuses, dataWriteConfig, metadataWriteConfig), !isTableServiceAction);
     closeInternal();
   }
 
@@ -822,6 +822,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       final String partitionName = entry.getKey().getPartitionPath();
       final int fileGroupCount = entry.getKey().getFileGroupCount();
       HoodieData<HoodieRecord> records = entry.getValue();
+      List<HoodieRecord> recordList = records.collectAsList();
 
       List<FileSlice> fileSlices =
           HoodieMetadataCommonUtils.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionName);
@@ -843,6 +844,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         r.seal();
         return r;
       });
+
+      List<HoodieRecord> tempRecs = rddSinglePartitionRecords.collectAsList();
 
       allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
     }
@@ -954,6 +957,15 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.initializeRecordIndexRecordsFromFiles(
           engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams(), createInstantTime, dataWriteConfig, metadataWriteConfig);
       partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX, recordsRDD);
+    } else {
+      //      // we need to initialize record level index bcoz, we did not initialize along w/ other partitions.
+      //      // Initialize the file groups
+      //      final int fileGroupCount = estimateFileGroupCount(dataWriteConfig.getMetadataConfig(), MetadataPartitionType.RECORD_INDEX.getPartitionPath(), recordCount,
+      //          RECORD_INDEX_AVERAGE_RECORD_SIZE, dataWriteConfig.getRecordIndexMinFileGroupCount(),
+      //          dataWriteConfig.getRecordIndexMaxFileGroupCount(), dataWriteConfig.getRecordIndexGrowthFactor());
+      //      MetadataPartitionType.RECORD_INDEX.setFileGroupCount(fileGroupCount);
+      //      initializeFileGroups(recordsGenerationParams.getMetadataMetaClient(), metadataWriteConfig, MetadataPartitionType.RECORD_INDEX, instantTime, fileGroupCount);
+      LOG.warn("We can't initialize record level index unless we get to first commit w/ valid record to account for rough estimation of table size.");
     }
 
     LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");

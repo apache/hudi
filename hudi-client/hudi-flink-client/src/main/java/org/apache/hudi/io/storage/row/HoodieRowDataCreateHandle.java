@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -91,7 +92,12 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.currTimer = HoodieTimer.start();
     this.fs = table.getMetaClient().getFs();
     this.path = makeNewPath(partitionPath);
-    this.writeStatus = new WriteStatus(!table.getIndex().isImplicitWithStorage(),
+    // We need to track written records within WriteStatus in two cases:
+    // 1. When the HoodieIndex being used is not implicit with storage
+    // 2. If any of the metadata table partitions (record index, etc) which require written record tracking are enabled
+    final boolean trackSuccessRecords = !table.getIndex().isImplicitWithStorage()
+        || HoodieTableMetadataUtil.needsWriteStatusTracking(writeConfig.getMetadataConfig(), table.getMetaClient());
+    this.writeStatus = new WriteStatus(trackSuccessRecords,
         writeConfig.getWriteStatusFailureFraction());
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);
