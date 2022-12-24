@@ -27,8 +27,6 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -140,10 +138,10 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         compactIfNecessary(writeClient, instantTime);
       }
 
-      if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
-        // if this is a new commit being applied to metadata for the first time
-        writeClient.startCommitWithTime(instantTime);
-      } else {
+      if (metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
+        writeClient.rollback(instantTime);
+        metadataMetaClient.reloadActiveTimeline();
+      } /*else {
         Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant();
         if (alreadyCompletedInstant.isPresent()) {
           // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
@@ -161,8 +159,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         // reuses the same instant time without rollback first.  It is a no-op here as the
         // clean plan is the same, so we don't need to delete the requested and inflight instant
         // files in the active timeline.
-      }
-      
+      }*/
+      writeClient.startCommitWithTime(instantTime);
       List<WriteStatus> statuses = writeClient.upsertPreppedRecords(preppedRecordRDD, instantTime).collect();
       statuses.forEach(writeStatus -> {
         if (writeStatus.hasErrors()) {

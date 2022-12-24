@@ -219,6 +219,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Sort the columns so that keys are looked up in order
     List<String> sortedKeys = new ArrayList<>(keys);
     Collections.sort(sortedKeys);
+    // Map.of(Pair.of(MetadataPartition, FileSlice), dataPartitions)
     Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = getPartitionFileSliceToKeysMapping(partitionName, sortedKeys);
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
     AtomicInteger fileSlicesKeysCount = new AtomicInteger();
@@ -502,7 +503,22 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // This is because the metadata table is updated before the dataset instants are committed.
     Set<String> validInstantTimestamps = getValidInstantTimestamps();
 
-    Option<HoodieInstant> latestMetadataInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+    HoodieActiveTimeline metadataActiveTimeline = metadataMetaClient.getActiveTimeline();
+    Option<HoodieInstant> latestMetadataInstant = metadataActiveTimeline
+        .filterCompletedInstants()
+        .filter(instant -> {
+          if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
+            Option<HoodieRollbackMetadata> rollbackMetadata;
+            try {
+              rollbackMetadata = Option.of(TimelineMetadataUtils.deserializeHoodieRollbackMetadata(metadataActiveTimeline.getInstantDetails(instant).get()));
+            } catch (IOException e) {
+              throw new HoodieMetadataException("Failed to deserialize rollback metadata for instant: " + instant, e);
+            }
+            return rollbackMetadata.map(m -> m.getCommitsRollback().contains(instant.getTimestamp())).orElse(false);
+          }
+          return true;
+        })
+        .lastInstant();
     String latestMetadataInstantTime = latestMetadataInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
 
     boolean allowFullScan = allowFullScanOverride.orElseGet(() -> isFullScanAllowedForPartition(partitionName));
