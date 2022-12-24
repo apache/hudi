@@ -189,9 +189,24 @@ object HoodieAnalysis extends SparkAdapterSupport {
               mit
             }
 
-          case iis @ MatchInsertIntoStatement(relation @ ResolvesToHudiTable(_), _, _, _, _) =>
-            val adapted = stripMetaFieldsAttributes(relation)
-            sparkAdapter.getCatalystPlanUtils.rebaseInsertIntoStatement(iis, adapted)
+          // NOTE: In case of [[InsertIntoStatement]] Hudi tables could be on both sides -- receiving and providing
+          //       the data, as such we have to make sure that we handle both of these cases
+          case iis @ MatchInsertIntoStatement(targetTable, _, query, _, _) =>
+            val updatedTargetTable = targetTable match {
+              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
+              case _ => None
+            }
+            val updatedQuery = query match {
+              case ResolvesToHudiTable(_) => Some(projectOutMetaFieldsAttributes(query))
+              case _ => None
+            }
+
+            if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
+              sparkAdapter.getCatalystPlanUtils.rebaseInsertIntoStatement(iis,
+                updatedTargetTable.getOrElse(targetTable), updatedQuery.getOrElse(query))
+            } else {
+              iis
+            }
 
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
             ut.copy(table = projectOutMetaFieldsAttributes(relation))

@@ -59,7 +59,7 @@ trait HoodieCatalystPlansUtils {
   def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
 
   // TODO scala-docs
-  def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan): LogicalPlan
+  def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan, query: LogicalPlan): LogicalPlan
 
   /**
    * Test if the logical plan is a Repair Table LogicalPlan.
