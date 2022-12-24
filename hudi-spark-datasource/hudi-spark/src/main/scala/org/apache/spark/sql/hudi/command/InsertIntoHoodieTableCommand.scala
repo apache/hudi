@@ -30,6 +30,7 @@ import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql._
+import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFields
 
 /**
  * Command for insert into Hudi table.
@@ -205,15 +206,6 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
           // Make sure we can cast source column to the target column type
           Cast.canCast(sourceColumn.dataType, targetColumn.dataType)
       }
-    }
-  }
-
-  def stripMetaFields(query: LogicalPlan): LogicalPlan = {
-    val filteredOutput = query.output.filterNot(attr => isMetaField(attr.name))
-    if (filteredOutput == query.output) {
-      query
-    } else {
-      Project(filteredOutput, query)
     }
   }
 
