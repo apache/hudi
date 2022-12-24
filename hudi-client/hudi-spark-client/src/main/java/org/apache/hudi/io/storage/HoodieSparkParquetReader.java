@@ -97,6 +97,15 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     });
   }
 
+  @Override
+  public ClosableIterator<String> getRecordKeyIterator() throws IOException {
+    // TODO fix me.
+    //    Schema schema = getSchema();
+    //    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
+    //    return new CloseableMappingIterator<>(getRecordIterator(getSchema(), getSchema()), internalRow -> (String).get(KEY_FIELD_NAME));
+    return null;
+  }
+
   private ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
     if (requestedSchema == null) {
       requestedSchema = readerSchema;

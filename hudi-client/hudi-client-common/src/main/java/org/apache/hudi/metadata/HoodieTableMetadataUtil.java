@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.metadata;
@@ -21,36 +22,61 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieKeyWithLocation;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -58,7 +84,6 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.AvroTypeException;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -68,21 +93,18 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import javax.annotation.Nonnull;
-
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -98,9 +120,8 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PART
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.metadata.HoodieMetadataCommonUtils.getPartitionIdentifier;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
-import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
-import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
 /**
  * A utility to convert timeline information to metadata table records.
@@ -109,21 +130,126 @@ public class HoodieTableMetadataUtil {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetadataUtil.class);
 
-  public static final String PARTITION_NAME_FILES = "files";
-  public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
-  public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
-  public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
+  // Average size of a record saved within the record index.
+  // Record index has a fixed size schema. This has been calculated based on experiments with default settings
+  // for block size (4MB), compression (GZ) and disabling the hudi metadata fields.
+  private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
+
 
   /**
-   * Returns whether the files partition of metadata table is ready for read.
+   * Create a {@code HoodieWriteConfig} to use for the Metadata Table.
    *
-   * @param metaClient {@link HoodieTableMetaClient} instance.
-   * @return true if the files partition of metadata table is ready for read,
-   * based on the table config; false otherwise.
+   * @param writeConfig {@code HoodieWriteConfig} of the main dataset writer
    */
-  public static boolean isFilesPartitionAvailable(HoodieTableMetaClient metaClient) {
-    return metaClient.getTableConfig().getMetadataPartitions()
-        .contains(HoodieTableMetadataUtil.PARTITION_NAME_FILES);
+  public static HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig, String tableName) {
+    int parallelism = writeConfig.getMetadataInsertParallelism();
+
+    int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
+    int maxCommitsToKeep = Math.max(writeConfig.getMetadataMaxCommitsToKeep(), writeConfig.getMaxCommitsToKeep());
+
+    // File groups in each partitions are fixed at creation time and we do not want them to be split into muliple files
+    // ever. Hence we use a very large basefile size in metadata table. The actual size of the HFiles created will
+    // eventually depend on the number of file groups seleted for each partition (See estimateFileGroupCount function)
+    final long maxHFileSizeBytes = 10 * 1024 * 1024 * 1024L; // 10GB
+
+    // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
+    // presence of keys.
+    final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
+    final int maxLogBlockSizeBytes = (int)maxLogFileSizeBytes;
+
+    // Create the write config for the metadata table by borrowing options from the main write config.
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
+        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
+            .withConsistencyCheckEnabled(writeConfig.getConsistencyGuardConfig().isConsistencyCheckEnabled())
+            .withInitialConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getInitialConsistencyCheckIntervalMs())
+            .withMaxConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getMaxConsistencyCheckIntervalMs())
+            .withMaxConsistencyChecks(writeConfig.getConsistencyGuardConfig().getMaxConsistencyChecks())
+            .build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.SINGLE_WRITER)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).withFileListingParallelism(writeConfig.getFileListingParallelism()).build())
+        .withAutoCommit(true)
+        .withAvroSchemaValidate(true)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withRollbackUsingMarkers(false)
+        .withPath(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()))
+        .withSchema(HoodieMetadataRecord.getClassSchema().toString())
+        .forTable(tableName)
+        // we will trigger cleaning manually, to control the instant times
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAsyncClean(writeConfig.isMetadataAsyncClean())
+            .withAutoClean(false)
+            .withCleanerParallelism(parallelism)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
+            .build())
+        // we will trigger archive manually, to ensure only regular writer invokes it
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
+            .withAutoArchive(false)
+            .build())
+        // we will trigger compaction manually, to control the instant times
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
+            // by default, the HFile does not keep the metadata fields, set up as false
+            // to always use the metadata of the new record.
+            .withPreserveCommitMetadata(false)
+            .withLogRecordReaderScanV2(String.valueOf(writeConfig.useScanV2ForLogRecordReader()))
+            .build())
+        .withParallelism(parallelism, parallelism)
+        .withDeleteParallelism(parallelism)
+        .withRollbackParallelism(parallelism)
+        .withFinalizeWriteParallelism(parallelism)
+        .withAllowMultiWriteOnSameInstant(true)
+        .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
+        .withPopulateMetaFields(writeConfig.getMetadataConfig().populateMetaFields())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(maxHFileSizeBytes)
+            .logFileMaxSize(maxLogFileSizeBytes).logFileDataBlockMaxSize(maxLogBlockSizeBytes).build());
+
+    // RecordKey properties are needed for the metadata table records
+    final Properties properties = new Properties();
+    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), HoodieMetadataCommonUtils.RECORD_KEY_FIELD_NAME);
+    properties.put("hoodie.datasource.write.recordkey.field", HoodieMetadataCommonUtils.RECORD_KEY_FIELD_NAME);
+    builder.withProperties(properties);
+
+    if (writeConfig.isMetricsOn()) {
+      // Table Name is needed for metric reporters prefix
+      Properties commonProperties = new Properties();
+      commonProperties.put(HoodieWriteConfig.TBL_NAME.key(), tableName);
+
+      builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
+          .fromProperties(commonProperties)
+          .withReporterType(writeConfig.getMetricsReporterType().toString())
+          .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
+          .on(true).build());
+      switch (writeConfig.getMetricsReporterType()) {
+        case GRAPHITE:
+          builder.withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
+              .onGraphitePort(writeConfig.getGraphiteServerPort())
+              .toGraphiteHost(writeConfig.getGraphiteServerHost())
+              .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
+          break;
+        case JMX:
+          builder.withMetricsJmxConfig(HoodieMetricsJmxConfig.newBuilder()
+              .onJmxPort(writeConfig.getJmxPort())
+              .toJmxHost(writeConfig.getJmxHost())
+              .build());
+          break;
+        case DATADOG:
+        case PROMETHEUS:
+        case PROMETHEUS_PUSHGATEWAY:
+        case CONSOLE:
+        case INMEMORY:
+        case CLOUDWATCH:
+          break;
+        default:
+          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
+      }
+    }
+    return builder.build();
   }
 
   /**
@@ -269,7 +395,7 @@ public class HoodieTableMetadataUtil {
       LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
       metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
       HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
-    } else if (partitions.remove(partitionType.get().getPartitionPath())) {
+    } else if (partitions.size() > 0 && partitions.remove(partitionType.get().getPartitionPath())) {
       metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", partitions));
       HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
     }
@@ -300,11 +426,13 @@ public class HoodieTableMetadataUtil {
    * @param commitMetadata          - Commit action metadata
    * @param instantTime             - Action instant time
    * @param recordsGenerationParams - Parameters for the record generation
+   * @param writeStatuses
+   * @param dataTableWriteConfig
    * @return Map of partition to metadata records for the commit action
    */
   public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadataToRecords(
       HoodieEngineContext context, HoodieCommitMetadata commitMetadata, String instantTime,
-      MetadataRecordsGenerationParams recordsGenerationParams) {
+      MetadataRecordsGenerationParams recordsGenerationParams, HoodieData<WriteStatus> writeStatuses, HoodieWriteConfig dataTableWriteConfig) {
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
         convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1);
@@ -318,6 +446,11 @@ public class HoodieTableMetadataUtil {
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.COLUMN_STATS)) {
       final HoodieData<HoodieRecord> metadataColumnStatsRDD = convertMetadataToColumnStatsRecords(commitMetadata, context, recordsGenerationParams);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, metadataColumnStatsRDD);
+    }
+
+    if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.RECORD_INDEX)) {
+      final HoodieData<HoodieRecord> metadataRecordIndexRDD = convertMetadataToRecordIndexRecords(commitMetadata, writeStatuses, context, recordsGenerationParams, dataTableWriteConfig);
+      partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX, metadataRecordIndexRDD);
     }
     return partitionToRecordsMap;
   }
@@ -393,7 +526,7 @@ public class HoodieTableMetadataUtil {
   private static List<String> getPartitionsAdded(HoodieCommitMetadata commitMetadata) {
     return commitMetadata.getPartitionToWriteStats().keySet().stream()
         // We need to make sure we properly handle case of non-partitioned tables
-        .map(HoodieTableMetadataUtil::getPartitionIdentifier)
+        .map(HoodieMetadataCommonUtils::getPartitionIdentifier)
         .collect(Collectors.toList());
   }
 
@@ -405,7 +538,7 @@ public class HoodieTableMetadataUtil {
 
       return partitionToReplaceFileIds.keySet().stream()
           // We need to make sure we properly handle case of non-partitioned tables
-          .map(HoodieTableMetadataUtil::getPartitionIdentifier)
+          .map(HoodieMetadataCommonUtils::getPartitionIdentifier)
           .collect(Collectors.toList());
     }
 
@@ -632,13 +765,13 @@ public class HoodieTableMetadataUtil {
 
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.BLOOM_FILTERS)) {
       final HoodieData<HoodieRecord> metadataBloomFilterRecordsRDD =
-          convertFilesToBloomFilterRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams, instantTime);
+          initializeBloomFilterRecordsFromFiles(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams, instantTime);
       partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, metadataBloomFilterRecordsRDD);
     }
 
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.COLUMN_STATS)) {
       final HoodieData<HoodieRecord> metadataColumnStatsRDD =
-          convertFilesToColumnStatsRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams);
+          initializeColumnStatsRecordsFromFiles(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, metadataColumnStatsRDD);
     }
     return partitionToRecordsMap;
@@ -678,13 +811,13 @@ public class HoodieTableMetadataUtil {
 
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.BLOOM_FILTERS)) {
       final HoodieData<HoodieRecord> metadataBloomFilterRecordsRDD =
-          convertFilesToBloomFilterRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams, instantTime);
+          initializeBloomFilterRecordsFromFiles(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams, instantTime);
       partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, metadataBloomFilterRecordsRDD);
     }
 
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.COLUMN_STATS)) {
       final HoodieData<HoodieRecord> metadataColumnStatsRDD =
-          convertFilesToColumnStatsRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams);
+          initializeColumnStatsRecordsFromFiles(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, metadataColumnStatsRDD);
     }
 
@@ -861,20 +994,13 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Returns partition name for the given path.
-   */
-  public static String getPartitionIdentifier(@Nonnull String relativePartitionPath) {
-    return EMPTY_PARTITION_NAME.equals(relativePartitionPath) ? NON_PARTITIONED_NAME : relativePartitionPath;
-  }
-
-  /**
    * Convert added and deleted files metadata to bloom filter index records.
    */
-  public static HoodieData<HoodieRecord> convertFilesToBloomFilterRecords(HoodieEngineContext engineContext,
-                                                                          Map<String, List<String>> partitionToDeletedFiles,
-                                                                          Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                                                          MetadataRecordsGenerationParams recordsGenerationParams,
-                                                                          String instantTime) {
+  public static HoodieData<HoodieRecord> initializeBloomFilterRecordsFromFiles(HoodieEngineContext engineContext,
+                                                                               Map<String, List<String>> partitionToDeletedFiles,
+                                                                               Map<String, Map<String, Long>> partitionToAppendedFiles,
+                                                                               MetadataRecordsGenerationParams recordsGenerationParams,
+                                                                               String instantTime) {
     HoodieData<HoodieRecord> allRecordsRDD = engineContext.emptyHoodieData();
 
     List<Pair<String, List<String>>> partitionToDeletedFilesList = partitionToDeletedFiles.entrySet()
@@ -938,10 +1064,10 @@ public class HoodieTableMetadataUtil {
   /**
    * Convert added and deleted action metadata to column stats index records.
    */
-  public static HoodieData<HoodieRecord> convertFilesToColumnStatsRecords(HoodieEngineContext engineContext,
-                                                                          Map<String, List<String>> partitionToDeletedFiles,
-                                                                          Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                                                          MetadataRecordsGenerationParams recordsGenerationParams) {
+  public static HoodieData<HoodieRecord> initializeColumnStatsRecordsFromFiles(HoodieEngineContext engineContext,
+                                                                               Map<String, List<String>> partitionToDeletedFiles,
+                                                                               Map<String, Map<String, Long>> partitionToAppendedFiles,
+                                                                               MetadataRecordsGenerationParams recordsGenerationParams) {
     HoodieData<HoodieRecord> allRecordsRDD = engineContext.emptyHoodieData();
     HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
 
@@ -1003,121 +1129,88 @@ public class HoodieTableMetadataUtil {
     return allRecordsRDD;
   }
 
+
   /**
-   * Map a record key to a file group in partition of interest.
-   * <p>
-   * Note: For hashing, the algorithm is same as String.hashCode() but is being defined here as hashCode()
-   * implementation is not guaranteed by the JVM to be consistent across JVM versions and implementations.
-   *
-   * @param recordKey record key for which the file group index is looked up for.
-   * @return An integer hash of the given string
+   * Convert added and deleted files metadata to record index records.
    */
-  public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
-    int h = 0;
-    for (int i = 0; i < recordKey.length(); ++i) {
-      h = 31 * h + recordKey.charAt(i);
+  public static HoodieData<HoodieRecord> initializeRecordIndexRecordsFromFiles(HoodieEngineContext engineContext,
+                                                                               Map<String, List<String>> partitionToDeletedFiles,
+                                                                               Map<String, Map<String, Long>> partitionToAppendedFiles,
+                                                                               MetadataRecordsGenerationParams recordsGenerationParams,
+                                                                               String instantTime,
+                                                                               HoodieWriteConfig dataWriteConfig,
+                                                                               HoodieWriteConfig metadataWriteConfig) throws IOException {
+    // we are interested only in base files. Filter for only base files.
+    final List<Pair<String, String>> partitionBaseFilePairs = new ArrayList<>();
+    partitionToAppendedFiles.entrySet().stream().forEach(kv -> {
+      Set<String> baseFiles = kv.getValue().keySet().stream().filter(file -> FSUtils.isBaseFile(new Path(file))).collect(Collectors.toSet());
+      baseFiles.forEach(file -> partitionBaseFilePairs.add(Pair.of(kv.getKey(), file)));
+    });
+
+    LOG.info("Initializing record index from " + partitionBaseFilePairs.size() + " base files in "
+        + partitionToAppendedFiles.size() + " partitions");
+
+    // Collect record keys from the files in parallel
+    HoodieData<HoodieRecord> records = readRecordKeysFromBaseFiles(dataWriteConfig.getBasePath(), engineContext, recordsGenerationParams, partitionBaseFilePairs);
+    // TODO: Do we need to persist for regular updates too?
+    records.persist("MEMORY_AND_DISK_SER");
+    // for first time initialization, we need to deduce the file group count dynamically and initialize them.
+    final long recordCount = records.count();
+    // Initialize the file groups
+    final int fileGroupCount = estimateFileGroupCount(dataWriteConfig, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), recordCount,
+        RECORD_INDEX_AVERAGE_RECORD_SIZE, dataWriteConfig.getRecordIndexMinFileGroupCount(),
+        dataWriteConfig.getRecordIndexMaxFileGroupCount(), dataWriteConfig.getRecordIndexGrowthFactor());
+    MetadataPartitionType.RECORD_INDEX.setFileGroupCount(fileGroupCount);
+    initializeFileGroups(recordsGenerationParams.getMetadataMetaClient(), metadataWriteConfig, MetadataPartitionType.RECORD_INDEX, instantTime, fileGroupCount);
+    // metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.STAT_COUNT_FILE_GROUP, fileGroupCount));
+
+    if (recordCount > 0) {
+      LOG.info("Initializing record index with " + recordCount + " mappings");
+      //        metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.READ_RECORDKEYS_TIME_STR, timer.endTimer()));
+      //        metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.READ_RECORDKEYS_COUNT_STR, recordCount));
     }
-
-    return Math.abs(Math.abs(h) % numFileGroups);
+    return records;
   }
 
   /**
-   * Get the latest file slices for a Metadata Table partition. If the file slice is
-   * because of pending compaction instant, then merge the file slice with the one
-   * just before the compaction instant time. The list of file slices returned is
-   * sorted in the correct order of file group name.
+   * Estimates the file group count to use for a partition.
    *
-   * @param metaClient Instance of {@link HoodieTableMetaClient}.
-   * @param fsView     Metadata table filesystem view.
-   * @param partition  The name of the partition whose file groups are to be loaded.
-   * @return List of latest file slices for all file groups in a given partition.
+   * @param partitionName Name of the partition for which the file group count is to be estimated.
+   * @param recordCount The number of records expected to be written.
+   * @param averageRecordSize Average size of each record to be writen.
+   * @param minFileGroupCount Minimum number of file groups to use.
+   * @param maxFileGroupCount Maximum number of file groups to use.
+   * @param growthFactor By what factor are the records (recordCount) expected to grow.
+   * @return The estimated number of file groups.
    */
-  public static List<FileSlice> getPartitionLatestMergedFileSlices(
-      HoodieTableMetaClient metaClient, HoodieTableFileSystemView fsView, String partition) {
-    LOG.info("Loading latest merged file slices for metadata table partition " + partition);
-    return getPartitionFileSlices(metaClient, Option.of(fsView), partition, true);
-  }
-
-  /**
-   * Get the latest file slices for a Metadata Table partition. The list of file slices
-   * returned is sorted in the correct order of file group name.
-   *
-   * @param metaClient - Instance of {@link HoodieTableMetaClient}.
-   * @param fsView     - Metadata table filesystem view
-   * @param partition  - The name of the partition whose file groups are to be loaded.
-   * @return List of latest file slices for all file groups in a given partition.
-   */
-  public static List<FileSlice> getPartitionLatestFileSlices(HoodieTableMetaClient metaClient,
-                                                             Option<HoodieTableFileSystemView> fsView, String partition) {
-    LOG.info("Loading latest file slices for metadata table partition " + partition);
-    return getPartitionFileSlices(metaClient, fsView, partition, false);
-  }
-
-  /**
-   * Get metadata table file system view.
-   *
-   * @param metaClient - Metadata table meta client
-   * @return Filesystem view for the metadata table
-   */
-  public static HoodieTableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) {
-    // If there are no commits on the metadata table then the table's
-    // default FileSystemView will not return any file slices even
-    // though we may have initialized them.
-    HoodieTimeline timeline = metaClient.getActiveTimeline();
-    if (timeline.empty()) {
-      final HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION,
-          HoodieActiveTimeline.createNewInstantTime());
-      timeline = new HoodieDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline()::getInstantDetails);
-    }
-    return new HoodieTableFileSystemView(metaClient, timeline);
-  }
-
-  /**
-   * Get the latest file slices for a given partition.
-   *
-   * @param metaClient      - Instance of {@link HoodieTableMetaClient}.
-   * @param partition       - The name of the partition whose file groups are to be loaded.
-   * @param mergeFileSlices - When enabled, will merge the latest file slices with the last known
-   *                        completed instant. This is useful for readers when there are pending
-   *                        compactions. MergeFileSlices when disabled, will return the latest file
-   *                        slices without any merging, and this is needed for the writers.
-   * @return List of latest file slices for all file groups in a given partition.
-   */
-  private static List<FileSlice> getPartitionFileSlices(HoodieTableMetaClient metaClient,
-                                                        Option<HoodieTableFileSystemView> fileSystemView,
-                                                        String partition,
-                                                        boolean mergeFileSlices) {
-    HoodieTableFileSystemView fsView = fileSystemView.orElse(getFileSystemView(metaClient));
-    Stream<FileSlice> fileSliceStream;
-    if (mergeFileSlices) {
-      if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
-        fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
-            partition, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
-      } else {
-        return Collections.EMPTY_LIST;
-      }
+  private static int estimateFileGroupCount(HoodieWriteConfig dataWriteConfig, String partitionName, long recordCount, int averageRecordSize, int minFileGroupCount,
+                                            int maxFileGroupCount, float growthFactor) {
+    long maxRequestedFileGroupSizeBytes = dataWriteConfig.getMetadataConfig().getMaxFileGroupSizeBytes();
+    int fileGroupCount = 1;
+    // If a fixed number of file groups are desired
+    if ((minFileGroupCount == maxFileGroupCount) && (minFileGroupCount != 0)) {
+      fileGroupCount = minFileGroupCount;
     } else {
-      fileSliceStream = fsView.getLatestFileSlices(partition);
-    }
-    return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
-  }
+      // Number of records to estimate for
+      final long expectedNumRecords = (long)Math.ceil((float)recordCount * growthFactor);
+      // Maximum records that should be written to each file group so it does not go over the size limit required
+      final long maxRecordsPerFileGroup = maxRequestedFileGroupSizeBytes / Math.max(averageRecordSize, 1L);
+      final long estimatedFileGroupCount = expectedNumRecords / maxRecordsPerFileGroup;
 
-  /**
-   * Get the latest file slices for a given partition including the inflight ones.
-   *
-   * @param metaClient     - instance of {@link HoodieTableMetaClient}
-   * @param fileSystemView - hoodie table file system view, which will be fetched from meta client if not already present
-   * @param partition      - name of the partition whose file groups are to be loaded
-   * @return
-   */
-  public static List<FileSlice> getPartitionLatestFileSlicesIncludingInflight(HoodieTableMetaClient metaClient,
-                                                                              Option<HoodieTableFileSystemView> fileSystemView,
-                                                                              String partition) {
-    HoodieTableFileSystemView fsView = fileSystemView.orElse(getFileSystemView(metaClient));
-    Stream<FileSlice> fileSliceStream = fsView.fetchLatestFileSlicesIncludingInflight(partition);
-    return fileSliceStream
-        .sorted(Comparator.comparing(FileSlice::getFileId))
-        .collect(Collectors.toList());
+      if (estimatedFileGroupCount >= maxFileGroupCount) {
+        fileGroupCount = maxFileGroupCount;
+      } else if (estimatedFileGroupCount <= minFileGroupCount) {
+        fileGroupCount = minFileGroupCount;
+      } else {
+        fileGroupCount = Math.max(1, (int) estimatedFileGroupCount);
+      }
+    }
+
+    LOG.info(String.format("Estimated file group count for metadata partition %s is %d "
+            + "[recordCount=%d, avgRecordSize=%d, minFileGroupCount=%d, maxFileGroupCount=%d, growthFactor=%f, "
+            + "maxFileGroupSizeBytes=%d]", partitionName, fileGroupCount, recordCount, averageRecordSize, minFileGroupCount,
+        maxFileGroupCount, growthFactor, maxRequestedFileGroupSizeBytes));
+    return fileGroupCount;
   }
 
   public static HoodieData<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCommitMetadata commitMetadata,
@@ -1240,6 +1333,103 @@ public class HoodieTableMetadataUtil {
     }
   }
 
+  public static HoodieData<HoodieRecord> convertMetadataToRecordIndexRecords(HoodieCommitMetadata commitMetadata,
+                                                                             HoodieData<WriteStatus> writeStatuses,
+                                                                             HoodieEngineContext engineContext,
+                                                                             MetadataRecordsGenerationParams recordsGenerationParams,
+                                                                             HoodieWriteConfig dataTableWriteConfig) {
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    Registry registry = Registry.getRegistry(dataTableWriteConfig.getTableName() + ".SparkMetadataTableRecordIndex");
+
+    HoodieData<HoodieRecord> records = writeStatuses.flatMap(writeStatus -> {
+      long numUpdates = 0;
+      long numInserts = 0;
+      long numDeletes = 0;
+
+      List<HoodieRecord> recordList = new LinkedList<>();
+      for (HoodieKeyWithLocation writtenRecord : writeStatus.getWrittenRecords()) {
+        if (!writeStatus.isErrored(writtenRecord.getKey())) {
+          HoodieRecord hoodieRecord;
+          HoodieKey key = writtenRecord.getKey();
+          Option<HoodieRecordLocation> newLocation = writtenRecord.getNewLocation();
+          if (newLocation.isPresent()) {
+            if (writtenRecord.getCurrentLocation() != null) {
+              // This is an update, no need to update index
+              // TODO: This may be required for clustering usecases
+              ++numUpdates;
+              continue;
+            }
+
+            hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(key.getRecordKey(), key.getPartitionPath(),
+                newLocation.get().getFileId(), newLocation.get().getInstantTime());
+            ++numInserts;
+          } else {
+            // Delete existing index for a deleted record
+            hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(key.getRecordKey());
+            ++numDeletes;
+          }
+
+          recordList.add(hoodieRecord);
+        }
+      }
+
+      //      registry.add(HoodieIndex.TOTAL_UPDATE, numUpdates);
+      //      registry.add(HoodieIndex.TOTAL_INSERT, numInserts);
+      //      registry.add(HoodieIndex.TOTAL_DELETE, numDeletes);
+      //      registry.add(HoodieIndex.TOTAL_WRITES, numUpdates + numInserts + numDeletes);
+      return recordList.iterator();
+    });
+
+    //    registry.add(HoodieIndex.UPDATE_LOC_DURATION, timer.endTimer());
+    //    registry.add(HoodieIndex.UPDATE_LOC_NUM_PARTITIONS, writeStatuses.getNumPartitions());
+
+    return records;
+    //return tagRecordsWithLocation(records, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
+  }
+
+  /**
+   * Read the record keys from base files in partitions and return records.
+   *
+   * @param tableBasePath table base path.
+   * @param engineContext instance of engine context.
+   * @param partitionBaseFilePairs Map of partitionName to base file name.
+   */
+  private static HoodieData<HoodieRecord> readRecordKeysFromBaseFiles(String tableBasePath, HoodieEngineContext engineContext,
+                                                                      MetadataRecordsGenerationParams recordsGenerationParams,
+                                                                      List<Pair<String, String>> partitionBaseFilePairs) {
+    if (partitionBaseFilePairs.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+
+    // TODO: follow the same model as bootstrap of file listing - limit the parallelism to fileListingParallelism
+    engineContext.setJobStatus(HoodieTableMetadataUtil.class.getSimpleName(), "Record Index: reading record keys from base files");
+    return engineContext.parallelize(partitionBaseFilePairs, partitionBaseFilePairs.size()).flatMap(p -> {
+      final String partition = p.getKey();
+      final String filename = p.getValue();
+      Path dataFilePath = new Path(tableBasePath, partition + Path.SEPARATOR + filename);
+
+      final String fileId = FSUtils.getFileId(filename);
+      final String instantTime = FSUtils.getCommitTime(filename);
+      try (HoodieFileReader fileReader =
+               HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), dataFilePath)) {
+        Iterator<String> recordKeyIterator = fileReader.getRecordKeyIterator();
+
+        return new Iterator<HoodieRecord>() {
+          @Override
+          public boolean hasNext() {
+            return recordKeyIterator.hasNext();
+          }
+
+          @Override
+          public HoodieRecord next() {
+            return HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId,
+                instantTime);
+          }
+        };
+      }
+    });
+  }
+
   /**
    * Get file group count for a metadata table partition.
    *
@@ -1255,7 +1445,7 @@ public class HoodieTableMetadataUtil {
                                                final Option<HoodieTableFileSystemView> fsView,
                                                final HoodieMetadataConfig metadataConfig, boolean isBootstrapCompleted) {
     if (isBootstrapCompleted) {
-      final List<FileSlice> latestFileSlices = HoodieTableMetadataUtil
+      final List<FileSlice> latestFileSlices = HoodieMetadataCommonUtils
           .getPartitionLatestFileSlices(metaClient.get(), fsView, partitionType.getPartitionPath());
       if (latestFileSlices.size() == 0 && !partitionType.getPartitionPath().equals(MetadataPartitionType.FILES.getPartitionPath())) {
         return getFileGroupCount(partitionType, metadataConfig);
@@ -1278,37 +1468,46 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Does an upcast for {@link BigDecimal} instance to align it with scale/precision expected by
-   * the {@link org.apache.avro.LogicalTypes.Decimal} Avro logical type
+   * Initialize file groups for a partition. For file listing, we just have one file group.
+   *
+   * All FileGroups for a given metadata partition has a fixed prefix as per the {@link MetadataPartitionType#getFileIdPrefix()}.
+   * Each file group is suffixed with 4 digits with increments of 1 starting with 0000.
+   *
+   * Lets say we configure 10 file groups for record level index partition, and prefix as "record-index-bucket-"
+   * File groups will be named as :
+   *    record-index-bucket-0000, .... -> ..., record-index-bucket-0009
    */
-  public static BigDecimal tryUpcastDecimal(BigDecimal value, final LogicalTypes.Decimal decimal) {
-    final int scale = decimal.getScale();
-    final int valueScale = value.scale();
+  static void initializeFileGroups(HoodieTableMetaClient metadataMetaClient, HoodieWriteConfig metadataWriteConfig, MetadataPartitionType metadataPartition, String instantTime,
+                                   int fileGroupCount) throws IOException {
+    final HashMap<HoodieLogBlock.HeaderMetadataType, String> blockHeader = new HashMap<>();
+    blockHeader.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
+    // Archival of data table has a dependency on compaction(base files) in metadata table.
+    // It is assumed that as of time Tx of base instant (/compaction time) in metadata table,
+    // all commits in data table is in sync with metadata table. So, we always start with log file for any fileGroup.
+    final HoodieDeleteBlock block = new HoodieDeleteBlock(new DeleteRecord[0], blockHeader);
 
-    boolean scaleAdjusted = false;
-    if (valueScale != scale) {
+    LOG.info(String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
+        fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
+    for (int i = 0; i < fileGroupCount; ++i) {
+      // TODO. fix fileId
+      final String fileGroupFileId = String.format("%s%04d", metadataPartition.getFileIdPrefix(), i);
       try {
-        value = value.setScale(scale, RoundingMode.UNNECESSARY);
-        scaleAdjusted = true;
-      } catch (ArithmeticException aex) {
-        throw new AvroTypeException(
-            "Cannot encode decimal with scale " + valueScale + " as scale " + scale + " without rounding");
+        HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
+            .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
+            .withFileId(fileGroupFileId).overBaseCommit(instantTime)
+            .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
+            .withFileSize(0L)
+            .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
+            .withFs(metadataMetaClient.getFs())
+            .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+            .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+        writer.appendBlock(block);
+        writer.close();
+      } catch (InterruptedException e) {
+        throw new HoodieException("Failed to created fileGroup " + fileGroupFileId + " for partition " + metadataPartition.getPartitionPath(), e);
       }
     }
-
-    int precision = decimal.getPrecision();
-    int valuePrecision = value.precision();
-    if (valuePrecision > precision) {
-      if (scaleAdjusted) {
-        throw new AvroTypeException("Cannot encode decimal with precision " + valuePrecision + " as max precision "
-            + precision + ". This is after safely adjusting scale from " + valueScale + " to required " + scale);
-      } else {
-        throw new AvroTypeException(
-            "Cannot encode decimal with precision " + valuePrecision + " as max precision " + precision);
-      }
-    }
-
-    return value;
   }
 
   private static Option<Schema> tryResolveSchemaForTable(HoodieTableMetaClient dataTableMetaClient) {

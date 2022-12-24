@@ -100,7 +100,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
         cowTablePath, "cow_table", HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
-    HoodieSparkWriteableTestTable cowTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
+    HoodieSparkWriteableTestTable cowTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema, context);
 
     cowTable.addCommit("20160401010101")
         .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "1", hoodieRecords1)
@@ -122,7 +122,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     new TableCommand().createTable(
         morTablePath, "mor_table", HoodieTableType.MERGE_ON_READ.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    HoodieSparkWriteableTestTable morTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
+    HoodieSparkWriteableTestTable morTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema, context);
 
     morTable.addDeltaCommit("20160401010101");
     morTable.withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "1", hoodieRecords1)
@@ -145,7 +145,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
         cowNonPartitionedTablePath, "cow_table_non_partitioned", HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
-    HoodieSparkWriteableTestTable cowNonPartitionedTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
+    HoodieSparkWriteableTestTable cowNonPartitionedTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema, context);
 
     cowNonPartitionedTable.addCommit("20160401010101")
         .withInserts(HoodieTestDataGenerator.NO_PARTITION_PATH, "1", hoodieRecords1)

@@ -28,6 +28,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -74,13 +75,13 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
   protected final boolean populateMetaFields;
 
   protected HoodieWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient,
-                                     Schema schema, BloomFilter filter) {
-    this(basePath, fs, metaClient, schema, filter, null);
+                                     Schema schema, BloomFilter filter, HoodieEngineContext context) {
+    this(basePath, fs, metaClient, schema, filter, null, context);
   }
 
   protected HoodieWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema,
-                                     BloomFilter filter, HoodieTableMetadataWriter metadataWriter) {
-    super(basePath, fs, metaClient, metadataWriter);
+                                     BloomFilter filter, HoodieTableMetadataWriter metadataWriter, HoodieEngineContext context) {
+    super(basePath, fs, metaClient, metadataWriter, context);
     this.schema = schema;
     this.filter = filter;
     this.populateMetaFields = metaClient.getTableConfig().populateMetaFields();

@@ -101,7 +101,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
         .withRollbackUsingMarkers(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
     HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(
-            metaClient.getHadoopConf(), config, context))
+            metaClient.getHadoopConf(), config, context), context)
         .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
         .addCommit("100")
         .withBaseFilesInPartitions(partitionAndFileId)

@@ -317,7 +317,7 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, context);
 
     Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap1 = new HashMap<>();
     partitionAndFileId1.forEach((k, v) -> partitionToFilesNameLengthMap1.put(k, Collections.singletonList(Pair.of(v, 100))));
@@ -433,7 +433,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
     HoodieTestTable testTable = enableMetadataTable
         ? HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(
-        metaClient.getHadoopConf(), config, context))
+        metaClient.getHadoopConf(), config, context), context)
         : HoodieTestTable.of(metaClient);
 
     testTable.withPartitionMetaFiles(p1, p2, p3)
@@ -538,7 +538,7 @@ public class TestClientRollback extends HoodieClientTestBase {
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build()).build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, context);
 
     Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap1 = new HashMap<>();
     partitionAndFileId1.forEach((k, v) -> partitionToFilesNameLengthMap1.put(k, Collections.singletonList(Pair.of(v, 100))));
@@ -634,7 +634,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
     HoodieTestTable testTable = enableMetadataTable
         ? HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(
-        metaClient.getHadoopConf(), config, context))
+        metaClient.getHadoopConf(), config, context), context)
         : HoodieTestTable.of(metaClient);
 
     testTable.withPartitionMetaFiles(p1, p2)
@@ -724,7 +724,7 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     // create test table with all commits completed
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf(), config, context));
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf(), config, context), context);
     testTable.withPartitionMetaFiles(p1, p2, p3)
         .addCommit(commitTime1)
         .withBaseFilesInPartitions(partitionAndFileId1)

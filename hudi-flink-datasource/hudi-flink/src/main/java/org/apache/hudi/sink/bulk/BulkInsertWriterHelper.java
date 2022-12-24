@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.bulk;
 
-import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -43,7 +42,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Helper class for bulk insert used by Flink.
@@ -61,7 +59,7 @@ public class BulkInsertWriterHelper {
   protected final RowType rowType;
   protected final boolean preserveHoodieMetadata;
   protected final Boolean isInputSorted;
-  private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
+  private final List<WriteStatus> writeStatusList = new ArrayList<>();
   protected HoodieRowDataCreateHandle handle;
   private String lastKnownPartitionPath = null;
   private final String fileIdPrefix;
@@ -119,7 +117,7 @@ public class BulkInsertWriterHelper {
     }
   }
 
-  public List<HoodieInternalWriteStatus> getHoodieWriteStatuses() throws IOException {
+  public List<WriteStatus> getHoodieWriteStatuses() throws IOException {
     close();
     return writeStatusList;
   }
@@ -193,24 +191,10 @@ public class BulkInsertWriterHelper {
 
   public List<WriteStatus> getWriteStatuses(int taskID) {
     try {
-      return getHoodieWriteStatuses().stream()
-          .map(BulkInsertWriterHelper::toWriteStatus).collect(Collectors.toList());
+      return getHoodieWriteStatuses();
     } catch (IOException e) {
       throw new HoodieException("Error collect the write status for task [" + taskID + "]", e);
     }
-  }
-
-  /**
-   * Tool to convert {@link HoodieInternalWriteStatus} into {@link WriteStatus}.
-   */
-  private static WriteStatus toWriteStatus(HoodieInternalWriteStatus internalWriteStatus) {
-    WriteStatus writeStatus = new WriteStatus(false, 0.1);
-    writeStatus.setStat(internalWriteStatus.getStat());
-    writeStatus.setFileId(internalWriteStatus.getFileId());
-    writeStatus.setGlobalError(internalWriteStatus.getGlobalError());
-    writeStatus.setTotalRecords(internalWriteStatus.getTotalRecords());
-    writeStatus.setTotalErrorRecords(internalWriteStatus.getTotalErrorRecords());
-    return writeStatus;
   }
 }
 

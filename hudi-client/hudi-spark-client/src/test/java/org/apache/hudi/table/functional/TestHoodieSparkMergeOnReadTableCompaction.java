@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
@@ -127,7 +128,8 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     List<WriteStatus> writeStatuses = writeData(insertTime, 100, false);
     Assertions.assertEquals(200, readTableTotalRecordsNum());
     // commit the write. The records should be visible now even though the compaction does not complete.
-    client.commitStats(insertTime, writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+    client.commitStats(insertTime, HoodieJavaRDD.of(jsc().parallelize(writeStatuses)),
+        writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
     Assertions.assertEquals(300, readTableTotalRecordsNum());
     // after the compaction, total records should remain the same
     config.setValue(AUTO_COMMIT_ENABLE, "true");
@@ -191,7 +193,8 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
     if (doCommit) {
       List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      boolean committed = client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType());
+      boolean committed = client.commitStats(instant, HoodieJavaRDD.of(jsc().parallelize(writeStatuses)),
+          writeStats, Option.empty(), metaClient.getCommitActionType());
       Assertions.assertTrue(committed);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);

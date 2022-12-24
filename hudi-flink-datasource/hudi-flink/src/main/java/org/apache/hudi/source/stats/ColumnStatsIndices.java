@@ -28,9 +28,9 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieMetadataCommonUtils;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RowDataProjection;
@@ -294,7 +294,7 @@ public class ColumnStatsIndices {
         .map(colName -> new ColumnIndexID(colName).asBase64EncodedString()).collect(Collectors.toList());
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
-        metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, false);
+        metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames, HoodieMetadataCommonUtils.PARTITION_NAME_COLUMN_STATS, false);
 
     org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter converter =
         AvroToRowDataConverters.createRowConverter((RowType) METADATA_DATA_TYPE.getLogicalType());

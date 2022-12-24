@@ -249,7 +249,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           writeClient.getEngineContext().getHadoopConf().get(), config, writeClient.getEngineContext());
       HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
-          .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
+          .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter, context());
 
       Set<String> allPartitions = updatedRecords.stream()
           .map(record -> record.getPartitionPath())
@@ -351,7 +351,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           writeClient.getEngineContext().getHadoopConf().get(), config, writeClient.getEngineContext());
       HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
-          .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
+          .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter, context());
 
       Set<String> allPartitions = updatedRecords.stream()
           .map(record -> record.getPartitionPath())
@@ -554,7 +554,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       client.scheduleCompactionAtInstant(instantTime, Option.of(metadata.getExtraMetadata()));
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instantTime);
       statuses = compactionMetadata.getWriteStatuses();
-      client.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+      client.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty(), HoodieJavaRDD.of(compactionMetadata.getWriteStatuses()));
 
       // Read from commit file
       table = HoodieSparkTable.create(cfg, context());
@@ -707,7 +707,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
-      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+      client.commitStats(newCommitTime, HoodieJavaRDD.of(jsc().parallelize(statuses)),
+          statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
       assertEquals(spark().sparkContext().persistentRdds().size(), 0);
     }
 
@@ -726,7 +727,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
-      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+      client.commitStats(newCommitTime, HoodieJavaRDD.of(jsc().parallelize(statuses)),
+          statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
       assertTrue(spark().sparkContext().persistentRdds().size() > 0);
     }
 

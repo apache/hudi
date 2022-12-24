@@ -20,7 +20,6 @@ package org.apache.hudi.connect;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKeyWithLocation;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.connect.transaction.ConnectTransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;

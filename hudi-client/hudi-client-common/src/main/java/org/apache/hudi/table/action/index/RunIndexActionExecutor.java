@@ -376,7 +376,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
                 HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
                     table.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
                 // do not trigger any table service as partition is not fully built out yet
-                metadataWriter.update(commitMetadata, instant.getTimestamp(), false);
+                // TODO: fix for record level index
+                metadataWriter.update(commitMetadata, instant.getTimestamp(), false, context.emptyHoodieData());
                 break;
               case CLEAN_ACTION:
                 HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(table.getMetaClient(), instant);

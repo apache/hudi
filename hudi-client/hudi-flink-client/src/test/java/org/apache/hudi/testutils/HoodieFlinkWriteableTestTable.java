@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -56,27 +57,28 @@ import java.util.stream.Collectors;
 public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   private static final Logger LOG = LogManager.getLogger(HoodieFlinkWriteableTestTable.class);
 
-  private HoodieFlinkWriteableTestTable(String basePath, org.apache.hadoop.fs.FileSystem fs, HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
-    super(basePath, fs, metaClient, schema, filter);
+  private HoodieFlinkWriteableTestTable(String basePath, org.apache.hadoop.fs.FileSystem fs, HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter,
+                                        HoodieEngineContext context) {
+    super(basePath, fs, metaClient, schema, filter, context);
   }
 
-  public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
-    return new HoodieFlinkWriteableTestTable(metaClient.getBasePathV2().toString(), metaClient.getRawFs(), metaClient, schema, filter);
+  public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter, HoodieEngineContext context) {
+    return new HoodieFlinkWriteableTestTable(metaClient.getBasePathV2().toString(), metaClient.getRawFs(), metaClient, schema, filter, context);
   }
 
-  public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema) {
+  public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, HoodieEngineContext context) {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
-    return of(metaClient, schema, filter);
+    return of(metaClient, schema, filter, context);
   }
 
-  public static HoodieFlinkWriteableTestTable of(HoodieTable hoodieTable, Schema schema) {
+  public static HoodieFlinkWriteableTestTable of(HoodieTable hoodieTable, Schema schema, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    return of(metaClient, schema);
+    return of(metaClient, schema, context);
   }
 
-  public static HoodieFlinkWriteableTestTable of(HoodieTable hoodieTable, Schema schema, BloomFilter filter) {
+  public static HoodieFlinkWriteableTestTable of(HoodieTable hoodieTable, Schema schema, BloomFilter filter, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    return of(metaClient, schema, filter);
+    return of(metaClient, schema, filter, context);
   }
 
   @Override

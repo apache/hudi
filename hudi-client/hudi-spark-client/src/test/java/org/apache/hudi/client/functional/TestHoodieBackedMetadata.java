@@ -87,11 +87,11 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieMetadataCommonUtils;
 import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -814,7 +814,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     java.nio.file.Path metaFilePath = parentPath.resolve(metadataCompactionInstant + HoodieTimeline.COMMIT_EXTENSION);
     java.nio.file.Path tempFilePath = FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant);
     metaClient.reloadActiveTimeline();
-    testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, context);
     // this validation will exercise the code path where a compaction is inflight in metadata table, but still metadata based file listing should match non
     // metadata based file listing.
     validateMetadata(testTable);
@@ -1490,7 +1490,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
               .forEach(partitionWriteStat -> {
                 String partitionStatName = partitionWriteStat.getKey();
                 List<HoodieWriteStat> writeStats = partitionWriteStat.getValue();
-                String partition = HoodieTableMetadataUtil.getPartitionIdentifier(partitionStatName);
+                String partition = HoodieMetadataCommonUtils.getPartitionIdentifier(partitionStatName);
                 if (!commitToPartitionsToFiles.get(commitTime).containsKey(partition)) {
                   commitToPartitionsToFiles.get(commitTime).put(partition, new ArrayList<>());
                 }

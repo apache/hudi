@@ -2286,6 +2286,29 @@ public class HoodieWriteConfig extends HoodieConfig {
         getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE));
   }
 
+  /**
+   * Record index configs.
+   */
+  public boolean createRecordIndex() {
+    return metadataConfig.isRecordIndexEnabled();
+  }
+
+  public int getRecordIndexMinFileGroupCount() {
+    return metadataConfig.getRecordIndexMinFileGroupCount();
+  }
+
+  public int getRecordIndexMaxFileGroupCount() {
+    return metadataConfig.getRecordIndexMaxFileGroupCount();
+  }
+
+  public float getRecordIndexGrowthFactor() {
+    return metadataConfig.getRecordIndexGrowthFactor();
+  }
+
+  public long getMaxMetadataFileGroupSizeBytes() {
+    return metadataConfig.getMaxFileGroupSizeBytes();
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();

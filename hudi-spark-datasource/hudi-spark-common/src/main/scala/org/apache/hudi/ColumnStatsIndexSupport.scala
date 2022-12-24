@@ -34,7 +34,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
 import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.{HoodieMetadataCommonUtils, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
@@ -85,7 +85,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    */
   def isIndexAvailable: Boolean = {
     checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
-    metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+    metaClient.getTableConfig.getMetadataPartitions.contains(HoodieMetadataCommonUtils.PARTITION_NAME_COLUMN_STATS)
   }
 
   /**
@@ -329,7 +329,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
 
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
-      metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
+      metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieMetadataCommonUtils.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
 
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       // NOTE: Explicit conversion is required for Scala 2.11

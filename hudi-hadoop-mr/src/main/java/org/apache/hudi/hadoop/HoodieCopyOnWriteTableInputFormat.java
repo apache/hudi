@@ -39,7 +39,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.HoodieMetadataCommonUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
@@ -252,7 +252,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
       Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = tableMetaClient.getTableType().equals(COPY_ON_WRITE) ? Option.empty() : getHoodieVirtualKeyInfo(tableMetaClient);
       String basePath = tableMetaClient.getBasePathV2().toString();
 
-      if (conf.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS) && HoodieTableMetadataUtil.isFilesPartitionAvailable(tableMetaClient)) {
+      if (conf.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS) && HoodieMetadataCommonUtils.isFilesPartitionAvailable(tableMetaClient)) {
         HiveHoodieTableFileIndex fileIndex =
             new HiveHoodieTableFileIndex(
                 engineContext,

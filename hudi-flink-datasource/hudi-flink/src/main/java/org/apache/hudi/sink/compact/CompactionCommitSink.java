@@ -161,7 +161,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
         table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema());
 
     // commit the compaction
-    this.writeClient.commitCompaction(instant, metadata, Option.empty());
+    this.writeClient.commitCompaction(instant, metadata, Option.empty(), HoodieListData.eager(statuses));
 
     // Whether to clean up the old log file when compaction
     if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {

@@ -38,8 +38,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.metadata.HoodieMetadataCommonUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -130,7 +130,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(configProperties)
         .enable(configProperties.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS)
-            && HoodieTableMetadataUtil.isFilesPartitionAvailable(metaClient))
+            && HoodieMetadataCommonUtils.isFilesPartitionAvailable(metaClient))
         .build();
 
     this.queryPaths = queryPaths;

@@ -577,7 +577,7 @@ public class TestCleaner extends HoodieClientTestBase {
         .build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, context);
     String p0 = "2020/01/01";
     String p1 = "2020/01/02";
 
@@ -594,7 +594,7 @@ public class TestCleaner extends HoodieClientTestBase {
           }
         })
     );
-    metadataWriter.update(commitMetadata, "00000000000001", false);
+    metadataWriter.update(commitMetadata, "00000000000001", false, context.emptyHoodieData());
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000001"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -933,7 +933,7 @@ public class TestCleaner extends HoodieClientTestBase {
     // Example use-case of this is when a client wants to create a table
     // with just some commit metadata, but no data/partitionPaths.
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, context);
     testTable.doWriteOperation("001", WriteOperationType.INSERT, Collections.emptyList(), 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -1032,7 +1032,7 @@ public class TestCleaner extends HoodieClientTestBase {
         .build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, context);
     String p0 = "2020/01/01";
     String p1 = "2020/01/02";
 
@@ -1049,7 +1049,7 @@ public class TestCleaner extends HoodieClientTestBase {
           }
         })
     );
-    metadataWriter.update(commitMetadata, "00000000000001", false);
+    metadataWriter.update(commitMetadata, "00000000000001", false, context.emptyHoodieData());
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000001"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));

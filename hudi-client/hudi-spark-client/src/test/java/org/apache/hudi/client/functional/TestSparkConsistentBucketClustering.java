@@ -38,6 +38,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -235,7 +236,8 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     List<WriteStatus> writeStatues = writeData(writeTime, 2000, false);
     // Cannot schedule clustering if there is in-flight writer
     Assertions.assertFalse(writeClient.scheduleClustering(Option.empty()).isPresent());
-    Assertions.assertTrue(writeClient.commitStats(writeTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+    Assertions.assertTrue(writeClient.commitStats(writeTime, HoodieJavaRDD.of(jsc.parallelize(writeStatues)),
+        writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(), metaClient.getCommitActionType()));
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -271,8 +273,8 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     List<WriteStatus> writeStatues = writeClient.upsert(writeRecords, commitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
-      Assertions.assertTrue(writeClient.commitStats(commitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
-          Option.empty(), metaClient.getCommitActionType()));
+      Assertions.assertTrue(writeClient.commitStats(commitTime, HoodieJavaRDD.of(jsc.parallelize(writeStatues)),
+          writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType()));
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return writeStatues;

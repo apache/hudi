@@ -276,7 +276,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
             .build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, context);
 
     final String p0 = "2020/01/01";
     final String p1 = "2020/01/02";
@@ -357,7 +357,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
             .build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, context);
 
     final String p0 = "2020/01/01";
     final String p1 = "2020/01/02";

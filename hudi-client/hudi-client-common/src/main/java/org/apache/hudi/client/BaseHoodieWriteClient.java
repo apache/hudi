@@ -40,6 +40,7 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -220,12 +221,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                  String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
                                  Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc);
 
-  public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
+  public boolean commitStats(String instantTime, HoodieData<WriteStatus> writeStatuses, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
                              String commitActionType) {
-    return commitStats(instantTime, stats, extraMetadata, commitActionType, Collections.emptyMap(), Option.empty());
+    return commitStats(instantTime, writeStatuses, stats, extraMetadata, commitActionType, Collections.emptyMap(), Option.empty());
   }
 
-  public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
+  public boolean commitStats(String instantTime,HoodieData<WriteStatus> writeStatuses, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     // Skip the empty commit if not allowed
@@ -246,7 +247,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (extraPreCommitFunc.isPresent()) {
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
-      commit(table, commitActionType, instantTime, metadata, stats);
+      commit(table, commitActionType, instantTime, metadata, stats, writeStatuses);
       // already within lock, and so no lock requried for archival
       postCommit(table, metadata, instantTime, extraMetadata, false);
       LOG.info("Committed " + instantTime);
@@ -282,7 +283,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
-                      List<HoodieWriteStat> stats) throws IOException {
+                      List<HoodieWriteStat> stats, HoodieData<WriteStatus> writeStatuses) throws IOException {
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
@@ -293,7 +294,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       saveInternalSchema(table, instantTime, metadata);
     }
     // update Metadata table
-    writeTableMetadata(table, instantTime, commitActionType, metadata);
+    writeTableMetadata(table, instantTime, commitActionType, metadata, writeStatuses);
     activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
@@ -360,11 +361,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime instant time of the commit.
    * @param actionType action type of the commit.
    * @param metadata instance of {@link HoodieCommitMetadata}.
+   * @param writeStatuses instance of {@link HoodieData} of {@link WriteStatus} holding write results.
    */
-  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
+  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata,
+                                    HoodieData<WriteStatus> writeStatuses) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
     table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime,
-        table.isTableServiceAction(actionType, instantTime)));
+        table.isTableServiceAction(actionType, instantTime), writeStatuses));
   }
 
   /**
@@ -1110,18 +1113,19 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Commit a compaction operation. Allow passing additional meta-data to be stored in commit instant file.
-   *
-   * @param compactionInstantTime Compaction Instant Time
+   *  @param compactionInstantTime Compaction Instant Time
    * @param metadata All the metadata that gets stored along with a commit
    * @param extraMetadata Extra Metadata to be stored
+   * @param writeStatuses
    */
   public abstract void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata,
-                                        Option<Map<String, String>> extraMetadata);
+                                        Option<Map<String, String>> extraMetadata, HoodieData<WriteStatus> writeStatuses);
 
   /**
    * Commit Compaction and track metrics.
    */
-  protected abstract void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime);
+  protected abstract void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime,
+                                             HoodieData<WriteStatus> writeStatuses);
 
   /**
    * Schedules a new log compaction instant.
@@ -1153,20 +1157,21 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Commit a log compaction operation. Allow passing additional meta-data to be stored in commit instant file.
-   *
-   * @param logCompactionInstantTime Log Compaction Instant Time
+   *  @param logCompactionInstantTime Log Compaction Instant Time
    * @param metadata All the metadata that gets stored along with a commit
    * @param extraMetadata Extra Metadata to be stored
+   * @param writeStatuses
    */
   public void commitLogCompaction(String logCompactionInstantTime, HoodieCommitMetadata metadata,
-                                  Option<Map<String, String>> extraMetadata) {
+                                  Option<Map<String, String>> extraMetadata, HoodieData<WriteStatus> writeStatuses) {
     throw new UnsupportedOperationException("Log compaction is not supported yet.");
   }
 
   /**
    * Commit Log Compaction and track metrics.
    */
-  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable<T, I, K, O> table, String logCompactionCommitTime) {
+  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime,
+                                       HoodieData<WriteStatus> writeStatuses) {
     throw new UnsupportedOperationException("Log compaction is not supported yet.");
   }
 
@@ -1827,7 +1832,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // try to save history schemas
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
     schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(newSchema, historySchemaStr));
-    commitStats(instantTime, Collections.emptyList(), Option.of(extraMeta), commitActionType);
+    commitStats(instantTime, context.emptyHoodieData(), Collections.emptyList(), Option.of(extraMeta), commitActionType);
   }
 
   private InternalSchema getInternalSchema(TableSchemaResolver schemaUtil) {

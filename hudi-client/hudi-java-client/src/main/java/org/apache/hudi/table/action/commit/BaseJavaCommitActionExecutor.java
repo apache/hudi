@@ -210,7 +210,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
 
-      writeTableMetadata(metadata, actionType);
+      writeTableMetadata(metadata, actionType, context.parallelize(result.getWriteStatuses()));
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));

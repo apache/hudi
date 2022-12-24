@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -208,6 +209,13 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // TODO eval whether seeking scanner would be faster than pread
     HFileScanner scanner = getHFileScanner(reader, false);
     return new RecordIterator(scanner, getSchema(), readerSchema);
+  }
+
+  @Override
+  public ClosableIterator<String> getRecordKeyIterator() throws IOException {
+    final HFileScanner scanner = reader.getScanner(false, false);
+    return new CloseableMappingIterator<>(new RecordIterator(scanner, getSchema(), getSchema()),
+        genericRecord -> (String) ((GenericRecord)genericRecord).get(KEY_FIELD_NAME));
   }
 
   @VisibleForTesting

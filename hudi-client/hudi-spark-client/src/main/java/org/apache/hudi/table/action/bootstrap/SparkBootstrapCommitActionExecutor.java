@@ -251,7 +251,7 @@ public class SparkBootstrapCommitActionExecutor<T>
     metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSchemaToStoreInCommit());
     metadata.setOperationType(operationType);
 
-    writeTableMetadata(metadata, actionType);
+    writeTableMetadata(metadata, actionType, result.getWriteStatuses());
 
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),

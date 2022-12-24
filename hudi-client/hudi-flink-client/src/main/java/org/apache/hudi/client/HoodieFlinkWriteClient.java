@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -120,7 +121,7 @@ public class HoodieFlinkWriteClient<T> extends
         .values().stream()
         .map(duplicates -> duplicates.stream().reduce(WriteStatMerger::merge).get())
         .collect(Collectors.toList());
-    return commitStats(instantTime, merged, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
+    return commitStats(instantTime, context.parallelize(writeStatuses), merged, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
   }
 
   @Override
@@ -282,9 +283,10 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   @Override
-  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
+  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata,
+                                    HoodieData<WriteStatus> writeStatuses) {
     try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
-      metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));
+      metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime), writeStatuses);
     } catch (Exception e) {
       throw new HoodieException("Failed to update metadata", e);
     }
@@ -395,17 +397,17 @@ public class HoodieFlinkWriteClient<T> extends
   public void commitCompaction(
       String compactionInstantTime,
       HoodieCommitMetadata metadata,
-      Option<Map<String, String>> extraMetadata) {
+      Option<Map<String, String>> extraMetadata, HoodieData<WriteStatus> writeStatuses) {
     HoodieFlinkTable<T> table = getHoodieTable();
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeCompaction(metadata, table, compactionInstantTime);
+    completeCompaction(metadata, table, compactionInstantTime, writeStatuses);
   }
 
   @Override
   public void completeCompaction(
       HoodieCommitMetadata metadata,
       HoodieTable table,
-      String compactionCommitTime) {
+      String compactionCommitTime, HoodieData<WriteStatus> writeStatuses) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     final HoodieInstant compactionInstant = HoodieTimeline.getCompactionInflightInstant(compactionCommitTime);
@@ -415,7 +417,7 @@ public class HoodieFlinkWriteClient<T> extends
       // commit to data table after committing to metadata table.
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      writeTableMetadata(table, compactionCommitTime, compactionInstant.getAction(), metadata);
+      writeTableMetadata(table, compactionCommitTime, compactionInstant.getAction(), metadata, writeStatuses);
       LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
@@ -441,7 +443,7 @@ public class HoodieFlinkWriteClient<T> extends
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = getHoodieTable().compact(context, compactionInstantTime);
-    commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+    commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty(), context.parallelize(compactionMetadata.getWriteStatuses()));
     return compactionMetadata;
   }
 
@@ -453,7 +455,8 @@ public class HoodieFlinkWriteClient<T> extends
   private void completeClustering(
       HoodieReplaceCommitMetadata metadata,
       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
-      String clusteringCommitTime) {
+      String clusteringCommitTime,
+      HoodieData<WriteStatus> writeStatuses) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect clustering write status and commit clustering");
     HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime);
     List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
@@ -469,7 +472,7 @@ public class HoodieFlinkWriteClient<T> extends
       // commit to data table after committing to metadata table.
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      writeTableMetadata(table, clusteringCommitTime, clusteringInstant.getAction(), metadata);
+      writeTableMetadata(table, clusteringCommitTime, clusteringInstant.getAction(), metadata, writeStatuses);
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
       table.getActiveTimeline().transitionReplaceInflightToComplete(
           HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
@@ -510,13 +513,14 @@ public class HoodieFlinkWriteClient<T> extends
       TableServiceType tableServiceType,
       HoodieCommitMetadata metadata,
       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
-      String commitInstant) {
+      String commitInstant,
+      List<WriteStatus> writeStatuses) {
     switch (tableServiceType) {
       case CLUSTER:
-        completeClustering((HoodieReplaceCommitMetadata) metadata, table, commitInstant);
+        completeClustering((HoodieReplaceCommitMetadata) metadata, table, commitInstant, context.parallelize(writeStatuses));
         break;
       case COMPACT:
-        completeCompaction(metadata, table, commitInstant);
+        completeCompaction(metadata, table, commitInstant, context.parallelize(writeStatuses));
         break;
       default:
         throw new IllegalArgumentException("This table service is not valid " + tableServiceType);

@@ -20,6 +20,7 @@ package org.apache.hudi.client.functional;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
@@ -43,12 +44,15 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
+
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -425,7 +429,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     logCompactionTimeStamp = lcClient.scheduleLogCompaction(Option.empty());
     assertTrue(logCompactionTimeStamp.isPresent());
     HoodieWriteMetadata metadata = lcClient.logCompact(logCompactionTimeStamp.get());
-    lcClient.commitLogCompaction(logCompactionTimeStamp.get(), (HoodieCommitMetadata) metadata.getCommitMetadata().get(), Option.empty());
+    lcClient.commitLogCompaction(logCompactionTimeStamp.get(), (HoodieCommitMetadata) metadata.getCommitMetadata().get(), Option.empty(),
+        HoodieJavaRDD.of((JavaRDD<WriteStatus>) metadata.getWriteStatuses()));
     assertDataInMORTable(config, prevCommitTime, logCompactionTimeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
   }
 

@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -31,6 +32,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
@@ -47,6 +50,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
@@ -105,8 +109,11 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
         HoodieTableMetadataWriter metadataWriter = table.getMetadataWriter(instantTime)
             .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to initialize filegroups for indexing for instant: %s", instantTime)));
         if (!finalPartitionsToIndex.get(0).getPartitionPath().equals(MetadataPartitionType.FILES.getPartitionPath())) {
+          HoodieWriteConfig metadataWriteConfig = HoodieTableMetadataUtil.createMetadataWriteConfig(table.getConfig(), table.getConfig().getTableName() + METADATA_TABLE_NAME_SUFFIX);
+          HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+              .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(table.getMetaClient().getBasePathV2().toString())).setConf(table.getHadoopConf()).build();
           // initialize metadata partition only if not for FILES partition.
-          metadataWriter.initializeMetadataPartitions(table.getMetaClient(), finalPartitionsToIndex, indexUptoInstant.get().getTimestamp());
+          metadataWriter.initializeMetadataPartitions(metadataMetaClient, metadataWriteConfig, finalPartitionsToIndex, indexUptoInstant.get().getTimestamp());
         }
 
         // for each partitionToIndex add that time to the plan

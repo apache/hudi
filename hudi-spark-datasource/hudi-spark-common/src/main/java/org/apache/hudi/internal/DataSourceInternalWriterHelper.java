@@ -19,8 +19,8 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -40,6 +40,7 @@ import org.apache.spark.sql.types.StructType;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Helper class for HoodieDataSourceInternalWriter used by Spark datasource v2.
@@ -79,9 +80,10 @@ public class DataSourceInternalWriterHelper {
     LOG.info("Received commit of a data writer = " + message);
   }
 
-  public void commit(List<HoodieWriteStat> writeStatList) {
+  public void commit(List<WriteStatus> writeStatuses) {
     try {
-      writeClient.commitStats(instantTime, writeStatList, Option.of(extraMetadata),
+      writeClient.commitStats(instantTime, hoodieTable.getContext().parallelize(writeStatuses),
+          writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.of(extraMetadata),
           CommitUtils.getCommitActionType(operationType, metaClient.getTableType()));
     } catch (Exception ioe) {
       throw new HoodieException(ioe.getMessage(), ioe);

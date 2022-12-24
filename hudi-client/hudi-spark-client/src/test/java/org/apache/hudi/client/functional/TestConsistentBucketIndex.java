@@ -35,6 +35,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
@@ -208,7 +209,7 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
     writeData(HoodieActiveTimeline.createNewInstantTime(), 200, true);
     Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(compactionTime);
-    writeClient.commitCompaction(compactionTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+    writeClient.commitCompaction(compactionTime, compactionMetadata.getCommitMetadata().get(), Option.empty(), HoodieJavaRDD.of(compactionMetadata.getWriteStatuses()));
     Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
   }
 
@@ -277,7 +278,8 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
     }
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
-      boolean success = writeClient.commitStats(commitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+      boolean success = writeClient.commitStats(commitTime, HoodieJavaRDD.of(jsc.parallelize(writeStatues)),
+          writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
       Assertions.assertTrue(success);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);

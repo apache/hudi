@@ -247,14 +247,14 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS_INFLIGHT = ConfigProperty
       .key("hoodie.table.metadata.partitions.inflight")
-      .defaultValue("")
+      .noDefaultValue()
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of metadata partitions whose building is in progress. "
           + "These partitions are not yet ready for use by the readers.");
 
   public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS = ConfigProperty
       .key("hoodie.table.metadata.partitions")
-      .noDefaultValue()
+      .defaultValue("")
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");

@@ -165,7 +165,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     // commit the clustering
     this.table.getMetaClient().reloadActiveTimeline();
     this.writeClient.completeTableService(
-        TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant);
+        TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant, writeMetadata.getWriteStatuses());
 
     // whether to clean up the input base parquet files used for clustering
     if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {

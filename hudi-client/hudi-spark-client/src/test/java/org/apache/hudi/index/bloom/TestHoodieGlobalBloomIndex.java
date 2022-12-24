@@ -92,7 +92,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     HoodieGlobalBloomIndex index =
         new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, context);
 
     // Create some partitions, and put some files, along with the meta file
     // "2016/01/21": 0 file
@@ -235,7 +235,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         .build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, context);
 
     // Create some partitions, and put some files, along with the meta file
     // "2016/01/21": 0 file
@@ -357,7 +357,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     HoodieGlobalBloomIndex index =
         new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, context);
     final String p1 = "2016/01/31";
     final String p2 = "2016/02/28";
 

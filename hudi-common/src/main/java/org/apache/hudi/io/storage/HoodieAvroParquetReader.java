@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -97,6 +98,11 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   @Override
   protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
     return getIndexedRecordIteratorInternal(readerSchema, Option.of(requestedSchema));
+  }
+
+  @Override
+  public ClosableIterator<String> getRecordKeyIterator() throws IOException {
+    return new CloseableMappingIterator<>(parquetUtils.getHoodieKeyIterator(conf, path), hoodieKey -> hoodieKey.getRecordKey());
   }
 
   @Override

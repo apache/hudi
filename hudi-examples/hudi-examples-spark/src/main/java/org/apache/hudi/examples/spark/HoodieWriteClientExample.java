@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
 import org.apache.hudi.index.HoodieIndex;
@@ -143,7 +144,7 @@ public class HoodieWriteClientExample {
       if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {
         Option<String> instant = client.scheduleCompaction(Option.empty());
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instant.get());
-        client.commitCompaction(instant.get(), compactionMetadata.getCommitMetadata().get(), Option.empty());
+        client.commitCompaction(instant.get(), compactionMetadata.getCommitMetadata().get(), Option.empty(), HoodieJavaRDD.of(compactionMetadata.getWriteStatuses()));
       }
       client.close();
     }

@@ -21,6 +21,7 @@ import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -486,7 +487,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
     // generate 200 records
     val schema: Schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema)
-    val testTable: HoodieSparkWriteableTestTable = HoodieSparkWriteableTestTable.of(metaClient, schema)
+    val testTable: HoodieSparkWriteableTestTable = HoodieSparkWriteableTestTable.of(metaClient, schema,
+      new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)))
 
     val hoodieRecords1 = SchemaTestUtil.generateHoodieTestRecords(0, 100, schema)
     val hoodieRecords2 = SchemaTestUtil.generateHoodieTestRecords(100, 100, schema)

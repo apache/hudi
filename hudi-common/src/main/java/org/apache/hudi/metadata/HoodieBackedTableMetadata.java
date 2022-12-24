@@ -76,10 +76,10 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView;
+import static org.apache.hudi.metadata.HoodieMetadataCommonUtils.PARTITION_NAME_BLOOM_FILTERS;
+import static org.apache.hudi.metadata.HoodieMetadataCommonUtils.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieMetadataCommonUtils.PARTITION_NAME_FILES;
+import static org.apache.hudi.metadata.HoodieMetadataCommonUtils.getFileSystemView;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table.
@@ -168,7 +168,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     //       to scan all file-groups for all key-prefixes as each of these might contain some
     //       records matching the key-prefix
     List<FileSlice> partitionFileSlices =
-        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
+        HoodieMetadataCommonUtils.getPartitionLatestMergedFileSlices(
             metadataMetaClient, metadataFileSystemView, partitionName);
 
     return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
@@ -392,13 +392,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private Map<Pair<String, FileSlice>, List<String>> getPartitionFileSliceToKeysMapping(final String partitionName, final List<String> keys) {
     // Metadata is in sync till the latest completed instant on the dataset
     List<FileSlice> latestFileSlices =
-        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
+        HoodieMetadataCommonUtils.getPartitionLatestMergedFileSlices(
             metadataMetaClient, metadataFileSystemView, partitionName);
 
     Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = new HashMap<>();
     for (String key : keys) {
       if (!isNullOrEmpty(latestFileSlices)) {
-        final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key,
+        final FileSlice slice = latestFileSlices.get(HoodieMetadataCommonUtils.mapRecordKeyToFileGroupIndex(key,
             latestFileSlices.size()));
         final Pair<String, FileSlice> partitionNameFileSlicePair = Pair.of(partitionName, slice);
         partitionFileSliceToKeysMap.computeIfAbsent(partitionNameFileSlicePair, k -> new ArrayList<>()).add(key);

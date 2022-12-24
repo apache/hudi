@@ -39,6 +39,7 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -395,7 +396,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       if (tableType == HoodieTableType.MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata =  client2.compact("005");
-          client2.commitCompaction("005", compactionMetadata.getCommitMetadata().get(), Option.empty());
+          client2.commitCompaction("005", compactionMetadata.getCommitMetadata().get(), Option.empty(), HoodieJavaRDD.of(compactionMetadata.getWriteStatuses()));
           validInstants.add("005");
         });
       }

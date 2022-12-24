@@ -417,7 +417,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     }
 
     // We create three parquet files, each having one record (two different partitions)
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, context);
     final String fileId1 = "fileID1";
     final String fileId2 = "fileID2";
     final String fileId3 = "fileID3";
@@ -505,7 +505,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
         writeClient.getEngineContext().getHadoopConf().get(), config, writeClient.getEngineContext());
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable.getMetaClient(),
-        SCHEMA, metadataWriter);
+        SCHEMA, metadataWriter, context);
 
     final String p1 = "2016/01/31";
     final String p2 = "2016/02/28";

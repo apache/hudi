@@ -40,6 +40,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -371,7 +372,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
       assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
       assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
-      writeClient.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+      writeClient.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty(), HoodieJavaRDD.of(compactionMetadata.getWriteStatuses()));
     }
   }
 }

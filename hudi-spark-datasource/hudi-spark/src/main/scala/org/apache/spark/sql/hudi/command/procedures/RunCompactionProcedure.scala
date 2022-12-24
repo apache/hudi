@@ -21,6 +21,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
 import org.apache.hudi.common.util.{CompactionUtils, HoodieTimer, Option => HOption}
+import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
@@ -110,7 +111,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
           willCompactionInstants.foreach { compactionInstant =>
             val writeResponse = client.compact(compactionInstant)
             handleResponse(writeResponse.getCommitMetadata.get())
-            client.commitCompaction(compactionInstant, writeResponse.getCommitMetadata.get(), HOption.empty())
+            client.commitCompaction(compactionInstant, writeResponse.getCommitMetadata.get(), HOption.empty(), HoodieJavaRDD.of(writeResponse.getWriteStatuses))
           }
           logInfo(s"Finish Run compaction at instants: [${willCompactionInstants.mkString(",")}]," +
             s" spend: ${timer.endTimer()}ms")
