@@ -95,7 +95,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 5, SparkRDDWriteClient::upsert,
         false, false, 5, 10, 2, config.populateMetaFields());
 
-    // Delete 5 records
+    // Delete 5 records.
     String prevCommitTime = commitTime;
     commitTime = HoodieActiveTimeline.createNewInstantTime();
     deleteBatch(config, client, commitTime, prevCommitTime,
