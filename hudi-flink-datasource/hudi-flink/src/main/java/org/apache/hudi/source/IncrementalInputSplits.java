@@ -18,7 +18,6 @@
 
 package org.apache.hudi.source;
 
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
@@ -43,6 +42,7 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.types.logical.RowType;
@@ -462,7 +462,7 @@ public class IncrementalInputSplits implements Serializable {
   }
 
   private HoodieTimeline getArchivedReadTimeline(HoodieTableMetaClient metaClient, String startInstant) {
-    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(startInstant);
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(startInstant, false);
     HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
     return filterInstantsByCondition(archivedCompleteTimeline);
   }

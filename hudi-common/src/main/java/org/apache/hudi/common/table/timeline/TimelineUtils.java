@@ -211,10 +211,29 @@ public class TimelineUtils {
   }
 
   /**
+   * Returns a Hudi timeline with commits after the given instant time (exclusive).
+   *
+   * @param metaClient                {@link HoodieTableMetaClient} instance.
+   * @param exclusiveStartInstantTime Start instant time (exclusive).
+   * @return Hudi timeline.
+   */
+  public static HoodieTimeline getCommitsTimelineAfter(
+      HoodieTableMetaClient metaClient, String exclusiveStartInstantTime) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieDefaultTimeline timeline =
+        activeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
+            ? metaClient.getArchivedTimeline(exclusiveStartInstantTime)
+            .mergeTimeline(activeTimeline)
+            : activeTimeline;
+    return timeline.getCommitsTimeline()
+        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
+  }
+  
+  /**
    * Returns the commit metadata of the given instant.
    *
-   * @param instant   The hoodie instant
-   * @param timeline  The timeline
+   * @param instant  The hoodie instant
+   * @param timeline The timeline
    * @return the commit metadata
    */
   public static HoodieCommitMetadata getCommitMetadata(
