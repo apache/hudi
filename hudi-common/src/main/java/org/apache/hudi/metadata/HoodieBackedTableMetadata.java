@@ -18,9 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -56,6 +53,10 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -503,7 +504,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // This is because the metadata table is updated before the dataset instants are committed.
     Set<String> validInstantTimestamps = getValidInstantTimestamps();
 
-    HoodieActiveTimeline metadataActiveTimeline = metadataMetaClient.getActiveTimeline();
+    Option<HoodieInstant> latestMetadataInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+    /*HoodieActiveTimeline metadataActiveTimeline = metadataMetaClient.getActiveTimeline();
     Option<HoodieInstant> latestMetadataInstant = metadataActiveTimeline
         .filterCompletedInstants()
         .filter(instant -> {
@@ -518,7 +520,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           }
           return true;
         })
-        .lastInstant();
+        .lastInstant();*/
     String latestMetadataInstantTime = latestMetadataInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
 
     boolean allowFullScan = allowFullScanOverride.orElseGet(() -> isFullScanAllowedForPartition(partitionName));
