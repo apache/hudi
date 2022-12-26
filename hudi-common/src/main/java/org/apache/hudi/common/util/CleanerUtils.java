@@ -188,21 +188,19 @@ public class CleanerUtils<T extends HoodieAvroPayload, I, K, O> {
    */
   public static Option<HoodieInstant> getEarliestUnCleanCompletedInstant(HoodieTableMetaClient metaClient) throws IOException {
     Option<String> earliestInstantCleanTime = getLatestInstantCleanTime(metaClient);
-    if (earliestInstantCleanTime.isPresent()) {
-      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-      return activeTimeline.getCommitsTimeline().filterCompletedInstants().filter(instant ->
-        instant.getMarkerFileAccessTimestamp().isPresent()
-          && HoodieTimeline.compareTimestamps(instant.getMarkerFileAccessTimestamp().get(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestInstantCleanTime.get())).firstInstant();
+    HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
+    Option<HoodieInstant> firstCompletedClusteringInstant = activeTimeline.getCommitsTimeline().filterCompletedInstants()
+        .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).firstInstant();
+    Option<HoodieInstant> lastCompletedClusteringInstant = activeTimeline.getCommitsTimeline().filterCompletedInstants()
+        .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
+    if (!lastCompletedClusteringInstant.isPresent()) {
+      return  Option.empty();
     } else {
-      // if no clean instant, return first completed clustering instant
-      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-      Option<HoodieInstant> firstCompletedClusteringInstant = activeTimeline.getCommitsTimeline().filterCompletedInstants()
-            .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).firstInstant();
-      if (firstCompletedClusteringInstant.isPresent()) {
-        return firstCompletedClusteringInstant;
-      } else {
-        return Option.empty();
-      }
+      return ! earliestInstantCleanTime.isPresent()
+        ? firstCompletedClusteringInstant
+        : activeTimeline.getCommitsTimeline().filterCompletedInstants().filter(instant ->
+        instant.getMarkerFileModificationTimestamp().isPresent()
+          && HoodieTimeline.compareTimestamps(instant.getMarkerFileModificationTimestamp().get(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestInstantCleanTime.get())).firstInstant();
     }
   }
 }

@@ -75,7 +75,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private State state = State.COMPLETED;
   private String action;
   private String timestamp;
-  private Option<String> markerFileAccessTimestamp;
+  private Option<String> markerFileModificationTimestamp;
 
   /**
    * Load the instant from the meta FileStatus.
@@ -85,7 +85,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     String fileName = fileStatus.getPath().getName();
     String fileExtension = getTimelineFileExtension(fileName);
     timestamp = fileName.replace(fileExtension, "");
-    markerFileAccessTimestamp = Option.ofNullable(HoodieInstantTimeGenerator.parseTimeMillisToInstantTime(fileStatus.getAccessTime()));
+    markerFileModificationTimestamp = Option.ofNullable(HoodieInstantTimeGenerator.parseTimeMillisToInstantTime(fileStatus.getModificationTime()));
 
     // Next read the action for this marker
     action = fileExtension.replaceFirst(".", "");
@@ -108,14 +108,14 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     this.state = isInflight ? State.INFLIGHT : State.COMPLETED;
     this.action = action;
     this.timestamp = timestamp;
-    this.markerFileAccessTimestamp = Option.ofNullable(null);
+    this.markerFileModificationTimestamp = Option.ofNullable(null);
   }
 
   public HoodieInstant(State state, String action, String timestamp) {
     this.state = state;
     this.action = action;
     this.timestamp = timestamp;
-    this.markerFileAccessTimestamp = Option.ofNullable(null);
+    this.markerFileModificationTimestamp = Option.ofNullable(null);
   }
 
   public boolean isCompleted() {
@@ -138,8 +138,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     return timestamp;
   }
 
-  public Option<String> getMarkerFileAccessTimestamp() {
-    return markerFileAccessTimestamp;
+  public Option<String> getMarkerFileModificationTimestamp() {
+    return markerFileModificationTimestamp;
   }
 
   /**

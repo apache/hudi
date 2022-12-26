@@ -190,8 +190,8 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     return hoodieTable.getCompletedCommitsTimeline().getInstantsAsStream().filter(
         instant -> (HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
             cleanMetadata.getEarliestCommitToRetain())
-              || (instant.getMarkerFileAccessTimestamp().isPresent()
-                && (HoodieTimeline.compareTimestamps(instant.getMarkerFileAccessTimestamp().get(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
+              || (instant.getMarkerFileModificationTimestamp().isPresent()
+                && (HoodieTimeline.compareTimestamps(instant.getMarkerFileModificationTimestamp().get(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
                     cleanMetadata.getStartCleanTime()))))
             && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
             HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())).flatMap(instant -> {
