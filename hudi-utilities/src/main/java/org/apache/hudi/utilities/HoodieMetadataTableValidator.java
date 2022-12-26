@@ -62,7 +62,6 @@ import org.apache.hudi.utilities.util.BloomFilterData;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import jline.internal.Log;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -940,6 +939,9 @@ public class HoodieMetadataTableValidator implements Serializable {
    * verified in the {@link HoodieMetadataTableValidator}.
    */
   private static class HoodieMetadataValidationContext implements Serializable {
+
+    private static final Logger LOG = LogManager.getLogger(HoodieMetadataValidationContext.class);
+
     private final HoodieTableMetaClient metaClient;
     private final HoodieTableFileSystemView fileSystemView;
     private final HoodieTableMetadata tableMetadata;
@@ -1050,11 +1052,11 @@ public class HoodieMetadataTableValidator implements Serializable {
       try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(), path)) {
         bloomFilter = fileReader.readBloomFilter();
         if (bloomFilter == null) {
-          Log.error("Failed to read bloom filter for " + path);
+          LOG.error("Failed to read bloom filter for " + path);
           return Option.empty();
         }
       } catch (IOException e) {
-        Log.error("Failed to get file reader for " + path + " " + e.getMessage());
+        LOG.error("Failed to get file reader for " + path + " " + e.getMessage());
         return Option.empty();
       }
       return Option.of(BloomFilterData.builder()
