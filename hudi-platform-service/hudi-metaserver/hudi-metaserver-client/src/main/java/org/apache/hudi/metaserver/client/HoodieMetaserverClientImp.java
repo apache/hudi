@@ -21,6 +21,7 @@ package org.apache.hudi.metaserver.client;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.hudi.metaserver.thrift.ThriftHoodieMetaserver;
@@ -34,8 +35,6 @@ import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 
 import java.io.Serializable;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -63,36 +62,31 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, AutoCl
     String uri = config.getMetaserverUris();
     if (isLocalEmbeddedMetaserver(uri)) {
       try {
-        Method method = Class.forName("org.apache.hudi.metaserver.HoodieMetaserver").getMethod("getEmbeddedMetaserver", new Class[]{});
-        this.client = (ThriftHoodieMetaserver.Iface) method.invoke(null, new Object[]{});
-      } catch (ClassNotFoundException | NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
+        this.client = (ThriftHoodieMetaserver.Iface) ReflectionUtils.invokeStaticMethod("org.apache.hudi.metaserver.HoodieMetaserver",
+            "getEmbeddedMetaserver", new Object[]{}, new Class[]{});
+      } catch (HoodieException e) {
         throw new HoodieException("Please check the server uri has ever been set. Empty uri is used for local unit test", e);
       }
       this.isConnected = true;
       this.isLocal = true;
     } else {
-      open();
-    }
-  }
-
-  private void open() {
-    String uri = config.getMetaserverUris();
-    TTransportException exception = null;
-    for (int i = 0; !isConnected && i < retryLimit; i++) {
-      try {
-        URI msUri = URI.create(uri);
-        this.transport = new TSocket(msUri.getHost(), msUri.getPort());
-        this.client = new ThriftHoodieMetaserver.Client(new TBinaryProtocol(transport));
-        transport.open();
-        this.isConnected = true;
-        LOG.info("Connected to meta server: " + msUri);
-      } catch (TTransportException e) {
-        exception = e;
-        LOG.warn("Failed to connect to the meta server.", e);
+      TTransportException exception = null;
+      for (int i = 0; !isConnected && i < retryLimit; i++) {
+        try {
+          URI msUri = URI.create(uri);
+          this.transport = new TSocket(msUri.getHost(), msUri.getPort());
+          this.client = new ThriftHoodieMetaserver.Client(new TBinaryProtocol(transport));
+          transport.open();
+          this.isConnected = true;
+          LOG.info("Connected to meta server: " + msUri);
+        } catch (TTransportException e) {
+          exception = e;
+          LOG.warn("Failed to connect to the meta server.", e);
+        }
       }
-    }
-    if (!isConnected) {
-      throw new HoodieException("Fail to connect to the metaserver.", exception);
+      if (!isConnected) {
+        throw new HoodieException("Fail to connect to the metaserver.", exception);
+      }
     }
   }
 

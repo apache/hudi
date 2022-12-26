@@ -40,9 +40,6 @@ public class EntityConversions {
   }
 
   public static TAction toTAction(String action) {
-    if (action == null) {
-      return null;
-    }
     switch (action) {
       case HoodieTimeline.COMMIT_ACTION:
         return TAction.COMMIT;
@@ -66,9 +63,6 @@ public class EntityConversions {
   }
 
   public static TState toTState(HoodieInstant.State state) {
-    if (state == null) {
-      return null;
-    }
     switch (state) {
       case COMPLETED:
         return TState.COMPLETED;
@@ -76,8 +70,8 @@ public class EntityConversions {
         return TState.INFLIGHT;
       case REQUESTED:
         return TState.REQUESTED;
-      case INVALID:
-        return TState.INVALID;
+      case NIL:
+        return TState.NIL;
       default:
         throw new IllegalArgumentException("Unknown state: " + state.name());
     }
@@ -107,8 +101,8 @@ public class EntityConversions {
         return HoodieInstant.State.INFLIGHT;
       case REQUESTED:
         return HoodieInstant.State.REQUESTED;
-      case INVALID:
-        return HoodieInstant.State.INVALID;
+      case NIL:
+        return HoodieInstant.State.NIL;
       default:
         throw new IllegalArgumentException("Unknown state: " + state.name());
     }

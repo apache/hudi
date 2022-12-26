@@ -58,10 +58,11 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   private final Table table;
   private final HoodieMetaserverClient metaserverClient;
 
-  public HoodieTableMetaserverClient(Configuration conf, ConsistencyGuardConfig consistencyGuardConfig, FileSystemRetryConfig fileSystemRetryConfig,
+  public HoodieTableMetaserverClient(Configuration conf, ConsistencyGuardConfig consistencyGuardConfig,
+                                     String mergerStrategy, FileSystemRetryConfig fileSystemRetryConfig,
                                      String databaseName, String tableName, HoodieMetaserverConfig config) {
     super(conf, config.getString(HoodieWriteConfig.BASE_PATH), false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
-        config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), fileSystemRetryConfig);
+        config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), mergerStrategy, fileSystemRetryConfig);
     checkArgument(nonEmpty(databaseName), "database name is required.");
     checkArgument(nonEmpty(tableName), "table name is required.");
     this.databaseName = databaseName;

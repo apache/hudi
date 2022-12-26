@@ -24,7 +24,7 @@ import org.apache.hudi.metaserver.thrift.Table;
  * Table entity for store.
  */
 public class TableBean {
-  private String databaseName;
+  private String dbName;
   private Long tblId;
   private String tableName;
   private String createTime;
@@ -37,8 +37,8 @@ public class TableBean {
     this.location = table.location;
   }
 
-  public TableBean(String databaseName, Long tblId, String tableName, String createTime, String owner, String location) {
-    this.databaseName = databaseName;
+  public TableBean(String dbName, Long tblId, String tableName, String createTime, String owner, String location) {
+    this.dbName = dbName;
     this.tblId = tblId;
     this.tableName = tableName;
     this.createTime = createTime;
@@ -48,19 +48,19 @@ public class TableBean {
 
   public Table toTable() {
     Table table = new Table();
-    table.setDbName(databaseName);
+    table.setDbName(dbName);
     table.setTableName(tableName);
     table.setOwner(owner);
     table.setLocation(location);
     return table;
   }
 
-  public String getDatabaseName() {
-    return databaseName;
+  public String getDbName() {
+    return dbName;
   }
 
-  public void setDatabaseName(String databaseName) {
-    this.databaseName = databaseName;
+  public void setDatabaseName(String dbName) {
+    this.dbName = dbName;
   }
 
   public Long getTblId() {
@@ -106,7 +106,7 @@ public class TableBean {
   @Override
   public String toString() {
     return "TableBean{"
-        + "databaseName=" + databaseName
+        + "dbName=" + dbName
         + ", tblId=" + tblId
         + ", tableName='" + tableName + '\''
         + ", createTime='" + createTime + '\''

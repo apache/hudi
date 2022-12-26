@@ -53,7 +53,7 @@ enum TState {
    REQUESTED = 1,
    INFLIGHT = 2,
    COMPLETED = 3,
-   INVALID = 4
+   NIL = 4
 }
 
 struct THoodieInstant {
