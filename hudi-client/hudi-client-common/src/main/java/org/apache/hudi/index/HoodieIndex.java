@@ -28,6 +28,8 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -152,8 +154,16 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public void close() {
   }
 
+  protected boolean checkIfValidCommit(HoodieTableMetaClient metaClient, String commitTs) {
+    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+    // Check if the last commit ts for this row is 1) present in the timeline or
+    // 2) is less than the first commit ts in the timeline
+    return !commitTimeline.empty()
+        && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
+  }
+  
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET, FLINK_STATE
+    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET, FLINK_STATE, RECORD_INDEX
   }
 
   public enum BucketIndexEngineType {

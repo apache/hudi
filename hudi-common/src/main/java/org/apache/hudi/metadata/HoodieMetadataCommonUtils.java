@@ -74,6 +74,18 @@ public class HoodieMetadataCommonUtils {
   }
 
   /**
+   * Returns a {@code HoodieTableMetaClient} for the metadata table.
+   *
+   * @param datasetMetaClient {@code HoodieTableMetaClient} for the dataset.
+   * @return {@code HoodieTableMetaClient} for the metadata table.
+   */
+  public static HoodieTableMetaClient getMetadataTableMetaClient(HoodieTableMetaClient datasetMetaClient) {
+    final String metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(datasetMetaClient.getBasePath());
+    return HoodieTableMetaClient.builder().setBasePath(metadataBasePath).setConf(datasetMetaClient.getHadoopConf())
+        .build();
+  }
+
+  /**
    * Get the latest file slices for a Metadata Table partition. If the file slice is
    * because of pending compaction instant, then merge the file slice with the one
    * just before the compaction instant time. The list of file slices returned is

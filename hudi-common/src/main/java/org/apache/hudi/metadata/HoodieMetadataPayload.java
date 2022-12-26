@@ -278,7 +278,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private HoodieMetadataPayload(String key, HoodieRecordIndexInfo recordIndexInfo) {
-    this(key, METADATA_TYPE_COLUMN_STATS, null, null, null, recordIndexInfo);
+    this(key, METADATA_TYPE_RECORD_INDEX, null, null, null, recordIndexInfo);
   }
 
   protected HoodieMetadataPayload(String key, int type,
@@ -429,6 +429,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           fileId, partition, instantTime), e);
     }
 
+
     // Store instantTime as milliseconds sinch epoch. Using an int here allows dates till year 2038.
     java.util.Date instantDate;
     try {
@@ -542,7 +543,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     if (recordIndexInfo.getFileIndex() != MISSING_FILEINDEX) {
       fileId += "-" + String.valueOf(recordIndexInfo.getFileIndex());
     }
-    final Date instantDate = new Date(recordIndexInfo.getInstantTime());
+    final java.util.Date instantDate = new java.util.Date(recordIndexInfo.getInstantTime());
     return new HoodieRecordGlobalLocation(partition, HoodieActiveTimeline.formatDate(instantDate), fileId);
   }
 

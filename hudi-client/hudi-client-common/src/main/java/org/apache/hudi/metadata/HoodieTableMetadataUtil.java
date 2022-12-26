@@ -106,6 +106,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collector;
@@ -172,7 +173,7 @@ public class HoodieTableMetadataUtil {
     // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
     // presence of keys.
     final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
-    final int maxLogBlockSizeBytes = (int)maxLogFileSizeBytes;
+    final int maxLogBlockSizeBytes = (int) (maxLogFileSizeBytes > Integer.MAX_VALUE ? Integer.MAX_VALUE : maxLogFileSizeBytes);
 
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
@@ -485,7 +486,10 @@ public class HoodieTableMetadataUtil {
         throw new HoodieIOException("Failed to initialize Record Level Index ", e);
       }
       final HoodieData<HoodieRecord> metadataRecordIndexRDD = convertMetadataToRecordIndexRecords(writeStatuses, dataTableWriteConfig);
-      partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX, metadataRecordIndexRDD);
+      if (!metadataRecordIndexRDD.isEmpty()) {
+        // if every record is an update for this commit, there won't be anything to update in record index.
+        partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX, metadataRecordIndexRDD);
+      }
     }
     return partitionToRecordsMap;
   }
@@ -1370,9 +1374,10 @@ public class HoodieTableMetadataUtil {
 
   public static HoodieData<HoodieRecord> convertMetadataToRecordIndexRecords(HoodieData<WriteStatus> writeStatuses, HoodieWriteConfig dataTableWriteConfig) {
     HoodieTimer timer = new HoodieTimer().startTimer();
+    AtomicInteger counter = new AtomicInteger(0);
     Registry registry = Registry.getRegistry(dataTableWriteConfig.getTableName() + ".SparkMetadataTableRecordIndex");
 
-    List<WriteStatus> writeStatuses1 = writeStatuses.collectAsList();
+    // List<WriteStatus> writeStatusesList = writeStatuses.collectAsList();
 
     HoodieData<HoodieRecord> records = writeStatuses.flatMap(writeStatus -> {
       long numUpdates = 0;
@@ -1416,8 +1421,8 @@ public class HoodieTableMetadataUtil {
     //    registry.add(HoodieIndex.UPDATE_LOC_DURATION, timer.endTimer());
     //    registry.add(HoodieIndex.UPDATE_LOC_NUM_PARTITIONS, writeStatuses.getNumPartitions());
 
-    List<HoodieRecord> recordList = records.collectAsList();
-
+    // List<HoodieRecord> recordList = records.collectAsList();
+    records.persist("MEMORY_AND_DISK_SER");
     return records;
     //return tagRecordsWithLocation(records, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
   }

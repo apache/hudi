@@ -710,7 +710,7 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public boolean isMetadataPartitionEnabled(MetadataPartitionType partition) {
     String[] partitions = getStringOrDefault(TABLE_METADATA_PARTITIONS).split(",");
-    return Arrays.stream(partitions).anyMatch(p -> p.equals(partition.name()));
+    return Arrays.stream(partitions).anyMatch(p -> p.equals(partition.getPartitionPath()));
   }
 
   /**

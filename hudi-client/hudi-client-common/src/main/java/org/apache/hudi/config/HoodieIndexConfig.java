@@ -53,6 +53,7 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.HBASE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
+import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_INDEX;
 import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
 
 /**
@@ -72,7 +73,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       // Builder#getDefaultIndexType has already set it according to engine type
       .noDefaultValue()
       .withValidValues(HBASE.name(), INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
-          SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name())
+          SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name(), RECORD_INDEX.name())
       .withDocumentation("Type of index to use. Default is SIMPLE on Spark engine, "
           + "and INMEMORY on Flink and Java engines. "
           + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "

@@ -161,7 +161,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       SliceView rtView = hoodieTable.getSliceView();
       Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
       // Set the base commit time as the current instantTime for new inserts into log files
-      String baseInstantTime;
       String baseFile = "";
       List<String> logFiles = new ArrayList<>();
       if (fileSlice.isPresent()) {
@@ -261,7 +260,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         recordsDeleted++;
       }
 
-      writeStatus.markSuccess(HoodieKeyWithLocation.toHoodieKeyWithLocation(hoodieRecord), recordMetadata);
+      // TODO: what to store as new location's instant time in writeStatus. should we represent current time time or base instant time. For record level index purpose, we need the base instant time.
+      // but in general, it makes sense to store the current instant time.
+      writeStatus.markSuccess(HoodieKeyWithLocation.toHoodieKeyWithLocation(hoodieRecord, baseInstantTime), recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
@@ -269,7 +270,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       return finalRecord;
     } catch (Exception e) {
       LOG.error("Error writing record  " + hoodieRecord, e);
-      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(hoodieRecord), e, recordMetadata);
+      // TODO: what to store as new location's instant time in writeStatus. should we represent current time time or base instant time. For record level index purpose, we need the base instant time.
+      // but in general, it makes sense to store the current instant time.
+      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(hoodieRecord, baseInstantTime), e, recordMetadata);
     }
     return Option.empty();
   }
@@ -295,6 +298,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void initNewStatus() {
+    LOG.warn("XXX instantiating new status ");
     HoodieDeltaWriteStat prevStat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
     // Make a new write status and copy basic fields over.
     HoodieDeltaWriteStat stat = new HoodieDeltaWriteStat();
@@ -382,6 +386,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       accumulateWriteCounts(stat, result);
       accumulateRuntimeStats(stat);
     } else {
+      LOG.warn("XXX writing to new log file");
       // written to a newer log file, due to rollover/otherwise.
       initNewStatus();
       stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
@@ -484,7 +489,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     } catch (Throwable t) {
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
-      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(record), t, recordMetadata);
+      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(record, baseInstantTime), t, recordMetadata);
       LOG.error("Error writing record " + record, t);
     }
   }
@@ -548,7 +553,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     if (!partitionPath.equals(record.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + record.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
-      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(record), failureEx, record.getMetadata());
+      writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(record, baseInstantTime), failureEx, record.getMetadata());
       return;
     }
 
@@ -568,7 +573,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           recordList.add(indexedRecord.get());
         }
       } catch (IOException e) {
-        writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(record), e, record.getMetadata());
+        writeStatus.markFailure(HoodieKeyWithLocation.toHoodieKeyWithLocation(record, baseInstantTime), e, record.getMetadata());
         LOG.error("Error writing record  " + indexedRecord.get(), e);
       }
     } else {
@@ -590,7 +595,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     if (numberOfRecords >= (int) (maxBlockSize / averageRecordSize)) {
       // Recompute averageRecordSize before writing a new block and update existing value with
       // avg of new and old
-      LOG.info("Flush log block to disk, the current avgRecordSize => " + averageRecordSize);
+      LOG.warn("XXX Flush log block to disk, the current avgRecordSize => " + averageRecordSize);
       // Delete blocks will be appended after appending all the data blocks.
       appendDataAndDeleteBlocks(header, appendDeleteBlocks);
       estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;

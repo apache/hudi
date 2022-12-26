@@ -63,4 +63,10 @@ public class HoodieKeyWithLocation {
   public static HoodieKeyWithLocation toHoodieKeyWithLocation(HoodieRecord record) {
     return new HoodieKeyWithLocation(record.getKey(), record.getCurrentLocation(), record.getNewLocation());
   }
+
+  public static HoodieKeyWithLocation toHoodieKeyWithLocation(HoodieRecord record, String baseInstantTime) {
+    return new HoodieKeyWithLocation(record.getKey(), record.getCurrentLocation(),
+        record.getNewLocation().isPresent() ? Option.of(new HoodieRecordLocation(baseInstantTime, ((HoodieRecordLocation)record.getNewLocation().get()).fileId)) :
+        Option.empty());
+  }
 }

@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -200,6 +201,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
                                                                           String partitionName,
                                                                           boolean shouldLoadInMemory);
+
+  /**
+   * Fetch records from record index. Given a list of record keys, this method should fetch the location of record from record index in metadata table an serve.
+   * @param recordKeys list of interested record keys.
+   * @return {@link Map} of record key to respective the record location.
+   */
+  Map<String, HoodieRecordGlobalLocation> tagLocationForRecordKeys(List<String> recordKeys);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

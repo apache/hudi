@@ -820,9 +820,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     HoodieTableFileSystemView fsView = HoodieMetadataCommonUtils.getFileSystemView(metadataMetaClient);
     for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
       final String partitionName = entry.getKey().getPartitionPath();
-      final int fileGroupCount = entry.getKey().getFileGroupCount();
+      int fileGroupCount = entry.getKey().getFileGroupCount();
       HoodieData<HoodieRecord> records = entry.getValue();
-      List<HoodieRecord> recordList = records.collectAsList();
+      // List<HoodieRecord> recordList = records.collectAsList();
 
       List<FileSlice> fileSlices =
           HoodieMetadataCommonUtils.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionName);
@@ -830,24 +830,34 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         // scheduling of INDEX only initializes the file group and not add commit
         // so if there are no committed file slices, look for inflight slices
         fileSlices = HoodieMetadataCommonUtils.getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionName);
+      } else {
+        // there are chances that file group was dynamically decided and so may not match w/ static file group count.
+        fileGroupCount = fileSlices.size();
       }
       ValidationUtils.checkArgument(fileSlices.size() == fileGroupCount,
           String.format("Invalid number of file groups for partition:%s, found=%d, required=%d",
               partitionName, fileSlices.size(), fileGroupCount));
 
       List<FileSlice> finalFileSlices = fileSlices;
+      int finalFileGroupCount = fileGroupCount;
       HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
         FileSlice slice = finalFileSlices.get(HoodieMetadataCommonUtils.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
-            fileGroupCount));
+            finalFileGroupCount));
         r.unseal();
         r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
         r.seal();
         return r;
       });
 
-      List<HoodieRecord> tempRecs = rddSinglePartitionRecords.collectAsList();
-
+      //      List<HoodieRecord> tempRecs = rddSinglePartitionRecords.collectAsList();
+      //      if (partitionName.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
+      //        System.out.println("Total record level index records to write " + tempRecs.size());
+      //        tempRecs.forEach(rec -> {
+      //          System.out.println("Record level index " + ((HoodieMetadataPayload)rec.getData()).getRecordGlobalLocation().toString());
+      //        });
+      //      }
       allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
+      // List<HoodieRecord> finalList = allPartitionRecords.collectAsList();
     }
     return allPartitionRecords;
   }

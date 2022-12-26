@@ -30,6 +30,7 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -285,6 +286,40 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       }
     }
     return fileToColumnStatMap;
+  }
+
+  /**
+   * Reads record keys from record-level index.
+   *
+   * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
+   *
+   * @param recordKeys The list of record keys to read
+   */
+  @Override
+  public Map<String, HoodieRecordGlobalLocation> tagLocationForRecordKeys(List<String> recordKeys) {
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.RECORD_INDEX),
+        "Cannot access record-level index as it is not available in the metadata table");
+
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = getRecordsByKeys(recordKeys,
+        MetadataPartitionType.RECORD_INDEX.getPartitionPath());
+
+    Map<String, HoodieRecordGlobalLocation> recordKeyToLocation = new HashMap<>(result.size());
+    result.forEach(e -> {
+      if (e.getValue().isPresent()) {
+        recordKeyToLocation.put(e.getKey(), e.getValue().get().getData().getRecordGlobalLocation());
+      } else {
+        // TODO: fix me. revisit the flow where we turn empty record location (new inserts)
+        recordKeyToLocation.put(e.getKey(), new HoodieRecordGlobalLocation());
+      }
+    });
+
+    //    metrics.ifPresent(m -> m.updateDurationMetric(HoodieMetadataMetrics.LOOKUP_RECORDINDEX_STR, timer.endTimer()));
+    //    metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.LOOKUP_RECORDKEYS_COUNT_STR, recordKeys.size()));
+    //    metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.RECORDINDEX_HITS_STR, recordKeyToLocation.size()));
+    //    metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.RECORDINDEX_MISS_STR, recordKeys.size() - recordKeyToLocation.size()));
+
+    return recordKeyToLocation;
   }
 
   /**

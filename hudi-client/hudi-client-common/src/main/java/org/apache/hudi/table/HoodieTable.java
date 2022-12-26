@@ -121,7 +121,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected final HoodieIndex<?, ?> index;
   private SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
-  private final HoodieTableMetadata metadata;
+  private final HoodieTableMetadata metadataReader;
   private final HoodieStorageLayout storageLayout;
 
   private transient FileSystemViewManager viewManager;
@@ -134,10 +134,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
         .build();
-    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
+    this.metadataReader = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
         FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
 
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadataReader);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.storageLayout = getStorageLayout(config);
@@ -152,13 +152,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadataReader);
     }
     return viewManager;
   }
 
-  public HoodieTableMetadata getMetadata() {
-    return metadata;
+  public HoodieTableMetadata getMetadataReader() {
+    return metadataReader;
   }
 
   /**
@@ -976,7 +976,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public HoodieTableMetadata getMetadataTable() {
-    return this.metadata;
+    return this.metadataReader;
   }
 
   public Runnable getPreExecuteRunnable() {
