@@ -191,9 +191,7 @@ public class CleanerUtils<T extends HoodieAvroPayload, I, K, O> {
     HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
     Option<HoodieInstant> firstCompletedClusteringInstant = activeTimeline.getCommitsTimeline().filterCompletedInstants()
         .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).firstInstant();
-    Option<HoodieInstant> lastCompletedClusteringInstant = activeTimeline.getCommitsTimeline().filterCompletedInstants()
-        .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
-    if (!lastCompletedClusteringInstant.isPresent()) {
+    if (!firstCompletedClusteringInstant.isPresent()) {
       return  Option.empty();
     } else {
       return ! earliestInstantCleanTime.isPresent()
