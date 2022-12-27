@@ -80,7 +80,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
-import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
 import org.junit.jupiter.api.AfterEach;
@@ -130,11 +129,10 @@ public class TestBootstrap extends HoodieClientTestBase {
 
   private HoodieParquetRealtimeInputFormat rtInputFormat;
   private JobConf rtJobConf;
-  private SparkSession spark;
 
   @BeforeEach
   public void setUp() throws Exception {
-    bootstrapBasePath = tmpFolder.toAbsolutePath().toString() + "/data";
+    bootstrapBasePath = tmpFolder.toAbsolutePath() + "/data";
     initPath();
     initSparkContexts();
     initTestDataGenerator();
@@ -272,6 +270,7 @@ public class TestBootstrap extends HoodieClientTestBase {
 
     BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
     assertFalse(index.useIndex());
+    client.close();
 
     // Run bootstrap again
     client = new SparkRDDWriteClient(context, config);
@@ -308,6 +307,7 @@ public class TestBootstrap extends HoodieClientTestBase {
           numInstantsAfterBootstrap + 2, 2, updateTimestamp, updateTimestamp, !deltaCommit,
           Arrays.asList(compactionInstant.get()), !config.isPreserveHoodieCommitMetadataForCompaction());
     }
+    client.close();
   }
 
   @Test

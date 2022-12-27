@@ -51,7 +51,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
-import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -75,7 +74,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
-import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
 import org.junit.jupiter.api.AfterEach;
@@ -110,9 +108,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("functional")
 public class TestOrcBootstrap extends HoodieClientTestBase {
 
-
-  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,"
-      + "struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
   @TempDir
   public java.nio.file.Path tmpFolder;
 
@@ -121,13 +116,9 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
   private HoodieParquetInputFormat roInputFormat;
   private JobConf roJobConf;
 
-  private HoodieParquetRealtimeInputFormat rtInputFormat;
-  private JobConf rtJobConf;
-  private SparkSession spark;
-
   @BeforeEach
   public void setUp() throws Exception {
-    bootstrapBasePath = tmpFolder.toAbsolutePath().toString() + "/data";
+    bootstrapBasePath = tmpFolder.toAbsolutePath() + "/data";
     initPath();
     initSparkContexts();
     initTestDataGenerator();
@@ -271,6 +262,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
 
     BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
     assertFalse(index.useIndex());
+    client.close();
 
     // Run bootstrap again
     client = new SparkRDDWriteClient(context, config);
@@ -307,6 +299,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
           numInstantsAfterBootstrap + 2, 2, updateTimestamp, updateTimestamp, !deltaCommit,
           Arrays.asList(compactionInstant.get()), !config.isPreserveHoodieCommitMetadataForCompaction());
     }
+    client.close();
   }
 
   @Test
