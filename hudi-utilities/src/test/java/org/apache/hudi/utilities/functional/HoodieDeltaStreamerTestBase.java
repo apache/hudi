@@ -37,8 +37,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
@@ -56,7 +54,6 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
-
 
   static final Random RANDOM = new Random();
   static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
@@ -102,9 +99,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   protected static String defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   protected static int testNum = 1;
 
-  @BeforeAll
-  public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, true, true);
+  protected static void prepareTestSetup() throws IOException {
     PARQUET_SOURCE_ROOT = basePath + "/parquetFiles";
     ORC_SOURCE_ROOT = basePath + "/orcFiles";
     JSON_KAFKA_SOURCE_ROOT = basePath + "/jsonKafkaFiles";
@@ -112,7 +107,6 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     testUtils.setup();
     topicName = "topic" + testNum;
     prepareInitialConfigs(fs, basePath, testUtils.brokerAddress());
-
     prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
     prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
   }
@@ -197,23 +191,17 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE);
   }
 
-  @BeforeEach
-  public void setup() throws Exception {
-    super.setup();
-    TestDataSource.returnEmptyBatch = false;
-  }
-
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
     if (testUtils != null) {
       testUtils.teardown();
     }
   }
 
-  @AfterEach
-  public void teardown() throws Exception {
-    super.teardown();
+  @BeforeEach
+  public void setup() throws Exception {
+    super.setup();
+    TestDataSource.returnEmptyBatch = false;
   }
 
   protected static void populateInvalidTableConfigFilePathProps(TypedProperties props, String dfsBasePath) {

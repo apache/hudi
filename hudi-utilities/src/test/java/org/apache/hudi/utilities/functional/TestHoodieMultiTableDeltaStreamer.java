@@ -33,6 +33,7 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -75,6 +76,12 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
       config.syncClientToolClassNames = "com.example.DummySyncTool1,com.example.DummySyncTool2";
       return config;
     }
+  }
+
+  @BeforeAll
+  public static void initClass() throws Exception {
+    UtilitiesTestBase.initTestServices(false, true, true);
+    prepareTestSetup();
   }
 
   @Test
