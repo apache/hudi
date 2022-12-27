@@ -700,9 +700,9 @@ public class DeltaSync implements Serializable, Closeable {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       if (checkpointStr != null) {
         checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
-      }
-      if (cfg.checkpoint != null) {
-        checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
+        if (cfg.checkpoint != null) {
+          checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
+        }
       }
 
       if (hasErrors) {
