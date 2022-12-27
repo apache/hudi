@@ -37,7 +37,7 @@ public interface RunsTableService {
   }
 
   default boolean useTableServicemanager(HoodieWriteConfig config, ActionType actionType) {
-    boolean supportsAction = config.getTableServiceManagerConfig().isTableServiceManagerSupportsAction(actionType);
+    boolean supportsAction = config.getTableServiceManagerConfig().isEnabledAndActionSupported(actionType);
     if (supportsAction) {
       LOG.warn(actionType.name() + " delegate to table manager service!");
     }

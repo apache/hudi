@@ -2297,7 +2297,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Table Service Manager configs.
    */
   public boolean isTableServiceManagerEnabled() {
-    return tableServiceManagerConfig.enableTableServiceManager();
+    return tableServiceManagerConfig.isTableServiceManagerEnabled();
   }
 
   public static class Builder {

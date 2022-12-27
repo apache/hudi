@@ -35,40 +35,40 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
 
   public static final String TABLE_SERVICE_MANAGER_PREFIX = "hoodie.table.service.manager";
 
-  public static final ConfigProperty<Boolean> TABLE_SERVICE_MANAGER_ENABLE = ConfigProperty
-      .key(TABLE_SERVICE_MANAGER_PREFIX + ".enable")
+  public static final ConfigProperty<Boolean> TABLE_SERVICE_MANAGER_ENABLED = ConfigProperty
+      .key(TABLE_SERVICE_MANAGER_PREFIX + ".enabled")
       .defaultValue(false)
-      .withDocumentation("Use table manager service to execute table service");
+      .withDocumentation("If true, use table service manager to execute table service");
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_URIS = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".uris")
       .defaultValue("http://localhost:9091")
-      .withDocumentation("Table service manager uris");
+      .withDocumentation("Table service manager URIs (comma-delimited).");
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_ACTIONS = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".actions")
       .defaultValue("")
-      .withDocumentation("Which action deploy on table service manager such as compaction:clean, default null");
+      .withDocumentation("The actions deployed on table service manager, such as compaction or clean.");
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DEPLOY_USERNAME = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".deploy.username")
       .defaultValue("default")
-      .withDocumentation("The user name to deploy for table service of this table");
+      .withDocumentation("The user name for this table to deploy table services.");
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DEPLOY_QUEUE = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".deploy.queue")
       .defaultValue("default")
-      .withDocumentation("The queue to deploy for table service of this table");
+      .withDocumentation("The queue for this table to deploy table services.");
 
-  public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DEPLOY_RESOURCE = ConfigProperty
-      .key(TABLE_SERVICE_MANAGER_PREFIX + ".deploy.resource")
+  public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DEPLOY_RESOURCES = ConfigProperty
+      .key(TABLE_SERVICE_MANAGER_PREFIX + ".deploy.resources")
       .defaultValue("4g:4g")
-      .withDocumentation("The resource to deploy for table service of this table, default driver 4g, executor 4g");
+      .withDocumentation("The resources for this table to use for deploying table services.");
 
   public static final ConfigProperty<Integer> TABLE_SERVICE_MANAGER_DEPLOY_PARALLELISM = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".deploy.parallelism")
       .defaultValue(100)
-      .withDocumentation("The max parallelism to deploy for table service of this table, default 100");
+      .withDocumentation("The parallelism for this table to deploy table services.");
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DEPLOY_EXECUTION_ENGINE = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".execution.engine")
@@ -80,18 +80,18 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
       .defaultValue("")
       .withDocumentation("The extra params to deploy for table service of this table, split by ';'");
 
-  public static final ConfigProperty<Integer> TABLE_SERVICE_MANAGER_TIMEOUT = ConfigProperty
-      .key(TABLE_SERVICE_MANAGER_PREFIX + ".timeout")
+  public static final ConfigProperty<Integer> TABLE_SERVICE_MANAGER_TIMEOUT_SEC = ConfigProperty
+      .key(TABLE_SERVICE_MANAGER_PREFIX + ".connection.timeout.sec")
       .defaultValue(300)
-      .withDocumentation("Connection timeout for client");
+      .withDocumentation("Timeout in seconds for connections to table service manager.");
 
   public static final ConfigProperty<Integer> TABLE_SERVICE_MANAGER_RETRIES = ConfigProperty
-      .key(TABLE_SERVICE_MANAGER_PREFIX + ".connect.retries")
+      .key(TABLE_SERVICE_MANAGER_PREFIX + ".connection.retries")
       .defaultValue(3)
       .withDocumentation("Number of retries while opening a connection to table service manager");
 
-  public static final ConfigProperty<Integer> TABLE_SERVICE_MANAGER_RETRY_DELAY = ConfigProperty
-      .key(TABLE_SERVICE_MANAGER_PREFIX + ".connect.retry.delay")
+  public static final ConfigProperty<Integer> TABLE_SERVICE_MANAGER_RETRY_DELAY_SEC = ConfigProperty
+      .key(TABLE_SERVICE_MANAGER_PREFIX + ".connection.retry.delay.sec")
       .defaultValue(1)
       .withDocumentation("Number of seconds for the client to wait between consecutive connection attempts");
 
@@ -110,11 +110,11 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
     return new HoodieTableServiceManagerConfig.Builder();
   }
 
-  public boolean enableTableServiceManager() {
-    return getBoolean(TABLE_SERVICE_MANAGER_ENABLE);
+  public boolean isTableServiceManagerEnabled() {
+    return getBoolean(TABLE_SERVICE_MANAGER_ENABLED);
   }
 
-  public String getTableServiceManagerURIS() {
+  public String getTableServiceManagerURIs() {
     return getStringOrDefault(TABLE_SERVICE_MANAGER_URIS);
   }
 
@@ -130,8 +130,8 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
     return getStringOrDefault(TABLE_SERVICE_MANAGER_DEPLOY_QUEUE);
   }
 
-  public String getDeployResource() {
-    return getStringOrDefault(TABLE_SERVICE_MANAGER_DEPLOY_RESOURCE);
+  public String getDeployResources() {
+    return getStringOrDefault(TABLE_SERVICE_MANAGER_DEPLOY_RESOURCES);
   }
 
   public int getDeployParallelism() {
@@ -146,8 +146,8 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
     return getStringOrDefault(TABLE_SERVICE_MANAGER_DEPLOY_EXECUTION_ENGINE);
   }
 
-  public int getConnectionTimeout() {
-    return getIntOrDefault(TABLE_SERVICE_MANAGER_TIMEOUT);
+  public int getConnectionTimeoutSec() {
+    return getIntOrDefault(TABLE_SERVICE_MANAGER_TIMEOUT_SEC);
   }
 
   public int getConnectionRetryLimit() {
@@ -155,15 +155,15 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
   }
 
   public int getConnectionRetryDelay() {
-    return getIntOrDefault(TABLE_SERVICE_MANAGER_RETRY_DELAY);
+    return getIntOrDefault(TABLE_SERVICE_MANAGER_RETRY_DELAY_SEC);
   }
 
   public int getConnectionTolerableNum() {
     return getIntOrDefault(TABLE_SERVICE_MANAGER_TOLERABLE_NUM);
   }
 
-  public boolean isTableServiceManagerSupportsAction(ActionType actionType) {
-    return enableTableServiceManager() && getTableServiceManagerActions().contains(actionType.name());
+  public boolean isEnabledAndActionSupported(ActionType actionType) {
+    return isTableServiceManagerEnabled() && getTableServiceManagerActions().contains(actionType.name());
   }
 
   public static class Builder {
@@ -174,7 +174,7 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder setUris(String uris) {
+    public Builder setURIs(String uris) {
       config.setValue(TABLE_SERVICE_MANAGER_URIS, uris);
       return this;
     }

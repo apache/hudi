@@ -90,7 +90,7 @@ public class HoodieTableServiceManagerClient {
     this.basePath = metaClient.getBasePathV2().toString();
     this.dbName = metaClient.getTableConfig().getDatabaseName();
     this.tableName = metaClient.getTableConfig().getTableName();
-    this.uri = config.getTableServiceManagerURIS();
+    this.uri = config.getTableServiceManagerURIs();
     this.config = config;
     this.metaClient = metaClient;
   }
@@ -106,7 +106,7 @@ public class HoodieTableServiceManagerClient {
 
     String url = builder.toString();
     LOG.info("Sending request to table management service : (" + url + ")");
-    int timeout = this.config.getConnectionTimeout() * 1000; // msec
+    int timeout = this.config.getConnectionTimeoutSec() * 1000; // msec
     int requestRetryLimit = config.getConnectionRetryLimit();
     int connectionRetryDelay = config.getConnectionRetryDelay();
 
@@ -173,7 +173,7 @@ public class HoodieTableServiceManagerClient {
   private Map<String, String> getDefaultParams(Action action, String instantRange) {
     return getParamsWithAdditionalParams(
         new String[] {ACTION, DATABASE_NAME_PARAM, TABLE_NAME_PARAM, INSTANT_PARAM, USERNAME, QUEUE, RESOURCE, PARALLELISM, EXTRA_PARAMS, EXECUTION_ENGINE},
-        new String[] {action.name(), dbName, tableName, instantRange, config.getDeployUsername(), config.getDeployQueue(), config.getDeployResource(),
+        new String[] {action.name(), dbName, tableName, instantRange, config.getDeployUsername(), config.getDeployQueue(), config.getDeployResources(),
             String.valueOf(config.getDeployParallelism()), config.getDeployExtraParams(), config.getDeployExecutionEngine()});
   }
 }

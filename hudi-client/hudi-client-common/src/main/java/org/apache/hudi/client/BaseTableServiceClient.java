@@ -808,7 +808,7 @@ public abstract class BaseTableServiceClient<O> extends BaseHoodieClient
   }
 
   private Option<String> delegateToTableServiceManager(TableServiceType tableServiceType, HoodieTable table) {
-    if (!config.getTableServiceManagerConfig().isTableServiceManagerSupportsAction(ActionType.compaction)) {
+    if (!config.getTableServiceManagerConfig().isEnabledAndActionSupported(ActionType.compaction)) {
       return Option.empty();
     }
     HoodieTableServiceManagerClient tableServiceManagerClient = new HoodieTableServiceManagerClient(table.getMetaClient(), config.getTableServiceManagerConfig());
