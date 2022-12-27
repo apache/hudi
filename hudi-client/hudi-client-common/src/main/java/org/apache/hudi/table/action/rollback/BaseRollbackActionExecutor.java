@@ -250,9 +250,6 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         writeTableMetadata(rollbackMetadata);
       }
 
-      // Then we delete the inflight instant in the data table timeline if enabled
-      deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
-
       // If publish the rollback to the timeline, we finally transition the inflight rollback
       // to complete in the data table timeline
       if (!skipTimelinePublish) {
@@ -260,6 +257,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
             TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
         LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
       }
+
+      // Then we delete the inflight instant in the data table timeline if enabled
+      deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
+
     } catch (IOException e) {
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     } finally {
