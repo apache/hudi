@@ -211,6 +211,23 @@ public class TimelineUtils {
   }
 
   /**
+   * Returns the incremental timeline for meta sync.
+   *
+   * <p>The archived timeline may be parsed if the last synced commit time
+   * is far behind, the parsing of archived timeline is expensive, for most of the time,
+   * there is no need to do that, if the metadata is synced in time regularly.
+   *
+   * @param metaClient           The meta client
+   * @param lastCommitTimeSynced The last synced commit time
+   */
+  public static HoodieTimeline getIncSyncTimeline(HoodieTableMetaClient metaClient, String lastCommitTimeSynced) {
+    final HoodieDefaultTimeline timeline = metaClient.getActiveTimeline().isBeforeTimelineStarts(lastCommitTimeSynced)
+        ? metaClient.getArchivedTimeline(lastCommitTimeSynced).mergeTimeline(metaClient.getActiveTimeline())
+        : metaClient.getActiveTimeline();
+    return timeline.getCommitsTimeline().findInstantsAfter(lastCommitTimeSynced, Integer.MAX_VALUE);
+  }
+
+  /**
    * Returns the commit metadata of the given instant.
    *
    * @param instant   The hoodie instant
