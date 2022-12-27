@@ -102,4 +102,10 @@ public class SparkDataSourceTableUtils {
     sparkSerdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(readAsOptimized));
     return sparkSerdeProperties;
   }
+
+  public static Map<String, String> getSparkSerdePathProperties(String basePath) {
+    Map<String, String> sparkSerdePathProperties = new HashMap<>();
+    sparkSerdePathProperties.put("path", basePath);
+    return sparkSerdePathProperties;
+  }
 }
