@@ -165,15 +165,15 @@ public class CleanerUtils<T extends HoodieAvroPayload, I, K, O> {
   }
 
   /**
-   * Get latest clean planner clean time.
+   * Get latest completed clean planner clean time.
    * @param metaClient
    * @return Latest clean planner clean time.
    * @throws IOException
    */
-  public static Option<String> getLatestInstantCleanTime(HoodieTableMetaClient metaClient)
+  public static Option<String> getLatestCompletedCleanInstantCleanTime(HoodieTableMetaClient metaClient)
       throws IOException {
     HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
-    Option<HoodieInstant> lastCleanInstantOption = activeTimeline.getCleanerTimeline().lastInstant();
+    Option<HoodieInstant> lastCleanInstantOption = activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
     Option<HoodieCleanMetadata> cleanMetadata = lastCleanInstantOption.isPresent() && ! activeTimeline.isEmpty(lastCleanInstantOption.get())
         ? Option.ofNullable(TimelineMetadataUtils.deserializeHoodieCleanMetadata(activeTimeline.getInstantDetails(lastCleanInstantOption.get()).get()))
         : Option.empty();
@@ -187,13 +187,13 @@ public class CleanerUtils<T extends HoodieAvroPayload, I, K, O> {
    * @throws IOException
    */
   public static Option<HoodieInstant> getEarliestUnCleanCompletedInstant(HoodieTableMetaClient metaClient) throws IOException {
-    Option<String> earliestInstantCleanTime = getLatestInstantCleanTime(metaClient);
     HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
     Option<HoodieInstant> firstCompletedClusteringInstant = activeTimeline.getCommitsTimeline().filterCompletedInstants()
         .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).firstInstant();
     if (!firstCompletedClusteringInstant.isPresent()) {
       return  Option.empty();
     } else {
+      Option<String> earliestInstantCleanTime = getLatestCompletedCleanInstantCleanTime(metaClient);
       return ! earliestInstantCleanTime.isPresent()
         ? firstCompletedClusteringInstant
         : activeTimeline.getCommitsTimeline().filterCompletedInstants().filter(instant ->

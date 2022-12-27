@@ -75,7 +75,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private State state = State.COMPLETED;
   private String action;
   private String timestamp;
-  private Option<String> markerFileModificationTimestamp;
+  private Option<String> markerFileModificationTimestamp = Option.empty();
 
   /**
    * Load the instant from the meta FileStatus.
@@ -108,14 +108,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     this.state = isInflight ? State.INFLIGHT : State.COMPLETED;
     this.action = action;
     this.timestamp = timestamp;
-    this.markerFileModificationTimestamp = Option.ofNullable(null);
   }
 
   public HoodieInstant(State state, String action, String timestamp) {
     this.state = state;
     this.action = action;
     this.timestamp = timestamp;
-    this.markerFileModificationTimestamp = Option.ofNullable(null);
   }
 
   public boolean isCompleted() {

@@ -430,7 +430,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax())
               : Option.empty();
 
-      Option<HoodieInstant> earlestUnCleanCompletedInstant = CleanerUtils.getEarliestUnCleanCompletedInstant(metaClient);
+      Option<HoodieInstant> earliestUnCleanCompletedInstant = CleanerUtils.getEarliestUnCleanCompletedInstant(metaClient);
 
       // Actually do the commits
       Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstantsAsStream()
@@ -444,7 +444,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               return !(firstSavepoint.isPresent() && compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
             }
           }).filter(s -> {
-            // Ensure commits >= oldest pending compaction commit is retained
+            // Ensure commits >= the oldest pending compaction commit is retained
             return oldestPendingCompactionAndReplaceInstant
                 .map(instant -> compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                 .orElse(true);
@@ -458,7 +458,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             }
             return true;
           }).filter(s ->
-              earlestUnCleanCompletedInstant.map(instant ->
+              earliestUnCleanCompletedInstant.map(instant ->
                       compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                   .orElse(true)
           ).filter(s ->
