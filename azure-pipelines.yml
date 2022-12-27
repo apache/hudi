@@ -19,7 +19,7 @@ trigger:
       - '*'  # must quote since "*" is a YAML reserved character; we want a string
 
 pool:
-  vmImage: 'ubuntu-18.04'
+  vmImage: 'ubuntu-22.04'
 
 parameters:
   - name: job1Modules
