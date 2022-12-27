@@ -115,8 +115,7 @@ import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
-    implements RunsTableService {
+public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient implements RunsTableService {
 
   protected static final String LOOKUP_STR = "lookup";
   private static final long serialVersionUID = 1L;
@@ -915,8 +914,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstantTime) {
-    if (useTableServicemanager(config, ActionType.replacecommit)) {
-      throw new HoodieException(ActionType.replacecommit.name() + " delegate to table management service!");
+    if (shouldDelegateToTableServiceManager(config, ActionType.replacecommit)) {
+      throw new UnsupportedOperationException("Clustering should be delegated to table service manager instead of direct run.");
     }
     return cluster(clusteringInstantTime, true);
   }
@@ -928,8 +927,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public HoodieWriteMetadata<O> compact(String compactionInstantTime) {
-    if (useTableServicemanager(config, ActionType.compaction)) {
-      throw new HoodieException(ActionType.compaction.name() + " delegate to table management service!");
+    if (shouldDelegateToTableServiceManager(config, ActionType.compaction)) {
+      throw new UnsupportedOperationException("Compaction should be delegated to table service manager instead of direct run.");
     }
     return compact(compactionInstantTime, config.shouldAutoCommit());
   }

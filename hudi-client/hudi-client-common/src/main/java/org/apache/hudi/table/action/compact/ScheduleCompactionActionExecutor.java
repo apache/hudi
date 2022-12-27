@@ -43,12 +43,15 @@ import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionP
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.text.ParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
@@ -109,7 +112,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
 
     HoodieCompactionPlan plan = scheduleCompaction();
     Option<HoodieCompactionPlan> option = Option.empty();
-    if (plan != null && (plan.getOperations() != null) && (!plan.getOperations().isEmpty())) {
+    if (plan != null && nonEmpty(plan.getOperations())) {
       extraMetadata.ifPresent(plan::setExtraMetadata);
       try {
         if (operationType.equals(WriteOperationType.COMPACT)) {
@@ -132,6 +135,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     return option;
   }
 
+  @Nullable
   private HoodieCompactionPlan scheduleCompaction() {
     LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
     // judge if we need to compact according to num delta commits and time elapsed

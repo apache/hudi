@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieRemoteException;
 
 import org.apache.http.client.fluent.Request;
@@ -36,12 +35,11 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Client which send the table service instants to the table service manager.
+ * Client that sends the table service action instants to the table service manager.
  */
 public class HoodieTableServiceManagerClient {
 
@@ -96,22 +94,17 @@ public class HoodieTableServiceManagerClient {
   }
 
   private String executeRequest(String requestPath, Map<String, String> queryParameters) throws IOException {
-    URIBuilder builder;
-    try {
-      builder = new URIBuilder(new URI(uri)).setPath(requestPath);
-    } catch (URISyntaxException e) {
-      throw new HoodieException("Invalid table table management service uri: " + uri, e);
-    }
+    URIBuilder builder = new URIBuilder(URI.create(uri)).setPath(requestPath);
     queryParameters.forEach(builder::addParameter);
 
     String url = builder.toString();
     LOG.info("Sending request to table management service : (" + url + ")");
-    int timeout = this.config.getConnectionTimeoutSec() * 1000; // msec
+    int timeoutMs = this.config.getConnectionTimeoutSec() * 1000;
     int requestRetryLimit = config.getConnectionRetryLimit();
     int connectionRetryDelay = config.getConnectionRetryDelay();
 
     RetryHelper<String> retryHelper = new RetryHelper<>(connectionRetryDelay, requestRetryLimit, connectionRetryDelay, RETRY_EXCEPTIONS);
-    return retryHelper.tryWith(() -> Request.Get(url).connectTimeout(timeout).socketTimeout(timeout).execute().returnContent().asString()).start();
+    return retryHelper.tryWith(() -> Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute().returnContent().asString()).start();
   }
 
   private Map<String, String> getParamsWithAdditionalParams(String[] paramNames, String[] paramVals) {

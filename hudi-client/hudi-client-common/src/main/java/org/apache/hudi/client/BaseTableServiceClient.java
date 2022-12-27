@@ -60,6 +60,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -69,8 +71,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public abstract class BaseTableServiceClient<O> extends BaseHoodieClient
-    implements RunsTableService {
+public abstract class BaseTableServiceClient<O> extends BaseHoodieClient implements RunsTableService {
 
   private static final Logger LOG = LogManager.getLogger(BaseHoodieWriteClient.class);
 
@@ -86,7 +87,7 @@ public abstract class BaseTableServiceClient<O> extends BaseHoodieClient
   }
 
   protected void startAsyncCleanerService(BaseHoodieWriteClient writeClient) {
-    if (null == this.asyncCleanerService) {
+    if (this.asyncCleanerService == null) {
       this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(writeClient);
     } else {
       this.asyncCleanerService.start(null);
@@ -94,7 +95,7 @@ public abstract class BaseTableServiceClient<O> extends BaseHoodieClient
   }
 
   protected void startAsyncArchiveService(BaseHoodieWriteClient writeClient) {
-    if (null == this.asyncArchiveService) {
+    if (this.asyncArchiveService == null) {
       this.asyncArchiveService = AsyncArchiveService.startAsyncArchiveIfEnabled(writeClient);
     } else {
       this.asyncArchiveService.start(null);
@@ -138,7 +139,7 @@ public abstract class BaseTableServiceClient<O> extends BaseHoodieClient
   }
 
   private void inlineCompaction(HoodieTable table, Option<Map<String, String>> extraMetadata) {
-    if (useTableServicemanager(config, ActionType.compaction)) {
+    if (shouldDelegateToTableServiceManager(config, ActionType.compaction)) {
       scheduleCompaction(extraMetadata);
     } else {
       runAnyPendingCompactions(table);
@@ -460,7 +461,7 @@ public abstract class BaseTableServiceClient<O> extends BaseHoodieClient
   }
 
   private void inlineClustering(HoodieTable table, Option<Map<String, String>> extraMetadata) {
-    if (useTableServicemanager(config, ActionType.replacecommit)) {
+    if (shouldDelegateToTableServiceManager(config, ActionType.replacecommit)) {
       scheduleClustering(extraMetadata);
     } else {
       runAnyPendingClustering(table);
@@ -536,6 +537,7 @@ public abstract class BaseTableServiceClient<O> extends BaseHoodieClient
    * @param scheduleInline   true if needs to be scheduled inline. false otherwise.
    * @param skipLocking      if this is triggered by another parent transaction, locking can be skipped.
    */
+  @Nullable
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline, boolean skipLocking) throws HoodieIOException {
     if (!tableServicesEnabled(config)) {
       return null;
@@ -553,7 +555,8 @@ public abstract class BaseTableServiceClient<O> extends BaseHoodieClient
         table.getMetaClient().reloadActiveTimeline();
       }
 
-      if (useTableServicemanager(config, ActionType.clean)) {
+      if (shouldDelegateToTableServiceManager(config, ActionType.clean)) {
+        LOG.warn("Cleaning is not yet supported with Table Service Manager.");
         return null;
       }
     }
@@ -729,7 +732,7 @@ public abstract class BaseTableServiceClient<O> extends BaseHoodieClient
         }
       }).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     } else if (cleaningPolicy.isNever()) {
-      return Collections.EMPTY_LIST;
+      return Collections.emptyList();
     } else {
       throw new IllegalArgumentException("Invalid Failed Writes Cleaning Policy " + config.getFailedWritesCleanPolicy());
     }

@@ -573,7 +573,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       // the compaction instants should be excluded
       metaClient.reloadActiveTimeline();
-      assertEquals(0, client.tableServiceClient.getPendingRollbackInfos(metaClient).size());
+      assertEquals(0, client.getTableServiceClient().getPendingRollbackInfos(metaClient).size());
 
       // verify there is no extra rollback instants
       client.rollback(commitTime4);
