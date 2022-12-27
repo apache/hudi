@@ -25,10 +25,9 @@ import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 
-import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -57,14 +56,19 @@ public class TestHiveIncrementalPuller {
   @TempDir
   java.nio.file.Path tempDir;
 
-  @BeforeAll
-  public static void setup() throws HiveException, IOException, InterruptedException, MetaException {
+  @AfterAll
+  public static void cleanUpClass() throws Exception {
+    HiveTestUtil.shutdown();
+  }
+
+  @BeforeEach
+  public void setUp() throws Exception {
     HiveTestUtil.setUp();
   }
 
-  @AfterAll
-  public static void teardown() throws Exception {
-    HiveTestUtil.shutdown();
+  @AfterEach
+  public void tearDown() throws Exception {
+    HiveTestUtil.clear();
   }
 
   @Test
