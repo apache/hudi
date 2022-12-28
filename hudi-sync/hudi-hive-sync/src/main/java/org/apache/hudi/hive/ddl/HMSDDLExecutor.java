@@ -49,6 +49,7 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -83,7 +84,7 @@ public class HMSDDLExecutor implements DDLExecutor {
     IMetaStoreClient tempMetaStoreClient;
     try {
       tempMetaStoreClient = ((Hive) Hive.class.getMethod("getWithoutRegisterFns", HiveConf.class).invoke(null, hiveConf)).getMSC();
-    } catch (Exception ex) {
+    } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
       tempMetaStoreClient = Hive.get(hiveConf).getMSC();
     }
     this.client = tempMetaStoreClient;

@@ -38,6 +38,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,7 +65,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     IMetaStoreClient tempMetaStoreClient;
     try {
       tempMetaStoreClient = ((Hive) Hive.class.getMethod("getWithoutRegisterFns", HiveConf.class).invoke(null, hiveConf)).getMSC();
-    } catch (Exception ex) {
+    } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
       tempMetaStoreClient = Hive.get(hiveConf).getMSC();
     }
     this.metaStoreClient = tempMetaStoreClient;
