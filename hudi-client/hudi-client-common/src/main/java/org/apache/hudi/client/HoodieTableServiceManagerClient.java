@@ -43,9 +43,6 @@ import java.util.Map;
  */
 public class HoodieTableServiceManagerClient {
 
-  /**
-   * Rollback commands, that trigger a specific handling for rollback.
-   */
   public enum Action {
     REQUEST,
     CANCEL,

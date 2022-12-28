@@ -47,7 +47,7 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_ACTIONS = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".actions")
-      .defaultValue("")
+      .noDefaultValue()
       .withDocumentation("The actions deployed on table service manager, such as compaction or clean.");
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DEPLOY_USERNAME = ConfigProperty
@@ -62,7 +62,7 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DEPLOY_RESOURCES = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".deploy.resources")
-      .defaultValue("4g:4g")
+      .defaultValue("spark:4g,4g")
       .withDocumentation("The resources for this table to use for deploying table services.");
 
   public static final ConfigProperty<Integer> TABLE_SERVICE_MANAGER_DEPLOY_PARALLELISM = ConfigProperty
@@ -77,7 +77,7 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DEPLOY_EXTRA_PARAMS = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".deploy.extra.params")
-      .defaultValue("")
+      .noDefaultValue()
       .withDocumentation("The extra params to deploy for table service of this table, split by ';'");
 
   public static final ConfigProperty<Integer> TABLE_SERVICE_MANAGER_TIMEOUT_SEC = ConfigProperty
@@ -94,17 +94,6 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".connection.retry.delay.sec")
       .defaultValue(1)
       .withDocumentation("Number of seconds for the client to wait between consecutive connection attempts");
-
-  public static final ConfigProperty<String> RETRY_EXCEPTIONS = ConfigProperty
-      .key(TABLE_SERVICE_MANAGER_PREFIX + ".operation.retry.exceptions")
-      .defaultValue("IOException")
-      .withDocumentation("The class name of the Exception that needs to be re-tryed, separated by commas. "
-          + "Default is empty which means retry all the IOException and RuntimeException from FileSystem");
-
-  public static final ConfigProperty<Integer> TABLE_SERVICE_MANAGER_TOLERABLE_NUM = ConfigProperty
-      .key(TABLE_SERVICE_MANAGER_PREFIX + ".tolerable.num")
-      .defaultValue(0)
-      .withDocumentation("Number of connection to table manager service unsuccessful tolerable for the client");
 
   public static HoodieTableServiceManagerConfig.Builder newBuilder() {
     return new HoodieTableServiceManagerConfig.Builder();
@@ -156,10 +145,6 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
 
   public int getConnectionRetryDelay() {
     return getIntOrDefault(TABLE_SERVICE_MANAGER_RETRY_DELAY_SEC);
-  }
-
-  public int getConnectionTolerableNum() {
-    return getIntOrDefault(TABLE_SERVICE_MANAGER_TOLERABLE_NUM);
   }
 
   public boolean isEnabledAndActionSupported(ActionType actionType) {
