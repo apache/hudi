@@ -54,11 +54,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class SparkRDDTableServiceClient<T> extends BaseTableServiceClient<JavaRDD<WriteStatus>> {
+public class SparkRDDHoodieTableServiceClient<T> extends BaseHoodieTableServiceClient<JavaRDD<WriteStatus>> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SparkRDDTableServiceClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkRDDHoodieTableServiceClient.class);
 
-  protected SparkRDDTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+  protected SparkRDDHoodieTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     super(context, clientConfig);
   }
 

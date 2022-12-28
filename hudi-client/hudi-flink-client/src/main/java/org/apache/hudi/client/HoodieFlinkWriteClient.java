@@ -85,7 +85,7 @@ public class HoodieFlinkWriteClient<T> extends
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, FlinkUpgradeDowngradeHelper.getInstance());
     this.bucketToHandles = new HashMap<>();
-    this.tableServiceClient = new HoodieFlinkTableServiceClient<>(context, writeConfig);
+    this.tableServiceClient = new HoodieFlinkHoodieTableServiceClient<>(context, writeConfig);
   }
 
   /**
@@ -277,7 +277,7 @@ public class HoodieFlinkWriteClient<T> extends
    * Initialized the metadata table on start up, should only be called once on driver.
    */
   public void initMetadataTable() {
-    ((HoodieFlinkTableServiceClient<T>) tableServiceClient).initMetadataTable();
+    ((HoodieFlinkHoodieTableServiceClient<T>) tableServiceClient).initMetadataTable();
   }
 
   /**
@@ -375,7 +375,7 @@ public class HoodieFlinkWriteClient<T> extends
       HoodieReplaceCommitMetadata metadata,
       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
       String clusteringCommitTime) {
-    ((HoodieFlinkTableServiceClient<T>) tableServiceClient).completeClustering(metadata, table, clusteringCommitTime);
+    ((HoodieFlinkHoodieTableServiceClient<T>) tableServiceClient).completeClustering(metadata, table, clusteringCommitTime);
   }
 
   @Override

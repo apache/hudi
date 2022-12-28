@@ -71,7 +71,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public abstract class BaseTableServiceClient<O> extends BaseHoodieClient implements RunsTableService {
+public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient implements RunsTableService {
 
   private static final Logger LOG = LogManager.getLogger(BaseHoodieWriteClient.class);
 
@@ -82,7 +82,7 @@ public abstract class BaseTableServiceClient<O> extends BaseHoodieClient impleme
   protected transient AsyncCleanerService asyncCleanerService;
   protected transient AsyncArchiveService asyncArchiveService;
 
-  protected BaseTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+  protected BaseHoodieTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     super(context, clientConfig, Option.empty());
   }
 
@@ -530,7 +530,7 @@ public abstract class BaseTableServiceClient<O> extends BaseHoodieClient impleme
    * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned). This API provides the flexibility to schedule clean instant asynchronously via
-   * {@link BaseTableServiceClient#scheduleTableService(String, Option, TableServiceType)} and disable inline scheduling
+   * {@link BaseHoodieTableServiceClient#scheduleTableService(String, Option, TableServiceType)} and disable inline scheduling
    * of clean.
    *
    * @param cleanInstantTime instant time for clean.

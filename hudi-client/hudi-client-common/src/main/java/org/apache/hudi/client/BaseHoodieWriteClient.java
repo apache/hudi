@@ -131,7 +131,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
   protected Set<String> pendingInflightAndRequestedInstants;
 
-  protected BaseTableServiceClient<O> tableServiceClient;
+  protected BaseHoodieTableServiceClient<O> tableServiceClient;
 
   /**
    * Create a write client, with new hudi index.
@@ -173,7 +173,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return this.operationType;
   }
 
-  public BaseTableServiceClient<O> getTableServiceClient() {
+  public BaseHoodieTableServiceClient<O> getTableServiceClient() {
     return tableServiceClient;
   }
 
