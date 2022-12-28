@@ -698,6 +698,8 @@ select * from hudi_cow_pt_tbl timestamp as of '2022-03-08' where id = 1;
 This is similar to inserting new data. Generate updates to existing trips using the data generator, load into a DataFrame 
 and write DataFrame into the hudi table.
 
+### Update
+
 <Tabs
 groupId="programming-language"
 defaultValue="python"
@@ -733,8 +735,6 @@ denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `d
 
 Spark SQL supports two kinds of DML to update hudi table: Merge-Into and Update.
 
-### Update
-
 **Syntax**
 ```sql
 UPDATE tableIdentifier SET column = EXPRESSION(,column = EXPRESSION) [ WHERE boolExpression]
@@ -752,7 +752,42 @@ update hudi_cow_pt_tbl set ts = 1001 where name = 'a1';
 `Update` operation requires `preCombineField` specified.
 :::
 
+</TabItem>
+<TabItem value="python">
+
+```python
+# pyspark
+updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
+df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
+df.write.format("hudi"). \
+  options(**hudi_options). \
+  mode("append"). \
+  save(basePath)
+```
+:::note
+Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts)
+denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit.
+:::
+
+</TabItem>
+
+</Tabs
+>
+
 ### MergeInto
+
+<Tabs
+groupId="programming-language"
+defaultValue="python"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
+<TabItem value="sparksql">
 
 **Syntax**
 
@@ -804,30 +839,28 @@ when not matched then
 ;
 
 ```
+</TabItem>
+
+<TabItem value="scala">
+
+```scala
+// scala
+// MergeInto is only available when using Spark SQL. 
+```
 
 </TabItem>
 <TabItem value="python">
 
 ```python
 # pyspark
-updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
-df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
-df.write.format("hudi"). \
-  options(**hudi_options). \
-  mode("append"). \
-  save(basePath)
+# MergeInto is only available when using Spark SQL.
 ```
-:::note
-Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts)
-denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit.
-:::
+
 
 </TabItem>
 
 </Tabs
 >
-
 
 ## Incremental query
 
