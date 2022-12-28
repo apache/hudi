@@ -4,7 +4,7 @@ keywords: [ configurations, default, flink options, spark, configs, parameters ]
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 toc: true
-last_modified_at: 2022-08-12T13:18:38.885
+last_modified_at: 2022-12-27T23:40:18.658
 ---
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
@@ -54,6 +54,13 @@ Options useful for reading tables via `read.format.option(...)`
 
 ---
 
+> #### hoodie.datasource.streaming.startOffset
+> Start offset to pull data from hoodie streaming source. allow earliest, latest, and specified start instant time<br></br>
+> **Default Value**: earliest (Optional)<br></br>
+> `Config Param: START_OFFSET`<br></br>
+
+---
+
 > #### hoodie.enable.data.skipping
 > Enables data-skipping allowing queries to leverage indexes to reduce the search space by skipping over files<br></br>
 > **Default Value**: false (Optional)<br></br>
@@ -90,6 +97,13 @@ Options useful for reading tables via `read.format.option(...)`
 
 ---
 
+> #### hoodie.datasource.query.incremental.format
+> This config is used alone with the 'incremental' query type.When set to 'latest_state', it returns the latest records' values.When set to 'cdc', it returns the cdc data.<br></br>
+> **Default Value**: latest_state (Optional)<br></br>
+> `Config Param: INCREMENTAL_FORMAT`<br></br>
+
+---
+
 > #### hoodie.datasource.write.precombine.field
 > Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br></br>
 > **Default Value**: ts (Optional)<br></br>
@@ -119,10 +133,26 @@ Options useful for reading tables via `read.format.option(...)`
 
 ---
 
+> #### hoodie.datasource.read.file.index.listing.mode.override
+> Overrides Hudi's file-index implementation's file listing mode: when set to 'eager', file-index will list all partition paths and corresponding file slices w/in them eagerly, during initialization, prior to partition-pruning kicking in, meaning that all partitions will be listed including ones that might be  subsequently pruned out; when set to 'lazy', partitions and file-slices w/in them will be listed lazily (ie when they actually accessed, instead of when file-index is initialized) allowing partition pruning to occur before that, only listing partitions that has already been pruned. Please note that, this config is provided purely to allow to fallback to behavior existing prior to 0.13.0 release, and will be deprecated soon after.<br></br>
+> **Default Value**: lazy (Optional)<br></br>
+> `Config Param: FILE_INDEX_LISTING_MODE_OVERRIDE`<br></br>
+> `Since Version: 0.13.0`<br></br>
+
+---
+
 > #### hoodie.datasource.read.begin.instanttime
 > Instant time to start incrementally pulling data from. The instanttime here need not necessarily correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM.<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: BEGIN_INSTANTTIME`<br></br>
+
+---
+
+> #### hoodie.datasource.read.file.index.listing.partition-path-prefix.analysis.enabled
+> Controls whether partition-path prefix analysis is enabled w/in the file-index, allowing to avoid necessity to recursively list deep folder structures of partitioned tables w/ multiple partition columns, by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from  them (if possible).<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED`<br></br>
+> `Since Version: 0.13.0`<br></br>
 
 ---
 
@@ -176,7 +206,7 @@ Options useful for writing tables via `write.format.option(...)`
 ---
 
 > #### hoodie.datasource.write.reconcile.schema
-> When a new batch of write has records with old schema, but latest table schema got evolved, this config will upgrade the records to leverage latest table schema(default values will be injected to missing fields). If not, the write batch would fail.<br></br>
+> This config controls how writer's schema will be selected based on the incoming batch's schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation is ENABLED, writer-schema will be picked such that table's schema (after txn) is either kept the same or extended, meaning that we'll always prefer the schema that either adds new columns or stays the same. This enables us, to always extend the table's schema during evolution and never lose the data (when, for ex, existing column is being dropped in a new batch)<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: RECONCILE_SCHEMA`<br></br>
 
@@ -186,7 +216,7 @@ Options useful for writing tables via `write.format.option(...)`
 > Record key field. Value to be used as the `recordKey` component of `HoodieKey`.
 Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using
 the dot notation eg: `a.b.c`<br></br>
-> **Default Value**: uuid (Optional)<br></br>
+> **Default Value**: N/A (Required)<br></br>
 > `Config Param: RECORDKEY_FIELD`<br></br>
 
 ---
@@ -277,8 +307,8 @@ the dot notation eg: `a.b.c`<br></br>
 ---
 
 > #### hoodie.datasource.write.streaming.ignore.failed.batch
-> Config to indicate whether to ignore any non exception error (e.g. writestatus error) within a streaming microbatch<br></br>
-> **Default Value**: true (Optional)<br></br>
+> Config to indicate whether to ignore any non exception error (e.g. writestatus error) within a streaming microbatch. Turning this on, could hide the write status errors while the spark checkpoint moves ahead.So, would recommend users to use this with caution.<br></br>
+> **Default Value**: false (Optional)<br></br>
 > `Config Param: STREAMING_IGNORE_FAILED_BATCH`<br></br>
 
 ---
@@ -459,6 +489,13 @@ the dot notation eg: `a.b.c`<br></br>
 
 ---
 
+> #### hoodie.datasource.write.merger.impls
+> List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by hoodie.datasource.write.merger.strategy Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)<br></br>
+> **Default Value**: org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)<br></br>
+> `Config Param: MERGER_IMPLS`<br></br>
+
+---
+
 > #### hoodie.datasource.hive_sync.use_pre_apache_input_format
 > Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. Use this when you are in the process of migrating from com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format<br></br>
 > **Default Value**: false (Optional)<br></br>
@@ -496,10 +533,33 @@ By default false (the names of partition folders are only partition values)<br><
 
 ---
 
+> #### hoodie.datasource.write.merger.strategy
+> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id<br></br>
+> **Default Value**: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)<br></br>
+> `Config Param: MERGER_STRATEGY`<br></br>
+
+---
+
 > #### hoodie.datasource.hive_sync.mode
 > Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: HIVE_SYNC_MODE`<br></br>
+
+---
+
+> #### hoodie.datasource.write.streaming.checkpoint.identifier
+> A stream identifier used for HUDI to fetch the right checkpoint(`batch id` to be more specific) corresponding this writer. Please note that keep the identifier an unique value for different writer if under multi-writer scenario. If the value is not set, will only keep the checkpoint info in the memory. This could introduce the potential issue that the job is restart(`batch id` is lost) while spark checkpoint write fails, causing spark will retry and rewrite the data.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: STREAMING_CHECKPOINT_IDENTIFIER`<br></br>
+> `Since Version: 0.13.0`<br></br>
+
+---
+
+> #### hoodie.datasource.write.schema.canonicalize
+> Controls whether incoming batch's schema's nullability constraints should be canonicalized relative to the table's schema. For ex, in case field A is marked as null-able in table's schema, but is marked as non-null in the incoming batch, w/o canonicalization such write might fail as we won't be able to read existing null records from the table (for updating, for ex). Note, that this config has only effect when 'hoodie.datasource.write.reconcile.schema' is set to false.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: CANONICALIZE_SCHEMA`<br></br>
+> `Since Version: 0.13.0`<br></br>
 
 ---
 
@@ -540,7 +600,7 @@ By default false (the names of partition folders are only partition values)<br><
 ---
 
 > #### hoodie.datasource.write.partitions.to.delete
-> Comma separated list of partitions to delete<br></br>
+> Comma separated list of partitions to delete. Allows use of wildcard *<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: PARTITIONS_TO_DELETE`<br></br>
 
@@ -613,6 +673,13 @@ k2=v2<br></br>
 
 ---
 
+> #### cdc.supplemental.logging.mode
+> The supplemental logging mode:1) 'cdc_op_key': persist the 'op' and the record key only,2) 'cdc_data_before': persist the additional 'before' image,3) 'cdc_data_before_after': persist the 'before' and 'after' images at the same time<br></br>
+> **Default Value**: cdc_data_before_after (Optional)<br></br>
+> `Config Param: SUPPLEMENTAL_LOGGING_MODE`<br></br>
+
+---
+
 > #### hive_sync.table
 > Table name for hive sync, default 'unknown'<br></br>
 > **Default Value**: unknown (Optional)<br></br>
@@ -620,17 +687,17 @@ k2=v2<br></br>
 
 ---
 
-> #### write.payload.class
+> #### payload.class
 > Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
 This will render any value set for the option in-effective<br></br>
-> **Default Value**: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload (Optional)<br></br>
+> **Default Value**: org.apache.hudi.common.model.EventTimeAvroPayload (Optional)<br></br>
 > `Config Param: PAYLOAD_CLASS_NAME`<br></br>
 
 ---
 
 > #### compaction.tasks
-> Parallelism of tasks that do actual compaction, default is 4<br></br>
-> **Default Value**: 4 (Optional)<br></br>
+> Parallelism of tasks that do actual compaction, default same as the write task parallelism<br></br>
+> **Default Value**: N/A (Required)<br></br>
 > `Config Param: COMPACTION_TASKS`<br></br>
 
 ---
@@ -655,6 +722,13 @@ By default false (the names of partition folders are only partition values)<br><
 > Auto create hive database if it does not exists, default true<br></br>
 > **Default Value**: true (Optional)<br></br>
 > `Config Param: HIVE_SYNC_AUTO_CREATE_DB`<br></br>
+
+---
+
+> #### record.merger.strategy
+> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in record.merger.impls which has the same merger strategy id<br></br>
+> **Default Value**: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)<br></br>
+> `Config Param: RECORD_MERGER_STRATEGY`<br></br>
 
 ---
 
@@ -731,8 +805,8 @@ Actual value will be obtained by invoking .toString() on the field value. Nested
 ---
 
 > #### hive_sync.mode
-> Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'<br></br>
-> **Default Value**: jdbc (Optional)<br></br>
+> Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'hms'<br></br>
+> **Default Value**: HMS (Optional)<br></br>
 > `Config Param: HIVE_SYNC_MODE`<br></br>
 
 ---
@@ -782,6 +856,14 @@ By default 2000 and it will be doubled by every retry<br></br>
 
 ---
 
+> #### read.streaming.skip_clustering
+> Whether to skip clustering instants for streaming read,
+to avoid reading duplicates<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: READ_STREAMING_SKIP_CLUSTERING`<br></br>
+
+---
+
 > #### compaction.schedule.enabled
 > Schedule the compaction plan, enabled by default for MOR<br></br>
 > **Default Value**: true (Optional)<br></br>
@@ -790,8 +872,8 @@ By default 2000 and it will be doubled by every retry<br></br>
 ---
 
 > #### hive_sync.partition_extractor_class
-> Tool to extract the partition value from HDFS path, default 'SlashEncodedDayPartitionValueExtractor'<br></br>
-> **Default Value**: org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor (Optional)<br></br>
+> Tool to extract the partition value from HDFS path, default 'MultiPartKeysValueExtractor'<br></br>
+> **Default Value**: org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)<br></br>
 > `Config Param: HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME`<br></br>
 
 ---
@@ -885,8 +967,9 @@ k2=v2<br></br>
 
 > #### write.ignore.failed
 > Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch.
-By default true (in favor of streaming progressing over data integrity)<br></br>
-> **Default Value**: true (Optional)<br></br>
+By default false.  Turning this on, could hide the write status errors while the spark checkpoint moves ahead. 
+  So, would recommend users to use this with caution.<br></br>
+> **Default Value**: false (Optional)<br></br>
 > `Config Param: IGNORE_FAILED`<br></br>
 
 ---
@@ -915,7 +998,7 @@ Actual value obtained by invoking .toString(), default ''<br></br>
 ---
 
 > #### write.bucket_assign.tasks
-> Parallelism of tasks that do bucket assign, default is the parallelism of the execution environment<br></br>
+> Parallelism of tasks that do bucket assign, default same as the write task parallelism<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: BUCKET_ASSIGN_TASKS`<br></br>
 
@@ -963,6 +1046,13 @@ Actual value obtained by invoking .toString(), default ''<br></br>
 
 ---
 
+> #### record.merger.impls
+> List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by record.merger.strategy. Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)<br></br>
+> **Default Value**: org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)<br></br>
+> `Config Param: RECORD_MERGER_IMPLS`<br></br>
+
+---
+
 > #### clustering.plan.strategy.class
 > Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan i.e select what file groups are being clustered. Default strategy, looks at the last N (determined by clustering.plan.strategy.daybased.lookback.partitions) day based partitions picks the small file slices within those partitions.<br></br>
 > **Default Value**: org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy (Optional)<br></br>
@@ -978,8 +1068,8 @@ Actual value obtained by invoking .toString(), default ''<br></br>
 ---
 
 > #### write.tasks
-> Parallelism of tasks that do actual write, default is 4<br></br>
-> **Default Value**: 4 (Optional)<br></br>
+> Parallelism of tasks that do actual write, default is the parallelism of the execution environment<br></br>
+> **Default Value**: N/A (Required)<br></br>
 > `Config Param: WRITE_TASKS`<br></br>
 
 ---
@@ -1007,9 +1097,16 @@ This also directly translates into how much you can incrementally pull on this t
 ---
 
 > #### write.index_bootstrap.tasks
-> Parallelism of tasks that do index bootstrap, default is the parallelism of the execution environment<br></br>
+> Parallelism of tasks that do index bootstrap, default same as the write task parallelism<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: INDEX_BOOTSTRAP_TASKS`<br></br>
+
+---
+
+> #### cdc.enabled
+> When enable, persist the change data if necessary, and can be queried as a CDC query mode<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: CDC_ENABLED`<br></br>
 
 ---
 
@@ -1051,8 +1148,7 @@ Actual value will be obtained by invoking .toString() on the field value. Nested
 ---
 
 > #### hoodie.datasource.write.keygenerator.type
-> Key generator type, that implements will extract the key out of incoming record. 
-> **Note** This is being actively worked on. Please use `hoodie.datasource.write.keygenerator.class` instead. <br></br>
+> Key generator type, that implements will extract the key out of incoming record<br></br>
 > **Default Value**: SIMPLE (Optional)<br></br>
 > `Config Param: KEYGEN_TYPE`<br></br>
 
@@ -1116,13 +1212,13 @@ Disabled by default for backward compatibility.<br></br>
 ---
 
 > #### clustering.tasks
-> Parallelism of tasks that do actual clustering, default is 4<br></br>
-> **Default Value**: 4 (Optional)<br></br>
+> Parallelism of tasks that do actual clustering, default same as the write task parallelism<br></br>
+> **Default Value**: N/A (Required)<br></br>
 > `Config Param: CLUSTERING_TASKS`<br></br>
 
 ---
 
-> #### hive_sync.enable
+> #### hive_sync.enabled
 > Asynchronously sync Hive meta to HMS, default false<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: HIVE_SYNC_ENABLED`<br></br>
@@ -1158,8 +1254,8 @@ The semantics is best effort because the compaction job would finally merge all 
 ---
 
 > #### read.tasks
-> Parallelism of tasks that do actual read, default is 4<br></br>
-> **Default Value**: 4 (Optional)<br></br>
+> Parallelism of tasks that do actual read, default is the parallelism of the execution environment<br></br>
+> **Default Value**: N/A (Required)<br></br>
 > `Config Param: READ_TASKS`<br></br>
 
 ---
@@ -1262,6 +1358,13 @@ The semantics is best effort because the compaction job would finally merge all 
 
 ---
 
+> #### hive_sync.table.strategy
+> Hive table synchronization strategy. Available option: RO, RT, ALL.<br></br>
+> **Default Value**: ALL (Optional)<br></br>
+> `Config Param: HIVE_SYNC_TABLE_STRATEGY`<br></br>
+
+---
+
 > #### hoodie.table.name
 > Table name to register to Hive metastore<br></br>
 > **Default Value**: N/A (Required)<br></br>
@@ -1336,7 +1439,7 @@ The semantics is best effort because the compaction job would finally merge all 
 
 ---
 
-> #### write.precombine.field
+> #### precombine.field
 > Field used in preCombining before actual write. When two records have the same
 key value, we will pick the one with the largest value for the precombine field,
 determined by Object.compareTo(..)<br></br>
@@ -1575,10 +1678,38 @@ Configurations that persist across writes and read on a Hudi table  like  base, 
 
 ---
 
+> #### hoodie.table.cdc.enabled
+> When enable, persist the change data if necessary, and can be queried as a CDC query mode.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: CDC_ENABLED`<br></br>
+
+---
+
+> #### hoodie.table.cdc.supplemental.logging.mode
+> When 'cdc_op_key' persist the 'op' and the record key only, when 'cdc_data_before' persist the additional 'before' image , and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.<br></br>
+> **Default Value**: cdc_op_key (Optional)<br></br>
+> `Config Param: CDC_SUPPLEMENTAL_LOGGING_MODE`<br></br>
+
+---
+
+> #### hoodie.compaction.merger.strategy
+> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id<br></br>
+> **Default Value**: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)<br></br>
+> `Config Param: MERGER_STRATEGY`<br></br>
+
+---
+
 > #### hoodie.archivelog.folder
 > path under the meta folder, to store archived timeline instants at.<br></br>
 > **Default Value**: archived (Optional)<br></br>
 > `Config Param: ARCHIVELOG_FOLDER`<br></br>
+
+---
+
+> #### hoodie.table.secondary.indexes.metadata
+> The metadata of secondary indexes<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: SECONDARY_INDEXES_METADATA`<br></br>
 
 ---
 
@@ -1796,7 +1927,7 @@ Controls memory usage for compaction and merges, performed internally by Hudi.
 ---
 
 > #### hoodie.memory.spillable.map.path
-> Default file path prefix for spillable map<br></br>
+> Default file path for spillable map<br></br>
 > **Default Value**: /tmp/ (Optional)<br></br>
 > `Config Param: SPILLABLE_MAP_BASE_PATH`<br></br>
 
@@ -1878,152 +2009,6 @@ Configs that control DynamoDB based locking mechanisms required for concurrency 
 
 ---
 
-### Storage Configs {#Storage-Configs}
-
-Configurations that control aspects around writing, sizing, reading base and log files.
-
-`Config Class`: org.apache.hudi.config.HoodieStorageConfig<br></br>
-> #### hoodie.logfile.data.block.max.size
-> LogFile Data block max size in bytes. This is the maximum size allowed for a single data block to be appended to a log file. This helps to make sure the data appended to the log file is broken up into sizable blocks to prevent from OOM errors. This size should be greater than the JVM memory.<br></br>
-> **Default Value**: 268435456 (Optional)<br></br>
-> `Config Param: LOGFILE_DATA_BLOCK_MAX_SIZE`<br></br>
-
----
-
-> #### hoodie.parquet.outputtimestamptype
-> Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.<br></br>
-> **Default Value**: TIMESTAMP_MICROS (Optional)<br></br>
-> `Config Param: PARQUET_OUTPUT_TIMESTAMP_TYPE`<br></br>
-
----
-
-> #### hoodie.orc.stripe.size
-> Size of the memory buffer in bytes for writing<br></br>
-> **Default Value**: 67108864 (Optional)<br></br>
-> `Config Param: ORC_STRIPE_SIZE`<br></br>
-
----
-
-> #### hoodie.orc.block.size
-> ORC block size, recommended to be aligned with the target file size.<br></br>
-> **Default Value**: 125829120 (Optional)<br></br>
-> `Config Param: ORC_BLOCK_SIZE`<br></br>
-
----
-
-> #### hoodie.orc.compression.codec
-> Compression codec to use for ORC base files.<br></br>
-> **Default Value**: ZLIB (Optional)<br></br>
-> `Config Param: ORC_COMPRESSION_CODEC_NAME`<br></br>
-
----
-
-> #### hoodie.parquet.max.file.size
-> Target size in bytes for parquet files produced by Hudi write phases. For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.<br></br>
-> **Default Value**: 125829120 (Optional)<br></br>
-> `Config Param: PARQUET_MAX_FILE_SIZE`<br></br>
-
----
-
-> #### hoodie.hfile.max.file.size
-> Target file size in bytes for HFile base files.<br></br>
-> **Default Value**: 125829120 (Optional)<br></br>
-> `Config Param: HFILE_MAX_FILE_SIZE`<br></br>
-
----
-
-> #### hoodie.parquet.writelegacyformat.enabled
-> Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier. For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: PARQUET_WRITE_LEGACY_FORMAT_ENABLED`<br></br>
-
----
-
-> #### hoodie.parquet.block.size
-> Parquet RowGroup size in bytes. It's recommended to make this large enough that scan costs can be amortized by packing enough column values into a single row group.<br></br>
-> **Default Value**: 125829120 (Optional)<br></br>
-> `Config Param: PARQUET_BLOCK_SIZE`<br></br>
-
----
-
-> #### hoodie.logfile.max.size
-> LogFile max size in bytes. This is the maximum size allowed for a log file before it is rolled over to the next version.<br></br>
-> **Default Value**: 1073741824 (Optional)<br></br>
-> `Config Param: LOGFILE_MAX_SIZE`<br></br>
-
----
-
-> #### hoodie.parquet.dictionary.enabled
-> Whether to use dictionary encoding<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: PARQUET_DICTIONARY_ENABLED`<br></br>
-
----
-
-> #### hoodie.hfile.block.size
-> Lower values increase the size in bytes of metadata tracked within HFile, but can offer potentially faster lookup times.<br></br>
-> **Default Value**: 1048576 (Optional)<br></br>
-> `Config Param: HFILE_BLOCK_SIZE`<br></br>
-
----
-
-> #### hoodie.parquet.field_id.write.enabled
-> Would only be effective with Spark 3.3+. Sets spark.sql.parquet.fieldId.write.enabled. If enabled, Spark will write out parquet native field ids that are stored inside StructField's metadata as parquet.field.id to parquet files.<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: PARQUET_FIELD_ID_WRITE_ENABLED`<br></br>
-> `Since Version: 0.12.0`<br></br>
-
----
-
-> #### hoodie.parquet.page.size
-> Parquet page size in bytes. Page is the unit of read within a parquet file. Within a block, pages are compressed separately.<br></br>
-> **Default Value**: 1048576 (Optional)<br></br>
-> `Config Param: PARQUET_PAGE_SIZE`<br></br>
-
----
-
-> #### hoodie.hfile.compression.algorithm
-> Compression codec to use for hfile base files.<br></br>
-> **Default Value**: GZ (Optional)<br></br>
-> `Config Param: HFILE_COMPRESSION_ALGORITHM_NAME`<br></br>
-
----
-
-> #### hoodie.orc.max.file.size
-> Target file size in bytes for ORC base files.<br></br>
-> **Default Value**: 125829120 (Optional)<br></br>
-> `Config Param: ORC_FILE_MAX_SIZE`<br></br>
-
----
-
-> #### hoodie.logfile.data.block.format
-> Format of the data block within delta logs. Following formats are currently supported "avro", "hfile", "parquet"<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: LOGFILE_DATA_BLOCK_FORMAT`<br></br>
-
----
-
-> #### hoodie.logfile.to.parquet.compression.ratio
-> Expected additional compression as records move from log files to parquet. Used for merge_on_read table to send inserts into log files & control the size of compacted parquet file.<br></br>
-> **Default Value**: 0.35 (Optional)<br></br>
-> `Config Param: LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION`<br></br>
-
----
-
-> #### hoodie.parquet.compression.ratio
-> Expected compression of parquet data used by Hudi, when it tries to size new parquet files. Increase this value, if bulk_insert is producing smaller than expected sized files<br></br>
-> **Default Value**: 0.1 (Optional)<br></br>
-> `Config Param: PARQUET_COMPRESSION_RATIO_FRACTION`<br></br>
-
----
-
-> #### hoodie.parquet.compression.codec
-> Compression Codec for parquet files<br></br>
-> **Default Value**: gzip (Optional)<br></br>
-> `Config Param: PARQUET_COMPRESSION_CODEC_NAME`<br></br>
-
----
-
 ### Archival Configs {#Archival-Configs}
 
 Configurations that control archival.
@@ -2037,7 +2022,7 @@ Configurations that control archival.
 ---
 
 > #### hoodie.keep.max.commits
-> Archiving service moves older entries from timeline into an archived log after each write, to  keep the metadata overhead constant, even as the table size grows.This config controls the maximum number of instants to retain in the active timeline. <br></br>
+> Archiving service moves older entries from timeline into an archived log after each write, to keep the metadata overhead constant, even as the table size grows. This config controls the maximum number of instants to retain in the active timeline. <br></br>
 > **Default Value**: 30 (Optional)<br></br>
 > `Config Param: MAX_COMMITS_TO_KEEP`<br></br>
 
@@ -2088,7 +2073,7 @@ Configurations that control archival.
 ---
 
 > #### hoodie.keep.min.commits
-> Similar to hoodie.keep.max.commits, but controls the minimum number ofinstants to retain in the active timeline.<br></br>
+> Similar to hoodie.keep.max.commits, but controls the minimum number of instants to retain in the active timeline.<br></br>
 > **Default Value**: 20 (Optional)<br></br>
 > `Config Param: MIN_COMMITS_TO_KEEP`<br></br>
 
@@ -2314,6 +2299,14 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 
 ---
 
+> #### hoodie.metadata.log.record.reader.use.scanV2
+> ScanV2 logic address all the multiwriter challenges while appending to log files. It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: USE_LOG_RECORD_READER_SCAN_V2`<br></br>
+> `Since Version: 0.13.0`<br></br>
+
+---
+
 ### Consistency Guard Configurations {#Consistency-Guard-Configurations}
 
 The consistency guard related config options, to help talk to eventually consistent object storage.(Tip: S3 is NOT eventually consistent anymore!)
@@ -2475,7 +2468,7 @@ Configurations that control write behavior on Hudi tables. These can be directly
 
 > #### hoodie.avro.schema.validate
 > Validate the schema used for the write against the latest schema, for backwards compatibility.<br></br>
-> **Default Value**: false (Optional)<br></br>
+> **Default Value**: true (Optional)<br></br>
 > `Config Param: AVRO_SCHEMA_VALIDATE_ENABLE`<br></br>
 
 ---
@@ -2660,8 +2653,7 @@ Configurations that control write behavior on Hudi tables. These can be directly
 ---
 
 > #### hoodie.datasource.write.keygenerator.type
-> Easily configure one the built-in key generators, instead of specifying the key generator class.Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE
-> **Note** This is being actively worked on. Please use `hoodie.datasource.write.keygenerator.class` instead. <br></br>
+> Easily configure one the built-in key generators, instead of specifying the key generator class.Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE<br></br>
 > **Default Value**: SIMPLE (Optional)<br></br>
 > `Config Param: KEYGENERATOR_TYPE`<br></br>
 
@@ -2681,6 +2673,13 @@ Configurations that control write behavior on Hudi tables. These can be directly
 
 ---
 
+> #### hoodie.datasource.write.merger.impls
+> List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by hoodie.datasource.write.merger.strategy Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)<br></br>
+> **Default Value**: org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)<br></br>
+> `Config Param: MERGER_IMPLS`<br></br>
+
+---
+
 > #### hoodie.datasource.write.precombine.field
 > Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br></br>
 > **Default Value**: ts (Optional)<br></br>
@@ -2689,7 +2688,7 @@ Configurations that control write behavior on Hudi tables. These can be directly
 ---
 
 > #### hoodie.bulkinsert.sort.mode
-> Sorting modes to use for sorting records for bulk insert. This is use when user hoodie.bulkinsert.user.defined.partitioner.classis not configured. Available values are - GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing lowest and best effort file sizing. NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads<br></br>
+> Sorting modes to use for sorting records for bulk insert. This is use when user hoodie.bulkinsert.user.defined.partitioner.classis not configured. Available values are - GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing lowest and best effort file sizing. PARTITION_PATH_REPARTITION: this ensures that the data for a single physical partition in the table is written by the same Spark executor, best for input data evenly distributed across different partition paths. This can cause imbalance among Spark executors if the input data is skewed, i.e., most records are intended for a handful of partition paths among all. PARTITION_PATH_REPARTITION_AND_SORT: this ensures that the data for a single physical partition in the table is written by the same Spark executor, best for input data evenly distributed across different partition paths. Compared to PARTITION_PATH_REPARTITION, this sort mode does an additional step of sorting the records based on the partition path within a single Spark partition, given that data for multiple physical partitions can be sent to the same Spark partition and executor. This can cause imbalance among Spark executors if the input data is skewed, i.e., most records are intended for a handful of partition paths among all. NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads<br></br>
 > **Default Value**: NONE (Optional)<br></br>
 > `Config Param: BULK_INSERT_SORT_MODE`<br></br>
 
@@ -2731,17 +2730,17 @@ Configurations that control write behavior on Hudi tables. These can be directly
 
 ---
 
+> #### hoodie.fail.writes.on.inline.table.service.exception
+> Table services such as compaction and clustering can fail and prevent syncing to the metaclient. Set this to true to fail writes when table services fail<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION`<br></br>
+
+---
+
 > #### hoodie.upsert.shuffle.parallelism
 > Parallelism to use for upsert operation on the table. Upserts can shuffle data to perform index lookups, file sizing, bin packing records optimallyinto file groups.<br></br>
 > **Default Value**: 200 (Optional)<br></br>
 > `Config Param: UPSERT_PARALLELISM_VALUE`<br></br>
-
----
-
-> #### hoodie.write.schema
-> The specified write schema. In most case, we do not need set this parameter, but for the case the write schema is not equal to the specified table schema, we can specify the write schema by this parameter. Used by MergeIntoHoodieTableCommand<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: WRITE_SCHEMA`<br></br>
 
 ---
 
@@ -2763,6 +2762,20 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > Schema string representing the latest schema of the table. Hudi passes this to implementations of evolution of schema<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: INTERNAL_SCHEMA_STRING`<br></br>
+
+---
+
+> #### hoodie.write.schema
+> Config allowing to override writer's schema. This might be necessary in cases when writer's schema derived from the incoming dataset might actually be different from the schema we actually want to use when writing. This, for ex, could be the case for'partial-update' use-cases (like `MERGE INTO` Spark SQL statement for ex) where only a projection of the incoming dataset might be used to update the records in the existing table, prompting us to override the writer's schema<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: WRITE_SCHEMA_OVERRIDE`<br></br>
+
+---
+
+> #### hoodie.write.executor.disruptor.buffer.size
+> The size of the Disruptor Executor ring buffer, must be power of 2<br></br>
+> **Default Value**: 1024 (Optional)<br></br>
+> `Config Param: WRITE_DISRUPTOR_BUFFER_SIZE`<br></br>
 
 ---
 
@@ -2820,6 +2833,27 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > Writers perform heartbeats to indicate liveness. Controls how often (in ms), such heartbeats are registered to lake storage.<br></br>
 > **Default Value**: 60000 (Optional)<br></br>
 > `Config Param: CLIENT_HEARTBEAT_INTERVAL_IN_MS`<br></br>
+
+---
+
+> #### hoodie.datasource.write.merger.strategy
+> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id<br></br>
+> **Default Value**: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)<br></br>
+> `Config Param: MERGER_STRATEGY`<br></br>
+
+---
+
+> #### hoodie.write.executor.disruptor.wait.strategy
+> Strategy employed for making Disruptor Executor wait on a cursor. Other options are SLEEPING_WAIT, it attempts to be conservative with CPU usage by using a simple busy wait loopYIELDING_WAIT, it is designed for cases where there is the option to burn CPU cycles with the goal of improving latencyBUSY_SPIN_WAIT, it can be used in low-latency systems, but puts the highest constraints on the deployment environment<br></br>
+> **Default Value**: BLOCKING_WAIT (Optional)<br></br>
+> `Config Param: WRITE_WAIT_STRATEGY`<br></br>
+
+---
+
+> #### hoodie.write.executor.type
+> Set executor which orchestrates concurrent producers and consumers communicating through a message queue.BOUNDED_IN_MEMORY(default): Use LinkedBlockingQueue as a bounded in-memory queue, this queue will use extra lock to balance producers and consumerDISRUPTOR: Use disruptor which a lock free message queue as inner message, this queue may gain better writing performance if lock was the bottleneck. SIMPLE: Executor with no inner message queue and no inner lock. Consuming and writing records from iterator directly. Compared with BIM and DISRUPTOR, this queue has no need for additional memory and cpu resources due to lock or multithreading, but also lost some benefits such as speed limit. Although DISRUPTOR_EXECUTOR and SIMPLE are still in experimental.<br></br>
+> **Default Value**: BOUNDED_IN_MEMORY (Optional)<br></br>
+> `Config Param: EXECUTOR_TYPE`<br></br>
 
 ---
 
@@ -2884,7 +2918,7 @@ By default false (the names of partition folders are only partition values)<br><
 > Record key field. Value to be used as the `recordKey` component of `HoodieKey`.
 Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using
 the dot notation eg: `a.b.c`<br></br>
-> **Default Value**: uuid (Optional)<br></br>
+> **Default Value**: N/A (Required)<br></br>
 > `Config Param: RECORDKEY_FIELD_NAME`<br></br>
 
 ---
@@ -3224,6 +3258,152 @@ Controls notifications sent to Kafka, on events happening to a hudi table.
 
 ---
 
+### Storage Configs {#Storage-Configs}
+
+Configurations that control aspects around writing, sizing, reading base and log files.
+
+`Config Class`: org.apache.hudi.common.config.HoodieStorageConfig<br></br>
+> #### hoodie.parquet.compression.ratio
+> Expected compression of parquet data used by Hudi, when it tries to size new parquet files. Increase this value, if bulk_insert is producing smaller than expected sized files<br></br>
+> **Default Value**: 0.1 (Optional)<br></br>
+> `Config Param: PARQUET_COMPRESSION_RATIO_FRACTION`<br></br>
+
+---
+
+> #### hoodie.parquet.compression.codec
+> Compression Codec for parquet files<br></br>
+> **Default Value**: gzip (Optional)<br></br>
+> `Config Param: PARQUET_COMPRESSION_CODEC_NAME`<br></br>
+
+---
+
+> #### hoodie.orc.max.file.size
+> Target file size in bytes for ORC base files.<br></br>
+> **Default Value**: 125829120 (Optional)<br></br>
+> `Config Param: ORC_FILE_MAX_SIZE`<br></br>
+
+---
+
+> #### hoodie.logfile.data.block.format
+> Format of the data block within delta logs. Following formats are currently supported "avro", "hfile", "parquet"<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: LOGFILE_DATA_BLOCK_FORMAT`<br></br>
+
+---
+
+> #### hoodie.logfile.to.parquet.compression.ratio
+> Expected additional compression as records move from log files to parquet. Used for merge_on_read table to send inserts into log files & control the size of compacted parquet file.<br></br>
+> **Default Value**: 0.35 (Optional)<br></br>
+> `Config Param: LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION`<br></br>
+
+---
+
+> #### hoodie.parquet.page.size
+> Parquet page size in bytes. Page is the unit of read within a parquet file. Within a block, pages are compressed separately.<br></br>
+> **Default Value**: 1048576 (Optional)<br></br>
+> `Config Param: PARQUET_PAGE_SIZE`<br></br>
+
+---
+
+> #### hoodie.hfile.compression.algorithm
+> Compression codec to use for hfile base files.<br></br>
+> **Default Value**: GZ (Optional)<br></br>
+> `Config Param: HFILE_COMPRESSION_ALGORITHM_NAME`<br></br>
+
+---
+
+> #### hoodie.hfile.block.size
+> Lower values increase the size in bytes of metadata tracked within HFile, but can offer potentially faster lookup times.<br></br>
+> **Default Value**: 1048576 (Optional)<br></br>
+> `Config Param: HFILE_BLOCK_SIZE`<br></br>
+
+---
+
+> #### hoodie.parquet.field_id.write.enabled
+> Would only be effective with Spark 3.3+. Sets spark.sql.parquet.fieldId.write.enabled. If enabled, Spark will write out parquet native field ids that are stored inside StructField's metadata as parquet.field.id to parquet files.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: PARQUET_FIELD_ID_WRITE_ENABLED`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
+> #### hoodie.parquet.block.size
+> Parquet RowGroup size in bytes. It's recommended to make this large enough that scan costs can be amortized by packing enough column values into a single row group.<br></br>
+> **Default Value**: 125829120 (Optional)<br></br>
+> `Config Param: PARQUET_BLOCK_SIZE`<br></br>
+
+---
+
+> #### hoodie.logfile.max.size
+> LogFile max size in bytes. This is the maximum size allowed for a log file before it is rolled over to the next version.<br></br>
+> **Default Value**: 1073741824 (Optional)<br></br>
+> `Config Param: LOGFILE_MAX_SIZE`<br></br>
+
+---
+
+> #### hoodie.parquet.dictionary.enabled
+> Whether to use dictionary encoding<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: PARQUET_DICTIONARY_ENABLED`<br></br>
+
+---
+
+> #### hoodie.hfile.max.file.size
+> Target file size in bytes for HFile base files.<br></br>
+> **Default Value**: 125829120 (Optional)<br></br>
+> `Config Param: HFILE_MAX_FILE_SIZE`<br></br>
+
+---
+
+> #### hoodie.parquet.writelegacyformat.enabled
+> Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier. For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: PARQUET_WRITE_LEGACY_FORMAT_ENABLED`<br></br>
+
+---
+
+> #### hoodie.orc.stripe.size
+> Size of the memory buffer in bytes for writing<br></br>
+> **Default Value**: 67108864 (Optional)<br></br>
+> `Config Param: ORC_STRIPE_SIZE`<br></br>
+
+---
+
+> #### hoodie.logfile.data.block.max.size
+> LogFile Data block max size in bytes. This is the maximum size allowed for a single data block to be appended to a log file. This helps to make sure the data appended to the log file is broken up into sizable blocks to prevent from OOM errors. This size should be greater than the JVM memory.<br></br>
+> **Default Value**: 268435456 (Optional)<br></br>
+> `Config Param: LOGFILE_DATA_BLOCK_MAX_SIZE`<br></br>
+
+---
+
+> #### hoodie.parquet.outputtimestamptype
+> Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.<br></br>
+> **Default Value**: TIMESTAMP_MICROS (Optional)<br></br>
+> `Config Param: PARQUET_OUTPUT_TIMESTAMP_TYPE`<br></br>
+
+---
+
+> #### hoodie.parquet.max.file.size
+> Target size in bytes for parquet files produced by Hudi write phases. For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.<br></br>
+> **Default Value**: 125829120 (Optional)<br></br>
+> `Config Param: PARQUET_MAX_FILE_SIZE`<br></br>
+
+---
+
+> #### hoodie.orc.block.size
+> ORC block size, recommended to be aligned with the target file size.<br></br>
+> **Default Value**: 125829120 (Optional)<br></br>
+> `Config Param: ORC_BLOCK_SIZE`<br></br>
+
+---
+
+> #### hoodie.orc.compression.codec
+> Compression codec to use for ORC base files.<br></br>
+> **Default Value**: ZLIB (Optional)<br></br>
+> `Config Param: ORC_COMPRESSION_CODEC_NAME`<br></br>
+
+---
+
 ### Locks Configurations {#Locks-Configurations}
 
 Configs that control locking mechanisms required for concurrency control  between writers to a Hudi table. Concurrency between Hudi's own table services  are auto managed internally.
@@ -3415,9 +3595,16 @@ Configurations that control compaction (merging of log files onto a new base fil
 ---
 
 > #### hoodie.compact.inline.max.delta.seconds
-> Number of elapsed seconds after the last compaction, before scheduling a new one.<br></br>
+> Number of elapsed seconds after the last compaction, before scheduling a new one. This config takes effect only for the compaction triggering strategy based on the elapsed time, i.e., TIME_ELAPSED, NUM_AND_TIME, and NUM_OR_TIME.<br></br>
 > **Default Value**: 3600 (Optional)<br></br>
 > `Config Param: INLINE_COMPACT_TIME_DELTA_SECONDS`<br></br>
+
+---
+
+> #### hoodie.log.compaction.inline
+> When set to true, logcompaction service is triggered after each write. While being  simpler operationally, this adds extra latency on the write path.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: INLINE_LOG_COMPACT`<br></br>
 
 ---
 
@@ -3425,6 +3612,13 @@ Configurations that control compaction (merging of log files onto a new base fil
 > Amount of MBs to spend during compaction run for the LogFileSizeBasedCompactionStrategy. This value helps bound ingestion latency while compaction is run inline mode.<br></br>
 > **Default Value**: 512000 (Optional)<br></br>
 > `Config Param: TARGET_IO_PER_COMPACTION_IN_MB`<br></br>
+
+---
+
+> #### hoodie.compaction.logfile.num.threshold
+> Only if the log file num is greater than the threshold, the file group will be compacted.<br></br>
+> **Default Value**: 0 (Optional)<br></br>
+> `Config Param: COMPACTION_LOG_FILE_NUM_THRESHOLD`<br></br>
 
 ---
 
@@ -3451,9 +3645,24 @@ Configurations that control compaction (merging of log files onto a new base fil
 ---
 
 > #### hoodie.compact.inline.max.delta.commits
-> Number of delta commits after the last compaction, before scheduling of a new compaction is attempted.<br></br>
+> Number of delta commits after the last compaction, before scheduling of a new compaction is attempted. This config takes effect only for the compaction triggering strategy based on the number of commits, i.e., NUM_COMMITS, NUM_COMMITS_AFTER_LAST_REQUEST, NUM_AND_TIME, and NUM_OR_TIME.<br></br>
 > **Default Value**: 5 (Optional)<br></br>
 > `Config Param: INLINE_COMPACT_NUM_DELTA_COMMITS`<br></br>
+
+---
+
+> #### hoodie.log.compaction.blocks.threshold
+> Log compaction can be scheduled if the no. of log blocks crosses this threshold value. This is effective only when log compaction is enabled via hoodie.log.compaction.inline<br></br>
+> **Default Value**: 5 (Optional)<br></br>
+> `Config Param: LOG_COMPACTION_BLOCKS_THRESHOLD`<br></br>
+
+---
+
+> #### hoodie.log.record.reader.use.scanV2
+> ScanV2 logic address all the multiwriter challenges while appending to log files. It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: USE_LOG_RECORD_READER_SCAN_V2`<br></br>
+> `Since Version: 0.13.0`<br></br>
 
 ---
 
@@ -3515,7 +3724,7 @@ Configurations that control how file metadata is stored by Hudi, for transaction
 > The class name of the Exception that needs to be re-tryed, separated by commas. Default is empty which means retry all the IOException and RuntimeException from Remote Request.<br></br>
 > **Default Value**:  (Optional)<br></br>
 > `Config Param: RETRY_EXCEPTIONS`<br></br>
-> `Since Version: 0.12.0`<br></br>
+> `Since Version: 0.12.1`<br></br>
 
 ---
 
@@ -3523,7 +3732,7 @@ Configurations that control how file metadata is stored by Hudi, for transaction
 > Amount of time (in ms) to wait, before retry to do operations on storage.<br></br>
 > **Default Value**: 100 (Optional)<br></br>
 > `Config Param: REMOTE_INITIAL_RETRY_INTERVAL_MS`<br></br>
-> `Since Version: 0.12.0`<br></br>
+> `Since Version: 0.12.1`<br></br>
 
 ---
 
@@ -3559,7 +3768,7 @@ Configurations that control how file metadata is stored by Hudi, for transaction
 > Maximum number of retry for API requests against a remote file system view. e.g timeline server.<br></br>
 > **Default Value**: 3 (Optional)<br></br>
 > `Config Param: REMOTE_MAX_RETRY_NUMBERS`<br></br>
-> `Since Version: 0.12.0`<br></br>
+> `Since Version: 0.12.1`<br></br>
 
 ---
 
@@ -3577,11 +3786,18 @@ Configurations that control how file metadata is stored by Hudi, for transaction
 
 ---
 
+> #### hoodie.filesystem.view.spillable.log.compaction.mem.fraction
+> Fraction of the file system view memory, to be used for holding log compaction related metadata.<br></br>
+> **Default Value**: 0.8 (Optional)<br></br>
+> `Config Param: SPILLABLE_LOG_COMPACTION_MEM_FRACTION`<br></br>
+
+---
+
 > #### hoodie.filesystem.view.remote.retry.enable
 > Whether to enable API request retry for remote file system view.<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: REMOTE_RETRY_ENABLE`<br></br>
-> `Since Version: 0.12.0`<br></br>
+> `Since Version: 0.12.1`<br></br>
 
 ---
 
@@ -3596,7 +3812,7 @@ Configurations that control how file metadata is stored by Hudi, for transaction
 > Maximum amount of time (in ms), to wait for next retry.<br></br>
 > **Default Value**: 2000 (Optional)<br></br>
 > `Config Param: REMOTE_MAX_RETRY_INTERVAL_MS`<br></br>
-> `Since Version: 0.12.0`<br></br>
+> `Since Version: 0.12.1`<br></br>
 
 ---
 
@@ -3654,24 +3870,10 @@ Configurations that control how file metadata is stored by Hudi, for transaction
 Configurations that control indexing behavior, which tags incoming records as either inserts or updates to older records.
 
 `Config Class`: org.apache.hudi.config.HoodieIndexConfig<br></br>
-> #### hoodie.index.bloom.num_entries
-> Only applies if index type is BLOOM. This is the number of entries to be stored in the bloom filter. The rationale for the default: Assume the maxParquetFileSize is 128MB and averageRecordSize is 1kb and hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. Warning: Setting this very low, will generate a lot of false positives and index lookup will have to scan a lot more files than it has to and setting this to a very high number will increase the size every base file linearly (roughly 4KB for every 50000 entries). This config is also used with DYNAMIC bloom filter which determines the initial size for the bloom.<br></br>
-> **Default Value**: 60000 (Optional)<br></br>
-> `Config Param: BLOOM_FILTER_NUM_ENTRIES_VALUE`<br></br>
-
----
-
 > #### hoodie.bloom.index.keys.per.bucket
 > Only applies if bloomIndexBucketizedChecking is enabled and index type is bloom. This configuration controls the “bucket” size which tracks the number of record-key checks made against a single file and is the unit of work allocated to each partition performing bloom filter lookup. A higher value would amortize the fixed cost of reading a bloom filter to memory.<br></br>
 > **Default Value**: 10000000 (Optional)<br></br>
 > `Config Param: BLOOM_INDEX_KEYS_PER_BUCKET`<br></br>
-
----
-
-> #### hoodie.simple.index.input.storage.level
-> Only applies when #simpleIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. Refer to org.apache.spark.storage.StorageLevel for different values<br></br>
-> **Default Value**: MEMORY_AND_DISK_SER (Optional)<br></br>
-> `Config Param: SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE`<br></br>
 
 ---
 
@@ -3696,13 +3898,6 @@ Configurations that control indexing behavior, which tags incoming records as ei
 
 ---
 
-> #### hoodie.bucket.index.num.buckets
-> Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, and each partition is divided to N buckets.<br></br>
-> **Default Value**: 256 (Optional)<br></br>
-> `Config Param: BUCKET_INDEX_NUM_BUCKETS`<br></br>
-
----
-
 > #### hoodie.bucket.index.hash.field
 > Index key. It is used to index the record and find its file group. If not set, use record key field as default<br></br>
 > **Default Value**: N/A (Required)<br></br>
@@ -3710,32 +3905,10 @@ Configurations that control indexing behavior, which tags incoming records as ei
 
 ---
 
-> #### hoodie.bloom.index.use.metadata
-> Only applies if index type is BLOOM.When true, the index lookup uses bloom filters and column stats from metadata table when available to speed up the process.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: BLOOM_INDEX_USE_METADATA`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
 > #### hoodie.bloom.index.bucketized.checking
 > Only applies if index type is BLOOM. When true, bucketized bloom filtering is enabled. This reduces skew seen in sort based bloom index lookup<br></br>
 > **Default Value**: true (Optional)<br></br>
 > `Config Param: BLOOM_INDEX_BUCKETIZED_CHECKING`<br></br>
-
----
-
-> #### hoodie.index.type
-> Type of index to use. Default is SIMPLE on Spark engine and INMEMORY on Flink and Java engines. Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: INDEX_TYPE`<br></br>
-
----
-
-> #### hoodie.index.bloom.fpp
-> Only applies if index type is BLOOM. Error rate allowed given the number of entries. This is used to calculate how many bits should be assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), we like to tradeoff disk space for lower false positives. If the number of entries added to bloom filter exceeds the configured value (hoodie.index.bloom.num_entries), then this fpp may not be honored.<br></br>
-> **Default Value**: 0.000000001 (Optional)<br></br>
-> `Config Param: BLOOM_FILTER_FPP_VALUE`<br></br>
 
 ---
 
@@ -3760,10 +3933,88 @@ Configurations that control indexing behavior, which tags incoming records as ei
 
 ---
 
+> #### hoodie.bloom.index.prune.by.ranges
+> Only applies if index type is BLOOM. When true, range information from files to leveraged speed up index lookups. Particularly helpful, if the key has a monotonously increasing prefix, such as timestamp. If the record key is completely random, it is better to turn this off, since range pruning will only  add extra overhead to the index lookup.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: BLOOM_INDEX_PRUNE_BY_RANGES`<br></br>
+
+---
+
+> #### hoodie.bloom.index.filter.type
+> Filter type used. Default is BloomFilterTypeCode.DYNAMIC_V0. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. Dynamic bloom filters auto size themselves based on number of keys.<br></br>
+> **Default Value**: DYNAMIC_V0 (Optional)<br></br>
+> `Config Param: BLOOM_FILTER_TYPE`<br></br>
+
+---
+
+> #### hoodie.index.bloom.num_entries
+> Only applies if index type is BLOOM. This is the number of entries to be stored in the bloom filter. The rationale for the default: Assume the maxParquetFileSize is 128MB and averageRecordSize is 1kb and hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. Warning: Setting this very low, will generate a lot of false positives and index lookup will have to scan a lot more files than it has to and setting this to a very high number will increase the size every base file linearly (roughly 4KB for every 50000 entries). This config is also used with DYNAMIC bloom filter which determines the initial size for the bloom.<br></br>
+> **Default Value**: 60000 (Optional)<br></br>
+> `Config Param: BLOOM_FILTER_NUM_ENTRIES_VALUE`<br></br>
+
+---
+
+> #### hoodie.simple.index.input.storage.level
+> Only applies when #simpleIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. Refer to org.apache.spark.storage.StorageLevel for different values<br></br>
+> **Default Value**: MEMORY_AND_DISK_SER (Optional)<br></br>
+> `Config Param: SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE`<br></br>
+
+---
+
+> #### hoodie.bucket.index.num.buckets
+> Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, and each partition is divided to N buckets.<br></br>
+> **Default Value**: 256 (Optional)<br></br>
+> `Config Param: BUCKET_INDEX_NUM_BUCKETS`<br></br>
+
+---
+
+> #### hoodie.bloom.index.use.metadata
+> Only applies if index type is BLOOM.When true, the index lookup uses bloom filters and column stats from metadata table when available to speed up the process.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: BLOOM_INDEX_USE_METADATA`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.index.type
+> Type of index to use. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java engines. Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: INDEX_TYPE`<br></br>
+
+---
+
+> #### hoodie.index.bloom.fpp
+> Only applies if index type is BLOOM. Error rate allowed given the number of entries. This is used to calculate how many bits should be assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), we like to tradeoff disk space for lower false positives. If the number of entries added to bloom filter exceeds the configured value (hoodie.index.bloom.num_entries), then this fpp may not be honored.<br></br>
+> **Default Value**: 0.000000001 (Optional)<br></br>
+> `Config Param: BLOOM_FILTER_FPP_VALUE`<br></br>
+
+---
+
+> #### hoodie.bucket.index.min.num.buckets
+> Only applies if bucket index engine is consistent hashing. Determine the lower bound of the number of buckets in the hudi table. Bucket resizing cannot be done lower than this min limit.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: BUCKET_INDEX_MIN_NUM_BUCKETS`<br></br>
+
+---
+
+> #### hoodie.bucket.index.merge.threshold
+> Control if buckets should be merged when using consistent hashing bucket indexSpecifically, if a file slice size is smaller than `hoodie.xxxx.max.file.size` * threshold, then it will be consideredas a merge candidate.<br></br>
+> **Default Value**: 0.2 (Optional)<br></br>
+> `Config Param: BUCKET_MERGE_THRESHOLD`<br></br>
+
+---
+
 > #### hoodie.bloom.index.use.treebased.filter
 > Only applies if index type is BLOOM. When true, interval tree based file pruning optimization is enabled. This mode speeds-up file-pruning based on key ranges when compared with the brute-force mode<br></br>
 > **Default Value**: true (Optional)<br></br>
 > `Config Param: BLOOM_INDEX_TREE_BASED_FILTER`<br></br>
+
+---
+
+> #### hoodie.bucket.index.max.num.buckets
+> Only applies if bucket index engine is consistent hashing. Determine the upper bound of the number of buckets in the hudi table. Bucket resizing cannot be done higher than this max limit.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: BUCKET_INDEX_MAX_NUM_BUCKETS`<br></br>
 
 ---
 
@@ -3775,7 +4026,7 @@ Configurations that control indexing behavior, which tags incoming records as ei
 ---
 
 > #### hoodie.index.bucket.engine
-> Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket.Possible options are [SIMPLE | CONSISTENT_HASHING].Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size issues of the SIMPLE hashing engine.<br></br>
+> Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket.Possible options are [SIMPLE | CONSISTENT_HASHING].Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables, only use simple hashing on COW tables.<br></br>
 > **Default Value**: SIMPLE (Optional)<br></br>
 > `Config Param: BUCKET_INDEX_ENGINE_TYPE`<br></br>
 > `Since Version: 0.11.0`<br></br>
@@ -3789,24 +4040,17 @@ Configurations that control indexing behavior, which tags incoming records as ei
 
 ---
 
+> #### hoodie.bucket.index.split.threshold
+> Control if the bucket should be split when using consistent hashing bucket index.Specifically, if a file slice size reaches `hoodie.xxxx.max.file.size` * threshold, then split will be carried out.<br></br>
+> **Default Value**: 2.0 (Optional)<br></br>
+> `Config Param: BUCKET_SPLIT_THRESHOLD`<br></br>
+
+---
+
 > #### hoodie.simple.index.use.caching
 > Only applies if index type is SIMPLE. When true, the incoming writes will cached to speed up index lookup by reducing IO for computing parallelism or affected partitions<br></br>
 > **Default Value**: true (Optional)<br></br>
 > `Config Param: SIMPLE_INDEX_USE_CACHING`<br></br>
-
----
-
-> #### hoodie.bloom.index.prune.by.ranges
-> Only applies if index type is BLOOM. When true, range information from files to leveraged speed up index lookups. Particularly helpful, if the key has a monotonously increasing prefix, such as timestamp. If the record key is completely random, it is better to turn this off, since range pruning will only  add extra overhead to the index lookup.<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: BLOOM_INDEX_PRUNE_BY_RANGES`<br></br>
-
----
-
-> #### hoodie.bloom.index.filter.type
-> Filter type used. Default is BloomFilterTypeCode.DYNAMIC_V0. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. Dynamic bloom filters auto size themselves based on number of keys.<br></br>
-> **Default Value**: DYNAMIC_V0 (Optional)<br></br>
-> `Config Param: BLOOM_FILTER_TYPE`<br></br>
 
 ---
 
@@ -4052,7 +4296,7 @@ The following set of configurations are common across Hudi.
 ---
 
 > #### hoodie.datasource.write.reconcile.schema
-> When a new batch of write has records with old schema, but latest table schema got evolved, this config will upgrade the records to leverage latest table schema(default values will be injected to missing fields). If not, the write batch would fail.<br></br>
+> This config controls how writer's schema will be selected based on the incoming batch's schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation is ENABLED, writer-schema will be picked such that table's schema (after txn) is either kept the same or extended, meaning that we'll always prefer the schema that either adds new columns or stays the same. This enables us, to always extend the table's schema during evolution and never lose the data (when, for ex, existing column is being dropped in a new batch)<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: RECONCILE_SCHEMA`<br></br>
 
@@ -4069,6 +4313,13 @@ The following set of configurations are common across Hudi.
 > Enables support for Schema Evolution feature<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: SCHEMA_EVOLUTION_ENABLE`<br></br>
+
+---
+
+> #### as.of.instant
+> The query instant for time travel. Without specified this option, we query the latest snapshot.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: TIMESTAMP_AS_OF`<br></br>
 
 ---
 
@@ -4292,6 +4543,13 @@ Enables reporting on Hudi metrics. Hudi publishes metrics on every commit, clean
 > **Default Value**:  (Optional)<br></br>
 > `Config Param: METRICS_REPORTER_PREFIX`<br></br>
 > `Since Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.metrics.lock.enable
+> Enable metrics for locking infra. Useful when operating in multiwriter mode<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: LOCK_METRICS_ENABLE`<br></br>
 
 ---
 
