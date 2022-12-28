@@ -53,16 +53,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class HoodieFlinkHoodieTableServiceClient<T> extends BaseHoodieTableServiceClient<List<WriteStatus>> {
+public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClient<List<WriteStatus>> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkHoodieTableServiceClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkTableServiceClient.class);
 
   /**
    * Cached metadata writer for coordinator to reuse for each commit.
    */
   private HoodieBackedTableMetadataWriter metadataWriter;
 
-  protected HoodieFlinkHoodieTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+  protected HoodieFlinkTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     super(context, clientConfig);
   }
 
