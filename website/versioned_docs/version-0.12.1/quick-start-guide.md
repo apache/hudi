@@ -1080,7 +1080,7 @@ For CoW tables, table services work in inline mode by default.
 For MoR tables, some async services are enabled by default.
 
 :::note
-Since Hudi 0.11 Metadata Table is enabled by default. When using async table services with Metadata Table enabled you must use Optimistic Concurrency Control to avoid the risk of data loss (even in single writer scenario). See [Metadata Table deployment considerations](/docs/metadata#deployment-considerations) for detailed instructions.
+Since Hudi 0.11 Metadata Table is enabled by default. When using async table services with Metadata Table enabled you must use Optimistic Concurrency Control to avoid the risk of data loss (even in single writer scenario). See [Metadata Table deployment considerations](/docs/0.12.0/metadata#deployment-considerations) for detailed instructions.
 
 If you're using Foreach or ForeachBatch streaming sink you must use inline table services, async table services are not supported.
 :::
