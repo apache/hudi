@@ -755,6 +755,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     if (fileSliceListFromMetadataTable.size() != fileSliceListFromFS.size()) {
       mismatch = true;
     } else if (!fileSliceListFromMetadataTable.equals(fileSliceListFromFS)) {
+      // In-memory cache for the set of committed files of commits of interest
       Map<String, Set<String>> committedFilesMap = new HashMap<>();
       for (int i = 0; i < fileSliceListFromMetadataTable.size(); i++) {
         FileSlice fileSlice1 = fileSliceListFromMetadataTable.get(i);
