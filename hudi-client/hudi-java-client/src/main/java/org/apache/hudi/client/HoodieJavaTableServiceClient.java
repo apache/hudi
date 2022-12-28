@@ -32,30 +32,30 @@ import org.apache.hadoop.conf.Configuration;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieJavaHoodieTableServiceClient extends BaseHoodieTableServiceClient<List<WriteStatus>> {
+public class HoodieJavaTableServiceClient extends BaseHoodieTableServiceClient<List<WriteStatus>> {
 
-  protected HoodieJavaHoodieTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+  protected HoodieJavaTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     super(context, clientConfig);
   }
 
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
-    throw new HoodieNotSupportedException("Compact is not supported in HoodieJavaHoodieTableServiceClient");
+    throw new HoodieNotSupportedException("Compact is not supported in HoodieJavaTableServiceClient");
   }
 
   @Override
   public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-    throw new HoodieNotSupportedException("CommitCompaction is not supported in HoodieJavaHoodieTableServiceClient");
+    throw new HoodieNotSupportedException("CommitCompaction is not supported in HoodieJavaTableServiceClient");
   }
 
   @Override
   protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
-    throw new HoodieNotSupportedException("CompleteCompaction is not supported in HoodieJavaHoodieTableServiceClient");
+    throw new HoodieNotSupportedException("CompleteCompaction is not supported in HoodieJavaTableServiceClient");
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> cluster(String clusteringInstant, boolean shouldComplete) {
-    throw new HoodieNotSupportedException("Cluster is not supported in HoodieJavaHoodieTableServiceClient");
+    throw new HoodieNotSupportedException("Cluster is not supported in HoodieJavaTableServiceClient");
   }
 
   @Override
