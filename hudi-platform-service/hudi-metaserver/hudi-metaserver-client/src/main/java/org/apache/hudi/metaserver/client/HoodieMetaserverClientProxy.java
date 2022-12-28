@@ -19,6 +19,7 @@
 package org.apache.hudi.metaserver.client;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
+import org.apache.hudi.common.util.RetryHelper;
 
 import java.io.Serializable;
 import java.lang.reflect.InvocationHandler;
@@ -34,11 +35,11 @@ public class HoodieMetaserverClientProxy implements InvocationHandler, Serializa
 
   private final HoodieMetaserverClient client;
   private final int retryLimit;
-  private final int retryDelaySeconds;
+  private final long retryDelayMs;
 
   private HoodieMetaserverClientProxy(HoodieMetaserverConfig config) {
     this.retryLimit = config.getConnectionRetryLimit();
-    this.retryDelaySeconds = config.getConnectionRetryDelay();
+    this.retryDelayMs = config.getConnectionRetryDelay() * 1000L;
     this.client = new HoodieMetaserverClientImp(config);
   }
 
@@ -50,21 +51,11 @@ public class HoodieMetaserverClientProxy implements InvocationHandler, Serializa
 
   @Override
   public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-    int retry = 0;
-    Throwable err;
-    do {
-      try {
-        return method.invoke(client, args);
-      } catch (IllegalAccessException | InvocationTargetException | UndeclaredThrowableException e) {
-        throw e.getCause();
-      } catch (Throwable e) {
-        err = e;
-      }
-      retry++;
-      if (retry >= retryLimit) {
-        throw err;
-      }
-      Thread.sleep(retryDelaySeconds * 1000L);
-    } while (true);
+    try {
+      return new RetryHelper<Object, Exception>(retryDelayMs, retryLimit, retryDelayMs, Exception.class.getName())
+          .tryWith(() -> method.invoke(client, args)).start();
+    } catch (IllegalAccessException | InvocationTargetException | UndeclaredThrowableException e) {
+      throw e.getCause();
+    }
   }
 }
