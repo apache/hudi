@@ -159,6 +159,8 @@ public class HoodieTableMetadataUtil {
         final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), false);
         final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
 
+        colStats.valueCount++;
+
         if (fieldVal != null && canCompare(fieldSchema)) {
           // Set the min value of the field
           if (colStats.minValue == null
@@ -170,8 +172,6 @@ public class HoodieTableMetadataUtil {
           if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldVal, colStats.maxValue, fieldSchema) > 0) {
             colStats.maxValue = fieldVal;
           }
-
-          colStats.valueCount++;
         } else {
           colStats.nullCount++;
         }
