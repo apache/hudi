@@ -3,8 +3,12 @@ title: Download
 sidebar_position: 1
 keywords: [ hudi, download]
 toc: true
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2022-12-27T15:59:57-04:00
 ---
+
+### Release 0.12.2
+* Source Release : [Apache Hudi 0.12.2 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.12.2/hudi-0.12.2.src.tgz) ([asc](https://downloads.apache.org/hudi/0.12.2/hudi-0.12.2.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.12.2/hudi-0.12.2.src.tgz.sha512))
+* Release Note : ([Release Note for Apache Hudi 0.12.2](/releases/release-0.12.2))
 
 ### Release 0.12.1
 * Source Release : [Apache Hudi 0.12.1 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.12.1/hudi-0.12.1.src.tgz) ([asc](https://downloads.apache.org/hudi/0.12.1/hudi-0.12.1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.12.1/hudi-0.12.1.src.tgz.sha512))
