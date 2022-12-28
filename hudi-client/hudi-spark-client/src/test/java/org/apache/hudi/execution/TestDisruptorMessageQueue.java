@@ -39,7 +39,6 @@ import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import scala.Tuple2;
@@ -86,11 +85,10 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
 
   // Test to ensure that we are reading all records from queue iterator in the same order
   // without any exceptions.
-  @Disabled("Disabled for unblocking 0.12.2 release. Disruptor queue is not part of this minor release. Tracked in HUDI-5410")
   @SuppressWarnings("unchecked")
   @Test
   @Timeout(value = 60)
-  public void testRecordReading() {
+  public void testRecordReading() throws Exception {
 
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
     ArrayList<HoodieRecord> beforeRecord = new ArrayList<>();

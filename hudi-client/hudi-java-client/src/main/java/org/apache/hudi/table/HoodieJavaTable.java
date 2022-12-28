@@ -50,8 +50,8 @@ public abstract class HoodieJavaTable<T>
   }
 
   public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config,
-                                                                          HoodieJavaEngineContext context,
-                                                                          HoodieTableMetaClient metaClient) {
+                                              HoodieEngineContext context,
+                                              HoodieTableMetaClient metaClient) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
         return new HoodieJavaCopyOnWriteTable<>(config, context, metaClient);

@@ -21,15 +21,12 @@ package org.apache.hudi.utilities.deltastreamer.multisync;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
-import org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -44,26 +41,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMultipleMetaSync extends HoodieDeltaStreamerTestBase {
-
-  @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
-    if (testUtils != null) {
-      testUtils.teardown();
-    }
-  }
-
-  @Override
-  @BeforeEach
-  public void setup() throws Exception {
-    super.setup();
-  }
-
-  @Override
-  @AfterEach
-  public void teardown() throws Exception {
-    super.teardown();
-  }
 
   @Test
   void testMultipleMetaStore() throws Exception {

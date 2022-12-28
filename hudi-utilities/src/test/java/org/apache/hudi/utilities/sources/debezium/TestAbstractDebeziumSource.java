@@ -69,7 +69,7 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
 
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
     testUtils.teardown();
   }
 
