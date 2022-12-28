@@ -55,7 +55,6 @@
             <version>${hudi.version}</version>
         </dependency>
 
-
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-aws</artifactId>
