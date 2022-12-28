@@ -32,7 +32,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 
-import com.esotericsoftware.minlog.Log;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -109,7 +108,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       } catch (IOException e) {
         throw new HoodieException(String.format("Failed to parse sparkOptions: %s", props.getString(Config.SPARK_DATASOURCE_OPTIONS)), e);
       }
-      Log.info(String.format("sparkOptions loaded: %s", sparkOptionsMap));
+      LOG.info(String.format("sparkOptions loaded: %s", sparkOptionsMap));
       dataFrameReader = dataFrameReader.options(sparkOptionsMap);
     }
     return dataFrameReader;
