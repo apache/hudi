@@ -3,7 +3,7 @@ title: "Apache Hudi 2022 - A year in Review"
 excerpt: "2022 was the best year for Apache Hudi yet! Huge thank you to everyone who contributed!"
 author: Sivabalan Narayanan
 category: blog
-image: /assets/images/blog/DataCouncil.jpg
+image: /assets/images/blog/Apache-Hudi-2022-Review.png
 tags:
 - apache hudi
 ---
