@@ -99,7 +99,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String MARKER_EXTN = ".marker";
 
   // In-memory cache for archived timeline based on the start instant time
-  // In most of the scenarios, only one entry should be present in this map
+  // Only one entry should be present in this map
   private final Map<String, HoodieArchivedTimeline> archivedTimelineMap = new HashMap<>();
 
   // NOTE: Since those two parameters lay on the hot-path of a lot of computations, we
@@ -410,7 +410,12 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public HoodieArchivedTimeline getArchivedTimeline(String startTs, boolean useCache) {
     if (useCache) {
-      return archivedTimelineMap.computeIfAbsent(startTs, this::instantiateArchivedTimeline);
+      if (!archivedTimelineMap.containsKey(startTs)) {
+        // Only keep one entry in the map
+        archivedTimelineMap.clear();
+        archivedTimelineMap.put(startTs, instantiateArchivedTimeline(startTs));
+      }
+      return archivedTimelineMap.get(startTs);
     }
     return instantiateArchivedTimeline(startTs);
   }
