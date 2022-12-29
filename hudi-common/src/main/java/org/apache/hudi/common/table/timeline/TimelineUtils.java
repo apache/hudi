@@ -94,7 +94,7 @@ public class TimelineUtils {
             return commitMetadata.getPartitionToWriteStats().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions written at " + s, e);
-          } 
+          }
         case HoodieTimeline.REPLACE_COMMIT_ACTION:
           try {
             HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
@@ -148,11 +148,11 @@ public class TimelineUtils {
    * Get extra metadata for specified key from latest commit/deltacommit/replacecommit(eg. insert_overwrite) instant.
    */
   public static Option<String> getExtraMetadataFromLatest(HoodieTableMetaClient metaClient, String extraMetadataKey) {
-    return metaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants()       
+    return metaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants()
         // exclude clustering commits for returning user stored extra metadata 
         .filter(instant -> !isClusteringCommit(metaClient, instant))
         .findFirst().map(instant ->
-        getMetadataValue(metaClient, extraMetadataKey, instant)).orElse(Option.empty());
+            getMetadataValue(metaClient, extraMetadataKey, instant)).orElse(Option.empty());
   }
 
   /**
@@ -170,7 +170,7 @@ public class TimelineUtils {
    */
   public static Map<String, Option<String>> getAllExtraMetadataForKey(HoodieTableMetaClient metaClient, String extraMetadataKey) {
     return metaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants().collect(Collectors.toMap(
-          HoodieInstant::getTimestamp, instant -> getMetadataValue(metaClient, extraMetadataKey, instant)));
+        HoodieInstant::getTimestamp, instant -> getMetadataValue(metaClient, extraMetadataKey, instant)));
   }
 
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
@@ -184,7 +184,7 @@ public class TimelineUtils {
       throw new HoodieIOException("Unable to parse instant metadata " + instant, e);
     }
   }
-  
+
   public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     try {
       if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
@@ -244,6 +244,40 @@ public class TimelineUtils {
       return HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class);
     } else {
       return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+    }
+  }
+
+  /**
+   * Gets the qualified earliest instant from the active timeline of the data table
+   * for the archival in metadata table.
+   * <p>
+   * the qualified earliest instant is chosen as the earlier one between the earliest
+   * commit (COMMIT, DELTA_COMMIT, and REPLACE_COMMIT only) and the earliest inflight
+   * instant (all actions).
+   *
+   * @param dataTableActiveTimeline the active timeline of the data table.
+   * @return the instant meeting the requirement.
+   */
+  public static Option<HoodieInstant> getEarliestInstantForMetadataArchival(
+      HoodieActiveTimeline dataTableActiveTimeline) {
+    // This is for commits only, not including CLEAN, ROLLBACK, etc.
+    Option<HoodieInstant> earliestCommit =
+        dataTableActiveTimeline.getCommitsTimeline().firstInstant();
+    // This is for all instants which are in-flight
+    Option<HoodieInstant> earliestInflight =
+        dataTableActiveTimeline.filterInflightsAndRequested().firstInstant();
+
+    if (earliestCommit.isPresent() && earliestInflight.isPresent()) {
+      if (earliestCommit.get().compareTo(earliestInflight.get()) < 0) {
+        return earliestCommit;
+      }
+      return earliestInflight;
+    } else if (earliestCommit.isPresent()) {
+      return earliestCommit;
+    } else if (earliestInflight.isPresent()) {
+      return earliestInflight;
+    } else {
+      return Option.empty();
     }
   }
 }
