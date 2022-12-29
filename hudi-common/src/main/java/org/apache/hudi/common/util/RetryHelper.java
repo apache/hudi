@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
  */
 public class RetryHelper<T, R extends Exception> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(RetryHelper.class);
-  private static final List<? extends Class<? extends Exception>> RETRY_EXCEPTION_CLASS = Arrays.asList(IOException.class, RuntimeException.class);
+  private static final List<? extends Class<? extends Exception>> DEFAULT_RETRY_EXCEPTIONS = Arrays.asList(IOException.class, RuntimeException.class);
   private transient CheckedFunction<T, R> func;
   private final int num;
   private final long maxIntervalTime;
@@ -51,7 +51,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
     this.initialIntervalTime = initialRetryIntervalMs;
     this.maxIntervalTime = maxRetryIntervalMs;
     if (StringUtils.isNullOrEmpty(retryExceptions)) {
-      this.retryExceptionsClasses = RETRY_EXCEPTION_CLASS;
+      this.retryExceptionsClasses = DEFAULT_RETRY_EXCEPTIONS;
     } else {
       try {
         this.retryExceptionsClasses = Arrays.stream(retryExceptions.split(","))
@@ -115,13 +115,6 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
 
   private boolean checkIfExceptionInRetryList(Exception e) {
     boolean inRetryList = false;
-
-    // if users didn't set hoodie.filesystem.operation.retry.exceptions
-    // we will retry all the IOException and RuntimeException
-    if (retryExceptionsClasses.equals(RETRY_EXCEPTION_CLASS)) {
-      return true;
-    }
-
     for (Class<? extends Exception> clazz : retryExceptionsClasses) {
       if (clazz.isInstance(e)) {
         inRetryList = true;
