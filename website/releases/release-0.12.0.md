@@ -7,6 +7,11 @@ last_modified_at: 2022-08-17T10:30:00+05:30
 ---
 # [Release 0.12.0](https://github.com/apache/hudi/releases/tag/release-0.12.0) ([docs](/docs/quick-start-guide))
 
+## Long Term Support
+
+We aim to maintain 0.12 for a longer period of time and provide a stable release through the latest 0.12.x release for
+users to migrate to.  The latest 0.12 release is [0.12.2](/releases/release-0.12.2).
+
 ## Migration Guide
 
 In this release, there have been a few API and configuration updates listed below that warranted a new table version.
