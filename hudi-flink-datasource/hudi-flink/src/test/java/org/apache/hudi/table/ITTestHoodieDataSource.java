@@ -1535,18 +1535,18 @@ public class ITTestHoodieDataSource {
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
-    String insertSql = "insert into t1 values (1, TO_DATE('2022-02-02'), '1'), (2, DATE '2022-02-02', '1')";
+    String insertSql = "insert into t1 values (1, TO_DATE('2022-02-02'), '1'), (2, DATE '2022-02-02', '2')";
     execInsertSql(tableEnv, insertSql);
 
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     final String expected = "["
         + "+I[1, 2022-02-02, 1], "
-        + "+I[2, 2022-02-02, 1]]";
+        + "+I[2, 2022-02-02, 2]]";
     assertRowsEquals(result, expected);
 
     List<Row> partitionResult = CollectionUtil.iterableToList(
-        () -> tableEnv.sqlQuery("select * from t1 where f_int = 1").execute().collect());
+        () -> tableEnv.sqlQuery("select * from t1 where f_par = '1'").execute().collect());
     assertRowsEquals(partitionResult, "[+I[1, 2022-02-02, 1]]");
   }
 

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -48,9 +49,10 @@ import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -79,7 +81,7 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
  * @see StreamWriteFunction for the work flow and semantics
  */
 public class StreamWriteOperatorCoordinator
-    implements OperatorCoordinator {
+    implements OperatorCoordinatorAdapter {
   private static final Logger LOG = LoggerFactory.getLogger(StreamWriteOperatorCoordinator.class);
 
   /**
