@@ -105,6 +105,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected SerializableConfiguration hadoopConf;
   protected final transient HoodieEngineContext engineContext;
   protected final List<MetadataPartitionType> enabledPartitionTypes;
+  protected HoodieTableFileSystemView metadataFsView;
 
   /**
    * Hudi backed table metadata writer.
@@ -180,6 +181,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     Option<HoodieTableFileSystemView> fsView = Option.ofNullable(
         metaClient.isPresent() ? HoodieMetadataCommonUtils.getFileSystemView(metaClient.get()) : null);
+    if (fsView.isPresent() && metadataFsView == null) {
+      metadataFsView = fsView.get();
+    }
     enablePartition(MetadataPartitionType.FILES, metadataConfig, metaClient, fsView, isBootstrapCompleted);
     if (metadataConfig.isBloomFilterIndexEnabled()) {
       enablePartition(MetadataPartitionType.BLOOM_FILTERS, metadataConfig, metaClient, fsView, isBootstrapCompleted);
@@ -245,6 +249,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       this.metadata = new HoodieBackedTableMetadata(engineContext, dataWriteConfig.getMetadataConfig(),
           dataWriteConfig.getBasePath(), dataWriteConfig.getSpillableMapBasePath());
       this.metadataMetaClient = metadata.getMetadataMetaClient();
+      metadataFsView = metadataFsView != null ? HoodieMetadataCommonUtils.getFileSystemView(metadataMetaClient) : metadataFsView;
     } catch (Exception e) {
       throw new HoodieException("Error initializing metadata table for reads", e);
     }
@@ -816,20 +821,21 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       HoodieData<HoodieRecord>> partitionRecordsMap) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
+    if (metadataFsView == null) {
+      metadataFsView = HoodieMetadataCommonUtils.getFileSystemView(metadataMetaClient);
+    }
 
-    HoodieTableFileSystemView fsView = HoodieMetadataCommonUtils.getFileSystemView(metadataMetaClient);
     for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
       final String partitionName = entry.getKey().getPartitionPath();
       int fileGroupCount = entry.getKey().getFileGroupCount();
       HoodieData<HoodieRecord> records = entry.getValue();
-      // List<HoodieRecord> recordList = records.collectAsList();
 
       List<FileSlice> fileSlices =
-          HoodieMetadataCommonUtils.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionName);
+          HoodieMetadataCommonUtils.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(metadataFsView), partitionName);
       if (fileSlices.isEmpty()) {
         // scheduling of INDEX only initializes the file group and not add commit
         // so if there are no committed file slices, look for inflight slices
-        fileSlices = HoodieMetadataCommonUtils.getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionName);
+        fileSlices = HoodieMetadataCommonUtils.getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(metadataFsView), partitionName);
       } else {
         // there are chances that file group was dynamically decided and so may not match w/ static file group count.
         fileGroupCount = fileSlices.size();
@@ -848,16 +854,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         r.seal();
         return r;
       });
-
-      //      List<HoodieRecord> tempRecs = rddSinglePartitionRecords.collectAsList();
-      //      if (partitionName.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
-      //        System.out.println("Total record level index records to write " + tempRecs.size());
-      //        tempRecs.forEach(rec -> {
-      //          System.out.println("Record level index " + ((HoodieMetadataPayload)rec.getData()).getRecordGlobalLocation().toString());
-      //        });
-      //      }
       allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
-      // List<HoodieRecord> finalList = allPartitionRecords.collectAsList();
     }
     return allPartitionRecords;
   }

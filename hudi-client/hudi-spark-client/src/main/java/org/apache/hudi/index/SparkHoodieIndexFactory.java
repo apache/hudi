@@ -67,6 +67,8 @@ public final class SparkHoodieIndexFactory {
         return new HoodieGlobalSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
       case RECORD_INDEX:
         return new SparkMetadataTableRecordIndex(config);
+      case RECORD_INDEX_V2:
+        return new SparkMetadataTableRecordIndexV2(config);
       case BUCKET:
         switch (config.getBucketIndexEngineType()) {
           case SIMPLE:

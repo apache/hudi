@@ -163,7 +163,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   }
   
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET, FLINK_STATE, RECORD_INDEX
+    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET, FLINK_STATE, RECORD_INDEX, RECORD_INDEX_V2
   }
 
   public enum BucketIndexEngineType {

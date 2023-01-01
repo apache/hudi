@@ -1605,7 +1605,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           "Must contain " + 100 + " records");
 
       // Write 2 (updates)
-      System.out.println("XXX starting commit 2 ");
       String secondCommit = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(secondCommit);
       records = dataGen.generateUniqueUpdates(secondCommit, 50);
@@ -1614,7 +1613,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertEquals(100, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
           "Must contain " + 100 + " records");
 
-      System.out.println("XXX Starting commit 3");
       String thirdCommit = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(thirdCommit);
       records = dataGen.generateUniqueUpdates(thirdCommit, 50);

@@ -468,6 +468,7 @@ public class HoodieTableMetadataUtil {
     }
 
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.RECORD_INDEX)) {
+      boolean initialized = false;
       try {
         // we need to initialize record level index if not initialized before.
         if (recordsGenerationParams.getMetadataMetaClient().getFs().listStatus(new Path(recordsGenerationParams.getMetadataMetaClient().getBasePathV2().toString()
@@ -481,13 +482,16 @@ public class HoodieTableMetadataUtil {
               dataTableWriteConfig.getRecordIndexMaxFileGroupCount(), dataTableWriteConfig.getRecordIndexGrowthFactor());
           MetadataPartitionType.RECORD_INDEX.setFileGroupCount(fileGroupCount);
           initializeFileGroups(recordsGenerationParams.getMetadataMetaClient(), metadataWriteConfig, MetadataPartitionType.RECORD_INDEX, SOLO_COMMIT_TIMESTAMP, fileGroupCount);
+          initialized = true;
         }
       } catch (IOException e) {
         throw new HoodieIOException("Failed to initialize Record Level Index ", e);
       }
       final HoodieData<HoodieRecord> metadataRecordIndexRDD = convertMetadataToRecordIndexRecords(writeStatuses, dataTableWriteConfig);
-      if (!metadataRecordIndexRDD.isEmpty()) {
-        // if every record is an update for this commit, there won't be anything to update in record index.
+      if (initialized || !metadataRecordIndexRDD.isEmpty()) {
+        // there are two conditions for which we need to add records to RLI partition
+        // a. first time initialization.
+        // b. if there is atleast 1 insert record(datatable), we need to update RLI partition. So, check for isEmpty and then proceed
         partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX, metadataRecordIndexRDD);
       }
     }
@@ -1377,8 +1381,6 @@ public class HoodieTableMetadataUtil {
     AtomicInteger counter = new AtomicInteger(0);
     Registry registry = Registry.getRegistry(dataTableWriteConfig.getTableName() + ".SparkMetadataTableRecordIndex");
 
-    // List<WriteStatus> writeStatusesList = writeStatuses.collectAsList();
-
     HoodieData<HoodieRecord> records = writeStatuses.flatMap(writeStatus -> {
       long numUpdates = 0;
       long numInserts = 0;
@@ -1421,10 +1423,8 @@ public class HoodieTableMetadataUtil {
     //    registry.add(HoodieIndex.UPDATE_LOC_DURATION, timer.endTimer());
     //    registry.add(HoodieIndex.UPDATE_LOC_NUM_PARTITIONS, writeStatuses.getNumPartitions());
 
-    // List<HoodieRecord> recordList = records.collectAsList();
     records.persist("MEMORY_AND_DISK_SER");
     return records;
-    //return tagRecordsWithLocation(records, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
   }
 
   /**
