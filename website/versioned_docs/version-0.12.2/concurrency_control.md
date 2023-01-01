@@ -47,7 +47,14 @@ hoodie.cleaner.policy.failed.writes=LAZY
 hoodie.write.lock.provider=<lock-provider-classname>
 ```
 
-There are 3 different server based lock providers that require different configuration to be set.
+There are 4 different lock providers that require different configurations to be set.
+
+**`FileSystem`** based lock provider
+
+```
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
+hoodie.write.lock.filesystem.path
+```
 
 **`Zookeeper`** based lock provider
 
