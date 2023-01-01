@@ -25,7 +25,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -60,7 +59,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
             .collect(Collectors.toList());
       } catch (HoodieException e) {
         LOG.error("Exception while loading retry exceptions classes '" + retryExceptions + "'.", e);
-        this.retryExceptionsClasses = new ArrayList<>();
+        this.retryExceptionsClasses = DEFAULT_RETRY_EXCEPTIONS;
       }
     }
   }
