@@ -31,13 +31,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  */
 public class TestRetryHelper {
 
-  private static final int num = 1;
-  private static final long intervalTime = 1L;
+  private static final int NUM = 1;
+  private static final long INTERVAL_TIME = 1L;
 
   @Test
   public void testCheckIfExceptionInRetryList() throws Exception {
     // test default retry exceptions
-    RetryHelper retryHelper = new RetryHelper(intervalTime, num, intervalTime, null);
+    RetryHelper retryHelper = new RetryHelper(INTERVAL_TIME, NUM, INTERVAL_TIME, null);
     Method privateOne = retryHelper.getClass().getDeclaredMethod("checkIfExceptionInRetryList", Exception.class);
     privateOne.setAccessible(true);
     boolean retry = (boolean) privateOne.invoke(retryHelper, new IOException("test"));
@@ -45,7 +45,7 @@ public class TestRetryHelper {
     retry = (boolean) privateOne.invoke(retryHelper, new Exception("test"));
     assertFalse(retry);
     // test user-defined retry exceptions
-    retryHelper =  new RetryHelper(intervalTime, num, intervalTime, Exception.class.getName());
+    retryHelper =  new RetryHelper(INTERVAL_TIME, NUM, INTERVAL_TIME, Exception.class.getName());
     retry = (boolean) privateOne.invoke(retryHelper, new UnsupportedOperationException("test"));
     assertTrue(retry);
   }
