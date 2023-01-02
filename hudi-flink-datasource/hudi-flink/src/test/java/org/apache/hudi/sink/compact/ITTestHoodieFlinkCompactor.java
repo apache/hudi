@@ -191,7 +191,6 @@ public class ITTestHoodieFlinkCompactor {
     tableEnv.executeSql(TestSQL.UPDATE_INSERT_T1).await();
 
     // Make configuration and setAvroSchema.
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
     FlinkCompactionConfig cfg = new FlinkCompactionConfig();
     cfg.path = tempFile.getAbsolutePath();
     cfg.minCompactionIntervalSeconds = 3;
@@ -200,7 +199,7 @@ public class ITTestHoodieFlinkCompactor {
     conf.setString(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
     conf.setInteger(FlinkOptions.COMPACTION_TASKS.key(), FlinkMiniCluster.DEFAULT_PARALLELISM);
 
-    HoodieFlinkCompactor.AsyncCompactionService asyncCompactionService = new HoodieFlinkCompactor.AsyncCompactionService(cfg, conf, env);
+    HoodieFlinkCompactor.AsyncCompactionService asyncCompactionService = new HoodieFlinkCompactor.AsyncCompactionService(cfg, conf);
     asyncCompactionService.start(null);
 
     // wait for the asynchronous commit to finish
