@@ -43,7 +43,7 @@ public class JavaCustomColumnsSortPartitioner<T>
   private final boolean consistentLogicalTimestampEnabled;
 
   public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
-    this.sortColumnNames = BulkInsertPartitioner.prependPartitionPathColumn(columnNames, config);
+    this.sortColumnNames = BulkInsertPartitioner.tryPrependPartitionPathColumns(columnNames, config);
     this.schema = schema;
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }

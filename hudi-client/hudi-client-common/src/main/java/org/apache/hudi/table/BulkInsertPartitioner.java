@@ -81,8 +81,9 @@ public interface BulkInsertPartitioner<I> extends Serializable {
 
   /*
    * If possible, we want to sort the data by partition path. Doing so will reduce the number of files written.
+   * This will not change the desired sort order, it is just a performance improvement.
    **/
-  static String[] prependPartitionPathColumn(String[] columnNames, HoodieWriteConfig config) {
+  static String[] tryPrependPartitionPathColumns(String[] columnNames, HoodieWriteConfig config) {
     ArrayList<String> sortCols = new ArrayList<>();
     Set<String> used = new HashSet<>();
     if (config.getMetadataConfig().populateMetaFields()) {

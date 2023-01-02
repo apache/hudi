@@ -43,12 +43,12 @@ public class RDDCustomColumnsSortPartitioner<T>
 
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
-    this.sortColumnNames = BulkInsertPartitioner.prependPartitionPathColumn(getSortColumnName(config), config);
+    this.sortColumnNames = BulkInsertPartitioner.tryPrependPartitionPathColumns(getSortColumnName(config), config);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
   public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
-    this.sortColumnNames = BulkInsertPartitioner.prependPartitionPathColumn(columnNames, config);
+    this.sortColumnNames = BulkInsertPartitioner.tryPrependPartitionPathColumns(columnNames, config);
     this.serializableSchema = new SerializableSchema(schema);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
