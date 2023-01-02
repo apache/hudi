@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -69,14 +70,14 @@ public class HoodieIndexConfig extends HoodieConfig {
   private static final Logger LOG = LogManager.getLogger(HoodieIndexConfig.class);
 
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
-      .key("hoodie.index.type")
+      .key(HoodieTableConfig.INDEX_TYPE.key())
       // Builder#getDefaultIndexType has already set it according to engine type
       .noDefaultValue()
       .withValidValues(HBASE.name(), INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
           SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name())
       .withDocumentation("Type of index to use. Default is SIMPLE on Spark engine, "
           + "and INMEMORY on Flink and Java engines. "
-          + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "
+          + "Possible options are [BLOOM | GLOBAL_BLOOM | SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "
           + "Bloom filters removes the dependency on a external system "
           + "and is stored in the footer of the Parquet Data Files");
 
@@ -250,7 +251,7 @@ public class HoodieIndexConfig extends HoodieConfig {
    *  1. Bucket num will auto-adjust by running clustering (still in progress)
    */
   public static final ConfigProperty<String> BUCKET_INDEX_ENGINE_TYPE = ConfigProperty
-      .key("hoodie.index.bucket.engine")
+      .key(HoodieTableConfig.BUCKET_INDEX_ENGINE_TYPE.key())
       .defaultValue("SIMPLE")
       .sinceVersion("0.11.0")
       .withDocumentation("Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket."
@@ -265,7 +266,7 @@ public class HoodieIndexConfig extends HoodieConfig {
    * In dynamic bucket index cases (e.g., using CONSISTENT_HASHING), this config of number of bucket serves as a initial bucket size
    */
   public static final ConfigProperty<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigProperty
-      .key("hoodie.bucket.index.num.buckets")
+      .key(HoodieTableConfig.BUCKET_INDEX_NUM_BUCKETS.key())
       .defaultValue(256)
       .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
           + "and each partition is divided to N buckets.");
@@ -285,7 +286,7 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "the number of buckets in the hudi table. Bucket resizing cannot be done lower than this min limit.");
 
   public static final ConfigProperty<String> BUCKET_INDEX_HASH_FIELD = ConfigProperty
-      .key("hoodie.bucket.index.hash.field")
+      .key(HoodieTableConfig.BUCKET_INDEX_HASH_FIELD.key())
       .noDefaultValue()
       .withDocumentation("Index key. It is used to index the record and find its file group. "
           + "If not set, use record key field as default");
@@ -684,12 +685,15 @@ public class HoodieIndexConfig extends HoodieConfig {
           hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD,
               hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
         } else {
+          String recordkeyField = hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME);
+          String indexHashField = hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD);
           boolean valid = Arrays
-              .stream(hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).split(","))
+              .stream(recordkeyField.split(","))
               .collect(Collectors.toSet())
-              .containsAll(Arrays.asList(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD).split(",")));
+              .containsAll(Arrays.asList(indexHashField.split(",")));
           if (!valid) {
-            throw new HoodieIndexException("Bucket index key (if configured) must be subset of record key.");
+            throw new HoodieIndexException("Bucket index key (if configured) must be subset of record key."
+                + " Bucket index key: " + indexHashField + " record key: " + recordkeyField);
           }
         }
         // check the bucket num

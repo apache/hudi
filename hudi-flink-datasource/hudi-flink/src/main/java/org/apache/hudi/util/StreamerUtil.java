@@ -38,6 +38,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
@@ -183,32 +184,44 @@ public class StreamerUtil {
   public static HoodieTableMetaClient initTableIfNotExists(
       Configuration conf,
       org.apache.hadoop.conf.Configuration hadoopConf) throws IOException {
+    if (conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name())) {
+      if (conf.getString(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
+        conf.setString(FlinkOptions.INDEX_KEY_FIELD, conf.getString(FlinkOptions.RECORD_KEY_FIELD));
+      }
+    }
+
     final String basePath = conf.getString(FlinkOptions.PATH);
+    final HoodieTableMetaClient.PropertyBuilder tablePropertyBuilder = HoodieTableMetaClient.withPropertyBuilder()
+        .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
+        .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
+        .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
+        .setDatabaseName(conf.getString(FlinkOptions.DATABASE_NAME))
+        .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
+        .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+        .setPreCombineField(OptionsResolver.getPreCombineField(conf))
+        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+        .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
+        .setKeyGeneratorClassProp(
+            conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(SimpleAvroKeyGenerator.class.getName()))
+        .setHiveStylePartitioningEnable(conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING))
+        .setUrlEncodePartitioning(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING))
+        .setCDCEnabled(conf.getBoolean(FlinkOptions.CDC_ENABLED))
+        .setCDCSupplementalLoggingMode(conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
+        .setTimelineLayoutVersion(1)
+        .setAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
+        .setIndexType(conf.getString(FlinkOptions.INDEX_TYPE))
+        .setIndexBucketEngine(conf.getString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE))
+        .setIndexHashField(conf.getString(FlinkOptions.INDEX_KEY_FIELD))
+        .setIndexNumBuckets(conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+
     if (!tableExists(basePath, hadoopConf)) {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.withPropertyBuilder()
-          .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
-          .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
-          .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
-          .setDatabaseName(conf.getString(FlinkOptions.DATABASE_NAME))
-          .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
-          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
-          .setPreCombineField(OptionsResolver.getPreCombineField(conf))
-          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-          .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
-          .setKeyGeneratorClassProp(
-              conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(SimpleAvroKeyGenerator.class.getName()))
-          .setHiveStylePartitioningEnable(conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING))
-          .setUrlEncodePartitioning(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING))
-          .setCDCEnabled(conf.getBoolean(FlinkOptions.CDC_ENABLED))
-          .setCDCSupplementalLoggingMode(conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
-          .setTimelineLayoutVersion(1)
-          .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
-      return metaClient;
+      return tablePropertyBuilder.initTable(hadoopConf, basePath);
     } else {
       LOG.info("Table [{}/{}] already exists, no need to initialize the table",
           basePath, conf.getString(FlinkOptions.TABLE_NAME));
-      return StreamerUtil.createMetaClient(basePath, hadoopConf);
+      LOG.info("Table update under base path {}", basePath);
+      return tablePropertyBuilder.updateTable(hadoopConf, basePath);
     }
     // Do not close the filesystem in order to use the CACHE,
     // some filesystems release the handles in #close method.

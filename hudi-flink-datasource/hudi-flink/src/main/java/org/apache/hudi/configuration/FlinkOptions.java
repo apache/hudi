@@ -398,6 +398,16 @@ public class FlinkOptions extends HoodieConfig {
           + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
           + "the dot notation eg: `a.b.c`");
 
+
+  public static final ConfigOption<String> BUCKET_INDEX_ENGINE_TYPE = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
+      .stringType()
+      .defaultValue("SIMPLE")
+      .withDescription("Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket."
+          + "Possible options are [SIMPLE | CONSISTENT_HASHING]."
+          + "Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size "
+          + "issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables, only use simple hashing on COW tables.");
+
   public static final ConfigOption<String> INDEX_KEY_FIELD = ConfigOptions
       .key(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key())
       .stringType()
