@@ -130,5 +130,6 @@ jobs:
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
       - name: Platform Service Build and Test
         run:
-          mvn install -pl :hudi-metaserver -DskipTests=true -Phudi-platform-service &&
-          mvn test -Phudi-platform-service -pl :hudi-metaserver
+          mvn install -pl :hudi-metaserver-client -DskipTests=true -Phudi-platform-service -am &&
+          mvn test -Phudi-platform-service -pl :hudi-metaserver-server &&
+          mvn test -Phudi-platform-service -pl :hudi-metaserver-client
