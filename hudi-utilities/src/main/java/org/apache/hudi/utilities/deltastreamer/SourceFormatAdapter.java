@@ -25,6 +25,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
@@ -72,7 +73,7 @@ public final class SourceFormatAdapter implements Closeable {
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
               SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
-              return (originalProvider instanceof FilebasedSchemaProvider)
+              return ((originalProvider instanceof FilebasedSchemaProvider) || (originalProvider instanceof SchemaRegistryProvider))
                   // If the source schema is specified through Avro schema,
                   // pass in the schema for the Row-to-Avro conversion
                   // to avoid nullability mismatch between Avro schema and Row schema
