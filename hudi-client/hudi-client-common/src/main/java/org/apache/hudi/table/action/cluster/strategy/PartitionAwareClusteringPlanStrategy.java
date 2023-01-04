@@ -102,6 +102,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
             },
             partitionPaths.size())
         .stream()
+        .filter(clusteringGroup -> clusteringGroup.getSlices().size() > 1)
         .limit(getWriteConfig().getClusteringMaxNumGroups())
         .collect(Collectors.toList());
 
