@@ -61,6 +61,20 @@ hoodie.write.lock.filesystem.expire (optional)
 
 When using the FileSystem based lock provider, by default, the lock file will store into `hoodie.base.path`+`/.hoodie/lock`,
 in additional, you can use a custom folder to store the lock file by specify `hoodie.write.lock.filesystem.path`
+
+In case the lock cannot release during job crash, you can set `hoodie.write.lock.filesystem.expire`, provide an expiry time in minutes, lock will never expire as default. 
+you can also delete lock file manually in such situation
+
+if you want to check which thread is obtaining and what does the lock call stack looks like, can simply open lock file to find out, the file content is JSON format like below
+
+```
+{
+"lockCreateTime" : "2023-01-04 19:02:08.302",
+"lockThreadName" : "pool-6-thread-1",
+"lockStacksInfo" : [ "java.lang.Thread.getStackTrace (Thread.java:1564)", "org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider.initLockInfo (FileSystemBasedLockProvider.java:169)", "org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider.acquireLock (FileSystemBasedLockProvider.java:157)", "org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider.tryLock (FileSystemBasedLockProvider.java:106)", "org.apache.hudi.client.transaction.lock.LockManager.lock (LockManager.java:102)", "org.apache.hudi.client.transaction.TransactionManager.beginTransaction (TransactionManager.java:58)", "org.apache.hudi.client.BaseHoodieWriteClient.commitStats (BaseHoodieWriteClient.java:242)", "org.apache.hudi.client.HoodieFlinkWriteClient.commit (HoodieFlinkWriteClient.java:123)", "org.apache.hudi.client.HoodieFlinkWriteClient.commit (HoodieFlinkWriteClient.java:87)", "org.apache.hudi.client.BaseHoodieWriteClient.commit (BaseHoodieWriteClient.java:215)", "org.apache.hudi.sink.StreamWriteOperatorCoordinator.doCommit (StreamWriteOperatorCoordinator.java:541)", "org.apache.hudi.sink.StreamWriteOperatorCoordinator.commitInstant (StreamWriteOperatorCoordinator.java:516)", "org.apache.hudi.sink.StreamWriteOperatorCoordinator.lambda$notifyCheckpointComplete$2 (StreamWriteOperatorCoordinator.java:245)", "org.apache.hudi.sink.utils.NonThrownExecutor.lambda$wrapAction$0 (NonThrownExecutor.java:130)", "java.util.concurrent.ThreadPoolExecutor.runWorker (ThreadPoolExecutor.java:1149)", "java.util.concurrent.ThreadPoolExecutor$Worker.run (ThreadPoolExecutor.java:624)", "java.lang.Thread.run (Thread.java:750)" ]
+}
+```
+
 **`Zookeeper`** based lock provider
 
 ```
