@@ -51,7 +51,8 @@ There are 4 different lock providers that require different configurations to be
 
 **`FileSystem`** based lock provider
 
-FileSystem based lock provider provides an out-of-box way to support multiple writers cross different jobs/applications
+FileSystem based lock provider provides an out-of-box way to support multiple writers cross different jobs/applications based on atomic
+create/delete operations of the underlying filesystem
 
 ```
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
