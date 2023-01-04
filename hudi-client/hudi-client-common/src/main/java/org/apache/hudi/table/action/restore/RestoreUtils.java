@@ -24,6 +24,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
 
@@ -42,5 +44,22 @@ public class RestoreUtils {
     final HoodieInstant requested = HoodieTimeline.getRollbackRequestedInstant(restoreInstant);
     return TimelineMetadataUtils.deserializeAvroMetadata(
         metaClient.getActiveTimeline().readRestoreInfoAsBytes(requested).get(), HoodieRestorePlan.class);
+  }
+
+  /**
+   * Get the restore time for a restore instant
+   * @param table          the HoodieTable
+   * @param restoreInstant Instant referring to restore action
+   * @return restore time of the rollback instant
+   * @throws IOException
+   *
+   * */
+  public static String getRestoreTime(HoodieTable table, HoodieInstant restoreInstant) throws IOException {
+    HoodieRestorePlan plan = getRestorePlan(table.getMetaClient(), restoreInstant);
+    //get earliest rollback
+    String firstRollback = plan.getInstantsToRollback().get(plan.getInstantsToRollback().size() - 1).getCommitTime();
+    //find last instant before first rollback
+    Option<HoodieInstant> savepointInstance = table.getActiveTimeline().findInstantsBefore(firstRollback).lastInstant();
+    return savepointInstance.isPresent() ? savepointInstance.get().getTimestamp() : firstRollback;
   }
 }

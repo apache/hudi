@@ -579,6 +579,21 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
+   * Transition Restore State from inflight to requested.
+   *
+   * @param inflightInstant inflight instant
+   * @return commit instant
+   */
+  public HoodieInstant transitionRestoreInflightToRequested(HoodieInstant inflightInstant) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.RESTORE_ACTION), "Transition to requested attempted for a restore instant with diff action "
+        + inflightInstant);
+    ValidationUtils.checkArgument(inflightInstant.isInflight(), "Transition to requested attempted for an instant not in inflight state " + inflightInstant);
+    HoodieInstant requested = new HoodieInstant(State.REQUESTED, RESTORE_ACTION, inflightInstant.getTimestamp());
+    transitionState(inflightInstant, requested, Option.empty());
+    return requested;
+  }
+
+  /**
    * Transition replace requested file to replace inflight.
    *
    * @param requestedInstant Requested instant

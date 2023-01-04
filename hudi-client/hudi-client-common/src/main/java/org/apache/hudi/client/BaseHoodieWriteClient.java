@@ -89,6 +89,7 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.restore.RestoreUtils;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -840,11 +841,25 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public HoodieRestoreMetadata restoreToInstant(final String instantTime, boolean initialMetadataTableIfNecessary) throws HoodieRestoreException {
     LOG.info("Begin restore to instant " + instantTime);
-    final String restoreInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    final String restoreInstantTime;
     Timer.Context timerContext = metrics.getRollbackCtx();
+    Option<HoodieRestorePlan> restorePlanOption;
     try {
-      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.of(restoreInstantTime), initialMetadataTableIfNecessary);
-      Option<HoodieRestorePlan> restorePlanOption = table.scheduleRestore(context, restoreInstantTime, instantTime);
+      //Use the previous restore if it failed
+      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
+      Option<HoodieInstant> failedRestore = table.getRestoreTimeline().filterInflightsAndRequested().lastInstant();
+      if (failedRestore.isPresent() && instantTime.equals(RestoreUtils.getRestoreTime(table, failedRestore.get()))) {
+        if (failedRestore.get().isInflight()) {
+          table.getActiveTimeline().transitionRestoreInflightToRequested(failedRestore.get());
+        }
+        restoreInstantTime = failedRestore.get().getTimestamp();
+        restorePlanOption = Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get()));
+      } else {
+        restoreInstantTime = HoodieActiveTimeline.createNewInstantTime();
+        table = initTable(WriteOperationType.UNKNOWN, Option.of(restoreInstantTime), initialMetadataTableIfNecessary);
+        restorePlanOption = table.scheduleRestore(context, restoreInstantTime, instantTime);
+      }
+
       if (restorePlanOption.isPresent()) {
         HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTime, instantTime);
         if (timerContext != null) {
