@@ -47,8 +47,20 @@ hoodie.cleaner.policy.failed.writes=LAZY
 hoodie.write.lock.provider=<lock-provider-classname>
 ```
 
-There are 3 different server based lock providers that require different configuration to be set.
+There are 4 different lock providers that require different configurations to be set.
 
+**`FileSystem`** based lock provider
+
+FileSystem based lock provider provides an out-of-box way to support multiple writers cross different jobs/applications
+
+```
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
+hoodie.write.lock.filesystem.path (optional)
+hoodie.write.lock.filesystem.expire (optional)
+```
+
+When using the FileSystem based lock provider, by default, the lock file will store into `hoodie.base.path`+`/.hoodie/lock`,
+in additional, you can use a custom folder to store the lock file by specify `hoodie.write.lock.filesystem.path`
 **`Zookeeper`** based lock provider
 
 ```
