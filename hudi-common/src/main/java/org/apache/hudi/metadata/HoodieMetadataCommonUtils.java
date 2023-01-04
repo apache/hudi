@@ -40,6 +40,7 @@ import java.math.RoundingMode;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -199,6 +200,35 @@ public class HoodieMetadataCommonUtils {
     }
 
     return Math.abs(Math.abs(h) % numFileGroups);
+  }
+
+  /**
+   * Maps record key to spark partition.
+   * if numFileGroups > shuffleParallelism, total spark partitions = numFileGroups.
+   * else total spark partitions = shuffleParallelism.
+   * In latter case, we first get the hash of record key and mod w/ numFileGroups and add a random value so as to match total spark partitions.
+   * for eg, if numFileGroups = 10 and shuffle parallelism = 200,
+   * records mapped to FG_1 will be spread across spark partitions 0 to 19.
+   * records mapped to FG_2 will be spread across spark partitions 20 to 39, and so on.
+   * @param recordKey record key for which spark partition is expected.
+   * @param numFileGroups num of file groups in record index.
+   * @param shuffleParallelism shuffle parallelism to use.
+   * @param random instance of {@link Random} to use to generate random spark partition.
+   * @return the integer representing spark partition.
+   */
+  public static int mapRecordKeyToSparkPartition(String recordKey, int numFileGroups, int shuffleParallelism, Random random) {
+    int h = 0;
+    for (int i = 0; i < recordKey.length(); ++i) {
+      h = 31 * h + recordKey.charAt(i);
+    }
+
+    int recordKeyHash = Math.abs(Math.abs(h) % numFileGroups);
+    if (shuffleParallelism <= numFileGroups) {
+      return recordKeyHash;
+    }
+    int numSparkPartitionsPerFileGroup = shuffleParallelism / numFileGroups;
+    int randomDelta = random.nextInt(numSparkPartitionsPerFileGroup);
+    return randomDelta + (recordKeyHash * numSparkPartitionsPerFileGroup);
   }
 
   /**

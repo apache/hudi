@@ -249,7 +249,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       this.metadata = new HoodieBackedTableMetadata(engineContext, dataWriteConfig.getMetadataConfig(),
           dataWriteConfig.getBasePath(), dataWriteConfig.getSpillableMapBasePath());
       this.metadataMetaClient = metadata.getMetadataMetaClient();
-      metadataFsView = metadataFsView != null ? HoodieMetadataCommonUtils.getFileSystemView(metadataMetaClient) : metadataFsView;
+      metadataFsView = metadataFsView == null ? HoodieMetadataCommonUtils.getFileSystemView(metadataMetaClient) : metadataFsView;
     } catch (Exception e) {
       throw new HoodieException("Error initializing metadata table for reads", e);
     }
@@ -821,9 +821,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       HoodieData<HoodieRecord>> partitionRecordsMap) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
-    if (metadataFsView == null) {
-      metadataFsView = HoodieMetadataCommonUtils.getFileSystemView(metadataMetaClient);
-    }
+    metadataFsView = HoodieMetadataCommonUtils.getFileSystemView(metadataMetaClient);
 
     for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
       final String partitionName = entry.getKey().getPartitionPath();

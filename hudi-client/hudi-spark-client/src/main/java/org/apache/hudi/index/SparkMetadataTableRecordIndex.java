@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
@@ -49,6 +48,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 /**
@@ -74,15 +74,14 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       // implies that metadata table has not been initialized yet (probably the first write on a new table)
       return records;
     }
-
-    JavaRDD<HoodieRecord<R>> y = HoodieJavaRDD.getJavaRDD(records)
-        .keyBy(r -> HoodieMetadataCommonUtils.mapRecordKeyToFileGroupIndex(r.getRecordKey(), numFileGroups))
-        .partitionBy(new PartitionIdPassthrough(numFileGroups))
+    Random random = new Random(0xDEEAD);
+    int totalParallelism = Math.max(numFileGroups, config.getUpsertShuffleParallelism());
+    JavaRDD<HoodieRecord<R>> y2 = HoodieJavaRDD.getJavaRDD(records)
+        .keyBy(r -> HoodieMetadataCommonUtils.mapRecordKeyToSparkPartition(r.getRecordKey(), numFileGroups, config.getUpsertShuffleParallelism(), random))
+        .partitionBy(new PartitionIdPassthrough(totalParallelism))
         .map(t -> t._2);
-    ValidationUtils.checkState(y.getNumPartitions() <= numFileGroups);
 
-    // registry.ifPresent(r -> r.add(TAG_LOC_NUM_PARTITIONS, records.getNumPartitions()));
-    return HoodieJavaRDD.of(y.mapPartitions(new LocationTagFunction(hoodieTable, Option.empty())));
+    return HoodieJavaRDD.of(y2.mapPartitions(new LocationTagFunction(hoodieTable, Option.empty())));
   }
 
   @Override
