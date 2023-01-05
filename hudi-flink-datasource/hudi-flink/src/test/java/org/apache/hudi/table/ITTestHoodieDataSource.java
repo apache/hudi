@@ -692,26 +692,35 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = ExecMode.class)
-  void testInsertOverwrite(ExecMode execMode) {
-    TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
+  @MethodSource("indexAndTableTypeParams")
+  void testInsertOverwrite(String indexType, HoodieTableType tableType) {
+    TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.INDEX_TYPE, indexType)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
     execInsertSql(tableEnv, TestSQL.INSERT_T1);
 
     // overwrite partition 'par1' and increase in age by 1
-    final String insertInto2 = "insert overwrite t1 partition(`partition`='par1') values\n"
+    final String insertInto1 = "insert overwrite t1 partition(`partition`='par1') values\n"
         + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01'),\n"
         + "('id2','Stephen',34,TIMESTAMP '1970-01-01 00:00:02')\n";
 
-    execInsertSql(tableEnv, insertInto2);
+    execInsertSql(tableEnv, insertInto1);
 
     List<Row> result1 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT_OVERWRITE);
+
+    // execute the same statement again and check the result
+    execInsertSql(tableEnv, insertInto1);
+
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result2, TestData.DATA_SET_SOURCE_INSERT_OVERWRITE);
 
     // overwrite the whole table
     final String insertInto3 = "insert overwrite t1 values\n"
@@ -720,12 +729,18 @@ public class ITTestHoodieDataSource {
 
     execInsertSql(tableEnv, insertInto3);
 
-    List<Row> result2 = CollectionUtil.iterableToList(
+    List<Row> result3 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     final String expected = "["
         + "+I[id1, Danny, 24, 1970-01-01T00:00:01, par1], "
         + "+I[id2, Stephen, 34, 1970-01-01T00:00:02, par2]]";
-    assertRowsEquals(result2, expected);
+    assertRowsEquals(result3, expected);
+
+    // execute the same statement again and check the result
+    execInsertSql(tableEnv, insertInto3);
+    List<Row> result4 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result4, expected);
   }
 
   @ParameterizedTest
@@ -1665,6 +1680,19 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", true},
             {"BUCKET", false},
             {"BUCKET", true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (index type, table type).
+   */
+  private static Stream<Arguments> indexAndTableTypeParams() {
+    Object[][] data =
+        new Object[][] {
+            {"FLINK_STATE", HoodieTableType.COPY_ON_WRITE},
+            {"FLINK_STATE", HoodieTableType.MERGE_ON_READ},
+            {"BUCKET", HoodieTableType.COPY_ON_WRITE},
+            {"BUCKET", HoodieTableType.MERGE_ON_READ}};
     return Stream.of(data).map(Arguments::of);
   }
 
