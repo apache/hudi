@@ -263,7 +263,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(compactionTimeStamp.isPresent());
 
-    // Try scheduling log compaction, it won't succeed
+    // Try scheduling log compaction, it won't succeed.
     Option<String> logCompactionTimeStamp = client.scheduleLogCompaction(Option.empty());
     assertFalse(logCompactionTimeStamp.isPresent());
   }
