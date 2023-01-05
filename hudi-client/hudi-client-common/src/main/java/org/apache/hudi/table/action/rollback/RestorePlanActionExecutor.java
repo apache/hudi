@@ -50,7 +50,8 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
   private static final Logger LOG = LogManager.getLogger(RestorePlanActionExecutor.class);
 
   public static final Integer RESTORE_PLAN_VERSION_1 = 1;
-  public static final Integer LATEST_RESTORE_PLAN_VERSION = RESTORE_PLAN_VERSION_1;
+  public static final Integer RESTORE_PLAN_VERSION_2 = 2;
+  public static final Integer LATEST_RESTORE_PLAN_VERSION = RESTORE_PLAN_VERSION_2;
   private final String restoreInstantTime;
 
   public RestorePlanActionExecutor(HoodieEngineContext context,
@@ -87,7 +88,7 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
               .map(entry -> new HoodieInstantInfo(entry.getTimestamp(), entry.getAction()))
               .collect(Collectors.toList());
 
-      HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION);
+      HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, restoreInstantTime, LATEST_RESTORE_PLAN_VERSION);
       table.getActiveTimeline().saveToRestoreRequested(restoreInstant, TimelineMetadataUtils.serializeRestorePlan(restorePlan));
       table.getMetaClient().reloadActiveTimeline();
       LOG.info("Requesting Restore with instant time " + restoreInstant);

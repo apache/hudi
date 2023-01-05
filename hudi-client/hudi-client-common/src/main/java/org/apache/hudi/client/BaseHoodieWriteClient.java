@@ -849,8 +849,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
       Option<HoodieInstant> failedRestore = table.getRestoreTimeline().filterInflightsAndRequested().lastInstant();
       if (failedRestore.isPresent() && instantTime.equals(RestoreUtils.getRestoreTime(table, failedRestore.get()))) {
-        if (failedRestore.get().isInflight()) {
-          table.getActiveTimeline().transitionRestoreInflightToRequested(failedRestore.get());
+        if (failedRestore.get().isRequested()) {
+          table.getActiveTimeline().transitionRestoreRequestedToInflight(failedRestore.get());
         }
         restoreInstantTime = failedRestore.get().getTimestamp();
         restorePlanOption = Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get()));

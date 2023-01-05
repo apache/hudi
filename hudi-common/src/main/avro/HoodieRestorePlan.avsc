@@ -30,8 +30,13 @@
            }
     },
     {
+            "name": "savepointTimestamp",
+            "type": ["string", "null"],
+            "default": "0"
+    },
+    {
            "name":"version",
            "type":["int", "null"],
-           "default": 1
+           "default": 2
     }]
 }

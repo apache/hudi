@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 
 import java.io.IOException;
 
@@ -56,6 +57,9 @@ public class RestoreUtils {
    * */
   public static String getRestoreTime(HoodieTable table, HoodieInstant restoreInstant) throws IOException {
     HoodieRestorePlan plan = getRestorePlan(table.getMetaClient(), restoreInstant);
+    if (plan.getVersion().compareTo(RestorePlanActionExecutor.RESTORE_PLAN_VERSION_1) > 0) {
+      return plan.getSavepointTimestamp();
+    }
     //get earliest rollback
     String firstRollback = plan.getInstantsToRollback().get(plan.getInstantsToRollback().size() - 1).getCommitTime();
     //find last instant before first rollback
