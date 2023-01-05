@@ -306,7 +306,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String fileName2 =
         FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 1, TEST_WRITE_TOKEN);
     // create a dummy log file mimicing cloud stores marker files
-    String fileName3 = "_DUMMY_" + fileName1.substring(1, fileName1.length());
+    String fileName3 = "_GCS_SYNCABLE_TEMPFILE_" + fileName1;
     // this file should not be deduced as a log file.
 
     Paths.get(basePath, partitionPath, fileName1).toFile().createNewFile();

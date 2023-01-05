@@ -80,7 +80,10 @@ public class FSUtils {
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
   public static final Pattern LOG_FILE_PATTERN =
-      Pattern.compile("\\.(.+)_(.*)\\.(.+)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
+      Pattern.compile("^\\.(.+)_(.*)\\.(log)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
+  public static final String ARCHIVED_LOG_PREFIX = ".commits_.archive";
+  public static final Pattern ARCHIVED_LOG_FILE_PATTERN =
+      Pattern.compile(ARCHIVED_LOG_PREFIX + ".(\\d+)(_((\\d+)-(\\d+)-(\\d+)))");
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final long MIN_CLEAN_TO_KEEP = 10;
   private static final long MIN_ROLLBACK_TO_KEEP = 10;
@@ -358,7 +361,8 @@ public class FSUtils {
    * Get the file extension from the log file.
    */
   public static String getFileExtensionFromLog(Path logPath) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
+    Matcher matcher = logPath.getName().contains(ARCHIVED_LOG_PREFIX) ? ARCHIVED_LOG_FILE_PATTERN.matcher(logPath.getName()) :
+        LOG_FILE_PATTERN.matcher(logPath.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(logPath, "LogFile");
     }
@@ -403,7 +407,8 @@ public class FSUtils {
    * Get TaskPartitionId used in log-path.
    */
   public static Integer getTaskPartitionIdFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = path.getName().contains(ARCHIVED_LOG_PREFIX) ? ARCHIVED_LOG_FILE_PATTERN.matcher(path.getName()) :
+        LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
@@ -415,7 +420,8 @@ public class FSUtils {
    * Get Write-Token used in log-path.
    */
   public static String getWriteTokenFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = path.getName().contains(ARCHIVED_LOG_PREFIX) ? ARCHIVED_LOG_FILE_PATTERN.matcher(path.getName()) :
+        LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
@@ -426,7 +432,8 @@ public class FSUtils {
    * Get StageId used in log-path.
    */
   public static Integer getStageIdFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = path.getName().contains(ARCHIVED_LOG_PREFIX) ? ARCHIVED_LOG_FILE_PATTERN.matcher(path.getName()) :
+        LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
@@ -438,7 +445,8 @@ public class FSUtils {
    * Get Task Attempt Id used in log-path.
    */
   public static Integer getTaskAttemptIdFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = path.getName().contains(ARCHIVED_LOG_PREFIX) ? ARCHIVED_LOG_FILE_PATTERN.matcher(path.getName()) :
+        LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
@@ -454,7 +462,8 @@ public class FSUtils {
   }
 
   public static int getFileVersionFromLog(String logFileName) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(logFileName);
+    Matcher matcher = logFileName.contains(ARCHIVED_LOG_PREFIX) ? ARCHIVED_LOG_FILE_PATTERN.matcher(logFileName) :
+        LOG_FILE_PATTERN.matcher(logFileName);
     if (!matcher.find()) {
       throw new HoodieIOException("Invalid log file name: " + logFileName);
     }
@@ -479,7 +488,7 @@ public class FSUtils {
   }
 
   public static boolean isLogFile(String fileName) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
+    Matcher matcher = fileName.contains(ARCHIVED_LOG_PREFIX) ? ARCHIVED_LOG_FILE_PATTERN.matcher(fileName) : LOG_FILE_PATTERN.matcher(fileName);
     return matcher.find() && fileName.contains(".log");
   }
 
