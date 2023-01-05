@@ -491,8 +491,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val targetTableDb = targetTableIdentify.database.getOrElse("default")
     val targetTableName = targetTableIdentify.identifier
     val path = hoodieCatalogTable.tableLocation
-    // force to use ExpressionPayload as WRITE_PAYLOAD_CLASS_NAME in MergeIntoHoodieTableCommand
-    val catalogProperties = hoodieCatalogTable.catalogProperties + (PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName)
+    val catalogProperties = hoodieCatalogTable.catalogProperties
     val tableConfig = hoodieCatalogTable.tableConfig
     val tableSchema = hoodieCatalogTable.tableSchema
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase)
@@ -503,10 +502,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // TODO(HUDI-3456) clean up
     val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
 
-    val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
-    val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
+    val extraOptions = Map[String, String](
+      PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName
+    )
+    val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig, extraOptions)
 
-    withSparkConf(sparkSession, catalogProperties) {
+    // TODO reconcile w/ getHoodieProps
+    withSparkConf(sparkSession, catalogProperties ++ extraOptions) {
       Map(
         "path" -> path,
         RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,

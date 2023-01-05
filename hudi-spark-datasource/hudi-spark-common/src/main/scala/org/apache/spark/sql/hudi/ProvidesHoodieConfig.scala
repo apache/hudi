@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{OverwriteWithLatestAvroPayload, WriteOperationType}
@@ -28,17 +29,17 @@ import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeys
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
-import org.apache.hudi.{DataSourceWriteOptions, HoodieWriterUtils}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hive.HiveExternalCatalog
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isUsingHiveCatalog, withSparkConf}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isHoodieConfigKey, isUsingHiveCatalog, withSparkConf}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.filterHoodieConfigs
 import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyPayload}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
-import java.util.Locale
+import java.util.{Locale, Properties}
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -57,8 +58,7 @@ trait ProvidesHoodieConfig extends Logging {
       s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
 
     val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
-
-    val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
+    val hiveSyncConfig = buildHiveSyncConfigInternal(hoodieProps, hoodieCatalogTable)
 
     withSparkConf(sparkSession, catalogProperties) {
       Map.apply(
@@ -112,7 +112,7 @@ trait ProvidesHoodieConfig extends Logging {
     val catalogProperties = hoodieCatalogTable.catalogProperties
 
     val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf, extraOptions)
-    val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
+    val hiveSyncConfig = buildHiveSyncConfigInternal(hoodieProps, hoodieCatalogTable)
 
     val parameters = withSparkConf(sparkSession, catalogProperties)()
 
@@ -221,7 +221,7 @@ trait ProvidesHoodieConfig extends Logging {
     val tableConfig = hoodieCatalogTable.tableConfig
 
     val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
-    val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
+    val hiveSyncConfig = buildHiveSyncConfigInternal(hoodieProps, hoodieCatalogTable)
 
     withSparkConf(sparkSession, catalogProperties) {
       Map(
@@ -259,10 +259,9 @@ trait ProvidesHoodieConfig extends Logging {
       s"There are no primary key defined in table ${hoodieCatalogTable.table.identifier}, cannot execute delete operation")
 
     val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
-    val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
+    val hiveSyncConfig = buildHiveSyncConfigInternal(hoodieProps, hoodieCatalogTable)
 
     val options = hoodieCatalogTable.catalogProperties
-    val enableHive = isUsingHiveCatalog(sparkSession)
     val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
 
     withSparkConf(sparkSession, options) {
@@ -290,16 +289,38 @@ trait ProvidesHoodieConfig extends Logging {
     }
   }
 
-  def getHoodieProps(catalogProperties: Map[String, String], tableConfig: HoodieTableConfig, conf: SQLConf, extraOptions: Map[String, String] = Map.empty): TypedProperties = {
-    val options: Map[String, String] = catalogProperties ++ tableConfig.getProps.asScala.toMap ++ conf.getAllConfs ++ extraOptions
-    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(options)
-    hoodieConfig.getProps
+  private def getHoodieProps(catalogProperties: Map[String, String],
+                             tableConfig: HoodieTableConfig,
+                             sqlConf: SQLConf,
+                             extraOptions: Map[String, String] = Map.empty): TypedProperties = {
+    val options: Map[String, String] = {
+      // NOTE: Properties are merged in the following order of priority (first has the highest priority, last has the
+      //       lowest, which is inverse to the ordering in the code):
+      //
+      //          1. (Extra) Option overrides
+      //          2. Spark SQL configs
+      //          3. Persisted Hudi's Table configs
+      //          4. Table's properties in Spark Catalog
+      catalogProperties ++
+      tableConfig.getProps.asScala.toMap ++
+      filterHoodieConfigs(sqlConf.getAllConfs) ++
+      extraOptions
+    }
+
+    new TypedProperties(new Properties(options))
   }
 
-  def buildHiveSyncConfig(
-     props: TypedProperties,
-     hoodieCatalogTable: HoodieCatalogTable,
-     sparkSession: SparkSession = SparkSession.active): HiveSyncConfig = {
+  def buildHiveSyncConfig(sparkSession: SparkSession,
+                          hoodieCatalogTable: HoodieCatalogTable,
+                          tableConfig: HoodieTableConfig,
+                          extraOptions: Map[String, String] = Map.empty): HiveSyncConfig = {
+    val props = getHoodieProps(hoodieCatalogTable.catalogProperties, tableConfig, sparkSession.sqlContext.conf, extraOptions)
+    buildHiveSyncConfigInternal(props, hoodieCatalogTable, sparkSession)
+  }
+
+  private def buildHiveSyncConfigInternal(props: TypedProperties,
+                                          hoodieCatalogTable: HoodieCatalogTable,
+                                          sparkSession: SparkSession = SparkSession.active): HiveSyncConfig = {
     // Enable the hive sync by default if spark have enable the hive metastore.
     val enableHive = isUsingHiveCatalog(sparkSession)
     val hiveSyncConfig: HiveSyncConfig = new HiveSyncConfig(props)
@@ -324,4 +345,11 @@ trait ProvidesHoodieConfig extends Logging {
         props.getString(HiveExternalCatalog.CREATED_SPARK_VERSION))
     hiveSyncConfig
   }
+}
+
+object ProvidesHoodieConfig {
+
+  private def filterHoodieConfigs(opts: Map[String, String]): Map[String, String] =
+    opts.filterKeys(isHoodieConfigKey)
+
 }
