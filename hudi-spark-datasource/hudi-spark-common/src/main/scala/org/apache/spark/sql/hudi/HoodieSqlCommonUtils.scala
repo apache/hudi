@@ -263,7 +263,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def withSparkConf(spark: SparkSession, options: Map[String, String])
                    (baseConfig: Map[String, String] = Map.empty): Map[String, String] = {
     baseConfig ++ DFSPropertiesConfiguration.getGlobalProps.asScala ++ // Table options has the highest priority
-      (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mappingSqlOptionToHoodieParam(options))
+      (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(options))
         .filterKeys(isHoodieConfigKey)
   }
 

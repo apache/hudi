@@ -23,14 +23,15 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
+import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieOptionConfig
-import org.apache.spark.sql.hudi.HoodieOptionConfig.SQL_KEY_TABLE_PRIMARY_KEY
+import org.apache.spark.sql.hudi.HoodieOptionConfig._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -216,20 +217,21 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   private def parseSchemaAndConfigs(): (StructType, Map[String, String]) = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap
     val globalTableConfigs = mappingSparkDatasourceConfigsToTableConfigs(globalProps)
-    val globalSqlOptions = HoodieOptionConfig.mappingTableConfigToSqlOption(globalTableConfigs)
+    val globalSqlOptions = mapTableConfigsToSqlOptions(globalTableConfigs)
 
-    val sqlOptions = HoodieOptionConfig.withDefaultSqlOptions(globalSqlOptions ++ catalogProperties)
+    val sqlOptions = withDefaultSqlOptions(globalSqlOptions ++
+      mapDataSourceWriteOptionsToSqlOptions(catalogProperties) ++ catalogProperties)
 
     // get final schema and parameters
     val (finalSchema, tableConfigs) = (table.tableType, hoodieTableExists) match {
       case (CatalogTableType.EXTERNAL, true) =>
         val existingTableConfig = tableConfig.getProps.asScala.toMap
         val currentTableConfig = globalTableConfigs ++ existingTableConfig
-        val catalogTableProps = HoodieOptionConfig.mappingSqlOptionToTableConfig(catalogProperties)
+        val catalogTableProps = mapSqlOptionsToTableConfigs(catalogProperties)
         validateTableConfig(spark, catalogTableProps, convertMapToHoodieConfig(existingTableConfig))
 
         val options = extraTableConfig(hoodieTableExists, currentTableConfig) ++
-          HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions) ++ currentTableConfig
+          mapSqlOptionsToTableConfigs(sqlOptions) ++ currentTableConfig
 
         val schemaFromMetaOpt = loadTableSchemaByMetaClient()
         val schema = if (schemaFromMetaOpt.nonEmpty) {
@@ -243,11 +245,11 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         (schema, options)
 
       case (_, false) =>
-        ValidationUtils.checkArgument(table.schema.nonEmpty,
+        checkArgument(table.schema.nonEmpty,
           s"Missing schema for Create Table: $catalogTableName")
         val schema = table.schema
         val options = extraTableConfig(tableExists = false, globalTableConfigs) ++
-          HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions)
+          mapSqlOptionsToTableConfigs(sqlOptions)
         (addMetaFields(schema), options)
 
       case (CatalogTableType.MANAGED, true) =>
@@ -255,7 +257,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
           s". The associated location('$tableLocation') already exists.")
     }
     HoodieOptionConfig.validateTable(spark, finalSchema,
-      HoodieOptionConfig.mappingTableConfigToSqlOption(tableConfigs))
+      mapTableConfigsToSqlOptions(tableConfigs))
 
     val resolver = spark.sessionState.conf.resolver
     val dataSchema = finalSchema.filterNot { f =>
