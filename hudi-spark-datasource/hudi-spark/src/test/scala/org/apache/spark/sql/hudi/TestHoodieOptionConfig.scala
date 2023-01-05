@@ -53,7 +53,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
       "hoodie.index.type" -> "INMEMORY",
       "hoodie.compact.inline" -> "true"
     )
-    val tableConfigs = HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions)
+    val tableConfigs = HoodieOptionConfig.mapSqlOptionsToTableConfigs(sqlOptions)
 
     assertTrue(tableConfigs.size == 5)
     assertTrue(tableConfigs(HoodieTableConfig.RECORDKEY_FIELDS.key) == "id,addr")
