@@ -18,7 +18,6 @@
 
 package org.apache.hudi.source;
 
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -35,8 +34,10 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.types.logical.RowType;
@@ -398,6 +399,17 @@ public class IncrementalInputSplits implements Serializable {
     return Collections.emptyList();
   }
 
+  private HoodieTimeline getReadTimeline(HoodieTableMetaClient metaClient) {
+    HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
+    return filterInstantsByCondition(timeline);
+  }
+
+  private HoodieTimeline getArchivedReadTimeline(HoodieTableMetaClient metaClient, String startInstant) {
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(startInstant, false);
+    HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
+    return filterInstantsByCondition(archivedCompleteTimeline);
+  }
+
   /**
    * Returns the instants with a given issuedInstant to start from.
    *
@@ -444,6 +456,23 @@ public class IncrementalInputSplits implements Serializable {
     return this.skipCompaction
         ? instants.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
         : instants;
+  }
+
+  /**
+   * Filters out the unnecessary instants by user specified condition.
+   *
+   * @param timeline The timeline
+   *
+   * @return the filtered timeline
+   */
+  @VisibleForTesting
+  public HoodieTimeline filterInstantsByCondition(HoodieTimeline timeline) {
+    final HoodieTimeline oriTimeline = timeline;
+    if (this.skipCompaction) {
+      // the compaction commit uses 'commit' as action which is tricky
+      timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+    }
+    return timeline;
   }
 
   private static <T> List<T> mergeList(List<T> list1, List<T> list2) {

@@ -58,6 +58,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -97,6 +98,10 @@ public class HoodieTableMetaClient implements Serializable {
 
   public static final String MARKER_EXTN = ".marker";
 
+  // In-memory cache for archived timeline based on the start instant time
+  // Only one entry should be present in this map
+  private final Map<String, HoodieArchivedTimeline> archivedTimelineMap = new HashMap<>();
+
   // NOTE: Since those two parameters lay on the hot-path of a lot of computations, we
   //       use tailored extension of the {@code Path} class allowing to avoid repetitive
   //       computations secured by its immutability
@@ -110,7 +115,6 @@ public class HoodieTableMetaClient implements Serializable {
   private TimelineLayoutVersion timelineLayoutVersion;
   protected HoodieTableConfig tableConfig;
   protected HoodieActiveTimeline activeTimeline;
-  private HoodieArchivedTimeline archivedTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetastoreConfig metastoreConfig;
@@ -365,10 +369,7 @@ public class HoodieTableMetaClient implements Serializable {
    * @return Archived commit timeline
    */
   public synchronized HoodieArchivedTimeline getArchivedTimeline() {
-    if (archivedTimeline == null) {
-      archivedTimeline = new HoodieArchivedTimeline(this);
-    }
-    return archivedTimeline;
+    return getArchivedTimeline(StringUtils.EMPTY_STRING);
   }
 
   public HoodieMetastoreConfig getMetastoreConfig() {
@@ -379,21 +380,49 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Returns fresh new archived commits as a timeline from startTs (inclusive).
+   * Returns the cached archived timeline from startTs (inclusive).
    *
-   * <p>This is costly operation if really early endTs is specified.
-   * Be caution to use this only when the time range is short.
-   *
-   * <p>This method is not thread safe.
-   *
-   * @return Archived commit timeline
+   * @param startTs The start instant time (inclusive) of the archived timeline.
+   * @return the archived timeline.
    */
   public HoodieArchivedTimeline getArchivedTimeline(String startTs) {
-    return new HoodieArchivedTimeline(this, startTs);
+    return getArchivedTimeline(startTs, true);
+  }
+
+  /**
+   * Returns the cached archived timeline if using in-memory cache or a fresh new archived
+   * timeline if not using cache, from startTs (inclusive).
+   * <p>
+   * Instantiating an archived timeline is costly operation if really early startTs is
+   * specified.
+   * <p>
+   * This method is not thread safe.
+   *
+   * @param startTs  The start instant time (inclusive) of the archived timeline.
+   * @param useCache Whether to use in-memory cache.
+   * @return the archived timeline based on the arguments.
+   */
+  public HoodieArchivedTimeline getArchivedTimeline(String startTs, boolean useCache) {
+    if (useCache) {
+      if (!archivedTimelineMap.containsKey(startTs)) {
+        // Only keep one entry in the map
+        archivedTimelineMap.clear();
+        archivedTimelineMap.put(startTs, instantiateArchivedTimeline(startTs));
+      }
+      return archivedTimelineMap.get(startTs);
+    }
+    return instantiateArchivedTimeline(startTs);
+  }
+
+  private HoodieArchivedTimeline instantiateArchivedTimeline(String startTs) {
+    return StringUtils.isNullOrEmpty(startTs)
+        ? new HoodieArchivedTimeline(this)
+        : new HoodieArchivedTimeline(this, startTs);
   }
 
   /**
    * Validate table properties.
+   *
    * @param properties Properties from writeConfig.
    */
   public void validateTableProperties(Properties properties) {
