@@ -746,7 +746,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   @Override
   public List<CatalogPartitionSpec> listPartitions(ObjectPath tablePath)
       throws TableNotExistException, TableNotPartitionedException, CatalogException {
-    throw new HoodieCatalogException("Not supported.");
+    return Collections.emptyList();
   }
 
   @Override
@@ -754,14 +754,14 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
       throws TableNotExistException, TableNotPartitionedException,
       PartitionSpecInvalidException, CatalogException {
-    throw new HoodieCatalogException("Not supported.");
+    return Collections.emptyList();
   }
 
   @Override
   public List<CatalogPartitionSpec> listPartitionsByFilter(
       ObjectPath tablePath, List<Expression> expressions)
       throws TableNotExistException, TableNotPartitionedException, CatalogException {
-    throw new HoodieCatalogException("Not supported.");
+    return Collections.emptyList();
   }
 
   @Override

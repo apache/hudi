@@ -132,12 +132,13 @@
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.3.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
+    <flink1.16.version>1.16.0</flink1.16.version>
     <flink1.15.version>1.15.1</flink1.15.version>
     <flink1.14.version>1.14.5</flink1.14.version>
     <flink1.13.version>1.13.6</flink1.13.version>
-    <flink.version>${flink1.15.version}</flink.version>
-    <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
-    <flink.bundle.version>1.15</flink.bundle.version>
+    <flink.version>${flink1.16.version}</flink.version>
+    <hudi.flink.module>hudi-flink1.16.x</hudi.flink.module>
+    <flink.bundle.version>1.16</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
     <flink.avro.version>1.10.0</flink.avro.version>
     <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
@@ -2240,6 +2241,17 @@
       </activation>
     </profile>
 
+    <profile>
+      <id>flink1.16</id>
+      <properties>
+        <orc.flink.version>1.5.6</orc.flink.version>
+      </properties>
+      <activation>
+        <property>
+          <name>flink1.16</name>
+        </property>
+      </activation>
+    </profile>
     <profile>
       <id>flink1.15</id>
       <properties>
