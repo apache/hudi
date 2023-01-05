@@ -56,6 +56,8 @@ public class RowDataKeyGen implements Serializable {
 
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
 
+  private final boolean hasRecordKey;
+
   private final String[] recordKeyFields;
   private final String[] partitionPathFields;
 
@@ -90,7 +92,11 @@ public class RowDataKeyGen implements Serializable {
 
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.encodePartitionPath = encodePartitionPath;
-    if (this.recordKeyFields.length == 1) {
+
+    this.hasRecordKey = hasRecordKey(fieldNames);
+    if (!hasRecordKey) {
+      this.recordKeyProjection = null;
+    } else if (this.recordKeyFields.length == 1) {
       // efficient code path
       this.simpleRecordKey = true;
       int recordKeyIdx = fieldNames.indexOf(this.recordKeyFields[0]);
@@ -115,6 +121,14 @@ public class RowDataKeyGen implements Serializable {
     this.keyGenOpt = keyGenOpt;
   }
 
+  /**
+   * Checks whether user provides any record key.
+   */
+  private boolean hasRecordKey(List<String> fieldNames) {
+    return recordKeyFields.length != 1
+        || fieldNames.contains(recordKeyFields[0]);
+  }
+
   public static RowDataKeyGen instance(Configuration conf, RowType rowType) {
     Option<TimestampBasedAvroKeyGenerator> keyGeneratorOpt = Option.empty();
     if (TimestampBasedAvroKeyGenerator.class.getName().equals(conf.getString(FlinkOptions.KEYGEN_CLASS_NAME))) {
@@ -134,7 +148,11 @@ public class RowDataKeyGen implements Serializable {
   }
 
   public String getRecordKey(RowData rowData) {
-    if (this.simpleRecordKey) {
+    if (!hasRecordKey) {
+      // should be optimized to unique values that can be easily calculated with low cost
+      // for e.g, fileId + auto inc integer
+      return EMPTY_RECORDKEY_PLACEHOLDER;
+    } else if (this.simpleRecordKey) {
       return getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0]);
     } else {
       Object[] keyValues = this.recordKeyProjection.projectAsValues(rowData);
