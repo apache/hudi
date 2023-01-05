@@ -91,12 +91,12 @@ However, if this feature is enabled, restore cannot be supported. This limitatio
 and the development of this feature can be tracked in [HUDI-4500](https://issues.apache.org/jira/browse/HUDI-4500).
 :::
 
-### Filesystem based Lock Provider
+### File system based Lock Provider
 
 For multiple writers using optimistic concurrency control, Hudi already supports lock providers based on 
-Zookeeper, Hive Metastore or Amazon DynamoDB. In this release, there is a new filesystem based lock provider. Unlike the
+Zookeeper, Hive Metastore or Amazon DynamoDB. In this release, there is a new file system based lock provider. Unlike the
 need for external systems in other lock providers, this implementation acquires/releases a lock based on atomic 
-create/delete operations of the underlying filesystem. To use this lock provider, users need to set the following 
+create/delete operations of the underlying file system. To use this lock provider, users need to set the following 
 minimal configurations (please check the [lock configuration](/docs/configurations#Locks-Configurations) for a few 
 other optional configs that can be used):
 ```

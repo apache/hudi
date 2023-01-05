@@ -94,5 +94,5 @@ hoodie.cleaner.policy.failed.writes=LAZY
 hoodie.write.lock.provider=<distributed-lock-provider-classname>
 ```
 
-Note that there are 3 different distributed [lock providers available](/docs/concurrency_control#enabling-multi-writing)
-to choose from: `ZookeeperBasedLockProvider`, `HiveMetastoreBasedLockProvider`, and `DynamoDBBasedLockProvider`.
+Note that there are 4 different [lock providers available](/docs/concurrency_control#enabling-multi-writing)
+to choose from: `FileSystemBasedLockProvider`, `ZookeeperBasedLockProvider`, `HiveMetastoreBasedLockProvider`, and `DynamoDBBasedLockProvider`.
