@@ -36,7 +36,7 @@ import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mappingSqlOptionToHoodieParam
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isHoodieConfigKey, isUsingHiveCatalog, withSparkConf}
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, filterHoodieConfigs}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, filterHoodieConfigs, withCombinedOptions}
 import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyPayload}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
@@ -58,10 +58,9 @@ trait ProvidesHoodieConfig extends Logging {
     require(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
 
-    val combinedProps = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf)
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
-    withSparkConf(sparkSession, combinedProps) {
+    withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
       Map.apply(
         "path" -> hoodieCatalogTable.tableLocation,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
@@ -83,7 +82,6 @@ trait ProvidesHoodieConfig extends Logging {
         HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
-        .filter { case(_, v) => v != null }
     }
   }
 
@@ -172,7 +170,7 @@ trait ProvidesHoodieConfig extends Logging {
       classOf[OverwriteWithLatestAvroPayload].getCanonicalName
     }
 
-    withSparkConf(sparkSession, combinedOpts) {
+    withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
       Map(
         "path" -> path,
         TABLE_TYPE.key -> tableType,
@@ -198,7 +196,6 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
-        .filter { case (_, v) => v != null }
     }
   }
 
@@ -208,10 +205,9 @@ trait ProvidesHoodieConfig extends Logging {
     val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf)
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
-    withSparkConf(sparkSession, combinedOpts) {
+    withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
       Map(
         "path" -> hoodieCatalogTable.tableLocation,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
@@ -230,7 +226,6 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFields,
         HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
       )
-        .filter { case (_, v) => v != null }
     }
   }
 
@@ -246,9 +241,8 @@ trait ProvidesHoodieConfig extends Logging {
       s"There are no primary key defined in table ${hoodieCatalogTable.table.identifier}, cannot execute delete operation")
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
-    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf)
 
-    withSparkConf(sparkSession, combinedOpts) {
+    withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
       Map(
         "path" -> path,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
@@ -307,6 +301,15 @@ trait ProvidesHoodieConfig extends Logging {
 
 object ProvidesHoodieConfig {
 
+  def filterNullValues(opts: Map[String, String]): Map[String, String] =
+    opts.filter { case (_, v) => v != null }
+
+  def withCombinedOptions(catalogTable: HoodieCatalogTable,
+                          tableConfig: HoodieTableConfig,
+                          sqlConf: SQLConf)(optionOverrides: Map[String, String] = Map.empty): Map[String, String] = {
+    combineOptions(catalogTable, tableConfig, sqlConf, optionOverrides)
+  }
+
   private def combineOptions(catalogTable: HoodieCatalogTable,
                              tableConfig: HoodieTableConfig,
                              sqlConf: SQLConf,
@@ -324,7 +327,7 @@ object ProvidesHoodieConfig {
       mappingSqlOptionToHoodieParam(catalogTable.catalogProperties) ++
       tableConfig.getProps.asScala.toMap ++
       filterHoodieConfigs(sqlConf.getAllConfs) ++
-      optionOverrides
+      filterNullValues(optionOverrides)
   }
 
   private def filterHoodieConfigs(opts: Map[String, String]): Map[String, String] =
