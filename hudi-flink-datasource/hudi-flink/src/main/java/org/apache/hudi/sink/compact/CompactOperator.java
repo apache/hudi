@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -98,8 +99,14 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   }
 
   @Override
-  public void processWatermark(Watermark mark) {
+  public void processWatermark(Watermark mark) throws Exception {
     // no need to propagate the watermark
+  }
+
+  @Override
+  public void processLatencyMarker(LatencyMarker latencyMarker)
+      throws Exception {
+    // no need to propagate the latencyMarker
   }
 
   @Override
@@ -111,7 +118,9 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
           () -> doCompaction(instantTime, compactionOperation, collector, reloadWriteConfig()),
-          (errMsg, t) -> collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), taskID)),
+          (errMsg, t) -> {
+            collector.collect(new CompactionCommitEvent(instantTime,
+                compactionOperation.getFileId(), taskID));},
           "Execute compaction for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the compaction task synchronously for batch mode.
@@ -137,7 +146,8 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
         compactionOperation,
         instantTime, maxInstantTime,
         writeClient.getHoodieTable().getTaskContextSupplier());
-    collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
+    collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(),
+        writeStatuses, taskID));
   }
 
   private HoodieWriteConfig reloadWriteConfig() throws Exception {
