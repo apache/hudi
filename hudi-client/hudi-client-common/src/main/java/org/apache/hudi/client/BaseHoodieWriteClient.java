@@ -346,9 +346,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metadata instance of {@link HoodieCommitMetadata}.
    */
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
-    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime,
-        table.isTableServiceAction(actionType, instantTime)));
+    if (table.isTableServiceAction(actionType, instantTime)) {
+      tableServiceClient.writeTableMetadata(table, instantTime, actionType, metadata);
+    } else {
+      context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
+      table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime, false));
+    }
   }
 
   /**
@@ -490,6 +493,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     this.pendingInflightAndRequestedInstants.remove(instantTime);
+    tableServiceClient.setPendingInflightAndRequestedInstants(this.pendingInflightAndRequestedInstants);
     tableServiceClient.startAsyncCleanerService(this);
     tableServiceClient.startAsyncArchiveService(this);
   }
@@ -1086,29 +1090,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       return tableServiceClient.scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
     } finally {
       this.txnManager.endTransaction(inflightInstant);
-    }
-  }
-
-  /**
-   * Finalize Write operation.
-   *
-   * @param table HoodieTable
-   * @param instantTime Instant Time
-   * @param stats Hoodie Write Stat
-   */
-  protected void finalizeWrite(HoodieTable table, String instantTime, List<HoodieWriteStat> stats) {
-    try {
-      final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
-      table.finalizeWrite(context, instantTime, stats);
-      if (finalizeCtx != null) {
-        Option<Long> durationInMs = Option.of(metrics.getDurationInMs(finalizeCtx.stop()));
-        durationInMs.ifPresent(duration -> {
-          LOG.info("Finalize write elapsed time (milliseconds): " + duration);
-          metrics.updateFinalizeWriteMetrics(duration, stats.size());
-        });
-      }
-    } catch (HoodieIOException ioe) {
-      throw new HoodieCommitException("Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
     }
   }
 

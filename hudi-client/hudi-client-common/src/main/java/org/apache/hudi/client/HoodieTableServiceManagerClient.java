@@ -100,7 +100,7 @@ public class HoodieTableServiceManagerClient {
     int requestRetryLimit = config.getConnectionRetryLimit();
     int connectionRetryDelay = config.getConnectionRetryDelay();
 
-    RetryHelper<String> retryHelper = new RetryHelper<>(connectionRetryDelay, requestRetryLimit, connectionRetryDelay, RETRY_EXCEPTIONS);
+    RetryHelper<String, IOException> retryHelper = new RetryHelper<>(connectionRetryDelay, requestRetryLimit, connectionRetryDelay, RETRY_EXCEPTIONS);
     return retryHelper.tryWith(() -> Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute().returnContent().asString()).start();
   }
 

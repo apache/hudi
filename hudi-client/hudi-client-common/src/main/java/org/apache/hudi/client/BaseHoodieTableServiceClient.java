@@ -32,7 +32,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -42,11 +41,11 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
@@ -68,6 +67,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -81,6 +81,8 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   protected transient AsyncCleanerService asyncCleanerService;
   protected transient AsyncArchiveService asyncArchiveService;
+
+  protected Set<String> pendingInflightAndRequestedInstants;
 
   protected BaseHoodieTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     super(context, clientConfig, Option.empty());
@@ -123,6 +125,10 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
         break;
       default:
     }
+  }
+
+  protected void setPendingInflightAndRequestedInstants(Set<String> pendingInflightAndRequestedInstants) {
+    this.pendingInflightAndRequestedInstants = pendingInflightAndRequestedInstants;
   }
 
   /**
@@ -490,29 +496,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   }
 
   /**
-   * Finalize Write operation.
-   *
-   * @param table       HoodieTable
-   * @param instantTime Instant Time
-   * @param stats       Hoodie Write Stat
-   */
-  protected void finalizeWrite(HoodieTable table, String instantTime, List<HoodieWriteStat> stats) {
-    try {
-      final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
-      table.finalizeWrite(context, instantTime, stats);
-      if (finalizeCtx != null) {
-        Option<Long> durationInMs = Option.of(metrics.getDurationInMs(finalizeCtx.stop()));
-        durationInMs.ifPresent(duration -> {
-          LOG.info("Finalize write elapsed time (milliseconds): " + duration);
-          metrics.updateFinalizeWriteMetrics(duration, stats.size());
-        });
-      }
-    } catch (HoodieIOException ioe) {
-      throw new HoodieCommitException("Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
-    }
-  }
-
-  /**
    * Write the HoodieCommitMetadata to metadata table if available.
    *
    * @param table       {@link HoodieTable} of interest.
@@ -521,9 +504,9 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * @param metadata    instance of {@link HoodieCommitMetadata}.
    */
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
+    ValidationUtils.checkArgument(table.isTableServiceAction(actionType, instantTime), "Not support action actionType");
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime,
-        table.isTableServiceAction(actionType, instantTime)));
+    table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime, true));
   }
 
   /**

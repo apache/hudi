@@ -36,9 +36,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -303,8 +306,6 @@ public class SparkRDDWriteClient<T> extends
   protected void completeLogCompaction(HoodieCommitMetadata metadata,
                                        HoodieTable table,
                                        String logCompactionCommitTime) {
-    final HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionCommitTime);
-    preCommit(logCompactionInstant, metadata);
     tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
   }
 
@@ -320,6 +321,32 @@ public class SparkRDDWriteClient<T> extends
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
     preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
     return tableServiceClient.cluster(clusteringInstant, shouldComplete);
+  }
+
+  @Override
+  protected void initMetadataTable(Option<String> instantTime) {
+    // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
+    // if it didn't exist before
+    // See https://issues.apache.org/jira/browse/HUDI-3343 for more details
+    initializeMetadataTable(instantTime);
+  }
+
+  /**
+   * Initialize the metadata table if needed. Creating the metadata table writer
+   * will trigger the initial bootstrapping from the data table.
+   *
+   * @param inFlightInstantTimestamp - The in-flight action responsible for the metadata table initialization
+   */
+  private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
+    if (config.isMetadataTableEnabled()) {
+      HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
+          context, Option.empty(), inFlightInstantTimestamp);
+      try {
+        writer.close();
+      } catch (Exception e) {
+        throw new HoodieException("Failed to instantiate Metadata table ", e);
+      }
+    }
   }
 
   @Override
