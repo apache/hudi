@@ -65,7 +65,7 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
     assert(metaClient.getTableType == HoodieTableType.MERGE_ON_READ,
       s"Cannot show compaction on a Non Merge On Read table.")
     val compactionInstants = metaClient.getActiveTimeline.getInstants.iterator().asScala
-      .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
+      .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION || p.getAction == HoodieTimeline.COMMIT_ACTION)
       .toSeq
       .sortBy(f => f.getTimestamp)
       .reverse
