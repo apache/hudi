@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.HoodieSparkUtils
+
 class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   test("Test Partial Update") {
@@ -98,15 +100,19 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          | preCombineField = '_ts'
          |)""".stripMargin)
 
+    val failedToResolveErrorMessage = if (HoodieSparkUtils.gteqSpark3_1) {
+      "Failed to resolve pre-combine field `_ts` w/in the source-table output"
+    } else {
+      "Failed to resolve pre-combine field `_ts` w/in the source-table output;"
+    }
+
     checkExceptionContain(
       s"""
          |merge into $tableName t0
          |using ( select 1 as id, 'a1' as name, 12 as price) s0
          |on t0.id = s0.id
          |when matched then update set price = s0.price
-      """.stripMargin)(
-      "Missing specify value for the preCombineField: _ts in merge-into update action. " +
-        "You should add '... update set _ts = xx....' to the when-matched clause.")
+      """.stripMargin)(failedToResolveErrorMessage)
 
     val tableName2 = generateTableName
     spark.sql(
