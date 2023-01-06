@@ -61,7 +61,7 @@ hoodie.write.lock.filesystem.expire (optional)
 ```
 
 When using the FileSystem based lock provider, by default, the lock file will store into `hoodie.base.path`+`/.hoodie/lock`,
-in additional, you can use a custom folder to store the lock file by specify `hoodie.write.lock.filesystem.path`
+in addition, you can use a custom folder to store the lock file by specify `hoodie.write.lock.filesystem.path`
 
 In case the lock cannot release during job crash, you can set `hoodie.write.lock.filesystem.expire`, provide an expiry time in minutes, lock will never expire as default. 
 you can also delete lock file manually in such situation
