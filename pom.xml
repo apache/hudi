@@ -270,7 +270,8 @@
           </dependency>
         </dependencies>
         <configuration>
-          <consoleOutput>true</consoleOutput>
+          <!-- Set consoleOutput to true to see minor checkstyle issues -->
+          <consoleOutput>false</consoleOutput>
           <encoding>UTF-8</encoding>
           <configLocation>style/checkstyle.xml</configLocation>
           <suppressionsLocation>style/checkstyle-suppressions.xml</suppressionsLocation>
